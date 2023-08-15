@@ -1,0 +1,190 @@
+[
+    {
+        "name": "A Verdadeira Margherita",
+        "description": "",
+        "ingredients": [
+            "tomate",
+            "mussarella",
+            "parmesão",
+            "basilico"
+        ],
+        "ingredients_ita": [
+            "pomodoro",
+            "mozzarella",
+            "parmigiano",
+            "basilico"
+        ],
+        "price": "R$ 30,00",
+        "visible": true
+    },
+    {
+        "name": "Margherita Invertida",
+        "description": "",
+        "ingredients": [
+            "tomate",
+            "mussarella",
+            "salsinha",
+            "salsa verde da casa"
+        ],
+        "ingredients_ita": [
+            "pomodoro",
+            "mozzarella",
+            "origano",
+            "basilico"
+        ],
+        "price": "R$ 30,00",
+        "visible": false
+    },
+    {
+        "name": "Quatro Queijos",
+        "description": "",
+        "ingredients": [
+            "tomate",
+            "gorzonzola",
+            "parmesão",
+            "queijo defumado",
+            "creme de ricota"
+        ],
+        "ingredients_ita": [
+            "pomodoro",
+            "gorzonzola",
+            "parmigiano",
+            "formaggio affumicato",
+            "crema di ricotta"
+        ],
+        "price": "R$ 30,00",
+        "visible": true
+    },
+    {
+        "name": "Calabresa acebolada",
+        "description": "",
+        "ingredients": [
+            "tomate",
+            "mussarella",
+            "oregano",
+            "basilico"
+        ],
+        "ingredients_ita": [
+            "mozzarella",
+            "pomodoro",
+            "origano",
+            "basilico"
+        ],
+        "price": "R$ 30,00",
+        "visible": true
+    },
+    {
+        "name": "Portuguesa",
+        "description": "",
+        "ingredients": [
+            "mussarella",
+            "tomate",
+            "oregano",
+            "basilico"
+        ],
+        "ingredients_ita": [
+            "mozzarella",
+            "pomodoro",
+            "origano",
+            "basilico"
+        ],
+        "price": "R$ 30,00",
+        "visible": true
+    },
+    {
+        "name": "Frango con catupry",
+        "description": "",
+        "ingredients": [
+            "mussarella",
+            "tomate",
+            "oregano",
+            "basilico"
+        ],
+        "ingredients_ita": [
+            "mozzarella",
+            "pomodoro",
+            "origano",
+            "basilico"
+        ],
+        "price": "R$ 30,00",
+        "visible": true
+    },
+    {
+        "name": "Contadina",
+        "description": "",
+        "ingredients": [
+            "tomate",
+            "mussarella",
+            "linguiça",
+            "batate assada com rosmarino"
+        ],
+        "ingredients_ita": [
+            "pomodoro",
+            "mozzarella",
+            "salsiccia",
+            "patate al rosmarino"
+        ],
+        "price": "R$ 30,00",
+        "visible": true
+    },
+    {
+        "name": "Fresca",
+        "description": "",
+        "ingredients": [
+            "mussarella",
+            "abobrinha",
+            "pimentão amarelo",
+            "burata de búfala",
+            "salsa verde da casa"
+        ],
+        "ingredients_ita": [
+            "mozzarella",
+            "zucchine",
+            "peperoni gialli",
+            "burrata di bufala",
+            "salsa verde della casa"
+        ],
+        "price": "R$ 30,00",
+        "visible": true
+    },
+    {
+        "name": "Vegetariana",
+        "description": "",
+        "ingredients": [
+            "mussarella",
+            "tomate",
+            "berinjelas",
+            "pimentão amarelo",
+            "pimentão vermelho",
+            "abobrinhas"
+        ],
+        "ingredients_ita": [
+            "mozzarella",
+            "pomodoro",
+            "melanzane",
+            "peperoni gialli",
+            "peperoni rossi",
+            "zucchine"
+        ],
+        "price": "R$ 30,00",
+        "visible": true
+    },
+    {
+        "name": "Tomate Seco e Rúcula",
+        "description": "",
+        "ingredients": [
+            "mussarella",
+            "tomate",
+            "rúcula",
+            "tomate seco"
+        ],
+        "ingredients_ita": [
+            "mozzarella",
+            "pomodoro",
+            "rucola",
+            "pomodoro secchi"
+        ],
+        "price": "R$ 30,00",
+        "visible": true
+    }
+]
