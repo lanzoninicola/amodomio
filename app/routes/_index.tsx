@@ -38,7 +38,7 @@ function TypewriterHomepage() {
     text += doubleBreakLine
     text += "Aqui, vocês terâo a oportunidade de saborear autênticas pizzas de massa italiana, preparadas por um verdadeiro italiano, nascido e crescido em Verona, Itàlia."
     text += doubleBreakLine
-    text += "Nosso compromiss è trazer para vocês a verdadeira essência da pizza italiana, com toda a tradição e sabor que vocês merecem, claro, sem esquecer o gostinho preferidos dos brasileiros."
+    text += "Nosso compromisso è trazer para vocês a verdadeira essência da pizza italiana, com toda a tradição e sabor que vocês merecem, claro, sem esquecer o gostinho preferidos dos brasileiros."
     text += doubleBreakLine
     text += "Além disso, teremos o prazer de oferecer a famosa Pizza Al Taglio, uma delìcia italia que conquistou corações ao redor do mundo."
     text += doubleBreakLine
