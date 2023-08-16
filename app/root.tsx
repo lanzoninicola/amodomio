@@ -13,7 +13,7 @@ import { cssBundleHref } from "@remix-run/css-bundle";
 
 export const meta: V2_MetaFunction = () => {
   return [
-    { title: "A Modio Mio - La vera pizza italiana" },
+    { title: "A Modio Mio - La vera pizza italiana di Pato Branco" },
     {
       name: "description",
       content: "Bem vindo ao cardápio da Pizza Delivery A Modo Mio",
