@@ -35,25 +35,23 @@
 
     --radius: 0.5rem;
 
-    --brand-military: #545c52;
+    --brand-blue: #3d5f76;
 
-    --brand-green: #32936f;
+    --brand-orange: #ee8043;
 
-    --brand-green-accent: #00c9a3;
+    --brand-violet: #9b386a;
 
-    --brand-cloud: #98b5df;
+    --brand-red: #d75148;
 
-    --brand-orange: #bd4b39;
+    --brand-yellow: #fdbc12;
 
-    --brand-yellow: #ffbf00;
+    --brand-green: #aec355;
 
     --font-sans: Inter;
 
-    --font-logo: "Homemade Apple";
+    --font-title: Montagu Slab;
 
-    --font-accent: "BioRhyme Expanded", serif;
-
-    --font-menu: "Inconsolata", serif;
+    --font-accent: Antonio;
   }
 
   .dark {

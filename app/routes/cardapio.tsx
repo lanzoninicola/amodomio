@@ -2,7 +2,6 @@ import type { ActionArgs, LinksFunction, LoaderArgs } from "@remix-run/node";
 import { redirect, type V2_MetaFunction } from "@remix-run/node";
 import { useLoaderData, useNavigate, useSearchParams } from "@remix-run/react";
 
-import { ItalianFlagSmall, LogoTransparent } from "~/components/primitives/logo/logo";
 import { ok } from "~/utils/http-response.server";
 import { menuEntity } from "~/domain/menu-item/menu-item.entity.server";
 import type { MenuItem } from "~/domain/menu-item/menu-item.model.server";
@@ -14,6 +13,7 @@ import { urlAt } from "~/utils/url";
 import toLowerCase from "~/utils/to-lower-case";
 import Container from "~/components/layout/container/container";
 import EasterEgg from "~/components/primitives/easter-egg/ester-egg";
+import { ItalianFlagSmall, LogoTransparent } from "~/components/primitives/logo/logo-transparent";
 
 export const meta: V2_MetaFunction = () => {
   return [

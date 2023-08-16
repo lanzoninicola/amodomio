@@ -39,23 +39,23 @@ module.exports = {
           DEFAULT: "hsl(var(--accent))",
           foreground: "hsl(var(--accent-foreground))",
         },
-        "brand-green": {
-          DEFAULT: "var(--brand-green)",
-        },
-        "brand-military": {
-          DEFAULT: "var(--brand-military)",
-        },
-        "brand-green-accent": {
-          DEFAULT: "var(--brand-green-accent)",
-        },
-        "brand-yellow": {
-          DEFAULT: "var(--brand-yellow)",
+        "brand-blue": {
+          DEFAULT: "var(--brand-blue)",
         },
         "brand-orange": {
           DEFAULT: "var(--brand-orange)",
         },
-        "brand-cloud": {
-          DEFAULT: "var(--brand-cloud)",
+        "brand-violet": {
+          DEFAULT: "var(--brand-violet)",
+        },
+        "brand-red": {
+          DEFAULT: "var(--brand-red)",
+        },
+        "brand-yellow": {
+          DEFAULT: "var(--brand-yellow)",
+        },
+        "brand-green": {
+          DEFAULT: "var(--brand-green)",
         },
         popover: {
           DEFAULT: "hsl(var(--popover))",
@@ -73,9 +73,9 @@ module.exports = {
       },
       fontFamily: {
         sans: ["var(--font-sans)", ...fontFamily.sans],
-        logo: ["var(--font-logo)", ...fontFamily.sans],
+        body: ["var(--font-sans)", ...fontFamily.sans],
         accent: ["var(--font-accent)", ...fontFamily.sans],
-        menu: ["var(--font-menu)", ...fontFamily.sans],
+        title: ["var(--font-title)", ...fontFamily.sans],
       },
       keyframes: {
         "accordion-down": {
