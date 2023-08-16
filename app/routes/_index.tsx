@@ -1,43 +1,19 @@
-import type { LinksFunction } from "@remix-run/node";
-import { type V2_MetaFunction } from "@remix-run/node";
 import TypewriterComponent from "typewriter-effect";
 import Container from "~/components/layout/container/container";
 import Logo from "~/components/primitives/logo/logo";
 
 // https://smart-pizza-marketing.framer.ai/
 
-export const meta: V2_MetaFunction = () => {
-    return [
-        { title: "A Modio Mio - La vera pizza italiana" },
-        {
-            name: "description",
-            content: "Bem vindo ao cardápio da Pizza Delivery A Modo Mio",
-        },
-    ];
-};
-
-export const links: LinksFunction = () => [
-    { rel: "preconnect", href: "https://fonts.googleapis.com" },
-    {
-        rel: "preconnect",
-        href: "https://fonts.gstatic.com",
-    },
-    {
-        href: "https://fonts.googleapis.com/css2?family=Antonio:wght@400;700&family=Inter&family=Montagu+Slab:opsz,wght@16..144,400;16..144,600;16..144,700&display=swap",
-        rel: "stylesheet",
-    },
-];
-
 export default function HomePage() {
     return (
-        <div className="min-h-screen bg-brand-blue">
+        <div className="min-h-screen bg-brand-blue md:py-16 ">
             <Container clazzName="py-8">
-                <div className="flex justify-center">
-                    <div className="w-[120px] mb-8 flex ">
+                <div className="flex justify-center mb-8 md:mb-16">
+                    <div className="w-[120px] md:w-[180px]">
                         <Logo />
                     </div>
                 </div>
-                <div className="p-4">
+                <div className="p-4 md:max-w-prose md:mx-auto">
                     <TypewriterHomepage />
                 </div>
             </Container>
@@ -52,7 +28,7 @@ function TypewriterHomepage() {
 
     const doubleBreakLine = "<br /><br />"
 
-    let text = "Caros amigos e amantes de pizza"
+    let text = "Caros amigos e amantes de pizza,"
     text += doubleBreakLine
     text += "Estamos emocionados em anunciar a futura abertura da nossa pizzaria, onde traremos algo único para a cidade!"
     text += doubleBreakLine
@@ -77,7 +53,7 @@ function TypewriterHomepage() {
 
 
     return (
-        <div className="text-white text-lg tracking-wide">
+        <div className="text-white text-lg md:text-xl tracking-wide">
             <TypewriterComponent
                 options={{
                     strings: text,
