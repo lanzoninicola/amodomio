@@ -20,7 +20,7 @@ export const meta: V2_MetaFunction = () => {
     },
     {
       name: "keywords",
-      content: "pizza, delivery, pizza delivery, pizza delivery a modo mio, pizzaria pato branco, pizza pato branco, pizza al taglio",
+      content: "pizza, pizza pato branco, pizza em pedaços, pizza al taglio, delivery, pizza delivery, pizza delivery a modo mio, pizzaria pato branco, pizza pato branco, pizza al taglio",
     }
   ];
 };
