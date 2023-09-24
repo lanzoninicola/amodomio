@@ -12,7 +12,7 @@ type DoughFormAction = "dough-create" | "dough-update"
 
 interface DoughFormProps {
     dough?: Dough
-    action: DoughFormAction
+    action?: DoughFormAction
 }
 
 export default function DoughForm({ dough, action = "dough-create" }: DoughFormProps) {
