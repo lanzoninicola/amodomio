@@ -1,6 +1,12 @@
-import { type LinksFunction } from "@remix-run/node";
-import { Outlet } from "@remix-run/react";
+import { LoaderFunction, type LinksFunction, MetaFunction, V2_MetaFunction, LoaderArgs, redirect } from "@remix-run/node";
+import { Outlet, useLoaderData } from "@remix-run/react";
 import { NavMenuCollapsible } from "~/components/primitives/menu-collapsible/nav-menu-collapsible";
+import { authenticator } from "~/domain/auth/google.server";
+
+export const meta: V2_MetaFunction = () => [
+    { name: "robots", content: "noindex" },
+];
+
 
 export const links: LinksFunction = () => [
     { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -14,8 +20,24 @@ export const links: LinksFunction = () => [
     },
 ];
 
+export const loader: LoaderFunction = async ({ request }: LoaderArgs) => {
+
+    let user = await authenticator.isAuthenticated(request);
+    console.log("admin loader", user)
+
+    if (!user) {
+        return redirect("/login");
+    }
+
+
+    return user
+}
+
 
 export default function AdminOutlet() {
+    const loggedUser = useLoaderData<typeof loader>();
+
+
 
     return (
 
