@@ -15,9 +15,9 @@ export interface DailyOrderTransaction {
   orderNumber: number;
   isMotoRequired: boolean;
   amountMotoboy: number;
-  inboudChannel: DOTInboudChannel;
+  inboundChannel: DOTInboundChannel;
   paymentMethod: DOTPaymentMethod;
-  deletedAt: string;
+  deletedAt: string | null;
 }
 
 export type DOTProduct =
@@ -25,7 +25,7 @@ export type DOTProduct =
   | "Pizza Media"
   | "Al Taglio"
   | "Bebida";
-export type DOTInboudChannel = "Mogo" | "Aiqfome";
+export type DOTInboundChannel = "Mogo" | "Aiqfome";
 export type DOTPaymentMethod =
   | "Dinheiro"
   | "PIX"

@@ -30,8 +30,6 @@ export default function AdminDailyOrdersIndex() {
     const loaderData = useLoaderData<typeof loader>()
     const dailyOrders = loaderData.payload.records as DailyOrder[]
 
-    console.log(dailyOrders)
-
     return (
         <Container clazzName="h-screen">
             <div className="flex flex-col item-center gap-8">

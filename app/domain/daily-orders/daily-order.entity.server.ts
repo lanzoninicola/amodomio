@@ -32,6 +32,8 @@ class DailyOrderEntity extends BaseEntity<DailyOrder> {
     const transactions = dailyOrder?.transactions || [];
     const transactionId = randomReactKey();
     transactions.push({ ...transaction, id: transactionId });
+
+    console.log("+++++++++++++createTransaction", transactions);
     await this.update(id, { transactions });
   }
 

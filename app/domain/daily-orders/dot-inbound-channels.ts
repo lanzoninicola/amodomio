@@ -1,5 +1,5 @@
-import { DOTInboudChannel } from "./daily-order.model.server";
+import { DOTInboundChannel } from "./daily-order.model.server";
 
-const dotInboundChannels = (): DOTInboudChannel[] => ["Mogo", "Aiqfome"];
+const dotInboundChannels = (): DOTInboundChannel[] => ["Mogo", "Aiqfome"];
 
 export default dotInboundChannels;
