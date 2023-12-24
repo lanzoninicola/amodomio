@@ -48,12 +48,6 @@ let googleStrategy = new GoogleStrategy(
 
     const emailInbound = profile.emails[0].value;
 
-    console.log(
-      "emailInbound",
-      emailWhitelistArray,
-      emailWhitelistArray && emailWhitelistArray.includes(emailInbound)
-    );
-
     if (!emailInbound) {
       return null;
     }
@@ -62,12 +56,8 @@ let googleStrategy = new GoogleStrategy(
       return null;
     }
 
-    if (
-      emailInbound &&
-      emailWhitelistArray &&
-      !emailWhitelistArray.includes(emailInbound)
-    ) {
-      return null;
+    if (emailWhitelistArray && !emailWhitelistArray.includes(emailInbound)) {
+      return false;
     }
 
     const user: LoggedUser = {
@@ -75,6 +65,8 @@ let googleStrategy = new GoogleStrategy(
       email: emailInbound,
       avatarURL: profile.photos[0].value,
     };
+
+    console.log("google.server.ts", user);
 
     return user;
   }

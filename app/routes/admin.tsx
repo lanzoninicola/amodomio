@@ -28,8 +28,6 @@ export const loader: LoaderFunction = async ({ request }: LoaderArgs) => {
     if (!user) {
         return redirect("/login");
     }
-
-
     return user
 }
 
@@ -46,10 +44,11 @@ export default function AdminOutlet() {
                 <NavMenuCollapsible navItems={
                     [
                         { label: "Gerençiar cardápio", to: "/admin" },
+                        { label: "Cardápio", to: "/cardapio" },
                         { label: "Categorias", to: "/admin/categorias" },
                         { label: "Opções", to: "/admin/options" },
-                        { label: "Voltar para o cardápio", to: "/cardapio" },
-                        { label: "Massa", to: "/admin/dough" }
+                        { label: "Massa", to: "/admin/dough" },
+                        { label: "Pedidos", to: "/admin/daily-orders" },
                     ]
                 } />
             </div>

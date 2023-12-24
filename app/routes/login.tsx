@@ -1,32 +1,17 @@
 import { LoaderFunction, LoaderArgs, redirect } from "@remix-run/node";
 import { Form, useLoaderData } from "@remix-run/react";
-import { LogIn } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { authenticator } from "~/domain/auth/google.server";
 
 export const loader: LoaderFunction = async ({ request }: LoaderArgs) => {
-  let user = await authenticator.isAuthenticated(request);
-
-  console.log("loader login", user)
-
-
-  // here we can get the "routerCaller" param to identify where to redirect after login succesfull
-  if (user) {
-    return redirect("/admin");
-  }
-
-
-  return {
-    loggedUser: user
-  }
-
+  return await authenticator.isAuthenticated(request);
 }
 
 
 export default function Login() {
   const loggedUser = useLoaderData<typeof loader>();
 
-  console.log("login", loggedUser)
+  console.log("login pageeee", loggedUser)
 
 
   return (
@@ -35,13 +20,7 @@ export default function Login() {
         <Form action="/auth/google" method="post" className="mb-8 justify-center flex">
           <Button>Acessar com o Google</Button>
         </Form>
-        {
-          !loggedUser && (
-            <div>
-              <span>user not identify</span>
-            </div>
-          )
-        }
+
       </div>
     </div>
   )
