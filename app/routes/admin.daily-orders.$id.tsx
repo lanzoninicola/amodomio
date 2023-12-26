@@ -3,7 +3,7 @@ import { LoaderArgs, redirect } from "@remix-run/node";
 import { Form, useLoaderData, useNavigation, useOutletContext } from "@remix-run/react";
 import InputItem from "~/components/primitives/form/input-item/input-item";
 import SubmitButton from "~/components/primitives/submit-button/submit-button";
-import { DeleteItemButton, Table, TableRow, TableRows, TableTitles } from "~/components/primitives/table-list";
+import { DeleteItemButton, EditItemButton, Table, TableRow, TableRows, TableTitles } from "~/components/primitives/table-list";
 import SaveItemButton from "~/components/primitives/table-list/action-buttons/save-item-button/save-item-button";
 import Fieldset from "~/components/ui/fieldset";
 import { Input } from "~/components/ui/input";
@@ -19,6 +19,9 @@ import randomReactKey from "~/utils/random-react-key";
 import tryit from "~/utils/try-it";
 import { urlAt } from "~/utils/url";
 import { AdminOutletContext } from "./admin";
+import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { Separator } from "~/components/ui/separator";
+
 
 export async function loader({ request }: LoaderArgs) {
 
@@ -41,7 +44,6 @@ export async function action({ request }: LoaderArgs) {
 
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);
-    console.log(values)
 
     const transaction: DailyOrderTransaction = {
         product: values.product as DOTProduct || "",
@@ -114,16 +116,32 @@ export default function DailyOrdersSingle() {
     const transactions = dailyOrder.transactions.filter(t => t.deletedAt === null) || []
 
     return (
-        <div className="flex flex-col gap-8">
-            <div className="flex gap-4">
-                <span>{`Numero pizza familia ${dailyOrder.largePizzaNumber}`}</span>
-                <span>{`Numero pizza média ${dailyOrder.mediumPizzaNumber}`}</span>
+        <div className="flex flex-col">
+            <div className="flex justify-between items-center">
+                <div className="flex gap-4">
+                    <PizzaSizeStat label={"Pizza Familía"} initialNumber={dailyOrder.initialLargePizzaNumber} restNumber={dailyOrder.restLargePizzaNumber} />
+                    <PizzaSizeStat label={"Pizza Medía"} initialNumber={dailyOrder.initialMediumPizzaNumber} restNumber={dailyOrder.restMediumPizzaNumber} />
+                </div>
+                <div className="flex flex-col gap-4">
+                    <div className="grid grid-cols-2 items-center gap-x-4">
+                        <span className="font-semibold leading-none tracking-tight">Total Valor Pedidos</span>
+                        <span className="font-semibold leading-none tracking-tight">R$ {dailyOrder.totalOrdersAmount || 0}</span>
+                    </div>
+                    <div className="grid grid-cols-2 items-center gap-x-4">
+                        <span className="text-sm font-semibold leading-none tracking-tight">Total Valor Motoboy</span>
+                        <span className="text-sm font-semibold leading-none tracking-tight">R$ {dailyOrder.totalMotoboyAmount || 0}</span>
+                    </div>
+
+                </div>
             </div>
+            <Separator className="my-6" />
             <div className="flex flex-col gap-6 w-full">
-                <Form method="post" className="flex items-center gap-2 w-full mb-6">
-                    <TransactionForm dailyOrderId={dailyOrder.id} />
-                    <SaveItemButton actionName="daily-orders-transaction-create" />
-                </Form>
+                <div className="bg-slate-50 rounded-xl p-4 mb-8">
+                    <Form method="post" className="flex items-center gap-2 w-full ">
+                        <TransactionForm dailyOrderId={dailyOrder.id} />
+                        <SaveItemButton actionName="daily-orders-transaction-create" clazzName="mt-6" />
+                    </Form>
+                </div>
 
                 <Transactions dailyOrderId={dailyOrder.id} transactions={transactions} />
             </div>
@@ -346,3 +364,38 @@ function TransactionForm({ dailyOrderId, transaction, showLabels = true, ghost =
     )
 }
 
+
+interface PizzaSizeStatProps {
+    label: string
+    initialNumber?: number
+    restNumber?: number
+}
+
+function PizzaSizeStat({ label, initialNumber = 0, restNumber = 0 }: PizzaSizeStatProps) {
+    return (
+        <div className="flex items-end gap-12 border rounded-lg px-2 py-4">
+            <h4 className="font-semibold leading-none tracking-tight">{label}</h4>
+            <Form method="post" className="flex gap-4">
+                <div className="flex gap-4">
+                    <div className="flex gap-4">
+                        <div className="flex flex-col items-center">
+                            <span className="text-xs  leading-none tracking-tight">Iniciais</span>
+                            <input type="text" defaultValue={initialNumber}
+                                className="border-none text-sm font-semibold leading-none tracking-tight w-[24px] text-center pt-2" />
+                        </div>
+                        <div className="flex flex-col items-center">
+                            <span className="text-xs  leading-none tracking-tight">Restante</span>
+                            <input type="text" defaultValue={restNumber}
+                                className="border-none text-sm font-semibold leading-none tracking-tight w-[24px] text-center pt-2" />
+                        </div>
+                    </div>
+
+                    <input type="hidden" name="pizzaSize" value={label} />
+                    <SaveItemButton actionName="daily-orders-pizzas-number-update" />
+                </div>
+            </Form>
+
+
+        </div>
+    )
+}

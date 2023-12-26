@@ -3,8 +3,13 @@ import { createFirestoreModel } from "~/lib/firestore-model/src";
 export interface DailyOrder {
   id?: string;
   date: string;
-  largePizzaNumber: number;
-  mediumPizzaNumber: number;
+  initialLargePizzaNumber: number;
+  restLargePizzaNumber: number;
+  initialMediumPizzaNumber: number;
+  restMediumPizzaNumber: number;
+  totalOrdersNumber: number;
+  totalOrdersAmount: number;
+  totalMotoboyAmount: number;
   transactions: DailyOrderTransaction[];
 }
 
@@ -23,7 +28,7 @@ export interface DailyOrderTransaction {
 
 export type DOTProduct =
   | "Pizza Familía"
-  | "Pizza Media"
+  | "Pizza Média"
   | "Al Taglio"
   | "Bebida";
 export type DOTInboundChannel = "Mogo" | "Aiqfome";

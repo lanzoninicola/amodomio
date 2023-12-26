@@ -6,8 +6,22 @@ import {
   DailyOrderTransaction,
 } from "./daily-order.model.server";
 import { nowWithTime } from "~/lib/dayjs";
+import { serverError } from "~/utils/http-response.server";
+import tryit from "~/utils/try-it";
 
 class DailyOrderEntity extends BaseEntity<DailyOrder> {
+  async createDailyOrder(dailyOrder: DailyOrder) {
+    const dateToAdd = dailyOrder.date;
+
+    const records = await DailyOrderModel.findWhere("date", "==", dateToAdd);
+
+    if (records.length === 0) {
+      return;
+    }
+
+    this.create(dailyOrder);
+  }
+
   async findAllLimit(limit: number) {
     const dailyOrders = await DailyOrderModel.findAll();
 
@@ -33,13 +47,35 @@ class DailyOrderEntity extends BaseEntity<DailyOrder> {
     if (!id) return;
 
     const dailyOrder: DailyOrder | null = await this.findById(id);
+
+    if (!dailyOrder) return;
+
     const transactions = dailyOrder?.transactions || [];
     const transactionId = randomReactKey();
     transactions.push({ ...transaction, id: transactionId });
 
-    console.log("createTransaction", transactions);
+    if (transaction.product === "Pizza Familía") {
+      dailyOrder.restLargePizzaNumber = dailyOrder.restLargePizzaNumber - 1;
+    }
 
-    await this.update(id, { transactions });
+    if (transaction.product === "Pizza Média") {
+      dailyOrder.restMediumPizzaNumber = dailyOrder.restMediumPizzaNumber - 1;
+    }
+
+    const [err, itemUpdated] = await tryit(
+      this.update(id, {
+        ...dailyOrder,
+        totalOrdersNumber: dailyOrder.totalOrdersNumber + 1,
+        totalOrdersAmount: dailyOrder.totalOrdersAmount + transaction.amount,
+        totalMotoboyAmount:
+          dailyOrder.totalMotoboyAmount + transaction.amountMotoboy,
+        transactions,
+      })
+    );
+
+    if (err) {
+      return serverError({ message: err.message });
+    }
   }
 
   async updateTransaction(
@@ -66,6 +102,11 @@ class DailyOrderEntity extends BaseEntity<DailyOrder> {
     if (!id) return;
 
     const dailyOrder: DailyOrder | null = await this.findById(id);
+
+    if (!dailyOrder) {
+      return;
+    }
+
     const transactions = dailyOrder?.transactions || [];
     const index = transactions.findIndex((t) => t.id === transactionId);
     if (index === -1) return;
@@ -74,7 +115,115 @@ class DailyOrderEntity extends BaseEntity<DailyOrder> {
       deletedAt: nowWithTime(),
     };
 
-    this.updateTransaction(id, transactionId, deletedTransaction);
+    transactions[index] = deletedTransaction;
+
+    const [err, itemUpdated] = await tryit(
+      this.update(id, {
+        ...dailyOrder,
+        totalOrdersNumber: dailyOrder.totalOrdersNumber - 1,
+        totalOrdersAmount:
+          dailyOrder.totalOrdersAmount + transactions[index].amount,
+        totalMotoboyAmount:
+          dailyOrder.totalMotoboyAmount + transactions[index].amountMotoboy,
+        transactions,
+      })
+    );
+  }
+
+  async decreaseLargePizzaNumber(id: DailyOrder["id"]) {
+    if (!id) return;
+
+    const dailyOrder: DailyOrder | null = await this.findById(id);
+    const restLargePizzaNumber = dailyOrder?.restLargePizzaNumber || 0;
+
+    await this.update(id, { restLargePizzaNumber: restLargePizzaNumber - 1 });
+  }
+
+  async increaseLargePizzaNumber(id: DailyOrder["id"]) {
+    if (!id) return;
+
+    const dailyOrder: DailyOrder | null = await this.findById(id);
+    const restLargePizzaNumber = dailyOrder?.restLargePizzaNumber || 0;
+
+    await this.update(id, { restLargePizzaNumber: restLargePizzaNumber + 1 });
+  }
+
+  async decreaseMediumPizzaNumber(id: DailyOrder["id"]) {
+    if (!id) return;
+
+    const dailyOrder: DailyOrder | null = await this.findById(id);
+    const restMediumPizzaNumber = dailyOrder?.restMediumPizzaNumber || 0;
+
+    await this.update(id, { restMediumPizzaNumber: restMediumPizzaNumber - 1 });
+  }
+
+  async increaseMediumPizzaNumber(id: DailyOrder["id"]) {
+    if (!id) return;
+
+    const dailyOrder: DailyOrder | null = await this.findById(id);
+    const restMediumPizzaNumber = dailyOrder?.restMediumPizzaNumber || 0;
+
+    await this.update(id, { restMediumPizzaNumber: restMediumPizzaNumber + 1 });
+  }
+
+  async findDailyOrderByDate(date: DailyOrder["date"]) {
+    const dailyOrders = await DailyOrderModel.findWhere("date", "==", date);
+
+    return dailyOrders[0];
+  }
+
+  async increaseTotalMotoboyAmount(id: DailyOrder["id"], amount: number) {
+    if (!id) return;
+
+    const dailyOrder: DailyOrder | null = await this.findById(id);
+    const totalMotoboyAmount = dailyOrder?.totalMotoboyAmount || 0;
+
+    await this.update(id, { totalMotoboyAmount: totalMotoboyAmount + amount });
+  }
+
+  async decreaseTotalMotoboyAmount(id: DailyOrder["id"], amount: number) {
+    if (!id) return;
+
+    const dailyOrder: DailyOrder | null = await this.findById(id);
+    const totalMotoboyAmount = dailyOrder?.totalMotoboyAmount || 0;
+
+    await this.update(id, { totalMotoboyAmount: totalMotoboyAmount - amount });
+  }
+
+  async increaseTotalOrdersAmount(id: DailyOrder["id"], amount: number) {
+    if (!id) return;
+
+    const dailyOrder: DailyOrder | null = await this.findById(id);
+    const totalOrdersAmount = dailyOrder?.totalOrdersAmount || 0;
+
+    await this.update(id, { totalAmount: totalOrdersAmount + amount });
+  }
+
+  async decreaseTotalOrdersAmount(id: DailyOrder["id"], amount: number) {
+    if (!id) return;
+
+    const dailyOrder: DailyOrder | null = await this.findById(id);
+    const totalOrdersAmount = dailyOrder?.totalOrdersAmount || 0;
+
+    await this.update(id, { totalAmount: totalOrdersAmount - amount });
+  }
+
+  async increaseTotalOrdersNumber(id: DailyOrder["id"]) {
+    if (!id) return;
+
+    const dailyOrder: DailyOrder | null = await this.findById(id);
+    const totalOrdersNumber = dailyOrder?.totalOrdersNumber || 0;
+
+    await this.update(id, { totalOrdersNumber: totalOrdersNumber + 1 } || 0);
+  }
+
+  async decreaseTotalOrdersNumber(id: DailyOrder["id"]) {
+    if (!id) return;
+
+    const dailyOrder: DailyOrder | null = await this.findById(id);
+    const totalOrdersNumber = dailyOrder?.totalOrdersNumber || 0;
+
+    await this.update(id, { totalOrdersNumber: totalOrdersNumber - 1 } || 0);
   }
 }
 

@@ -16,8 +16,13 @@ export async function action({ request }: LoaderArgs) {
     if (_action === "daily-orders-create") {
         const dailyOrder: DailyOrder = {
             date: now(),
-            mediumPizzaNumber: Number(values.mediumPizzaNumber),
-            largePizzaNumber: Number(values.largePizzaNumber),
+            initialLargePizzaNumber: Number(values.initialLargePizzaNumber),
+            restLargePizzaNumber: Number(values.initialLargePizzaNumber),
+            initialMediumPizzaNumber: Number(values.initialMediumPizzaNumber),
+            restMediumPizzaNumber: Number(values.initialMediumPizzaNumber),
+            totalOrdersNumber: 0,
+            totalOrdersAmount: 0,
+            totalMotoboyAmount: 0,
             transactions: []
         }
 
