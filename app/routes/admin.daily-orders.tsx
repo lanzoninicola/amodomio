@@ -13,7 +13,7 @@ import { Button } from "~/components/ui/button";
 
 export async function loader({ request }: LoaderArgs) {
 
-    const records = await dailyOrderEntity.findAllLimit(10)
+    const records = await dailyOrderEntity.findAllLimit(10, { order: "desc" })
 
     return ok({
         records

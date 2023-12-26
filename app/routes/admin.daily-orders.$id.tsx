@@ -119,8 +119,6 @@ export default function DailyOrdersSingle() {
 
     const formResponse = useFormResponse()
 
-    console.log(formResponse)
-
     return (
         <div className="flex flex-col">
             <div className="flex justify-between items-center">
@@ -145,7 +143,7 @@ export default function DailyOrdersSingle() {
                 <div className="bg-slate-50 rounded-xl p-4 mb-8">
                     <Form method="post" className="flex items-center gap-2 w-full" ref={formResponse.formRef}>
                         <TransactionForm dailyOrderId={dailyOrder.id} />
-                        <SaveItemButton actionName="daily-orders-transaction-create" clazzName="mt-6" />
+                        <SaveItemButton actionName="daily-orders-transaction-create" clazzName="mt-2" />
                     </Form>
                     {
                         formResponse?.isError && (
@@ -277,7 +275,7 @@ function TransactionForm({ dailyOrderId, transaction, showLabels = true, ghost =
                         Valor
                     </Label>
                 )}
-                <InputItem type="text" name="amount"
+                <InputItem type="number" name="amount"
                     className={`max-w-[100px] ${smallText === true ? `text-xs` : ``}`}
                     ghost={ghost}
                     defaultValue={transaction?.amount} />
@@ -322,7 +320,7 @@ function TransactionForm({ dailyOrderId, transaction, showLabels = true, ghost =
                         Valor Motoboy
                     </Label>
                 )}
-                <InputItem type="text" name="amountMotoboy"
+                <InputItem type="number" name="amountMotoboy"
                     className={`max-w-[100px] ${smallText === true ? `text-xs` : ``}`}
                     ghost={ghost}
                     defaultValue={transaction?.amountMotoboy} />

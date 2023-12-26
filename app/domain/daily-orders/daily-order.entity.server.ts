@@ -24,8 +24,44 @@ class DailyOrderEntity extends BaseEntity<DailyOrder> {
     return await this.create(dailyOrder);
   }
 
-  async findAllLimit(limit: number) {
+  async findAllOrders(options?: {
+    order?: "asc" | "desc";
+    orderBy?: "date" | "totalOrdersAmount";
+  }) {
     const dailyOrders = await DailyOrderModel.findAll();
+    const order = options?.order || "asc";
+    const orderBy = options?.orderBy || "date";
+
+    dailyOrders.sort((a, b) => {
+      const valueA = a[orderBy];
+      const valueB = b[orderBy];
+
+      if (valueA === undefined || valueB === undefined) {
+        return 0; // Handle undefined values, placing them at an arbitrary position
+      }
+
+      if (order === "asc") {
+        if (valueA < valueB) return -1;
+        if (valueA > valueB) return 1;
+        return 0;
+      } else {
+        if (valueA < valueB) return 1;
+        if (valueA > valueB) return -1;
+        return 0;
+      }
+    });
+
+    return dailyOrders;
+  }
+
+  async findAllLimit(
+    limit: number,
+    options?: {
+      order?: "asc" | "desc";
+      orderBy?: "date" | "totalOrdersAmount";
+    }
+  ) {
+    const dailyOrders = await this.findAllOrders(options);
 
     return dailyOrders.slice(0, limit);
   }
