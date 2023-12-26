@@ -11,6 +11,7 @@ export interface DailyOrder {
   totalOrdersAmount: number;
   totalMotoboyAmount: number;
   transactions: DailyOrderTransaction[];
+  operator: DOTOperator;
 }
 
 export interface DailyOrderTransaction {
@@ -23,7 +24,7 @@ export interface DailyOrderTransaction {
   inboundChannel: DOTInboundChannel;
   paymentMethod: DOTPaymentMethod;
   deletedAt: string | null;
-  userLogged: string;
+  operator: DOTOperator;
 }
 
 export type DOTProduct =
@@ -38,6 +39,7 @@ export type DOTPaymentMethod =
   | "AIQFome"
   | "Cartão Credito"
   | "Cartão Debito";
+export type DOTOperator = { id: number; name: string };
 
 const DailyOrderModel = createFirestoreModel<DailyOrder>("daily-order");
 

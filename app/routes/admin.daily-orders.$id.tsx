@@ -1,40 +1,38 @@
 import { Label } from "@radix-ui/react-label";
 import { LoaderArgs, redirect } from "@remix-run/node";
-import { Form, useLoaderData, useNavigation, useOutletContext } from "@remix-run/react";
+import { Form, useLoaderData, useNavigation, useOutletContext, useParams } from "@remix-run/react";
 import InputItem from "~/components/primitives/form/input-item/input-item";
-import SubmitButton from "~/components/primitives/submit-button/submit-button";
-import { DeleteItemButton, EditItemButton, Table, TableRow, TableRows, TableTitles } from "~/components/primitives/table-list";
+import { DeleteItemButton, Table, TableRow, TableRows, TableTitles } from "~/components/primitives/table-list";
 import SaveItemButton from "~/components/primitives/table-list/action-buttons/save-item-button/save-item-button";
 import Fieldset from "~/components/ui/fieldset";
-import { Input } from "~/components/ui/input";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { dailyOrderEntity } from "~/domain/daily-orders/daily-order.entity.server";
-import { DOTInboundChannel, DOTPaymentMethod, DOTProduct, DailyOrder, DailyOrderTransaction } from "~/domain/daily-orders/daily-order.model.server";
+import { DOTInboundChannel, DOTOperator, DOTPaymentMethod, DOTProduct, DailyOrder, DailyOrderTransaction } from "~/domain/daily-orders/daily-order.model.server";
 import dotInboundChannels from "~/domain/daily-orders/dot-inbound-channels";
 import dotPaymentMethods from "~/domain/daily-orders/dot-payment-methods";
 import dotProducts from "~/domain/daily-orders/dot-products";
 import { ok, serverError } from "~/utils/http-response.server";
-import { jsonStringify } from "~/utils/json-helper";
-import randomReactKey from "~/utils/random-react-key";
 import tryit from "~/utils/try-it";
 import { urlAt } from "~/utils/url";
 import { AdminOutletContext } from "./admin";
-import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Separator } from "~/components/ui/separator";
+import dotOperators from "~/domain/daily-orders/dot-operators";
+import useFormResponse from "~/hooks/useFormResponse";
+import { AlertError } from "~/components/layout/alerts/alerts";
 
 
-export async function loader({ request }: LoaderArgs) {
+export async function loader({ request, params }: LoaderArgs) {
+    const operatorId = new URL(request.url).searchParams.get('op');
 
-    const lastUrlSlug = urlAt(request.url, -1)
-
-    if (!lastUrlSlug) {
+    if (!params?.id) {
         return redirect(`/admin/daily-orders`)
     }
 
-    const dailyOrder = await dailyOrderEntity.findById(lastUrlSlug)
+    const dailyOrder = await dailyOrderEntity.findById(params?.id)
 
     return ok({
-        dailyOrder
+        dailyOrder,
+        currentOperatorId: operatorId,
     })
 
 }
@@ -45,6 +43,8 @@ export async function action({ request }: LoaderArgs) {
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);
 
+    const operator = dotOperators(values.operatorId as string) as DOTOperator
+
     const transaction: DailyOrderTransaction = {
         product: values.product as DOTProduct || "",
         amount: Number.isNaN(values?.amount) ? 0 : Number(values.amount),
@@ -54,7 +54,7 @@ export async function action({ request }: LoaderArgs) {
         inboundChannel: values.inboundChannel as DOTInboundChannel || "",
         paymentMethod: values.paymentMethod as DOTPaymentMethod || "",
         deletedAt: null,
-        userLogged: values.userLogged as string
+        operator
     }
 
     if (values.transactionId) {
@@ -62,15 +62,17 @@ export async function action({ request }: LoaderArgs) {
     }
 
     if (values.dailyOrderId === undefined || values.dailyOrderId === "") {
-        return serverError({ message: "Erro generico" })
+        return serverError("Erro generico")
     }
 
     if (_action === "daily-orders-transaction-create") {
         const [err, itemCreated] = await tryit(dailyOrderEntity.createTransaction(values.dailyOrderId as string, transaction))
 
+
         if (err) {
-            return serverError({ message: err.message })
+            return serverError(err)
         }
+
         return ok()
     }
 
@@ -84,7 +86,7 @@ export async function action({ request }: LoaderArgs) {
         )
 
         if (err) {
-            return serverError({ message: err.message })
+            return serverError(err)
         }
         return ok()
     }
@@ -98,7 +100,7 @@ export async function action({ request }: LoaderArgs) {
         )
 
         if (err) {
-            return serverError({ message: err.message })
+            return serverError(err)
         }
         return ok()
     }
@@ -111,25 +113,29 @@ export async function action({ request }: LoaderArgs) {
 
 export default function DailyOrdersSingle() {
     const loaderData = useLoaderData<typeof loader>()
-    const dailyOrder = loaderData.payload.dailyOrder as DailyOrder
+    const dailyOrder = loaderData?.payload?.dailyOrder as DailyOrder
 
-    const transactions = dailyOrder.transactions.filter(t => t.deletedAt === null) || []
+    const transactions = dailyOrder?.transactions.filter(t => t.deletedAt === null) || []
+
+    const formResponse = useFormResponse()
+
+    console.log(formResponse)
 
     return (
         <div className="flex flex-col">
             <div className="flex justify-between items-center">
                 <div className="flex gap-4">
-                    <PizzaSizeStat label={"Pizza Familía"} initialNumber={dailyOrder.initialLargePizzaNumber} restNumber={dailyOrder.restLargePizzaNumber} />
-                    <PizzaSizeStat label={"Pizza Medía"} initialNumber={dailyOrder.initialMediumPizzaNumber} restNumber={dailyOrder.restMediumPizzaNumber} />
+                    <PizzaSizeStat label={"Pizza Familía"} initialNumber={dailyOrder?.initialLargePizzaNumber} restNumber={dailyOrder.restLargePizzaNumber} />
+                    <PizzaSizeStat label={"Pizza Medía"} initialNumber={dailyOrder?.initialMediumPizzaNumber} restNumber={dailyOrder.restMediumPizzaNumber} />
                 </div>
                 <div className="flex flex-col gap-4">
                     <div className="grid grid-cols-2 items-center gap-x-4">
                         <span className="font-semibold leading-none tracking-tight">Total Valor Pedidos</span>
-                        <span className="font-semibold leading-none tracking-tight">R$ {dailyOrder.totalOrdersAmount || 0}</span>
+                        <span className="font-semibold leading-none tracking-tight">R$ {dailyOrder?.totalOrdersAmount || 0}</span>
                     </div>
                     <div className="grid grid-cols-2 items-center gap-x-4">
                         <span className="text-sm font-semibold leading-none tracking-tight">Total Valor Motoboy</span>
-                        <span className="text-sm font-semibold leading-none tracking-tight">R$ {dailyOrder.totalMotoboyAmount || 0}</span>
+                        <span className="text-sm font-semibold leading-none tracking-tight">R$ {dailyOrder?.totalMotoboyAmount || 0}</span>
                     </div>
 
                 </div>
@@ -137,10 +143,18 @@ export default function DailyOrdersSingle() {
             <Separator className="my-6" />
             <div className="flex flex-col gap-6 w-full">
                 <div className="bg-slate-50 rounded-xl p-4 mb-8">
-                    <Form method="post" className="flex items-center gap-2 w-full ">
+                    <Form method="post" className="flex items-center gap-2 w-full" ref={formResponse.formRef}>
                         <TransactionForm dailyOrderId={dailyOrder.id} />
                         <SaveItemButton actionName="daily-orders-transaction-create" clazzName="mt-6" />
                     </Form>
+                    {
+                        formResponse?.isError && (
+                            <div className="md:max-w-md mt-6">
+                                <AlertError message={formResponse.errorMessage} title="Erro!" position="top" />
+                            </div>
+
+                        )
+                    }
                 </div>
 
                 <Transactions dailyOrderId={dailyOrder.id} transactions={transactions} />
@@ -220,17 +234,19 @@ interface TransactionFormProps {
 }
 
 function TransactionForm({ dailyOrderId, transaction, showLabels = true, ghost = false, smallText = false }: TransactionFormProps) {
-    const outletContext = useOutletContext<AdminOutletContext>()
+    const loaderData = useLoaderData<typeof loader>()
 
     const productsSelection = dotProducts()
     const inboundChannelsSelection = dotInboundChannels()
     const paymentMethodsSelection = dotPaymentMethods()
 
+
+
     return (
         <>
             <InputItem type="hidden" name="dailyOrderId" defaultValue={dailyOrderId} />
             <InputItem type="hidden" name="transactionId" defaultValue={transaction?.id || ""} />
-            <InputItem type="hidden" name="userLogged" defaultValue={outletContext?.loggedUser?.email || ""} />
+            <InputItem type="hidden" name="operatorId" defaultValue={loaderData.payload?.currentOperatorId} />
             <Fieldset clazzName="mb-0">
                 {showLabels && (
                     <Label htmlFor="name" className="flex gap-2 items-center text-sm font-semibold">
@@ -360,6 +376,7 @@ function TransactionForm({ dailyOrderId, transaction, showLabels = true, ghost =
                     </Select>
                 </div>
             </Fieldset>
+
         </>
     )
 }
@@ -372,21 +389,26 @@ interface PizzaSizeStatProps {
 }
 
 function PizzaSizeStat({ label, initialNumber = 0, restNumber = 0 }: PizzaSizeStatProps) {
+
+    const warn = restNumber > 1 && restNumber <= 3
+    const error = restNumber === 1
+
     return (
-        <div className="flex items-end gap-12 border rounded-lg px-2 py-4">
-            <h4 className="font-semibold leading-none tracking-tight">{label}</h4>
-            <Form method="post" className="flex gap-4">
+        <div className={`flex items-end gap-12 border rounded-lg p-4
+        ${warn === true ? 'bg-orange-500' : error === true ? 'bg-red-500' : ""}`}>
+            <h4 className={`font-semibold leading-none tracking-tight ${warn === true || error === true ? 'text-white' : 'text-black'}`}>{label}</h4>
+            <Form method="post" className={`flex gap-4 ${warn === true || error === true ? 'text-white' : 'text-black'}`}>
                 <div className="flex gap-4">
                     <div className="flex gap-4">
                         <div className="flex flex-col items-center">
                             <span className="text-xs  leading-none tracking-tight">Iniciais</span>
                             <input type="text" defaultValue={initialNumber}
-                                className="border-none text-sm font-semibold leading-none tracking-tight w-[24px] text-center pt-2" />
+                                className="border-none text-sm font-semibold leading-none tracking-tight w-[24px] text-center pt-2 bg-transparent" />
                         </div>
                         <div className="flex flex-col items-center">
                             <span className="text-xs  leading-none tracking-tight">Restante</span>
                             <input type="text" defaultValue={restNumber}
-                                className="border-none text-sm font-semibold leading-none tracking-tight w-[24px] text-center pt-2" />
+                                className="border-none text-sm font-semibold leading-none tracking-tight w-[24px] text-center pt-2 bg-transparent" />
                         </div>
                     </div>
 

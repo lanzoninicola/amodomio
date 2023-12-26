@@ -1,12 +1,16 @@
 import { LoaderFunction, type LinksFunction, MetaFunction, V2_MetaFunction, LoaderArgs, redirect } from "@remix-run/node";
 import { Outlet, useLoaderData } from "@remix-run/react";
+import { useState } from "react";
 import { NavMenuCollapsible } from "~/components/primitives/menu-collapsible/nav-menu-collapsible";
 import { authenticator } from "~/domain/auth/google.server";
 import { LoggedUser } from "~/domain/auth/types.server";
+import { DOTOperator } from "~/domain/daily-orders/daily-order.model.server";
 
 
 export interface AdminOutletContext {
     loggedUser: LoggedUser | null
+    operatorId: string
+    setOperatorId: (operatorId: string) => void
 }
 
 export const meta: V2_MetaFunction = () => [
@@ -27,9 +31,7 @@ export const links: LinksFunction = () => [
 ];
 
 export const loader: LoaderFunction = async ({ request }: LoaderArgs) => {
-
     let user = await authenticator.isAuthenticated(request);
-    console.log("admin loader", user)
 
     if (!user) {
         return redirect("/login");
@@ -40,8 +42,6 @@ export const loader: LoaderFunction = async ({ request }: LoaderArgs) => {
 
 export default function AdminOutlet() {
     const loggedUser = useLoaderData<typeof loader>();
-
-
 
     return (
 
@@ -59,7 +59,8 @@ export default function AdminOutlet() {
                 } />
             </div>
             <Outlet context={{
-                loggedUser
+                loggedUser,
+
             }} />
         </div>
     )

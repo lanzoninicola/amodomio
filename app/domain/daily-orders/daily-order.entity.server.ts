@@ -13,13 +13,15 @@ class DailyOrderEntity extends BaseEntity<DailyOrder> {
   async createDailyOrder(dailyOrder: DailyOrder) {
     const dateToAdd = dailyOrder.date;
 
-    const records = await DailyOrderModel.findWhere("date", "==", dateToAdd);
+    const record = await this.findDailyOrderByDate(dateToAdd);
 
-    if (records.length === 0) {
-      return;
+    if (record) {
+      throw new Error(
+        `Não pode abrir o dia para a data ${dateToAdd}, os pedidos já existem. Selecíona o dia na barra a esquerda.`
+      );
     }
 
-    this.create(dailyOrder);
+    return await this.create(dailyOrder);
   }
 
   async findAllLimit(limit: number) {
@@ -44,11 +46,15 @@ class DailyOrderEntity extends BaseEntity<DailyOrder> {
     id: DailyOrder["id"],
     transaction: DailyOrderTransaction
   ) {
-    if (!id) return;
+    if (!id) {
+      throw new Error("Falha na criação: falta o ID do registro");
+    }
 
     const dailyOrder: DailyOrder | null = await this.findById(id);
 
-    if (!dailyOrder) return;
+    if (!dailyOrder) {
+      throw new Error("Falha na criação: registro não encontrado");
+    }
 
     const transactions = dailyOrder?.transactions || [];
     const transactionId = randomReactKey();
@@ -64,7 +70,8 @@ class DailyOrderEntity extends BaseEntity<DailyOrder> {
 
     const [err, itemUpdated] = await tryit(
       this.update(id, {
-        ...dailyOrder,
+        restLargePizzaNumber: dailyOrder.restLargePizzaNumber,
+        restMediumPizzaNumber: dailyOrder.restMediumPizzaNumber,
         totalOrdersNumber: dailyOrder.totalOrdersNumber + 1,
         totalOrdersAmount: dailyOrder.totalOrdersAmount + transaction.amount,
         totalMotoboyAmount:
@@ -74,8 +81,10 @@ class DailyOrderEntity extends BaseEntity<DailyOrder> {
     );
 
     if (err) {
-      return serverError({ message: err.message });
+      throw new Error(err.message);
     }
+
+    return itemUpdated;
   }
 
   async updateTransaction(
@@ -117,17 +126,30 @@ class DailyOrderEntity extends BaseEntity<DailyOrder> {
 
     transactions[index] = deletedTransaction;
 
+    if (deletedTransaction.product === "Pizza Familía") {
+      dailyOrder.restLargePizzaNumber = dailyOrder.restLargePizzaNumber + 1;
+    }
+
+    if (deletedTransaction.product === "Pizza Média") {
+      dailyOrder.restMediumPizzaNumber = dailyOrder.restMediumPizzaNumber + 1;
+    }
+
     const [err, itemUpdated] = await tryit(
       this.update(id, {
-        ...dailyOrder,
+        restLargePizzaNumber: dailyOrder.restLargePizzaNumber,
+        restMediumPizzaNumber: dailyOrder.restMediumPizzaNumber,
         totalOrdersNumber: dailyOrder.totalOrdersNumber - 1,
         totalOrdersAmount:
-          dailyOrder.totalOrdersAmount + transactions[index].amount,
+          dailyOrder.totalOrdersAmount - transactions[index].amount,
         totalMotoboyAmount:
-          dailyOrder.totalMotoboyAmount + transactions[index].amountMotoboy,
+          dailyOrder.totalMotoboyAmount - transactions[index].amountMotoboy,
         transactions,
       })
     );
+
+    if (err) {
+      throw new Error(err.message);
+    }
   }
 
   async decreaseLargePizzaNumber(id: DailyOrder["id"]) {
