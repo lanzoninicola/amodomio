@@ -18,6 +18,7 @@ export interface DailyOrderTransaction {
   inboundChannel: DOTInboundChannel;
   paymentMethod: DOTPaymentMethod;
   deletedAt: string | null;
+  userLogged: string;
 }
 
 export type DOTProduct =

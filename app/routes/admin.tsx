@@ -2,6 +2,12 @@ import { LoaderFunction, type LinksFunction, MetaFunction, V2_MetaFunction, Load
 import { Outlet, useLoaderData } from "@remix-run/react";
 import { NavMenuCollapsible } from "~/components/primitives/menu-collapsible/nav-menu-collapsible";
 import { authenticator } from "~/domain/auth/google.server";
+import { LoggedUser } from "~/domain/auth/types.server";
+
+
+export interface AdminOutletContext {
+    loggedUser: LoggedUser | null
+}
 
 export const meta: V2_MetaFunction = () => [
     { name: "robots", content: "noindex" },
@@ -52,7 +58,9 @@ export default function AdminOutlet() {
                     ]
                 } />
             </div>
-            <Outlet />
+            <Outlet context={{
+                loggedUser
+            }} />
         </div>
     )
 }

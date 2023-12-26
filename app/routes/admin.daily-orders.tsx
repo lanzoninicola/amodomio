@@ -1,5 +1,5 @@
 import { LoaderArgs, redirect } from "@remix-run/node";
-import { Form, Link, Outlet, useLoaderData } from "@remix-run/react";
+import { Form, Link, Outlet, useLoaderData, useOutletContext } from "@remix-run/react";
 import { PlusCircle, PlusCircleIcon, PlusIcon } from "lucide-react";
 import { useState } from "react";
 import Container from "~/components/layout/container/container";
@@ -9,6 +9,7 @@ import { dailyOrderEntity } from "~/domain/daily-orders/daily-order.entity.serve
 import { DailyOrder } from "~/domain/daily-orders/daily-order.model.server";
 import { now, nowMergedString } from "~/lib/dayjs";
 import { ok } from "~/utils/http-response.server";
+import { AdminOutletContext } from "./admin";
 
 type DailyOrderFormAction = "daily-orders-create" | "daily-orders-update"
 
@@ -26,6 +27,7 @@ export async function loader({ request }: LoaderArgs) {
 
 
 export default function AdminDailyOrdersIndex() {
+    const adminOutletContext = useOutletContext<AdminOutletContext>()
 
     const loaderData = useLoaderData<typeof loader>()
     const dailyOrders = loaderData.payload.records as DailyOrder[]
@@ -68,7 +70,9 @@ export default function AdminDailyOrdersIndex() {
                     }
                 </ul>
                 <div className="py-6">
-                    <Outlet />
+                    <Outlet context={
+                        { ...adminOutletContext }
+                    } />
                 </div>
             </div>
         </Container>

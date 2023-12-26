@@ -19,7 +19,11 @@ class DailyOrderEntity extends BaseEntity<DailyOrder> {
 
     const dailyOrder: DailyOrder | null = await this.findById(id);
 
-    return dailyOrder?.transactions || [];
+    const records = dailyOrder?.transactions.filter(
+      (t) => t.deletedAt === null
+    );
+
+    return records || [];
   }
 
   async createTransaction(
@@ -33,7 +37,8 @@ class DailyOrderEntity extends BaseEntity<DailyOrder> {
     const transactionId = randomReactKey();
     transactions.push({ ...transaction, id: transactionId });
 
-    console.log("+++++++++++++createTransaction", transactions);
+    console.log("createTransaction", transactions);
+
     await this.update(id, { transactions });
   }
 
@@ -49,6 +54,7 @@ class DailyOrderEntity extends BaseEntity<DailyOrder> {
     const index = transactions.findIndex((t) => t.id === transactionId);
     if (index === -1) return;
     transactions[index] = transaction;
+
     await this.update(id, { transactions });
     return transactions[index];
   }
@@ -65,7 +71,7 @@ class DailyOrderEntity extends BaseEntity<DailyOrder> {
     if (index === -1) return;
     const deletedTransaction = {
       ...transactions[index],
-      deletedAd: nowWithTime(),
+      deletedAt: nowWithTime(),
     };
 
     this.updateTransaction(id, transactionId, deletedTransaction);
