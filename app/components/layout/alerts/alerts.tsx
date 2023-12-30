@@ -51,14 +51,25 @@ interface AlertProps {
 
 export function AlertError({ title, message, duration = 8000, position = "bottom" }: AlertProps) {
     const [visible, setVisible] = useState(true);
+    const [remainingTime, setRemainingTime] = useState(duration / 1000);
 
     useEffect(() => {
-        const timer = setTimeout(() => {
+        const timer = setInterval(() => {
+            setRemainingTime(prevTime => prevTime - 1);
+        }, 1000);
+
+        return () => {
+            clearInterval(timer);
+        };
+    }, []);
+
+    useEffect(() => {
+        const hideTimer = setTimeout(() => {
             setVisible(false);
         }, duration);
 
         return () => {
-            clearTimeout(timer);
+            clearTimeout(hideTimer);
         };
     }, [duration]);
 
@@ -66,16 +77,13 @@ export function AlertError({ title, message, duration = 8000, position = "bottom
         return null;
     }
 
-    if (position === "top") {
-
-    }
-
     return (
         <div className={`fixed z-50 m-auto ${position === "top" ? `top-2 -translate-x-1/2` : `bottom-2 -translate-x-1/2`}`}>
             <div className={`bg-red-500 border text-white px-4 py-3 rounded relative`} role="alert">
                 <div className="flex flex-col gap-2">
                     <strong className="font-semibold">{title || "Erro!"}</strong>
-                    <span className="block sm:inline">{message}</span>
+                    <span className="block sm:inline mb-6">{message}</span>
+                    <span className="text-xs">Fechando em {remainingTime} seconds</span>
                 </div>
             </div>
         </div>

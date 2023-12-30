@@ -1,13 +1,13 @@
 import { Label } from "@radix-ui/react-label";
 import { LoaderArgs, redirect } from "@remix-run/node";
-import { Form, useLoaderData, useNavigation, useOutletContext, useParams } from "@remix-run/react";
+import { Form, useActionData, useLoaderData, useNavigation, useOutletContext, useParams } from "@remix-run/react";
 import InputItem from "~/components/primitives/form/input-item/input-item";
 import { DeleteItemButton, Table, TableRow, TableRows, TableTitles } from "~/components/primitives/table-list";
 import SaveItemButton from "~/components/primitives/table-list/action-buttons/save-item-button/save-item-button";
 import Fieldset from "~/components/ui/fieldset";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { dailyOrderEntity } from "~/domain/daily-orders/daily-order.entity.server";
-import { DOTInboundChannel, DOTOperator, DOTPaymentMethod, DOTProduct, DailyOrder, DailyOrderTransaction } from "~/domain/daily-orders/daily-order.model.server";
+import { DOTInboundChannel, DOTOperator, DOTPaymentMethod, DOTPizzaSize, DOTProduct, DailyOrder, DailyOrderTransaction } from "~/domain/daily-orders/daily-order.model.server";
 import dotInboundChannels from "~/domain/daily-orders/dot-inbound-channels";
 import dotPaymentMethods from "~/domain/daily-orders/dot-payment-methods";
 import dotProducts from "~/domain/daily-orders/dot-products";
@@ -19,6 +19,8 @@ import { Separator } from "~/components/ui/separator";
 import dotOperators from "~/domain/daily-orders/dot-operators";
 import useFormResponse from "~/hooks/useFormResponse";
 import { AlertError } from "~/components/layout/alerts/alerts";
+import { useEffect, useState } from "react";
+import randomReactKey from "~/utils/random-react-key";
 
 
 export async function loader({ request, params }: LoaderArgs) {
@@ -43,6 +45,8 @@ export async function action({ request }: LoaderArgs) {
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);
 
+    console.log(formData)
+
     const operator = dotOperators(values.operatorId as string) as DOTOperator
 
     const transaction: DailyOrderTransaction = {
@@ -62,7 +66,7 @@ export async function action({ request }: LoaderArgs) {
     }
 
     if (values.dailyOrderId === undefined || values.dailyOrderId === "") {
-        return serverError("Erro generico")
+        return serverError("O ID dos pedidos do dia não pode ser null")
     }
 
     if (_action === "daily-orders-transaction-create") {
@@ -106,6 +110,31 @@ export async function action({ request }: LoaderArgs) {
     }
 
 
+    if (_action === "daily-orders-pizzas-number-update") {
+
+
+        console.log("im here", values)
+
+        if (Number.isNaN(values.pizzaNumber)) {
+            return serverError("O numero de pizza está incorreto")
+        }
+
+        const [err, itemUpdated] = await tryit(
+            dailyOrderEntity.updatePizzaSizeRestNumber(
+                values.dailyOrderId as string,
+                values.pizzaSize as DOTPizzaSize,
+                Number(values.pizzaNumber)
+            )
+        )
+
+        if (err) {
+            return serverError(err)
+        }
+        return ok()
+
+    }
+
+
     return null
 
 
@@ -121,22 +150,22 @@ export default function DailyOrdersSingle() {
 
     return (
         <div className="flex flex-col">
-            <div className="flex justify-between items-center">
-                <div className="flex gap-4">
-                    <PizzaSizeStat label={"Pizza Familía"} initialNumber={dailyOrder?.initialLargePizzaNumber} restNumber={dailyOrder.restLargePizzaNumber} />
-                    <PizzaSizeStat label={"Pizza Medía"} initialNumber={dailyOrder?.initialMediumPizzaNumber} restNumber={dailyOrder.restMediumPizzaNumber} />
-                </div>
-                <div className="flex flex-col gap-4">
-                    <div className="grid grid-cols-2 items-center gap-x-4">
-                        <span className="font-semibold leading-none tracking-tight">Total Valor Pedidos</span>
-                        <span className="font-semibold leading-none tracking-tight">R$ {dailyOrder?.totalOrdersAmount || 0}</span>
-                    </div>
-                    <div className="grid grid-cols-2 items-center gap-x-4">
-                        <span className="text-sm font-semibold leading-none tracking-tight">Total Valor Motoboy</span>
-                        <span className="text-sm font-semibold leading-none tracking-tight">R$ {dailyOrder?.totalMotoboyAmount || 0}</span>
-                    </div>
+            <div className="grid grid-cols-2 gap-x-6">
+                <PizzaSizeStat label={"Pizza Familía"} initialNumber={dailyOrder?.initialLargePizzaNumber} restNumber={dailyOrder.restLargePizzaNumber} />
+                <PizzaSizeStat label={"Pizza Medía"} initialNumber={dailyOrder?.initialMediumPizzaNumber} restNumber={dailyOrder.restMediumPizzaNumber} />
+            </div>
+            <Separator className="my-6" />
 
+            <div className="flex gap-4 items-center w-full justify-center">
+                <div className="grid grid-cols-2 items-center gap-x-4 ">
+                    <span className="font-semibold leading-none tracking-tight">Total Valor Pedidos</span>
+                    <span className="font-semibold leading-none tracking-tight">R$ {dailyOrder?.totalOrdersAmount || 0}</span>
                 </div>
+                <div className="grid grid-cols-2 items-center gap-x-4">
+                    <span className="font-semibold leading-none tracking-tight">Total Valor Motoboy</span>
+                    <span className="font-semibold leading-none tracking-tight">R$ {dailyOrder?.totalMotoboyAmount || 0}</span>
+                </div>
+
             </div>
             <Separator className="my-6" />
             <div className="flex flex-col gap-6 w-full">
@@ -390,30 +419,75 @@ interface PizzaSizeStatProps {
 
 function PizzaSizeStat({ label, initialNumber = 0, restNumber = 0 }: PizzaSizeStatProps) {
 
+    const loaderData = useLoaderData<typeof loader>()
+    const dailyOrder = loaderData?.payload?.dailyOrder as DailyOrder
+    const [restNumberInput, setRestNumberInput] = useState(restNumber)
+    const [isRestNumberChanged, setIsRestNumberChanged] = useState(false)
+
     const warn = restNumber > 1 && restNumber <= 3
     const error = restNumber === 1
 
-    return (
-        <div className={`flex items-end gap-12 border rounded-lg p-4
-        ${warn === true ? 'bg-orange-500' : error === true ? 'bg-red-500' : ""}`}>
-            <h4 className={`font-semibold leading-none tracking-tight ${warn === true || error === true ? 'text-white' : 'text-black'}`}>{label}</h4>
-            <Form method="post" className={`flex gap-4 ${warn === true || error === true ? 'text-white' : 'text-black'}`}>
-                <div className="flex gap-4">
-                    <div className="flex gap-4">
-                        <div className="flex flex-col items-center">
-                            <span className="text-xs  leading-none tracking-tight">Iniciais</span>
-                            <input type="text" defaultValue={initialNumber}
-                                className="border-none text-sm font-semibold leading-none tracking-tight w-[24px] text-center pt-2 bg-transparent" />
-                        </div>
-                        <div className="flex flex-col items-center">
-                            <span className="text-xs  leading-none tracking-tight">Restante</span>
-                            <input type="text" defaultValue={restNumber}
-                                className="border-none text-sm font-semibold leading-none tracking-tight w-[24px] text-center pt-2 bg-transparent" />
-                        </div>
-                    </div>
+    const formResponse = useFormResponse()
 
+
+    function handleChangeNumber(newValue: string) {
+        if (Number.isNaN(Number(newValue))) {
+            setRestNumberInput(0)
+            return
+        }
+        setRestNumberInput(Number(newValue))
+    }
+
+    useEffect(() => {
+        if (formResponse.isError) {
+            setIsRestNumberChanged(false)
+            setRestNumberInput(restNumber)
+        }
+
+    }, [formResponse.isError])
+
+    return (
+        <div key={randomReactKey()} className={`flex justify-between items-end gap-12 border rounded-lg py-4 px-6
+        ${warn === true ? 'bg-orange-500' : error === true ? 'bg-red-500' : ""}`}>
+            <h4 className={`text-3xl leading-none tracking-tight ${warn === true || error === true ? 'text-white' : 'text-black'}`}>{label}</h4>
+            <Form method="post" className={`flex gap-4 ${warn === true || error === true ? 'text-white' : 'text-black'}`} ref={formResponse.formRef}>
+                <div className="grid grid-cols-2">
+                    <div className="flex gap-4">
+                        <div className="flex gap-4">
+                            <div className="flex flex-col items-center">
+                                <span className="text-xs leading-none tracking-tight">Iniciais</span>
+                                <input type="text" defaultValue={initialNumber}
+                                    className="text-xl  border-none font-semibold leading-none tracking-tight w-[72px] text-center pt-2 bg-transparent outline-none"
+                                />
+                            </div>
+                            <div className="flex flex-col items-center">
+                                <span className="text-xs leading-none tracking-tight">Restante</span>
+                                <input type="text"
+                                    className="text-xl  border-none font-semibold leading-none tracking-tight w-[72px] text-center pt-2 bg-transparent outline-none"
+                                    onChange={e => {
+                                        const newValue = e.target.value
+
+                                        if (Number(newValue) !== restNumber) {
+                                            setIsRestNumberChanged(true)
+                                        }
+                                        handleChangeNumber(newValue)
+                                    }}
+                                    value={restNumberInput || 0}
+
+                                />
+
+                            </div>
+                        </div>
+
+
+                    </div>
+                    <input type="hidden" name="dailyOrderId" value={dailyOrder.id} />
                     <input type="hidden" name="pizzaSize" value={label} />
-                    <SaveItemButton actionName="daily-orders-pizzas-number-update" />
+                    {isRestNumberChanged === true &&
+                        <button type="submit" className="text-sm underline justify-self-end" name="_action" value={"daily-orders-pizzas-number-update"}>
+                            Salvar alterações
+                        </button>
+                    }
                 </div>
             </Form>
 

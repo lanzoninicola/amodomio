@@ -1,6 +1,7 @@
 import randomReactKey from "~/utils/random-react-key";
 import { BaseEntity } from "../base.entity";
 import {
+  DOTPizzaSize,
   DailyOrder,
   DailyOrderModel,
   DailyOrderTransaction,
@@ -282,6 +283,32 @@ class DailyOrderEntity extends BaseEntity<DailyOrder> {
     const totalOrdersNumber = dailyOrder?.totalOrdersNumber || 0;
 
     await this.update(id, { totalOrdersNumber: totalOrdersNumber - 1 } || 0);
+  }
+
+  async updatePizzaSizeRestNumber(
+    id: DailyOrder["id"],
+    pizzaSize: DOTPizzaSize,
+    amount: number
+  ) {
+    if (!id) return;
+
+    const dailyOrder: DailyOrder | null = await this.findById(id);
+
+    if (!dailyOrder) return;
+
+    if (pizzaSize === "Pizza Familía") {
+      await this.update(id, {
+        restLargePizzaNumber: dailyOrder.restLargePizzaNumber - amount,
+      });
+    }
+
+    if (pizzaSize === "Pizza Média") {
+      await this.update(id, {
+        restMediumPizzaNumber: dailyOrder.restMediumPizzaNumber - amount,
+      });
+    }
+
+    return dailyOrder;
   }
 }
 

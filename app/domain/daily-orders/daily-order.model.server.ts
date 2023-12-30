@@ -27,6 +27,8 @@ export interface DailyOrderTransaction {
   operator: DOTOperator;
 }
 
+export type DOTPizzaSize = "Pizza Familía" | "Pizza Média";
+
 export type DOTProduct =
   | "Pizza Familía"
   | "Pizza Média"
