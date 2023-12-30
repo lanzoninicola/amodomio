@@ -276,6 +276,7 @@ function TransactionForm({ dailyOrderId, transaction, showLabels = true, ghost =
                     </Label>
                 )}
                 <InputItem type="number" name="amount"
+                    step=".01"
                     className={`max-w-[100px] ${smallText === true ? `text-xs` : ``}`}
                     ghost={ghost}
                     defaultValue={transaction?.amount} />
@@ -321,6 +322,7 @@ function TransactionForm({ dailyOrderId, transaction, showLabels = true, ghost =
                     </Label>
                 )}
                 <InputItem type="number" name="amountMotoboy"
+                    step=".01"
                     className={`max-w-[100px] ${smallText === true ? `text-xs` : ``}`}
                     ghost={ghost}
                     defaultValue={transaction?.amountMotoboy} />

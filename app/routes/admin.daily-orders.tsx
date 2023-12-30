@@ -74,7 +74,7 @@ export default function AdminDailyOrdersIndex() {
                         <ul className="space-y-2 font-medium">
 
                         </ul>
-                    </div>
+                    </div>2
                 </aside>
                 <div className="py-6 px-4 w-full">
                     <Outlet context={
