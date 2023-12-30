@@ -68,15 +68,16 @@ export default function DailyOrdersSingleNew() {
 
     return (
         <div className="grid place-items-center w-full">
-            <Form method="post" className="flex flex-col mt-32 items-center" >
-                <div className="flex flex-col gap-4 mb-6">
 
-                    <div className="flex flex-col items-center mb-4">
-                        <div className="flex gap-x-4">
-                            <span className="text-3xl tracking-tight font-semibold">Bem vindo,</span>
+            <Form method="post" className="flex flex-col my-6 items-center " >
+                <h1 className="text-3xl tracking-tight font-semibold mb-6">Bem vindo,</h1>
+                <div className="flex flex-col gap-4 mb-12">
 
+                    <div className="flex flex-col gap-4 bg-slate-50 rounded-xl py-8 px-6 md:w-[500px]">
+                        <div className="flex justify-between w-full">
+                            <span className="font-semibold">Operador</span>
                             <Select name="operatorId" onValueChange={v => setOperatorId(v)}>
-                                <SelectTrigger className="w-[180px]">
+                                <SelectTrigger className="w-[180px] bg-white">
                                     <SelectValue placeholder="Selecionar operador" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -88,19 +89,19 @@ export default function DailyOrdersSingleNew() {
                                 </SelectContent>
                             </Select>
                         </div>
+
+                        <div className="flex justify-between items-center w-full">
+                            <span className="font-semibold">Registro do dia</span>
+                            <Input type="text" id="date" name="date" defaultValue={now()} className="w-[180px] bg-white text-center text-xl tracking-wide" />
+                        </div>
                     </div>
 
-                    <div className="flex gap-x-4 items-center mb-6">
-                        <span className="text-xl tracking-tight text-gray-500">vamos registrar os pedidos do día</span>
-                        <Input type="text" id="date" name="date" defaultValue={now()} className="w-[180px] border-none text-center text-xl tracking-wide" />
-                    </div>
-
-                    <div>
+                    <div className="flex flex-col gap-4 bg-slate-50 rounded-xl py-8 px-6 md:w-[500px]">
                         <h2 className="font-semibold text-md mb-4 tracking-tight">Por favor, indicar o numero de pizzas</h2>
-                        <div className="flex gap-12 mb-6 w-full justify-between">
+                        <div className="flex flex-col gap-4">
 
 
-                            <div className="flex gap-4 items-center">
+                            <div className="flex gap-4 items-center justify-between">
                                 <span>Pizzas Familía</span>
                                 <Input type="text" id="largePizzaNumber" name="initialLargePizzaNumber" maxLength={2} className="w-[72px] bg-white" onChange={(e) => {
                                     const value = Number(e.target.value)
@@ -115,7 +116,7 @@ export default function DailyOrdersSingleNew() {
                                     setLargePizzaNumber(value)
                                 }} />
                             </div>
-                            <div className="flex gap-4 items-center">
+                            <div className="flex gap-4 items-center justify-between">
                                 <span>Pizzas Média</span>
                                 <Input type="text" id="mediumPizzaNumber" name="initialMediumPizzaNumber" maxLength={2} className="w-[72px] bg-white" onChange={(e) => {
                                     const value = Number(e.target.value)

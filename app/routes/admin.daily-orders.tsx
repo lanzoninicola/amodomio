@@ -29,7 +29,7 @@ export default function AdminDailyOrdersIndex() {
 
     return (
         <div className="mt-12">
-            <div className="flex justify-between pb-6 px-6 border-b-2 border-b-slate-100">
+            <div className="flex justify-between pb-6 px-6 border-b-2 border-b-slate-100 h-[80px]">
                 <div className="flex flex-col">
                     <h1 className="font-bold text-xl">Pedidos giornalieri</h1>
                     <span className="font-sm">Data: {now()}</span>
@@ -38,8 +38,8 @@ export default function AdminDailyOrdersIndex() {
                     <span className="text-sm underline">Lista dos pedidos</span>
                 </Link>
             </div>
-            <div className="flex gap-6">
-                <aside id="default-sidebar" className="top-32 z-40 w-64 h-screen
+            <div className="flex gap-6 h-screen">
+                <aside id="default-sidebar" className="top-32 z-40 w-64
             transition-transform -translate-x-full sm:translate-x-0 border-r-2 border-r-slate-100" aria-label="Sidebar">
                     <div className="px-3 py-4 w-full">
                         <Link to={`/admin/daily-orders/new`}>
