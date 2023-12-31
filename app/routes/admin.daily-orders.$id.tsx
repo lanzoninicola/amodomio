@@ -45,8 +45,6 @@ export async function action({ request }: LoaderArgs) {
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);
 
-    console.log(formData)
-
     const operator = dotOperators(values.operatorId as string) as DOTOperator
 
     const transaction: DailyOrderTransaction = {
@@ -115,7 +113,7 @@ export async function action({ request }: LoaderArgs) {
 
         console.log("im here", values)
 
-        if (Number.isNaN(values.pizzaNumber)) {
+        if (Number.isNaN(values.number)) {
             return serverError("O numero de pizza está incorreto")
         }
 
@@ -123,7 +121,7 @@ export async function action({ request }: LoaderArgs) {
             dailyOrderEntity.updatePizzaSizeRestNumber(
                 values.dailyOrderId as string,
                 values.pizzaSize as DOTPizzaSize,
-                Number(values.pizzaNumber)
+                Number(values.number)
             )
         )
 
@@ -463,6 +461,7 @@ function PizzaSizeStat({ label, initialNumber = 0, restNumber = 0 }: PizzaSizeSt
                             <div className="flex flex-col items-center">
                                 <span className="text-xs leading-none tracking-tight">Restante</span>
                                 <input type="text"
+                                    name="number"
                                     className="text-xl  border-none font-semibold leading-none tracking-tight w-[72px] text-center pt-2 bg-transparent outline-none"
                                     onChange={e => {
                                         const newValue = e.target.value

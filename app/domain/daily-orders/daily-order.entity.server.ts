@@ -298,13 +298,13 @@ class DailyOrderEntity extends BaseEntity<DailyOrder> {
 
     if (pizzaSize === "Pizza Familía") {
       await this.update(id, {
-        restLargePizzaNumber: dailyOrder.restLargePizzaNumber - amount,
+        restLargePizzaNumber: amount,
       });
     }
 
-    if (pizzaSize === "Pizza Média") {
+    if (pizzaSize === "Pizza Medía") {
       await this.update(id, {
-        restMediumPizzaNumber: dailyOrder.restMediumPizzaNumber - amount,
+        restMediumPizzaNumber: amount,
       });
     }
 
