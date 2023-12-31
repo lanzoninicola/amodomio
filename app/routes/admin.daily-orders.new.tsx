@@ -38,7 +38,8 @@ export async function action({ request }: LoaderArgs) {
             totalOrdersAmount: 0,
             totalMotoboyAmount: 0,
             operator: operator,
-            transactions: []
+            transactions: [],
+            lastOrderNumber: 0,
         }
 
         const [err, dailyOrderCreated] = await tryit(dailyOrderEntity.createDailyOrder(dailyOrder))

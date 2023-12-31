@@ -21,20 +21,20 @@ import useFormResponse from "~/hooks/useFormResponse";
 import { AlertError } from "~/components/layout/alerts/alerts";
 import { useEffect, useState } from "react";
 import randomReactKey from "~/utils/random-react-key";
+import getSearchParam from "~/utils/get-search-param";
 
 
 export async function loader({ request, params }: LoaderArgs) {
-    const operatorId = new URL(request.url).searchParams.get('op');
-
     if (!params?.id) {
         return redirect(`/admin/daily-orders`)
     }
 
     const dailyOrder = await dailyOrderEntity.findById(params?.id)
+    console.log(dailyOrder)
 
     return ok({
         dailyOrder,
-        currentOperatorId: operatorId,
+        currentOperatorId: getSearchParam({ request, paramName: 'op' }),
     })
 
 }
@@ -156,11 +156,15 @@ export default function DailyOrdersSingle() {
 
             <div className="flex gap-4 items-center w-full justify-center">
                 <div className="grid grid-cols-2 items-center gap-x-4 ">
-                    <span className="font-semibold leading-none tracking-tight">Total Valor Pedidos</span>
+                    <span className="font-medium leading-none tracking-tight">Total Pedidos</span>
+                    <span className="font-semibold leading-none tracking-tight">{dailyOrder?.totalOrdersNumber || 0}</span>
+                </div>
+                <div className="grid grid-cols-2 items-center gap-x-4 ">
+                    <span className="font-medium leading-none tracking-tight">Total Valor Pedidos</span>
                     <span className="font-semibold leading-none tracking-tight">R$ {dailyOrder?.totalOrdersAmount || 0}</span>
                 </div>
                 <div className="grid grid-cols-2 items-center gap-x-4">
-                    <span className="font-semibold leading-none tracking-tight">Total Valor Motoboy</span>
+                    <span className="font-medium leading-none tracking-tight">Total Valor Motoboy</span>
                     <span className="font-semibold leading-none tracking-tight">R$ {dailyOrder?.totalMotoboyAmount || 0}</span>
                 </div>
 
@@ -169,7 +173,7 @@ export default function DailyOrdersSingle() {
             <div className="flex flex-col gap-6 w-full">
                 <div className="bg-slate-50 rounded-xl p-4 mb-8">
                     <Form method="post" className="flex items-center gap-2 w-full" ref={formResponse.formRef}>
-                        <TransactionForm dailyOrderId={dailyOrder.id} />
+                        <TransactionForm />
                         <SaveItemButton actionName="daily-orders-transaction-create" clazzName="mt-2" />
                     </Form>
                     {
@@ -227,7 +231,6 @@ function Transactions({ transactions, dailyOrderId }: TransactionsProps) {
                             >
                                 <Form method="post" className="grid grid-cols-8">
                                     <TransactionForm
-                                        dailyOrderId={dailyOrderId}
                                         transaction={t}
                                         showLabels={false}
                                         ghost={true}
@@ -250,7 +253,6 @@ function Transactions({ transactions, dailyOrderId }: TransactionsProps) {
 
 
 interface TransactionFormProps {
-    dailyOrderId: DailyOrder["id"],
     transaction?: DailyOrderTransaction
     showLabels?: boolean
     ghost?: boolean
@@ -258,18 +260,36 @@ interface TransactionFormProps {
     action?: "create" | "update" | "soft-delete"
 }
 
-function TransactionForm({ dailyOrderId, transaction, showLabels = true, ghost = false, smallText = false }: TransactionFormProps) {
+function TransactionForm({ transaction, showLabels = true, ghost = false, smallText = false }: TransactionFormProps) {
     const loaderData = useLoaderData<typeof loader>()
+    const dailyOrder = loaderData?.payload?.dailyOrder as DailyOrder
 
     const productsSelection = dotProducts()
     const inboundChannelsSelection = dotInboundChannels()
     const paymentMethodsSelection = dotPaymentMethods()
 
+    // set the "Comanda" number
+    let orderNumber = transaction?.orderNumber
+    const totalOrdersNumber = dailyOrder.totalOrdersNumber
 
+    // if the transaction is undefined, this means that the form is used to add a new transaction
+    // otherwise it is used to update the order
+    const transactionFormState = transaction === undefined ? "new" : "update"
+
+    // if the form is used to add the first transaction the order number is 1
+    if (transactionFormState === "new") {
+        orderNumber = 1
+    }
+
+    // but other orders are already added, the next order number will set based on the totalOrdersNumber
+    if (transactionFormState === "new" && totalOrdersNumber >= 1) {
+        const lastOrderNumber = dailyOrder?.lastOrderNumber || 0
+        orderNumber = lastOrderNumber + 1
+    }
 
     return (
         <>
-            <InputItem type="hidden" name="dailyOrderId" defaultValue={dailyOrderId} />
+            <InputItem type="hidden" name="dailyOrderId" defaultValue={dailyOrder.id} />
             <InputItem type="hidden" name="transactionId" defaultValue={transaction?.id || ""} />
             <InputItem type="hidden" name="operatorId" defaultValue={loaderData.payload?.currentOperatorId} />
             <Fieldset clazzName="mb-0">
@@ -318,7 +338,7 @@ function TransactionForm({ dailyOrderId, transaction, showLabels = true, ghost =
                 <InputItem type="text" name="orderNumber"
                     className={`max-w-[100px] ${smallText === true ? `text-xs` : ``}`}
                     ghost={ghost}
-                    defaultValue={transaction?.orderNumber} />
+                    defaultValue={orderNumber} />
             </Fieldset>
 
             <Fieldset clazzName="mb-0">

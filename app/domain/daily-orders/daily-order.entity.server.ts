@@ -114,6 +114,7 @@ class DailyOrderEntity extends BaseEntity<DailyOrder> {
         totalMotoboyAmount:
           dailyOrder.totalMotoboyAmount + transaction.amountMotoboy,
         transactions,
+        lastOrderNumber: transaction.orderNumber,
       })
     );
 

@@ -12,6 +12,7 @@ export interface DailyOrder {
   totalMotoboyAmount: number;
   transactions: DailyOrderTransaction[];
   operator: DOTOperator;
+  lastOrderNumber: number;
 }
 
 export interface DailyOrderTransaction {
