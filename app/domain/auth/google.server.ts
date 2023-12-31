@@ -4,11 +4,14 @@ import { createCookieSessionStorage } from "@remix-run/node";
 import { Authenticator } from "remix-auth";
 import { GoogleStrategy } from "remix-auth-google";
 import {
+  GOOGLE_AUTH_COOKIE_SECRET,
   GOOGLE_CALLBACK_URL,
   GOOGLE_CLIENT_ID,
   GOOGLE_CLIENT_SECRET,
 } from "./constants.server";
 import { LoggedUser } from "./types.server";
+
+const cookieSecret = GOOGLE_AUTH_COOKIE_SECRET || "AM0D0MI02O24";
 
 // Personalize this options for your usage.
 const cookieOptions = {
@@ -16,7 +19,7 @@ const cookieOptions = {
   httpOnly: true,
   sameSite: "lax" as const,
   maxAge: 24 * 60 * 60 * 1000 * 30,
-  secrets: ["THISSHOULDBESECRET_AND_NOT_SHARED"],
+  secrets: [cookieSecret],
   secure: process.env.NODE_ENV !== "development",
 };
 

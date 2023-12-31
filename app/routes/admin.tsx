@@ -55,6 +55,7 @@ export default function AdminOutlet() {
                         { label: "Opções", to: "/admin/options" },
                         { label: "Massa", to: "/admin/dough" },
                         { label: "Pedidos", to: "/admin/daily-orders" },
+                        { label: "Sair", to: "/logout" },
                     ]
                 } />
             </div>
