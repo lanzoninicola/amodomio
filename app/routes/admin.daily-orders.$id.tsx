@@ -22,6 +22,8 @@ import { AlertError } from "~/components/layout/alerts/alerts";
 import { useEffect, useState } from "react";
 import randomReactKey from "~/utils/random-react-key";
 import getSearchParam from "~/utils/get-search-param";
+import formatDate from "~/utils/format-date";
+import { dateOnlyTime, nowWithTime } from "~/lib/dayjs";
 
 
 export async function loader({ request, params }: LoaderArgs) {
@@ -47,7 +49,7 @@ export async function action({ request }: LoaderArgs) {
 
     const operator = dotOperators(values.operatorId as string) as DOTOperator
 
-    const transaction: DailyOrderTransaction = {
+    const transaction: Omit<DailyOrderTransaction, "createdAt" | "updatedAt"> = {
         product: values.product as DOTProduct || "",
         amount: Number.isNaN(values?.amount) ? 0 : Number(values.amount),
         orderNumber: Number.isNaN(values?.orderNumber) ? 0 : Number(values.orderNumber),
@@ -155,26 +157,15 @@ export default function DailyOrdersSingle() {
             <Separator className="my-6" />
 
             <div className="flex gap-4 items-center w-full justify-center">
-                <div className="grid grid-cols-2 items-center gap-x-4 ">
-                    <span className="font-medium leading-none tracking-tight">Total Pedidos</span>
-                    <span className="font-semibold leading-none tracking-tight">{dailyOrder?.totalOrdersNumber || 0}</span>
-                </div>
-                <div className="grid grid-cols-2 items-center gap-x-4 ">
-                    <span className="font-medium leading-none tracking-tight">Total Valor Pedidos</span>
-                    <span className="font-semibold leading-none tracking-tight">R$ {dailyOrder?.totalOrdersAmount || 0}</span>
-                </div>
-                <div className="grid grid-cols-2 items-center gap-x-4">
-                    <span className="font-medium leading-none tracking-tight">Total Valor Motoboy</span>
-                    <span className="font-semibold leading-none tracking-tight">R$ {dailyOrder?.totalMotoboyAmount || 0}</span>
-                </div>
-
+                <DailyOrderQuickStat label={"Total Pedidos"} value={dailyOrder?.totalOrdersNumber || 0} decimalsAmount={0} />
+                <DailyOrderQuickStat label={"Total Valor Pedidos"} value={dailyOrder?.totalOrdersNumber || 0} />
+                <DailyOrderQuickStat label={"Total Valor Motoboy"} value={dailyOrder?.totalMotoboyAmount || 0} />
             </div>
             <Separator className="my-6" />
             <div className="flex flex-col gap-6 w-full">
                 <div className="bg-slate-50 rounded-xl p-4 mb-8">
                     <Form method="post" className="flex items-center gap-2 w-full" ref={formResponse.formRef}>
-                        <TransactionForm />
-                        <SaveItemButton actionName="daily-orders-transaction-create" clazzName="mt-2" />
+                        <TransactionForm saveActionName="daily-orders-transaction-create" />
                     </Form>
                     {
                         formResponse?.isError && (
@@ -208,7 +199,7 @@ function Transactions({ transactions, dailyOrderId }: TransactionsProps) {
             </h4>
             <Table>
                 <TableTitles
-                    clazzName="grid-cols-8"
+                    clazzName="grid-cols-9"
                     titles={[
                         "Produto",
                         "Valor",
@@ -217,30 +208,41 @@ function Transactions({ transactions, dailyOrderId }: TransactionsProps) {
                         "Valor Motoboy",
                         "Canal de entrada",
                         "Forma de pagamento",
-                        "Ações"
+                        "Ações",
+                        "Data"
                     ]}
                 />
                 <TableRows>
-                    {transactions.map(t => {
+                    {transactions.sort((a, b) => {
+                        // sort desc by date
+                        if (a.createdAt > b.createdAt) return -1
+
+                        if (a.createdAt < b.createdAt) return 1
+
+                        return 0; // Handle undefined values, placing them at an arbitrary position
+                    }).map(t => {
                         return (
+
                             <TableRow
                                 key={t.id}
                                 row={t}
                                 isProcessing={navigation.state !== "idle"}
-
+                                showDateColumns={false}
                             >
-                                <Form method="post" className="grid grid-cols-8">
+                                <Form method="post" className="grid grid-cols-9">
                                     <TransactionForm
                                         transaction={t}
                                         showLabels={false}
                                         ghost={true}
-                                        smallText={true} />
-                                    <div className="flex">
-                                        <SaveItemButton actionName="daily-orders-transaction-update" />
-                                        <DeleteItemButton actionName="daily-orders-transaction-soft-delete" />
-                                    </div>
+                                        smallText={true}
+                                        saveActionName="daily-orders-transaction-update"
+                                        showDeleteButton={true}
+                                    />
+
                                 </Form>
                             </TableRow>
+
+
                         )
                     })}
                 </TableRows>
@@ -257,10 +259,12 @@ interface TransactionFormProps {
     showLabels?: boolean
     ghost?: boolean
     smallText?: boolean
-    action?: "create" | "update" | "soft-delete"
+    action?: "create" | "update" | "soft-delete",
+    saveActionName: "daily-orders-transaction-create" | "daily-orders-transaction-update",
+    showDeleteButton?: boolean
 }
 
-function TransactionForm({ transaction, showLabels = true, ghost = false, smallText = false }: TransactionFormProps) {
+function TransactionForm({ transaction, showLabels = true, ghost = false, smallText = false, saveActionName, showDeleteButton = false }: TransactionFormProps) {
     const loaderData = useLoaderData<typeof loader>()
     const dailyOrder = loaderData?.payload?.dailyOrder as DailyOrder
 
@@ -288,6 +292,7 @@ function TransactionForm({ transaction, showLabels = true, ghost = false, smallT
     }
 
     return (
+
         <>
             <InputItem type="hidden" name="dailyOrderId" defaultValue={dailyOrder.id} />
             <InputItem type="hidden" name="transactionId" defaultValue={transaction?.id || ""} />
@@ -424,6 +429,34 @@ function TransactionForm({ transaction, showLabels = true, ghost = false, smallT
                 </div>
             </Fieldset>
 
+            <div className="flex items-center">
+                <SaveItemButton actionName={saveActionName} />
+                {showDeleteButton === true && <DeleteItemButton actionName="daily-orders-transaction-soft-delete" />}
+            </div>
+
+
+            <div className="flex flex-col justify-center">
+                {transaction?.createdAt && (
+                    <div className="flex flex-col">
+                        <span className="font-body font-bold text-xs">Criado</span>
+                        <span className="font-body text-xs">
+                            {dateOnlyTime(transaction?.createdAt)}
+                        </span>
+                    </div>
+                )}
+                {transaction?.updatedAt && (
+                    <div className="flex flex-col">
+                        <span className="font-body font-bold text-xs">Atualizado</span>
+                        <span className="font-body text-xs">
+                            {dateOnlyTime(transaction?.updatedAt)}
+                        </span>
+                    </div>
+                )}
+            </div>
+
+
+
+
         </>
     )
 }
@@ -511,6 +544,24 @@ function PizzaSizeStat({ label, initialNumber = 0, restNumber = 0 }: PizzaSizeSt
             </Form>
 
 
+        </div>
+    )
+}
+
+interface DailyOrderQuickStatProps {
+    label: string
+    value: number
+    decimalsAmount?: number
+}
+
+export function DailyOrderQuickStat({ label, value, decimalsAmount = 2 }: DailyOrderQuickStatProps) {
+
+    const valueRendered = value.toFixed(decimalsAmount)
+
+    return (
+        <div className="grid grid-cols-2 items-center gap-x-4 ">
+            <span className="font-medium leading-none tracking-tight">{label}</span>
+            <span className="font-semibold leading-none tracking-tight">{valueRendered}</span>
         </div>
     )
 }

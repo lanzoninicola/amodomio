@@ -24,6 +24,8 @@ export interface DailyOrderTransaction {
   amountMotoboy: number;
   inboundChannel: DOTInboundChannel;
   paymentMethod: DOTPaymentMethod;
+  createdAt: string;
+  updatedAt: string | null;
   deletedAt: string | null;
   operator: DOTOperator;
 }

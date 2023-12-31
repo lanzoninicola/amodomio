@@ -81,7 +81,7 @@ class DailyOrderEntity extends BaseEntity<DailyOrder> {
 
   async createTransaction(
     id: DailyOrder["id"],
-    transaction: DailyOrderTransaction
+    transaction: Omit<DailyOrderTransaction, "createdAt" | "updatedAt">
   ) {
     if (!id) {
       throw new Error("Falha na criação: falta o ID do registro");
@@ -95,7 +95,12 @@ class DailyOrderEntity extends BaseEntity<DailyOrder> {
 
     const transactions = dailyOrder?.transactions || [];
     const transactionId = randomReactKey();
-    transactions.push({ ...transaction, id: transactionId });
+    transactions.push({
+      ...transaction,
+      id: transactionId,
+      createdAt: new Date().toISOString(),
+      updatedAt: null,
+    });
 
     if (transaction.product === "Pizza Familía") {
       dailyOrder.restLargePizzaNumber = dailyOrder.restLargePizzaNumber - 1;
@@ -128,7 +133,7 @@ class DailyOrderEntity extends BaseEntity<DailyOrder> {
   async updateTransaction(
     id: DailyOrder["id"],
     transactionId: DailyOrderTransaction["id"],
-    transaction: DailyOrderTransaction
+    transaction: Omit<DailyOrderTransaction, "createdAt" | "updatedAt">
   ) {
     if (!id) return;
 
@@ -136,9 +141,16 @@ class DailyOrderEntity extends BaseEntity<DailyOrder> {
     const transactions = dailyOrder?.transactions || [];
     const index = transactions.findIndex((t) => t.id === transactionId);
     if (index === -1) return;
-    transactions[index] = transaction;
+    transactions[index] = {
+      ...transaction,
+      createdAt: transactions[index].createdAt,
+      updatedAt: new Date().toISOString(),
+    };
 
-    await this.update(id, { transactions });
+    await this.update(id, {
+      lastOrderNumber: transaction.orderNumber,
+      transactions,
+    });
     return transactions[index];
   }
 
@@ -182,6 +194,7 @@ class DailyOrderEntity extends BaseEntity<DailyOrder> {
         totalMotoboyAmount:
           dailyOrder.totalMotoboyAmount - transactions[index].amountMotoboy,
         transactions,
+        lastOrderNumber: transactions[index].orderNumber, // Update the lastOrderNumber to the orderNumber of the deleted transaction
       })
     );
 
