@@ -111,12 +111,28 @@ class DailyOrderEntity extends BaseEntity<DailyOrder> {
       updatedAt: null,
     });
 
+    console.log({ product: transaction.product });
+
     if (transaction.product === "Pizza Familía") {
       dailyOrder.restLargePizzaNumber = dailyOrder.restLargePizzaNumber - 1;
+
+      console.log({ restLargePizzaNumber: dailyOrder.restLargePizzaNumber });
+
+      if (dailyOrder.restLargePizzaNumber < 0) {
+        throw new Error(
+          "Não há mais pizza Familía disponível. Não é possivel salvar."
+        );
+      }
     }
 
     if (transaction.product === "Pizza Média") {
       dailyOrder.restMediumPizzaNumber = dailyOrder.restMediumPizzaNumber - 1;
+
+      if (dailyOrder.restMediumPizzaNumber < 0) {
+        throw new Error(
+          "Não há mais pizza Média disponível.Não é possivel salvar."
+        );
+      }
     }
 
     const [err, itemUpdated] = await tryit(
@@ -204,8 +220,6 @@ class DailyOrderEntity extends BaseEntity<DailyOrder> {
       lastOrderNumber = lastActiveTransaction.orderNumber;
     }
 
-    console.log({ lastActiveTransaction });
-
     const [err, itemUpdated] = await tryit(
       this.update(id, {
         lastOrderNumber: lastActiveTransaction?.orderNumber || 0,
@@ -213,9 +227,9 @@ class DailyOrderEntity extends BaseEntity<DailyOrder> {
         restMediumPizzaNumber: dailyOrder.restMediumPizzaNumber,
         totalOrdersNumber: dailyOrder.totalOrdersNumber - 1,
         totalOrdersAmount:
-          dailyOrder.totalOrdersAmount - transactions[index].amount,
+          dailyOrder.totalOrdersAmount - deletedTransaction.amount,
         totalMotoboyAmount:
-          dailyOrder.totalMotoboyAmount - transactions[index].amountMotoboy,
+          dailyOrder.totalMotoboyAmount - deletedTransaction.amountMotoboy,
         transactions,
       })
     );

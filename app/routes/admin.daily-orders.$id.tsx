@@ -1,6 +1,6 @@
 import { Label } from "@radix-ui/react-label";
 import { LoaderArgs, redirect } from "@remix-run/node";
-import { Form, useActionData, useLoaderData, useNavigation, useOutletContext, useParams } from "@remix-run/react";
+import { Form, useLoaderData, useNavigation } from "@remix-run/react";
 import InputItem from "~/components/primitives/form/input-item/input-item";
 import { DeleteItemButton, Table, TableRow, TableRows, TableTitles } from "~/components/primitives/table-list";
 import SaveItemButton from "~/components/primitives/table-list/action-buttons/save-item-button/save-item-button";
@@ -13,17 +13,16 @@ import dotPaymentMethods from "~/domain/daily-orders/dot-payment-methods";
 import dotProducts from "~/domain/daily-orders/dot-products";
 import { ok, serverError } from "~/utils/http-response.server";
 import tryit from "~/utils/try-it";
-import { urlAt } from "~/utils/url";
-import { AdminOutletContext } from "./admin";
 import { Separator } from "~/components/ui/separator";
 import dotOperators from "~/domain/daily-orders/dot-operators";
 import useFormResponse from "~/hooks/useFormResponse";
-import { AlertError } from "~/components/layout/alerts/alerts";
+import { AlertError, AlertOk } from "~/components/layout/alerts/alerts";
 import { useEffect, useState } from "react";
 import randomReactKey from "~/utils/random-react-key";
 import getSearchParam from "~/utils/get-search-param";
-import formatDate from "~/utils/format-date";
-import { formatDateOnyTime, nowWithTime } from "~/lib/dayjs";
+import { formatDateOnyTime } from "~/lib/dayjs";
+import useFormSubmissionnState from "~/hooks/useFormSubmissionState";
+import { Loader } from "lucide-react";
 
 
 export async function loader({ request, params }: LoaderArgs) {
@@ -111,9 +110,6 @@ export async function action({ request }: LoaderArgs) {
 
     if (_action === "daily-orders-pizzas-number-update") {
 
-
-        console.log("im here", values)
-
         if (Number.isNaN(values.number)) {
             return serverError("O numero de pizza está incorreto")
         }
@@ -129,7 +125,10 @@ export async function action({ request }: LoaderArgs) {
         if (err) {
             return serverError(err)
         }
-        return ok()
+
+        return ok({
+            action: "daily-orders-pizzas-number-update",
+        })
 
     }
 
@@ -157,7 +156,7 @@ export default function DailyOrdersSingle() {
 
             <div className="flex gap-4 items-center w-full justify-center">
                 <DailyOrderQuickStat label={"Total Pedidos"} value={dailyOrder?.totalOrdersNumber || 0} decimalsAmount={0} />
-                <DailyOrderQuickStat label={"Total Valor Pedidos"} value={dailyOrder?.totalOrdersNumber || 0} />
+                <DailyOrderQuickStat label={"Total Valor Pedidos"} value={dailyOrder?.totalOrdersAmount || 0} />
                 <DailyOrderQuickStat label={"Total Valor Motoboy"} value={dailyOrder?.totalMotoboyAmount || 0} />
             </div>
             <Separator className="my-6" />
@@ -251,8 +250,6 @@ function Transactions({ transactions, dailyOrderId }: TransactionsProps) {
     )
 }
 
-
-
 interface TransactionFormProps {
     transaction?: DailyOrderTransaction
     showLabels?: boolean
@@ -294,7 +291,7 @@ function TransactionForm({ transaction, showLabels = true, ghost = false, smallT
                                 className={`max-w-[60px] ${smallText === true ? `text-xs` : ``} border-none outline-none text-center`}
                                 ghost={ghost}
                                 defaultValue={transaction?.orderNumber}
-                                readonly
+
                             />
                         </div>
                     </Fieldset>
@@ -334,7 +331,9 @@ function TransactionForm({ transaction, showLabels = true, ghost = false, smallT
                     step=".01"
                     className={`max-w-[100px] ${smallText === true ? `text-xs` : ``}`}
                     ghost={ghost}
-                    defaultValue={transaction?.amount} />
+                    defaultValue={transaction?.amount}
+                    required
+                />
             </Fieldset>
 
             <Fieldset clazzName="mb-0">
@@ -454,7 +453,6 @@ function TransactionForm({ transaction, showLabels = true, ghost = false, smallT
     )
 }
 
-
 interface PizzaSizeStatProps {
     label: string
     initialNumber?: number
@@ -469,10 +467,13 @@ function PizzaSizeStat({ label, initialNumber = 0, restNumber = 0 }: PizzaSizeSt
     const [isRestNumberChanged, setIsRestNumberChanged] = useState(false)
 
     const warn = restNumber > 1 && restNumber <= 3
-    const error = restNumber === 1
+    const error = restNumber <= 1
 
     const formResponse = useFormResponse()
 
+    const formSubmissionState = useFormSubmissionnState()
+    let formSubmissionInProgress = formSubmissionState === "submitting"
+    let saveLabel = formSubmissionInProgress ? ("Salvando...") : ("Salvar alterações")
 
     function handleChangeNumber(newValue: string) {
         if (Number.isNaN(Number(newValue))) {
@@ -491,53 +492,65 @@ function PizzaSizeStat({ label, initialNumber = 0, restNumber = 0 }: PizzaSizeSt
     }, [formResponse.isError])
 
     return (
-        <div key={randomReactKey()} className={`flex justify-between items-end gap-12 border rounded-lg py-4 px-6
+        <div className="flex flex-col gap-2">
+            <div key={randomReactKey()} className={`flex justify-between items-end gap-12 border rounded-lg py-4 px-6
         ${warn === true ? 'bg-orange-500' : error === true ? 'bg-red-500' : ""}`}>
-            <h4 className={`text-3xl leading-none tracking-tight ${warn === true || error === true ? 'text-white' : 'text-black'}`}>{label}</h4>
-            <Form method="post" className={`flex gap-4 ${warn === true || error === true ? 'text-white' : 'text-black'}`} ref={formResponse.formRef}>
-                <div className="grid grid-cols-2">
-                    <div className="flex gap-4">
+                <h4 className={`text-3xl leading-none tracking-tight ${warn === true || error === true ? 'text-white' : 'text-black'}`}>{label}</h4>
+                <Form method="post" className={`flex gap-4 ${warn === true || error === true ? 'text-white' : 'text-black'}`} ref={formResponse.formRef}>
+                    <div className="grid grid-cols-2">
                         <div className="flex gap-4">
-                            <div className="flex flex-col items-center">
-                                <span className="text-xs leading-none tracking-tight">Iniciais</span>
-                                <input type="text" defaultValue={initialNumber}
-                                    className="text-xl  border-none font-semibold leading-none tracking-tight w-[72px] text-center pt-2 bg-transparent outline-none"
-                                />
+                            <div className="flex gap-4">
+                                <div className="flex flex-col items-center">
+                                    <span className="text-xs leading-none tracking-tight">Iniciais</span>
+                                    <input type="text" defaultValue={initialNumber}
+                                        className="text-xl  border-none font-semibold leading-none tracking-tight w-[72px] text-center pt-2 bg-transparent outline-none"
+                                    />
+                                </div>
+                                <div className="flex flex-col items-center">
+                                    <span className="text-xs leading-none tracking-tight">Restante</span>
+                                    <input type="text"
+                                        name="number"
+                                        className="text-xl  border-none font-semibold leading-none tracking-tight w-[72px] text-center pt-2 bg-transparent outline-none"
+                                        onChange={e => {
+                                            const newValue = e.target.value
+
+                                            if (Number(newValue) !== restNumber) {
+                                                setIsRestNumberChanged(true)
+                                            }
+                                            handleChangeNumber(newValue)
+                                        }}
+                                        value={restNumberInput || 0}
+
+                                    />
+
+                                </div>
                             </div>
-                            <div className="flex flex-col items-center">
-                                <span className="text-xs leading-none tracking-tight">Restante</span>
-                                <input type="text"
-                                    name="number"
-                                    className="text-xl  border-none font-semibold leading-none tracking-tight w-[72px] text-center pt-2 bg-transparent outline-none"
-                                    onChange={e => {
-                                        const newValue = e.target.value
 
-                                        if (Number(newValue) !== restNumber) {
-                                            setIsRestNumberChanged(true)
-                                        }
-                                        handleChangeNumber(newValue)
-                                    }}
-                                    value={restNumberInput || 0}
 
-                                />
-
-                            </div>
                         </div>
+                        <input type="hidden" name="dailyOrderId" value={dailyOrder.id} />
+                        <input type="hidden" name="pizzaSize" value={label} />
+                        {isRestNumberChanged === true &&
+                            <div className="flex gap-2 items-center justify-end">
+                                {formSubmissionInProgress && <Loader className="text-md" />}
+                                <button type="submit" className="text-sm underline justify-self-end" name="_action" value={"daily-orders-pizzas-number-update"}>
+                                    {saveLabel}
 
-
+                                </button>
+                            </div>
+                        }
                     </div>
-                    <input type="hidden" name="dailyOrderId" value={dailyOrder.id} />
-                    <input type="hidden" name="pizzaSize" value={label} />
-                    {isRestNumberChanged === true &&
-                        <button type="submit" className="text-sm underline justify-self-end" name="_action" value={"daily-orders-pizzas-number-update"}>
-                            Salvar alterações
-                        </button>
-                    }
-                </div>
-            </Form>
-
-
+                </Form>
+            </div>
+            {/* {
+                formResponse.isOk === true &&
+                formResponse.data?.action === "daily-orders-pizzas-number-update" &&
+                (
+                    <AlertOk message="Numero de pizza alterado com successo" />
+                )
+            } */}
         </div>
+
     )
 }
 
