@@ -66,7 +66,7 @@ export async function action({ request }: LoaderArgs) {
             return serverError(err)
         }
 
-        return ok()
+        return redirect(`/admin/daily-orders/${values.dailyOrderId}/transactions`)
     }
 
     if (_action === "daily-orders-transaction-update") {
@@ -159,7 +159,11 @@ export default function DailyOrdersSingle() {
             <div className="flex flex-col gap-6 w-full">
                 <div className="bg-slate-50 rounded-xl p-4 mb-8">
                     <Form method="post" className="flex items-center gap-2 w-full" ref={formResponse.formRef}>
-                        <TransactionForm saveActionName="daily-orders-transaction-create" />
+                        <TransactionForm
+                            dailyOrderId={dailyOrder.id}
+                            saveActionName="daily-orders-transaction-create"
+                            operatorId={currentOperatorId}
+                        />
                     </Form>
                     {
                         formResponse?.isError && (

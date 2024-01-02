@@ -57,7 +57,7 @@ export default function AdminDailyOrdersIndex() {
                                     dailyOrders.map(dailyOrder => {
                                         return (
                                             <div key={dailyOrder.id} >
-                                                <Link to={`/admin/daily-orders/${dailyOrder.id}`} className="block p-2 w-full hover:bg-slate-100 hover:rounded-lg" >
+                                                <Link to={`/admin/daily-orders/${dailyOrder.id}/transactions`} className="block p-2 w-full hover:bg-slate-100 hover:rounded-lg" >
                                                     <span className="text-xs font-semibold">{dailyOrder.date}</span>
                                                 </Link>
                                                 <Separator />

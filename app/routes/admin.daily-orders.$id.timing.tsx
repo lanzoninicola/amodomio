@@ -3,14 +3,12 @@ import { LoaderArgs } from "@remix-run/node";
 import { Form, useLoaderData, useNavigation } from "@remix-run/react";
 import { ChevronRightSquare, HelpCircle } from "lucide-react";
 import { useState } from "react";
-import SubmitButton from "~/components/primitives/submit-button/submit-button";
 import { Button } from "~/components/ui/button";
 import mogoEntity from "~/domain/mogo/mogo.entity.server";
 import { MogoOrderWithDiffTime } from "~/domain/mogo/types";
 import useFormResponse from "~/hooks/useFormResponse";
 import { ok, serverError } from "~/utils/http-response.server";
 import tryit from "~/utils/try-it";
-
 
 
 export async function loader({ request }: LoaderArgs) {
@@ -57,8 +55,6 @@ export default function DailyOrderSingleTiming() {
     const message = loaderData?.message
 
     let orders: MogoOrderWithDiffTime[] = loaderData?.payload?.orders || []
-
-    console.log(orders)
 
     const orderLess20Opened = orders.filter(order => order?.diffMinutesToNow < 20 && order?.diffMinutesToNow >= 0)
     const orderLess40Minutes = orders.filter(order => order?.diffMinutesToNow < 40 && order?.diffMinutesToNow >= 20)
@@ -207,7 +203,7 @@ function KanbanCol({ children, title, description, clazzName, ...props }: Kanban
                 <span className="font-semibold">{title}</span>
                 <div className="flex gap-2 items-center">
 
-                    <span className="text-xs underline" onClick={() => setShowDescription(!showDescription)}>
+                    <span className="text-xs underline cursor-pointer" onClick={() => setShowDescription(!showDescription)}>
                         {showDescription ? 'Esconder' : 'Ver mais'}
                     </span>
                     <HelpCircle size={16} />
