@@ -9,9 +9,10 @@ interface SubmitButtonProps extends ButtonProps {
     loadingText?: string,
     idleText?: string,
     disableLoadingAnimation?: boolean,
+    onlyIcon?: boolean
 }
 
-export default function SubmitButton({ actionName, loadingText, idleText, disableLoadingAnimation, ...props }: SubmitButtonProps) {
+export default function SubmitButton({ actionName, loadingText, idleText, disableLoadingAnimation, onlyIcon = false, ...props }: SubmitButtonProps) {
 
     const formSubmissionState = useFormSubmissionnState()
     let formSubmissionInProgress = formSubmissionState === "submitting"
@@ -28,9 +29,11 @@ export default function SubmitButton({ actionName, loadingText, idleText, disabl
     return (
         <Button type="submit" name="_action" value={actionName} disabled={disabled} {...props} className={`flex gap-2 w-full md:max-w-max md:px-8 ${props.className}  `} >
             {icon}
-            <span className="text-lg lg:text-md">
-                {text}
-            </span>
+            {onlyIcon === false &&
+                (<span className="text-lg lg:text-md">
+                    {text}
+                </span>)
+            }
         </Button>
     )
 

@@ -8,9 +8,13 @@ export default function HomePage() {
     return (
         <div className="min-h-screen bg-brand-blue md:py-16 ">
             <Container clazzName="py-8">
-                <div className="flex justify-center mb-8 md:mb-16">
+                <div className="flex justify-center flex-col items-center gap-4 mb-8 md:mb-16">
                     <div className="w-[120px] md:w-[180px]">
                         <Logo />
+                    </div>
+                    <div className="flex flex-col gap-0 items-center text-white font-accent text-sm">
+                        <span>Rua Araribóia, 964 - La Salle</span>
+                        <span>Pato Branco</span>
                     </div>
                 </div>
                 <div className="p-4 md:max-w-prose md:mx-auto">
@@ -34,7 +38,7 @@ function TypewriterHomepage() {
     text += doubleBreakLine
     text += "Aqui, vocês terâo a oportunidade de saborear autênticas pizzas de massa italiana, preparadas por um verdadeiro italiano, nascido e crescido em Verona, Itàlia."
     text += doubleBreakLine
-    text += "Nosso compromiss è trazer para vocês a verdadeira essêcia da pizza italiana, com toda a tradição e sabor que vocês merecem, claro, sem esquecer o gostinho preferidos dos brasileiros."
+    text += "Nosso compromisso è trazer para vocês a verdadeira essência da pizza italiana, com toda a tradição e sabor que vocês merecem, claro, sem esquecer o gostinho preferidos dos brasileiros."
     text += doubleBreakLine
     text += "Além disso, teremos o prazer de oferecer a famosa Pizza Al Taglio, uma delìcia italia que conquistou corações ao redor do mundo."
     text += doubleBreakLine
