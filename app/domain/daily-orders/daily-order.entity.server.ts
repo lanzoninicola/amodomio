@@ -95,8 +95,17 @@ class DailyOrderEntity extends BaseEntity<DailyOrder> {
 
     const transactions = dailyOrder?.transactions || [];
     const transactionId = randomReactKey();
+
+    let lastOrderNumber = dailyOrder?.lastOrderNumber || 0;
+    let orderNumber = 1;
+
+    if (lastOrderNumber > 0) {
+      orderNumber = lastOrderNumber + 1;
+    }
+
     transactions.push({
       ...transaction,
+      orderNumber,
       id: transactionId,
       createdAt: new Date().toISOString(),
       updatedAt: null,
@@ -112,6 +121,7 @@ class DailyOrderEntity extends BaseEntity<DailyOrder> {
 
     const [err, itemUpdated] = await tryit(
       this.update(id, {
+        lastOrderNumber: orderNumber,
         restLargePizzaNumber: dailyOrder.restLargePizzaNumber,
         restMediumPizzaNumber: dailyOrder.restMediumPizzaNumber,
         totalOrdersNumber: dailyOrder.totalOrdersNumber + 1,
@@ -119,7 +129,6 @@ class DailyOrderEntity extends BaseEntity<DailyOrder> {
         totalMotoboyAmount:
           dailyOrder.totalMotoboyAmount + transaction.amountMotoboy,
         transactions,
-        lastOrderNumber: transaction.orderNumber,
       })
     );
 
@@ -184,8 +193,22 @@ class DailyOrderEntity extends BaseEntity<DailyOrder> {
       dailyOrder.restMediumPizzaNumber = dailyOrder.restMediumPizzaNumber + 1;
     }
 
+    let lastOrderNumber = dailyOrder?.lastOrderNumber || 0;
+
+    const activeTransactions = transactions.filter((t) => t.deletedAt === null);
+
+    const lastActiveTransaction =
+      activeTransactions[activeTransactions.length - 1];
+
+    if (lastActiveTransaction) {
+      lastOrderNumber = lastActiveTransaction.orderNumber;
+    }
+
+    console.log({ lastActiveTransaction });
+
     const [err, itemUpdated] = await tryit(
       this.update(id, {
+        lastOrderNumber: lastActiveTransaction?.orderNumber || 0,
         restLargePizzaNumber: dailyOrder.restLargePizzaNumber,
         restMediumPizzaNumber: dailyOrder.restMediumPizzaNumber,
         totalOrdersNumber: dailyOrder.totalOrdersNumber - 1,
@@ -194,13 +217,29 @@ class DailyOrderEntity extends BaseEntity<DailyOrder> {
         totalMotoboyAmount:
           dailyOrder.totalMotoboyAmount - transactions[index].amountMotoboy,
         transactions,
-        lastOrderNumber: transactions[index].orderNumber, // Update the lastOrderNumber to the orderNumber of the deleted transaction
       })
     );
 
     if (err) {
       throw new Error(err.message);
     }
+  }
+
+  async findLastActiveTransaction(id: DailyOrder["id"]) {
+    if (!id) return;
+
+    const dailyOrder: DailyOrder | null = await this.findById(id);
+    const transactions = dailyOrder?.transactions || [];
+
+    const activeTransactions = transactions.filter((t) => t.deletedAt === null);
+
+    console.log("findLastActiveTransaction", { activeTransactions });
+
+    if (activeTransactions.length === 0) {
+      return null;
+    }
+
+    return activeTransactions[activeTransactions.length - 1];
   }
 
   async decreaseLargePizzaNumber(id: DailyOrder["id"]) {

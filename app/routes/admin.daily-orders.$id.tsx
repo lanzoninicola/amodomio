@@ -23,7 +23,7 @@ import { useEffect, useState } from "react";
 import randomReactKey from "~/utils/random-react-key";
 import getSearchParam from "~/utils/get-search-param";
 import formatDate from "~/utils/format-date";
-import { dateOnlyTime, nowWithTime } from "~/lib/dayjs";
+import { formatDateOnyTime, nowWithTime } from "~/lib/dayjs";
 
 
 export async function loader({ request, params }: LoaderArgs) {
@@ -32,7 +32,6 @@ export async function loader({ request, params }: LoaderArgs) {
     }
 
     const dailyOrder = await dailyOrderEntity.findById(params?.id)
-    console.log(dailyOrder)
 
     return ok({
         dailyOrder,
@@ -201,15 +200,15 @@ function Transactions({ transactions, dailyOrderId }: TransactionsProps) {
                 <TableTitles
                     clazzName="grid-cols-9"
                     titles={[
+                        "Comanda",
                         "Produto",
                         "Valor",
-                        "Comanda",
                         "Moto",
                         "Valor Motoboy",
                         "Canal de entrada",
                         "Forma de pagamento",
+                        "Data",
                         "Ações",
-                        "Data"
                     ]}
                 />
                 <TableRows>
@@ -268,28 +267,13 @@ function TransactionForm({ transaction, showLabels = true, ghost = false, smallT
     const loaderData = useLoaderData<typeof loader>()
     const dailyOrder = loaderData?.payload?.dailyOrder as DailyOrder
 
-    const productsSelection = dotProducts()
-    const inboundChannelsSelection = dotInboundChannels()
-    const paymentMethodsSelection = dotPaymentMethods()
-
-    // set the "Comanda" number
-    let orderNumber = transaction?.orderNumber
-    const totalOrdersNumber = dailyOrder.totalOrdersNumber
-
     // if the transaction is undefined, this means that the form is used to add a new transaction
     // otherwise it is used to update the order
     const transactionFormState = transaction === undefined ? "new" : "update"
 
-    // if the form is used to add the first transaction the order number is 1
-    if (transactionFormState === "new") {
-        orderNumber = 1
-    }
-
-    // but other orders are already added, the next order number will set based on the totalOrdersNumber
-    if (transactionFormState === "new" && totalOrdersNumber >= 1) {
-        const lastOrderNumber = dailyOrder?.lastOrderNumber || 0
-        orderNumber = lastOrderNumber + 1
-    }
+    const productsSelection = dotProducts()
+    const inboundChannelsSelection = dotInboundChannels()
+    const paymentMethodsSelection = dotPaymentMethods()
 
     return (
 
@@ -297,6 +281,25 @@ function TransactionForm({ transaction, showLabels = true, ghost = false, smallT
             <InputItem type="hidden" name="dailyOrderId" defaultValue={dailyOrder.id} />
             <InputItem type="hidden" name="transactionId" defaultValue={transaction?.id || ""} />
             <InputItem type="hidden" name="operatorId" defaultValue={loaderData.payload?.currentOperatorId} />
+            {
+                transactionFormState === "update" && (
+                    <Fieldset clazzName="mb-0">
+                        {showLabels && (
+                            <Label htmlFor="orderNumber" className="flex gap-2 items-center text-sm font-semibold max-w-[100px]">
+                                Comanda
+                            </Label>
+                        )}
+                        <div className="border-2 border-black rounded-xl font-bold text-xl w-[60px] h-[40px] m-auto grid place-items-center">
+                            <InputItem type="text" name="orderNumber"
+                                className={`max-w-[60px] ${smallText === true ? `text-xs` : ``} border-none outline-none text-center`}
+                                ghost={ghost}
+                                defaultValue={transaction?.orderNumber}
+                                readonly
+                            />
+                        </div>
+                    </Fieldset>
+                )
+            }
             <Fieldset clazzName="mb-0">
                 {showLabels && (
                     <Label htmlFor="name" className="flex gap-2 items-center text-sm font-semibold">
@@ -332,18 +335,6 @@ function TransactionForm({ transaction, showLabels = true, ghost = false, smallT
                     className={`max-w-[100px] ${smallText === true ? `text-xs` : ``}`}
                     ghost={ghost}
                     defaultValue={transaction?.amount} />
-            </Fieldset>
-
-            <Fieldset clazzName="mb-0">
-                {showLabels && (
-                    <Label htmlFor="orderNumber" className="flex gap-2 items-center text-sm font-semibold max-w-[100px]">
-                        Comanda
-                    </Label>
-                )}
-                <InputItem type="text" name="orderNumber"
-                    className={`max-w-[100px] ${smallText === true ? `text-xs` : ``}`}
-                    ghost={ghost}
-                    defaultValue={orderNumber} />
             </Fieldset>
 
             <Fieldset clazzName="mb-0">
@@ -429,18 +420,12 @@ function TransactionForm({ transaction, showLabels = true, ghost = false, smallT
                 </div>
             </Fieldset>
 
-            <div className="flex items-center">
-                <SaveItemButton actionName={saveActionName} />
-                {showDeleteButton === true && <DeleteItemButton actionName="daily-orders-transaction-soft-delete" />}
-            </div>
-
-
             <div className="flex flex-col justify-center">
                 {transaction?.createdAt && (
                     <div className="flex flex-col">
                         <span className="font-body font-bold text-xs">Criado</span>
                         <span className="font-body text-xs">
-                            {dateOnlyTime(transaction?.createdAt)}
+                            {formatDateOnyTime(transaction?.createdAt)}
                         </span>
                     </div>
                 )}
@@ -448,11 +433,19 @@ function TransactionForm({ transaction, showLabels = true, ghost = false, smallT
                     <div className="flex flex-col">
                         <span className="font-body font-bold text-xs">Atualizado</span>
                         <span className="font-body text-xs">
-                            {dateOnlyTime(transaction?.updatedAt)}
+                            {formatDateOnyTime(transaction?.updatedAt)}
                         </span>
                     </div>
                 )}
             </div>
+
+            <div className="flex items-center">
+                <SaveItemButton actionName={saveActionName} />
+                {showDeleteButton === true && <DeleteItemButton actionName="daily-orders-transaction-soft-delete" />}
+            </div>
+
+
+
 
 
 

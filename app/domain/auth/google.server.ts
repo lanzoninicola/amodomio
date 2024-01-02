@@ -51,6 +51,8 @@ let googleStrategy = new GoogleStrategy(
 
     const emailInbound = profile.emails[0].value;
 
+    console.log({ emailInbound });
+
     if (!emailInbound) {
       return null;
     }
