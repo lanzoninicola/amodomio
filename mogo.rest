@@ -1,0 +1,5 @@
+### se entrega não é visualizado
+GET app.mogogourmet.com.br/snack/v1/GetPedidosAbertos?dbname=amodomio&onlyNew=true
+Authorization: Token MTozMC8xMS8yMDIzIDA5OjMxOjAwtoken_sh=MTozMC8xMS8yMDIzIDA5OjMxOjAwdbname=amodomio
+
+
