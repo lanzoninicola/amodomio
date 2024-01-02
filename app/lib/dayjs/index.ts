@@ -27,12 +27,12 @@ export const nowMergedString = () => {
   return dayjs().format("YYYYMMDD");
 };
 
-export const dateWithTime = (date: Date | string) => {
+export const formatDateWithTime = (date: Date | string) => {
   setup();
   return dayjs(date).format("DD/MM/YYYY HH:mm:ss");
 };
 
-export const dateOnlyTime = (date: Date | string) => {
+export const formatDateOnyTime = (date: Date | string) => {
   setup();
   return dayjs(date).format("HH:mm:ss");
 };
