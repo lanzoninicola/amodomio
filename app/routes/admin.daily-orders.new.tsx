@@ -48,7 +48,7 @@ export async function action({ request }: LoaderArgs) {
             return serverError(err)
         }
 
-        return redirect(`/admin/daily-orders/${dailyOrderCreated?.id}?op=${operator.id}`)
+        return redirect(`/admin/daily-orders/${dailyOrderCreated?.id}/transactions?op=${operator.id}`)
     }
 
     return null
