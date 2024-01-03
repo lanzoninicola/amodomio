@@ -1,6 +1,22 @@
-import { type LinksFunction } from "@remix-run/node";
-import { Outlet } from "@remix-run/react";
+import { LoaderFunction, type LinksFunction, MetaFunction, V2_MetaFunction, LoaderArgs, redirect } from "@remix-run/node";
+import { Outlet, useLoaderData } from "@remix-run/react";
+import { useState } from "react";
 import { NavMenuCollapsible } from "~/components/primitives/menu-collapsible/nav-menu-collapsible";
+import { authenticator } from "~/domain/auth/google.server";
+import { LoggedUser } from "~/domain/auth/types.server";
+import { DOTOperator } from "~/domain/daily-orders/daily-order.model.server";
+
+
+export interface AdminOutletContext {
+    loggedUser: LoggedUser | null
+    operatorId: string
+    setOperatorId: (operatorId: string) => void
+}
+
+export const meta: V2_MetaFunction = () => [
+    { name: "robots", content: "noindex" },
+];
+
 
 export const links: LinksFunction = () => [
     { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -14,8 +30,18 @@ export const links: LinksFunction = () => [
     },
 ];
 
+export const loader: LoaderFunction = async ({ request }: LoaderArgs) => {
+    let user = await authenticator.isAuthenticated(request);
+
+    if (!user) {
+        return redirect("/login");
+    }
+    return user
+}
+
 
 export default function AdminOutlet() {
+    const loggedUser = useLoaderData<typeof loader>();
 
     return (
 
@@ -24,13 +50,20 @@ export default function AdminOutlet() {
                 <NavMenuCollapsible navItems={
                     [
                         { label: "Gerençiar cardápio", to: "/admin" },
+                        { label: "Cardápio", to: "/cardapio" },
                         { label: "Categorias", to: "/admin/categorias" },
                         { label: "Opções", to: "/admin/options" },
-                        { label: "Voltar para o cardápio", to: "/cardapio" }
+                        { label: "Massa", to: "/admin/dough" },
+                        { label: "Pedidos", to: "/admin/daily-orders" },
+                        { label: "Linha do tempo", to: "/admin/orders-timeline-segmentation" },
+                        { label: "Sair", to: "/logout" },
                     ]
                 } />
             </div>
-            <Outlet />
+            <Outlet context={{
+                loggedUser,
+
+            }} />
         </div>
     )
 }
