@@ -183,8 +183,8 @@ export default function DailyOrdersSingle() {
                     </li>
 
                     <li className="border-l-2 border-t-2 border-r-2 rounded-tl-lg rounded-tr-lg px-4 py-2">
-                        <Link to="timing">
-                            <span className="font-semibold">Kanban time</span>
+                        <Link to="report">
+                            <span className="font-semibold">Relatorio</span>
                         </Link>
                     </li>
                 </ul>

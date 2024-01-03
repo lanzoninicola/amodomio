@@ -2,7 +2,7 @@ import { Separator } from "@radix-ui/react-select";
 import { LoaderArgs } from "@remix-run/node";
 import { Form, useLoaderData, useNavigation } from "@remix-run/react";
 import { ChevronRightSquare, HelpCircle } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "~/components/ui/button";
 import mogoEntity from "~/domain/mogo/mogo.entity.server";
 import { MogoOrderWithDiffTime } from "~/domain/mogo/types";
@@ -48,7 +48,7 @@ interface FormResponseData {
     orders: MogoOrderWithDiffTime[]
 }
 
-export default function DailyOrderSingleTiming() {
+export default function OrdersTimelineSegmentation() {
 
     const loaderData = useLoaderData<typeof loader>()
     const status = loaderData?.status
@@ -78,12 +78,27 @@ export default function DailyOrderSingleTiming() {
         orders = formData?.orders || []
     }
 
+    const refreshSubmitButton = useRef<HTMLButtonElement | null>(null);
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            // Simulate button click
+            if (refreshSubmitButton.current) {
+                refreshSubmitButton.current.click();
+            }
+        }, 300_000); // Trigger click every 60 seconds (5 minute)
+
+        return () => clearInterval(interval); // Cleanup the interval on component unmount
+    }, []);
+
     return (
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-4 px-6 pt-16 min-h-screen">
             <Form method="post">
                 <Button type="submit" className="font-semibold"
                     name="_action"
-                    value="kanban-timing-refresh">
+                    value="kanban-timing-refresh"
+                    ref={refreshSubmitButton}
+                >
                     {navigation.state !== "idle" ? "Atualizando..." : "Atualizar"}
 
                 </Button>
@@ -229,7 +244,7 @@ interface OrderCardProps {
 function OrderCard({ number, time, customerName, deliveryTime, diff }: OrderCardProps) {
     return (
 
-        <div className="flex flex-col gap-4 rounded-lg shadow-lg p-4 hover:cursor-pointer hover:bg-slate-50 ">
+        <div className="flex flex-col gap-4 rounded-lg shadow-xl p-4 hover:cursor-pointer hover:bg-slate-50 ">
             <div className="flex flex-col gap-1">
                 <div className="flex justify-between items-center">
                     <div className="flex gap-2 items-center">
