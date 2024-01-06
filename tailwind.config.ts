@@ -74,6 +74,7 @@ module.exports = {
       fontFamily: {
         sans: ["var(--font-sans)", ...fontFamily.sans],
         body: ["var(--font-sans)", ...fontFamily.sans],
+        bodyPublic: ["var(--font-sans-public)", ...fontFamily.sans],
         accent: ["var(--font-accent)", ...fontFamily.sans],
         title: ["var(--font-title)", ...fontFamily.sans],
       },
