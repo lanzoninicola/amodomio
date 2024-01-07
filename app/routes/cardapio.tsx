@@ -131,7 +131,7 @@ function BottomActionBar({ currentSlide, showBarOnPageNumber, topPosition }: Bot
                     <WhatsAppButton />
 
                     <Link to="finalizar" aria-label="Botão para fazer o pedido" className="w-full">
-                        <div className="flex flex-row items-center justify-center gap-2 rounded-xl bg-brand-blue h-[48px] shadow-2xl">
+                        <div className="flex flex-row items-center justify-center gap-2 rounded-xl bg-brand-green h-[48px] shadow-2xl">
                             <ShoppingCart className="text-white" />
                             <span className="uppercase text-xl font-semibold font-accent tracking-wide text-center text-white my-auto"
                                 aria-label="Fazer o pedido"
