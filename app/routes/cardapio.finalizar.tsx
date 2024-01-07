@@ -1,7 +1,6 @@
 import { Link } from "@remix-run/react";
 import { AlertTriangle } from "lucide-react";
 import { ShoppingCart } from "lucide-react";
-import { XCircle } from "lucide-react";
 import ExternalLink from "~/components/primitives/external-link/external-link";
 import WhatsappExternalLink from "~/components/primitives/whatsapp/whatsapp-external-link";
 
@@ -18,7 +17,7 @@ export default function FinalizarPedido() {
                     <div className="flex flex-col">
 
                         <div className="flex flex-col gap-6 mb-6">
-                            <p>Ao clicar no botão 'Fazer Pedido' abaixo, você será redirecionado ao nosso cardápio digital para fazer o seu pedido.</p>
+                            <p>Ao clicar no botão <span className="text-semibold">Fazer Pedido</span> abaixo, você será redirecionado ao nosso cardápio digital para fazer o seu pedido.</p>
                             <div>
                                 <p className="font-semibold text-brand-blue font-accent uppercase text-lg">Lembre-se </p>
                                 <p className="">
