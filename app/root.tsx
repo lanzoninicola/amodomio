@@ -10,6 +10,8 @@ import {
 import { Toaster } from "./components/ui/toaster";
 import stylesheet from "~/tailwind.css";
 import { cssBundleHref } from "@remix-run/css-bundle";
+import GoogleTagManagerScriptTag from "./components/primitives/google-tag-manager/gtm-script";
+import GoogleTagManagerNoScriptTag from "./components/primitives/google-tag-manager/gtm-noscript";
 
 export const meta: V2_MetaFunction = () => {
   return [
@@ -70,6 +72,8 @@ export const links: LinksFunction = () => [
   // { rel: 'icon', href: '/favicon.ico' },
 ];
 
+const GTM_ID = process.env.GOOGLE_TAG_MANAGER_ID
+
 export default function App() {
   return (
     <html lang="en">
@@ -78,8 +82,10 @@ export default function App() {
         <meta name="viewport" content="width=device-width,initial-scale=1" />
         <Meta />
         <Links />
+        <GoogleTagManagerScriptTag id={GTM_ID} />
       </head>
       <body>
+        <GoogleTagManagerNoScriptTag id={GTM_ID} />
         <Outlet />
         <Toaster />
         <ScrollRestoration />
