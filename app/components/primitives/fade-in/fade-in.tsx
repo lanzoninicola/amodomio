@@ -1,10 +1,20 @@
-import { type HTMLAttributes } from "react";
+import { cn } from "~/lib/utils";
 
-interface FadeInProps {
-  children: React.ReactNode;
-  clazzName?: HTMLAttributes<HTMLDivElement>["className"];
-}
 
-export default function FadeIn({ children, clazzName }: FadeInProps) {
-  return <div className={`w-full animate-fadeIn ${clazzName}`}>{children}</div>;
+
+interface FadeInProps
+  extends React.HTMLAttributes<HTMLDivElement> { }
+
+export default function FadeIn({ children, className }: FadeInProps) {
+  return (
+    <div
+      className={cn(
+        "w-full animate-fadeIn",
+        className
+      )}
+      data-element="fade-in"
+    >
+      {children}
+    </div>
+  )
 }

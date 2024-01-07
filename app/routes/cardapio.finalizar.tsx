@@ -1,7 +1,6 @@
 import { Link } from "@remix-run/react";
 import { AlertTriangle } from "lucide-react";
 import { ShoppingCart } from "lucide-react";
-import { XCircle } from "lucide-react";
 import ExternalLink from "~/components/primitives/external-link/external-link";
 import WhatsappExternalLink from "~/components/primitives/whatsapp/whatsapp-external-link";
 

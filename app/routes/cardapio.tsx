@@ -122,7 +122,7 @@ function BottomActionBar({ currentSlide, showBarOnPageNumber, topPosition }: Bot
 
     return (
 
-        <div className="fixed z-10 w-full" style={{
+        <div className="absolute z-10 w-full" style={{
             top: topPosition
         }}>
 
@@ -131,9 +131,9 @@ function BottomActionBar({ currentSlide, showBarOnPageNumber, topPosition }: Bot
                     <WhatsAppButton />
 
                     <Link to="finalizar" aria-label="Botão para fazer o pedido" className="w-full">
-                        <div className="flex flex-row items-center justify-center gap-2 rounded-xl bg-brand-green h-[48px] shadow-2xl">
-                            <ShoppingCart className="text-white" />
-                            <span className="uppercase text-xl font-semibold font-accent tracking-wide text-center text-white my-auto"
+                        <div className="flex flex-row items-center justify-center gap-2 rounded-xl bg-brand-green h-[48px] shadow-2xl hover:bg-brand-green/50">
+                            <ShoppingCart className="text-white md:text-2xl" />
+                            <span className="uppercase text-xl font-semibold font-accent tracking-wide text-center text-white my-auto md:text-2xl"
                                 aria-label="Fazer o pedido"
                             >Fazer Pedido</span>
                         </div>
