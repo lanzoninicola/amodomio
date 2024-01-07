@@ -10,6 +10,8 @@ import {
 import { Toaster } from "./components/ui/toaster";
 import stylesheet from "~/tailwind.css";
 import { cssBundleHref } from "@remix-run/css-bundle";
+import GoogleTagManagerScriptTag from "./components/primitives/google-tag-manager/gtm-script";
+import GoogleTagManagerNoScriptTag from "./components/primitives/google-tag-manager/gtm-noscript";
 
 export const meta: V2_MetaFunction = () => {
   return [
@@ -70,6 +72,8 @@ export const links: LinksFunction = () => [
   // { rel: 'icon', href: '/favicon.ico' },
 ];
 
+const GTM_ID = process.env.GOOGLE_TAG_MANAGER_ID
+
 export default function App() {
   return (
     <html lang="en">
@@ -78,26 +82,10 @@ export default function App() {
         <meta name="viewport" content="width=device-width,initial-scale=1" />
         <Meta />
         <Links />
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
-new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
-j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
-'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
-})(window,document,'script','dataLayer','GTM-5F3FPGF9');
-`}}></script>
+        <GoogleTagManagerScriptTag id={GTM_ID} />
       </head>
       <body>
-        <noscript>
-          <iframe
-            dangerouslySetInnerHTML={{
-              __html: `
-src="https://www.googletagmanager.com/ns.html?id=GTM-5F3FPGF9"
-height="0" width="0" style="display:none;visibility:hidden"
-`}}
-          ></iframe>
-        </noscript>
+        <GoogleTagManagerNoScriptTag id={GTM_ID} />
         <Outlet />
         <Toaster />
         <ScrollRestoration />
