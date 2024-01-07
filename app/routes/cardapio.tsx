@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { Link, Outlet } from "react-router-dom";
 import FadeIn from "~/components/primitives/fade-in/fade-in";
 import WhatsAppButton from "~/components/primitives/whatsapp/whatsapp";
-import { Carousel, CarouselContent, CarouselItem, type CarouselApi } from "~/components/ui/carousel";
+import { Carousel, CarouselContent, CarouselItem, type CarouselApi, CarouselPrevious, CarouselNext } from "~/components/ui/carousel";
 import useBoundaryPosition from "~/utils/use-boundary-position";
 
 
@@ -40,7 +40,7 @@ export default function CardapioPage() {
             {
                 currentSlide === 1 && (
 
-                    <div className="absolute top-4 w-full grid place-items-center animate-pulse z-10">
+                    <div className="absolute top-4 w-full grid place-items-center animate-pulse z-10 md:hidden">
                         <div className="flex gap-2 items-center bg-brand-orange px-3 py-1 rounded-xl">
                             <span className="text-white text-sm font-semibold">arrastar para esquerda</span>
                             {/* <ArrowRight className="text-white" size={16} /> */}
@@ -88,22 +88,31 @@ function CardapioCarousel({
 
 
     return (
+        <>
+            <div className="hidden md:block">
+                <div className="flex justify-center w-full mb-4">
+                    <span className="text-center text-md font-semibold">Use as setas para navegar</span>
+                </div>
+            </div>
+            <Carousel className="md:w-1/3 md:m-auto" setApi={setApi} >
+                <CarouselContent>
+                    {cardapioArray.map((item, index) => (
+                        <CarouselItem key={index}>
+                            <img src={`/images/cardapio/${item}.png`}
+                                loading="lazy"
+                                decoding="async"
+                                data-nimg="intrinsic"
+                                alt={`cardapio pagína ${index + 1}`} />
+                        </CarouselItem>
+                    ))}
 
-        <Carousel className="md:w-1/3 md:m-auto" setApi={setApi} >
-            <CarouselContent>
-                {cardapioArray.map((item, index) => (
-                    <CarouselItem key={index}>
-                        <img src={`/images/cardapio/${item}.png`}
-                            loading="lazy"
-                            decoding="async"
-                            data-nimg="intrinsic"
-                            alt={`cardapio pagína ${index + 1}`} />
-                    </CarouselItem>
-                ))}
-            </CarouselContent>
-            {/* <CarouselPrevious />
-                <CarouselNext /> */}
-        </Carousel>
+                </CarouselContent>
+                <div className="hidden md:block">
+                    <CarouselPrevious />
+                    <CarouselNext />
+                </div>
+            </Carousel>
+        </>
     )
 }
 
