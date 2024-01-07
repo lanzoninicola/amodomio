@@ -74,6 +74,7 @@ module.exports = {
       fontFamily: {
         sans: ["var(--font-sans)", ...fontFamily.sans],
         body: ["var(--font-sans)", ...fontFamily.sans],
+        bodyPublic: ["var(--font-sans-public)", ...fontFamily.sans],
         accent: ["var(--font-accent)", ...fontFamily.sans],
         title: ["var(--font-title)", ...fontFamily.sans],
       },
@@ -116,6 +117,9 @@ module.exports = {
         "move-slow": "move 9.2s ease-in-out infinite",
         "move-slower": "move 11.2s ease-in-out infinite",
         "move-slowest": "move 13.5s ease-in-out infinite",
+        float: "float 6s ease-in-out infinite",
+        fadeIn: "fadeIn 1s ease-in-out",
+        pulse: "pulse 2s ease-in-out infinite",
       },
     },
   },
