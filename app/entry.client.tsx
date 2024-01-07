@@ -4,6 +4,10 @@
  * For more information, see https://remix.run/file-conventions/entry.client
  */
 
+/**
+
+https://github.com/vercel/next.js/issues/50245#issuecomment-1608732639
+
 import { RemixBrowser } from "@remix-run/react";
 import { startTransition, StrictMode } from "react";
 import { hydrateRoot } from "react-dom/client";
@@ -16,3 +20,10 @@ startTransition(() => {
     </StrictMode>
   );
 });
+
+ */
+
+import { hydrate } from 'react-dom'
+// import { RemixBrowser } from "remix";
+import { RemixBrowser } from '@remix-run/react'
+hydrate(<RemixBrowser />, document)
