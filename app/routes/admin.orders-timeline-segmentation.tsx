@@ -360,14 +360,14 @@ function OrderCard({
 
                     <Separator className="my-0" />
                     <div>
-                        <h2 className="text-xs mb-2 font-semibold">Atrasos</h2>
+                        <h2 className="text-xs mb-2 font-semibold">Atrasos respeito a:</h2>
 
                         <div className="flex justify-between items-center">
-                            <span className="text-xs ">Respeito hora abertura pedido: </span>
+                            <span className="text-xs ">Hora pedido: </span>
                             <span className="text-xs ">{delayStringOrderTime || "Não definido"}</span>
                         </div>
                         <div className="flex justify-between items-center">
-                            <span className="text-xs ">Respeito hora de entrega programada: </span>
+                            <span className="text-xs ">Hora entrega: </span>
                             <span className="text-xs ">{delayStringDeliveryTime || "Não definido"}</span>
                         </div>
                     </div>

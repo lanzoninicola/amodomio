@@ -14,6 +14,7 @@ import getSearchParam from "~/utils/get-search-param";
 import useFormSubmissionnState from "~/hooks/useFormSubmissionState";
 import { Loader } from "lucide-react";
 import TransactionForm from "~/domain/daily-orders/components/transaction-form";
+import { cn } from "~/lib/utils";
 
 
 export async function loader({ request, params }: LoaderArgs) {
@@ -281,16 +282,28 @@ interface DailyOrderQuickStatProps {
     label: string
     value: number
     decimalsAmount?: number
+    classNameLabel?: string
+    classNameValue?: string
 }
 
-export function DailyOrderQuickStat({ label, value, decimalsAmount = 2 }: DailyOrderQuickStatProps) {
+export function DailyOrderQuickStat({ label, value, decimalsAmount = 2, classNameLabel, classNameValue }: DailyOrderQuickStatProps) {
 
     const valueRendered = value.toFixed(decimalsAmount)
 
     return (
         <div className="grid grid-cols-2 items-center gap-x-4">
-            <span className="font-medium leading-none tracking-tight">{label}</span>
-            <span className="font-semibold leading-none tracking-tight text-right">{valueRendered}</span>
+            <span className={
+                cn(
+                    "font-medium leading-none tracking-tight",
+                    classNameLabel
+                )
+            }>{label}</span>
+            <span className={
+                cn(
+                    "font-semibold leading-none tracking-tight text-right",
+                    classNameValue
+                )
+            }>{valueRendered}</span>
         </div>
     )
 }

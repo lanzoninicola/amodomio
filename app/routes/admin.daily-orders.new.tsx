@@ -30,6 +30,7 @@ export async function action({ request }: LoaderArgs) {
 
         const dailyOrder: DailyOrder = {
             date: values.date as string,
+            moneyCash: Number(values.moneyCash || 0),
             initialLargePizzaNumber: Number(values.initialLargePizzaNumber || 0),
             restLargePizzaNumber: Number(values.initialLargePizzaNumber || 0),
             initialMediumPizzaNumber: Number(values.initialMediumPizzaNumber || 0),
@@ -75,7 +76,7 @@ export default function DailyOrdersSingleNew() {
                 <div className="flex flex-col gap-4 mb-12">
 
                     <div className="flex flex-col gap-4 bg-slate-50 rounded-xl py-8 px-6 md:w-[500px]">
-                        <div className="flex justify-between w-full">
+                        <div className="flex justify-between w-full items-center">
                             <span className="font-semibold">Operador</span>
                             <Select name="operatorId" onValueChange={v => setOperatorId(v)}>
                                 <SelectTrigger className="w-[180px] bg-white">
@@ -94,6 +95,11 @@ export default function DailyOrdersSingleNew() {
                         <div className="flex justify-between items-center w-full">
                             <span className="font-semibold">Registro do dia</span>
                             <Input type="text" id="date" name="date" defaultValue={now()} className="w-[180px] bg-white text-center text-xl tracking-wide" />
+                        </div>
+
+                        <div className="flex justify-between items-center w-full">
+                            <span className="font-semibold">Denaro na caixa (R$)</span>
+                            <Input type="text" id="moneyCash" name="moneyCash" defaultValue={0} className="w-[180px] bg-white text-center text-xl tracking-wide" />
                         </div>
                     </div>
 
