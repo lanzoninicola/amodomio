@@ -3,6 +3,7 @@ import { createFirestoreModel } from "~/lib/firestore-model/src";
 export interface DailyOrder {
   id?: string;
   date: string;
+  moneyCash: number;
   initialLargePizzaNumber: number;
   restLargePizzaNumber: number;
   initialMediumPizzaNumber: number;
