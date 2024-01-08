@@ -8,6 +8,7 @@ import dayjs from "dayjs";
 import { setup } from "~/lib/dayjs";
 import MogoHttpClient from "./mogo-http-client.server";
 import MogoHttpClientMock from "./mogo-http-client.mock.server";
+import convertMinutesToHHMM from "~/utils/convert-minutes-to-hhmm";
 
 interface MogoEntityProps {
   httpClient: MogoHttpClientInterface;
@@ -39,8 +40,14 @@ class MogoEntity {
       if (!o.DataPedido || !o.HoraPedido || !o.HoraEntregaTxt) {
         return {
           ...o,
-          diffMinutesOrderDateTimeToNow: 0,
-          diffMinutesDeliveryDateTimeToNow: 0,
+          diffOrderDateTimeToNow: {
+            minutes: 0,
+            timeString: null,
+          },
+          diffDeliveryDateTimeToNow: {
+            minutes: 0,
+            timeString: null,
+          },
         };
       }
 
@@ -65,8 +72,14 @@ class MogoEntity {
 
       return {
         ...o,
-        diffMinutesOrderDateTimeToNow,
-        diffMinutesDeliveryDateTimeToNow,
+        diffOrderDateTimeToNow: {
+          minutes: diffMinutesOrderDateTimeToNow,
+          timeString: convertMinutesToHHMM(diffMinutesOrderDateTimeToNow),
+        },
+        diffDeliveryDateTimeToNow: {
+          minutes: diffMinutesDeliveryDateTimeToNow,
+          timeString: convertMinutesToHHMM(diffMinutesDeliveryDateTimeToNow),
+        },
       };
     });
 
