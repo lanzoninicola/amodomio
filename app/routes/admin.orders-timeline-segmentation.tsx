@@ -351,12 +351,12 @@ function OrderCard({
                         </div>
                         <Separator className="my-2" />
                         <div className="flex justify-between items-center">
-                            <span className="text-sm font-semibold">Hora de entrega programada</span>
+                            <span className="text-sm font-semibold">Entrega programada</span>
                             <span className="text-sm font-semibold">{deliveryTime}</span>
                         </div>
                     </div>
 
-                    <span className="text-xs">Nome cliente: {customerName || "Não definido"}</span>
+                    <span className="text-xs">Cliente: {customerName || "Não definido"}</span>
 
                     <Separator className="my-0" />
                     <div>
