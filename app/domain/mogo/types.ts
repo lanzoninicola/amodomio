@@ -50,8 +50,14 @@ export interface MogoBaseOrder {
 }
 
 export interface MogoOrderWithDiffTime extends MogoBaseOrder {
-  diffMinutesOrderDateTimeToNow: number;
-  diffMinutesDeliveryDateTimeToNow: number;
+  diffOrderDateTimeToNow: {
+    minutes: number;
+    timeString: string | null;
+  };
+  diffDeliveryDateTimeToNow: {
+    minutes: number;
+    timeString: string | null;
+  };
 }
 
 export interface MogoHttpClientInterface {
