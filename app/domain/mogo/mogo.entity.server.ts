@@ -1,11 +1,28 @@
 import tryit from "~/utils/try-it";
 import mogoHttpClient from "./mogo-http.client.server";
+import { MogoBaseOrder, MogoOrderWithDiffTime } from "./types";
 import dayjs from "dayjs";
-import { MogoOrderWithDiffTime } from "./types";
+import { setup } from "~/lib/dayjs";
+
+function formatMogoOrderDate(dateStr: string) {
+  if (!dateStr) return dateStr;
+  const [day, month, year] = dateStr.split(/\/| /);
+  return `${year}-${month}-${day}`;
+}
+
+function formatMogoOrderTime(timeStr: string) {
+  if (!timeStr) return timeStr;
+  const [hour, minute, second] = timeStr.split(":");
+  return `2000-01-01 ${hour}:${minute}:${second}`;
+}
 
 class MogoEntity {
   authToken = process.env.MOGO_TOKEN;
   dbName = process.env.MOGO_DB_NAME;
+
+  constructor() {
+    setup();
+  }
 
   async getOrdersOpened(): Promise<MogoOrderWithDiffTime[]> {
     const [err, ordersRes] = await tryit(mogoHttpClient.getOrdersOpened());
@@ -223,18 +240,32 @@ class MogoEntity {
 
     const now = dayjs();
 
-    const orders = ordersRes.map((o) => {
-      // Convertendo a string em um objeto Day.js com a data atual
-      const horaEntregaObjeto = dayjs()
-        .set("hour", parseInt(o.HoraEntrega.split(":")[0]))
-        .set("minute", parseInt(o.HoraEntrega.split(":")[1]));
+    const orders = ordersRes.map((o: MogoBaseOrder) => {
+      const orderDate = formatMogoOrderDate(o.DataPedido);
+      const orderTime = formatMogoOrderTime(o.HoraPedido);
+      const deliveryExpectedTime = formatMogoOrderTime(o.HoraEntregaTxt);
 
-      // Calculando a diferença em minutos entre agora e a hora de entrega
-      const diffMinutesToNow = horaEntregaObjeto.diff(now, "minute") * -1;
+      const parsedDate = dayjs(orderDate, "DD/MM/YYYY HH:mm:ss", "pt-br");
+      const parsedTime = dayjs(orderTime, "HH:mm:ss", "pt-br");
+      const parsedDeliveryExpectedTime = dayjs(
+        deliveryExpectedTime,
+        "HH:mm:ss",
+        "pt-br"
+      );
+
+      const orderDateTime = parsedDate
+        .set("hour", parsedTime.hour())
+        .set("minute", parsedTime.minute())
+        .set("second", parsedTime.second());
+
+      const orderDeliveryDateTime = parsedDate
+        .set("hour", parsedDeliveryExpectedTime.hour())
+        .set("minute", parsedDeliveryExpectedTime.minute())
+        .set("second", parsedDeliveryExpectedTime.second());
 
       return {
         ...o,
-        diffMinutesToNow,
+        diffMinutesToNow: 9,
       };
     });
 
