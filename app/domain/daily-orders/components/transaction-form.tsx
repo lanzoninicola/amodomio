@@ -10,6 +10,7 @@ import dotPaymentMethods from "../dot-payment-methods"
 import dotProducts from "../dot-products"
 import { Label } from "~/components/ui/label"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select"
+import { useState } from "react"
 
 interface TransactionFormProps {
     dailyOrderId?: DailyOrder["id"] | null
@@ -29,17 +30,20 @@ export default function TransactionForm({
     dailyOrderId,
     transaction,
     operatorId = null,
-
     showLabels = true,
     ghost = false,
     smallText = false,
     saveActionName,
     showDeleteButton = false,
-
 }: TransactionFormProps) {
+
+    const [isMotoRequired, setIsMotoRequired] = useState(false)
+
     // if the transaction is undefined, this means that the form is used to add a new transaction
     // otherwise it is used to update the order
     const transactionFormState = transaction === undefined ? "new" : "update"
+
+
 
     const productsSelection = dotProducts()
     const inboundChannelsSelection = dotInboundChannels()
@@ -116,7 +120,12 @@ export default function TransactionForm({
                     </Label>
                 )}
                 <div className="md:max-w-[100px]">
-                    <Select name="isMotoRequired" defaultValue={transaction?.isMotoRequired === true ? "Sim" : "Não" || "Sim"}>
+                    <Select name="isMotoRequired" defaultValue={transaction?.isMotoRequired === true ? "Sim" : "Não" || "Sim"}
+                        onValueChange={(value) => {
+                            if (value === "Sim") setIsMotoRequired(true)
+                            if (value === "Não") setIsMotoRequired(false)
+                        }}
+                    >
                         <SelectTrigger className={`${smallText === true ? `text-xs` : ``} ${ghost === true ? `border-none` : ``}`}>
                             <SelectValue placeholder="Canale Entrada" />
                         </SelectTrigger>
@@ -140,7 +149,9 @@ export default function TransactionForm({
                     step=".01"
                     className={`max-w-[100px] ${smallText === true ? `text-xs` : ``}`}
                     ghost={ghost}
-                    defaultValue={transaction?.amountMotoboy} />
+                    defaultValue={transaction?.amountMotoboy}
+                    disabled={(transactionFormState === "new" && !isMotoRequired) || (transactionFormState === "update" && !transaction?.isMotoRequired)}
+                />
 
             </Fieldset>
 

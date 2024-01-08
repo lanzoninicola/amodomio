@@ -1,10 +1,73 @@
 import { useNavigation, Form, useOutletContext } from "@remix-run/react"
 import { Table, TableTitles, TableRows, TableRow } from "~/components/primitives/table-list"
-import { DailyOrder, DailyOrderTransaction } from "~/domain/daily-orders/daily-order.model.server"
+import { DOTInboundChannel, DOTOperator, DOTPaymentMethod, DOTProduct, DailyOrder, DailyOrderTransaction } from "~/domain/daily-orders/daily-order.model.server"
 import { DailyOrderSingleOutletContext } from "./admin.daily-orders.$id"
 import TransactionForm from "~/domain/daily-orders/components/transaction-form"
 import randomReactKey from "~/utils/random-react-key"
+import { LoaderArgs, redirect } from "@remix-run/node"
+import { dailyOrderEntity } from "~/domain/daily-orders/daily-order.entity.server"
+import dotOperators from "~/domain/daily-orders/dot-operators"
+import { serverError, ok } from "~/utils/http-response.server"
+import tryit from "~/utils/try-it"
 
+export async function action({ request }: LoaderArgs) {
+
+    let formData = await request.formData();
+    const { _action, ...values } = Object.fromEntries(formData);
+
+    const operator = dotOperators(values.operatorId as string) as DOTOperator
+
+    const transaction: Omit<DailyOrderTransaction, "createdAt" | "updatedAt"> = {
+        product: values.product as DOTProduct || "",
+        amount: Number.isNaN(values?.amount) ? 0 : Number(values.amount),
+        orderNumber: Number.isNaN(values?.orderNumber) ? 0 : Number(values.orderNumber),
+        isMotoRequired: values.isMotoRequired === "Sim" ? true : false,
+        amountMotoboy: Number.isNaN(values?.amountMotoboy) ? 0 : values.isMotoRequired === "Não" ? 0 : Number(values.amountMotoboy),
+        inboundChannel: values.inboundChannel as DOTInboundChannel || "",
+        paymentMethod: values.paymentMethod as DOTPaymentMethod || "",
+        deletedAt: null,
+        operator
+    }
+
+    if (values.transactionId) {
+        transaction.id = values.transactionId as string
+    }
+
+    if (values.dailyOrderId === undefined || values.dailyOrderId === "") {
+        return serverError("O ID dos pedidos do dia não pode ser null")
+    }
+
+    if (_action === "daily-orders-transaction-update") {
+        const [err, itemUpdated] = await tryit(
+            dailyOrderEntity.updateTransaction(
+                values.dailyOrderId as string,
+                transaction.id,
+                transaction
+            )
+        )
+
+        if (err) {
+            return serverError(err)
+        }
+        return ok()
+    }
+
+    if (_action === "daily-orders-transaction-soft-delete") {
+        const [err, itemUpdated] = await tryit(
+            dailyOrderEntity.deleteTransaction(
+                values.dailyOrderId as string,
+                transaction.id,
+            )
+        )
+
+        if (err) {
+            return serverError(err)
+        }
+        return ok()
+    }
+
+    return null
+}
 
 export default function DailyOrderSingleTransactions() {
     const outletContext = useOutletContext<DailyOrderSingleOutletContext>()
