@@ -5,7 +5,7 @@ export interface MogoBaseOrder {
     IdProduto: number;
     IdItemPedido: number;
     Descricao: string;
-    Observacao: string;
+    Observacao: string | null;
     Quantidade: number;
     ValorUnitario: number;
     Adicionais: any[]; // Pode ser um array de objetos com propriedades específicas
@@ -19,7 +19,7 @@ export interface MogoBaseOrder {
   TaxaEntrega: number;
   DataPedido: string;
   HoraPedido: string;
-  HoraEntrega: string;
+  HoraEntrega: string | null;
   HoraAcerto: string;
   FormaPagamento: string;
   TrocoDelivery: number;
@@ -35,7 +35,7 @@ export interface MogoBaseOrder {
   HoraEntregaTxt: string;
   DataEntregaTxt: string | null;
   CodObsEntrega: number;
-  DataSaidaEntregador: string;
+  DataSaidaEntregador: string | null;
   Adiantamentos: any; // Pode ser de um tipo específico ou null
   IdPedRemoteDevice: string;
   ObsEntrega: any; // Pode ser de um tipo específico ou null
@@ -50,5 +50,10 @@ export interface MogoBaseOrder {
 }
 
 export interface MogoOrderWithDiffTime extends MogoBaseOrder {
-  diffMinutesToNow: number;
+  diffMinutesOrderDateTimeToNow: number;
+  diffMinutesDeliveryDateTimeToNow: number;
+}
+
+export interface MogoHttpClientInterface {
+  getOrdersOpened(): Promise<MogoBaseOrder[]>;
 }

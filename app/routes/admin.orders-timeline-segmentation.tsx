@@ -56,13 +56,11 @@ export default function OrdersTimelineSegmentation() {
 
     let orders: MogoOrderWithDiffTime[] = loaderData?.payload?.orders || []
 
-
-
-    const orderLess20Opened = orders.filter(order => order?.diffMinutesToNow < 20 && order?.diffMinutesToNow >= 0)
-    const orderLess40Minutes = orders.filter(order => order?.diffMinutesToNow < 40 && order?.diffMinutesToNow >= 20)
-    const orderLess60Minutes = orders.filter(order => order?.diffMinutesToNow < 60 && order?.diffMinutesToNow >= 40)
-    const orderLess90Minutes = orders.filter(order => order?.diffMinutesToNow < 90 && order?.diffMinutesToNow >= 60)
-    const orderMore90Minutes = orders.filter(order => order?.diffMinutesToNow >= 91)
+    const orderLess20Opened = orders.filter(order => order?.diffMinutesOrderDateTimeToNow < 20 && order?.diffMinutesOrderDateTimeToNow >= 0)
+    const orderLess40Minutes = orders.filter(order => order?.diffMinutesOrderDateTimeToNow < 40 && order?.diffMinutesOrderDateTimeToNow >= 20)
+    const orderLess60Minutes = orders.filter(order => order?.diffMinutesOrderDateTimeToNow < 60 && order?.diffMinutesOrderDateTimeToNow >= 40)
+    const orderLess90Minutes = orders.filter(order => order?.diffMinutesOrderDateTimeToNow < 90 && order?.diffMinutesOrderDateTimeToNow >= 60)
+    const orderMore90Minutes = orders.filter(order => order?.diffMinutesOrderDateTimeToNow >= 91)
 
     // console.log({ orders, orderLess20Opened, orderLess40Minutes, orderLess60Minutes, orderLess90Minutes, orderMore90Minutes })
 
@@ -123,7 +121,7 @@ export default function OrdersTimelineSegmentation() {
                                 time={o?.HoraPedido}
                                 customerName={o?.Cliente}
                                 deliveryTime={o?.HoraEntregaTxt}
-                                diff={o?.diffMinutesToNow}
+                                diff={o?.diffMinutesOrderDateTimeToNow}
                             />
                         )
                     })}
@@ -141,7 +139,7 @@ export default function OrdersTimelineSegmentation() {
                                 time={o?.HoraPedido}
                                 customerName={o?.Cliente}
                                 deliveryTime={o?.HoraEntregaTxt}
-                                diff={o?.diffMinutesToNow}
+                                diff={o?.diffMinutesOrderDateTimeToNow}
                             />
                         )
                     })}
@@ -160,7 +158,7 @@ export default function OrdersTimelineSegmentation() {
                                 time={o?.HoraPedido}
                                 customerName={o?.Cliente}
                                 deliveryTime={o?.HoraEntregaTxt}
-                                diff={o?.diffMinutesToNow}
+                                diff={o?.diffMinutesOrderDateTimeToNow}
                             />
                         )
                     })}
@@ -178,7 +176,7 @@ export default function OrdersTimelineSegmentation() {
                                 time={o?.HoraPedido}
                                 customerName={o?.Cliente}
                                 deliveryTime={o?.HoraEntregaTxt}
-                                diff={o?.diffMinutesToNow}
+                                diff={o?.diffMinutesOrderDateTimeToNow}
                             />
                         )
                     })}
@@ -196,7 +194,7 @@ export default function OrdersTimelineSegmentation() {
                                 time={o?.HoraPedido}
                                 customerName={o?.Cliente}
                                 deliveryTime={o?.HoraEntregaTxt}
-                                diff={o?.diffMinutesToNow}
+                                diff={o?.diffMinutesOrderDateTimeToNow}
                             />
                         )
                     })}
@@ -258,7 +256,10 @@ function OrderCard({ number, time, customerName, deliveryTime, diff }: OrderCard
                     </div>
                     <span className="text-sm font-semibold">{time || "Não definido"}</span>
                 </div>
-                <span className="text-sm font-semibold">Hora de entrega: {deliveryTime}</span>
+                <div className="flex justify-between items-center">
+                    <span className="text-sm font-semibold">Hora de entrega programada</span>
+                    <span className="text-sm font-semibold">{deliveryTime}</span>
+                </div>
             </div>
             <span className="text-xs mb-2">Nome cliente: {customerName || "Não definido"}</span>
             <span className="text-xs "> Minutos: {diff}</span>

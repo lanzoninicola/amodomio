@@ -1,6 +1,7 @@
 import tryit from "~/utils/try-it";
+import { MogoBaseOrder, MogoHttpClientInterface } from "./types";
 
-class MogoHttpClient {
+export default class MogoHttpClient implements MogoHttpClientInterface {
   authToken = process.env.MOGO_TOKEN;
   dbName = process.env.MOGO_DB_NAME;
 
@@ -35,7 +36,3 @@ class MogoHttpClient {
     return orders;
   }
 }
-
-const mogoHttpClient = new MogoHttpClient();
-
-export default mogoHttpClient;
