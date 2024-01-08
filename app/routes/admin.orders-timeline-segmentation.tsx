@@ -56,16 +56,21 @@ export default function OrdersTimelineSegmentation() {
 
     let orders: MogoOrderWithDiffTime[] = loaderData?.payload?.orders || []
 
+
+
     const orderLess20Opened = orders.filter(order => order?.diffMinutesToNow < 20 && order?.diffMinutesToNow >= 0)
     const orderLess40Minutes = orders.filter(order => order?.diffMinutesToNow < 40 && order?.diffMinutesToNow >= 20)
     const orderLess60Minutes = orders.filter(order => order?.diffMinutesToNow < 60 && order?.diffMinutesToNow >= 40)
     const orderLess90Minutes = orders.filter(order => order?.diffMinutesToNow < 90 && order?.diffMinutesToNow >= 60)
     const orderMore90Minutes = orders.filter(order => order?.diffMinutesToNow >= 91)
 
+    // console.log({ orders, orderLess20Opened, orderLess40Minutes, orderLess60Minutes, orderLess90Minutes, orderMore90Minutes })
 
     if (status === 500) {
         return (
-            <div className="font-semibold text-red-500 text-center">{message}</div>
+            <div className="font-semibold text-red-500 text-center mt-32">
+                Erro: {message}
+            </div>
         )
     }
 
