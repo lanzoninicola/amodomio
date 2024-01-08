@@ -135,6 +135,7 @@ export default function OrdersTimelineSegmentation() {
                     severity={1}
                     title="Menos de 20 minutos"
                     description="Pedidos abertos há menos de 20 minutos"
+                    itemsNumber={orderLess20Opened.length}
                 >
                     {orderLess20Opened.map(o => {
                         return (
@@ -157,6 +158,7 @@ export default function OrdersTimelineSegmentation() {
                     severity={2}
                     title="Mais de 20 || Menos de 40"
                     description="Pedidos abertos entre 21 e 40 minutos"
+                    itemsNumber={orderLess40Minutes.length}
                 >
                     {orderLess40Minutes.map(o => {
                         return (
@@ -179,6 +181,7 @@ export default function OrdersTimelineSegmentation() {
                     severity={3}
                     title="Mais de 40 || Menos de 60"
                     description="Pedidos abertos entre 41 e 60 minutos"
+                    itemsNumber={orderLess60Minutes.length}
                 >
                     {orderLess60Minutes.map(o => {
                         return (
@@ -200,6 +203,7 @@ export default function OrdersTimelineSegmentation() {
                     severity={4}
                     title="Mais de 60 || Menos de 90"
                     description="Pedidos abertos entre 61 e 90 minutos"
+                    itemsNumber={orderLess90Minutes.length}
                 >
                     {orderLess90Minutes.map(o => {
                         return (
@@ -221,6 +225,7 @@ export default function OrdersTimelineSegmentation() {
                     severity={5}
                     title="Mais de 90 minutos"
                     description="Pedidos abertos há mais de 90 minutos"
+                    itemsNumber={orderMore90Minutes.length}
                 >
                     {orderMore90Minutes.map(o => {
                         return (
@@ -249,9 +254,10 @@ interface KanbanColProps {
     description: string
     className?: string
     severity: number
+    itemsNumber?: number
 }
 
-function KanbanCol({ children, title, description, className, severity = 1, ...props }: KanbanColProps) {
+function KanbanCol({ children, title, description, className, severity = 1, itemsNumber, ...props }: KanbanColProps) {
 
     const [showDescription, setShowDescription] = useState(false)
 
@@ -272,20 +278,25 @@ function KanbanCol({ children, title, description, className, severity = 1, ...p
         } {...props}>
             <div className={
                 cn(
-                    "flex flex-col gap-2 p-2 rounded-sm",
+                    "flex gap-2 items-center justify-between p-2 rounded-sm",
                     severityClass[severity],
                 )
             }>
-                <span className="font-semibold">{title}</span>
-                <div className="flex gap-2 items-center">
+                <div className="flex flex-col gap-2">
+                    <span className="font-semibold text-sm">{title}</span>
+                    <div className="flex gap-2 items-center">
 
-                    <span className="text-xs underline cursor-pointer" onClick={() => setShowDescription(!showDescription)}>
-                        {showDescription ? 'Esconder' : 'Ver mais'}
-                    </span>
-                    <HelpCircle size={16} />
+                        <span className="text-xs underline cursor-pointer" onClick={() => setShowDescription(!showDescription)}>
+                            {showDescription ? 'Esconder' : 'Ver mais'}
+                        </span>
+                        <HelpCircle size={16} />
 
+                    </div>
+                    {showDescription && <span>{description}</span>}
                 </div>
-                {showDescription && <span>{description}</span>}
+                <div className="grid place-items-center rounded-full border border-black w-8 h-8">
+                    <span className="font-semibold text-sm">{itemsNumber}</span>
+                </div>
             </div>
 
             {children}
