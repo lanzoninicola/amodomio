@@ -2,7 +2,7 @@ import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
 
-const setup = (userTimezone = "America/Bahia") => {
+export const setup = (userTimezone = "America/Bahia") => {
   dayjs.extend(utc);
   dayjs.extend(timezone);
   dayjs.tz.setDefault(userTimezone);
