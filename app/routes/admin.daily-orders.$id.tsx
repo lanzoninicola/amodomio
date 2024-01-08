@@ -38,66 +38,9 @@ export async function action({ request }: LoaderArgs) {
 
     const operator = dotOperators(values.operatorId as string) as DOTOperator
 
-    const transaction: Omit<DailyOrderTransaction, "createdAt" | "updatedAt"> = {
-        product: values.product as DOTProduct || "",
-        amount: Number.isNaN(values?.amount) ? 0 : Number(values.amount),
-        orderNumber: Number.isNaN(values?.orderNumber) ? 0 : Number(values.orderNumber),
-        isMotoRequired: values.isMotoRequired === "Sim" ? true : false,
-        amountMotoboy: Number.isNaN(values?.amountMotoboy) ? 0 : Number(values.amountMotoboy),
-        inboundChannel: values.inboundChannel as DOTInboundChannel || "",
-        paymentMethod: values.paymentMethod as DOTPaymentMethod || "",
-        deletedAt: null,
-        operator
-    }
-
-    if (values.transactionId) {
-        transaction.id = values.transactionId as string
-    }
-
     if (values.dailyOrderId === undefined || values.dailyOrderId === "") {
         return serverError("O ID dos pedidos do dia não pode ser null")
     }
-
-    if (_action === "daily-orders-transaction-create") {
-        const [err, itemCreated] = await tryit(dailyOrderEntity.createTransaction(values.dailyOrderId as string, transaction))
-
-
-        if (err) {
-            return serverError(err)
-        }
-
-        return redirect(`/admin/daily-orders/${values.dailyOrderId}/transactions`)
-    }
-
-    if (_action === "daily-orders-transaction-update") {
-        const [err, itemUpdated] = await tryit(
-            dailyOrderEntity.updateTransaction(
-                values.dailyOrderId as string,
-                transaction.id,
-                transaction
-            )
-        )
-
-        if (err) {
-            return serverError(err)
-        }
-        return ok()
-    }
-
-    if (_action === "daily-orders-transaction-soft-delete") {
-        const [err, itemUpdated] = await tryit(
-            dailyOrderEntity.deleteTransaction(
-                values.dailyOrderId as string,
-                transaction.id,
-            )
-        )
-
-        if (err) {
-            return serverError(err)
-        }
-        return ok()
-    }
-
 
     if (_action === "daily-orders-pizzas-number-update") {
 
@@ -150,14 +93,16 @@ export default function DailyOrdersSingle() {
             </div>
             <Separator className="my-6" />
 
+            {/*
             <div className="flex gap-4 items-center w-full justify-center">
                 <DailyOrderQuickStat label={"Total Pedidos"} value={dailyOrder?.totalOrdersNumber || 0} decimalsAmount={0} />
                 <DailyOrderQuickStat label={"Total Valor Pedidos"} value={dailyOrder?.totalOrdersAmount || 0} />
                 <DailyOrderQuickStat label={"Total Valor Motoboy"} value={dailyOrder?.totalMotoboyAmount || 0} />
             </div>
             <Separator className="my-6" />
-            <div className="flex flex-col gap-6 w-full">
-                <div className="bg-slate-50 rounded-xl p-4 mb-8">
+            */}
+            <div className="flex flex-col gap-4 w-full">
+                <div className="bg-slate-50 rounded-xl p-4">
                     <Form method="post" className="flex items-center gap-2 w-full" ref={formResponse.formRef}>
                         <TransactionForm
                             dailyOrderId={dailyOrder.id}
@@ -184,7 +129,12 @@ export default function DailyOrdersSingle() {
 
                     <li className="border-l-2 border-t-2 border-r-2 rounded-tl-lg rounded-tr-lg px-4 py-2">
                         <Link to="report">
-                            <span className="font-semibold">Relatorio</span>
+                            <span className="font-semibold">Relatorio do dia</span>
+                        </Link>
+                    </li>
+                    <li className="border-l-2 border-t-2 border-r-2 rounded-tl-lg rounded-tr-lg px-4 py-2">
+                        <Link to="report-motoboy">
+                            <span className="font-semibold">Relatorio Motoboy</span>
                         </Link>
                     </li>
                 </ul>
@@ -311,9 +261,9 @@ export function DailyOrderQuickStat({ label, value, decimalsAmount = 2 }: DailyO
     const valueRendered = value.toFixed(decimalsAmount)
 
     return (
-        <div className="grid grid-cols-2 items-center gap-x-4 ">
+        <div className="grid grid-cols-2 items-center gap-x-4">
             <span className="font-medium leading-none tracking-tight">{label}</span>
-            <span className="font-semibold leading-none tracking-tight">{valueRendered}</span>
+            <span className="font-semibold leading-none tracking-tight text-right">{valueRendered}</span>
         </div>
     )
 }

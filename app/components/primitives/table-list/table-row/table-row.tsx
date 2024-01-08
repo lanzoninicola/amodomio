@@ -1,3 +1,4 @@
+import { cn } from "~/lib/utils";
 import formatDate from "~/utils/format-date";
 
 interface TableRowProps {
@@ -7,6 +8,7 @@ interface TableRowProps {
   isProcessing?: boolean;
   isError?: boolean;
   clazzName?: string;
+  className?: string
   dateColumnsCondensed?: boolean;
   showDateColumns?: boolean;
 }
@@ -17,6 +19,7 @@ export default function TableRow({
   isProcessing,
   isError,
   clazzName,
+  className,
   dateColumnsCondensed,
   showDateColumns = true,
 }: TableRowProps) {
@@ -34,14 +37,17 @@ export default function TableRow({
     />
   )
 
-  let rowStyle = `cursor-pointer w-full grid gap-x-6 p-2 mb-2 text-sm items-center hover:bg-gray-200 border-b-2 border-b-gray-50 ${clazzName}`
-  rowStyle = isProcessing ? `${rowStyle} opacity-25` : rowStyle
-  rowStyle = isError ? `${rowStyle} bg-red-100` : rowStyle
-
   return (
     <li
       data-element="table-row"
-      className={rowStyle}
+      className={
+        cn(
+          `cursor-pointer w-full grid gap-x-6 p-2 mb-2 text-sm items-center hover:bg-gray-200 border-b-2 border-b-gray-50 ${clazzName}`,
+          isProcessing && "opacity-25",
+          isError && "bg-red-100",
+          className
+        )
+      }
     >
       {children}
       {showDateColumns === true && dateColumns}
