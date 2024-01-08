@@ -22,7 +22,7 @@ export async function action({ request }: LoaderArgs) {
         amount: Number.isNaN(values?.amount) ? 0 : Number(values.amount),
         orderNumber: Number.isNaN(values?.orderNumber) ? 0 : Number(values.orderNumber),
         isMotoRequired: values.isMotoRequired === "Sim" ? true : false,
-        amountMotoboy: Number.isNaN(values?.amountMotoboy) ? 0 : Number(values.amountMotoboy),
+        amountMotoboy: Number.isNaN(values?.amountMotoboy) ? 0 : values.isMotoRequired === "Não" ? 0 : Number(values.amountMotoboy),
         inboundChannel: values.inboundChannel as DOTInboundChannel || "",
         paymentMethod: values.paymentMethod as DOTPaymentMethod || "",
         deletedAt: null,
@@ -35,17 +35,6 @@ export async function action({ request }: LoaderArgs) {
 
     if (values.dailyOrderId === undefined || values.dailyOrderId === "") {
         return serverError("O ID dos pedidos do dia não pode ser null")
-    }
-
-    if (_action === "daily-orders-transaction-create") {
-        const [err, itemCreated] = await tryit(dailyOrderEntity.createTransaction(values.dailyOrderId as string, transaction))
-
-
-        if (err) {
-            return serverError(err)
-        }
-
-        return redirect(`/admin/daily-orders/${values.dailyOrderId}/transactions`)
     }
 
     if (_action === "daily-orders-transaction-update") {
@@ -77,13 +66,7 @@ export async function action({ request }: LoaderArgs) {
         return ok()
     }
 
-
-
-
-
     return null
-
-
 }
 
 export default function DailyOrderSingleTransactions() {

@@ -11,7 +11,7 @@ export default function DailyOrderSingleReportMotoboy() {
 
     const transactions = dailyOrder?.transactions || []
 
-    const motoboyTransactions = transactions.filter(t => t.isMotoRequired === true)
+    const motoboyTransactions = transactions.filter(t => t.deletedAt === null && t.isMotoRequired === true)
 
     return (
         <div className="flex flex-col gap-4">
