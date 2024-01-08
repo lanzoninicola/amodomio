@@ -18,6 +18,11 @@ interface NavMenuCollapsibleProps {
 export function NavMenuCollapsible({ navItems }: NavMenuCollapsibleProps) {
     const [isOpen, setIsOpen] = useState(false)
 
+
+    const onClickNavItem = () => {
+        setIsOpen(false)
+    }
+
     return (
         <Collapsible
             open={isOpen}
@@ -41,7 +46,7 @@ export function NavMenuCollapsible({ navItems }: NavMenuCollapsibleProps) {
                     navItems && navItems.map((item, index) => {
 
                         return (
-                            <Link key={index} to={item.to}>
+                            <Link key={index} to={item.to} onClick={onClickNavItem}>
                                 <div className="rounded-md border px-4 py-3 font-mono text-sm mb-2 flex justify-between items-center">
                                     <span>{item.label}</span>
                                     <ChevronRight />
