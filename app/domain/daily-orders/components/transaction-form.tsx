@@ -43,8 +43,6 @@ export default function TransactionForm({
     // otherwise it is used to update the order
     const transactionFormState = transaction === undefined ? "new" : "update"
 
-
-
     const productsSelection = dotProducts()
     const inboundChannelsSelection = dotInboundChannels()
     const paymentMethodsSelection = dotPaymentMethods()
@@ -150,7 +148,7 @@ export default function TransactionForm({
                     className={`max-w-[100px] ${smallText === true ? `text-xs` : ``}`}
                     ghost={ghost}
                     defaultValue={transaction?.amountMotoboy}
-                    disabled={(transactionFormState === "new" && !isMotoRequired) || (transactionFormState === "update" && !transaction?.isMotoRequired)}
+                // disabled={(transactionForKmState === "new" && !isMotoRequired) || (transactionFormState === "update" && !transaction?.isMotoRequired)}
                 />
 
             </Fieldset>

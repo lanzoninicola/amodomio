@@ -172,6 +172,21 @@ class DailyOrderEntity extends BaseEntity<DailyOrder> {
       updatedAt: new Date().toISOString(),
     };
 
+    // const record = await this.findTransactionsByOrderNumber(
+    //   dailyOrder?.id,
+    //   transaction.orderNumber
+    // );
+
+    // if (record) {
+    //   throw new Error(
+    //     `Já existe um pedido com a comanda numero ${
+    //       transaction.orderNumber
+    //     }. Proximo numero disponivel é ${
+    //       (dailyOrder?.lastOrderNumber || 0) + 1
+    //     }`
+    //   );
+    // }
+
     await this.update(id, {
       lastOrderNumber: transaction.orderNumber,
       transactions,
@@ -237,6 +252,16 @@ class DailyOrderEntity extends BaseEntity<DailyOrder> {
     if (err) {
       throw new Error(err.message);
     }
+  }
+
+  async findTransactionsByOrderNumber(id: DailyOrder["id"], number: number) {
+    if (!id) return;
+
+    const record = await this.findById(id);
+
+    return record?.transactions.filter(
+      (t) => t.deletedAt === null && t.orderNumber === number
+    );
   }
 
   async findLastActiveTransaction(id: DailyOrder["id"]) {
