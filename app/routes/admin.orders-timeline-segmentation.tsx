@@ -256,11 +256,11 @@ function KanbanCol({ children, title, description, className, severity = 1, ...p
     const [showDescription, setShowDescription] = useState(false)
 
     const severityClass: Record<number, string> = {
-        1: "bg-slate-50/50 ",
-        2: "bg-orange-100/50 ",
-        3: "bg-orange-200/50 ",
-        4: "bg-red-300/50 ",
-        5: "bg-red-400/50 "
+        1: "bg-slate-50",
+        2: "bg-orange-100",
+        3: "bg-orange-200",
+        4: "bg-red-300",
+        5: "bg-red-400"
     }
 
     return (
@@ -330,52 +330,53 @@ function OrderCard({
 
     return (
 
-        <div className="relative shadow-xl hover:cursor-pointer hover:bg-slate-50 rounded-lg" >
+        <div className="flex gap-x-0 shadow-xl hover:cursor-pointer hover:bg-slate-50 rounded-lg" >
 
-            <div className="flex gap-0">
-                {delayOnDeliveryTime === true && <div className="bg-violet-400 animate-pulse w-2 rounded-tl-lg rounded-bl-lg"></div>}
-                <div className="w-full">
-                    <div className={
-                        cn(
-                            "h-2 w-full rounded-tr-lg",
-                            severity[orderTimeSeverity]
-                        )
-                    }></div>
-                    <div className="flex flex-col gap-4 px-4 py-2">
-                        <div className="flex flex-col gap-1">
-                            <div className="flex justify-between items-center">
-                                <div className="flex gap-2 items-center">
-                                    <ChevronRightSquare size={16} />
-                                    <span className="text-sm font-semibold">{number || "Não definido"}</span>
-                                </div>
-                                <span className="text-sm font-semibold">{time || "Não definido"}</span>
+            <div className="flex gap-x-0 w-full m-0">
+                <div className={
+                    cn(
+                        "w-2 h-full rounded-l-lg",
+                        severity[orderTimeSeverity]
+                    )
+                }></div>
+
+                <div className="flex flex-col gap-4 px-4 py-2 w-full">
+                    <div className="flex flex-col">
+                        <div className="flex justify-between items-center">
+                            <div className="flex gap-2 items-center">
+                                <ChevronRightSquare size={16} />
+                                <span className="text-sm font-semibold">{number || "Não definido"}</span>
                             </div>
-                            <Separator className="my-2" />
-                            <div className="flex justify-between items-center">
-                                <span className="text-sm font-semibold">Hora de entrega programada</span>
-                                <span className="text-sm font-semibold">{deliveryTime}</span>
-                            </div>
+                            <span className="text-sm font-semibold">{time || "Não definido"}</span>
                         </div>
-
-                        <span className="text-xs">Nome cliente: {customerName || "Não definido"}</span>
-
-                        <Separator className="my-0" />
-                        <div>
-                            <h2 className="text-xs mb-2 font-semibold">Atrasos</h2>
-
-                            <div className="flex justify-between items-center">
-                                <span className="text-xs ">Respeito hora abertura pedido: </span>
-                                <span className="text-xs ">{delayStringOrderTime || "Não definido"}</span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                                <span className="text-xs ">Respeito hora de entrega programada: </span>
-                                <span className="text-xs ">{delayStringDeliveryTime || "Não definido"}</span>
-                            </div>
+                        <Separator className="my-2" />
+                        <div className="flex justify-between items-center">
+                            <span className="text-sm font-semibold">Hora de entrega programada</span>
+                            <span className="text-sm font-semibold">{deliveryTime}</span>
                         </div>
-
                     </div>
+
+                    <span className="text-xs">Nome cliente: {customerName || "Não definido"}</span>
+
+                    <Separator className="my-0" />
+                    <div>
+                        <h2 className="text-xs mb-2 font-semibold">Atrasos</h2>
+
+                        <div className="flex justify-between items-center">
+                            <span className="text-xs ">Respeito hora abertura pedido: </span>
+                            <span className="text-xs ">{delayStringOrderTime || "Não definido"}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                            <span className="text-xs ">Respeito hora de entrega programada: </span>
+                            <span className="text-xs ">{delayStringDeliveryTime || "Não definido"}</span>
+                        </div>
+                    </div>
+
                 </div>
+
             </div>
+
+            {delayOnDeliveryTime === true && <div className="bg-violet-400 animate-pulse w-2 rounded-r-lg m-0"></div>}
 
         </div>
     )
