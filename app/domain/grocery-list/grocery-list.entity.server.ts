@@ -85,14 +85,10 @@ class GroceryListEntity extends BaseEntity<GroceryList> {
 
     let nextItemsList = list?.items || [];
 
-    console.log("pre filter", { nextItemsList, itemId });
-
     // remove the item from the list
     const nextItemsListFiltered = nextItemsList.filter(
       (item) => item.id !== itemId
     );
-
-    console.log("post filter", { nextItemsListFiltered, itemId });
 
     await this.update(listId, {
       items: nextItemsListFiltered,

@@ -1,5 +1,7 @@
 import { LoaderArgs, redirect } from "@remix-run/node";
 import { Form, Link, Outlet, useActionData, useLoaderData } from "@remix-run/react";
+import { PlusSquareIcon } from "lucide-react";
+import { PlusIcon } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { toast } from "~/components/ui/use-toast";
 import GroceryItem from "~/domain/grocery-list/components/grocery-item";
@@ -78,12 +80,14 @@ export default function SingleGroceryList() {
 
     return (
         <div className="flex flex-col gap-4">
-            <div className="border rounded-lg p-4">
-                <Link to="products">
-                    <Button className="w-full md:w-max font-semibold text-lg">Adicionar Produtos</Button>
-                </Link>
 
-            </div>
+            <Link to="products">
+                <div className="flex gap-2 items-center justify-end">
+                    <span className="">Adicionar Produtos</span>
+                    <PlusSquareIcon />
+                </div>
+            </Link>
+
             <Outlet />
             <div className="flex flex-col mt-2">
 
