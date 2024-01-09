@@ -31,7 +31,6 @@ export async function loader({ request }: LoaderArgs) {
     }
 
     const productTypes = ProductEntity.findAllProductTypes()
-    product.entity
 
     let categories = null
 

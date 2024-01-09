@@ -111,12 +111,8 @@ class DailyOrderEntity extends BaseEntity<DailyOrder> {
       updatedAt: null,
     });
 
-    console.log({ product: transaction.product });
-
     if (transaction.product === "Pizza Familía") {
       dailyOrder.restLargePizzaNumber = dailyOrder.restLargePizzaNumber - 1;
-
-      console.log({ restLargePizzaNumber: dailyOrder.restLargePizzaNumber });
 
       if (dailyOrder.restLargePizzaNumber < 0) {
         throw new Error(
