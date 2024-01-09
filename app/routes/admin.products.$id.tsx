@@ -29,7 +29,7 @@ export async function loader({ request }: LoaderArgs) {
         return badRequest({ message: "Produto não encontrado" })
     }
 
-    const productTypes = ProductEntity.getProductTypeRawValues()
+    const productTypes = ProductEntity.findAllProductTypes()
 
 
     let categories = null

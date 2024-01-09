@@ -6,5 +6,10 @@ GET app.mogogourmet.com.br/snack/v1/GetPedidosAbertos?dbname=amodomio&onlyNew=tr
 Authorization: Token MTozMC8xMS8yMDIzIDA5OjMxOjAwtoken_sh=MTozMC8xMS8yMDIzIDA5OjMxOjAwdbname=amodomio
 
 ### get order by ID
+GET app.mogogourmet.com.br/snack/v1/GetPedidosAbertos?dbname=amodomio&onlyNew=true
 app.mogogourmet.com.br/Snack/V1/buscapedidos?id=D729
-Authorization: Token MTozMC8xMS8yMDIzIDA5OjMxOjAwtoken_sh=MTozMC8xMS8yMDIzIDA5OjMxOjAwdbname=amodomio
+Authorization: Token MTozMC8xMS8yMDIzIDA5OjMxOjAwtokensh=MTozMC8xMS8yMDIzIDA5OjMxOjAwdbname=amodomio
+
+###
+GET app.mogogourmet.com.br/snack/v1/GetGruposSaboresPizzas
+Authorization: Token MTozMC8xMS8yMDIzIDA5OjMxOjAwtokensh=MTozMC8xMS8yMDIzIDA5OjMxOjAwdbname=amodomio

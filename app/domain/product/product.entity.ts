@@ -8,6 +8,7 @@ import {
 } from "./product.model.server";
 import type { LatestSellPrice } from "../sell-price/sell-price.model.server";
 import { BaseEntity } from "../base.entity";
+import tryit from "~/utils/try-it";
 
 export interface ProductTypeHTMLSelectOption {
   value: ProductType;
@@ -15,6 +16,24 @@ export interface ProductTypeHTMLSelectOption {
 }
 
 export class ProductEntity extends BaseEntity<Product> {
+  async findByType(type: ProductType) {
+    const [err, products] = await tryit(
+      productEntity.findAll([
+        {
+          field: "info.type",
+          op: "==",
+          value: type,
+        },
+      ])
+    );
+
+    if (err) {
+      throw new Error(err.message);
+    }
+
+    return products;
+  }
+
   async addComponent(productId: string, component: ProductComponent) {
     const product = await this.findById(productId);
     const components = product?.components || [];
@@ -96,7 +115,7 @@ export class ProductEntity extends BaseEntity<Product> {
     );
   }
 
-  static getProductTypeValues(type: ProductInfo["type"] | null | undefined) {
+  static findProductTypeByName(type: ProductInfo["type"] | null | undefined) {
     switch (type) {
       case "pizza":
         return "Pizza";
@@ -116,7 +135,7 @@ export class ProductEntity extends BaseEntity<Product> {
     }
   }
 
-  static getProductTypeRawValues(): ProductTypeHTMLSelectOption[] {
+  static findAllProductTypes(): ProductTypeHTMLSelectOption[] {
     return [
       { value: "pizza", label: "Pizza" },
       { value: "ingredient", label: "Ingrediente" },
