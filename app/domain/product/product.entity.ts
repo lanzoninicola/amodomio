@@ -9,6 +9,7 @@ import {
 import type { LatestSellPrice } from "../sell-price/sell-price.model.server";
 import { BaseEntity } from "../base.entity";
 import tryit from "~/utils/try-it";
+import { FieldPath } from "firebase/firestore";
 
 export interface ProductTypeHTMLSelectOption {
   value: ProductType;
@@ -16,6 +17,27 @@ export interface ProductTypeHTMLSelectOption {
 }
 
 export class ProductEntity extends BaseEntity<Product> {
+  async deleteProduct(id: Product["id"]) {
+    if (!id) {
+      throw new Error("Não foi passado o ID do produto da eliminar");
+    }
+
+    // check if the product is part of a composition, if so, throw an error
+    const isPartOfComposition = await this.isProductPartOfComposition(id);
+
+    if (isPartOfComposition === true) {
+      throw new Error("O produto está em composição, não pode ser deletado.");
+    }
+
+    const [err, data] = await tryit(productEntity._delete(id));
+
+    if (err) {
+      throw new Error(err.message);
+    }
+
+    return data;
+  }
+
   async findByType(type: ProductType) {
     const [err, products] = await tryit(
       productEntity.findAll([
@@ -32,6 +54,43 @@ export class ProductEntity extends BaseEntity<Product> {
     }
 
     return products;
+  }
+
+  /**
+   * This retrieves the main product containing the item I wish to verify within its composition.
+   *
+   * @param id The product ID that could be inside a composition
+   * @return
+   */
+  async findCompositionWithProduct(id: Product["id"]): Promise<Product[]> {
+    const products = await this.findAll();
+    return products.filter((p) => {
+      const composition = p.components?.filter((c) => c.product.id === id);
+
+      if (composition && composition?.length > 0) {
+        return p;
+      }
+      return false;
+    });
+  }
+
+  /**
+   * This detect if a product is part of a composition.
+   *
+   * @param id The product ID that could be inside a composition
+   * @return boolean
+   */
+  async isProductPartOfComposition(id: Product["id"]): Promise<boolean> {
+    const products = await this.findAll();
+
+    return products.some((p) => {
+      const composition = p.components?.some((c) => c.product.id === id);
+
+      if (composition && composition === true) {
+        return true;
+      }
+      return false;
+    });
   }
 
   async addComponent(productId: string, component: ProductComponent) {

@@ -8,7 +8,7 @@ import { ProductEntity, productEntity } from "~/domain/product/product.entity";
 import type { ProductOutletContext } from "./admin.products.$id";
 import { Trash2, Save } from "lucide-react";
 import { Button } from "~/components/ui/button";
-import { TableRow, TableTitles, Table } from "~/components/primitives/table-list";
+import { TableRow, TableTitles, Table, DeleteItemButton } from "~/components/primitives/table-list";
 import useFormSubmissionnState from "~/hooks/useFormSubmissionState";
 import randomReactKey from "~/utils/random-react-key";
 import type { ComponentType } from "~/domain/product/product-composition.model.server";
@@ -19,6 +19,8 @@ import type { Product, ProductComponent } from "~/domain/product/product.model.s
 import { jsonParse, jsonStringify } from "~/utils/json-helper";
 import toNumber from "~/utils/to-number";
 import Tooltip from "~/components/primitives/tooltip/tooltip";
+import SelectProductUnit from "~/domain/product/components/select-product-unit/select-product-unit";
+import SaveItemButton from "~/components/primitives/table-list/action-buttons/save-item-button/save-item-button";
 
 
 
@@ -163,25 +165,11 @@ function ProductComponentList() {
                                     </Tooltip>
 
                                 </div>
-                                <Select name="unit" defaultValue={component.unit} >
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Selecionar..." />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectGroup >
-                                            <SelectItem value="gr">GR</SelectItem>
-                                            <SelectItem value="un">UN</SelectItem>
-                                        </SelectGroup>
-                                    </SelectContent>
-                                </Select>
+                                <SelectProductUnit />
                                 <Input name="quantity" defaultValue={component.quantity} className="w-full" />
                                 <div className="flex gap-2">
-                                    <Button type="submit" name="_action" value="composition-update-component">
-                                        <Save size={16} />
-                                    </Button>
-                                    <Button variant="destructive" type="submit" name="_action" value="composition-delete-component">
-                                        <Trash2 size={16} />
-                                    </Button>
+                                    <SaveItemButton actionName="composition-update-component" />
+                                    <DeleteItemButton actionName="composition-delete-component" />
                                 </div>
                             </TableRow>
                         </Form >

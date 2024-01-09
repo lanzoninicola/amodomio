@@ -1,4 +1,4 @@
-import { Form, useOutletContext } from "@remix-run/react";
+import { Form, Link, useOutletContext } from "@remix-run/react";
 import Fieldset from "~/components/ui/fieldset";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
@@ -36,7 +36,7 @@ export async function action({ request }: ActionArgs) {
 
     if (_action === "product-delete") {
 
-        const [err, data] = await tryit(productEntity.delete(values.productId as string))
+        const [err, data] = await tryit(productEntity.deleteProduct(values.productId as string))
 
         if (err) {
             return badRequest({ action: "product-delete", message: errorMessage(err) })
@@ -53,53 +53,72 @@ export default function SingleProductInformation() {
     const product = context.product as Product
     const productTypes = context.productTypes
     const productInfo = product.info
+    const compositions = context.compositions
 
     return (
         <div className="p-4">
-            <Form method="post" className="w-full">
-                <div className="mb-4 flex justify-end">
-                    <div className="flex gap-2">
-                        <SubmitButton actionName="product-delete" size="lg" idleText="Excluir" loadingText="Excluindo" variant={"destructive"} />
-                        <SubmitButton actionName="product-info-update" size="lg" />
+            <div className="flex flex-col gap-4">
+                <Form method="post" className="w-full">
+                    <div className="mb-4 flex justify-end">
+                        <div className="flex gap-2">
+                            <SubmitButton actionName="product-delete" size="lg" idleText="Excluir" loadingText="Excluindo" variant={"destructive"} />
+                            <SubmitButton actionName="product-info-update" size="lg" />
+                        </div>
                     </div>
-                </div>
-                <div className="border-2 border-muted rounded-lg px-4 py-8">
-                    <Input type="hidden" name="productId" defaultValue={product.id || undefined} />
+                    <div className="border-2 border-muted rounded-lg px-4 py-8">
+                        <Input type="hidden" name="productId" defaultValue={product.id || undefined} />
 
-                    <Fieldset>
-                        <div className="flex justify-between items-start ">
-                            <Label htmlFor="description" className="pt-2">Tipo</Label>
-                            <div className="flex flex-col gap-2 w-[300px]">
-                                <Select name="type" defaultValue={productInfo?.type} required >
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Selecionar..." />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectGroup >
-                                            {productTypes && productTypes.map((type, idx) => {
-                                                return <SelectItem key={idx} value={type.value}>{type.label}</SelectItem>
-                                            })}
-                                        </SelectGroup>
-                                    </SelectContent>
-                                    {/* <div className="flex gap-2 items-start">
+                        <Fieldset>
+                            <div className="flex justify-between items-start ">
+                                <Label htmlFor="description" className="pt-2">Tipo</Label>
+                                <div className="flex flex-col gap-2 w-[300px]">
+                                    <Select name="type" defaultValue={productInfo?.type} required >
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Selecionar..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectGroup >
+                                                {productTypes && productTypes.map((type, idx) => {
+                                                    return <SelectItem key={idx} value={type.value}>{type.label}</SelectItem>
+                                                })}
+                                            </SelectGroup>
+                                        </SelectContent>
+                                        {/* <div className="flex gap-2 items-start">
                                         <Info size={24} />
                                         <p className="text-xs text-muted-foreground">
                                             <span className="text-xs text-muted-foreground font-semibold">Kit vs Fabricado:{" "}</span>
                                             diferente do fabricado, os componentes de um kit podem ser vendidos separadamente
                                         </p>
                                     </div> */}
-                                </Select>
+                                    </Select>
+                                </div>
                             </div>
-                        </div>
-                    </Fieldset>
-                    <Fieldset>
-                        <div className="flex justify-between">
-                            <Label htmlFor="description" className="pt-2">Descrição produto</Label>
-                            <Textarea id="description" name="description" placeholder="Descrição" defaultValue={productInfo?.description} className="max-w-[300px]" />
-                        </div>
-                    </Fieldset>
+                        </Fieldset>
+                        <Fieldset>
+                            <div className="flex justify-between">
+                                <Label htmlFor="description" className="pt-2">Descrição produto</Label>
+                                <Textarea id="description" name="description" placeholder="Descrição" defaultValue={productInfo?.description} className="max-w-[300px]" />
+                            </div>
+                        </Fieldset>
+                    </div>
+                </Form>
+                <div className="flex flex-col gap-4 border-2 border-muted rounded-lg px-4 py-8">
+                    <span className="text-sm">Este produto é presente na composição de outros produtos:</span>
+                    <ul className="flex gap-2">
+                        {compositions?.map(c => {
+
+                            return (
+                                <li key={c.id} className="bg-slate-200 rounded-xl py-1 px-4 hover:bg-slate-50 cursor-pointer">
+                                    <Link to={`/admin/products/${c.id}/components`}>
+                                        <span className="font-semibold">{c.name}</span>
+                                    </Link>
+                                </li>
+                            )
+
+                        })}
+                    </ul>
                 </div>
-            </Form>
+            </div>
         </div>
     )
 

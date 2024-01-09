@@ -8,7 +8,6 @@ import { ok } from "~/utils/http-response.server"
 
 export async function loader() {
 
-    const categoryEntity = new CategoryEntity()
     const categories = await categoryEntity.findAll() as Category[]
 
     return ok({ categories })

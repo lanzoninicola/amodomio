@@ -7,6 +7,7 @@ import Fieldset from "~/components/ui/fieldset";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
+import SelectProductUnit from "~/domain/product/components/select-product-unit/select-product-unit";
 import { productEntity } from "~/domain/product/product.entity";
 import type { ProductUnit } from "~/domain/product/product.model.server";
 import errorMessage from "~/utils/error-message";
@@ -55,17 +56,7 @@ export default function SingleProductNew() {
 
                                 <div className="max-w-[150px]">
                                     <Label htmlFor="unit">Unidade</Label>
-                                    <Select name="unit" required defaultValue="gr">
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Selecionar..." />
-                                        </SelectTrigger>
-                                        <SelectContent id="unit"  >
-                                            <SelectGroup >
-                                                <SelectItem value="gr">GR</SelectItem>
-                                                <SelectItem value="un">UN</SelectItem>
-                                            </SelectGroup>
-                                        </SelectContent>
-                                    </Select>
+                                    <SelectProductUnit />
                                 </div>
                             </Fieldset>
                         </div>

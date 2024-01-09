@@ -1,9 +1,5 @@
 import { Link, Outlet } from "@remix-run/react";
-import { Plus } from "lucide-react";
 import Container from "~/components/layout/container/container";
-import { Button } from "~/components/ui/button";
-
-
 
 export default function ProductsOutlet() {
     return (
@@ -12,7 +8,7 @@ export default function ProductsOutlet() {
                 <div className="flex justify-between mb-4">
                     <h1 className="font-bold text-xl">Produtos</h1>
                     <div className="flex flex-col gap-4">
-                        <Link to="/new" className="mr-4 py-2 px-4 rounded-md bg-black">
+                        <Link to="new" className="mr-4 py-2 px-4 rounded-md bg-black">
                             <span className=" text-white font-semibold">
                                 Novo Produto
                             </span>

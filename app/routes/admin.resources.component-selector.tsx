@@ -21,7 +21,7 @@ export async function loader({ request }: LoaderArgs) {
         {
             field: new FieldPath("info", "type"),
             op: "in",
-            value: ["ingredient", "processed"]
+            value: ["ingredient", "simple"]
         }
     ])
 

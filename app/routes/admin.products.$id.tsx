@@ -13,6 +13,7 @@ export interface ProductOutletContext {
     product: Product | null
     categories: Category[] | null
     productTypes: { value: ProductType, label: string }[] | null
+    compositions: Product[]
 }
 
 
@@ -38,11 +39,15 @@ export async function loader({ request }: LoaderArgs) {
         categories = await categoryEntity.findAll()
     }
 
+    // Retrieve all compositions that include this particular product.
+    const compositions = await productEntity.findCompositionWithProduct(productId)
+
 
     return ok({
         product,
         categories,
-        productTypes
+        productTypes,
+        compositions
     })
 
 }
@@ -56,6 +61,8 @@ export default function SingleProduct() {
     const components = loaderData?.payload?.components as ProductComponent[]
     const categories = loaderData?.payload?.categories as Category[]
     const productTypes = loaderData?.payload?.productTypes as ProductType[]
+    const compositions = loaderData?.payload?.compositions as Product[]
+
     const productId = product.id
 
     const activeTabStyle = "bg-primary text-white rounded-md py-1"
@@ -78,7 +85,7 @@ export default function SingleProduct() {
                 </Link >
 
                 {
-                    (productType === "pizza" || productType === "topping") &&
+                    (productType === "pizza" || productType === "processed") &&
                     <Link to={`/admin/products/${productId}/components`} className="w-full text-center">
                         <div className={`${activeTab === "components" && activeTabStyle} ${activeTab}`}>
                             <span>Componentes</span>
@@ -106,7 +113,7 @@ export default function SingleProduct() {
                 </Link>
             </div >
 
-            <Outlet context={{ product, components, categories, productTypes }} />
+            <Outlet context={{ product, components, categories, productTypes, compositions }} />
         </>
     )
 }

@@ -1,11 +1,12 @@
 import type { ActionArgs, LoaderArgs } from "@remix-run/node"
-import { useLoaderData, useNavigation, Form, Link } from "@remix-run/react"
+import { useLoaderData, useNavigation, Form, Link, useActionData } from "@remix-run/react"
 import Container from "~/components/layout/container/container"
 import { TableTitles, TableRows, TableRow, Table, EditItemButton, DeleteItemButton } from "~/components/primitives/table-list"
 import { Input } from "~/components/ui/input"
+import { toast } from "~/components/ui/use-toast"
 import ProductTypeBadge from "~/domain/product/components/product-type-badge/product-type-badge"
 import { ProductEntity, productEntity } from "~/domain/product/product.entity"
-import type { ProductInfo, ProductType } from "~/domain/product/product.model.server"
+import type { ProductType } from "~/domain/product/product.model.server"
 import { type Product } from "~/domain/product/product.model.server"
 import { cn } from "~/lib/utils"
 import errorMessage from "~/utils/error-message"
@@ -38,6 +39,24 @@ export async function loader({ request }: LoaderArgs) {
 
 }
 
+export async function action({ request }: ActionArgs) {
+    let formData = await request.formData();
+    const { _action, ...values } = Object.fromEntries(formData);
+
+
+    if (_action === "product-delete") {
+
+        const [err, data] = await tryit(productEntity.deleteProduct(values.id as string))
+
+        if (err) {
+            return serverError(err)
+        }
+
+        return ok({ message: "Produto deletado com sucesso" })
+    }
+
+    return null
+}
 
 
 
@@ -45,10 +64,21 @@ export default function ProducstIndex() {
     const loaderData = useLoaderData<typeof loader>()
     const products = loaderData?.payload.products as Product[]
 
+    const actionData = useActionData<typeof action>()
+    const status = actionData?.status
+    const message = actionData?.message
+
+    if (status === 500) {
+        toast({
+            title: "Erro",
+            description: message,
+        })
+    }
+
     return (
         <Container>
             <div className="flex flex-col gap-2">
-                <div data-element="filters" className="flex gap-4 items-center border rounded-md p-4">
+                <div data-element="filters" className="flex gap-4 items-center border rounded-md p-4 mb-2">
                     <span className="text-sm">Filtrar por:</span>
                     <ProductsFilters />
                 </div>
@@ -65,7 +95,7 @@ export default function ProducstIndex() {
                     />
                     <TableRows>
                         {products.map((p) => {
-                            return <ProductTableRow key={p.id} product={p} clazzName="grid-cols-5" />;
+                            return <ProductTableRow key={p.id} product={p} className="grid-cols-5" />;
                         })}
                     </TableRows>
                 </Table>
@@ -77,10 +107,10 @@ export default function ProducstIndex() {
 
 interface ProductTableRowProps {
     product: Product;
-    clazzName?: string;
+    className?: string;
 }
 
-function ProductTableRow({ product, clazzName }: ProductTableRowProps) {
+function ProductTableRow({ product, className }: ProductTableRowProps) {
     const navigation = useNavigation()
 
     return (
@@ -89,7 +119,7 @@ function ProductTableRow({ product, clazzName }: ProductTableRowProps) {
             <TableRow
                 row={product}
                 isProcessing={navigation.state !== "idle"}
-                clazzName={`${clazzName}`}
+                className={cn("grid-cols-5 text-sm p-0", className)}
             >
                 <div className="flex gap-2 md:gap-2">
                     <EditItemButton to={`/admin/products/${product.id}/info`} />
