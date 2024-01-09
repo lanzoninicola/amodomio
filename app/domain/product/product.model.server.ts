@@ -21,7 +21,7 @@ export interface RawMaterialProduct extends Product {
 }
 
 export interface SemiManufacturedProduct extends Product {
-  type: "prepared";
+  type: "processed";
 }
 
 export type ProductType =

@@ -20,7 +20,7 @@ export function NavMenuCollapsible({ navItems }: NavMenuCollapsibleProps) {
 
 
     const onClickNavItem = () => {
-        setIsOpen(false)
+        // setIsOpen(false)
     }
 
     return (
@@ -46,7 +46,7 @@ export function NavMenuCollapsible({ navItems }: NavMenuCollapsibleProps) {
                     navItems && navItems.map((item, index) => {
 
                         return (
-                            <Link key={index} to={item.to} onClick={onClickNavItem}>
+                            <Link key={index} to={item.to}>
                                 <div className="rounded-md border px-4 py-3 font-mono text-sm mb-2 flex justify-between items-center">
                                     <span>{item.label}</span>
                                     <ChevronRight />

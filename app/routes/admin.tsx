@@ -51,6 +51,7 @@ export default function AdminOutlet() {
                     [
                         { label: "Gerençiar cardápio", to: "/admin/cardapio" },
                         { label: "Cardápio", to: "/cardapio" },
+                        { label: "Produtos", to: "/admin/products" },
                         { label: "Categorias", to: "/admin/categorias" },
                         { label: "Opções", to: "/admin/options" },
                         { label: "Massa", to: "/admin/dough" },

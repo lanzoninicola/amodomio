@@ -12,7 +12,7 @@ export interface PizzaSizeVariation extends Size {
 }
 
 interface ToppingInfo extends ProductInfo {
-  type: "prepared";
+  type: "processed";
 }
 
 export interface Topping extends Product {
