@@ -68,7 +68,7 @@ export default function ProducstIndex() {
     const status = actionData?.status
     const message = actionData?.message
 
-    if (status === 500) {
+    if (status && status >= 400) {
         toast({
             title: "Erro",
             description: message,
@@ -142,7 +142,7 @@ function ProductsFilters() {
     const productTypes = ProductEntity.findAllProductTypes()
 
     return (
-        <ul className="flex gap-2">
+        <ul className="flex gap-2 flex-wrap">
             <li key={"all"}>
                 <Link to={`/admin/products?type=all`}>
                     <span className="border px-4 py-1 rounded-full text-xs text-gray-800 font-semibold tracking-wide max-w-max">Todos</span>
@@ -153,7 +153,7 @@ function ProductsFilters() {
                     return (
                         <li key={type.value}>
                             <Link to={`/admin/products?type=${type.value}`}
-                                className={cn("text-sm", type.value === "pizza" ? "text-violet-500" : "text-gray-500")}>
+                                className={cn("text-sm")}>
                                 <ProductTypeBadge type={type.value} />
                             </Link>
                         </li>

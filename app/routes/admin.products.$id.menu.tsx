@@ -18,49 +18,60 @@ import type { Category } from "~/domain/category/category.model.server";
 import type { Product, ProductMenu } from "~/domain/product/product.model.server";
 import { jsonStringify } from "~/utils/json-helper";
 import { FormLabel } from "~/components/layout/form";
+import { Separator } from "~/components/ui/separator";
 
 
 export async function action({ request }: ActionArgs) {
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);
 
-    // if (_action === "product-menu-create") {
+    const productMenuFormData: ProductMenu = {
+        productId: values.productId as string,
+        show: values.show as boolean,
+        category: values.categoryId,
+        description: values.description,
+        italianProductName: values.italianProductName,
+        isVegetarian: values.isVegetarian,
+        isGlutenFree: values.isGlutenFree
+    }
 
-    //     const [err, data] = await tryit(ProductMenuModel.add({
-    //         productId: values.productId,
-    //         show: values.show,
-    //         categoryId: values.categoryId,
-    //         description: values.description,
-    //         italianProductName: values.italianProductName,
-    //         isVegetarian: values.isVegetarian,
-    //         isGlutenFree: values.isGlutenFree
-    //     }))
+    if (_action === "product-menu-create") {
 
-    //     if (err) {
-    //         return badRequest({ action: "product-menu-create", message: errorMessage(err) })
-    //     }
+        const [err, data] = await tryit(ProductMenuModel.add({
+            productId: values.productId,
+            show: values.show,
+            categoryId: values.categoryId,
+            description: values.description,
+            italianProductName: values.italianProductName,
+            isVegetarian: values.isVegetarian,
+            isGlutenFree: values.isGlutenFree
+        }))
 
-    //     return ok({ ...data, message: "Informaçẽs do produto criados com sucesso" })
-    // }
+        if (err) {
+            return badRequest({ action: "product-menu-create", message: errorMessage(err) })
+        }
 
-    // if (_action === "product-menu-update") {
+        return ok({ ...data, message: "Informaçẽs do produto criados com sucesso" })
+    }
 
-    //     const [err, data] = await tryit(ProductMenuModel.update(values.id as string, {
-    //         productId: values.productId,
-    //         show: values.show || false,
-    //         categoryId: values.categoryId || null,
-    //         description: values.description || "",
-    //         italianProductName: values.italianProductName || "",
-    //         isVegetarian: values.isVegetarian || false,
-    //         isGlutenFree: values.isGlutenFree || false
-    //     }))
+    if (_action === "product-menu-update") {
 
-    //     if (err) {
-    //         return badRequest({ action: "product-menu-update", message: errorMessage(err) })
-    //     }
+        const [err, data] = await tryit(ProductMenuModel.update(values.id as string, {
+            productId: values.productId,
+            show: values.show || false,
+            categoryId: values.categoryId || null,
+            description: values.description || "",
+            italianProductName: values.italianProductName || "",
+            isVegetarian: values.isVegetarian || false,
+            isGlutenFree: values.isGlutenFree || false
+        }))
 
-    //     return ok({ message: "Informaçẽs do produto atualizados com sucesso" })
-    // }
+        if (err) {
+            return badRequest({ action: "product-menu-update", message: errorMessage(err) })
+        }
+
+        return ok({ message: "Informaçẽs do produto atualizados com sucesso" })
+    }
 
     return null
 }
@@ -83,12 +94,22 @@ export default function SingleProductMenu() {
                     <SubmitButton actionName="product-menu-update" size="lg" />
                 </div>
                 <div className="flex flex-col gap-2 border-2 border-muted rounded-lg px-4 py-8">
+                    <Input type="hidden" name="productId" defaultValue={product?.id || undefined} />
+
                     <Fieldset>
-                        <Input type="hidden" name="productId" defaultValue={product?.id || undefined} />
+                        <div className="flex justify-between">
+                            <FormLabel htmlFor="description" className="leading-tight">Descrição que aparece no cardápio</FormLabel>
+                            <Textarea id="description" name="description" placeholder="Descrição" defaultValue={productMenu?.description} className="max-w-[300px]" />
+                        </div>
+                    </Fieldset>
+
+                    <Separator className="my-2" />
+
+                    <Fieldset>
                         <Fieldset>
                             <div className="flex justify-between   items-center">
                                 <Label htmlFor="show-on-menu" className="text-sm">
-                                    Mostrar no cardapio
+                                    E´ um item do cardápio?
                                 </Label>
                                 <Switch id="show-on-menu" name="show" defaultChecked={showOnProductMenu} />
                             </div>
@@ -127,12 +148,7 @@ export default function SingleProductMenu() {
 
                         </Fieldset>
                     </Fieldset>
-                    <Fieldset>
-                        <div className="flex justify-between">
-                            <FormLabel disabled={showOnProductMenu === false} htmlFor="description">Descrição</FormLabel>
-                            <Textarea id="description" name="description" placeholder="Descrição" defaultValue={productMenu?.description} className="max-w-[300px]" disabled={showOnProductMenu === false} />
-                        </div>
-                    </Fieldset>
+
                     <Fieldset>
                         <div className="flex justify-between items-center">
                             <FormLabel disabled={showOnProductMenu === false} htmlFor="italian-product-name">Nome produto em italiano</FormLabel>

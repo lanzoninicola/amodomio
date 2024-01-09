@@ -31,7 +31,7 @@ export async function loader({ request }: LoaderArgs) {
     }
 
     const productTypes = ProductEntity.findAllProductTypes()
-
+    product.entity
 
     let categories = null
 
@@ -85,7 +85,7 @@ export default function SingleProduct() {
                 </Link >
 
                 {
-                    (productType === "pizza" || productType === "processed") &&
+                    (productType === "topping" || productType === "processed") &&
                     <Link to={`/admin/products/${productId}/components`} className="w-full text-center">
                         <div className={`${activeTab === "components" && activeTabStyle} ${activeTab}`}>
                             <span>Componentes</span>
@@ -99,7 +99,7 @@ export default function SingleProduct() {
                     </div>
                 </Link >
                 {
-                    (productType === "pizza" || productType === "simple") &&
+                    (productType === "simple") &&
                     <Link to={`/admin/products/${productId}/menu`} className="w-full text-center">
                         <div className={`${activeTab === "menu" && activeTabStyle} ${activeTab}`}>
                             <span>Cardápio</span>

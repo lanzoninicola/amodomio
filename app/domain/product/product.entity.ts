@@ -9,14 +9,62 @@ import {
 import type { LatestSellPrice } from "../sell-price/sell-price.model.server";
 import { BaseEntity } from "../base.entity";
 import tryit from "~/utils/try-it";
-import { FieldPath } from "firebase/firestore";
+import dayjs from "dayjs";
 
 export interface ProductTypeHTMLSelectOption {
   value: ProductType;
   label: string;
 }
 
+type FieldOrderBy = "name" | "createdAt" | "updatedAt";
+
 export class ProductEntity extends BaseEntity<Product> {
+  async findAllOrderedBy(field: FieldOrderBy, orientation: "asc" | "desc") {
+    const products = await this.findAll();
+
+    const compareFunction = (a: Product, b: Product) => {
+      if (field === "name") {
+        return a.name.localeCompare(b.name);
+      }
+
+      if (field === "createdAt") {
+        // @ts-ignore
+        const createdAtA = dayjs(a.createdAt);
+        // @ts-ignore
+        const createdAtB = dayjs(b.createdAt);
+
+        if (createdAtA.isBefore(createdAtB)) {
+          return -1;
+        }
+        if (createdAtA.isAfter(createdAtB)) {
+          return 1;
+        }
+        return 0;
+      }
+
+      if (field === "updatedAt") {
+        // @ts-ignore
+        const updatedAtA = dayjs(a.updatedAt);
+        // @ts-ignore
+        const updatedAtB = dayjs(b.updatedAt);
+
+        if (updatedAtA.isBefore(updatedAtB)) {
+          return -1;
+        }
+        if (updatedAtA.isAfter(updatedAtB)) {
+          return 1;
+        }
+        return 0;
+      }
+
+      return 0;
+    };
+
+    return orientation === "asc"
+      ? products.slice().sort(compareFunction)
+      : products.slice().sort(compareFunction).reverse();
+  }
+
   async deleteProduct(id: Product["id"]) {
     if (!id) {
       throw new Error("Não foi passado o ID do produto da eliminar");
@@ -176,10 +224,10 @@ export class ProductEntity extends BaseEntity<Product> {
 
   static findProductTypeByName(type: ProductInfo["type"] | null | undefined) {
     switch (type) {
-      case "pizza":
-        return "Pizza";
-      case "ingredient":
-        return "Ingrediente";
+      // case "pizza":
+      //   return "Pizza";
+      // case "ingredient":
+      //   return "Ingrediente";
       case "topping":
         return "Sabor";
       case "processed":
@@ -196,8 +244,8 @@ export class ProductEntity extends BaseEntity<Product> {
 
   static findAllProductTypes(): ProductTypeHTMLSelectOption[] {
     return [
-      { value: "pizza", label: "Pizza" },
-      { value: "ingredient", label: "Ingrediente" },
+      // { value: "pizza", label: "Pizza" },
+      // { value: "ingredient", label: "Ingrediente" },
       { value: "topping", label: "Sabor" },
       { value: "processed", label: "Produzido" },
       { value: "simple", label: "Simples" },

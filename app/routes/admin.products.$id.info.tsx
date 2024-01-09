@@ -1,4 +1,4 @@
-import { Form, Link, useOutletContext } from "@remix-run/react";
+import { Form, Link, useActionData, useOutletContext } from "@remix-run/react";
 import Fieldset from "~/components/ui/fieldset";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
@@ -13,6 +13,9 @@ import SubmitButton from "~/components/primitives/submit-button/submit-button";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { type Product, type ProductType } from "~/domain/product/product.model.server";
 import { productEntity } from "~/domain/product/product.entity";
+import { jsonParse, jsonStringify } from "~/utils/json-helper";
+import { Category } from "~/domain/category/category.model.server";
+import { toast } from "~/components/ui/use-toast";
 
 
 export async function action({ request }: ActionArgs) {
@@ -25,10 +28,11 @@ export async function action({ request }: ActionArgs) {
             "info.productId": values.productId as string,
             "info.type": values.type as ProductType,
             "info.description": values.description as string,
+            "info.category": jsonParse(values.category) as Category || null
         }))
 
         if (err) {
-            return badRequest({ action: "product-info-update", message: errorMessage(err) })
+            return badRequest(err)
         }
 
         return ok({ message: "Informaçẽs do produto atualizados com sucesso" })
@@ -53,7 +57,19 @@ export default function SingleProductInformation() {
     const product = context.product as Product
     const productTypes = context.productTypes
     const productInfo = product.info
+    const categories = context?.categories && context?.categories.filter(c => c.type === "generic")
     const compositions = context.compositions
+
+    const actionData = useActionData<typeof action>()
+    const status = actionData?.status
+    const message = actionData?.message
+
+    if (status && status >= 400) {
+        toast({
+            title: "Erro",
+            description: message,
+        })
+    }
 
     return (
         <div className="p-4">
@@ -67,6 +83,8 @@ export default function SingleProductInformation() {
                     </div>
                     <div className="border-2 border-muted rounded-lg px-4 py-8">
                         <Input type="hidden" name="productId" defaultValue={product.id || undefined} />
+
+                        {/* Tipo de produto */}
 
                         <Fieldset>
                             <div className="flex justify-between items-start ">
@@ -83,23 +101,42 @@ export default function SingleProductInformation() {
                                                 })}
                                             </SelectGroup>
                                         </SelectContent>
-                                        {/* <div className="flex gap-2 items-start">
-                                        <Info size={24} />
-                                        <p className="text-xs text-muted-foreground">
-                                            <span className="text-xs text-muted-foreground font-semibold">Kit vs Fabricado:{" "}</span>
-                                            diferente do fabricado, os componentes de um kit podem ser vendidos separadamente
-                                        </p>
-                                    </div> */}
                                     </Select>
                                 </div>
                             </div>
                         </Fieldset>
+
+                        {/* Descrição de produto */}
+
                         <Fieldset>
                             <div className="flex justify-between">
                                 <Label htmlFor="description" className="pt-2">Descrição produto</Label>
                                 <Textarea id="description" name="description" placeholder="Descrição" defaultValue={productInfo?.description} className="max-w-[300px]" />
                             </div>
                         </Fieldset>
+
+                        {/* Categoria de produto */}
+
+                        <Fieldset>
+                            <div className="flex justify-between items-start ">
+                                <Label htmlFor="description" className="pt-2">Categoria</Label>
+                                <div className="flex flex-col gap-2 w-[300px]">
+                                    <Select name="type" defaultValue={jsonStringify(productInfo?.category)} >
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Selecionar..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectGroup >
+                                                {categories && categories.map((c, idx) => {
+                                                    return <SelectItem key={idx} value={jsonStringify(c) || ""}>{c.name}</SelectItem>
+                                                })}
+                                            </SelectGroup>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+                        </Fieldset>
+
                     </div>
                 </Form>
                 <div className="flex flex-col gap-4 border-2 border-muted rounded-lg px-4 py-8">
