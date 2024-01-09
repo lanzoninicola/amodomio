@@ -1,56 +1,20 @@
 import { serverError } from "~/utils/http-response.server";
-import type {
-  Product,
-  ProductComponent,
-  ProductInfo,
-  ProductType,
+import {
+  ProductModel,
+  type Product,
+  type ProductComponent,
+  type ProductInfo,
+  type ProductType,
 } from "./product.model.server";
-import { ProductModel } from "./product.model.server";
-import type { whereCompoundConditions } from "~/lib/firestore-model/src";
 import type { LatestSellPrice } from "../sell-price/sell-price.model.server";
+import { BaseEntity } from "../base.entity";
 
 export interface ProductTypeHTMLSelectOption {
   value: ProductType;
   label: string;
 }
 
-export class ProductEntity {
-  async create(product: Product): Promise<Product> {
-    this.validate(product);
-    return this.save(product);
-  }
-
-  private async save(product: Product): Promise<Product> {
-    console.log(product);
-
-    return await ProductModel.add(product);
-  }
-
-  async findAll(conditions?: whereCompoundConditions): Promise<Product[]> {
-    if (!conditions) {
-      return await ProductModel.findAll();
-    }
-
-    return await ProductModel.whereCompound(conditions);
-  }
-
-  async findById(id: string): Promise<Product | null> {
-    return await ProductModel.findById(id);
-  }
-
-  async update(id: string, updatedData: any) {
-    return await ProductModel.update(id, updatedData);
-  }
-
-  async delete(id: string) {
-    // TODO: check if product is being used in a catalog
-    // TODO: check if product is a topping or pizza product
-    // TODO: check if product is a component of another product
-    // TODO: check if product is inside an order
-
-    return await ProductModel.delete(id);
-  }
-
+export class ProductEntity extends BaseEntity<Product> {
   async addComponent(productId: string, component: ProductComponent) {
     const product = await this.findById(productId);
     const components = product?.components || [];
@@ -140,8 +104,8 @@ export class ProductEntity {
         return "Ingrediente";
       case "topping":
         return "Sabor";
-      case "prepared":
-        return "Preparado";
+      case "processed":
+        return "Produzido";
       case "simple":
         return "Simples";
       case null:
@@ -157,7 +121,7 @@ export class ProductEntity {
       { value: "pizza", label: "Pizza" },
       { value: "ingredient", label: "Ingrediente" },
       { value: "topping", label: "Sabor" },
-      { value: "prepared", label: "Preparado" },
+      { value: "processed", label: "Produzido" },
       { value: "simple", label: "Simples" },
     ];
   }
@@ -168,3 +132,5 @@ export class ProductEntity {
     }
   }
 }
+
+export const productEntity = new ProductEntity(ProductModel);

@@ -2,4 +2,10 @@
 GET app.mogogourmet.com.br/snack/v1/GetPedidosAbertos?dbname=amodomio&onlyNew=true
 Authorization: Token MTozMC8xMS8yMDIzIDA5OjMxOjAwtoken_sh=MTozMC8xMS8yMDIzIDA5OjMxOjAwdbname=amodomio
 
+### se entrega não é visualizado
+app.mogogourmet.com.br/Snack/V1/buscapedidos?id=D729
+Authorization: Token MTozMC8xMS8yMDIzIDA5OjMxOjAwtoken_sh=MTozMC8xMS8yMDIzIDA5OjMxOjAwdbname=amodomio
 
+### se entrega não é visualizado
+app.mogogourmet.com.br/Snack/v1/buscastatus?id=D729
+Authorization: Token MTozMC8xMS8yMDIzIDA5OjMxOjAwtoken_sh=MTozMC8xMS8yMDIzIDA5OjMxOjAwdbname=amodomio
