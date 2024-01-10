@@ -47,6 +47,8 @@ export interface ProductComponent {
   unit: ProductUnit;
   quantity: number;
   unitCost: number;
+  // if the product is a topping, for each component I can adjust the description for the menu
+  menuDescription?: string;
 }
 
 export interface ProductPricing {
