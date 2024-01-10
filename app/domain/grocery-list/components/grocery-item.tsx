@@ -1,11 +1,11 @@
-import { useReducer, useRef, useState } from "react"
+import { useState } from "react"
 import { GroceryList, GroceryListItem } from "../grocery-list.model.server"
-import { PlusCircleIcon, MinusCircleIcon, Trash2Icon, TrashIcon, SaveIcon } from "lucide-react"
+import { PlusCircleIcon, MinusCircleIcon, TrashIcon, SaveIcon } from "lucide-react"
 import { Input } from "~/components/ui/input"
 import uppercase from "~/utils/to-uppercase"
-import { Button } from "~/components/ui/button"
 import { Form } from "@remix-run/react"
 import { cn } from "~/lib/utils"
+import { jsonStringify } from "~/utils/json-helper"
 
 interface GroceryItemProps {
     listId: GroceryList["id"]
@@ -59,7 +59,7 @@ export default function GroceryItem({ listId, item }: GroceryItemProps) {
                     }
                     type="submit"
                     name="_action"
-                    value="item-save"
+                    value="item-update"
                 >
                     <SaveIcon size={16} className="text-white" />
                 </button>
@@ -68,7 +68,7 @@ export default function GroceryItem({ listId, item }: GroceryItemProps) {
 
                     <div className="flex justify-between w-full py-2">
                         <input type="hidden" name="listId" value={listId} />
-                        <input type="hidden" name="itemId" value={item.id} />
+                        <input type="hidden" name="item" value={jsonStringify(item)} />
                         <div className="flex flex-col gap-1">
                             <span className={
                                 cn(
@@ -81,7 +81,7 @@ export default function GroceryItem({ listId, item }: GroceryItemProps) {
                         </div>
                         <div className="flex gap-2 items-center">
                             <PlusCircleIcon onClick={increaseQuantity} />
-                            <Input type="number" name="quantity" defaultValue={quantity} className="bg-white w-16 text-lg text-center" min={1} />
+                            <Input type="number" name="quantity" defaultValue={quantity} className="bg-white w-16 text-lg text-center" min={0} />
                             <MinusCircleIcon onClick={decreaseQuantity} />
                         </div>
                     </div>

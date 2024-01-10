@@ -23,7 +23,7 @@ class GroceryListEntity extends BaseEntity<GroceryList> {
   }
 
   async addItem(listId: string, item: GroceryListItem) {
-    const list = await this.findOne([{ field: "id", op: "==", value: listId }]);
+    const list = await this.findById(listId);
 
     if (!list) {
       throw new Error("Lista não encontrada");
@@ -74,6 +74,32 @@ class GroceryListEntity extends BaseEntity<GroceryList> {
     });
 
     return list;
+  }
+
+  async updateItem(listId: string, itemId: string, updatedData: any) {
+    const list = await this.findById(listId);
+
+    if (!list) {
+      throw new Error("Lista não encontrada");
+    }
+
+    let nextItemsList = list?.items || [];
+
+    // update the item in the list
+    const nextItemsListUpdated = nextItemsList.map((item) => {
+      if (item.id === itemId) {
+        return {
+          ...item,
+          ...updatedData,
+        };
+      }
+
+      return item;
+    });
+
+    await this.update(listId, {
+      items: nextItemsListUpdated,
+    });
   }
 
   async removeItem(listId: string, itemId: string) {

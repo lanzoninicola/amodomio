@@ -6,7 +6,7 @@ import { Button } from "~/components/ui/button";
 import { toast } from "~/components/ui/use-toast";
 import GroceryItem from "~/domain/grocery-list/components/grocery-item";
 import { groceryListEntity } from "~/domain/grocery-list/grocery-list.entity.server";
-import { GroceryList } from "~/domain/grocery-list/grocery-list.model.server";
+import { GroceryList, GroceryListItem } from "~/domain/grocery-list/grocery-list.model.server";
 import { ok, serverError } from "~/utils/http-response.server";
 import tryit from "~/utils/try-it";
 
@@ -46,10 +46,24 @@ export async function action({ request }: LoaderArgs) {
         return redirect(`/purchasing?id=${values.listId}`)
     }
 
+    if (_action === "item-update") {
+        const listId = values.listId as string
+        const item = values.item as unknown as GroceryListItem
+
+        const [err, list] = await tryit(groceryListEntity.updateItem(listId, item.id!, item))
+
+        if (err) {
+            return serverError(err)
+        }
+
+        return ok("Produto adicionado na lista")
+    }
+
     if (_action === "item-delete") {
+        const listId = values.listId as string
+        const item = values.item as unknown as GroceryListItem
 
-
-        const [err, list] = await tryit(groceryListEntity.removeItem(values.listId as string, values.itemId as string))
+        const [err, list] = await tryit(groceryListEntity.removeItem(listId, item.id!))
 
         if (err) {
             return serverError(err)
