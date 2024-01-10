@@ -156,7 +156,7 @@ export default function OrdersTimelineSegmentation() {
 
                 <KanbanCol
                     severity={2}
-                    title="Mais de 20 || Menos de 40"
+                    title="Mais 20 || Menos 40"
                     description="Pedidos abertos entre 21 e 40 minutos"
                     itemsNumber={orderLess40Minutes.length}
                 >
@@ -179,7 +179,7 @@ export default function OrdersTimelineSegmentation() {
 
                 <KanbanCol
                     severity={3}
-                    title="Mais de 40 || Menos de 60"
+                    title="Mais 40 || Menos 60"
                     description="Pedidos abertos entre 41 e 60 minutos"
                     itemsNumber={orderLess60Minutes.length}
                 >
@@ -201,7 +201,7 @@ export default function OrdersTimelineSegmentation() {
                 </KanbanCol >
                 <KanbanCol
                     severity={4}
-                    title="Mais de 60 || Menos de 90"
+                    title="Mais 60 || Menos 90"
                     description="Pedidos abertos entre 61 e 90 minutos"
                     itemsNumber={orderLess90Minutes.length}
                 >

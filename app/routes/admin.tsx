@@ -49,13 +49,15 @@ export default function AdminOutlet() {
             <div className="fixed h-auto w-full bg-muted z-50">
                 <NavMenuCollapsible navItems={
                     [
-                        { label: "Gerençiar cardápio", to: "/admin" },
+                        { label: "Gerençiar cardápio", to: "/admin/cardapio" },
                         { label: "Cardápio", to: "/cardapio" },
+                        { label: "Produtos", to: "/admin/products" },
                         { label: "Categorias", to: "/admin/categorias" },
-                        { label: "Opções", to: "/admin/options" },
-                        { label: "Massa", to: "/admin/dough" },
+                        { label: "Lista de supermercado", to: "/admin/grocery-list" },
                         { label: "Pedidos", to: "/admin/daily-orders" },
                         { label: "Linha do tempo", to: "/admin/orders-timeline-segmentation" },
+                        { label: "Massa", to: "/admin/dough" },
+                        { label: "Opções", to: "/admin/options" },
                         { label: "Sair", to: "/logout" },
                     ]
                 } />

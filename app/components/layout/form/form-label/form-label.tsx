@@ -1,18 +1,24 @@
 import { Label } from "~/components/ui/label"
+import { cn } from "~/lib/utils"
 
 
 interface FormLabelProps {
     disabled?: boolean
-    clazzName?: React.StyleHTMLAttributes<HTMLLabelElement>["className"]
     children: React.ReactNode
+    className?: string
 }
 
-export default function FormLabel({ disabled, children, clazzName, ...props }: FormLabelProps & React.ComponentPropsWithoutRef<typeof Label>) {
-
-    const disabledClass = disabled ? "cursor-not-allowed opacity-70" : ""
+export default function FormLabel({ disabled, children, className, ...props }: FormLabelProps & React.ComponentPropsWithoutRef<typeof Label>) {
 
     return (
-        <Label {...props} className={`${disabledClass} ${props.className}`} >{children}</Label>
+        <Label {...props} className={
+            cn(
+                disabled && "cursor-not-allowed opacity-70",
+                className
+            )
+        } >
+            {children}
+        </Label>
     )
 
 }
