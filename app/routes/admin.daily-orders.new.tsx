@@ -30,14 +30,24 @@ export async function action({ request }: LoaderArgs) {
 
         const dailyOrder: DailyOrder = {
             date: values.date as string,
-            moneyCash: Number(values.moneyCash || 0),
             initialLargePizzaNumber: Number(values.initialLargePizzaNumber || 0),
             restLargePizzaNumber: Number(values.initialLargePizzaNumber || 0),
             initialMediumPizzaNumber: Number(values.initialMediumPizzaNumber || 0),
             restMediumPizzaNumber: Number(values.initialMediumPizzaNumber || 0),
             totalOrdersNumber: 0,
-            totalOrdersAmount: 0,
-            totalMotoboyAmount: 0,
+            finance: {
+                cashRegisterAmount: {
+                    initial: Number(values.initialMoneyCashRegisterAmount || 0),
+                    final: 0,
+                },
+                totalOrdersAmount: 0,
+                totalMotoboyAmount: 0,
+                totalDailyAmount: {
+                    final: 0,
+                    adjusted: 0,
+                    adjustmentReason: "",
+                }
+            },
             operator: operator,
             transactions: [],
             lastOrderNumber: 0,
@@ -71,9 +81,9 @@ export default function DailyOrdersSingleNew() {
     return (
         <div className="grid place-items-center w-full">
 
-            <Form method="post" className="flex flex-col my-6 items-center " >
+            <Form method="post" className="flex flex-col my-6" >
                 <h1 className="text-3xl tracking-tight font-semibold mb-6">Bem vindo,</h1>
-                <div className="flex flex-col gap-4 mb-12">
+                <div className="flex gap-4 mb-12">
 
                     <div className="flex flex-col gap-4 bg-slate-50 rounded-xl py-8 px-6 md:w-[500px]">
                         <div className="flex justify-between w-full items-center">
@@ -99,7 +109,10 @@ export default function DailyOrdersSingleNew() {
 
                         <div className="flex justify-between items-center w-full">
                             <span className="font-semibold">Denaro na caixa (R$)</span>
-                            <Input type="text" id="moneyCash" name="moneyCash" defaultValue={0} className="w-[180px] bg-white text-center text-xl tracking-wide" />
+                            <Input type="text" id="initialMoneyCashRegisterAmount" name="initialMoneyCashRegisterAmount"
+                                placeholder="Inserir valor"
+                                className="w-[180px] bg-white text-center text-xl tracking-wide"
+                            />
                         </div>
                     </div>
 
@@ -141,15 +154,17 @@ export default function DailyOrdersSingleNew() {
                         </div>
                     </div>
                 </div >
-                <SubmitButton actionName="daily-orders-create" idleText="Abrir o dia" loadingText="Abrindo..." disabled={submitButtonDisabled} />
-                {
-                    formResponse?.isError && (
-                        <div className="md:max-w-md mt-6">
-                            <AlertError message={formResponse.errorMessage} title="Erro!" position="top" />
-                        </div>
+                <div className="flex justify-center w-full">
+                    <SubmitButton actionName="daily-orders-create" idleText="Abrir o dia" loadingText="Abrindo..." disabled={submitButtonDisabled} />
+                    {
+                        formResponse?.isError && (
+                            <div className="md:max-w-md mt-6">
+                                <AlertError message={formResponse.errorMessage} title="Erro!" position="top" />
+                            </div>
 
-                    )
-                }
+                        )
+                    }
+                </div>
             </Form >
 
         </div >
