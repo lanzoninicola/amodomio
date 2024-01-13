@@ -1,6 +1,10 @@
 const getFirebaseConfig = () => {
   // Seems like the only key that is needed is the project_id
 
+  if (!process.env.project_id) {
+    throw new Error("Missing information to connect to firebase: project_id");
+  }
+
   return {
     // type: process.env.type,
     project_id: process.env.project_id,

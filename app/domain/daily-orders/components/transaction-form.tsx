@@ -148,7 +148,6 @@ export default function TransactionForm({
                     className={`max-w-[100px] ${smallText === true ? `text-xs` : ``}`}
                     ghost={ghost}
                     defaultValue={transaction?.amountMotoboy}
-                // disabled={(transactionForKmState === "new" && !isMotoRequired) || (transactionFormState === "update" && !transaction?.isMotoRequired)}
                 />
 
             </Fieldset>

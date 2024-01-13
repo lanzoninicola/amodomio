@@ -5,7 +5,7 @@ import SubmitButton from "~/components/primitives/submit-button/submit-button";
 import Fieldset from "~/components/ui/fieldset";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
-import { optionEntity } from "~/domain/option/option.entity.server";
+import { settingEntity } from "~/domain/setting/setting.entity.server";
 
 
 export async function action({ request }: LoaderArgs) {
@@ -18,7 +18,7 @@ export async function action({ request }: LoaderArgs) {
         const name = values.name as string
         const value = values.value as string
 
-        await optionEntity.create({ name, value })
+        await settingEntity.create({ name, value })
     }
 
     return null
