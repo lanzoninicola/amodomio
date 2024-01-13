@@ -35,7 +35,7 @@ export async function loader({ request }: LoaderArgs) {
 
     const [errSettings, settings] = await tryit(settingEntity.findSettingsByContext("order-timeline-segmentation-delivery-time"))
 
-    console.log({ settings })
+    // console.log({ settings })
 
     if (errSettings) {
         return serverError(errSettings)
@@ -87,7 +87,7 @@ export async function action({ request }: LoaderArgs) {
 
     if (_action === "order-timeline-segmentation-settings-change") {
 
-        console.log(values)
+        // console.log(values)
 
         const context = values.context as string
         const minTime = String(Number(values.minTimeDeliveryMinutes || 0))
