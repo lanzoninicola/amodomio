@@ -1,23 +1,20 @@
-import { Label } from "@radix-ui/react-label";
 import { LoaderArgs } from "@remix-run/node";
 import { Form, useLoaderData, useNavigation } from "@remix-run/react";
-import dayjs from "dayjs";
-import { ChevronRightSquare, HelpCircle, PersonStanding, Settings, Truck } from "lucide-react";
+import { ArrowBigDownDash, ArrowBigUpDash, HelpCircle, PersonStanding, Settings, Truck } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import Clock from "~/components/primitives/clock/clock";
 import SubmitButton from "~/components/primitives/submit-button/submit-button";
 
 import { Button } from "~/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "~/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
 import { Separator } from "~/components/ui/separator";
 import mogoEntity from "~/domain/mogo/mogo.entity.server";
 import { MogoOrderWithDiffTime } from "~/domain/mogo/types";
-import { Order } from "~/domain/order/order.model.server";
 import { settingEntity } from "~/domain/setting/setting.entity.server";
 import { Setting } from "~/domain/setting/setting.model.server";
 import useFormResponse from "~/hooks/useFormResponse";
-import { formatDateOnyTime, now } from "~/lib/dayjs";
+import { now } from "~/lib/dayjs";
 import { cn } from "~/lib/utils";
 import { ok, serverError } from "~/utils/http-response.server";
 import tryit from "~/utils/try-it";
@@ -366,6 +363,9 @@ function OrderCard({
     const delayOnDeliveryTime = order.diffDeliveryDateTimeToNow.minutes > 0
     const isDelivery = order.isDelivery
 
+    const orderItems = order.Itens || []
+    const pizzaItems = orderItems.filter(i => (i.IdProduto === 19 || i.IdProduto === 18))
+
     const severity = {
         1: "bg-slate-50",
         2: "bg-orange-100",
@@ -402,7 +402,27 @@ function OrderCard({
                         </div>
                     </div>
 
-                    <span className="text-xs">Cliente: {customerName || "Não definido"}</span>
+                    <div className="flex flex-col gap-2">
+                        <span className="text-xs">Cliente: {customerName || "Não definido"}</span>
+                        <div>
+                            <span className="flex gap-2 text-xs items-center">
+                                Pizzas: {pizzaItems.map(p => {
+
+                                    // pizza media
+                                    if (p.IdProduto === 18) {
+                                        return <span className="flex text-xs font-semibold items-center"><ArrowBigDownDash /> ({p.Quantidade})</span>
+                                    }
+
+                                    // pizza familia
+                                    if (p.IdProduto === 19) {
+                                        return <span className="flex text-xs font-semibold items-center"><ArrowBigUpDash /> ({p.Quantidade})</span>
+                                    }
+
+
+                                })}
+                            </span>
+                        </div>
+                    </div>
 
                     <Separator className="my-0" />
                     <div>
