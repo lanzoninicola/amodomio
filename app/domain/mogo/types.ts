@@ -1,4 +1,6 @@
-export interface MogoBaseOrder {
+import dayjs from "dayjs";
+
+export interface MogoOrderHttpResponse {
   Id: number;
   NumeroPedido: string;
   Itens: {
@@ -49,7 +51,16 @@ export interface MogoBaseOrder {
   PickupCode: any; // Pode ser de um tipo específico ou null
 }
 
+export interface MogoBaseOrder extends MogoOrderHttpResponse {
+  isDelivery: boolean;
+}
+
 export interface MogoOrderWithDiffTime extends MogoBaseOrder {
+  deliveryTimeExpected: {
+    fulldate: dayjs.Dayjs | null;
+    fulldateString: string | null;
+    timeString: string | null;
+  };
   diffOrderDateTimeToNow: {
     minutes: number;
     timeString: string | null;
@@ -61,5 +72,5 @@ export interface MogoOrderWithDiffTime extends MogoBaseOrder {
 }
 
 export interface MogoHttpClientInterface {
-  getOrdersOpened(): Promise<MogoBaseOrder[]>;
+  getOrdersOpened(): Promise<MogoOrderHttpResponse[]>;
 }

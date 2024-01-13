@@ -77,9 +77,6 @@ function Sidebar() {
 
     const loaderData = useLoaderData<typeof loader>()
     const dailyOrders = loaderData.payload.records as DailyOrder[]
-    const loggedUser = loaderData.payload.loggedUser as LoggedUser
-
-    console.log({ loggedUser })
 
     return (
         <div className="flex gap-6 min-h-screen">
