@@ -196,7 +196,7 @@ class MogoEntity {
     const [day, month, year] = dateStr.split(/\/| /);
     const parsedDate = `${year}-${month}-${day}`;
 
-    return dayjs(parsedDate, "DD/MM/YYYY HH:mm:ss", "pt-br");
+    return dayjs(parsedDate, "DD/MM/YYYY HH:mm:ss");
   }
 
   /**
@@ -209,7 +209,7 @@ class MogoEntity {
     const [hour, minute, second] = timeStr.split(":");
     const timeStringFormatted = `2000-01-01 ${hour}:${minute}:${second}`;
 
-    return dayjs(timeStringFormatted, "HH:mm:ss", "pt-br");
+    return dayjs(timeStringFormatted, "HH:mm:ss");
   }
 }
 
