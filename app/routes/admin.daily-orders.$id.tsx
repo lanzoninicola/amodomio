@@ -14,6 +14,7 @@ import getSearchParam from "~/utils/get-search-param";
 import useFormSubmissionnState from "~/hooks/useFormSubmissionState";
 import { Loader } from "lucide-react";
 import TransactionForm from "~/domain/daily-orders/components/transaction-form";
+import { cn } from "~/lib/utils";
 
 
 export async function loader({ request, params }: LoaderArgs) {
@@ -43,7 +44,7 @@ export async function action({ request }: LoaderArgs) {
         amount: Number.isNaN(values?.amount) ? 0 : Number(values.amount),
         orderNumber: Number.isNaN(values?.orderNumber) ? 0 : Number(values.orderNumber),
         isMotoRequired: values.isMotoRequired === "Sim" ? true : false,
-        amountMotoboy: Number.isNaN(values?.amountMotoboy) ? 0 : Number(values.amountMotoboy),
+        amountMotoboy: Number.isNaN(values?.amountMotoboy) ? 0 : values.isMotoRequired === "Não" ? 0 : Number(values.amountMotoboy),
         inboundChannel: values.inboundChannel as DOTInboundChannel || "",
         paymentMethod: values.paymentMethod as DOTPaymentMethod || "",
         deletedAt: null,
@@ -68,36 +69,6 @@ export async function action({ request }: LoaderArgs) {
 
         return redirect(`/admin/daily-orders/${values.dailyOrderId}/transactions`)
     }
-
-    if (_action === "daily-orders-transaction-update") {
-        const [err, itemUpdated] = await tryit(
-            dailyOrderEntity.updateTransaction(
-                values.dailyOrderId as string,
-                transaction.id,
-                transaction
-            )
-        )
-
-        if (err) {
-            return serverError(err)
-        }
-        return ok()
-    }
-
-    if (_action === "daily-orders-transaction-soft-delete") {
-        const [err, itemUpdated] = await tryit(
-            dailyOrderEntity.deleteTransaction(
-                values.dailyOrderId as string,
-                transaction.id,
-            )
-        )
-
-        if (err) {
-            return serverError(err)
-        }
-        return ok()
-    }
-
 
     if (_action === "daily-orders-pizzas-number-update") {
 
@@ -142,22 +113,22 @@ export default function DailyOrdersSingle() {
 
     const formResponse = useFormResponse()
 
+    if (!dailyOrder?.id) {
+        return <div>Pedidos do dia não encontrados</div>
+    }
+
     return (
         <div className="flex flex-col">
             <div className="grid grid-cols-2 gap-x-6">
-                <PizzaSizeStat label={"Pizza Familía"} initialNumber={dailyOrder?.initialLargePizzaNumber} restNumber={dailyOrder.restLargePizzaNumber} />
-                <PizzaSizeStat label={"Pizza Medía"} initialNumber={dailyOrder?.initialMediumPizzaNumber} restNumber={dailyOrder.restMediumPizzaNumber} />
+                <PizzaSizeStat dailyOrderId={dailyOrder?.id}
+                    label={"Pizza Familía"} initialNumber={dailyOrder?.initialLargePizzaNumber} restNumber={dailyOrder.restLargePizzaNumber} />
+                <PizzaSizeStat dailyOrderId={dailyOrder?.id}
+                    label={"Pizza Medía"} initialNumber={dailyOrder?.initialMediumPizzaNumber} restNumber={dailyOrder.restMediumPizzaNumber} />
             </div>
             <Separator className="my-6" />
 
-            <div className="flex gap-4 items-center w-full justify-center">
-                <DailyOrderQuickStat label={"Total Pedidos"} value={dailyOrder?.totalOrdersNumber || 0} decimalsAmount={0} />
-                <DailyOrderQuickStat label={"Total Valor Pedidos"} value={dailyOrder?.totalOrdersAmount || 0} />
-                <DailyOrderQuickStat label={"Total Valor Motoboy"} value={dailyOrder?.totalMotoboyAmount || 0} />
-            </div>
-            <Separator className="my-6" />
-            <div className="flex flex-col gap-6 w-full">
-                <div className="bg-slate-50 rounded-xl p-4 mb-8">
+            <div className="flex flex-col gap-4 w-full">
+                <div className="bg-slate-50 rounded-xl p-4">
                     <Form method="post" className="flex items-center gap-2 w-full" ref={formResponse.formRef}>
                         <TransactionForm
                             dailyOrderId={dailyOrder.id}
@@ -184,7 +155,12 @@ export default function DailyOrdersSingle() {
 
                     <li className="border-l-2 border-t-2 border-r-2 rounded-tl-lg rounded-tr-lg px-4 py-2">
                         <Link to="report">
-                            <span className="font-semibold">Relatorio</span>
+                            <span className="font-semibold">Relatorio do dia</span>
+                        </Link>
+                    </li>
+                    <li className="border-l-2 border-t-2 border-r-2 rounded-tl-lg rounded-tr-lg px-4 py-2">
+                        <Link to="report-motoboy">
+                            <span className="font-semibold">Relatorio Motoboy</span>
                         </Link>
                     </li>
                 </ul>
@@ -201,14 +177,13 @@ export default function DailyOrdersSingle() {
 
 interface PizzaSizeStatProps {
     label: string
+    dailyOrderId: string
     initialNumber?: number
     restNumber?: number
 }
 
-function PizzaSizeStat({ label, initialNumber = 0, restNumber = 0 }: PizzaSizeStatProps) {
+function PizzaSizeStat({ label, dailyOrderId, initialNumber = 0, restNumber = 0 }: PizzaSizeStatProps) {
 
-    const loaderData = useLoaderData<typeof loader>()
-    const dailyOrder = loaderData?.payload?.dailyOrder as DailyOrder
     const [restNumberInput, setRestNumberInput] = useState(restNumber)
     const [isRestNumberChanged, setIsRestNumberChanged] = useState(false)
 
@@ -274,7 +249,7 @@ function PizzaSizeStat({ label, initialNumber = 0, restNumber = 0 }: PizzaSizeSt
 
 
                         </div>
-                        <input type="hidden" name="dailyOrderId" value={dailyOrder.id} />
+                        <input type="hidden" name="dailyOrderId" value={dailyOrderId} />
                         <input type="hidden" name="pizzaSize" value={label} />
                         {isRestNumberChanged === true &&
                             <div className="flex gap-2 items-center justify-end">
@@ -304,16 +279,28 @@ interface DailyOrderQuickStatProps {
     label: string
     value: number
     decimalsAmount?: number
+    classNameLabel?: string
+    classNameValue?: string
 }
 
-export function DailyOrderQuickStat({ label, value, decimalsAmount = 2 }: DailyOrderQuickStatProps) {
+export function DailyOrderQuickStat({ label, value, decimalsAmount = 2, classNameLabel, classNameValue }: DailyOrderQuickStatProps) {
 
     const valueRendered = value.toFixed(decimalsAmount)
 
     return (
-        <div className="grid grid-cols-2 items-center gap-x-4 ">
-            <span className="font-medium leading-none tracking-tight">{label}</span>
-            <span className="font-semibold leading-none tracking-tight">{valueRendered}</span>
+        <div className="grid grid-cols-2 items-center gap-x-4">
+            <span className={
+                cn(
+                    "font-medium leading-none tracking-tight",
+                    classNameLabel
+                )
+            }>{label}</span>
+            <span className={
+                cn(
+                    "font-semibold leading-none tracking-tight text-right",
+                    classNameValue
+                )
+            }>{valueRendered}</span>
         </div>
     )
 }

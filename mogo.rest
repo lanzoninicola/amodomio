@@ -1,5 +1,15 @@
+### DOCUMENTATION
+### https://documenter.getpostman.com/view/12307385/UVJYJJvL#80576019-7dad-4c32-802a-8fc4bd435238
+
 ### se entrega não é visualizado
 GET app.mogogourmet.com.br/snack/v1/GetPedidosAbertos?dbname=amodomio&onlyNew=true
 Authorization: Token MTozMC8xMS8yMDIzIDA5OjMxOjAwtoken_sh=MTozMC8xMS8yMDIzIDA5OjMxOjAwdbname=amodomio
 
+### get order by ID
+GET app.mogogourmet.com.br/snack/v1/GetPedidosAbertos?dbname=amodomio&onlyNew=true
+app.mogogourmet.com.br/Snack/V1/buscapedidos?id=D729
+Authorization: Token MTozMC8xMS8yMDIzIDA5OjMxOjAwtokensh=MTozMC8xMS8yMDIzIDA5OjMxOjAwdbname=amodomio
 
+###
+GET app.mogogourmet.com.br/snack/v1/GetGruposSaboresPizzas
+Authorization: Token MTozMC8xMS8yMDIzIDA5OjMxOjAwtokensh=MTozMC8xMS8yMDIzIDA5OjMxOjAwdbname=amodomio

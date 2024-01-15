@@ -1,17 +1,25 @@
+import { cn } from "~/lib/utils";
+
 interface TableTitlesProps {
   titles: string[];
   clazzName?: React.HTMLAttributes<HTMLDivElement>["className"];
+  className?: string
   center?: boolean;
 }
 
-export default function TableTitles({ titles, clazzName, center }: TableTitlesProps) {
+export default function TableTitles({ titles, clazzName, className, center }: TableTitlesProps) {
 
   if (center) clazzName = clazzName?.concat(" justify-items-center")
 
   return (
     <div
       data-element="table-titles"
-      className={`grid gap-x-4 px-6 py-4 items-center border-b transition-colors hover:bg-muted/50 ${clazzName}`}
+      className={
+        cn(
+          `grid gap-x-4 px-6 py-4 items-center border-b transition-colors hover:bg-muted/50 ${clazzName}`,
+          className
+        )
+      }
     >
       {titles.map((title, idx) => {
         return (

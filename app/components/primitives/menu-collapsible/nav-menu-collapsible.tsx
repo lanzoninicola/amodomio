@@ -18,6 +18,11 @@ interface NavMenuCollapsibleProps {
 export function NavMenuCollapsible({ navItems }: NavMenuCollapsibleProps) {
     const [isOpen, setIsOpen] = useState(false)
 
+
+    const onClickNavItem = () => {
+        // setIsOpen(false)
+    }
+
     return (
         <Collapsible
             open={isOpen}

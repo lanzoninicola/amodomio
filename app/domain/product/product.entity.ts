@@ -1,54 +1,144 @@
 import { serverError } from "~/utils/http-response.server";
-import type {
-  Product,
-  ProductComponent,
-  ProductInfo,
-  ProductType,
+import {
+  ProductModel,
+  type Product,
+  type ProductComponent,
+  type ProductInfo,
+  type ProductType,
 } from "./product.model.server";
-import { ProductModel } from "./product.model.server";
-import type { whereCompoundConditions } from "~/lib/firestore-model/src";
 import type { LatestSellPrice } from "../sell-price/sell-price.model.server";
+import { BaseEntity } from "../base.entity";
+import tryit from "~/utils/try-it";
+import dayjs from "dayjs";
 
 export interface ProductTypeHTMLSelectOption {
   value: ProductType;
   label: string;
 }
 
-export class ProductEntity {
-  async create(product: Product): Promise<Product> {
-    this.validate(product);
-    return this.save(product);
+type FieldOrderBy = "name" | "createdAt" | "updatedAt";
+
+export class ProductEntity extends BaseEntity<Product> {
+  async findAllOrderedBy(field: FieldOrderBy, orientation: "asc" | "desc") {
+    const products = await this.findAll();
+
+    const compareFunction = (a: Product, b: Product) => {
+      if (field === "name") {
+        return a.name.localeCompare(b.name);
+      }
+
+      if (field === "createdAt") {
+        // @ts-ignore
+        const createdAtA = dayjs(a.createdAt);
+        // @ts-ignore
+        const createdAtB = dayjs(b.createdAt);
+
+        if (createdAtA.isBefore(createdAtB)) {
+          return -1;
+        }
+        if (createdAtA.isAfter(createdAtB)) {
+          return 1;
+        }
+        return 0;
+      }
+
+      if (field === "updatedAt") {
+        // @ts-ignore
+        const updatedAtA = dayjs(a.updatedAt);
+        // @ts-ignore
+        const updatedAtB = dayjs(b.updatedAt);
+
+        if (updatedAtA.isBefore(updatedAtB)) {
+          return -1;
+        }
+        if (updatedAtA.isAfter(updatedAtB)) {
+          return 1;
+        }
+        return 0;
+      }
+
+      return 0;
+    };
+
+    return orientation === "asc"
+      ? products.slice().sort(compareFunction)
+      : products.slice().sort(compareFunction).reverse();
   }
 
-  private async save(product: Product): Promise<Product> {
-    console.log(product);
-
-    return await ProductModel.add(product);
-  }
-
-  async findAll(conditions?: whereCompoundConditions): Promise<Product[]> {
-    if (!conditions) {
-      return await ProductModel.findAll();
+  async deleteProduct(id: Product["id"]) {
+    if (!id) {
+      throw new Error("Não foi passado o ID do produto da eliminar");
     }
 
-    return await ProductModel.whereCompound(conditions);
+    // check if the product is part of a composition, if so, throw an error
+    const isPartOfComposition = await this.isProductPartOfComposition(id);
+
+    if (isPartOfComposition === true) {
+      throw new Error("O produto está em composição, não pode ser deletado.");
+    }
+
+    const [err, data] = await tryit(productEntity._delete(id));
+
+    if (err) {
+      throw new Error(err.message);
+    }
+
+    return data;
   }
 
-  async findById(id: string): Promise<Product | null> {
-    return await ProductModel.findById(id);
+  async findByType(type: ProductType) {
+    const [err, products] = await tryit(
+      productEntity.findAll([
+        {
+          field: "info.type",
+          op: "==",
+          value: type,
+        },
+      ])
+    );
+
+    if (err) {
+      throw new Error(err.message);
+    }
+
+    return products;
   }
 
-  async update(id: string, updatedData: any) {
-    return await ProductModel.update(id, updatedData);
+  /**
+   * This retrieves the main product containing the item I wish to verify within its composition.
+   *
+   * @param id The product ID that could be inside a composition
+   * @return
+   */
+  async findCompositionWithProduct(id: Product["id"]): Promise<Product[]> {
+    const products = await this.findAll();
+    return products.filter((p) => {
+      const composition = p.components?.filter((c) => c.product.id === id);
+
+      if (composition && composition?.length > 0) {
+        return p;
+      }
+      return false;
+    });
   }
 
-  async delete(id: string) {
-    // TODO: check if product is being used in a catalog
-    // TODO: check if product is a topping or pizza product
-    // TODO: check if product is a component of another product
-    // TODO: check if product is inside an order
+  /**
+   * This detect if a product is part of a composition.
+   *
+   * @param id The product ID that could be inside a composition
+   * @return boolean
+   */
+  async isProductPartOfComposition(id: Product["id"]): Promise<boolean> {
+    const products = await this.findAll();
 
-    return await ProductModel.delete(id);
+    return products.some((p) => {
+      const composition = p.components?.some((c) => c.product.id === id);
+
+      if (composition && composition === true) {
+        return true;
+      }
+      return false;
+    });
   }
 
   async addComponent(productId: string, component: ProductComponent) {
@@ -132,16 +222,16 @@ export class ProductEntity {
     );
   }
 
-  static getProductTypeValues(type: ProductInfo["type"] | null | undefined) {
+  static findProductTypeByName(type: ProductInfo["type"] | null | undefined) {
     switch (type) {
-      case "pizza":
-        return "Pizza";
-      case "ingredient":
-        return "Ingrediente";
+      // case "pizza":
+      //   return "Pizza";
+      // case "ingredient":
+      //   return "Ingrediente";
       case "topping":
         return "Sabor";
-      case "prepared":
-        return "Preparado";
+      case "processed":
+        return "Produzido";
       case "simple":
         return "Simples";
       case null:
@@ -152,12 +242,12 @@ export class ProductEntity {
     }
   }
 
-  static getProductTypeRawValues(): ProductTypeHTMLSelectOption[] {
+  static findAllProductTypes(): ProductTypeHTMLSelectOption[] {
     return [
-      { value: "pizza", label: "Pizza" },
-      { value: "ingredient", label: "Ingrediente" },
+      // { value: "pizza", label: "Pizza" },
+      // { value: "ingredient", label: "Ingrediente" },
       { value: "topping", label: "Sabor" },
-      { value: "prepared", label: "Preparado" },
+      { value: "processed", label: "Produzido" },
       { value: "simple", label: "Simples" },
     ];
   }
@@ -168,3 +258,5 @@ export class ProductEntity {
     }
   }
 }
+
+export const productEntity = new ProductEntity(ProductModel);

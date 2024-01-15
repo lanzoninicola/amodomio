@@ -8,11 +8,24 @@ export interface DailyOrder {
   initialMediumPizzaNumber: number;
   restMediumPizzaNumber: number;
   totalOrdersNumber: number;
-  totalOrdersAmount: number;
-  totalMotoboyAmount: number;
+  finance: DailyOrderFinance;
   transactions: DailyOrderTransaction[];
   operator: DOTOperator;
   lastOrderNumber: number;
+}
+
+export interface DailyOrderFinance {
+  cashRegisterAmount: {
+    initial: number;
+    final: number;
+  };
+  totalOrdersAmount: number;
+  totalMotoboyAmount: number;
+  totalDailyAmount: {
+    adjusted: number;
+    final: number;
+    adjustmentReason: string;
+  };
 }
 
 export interface DailyOrderTransaction {

@@ -11,6 +11,14 @@ import { serverError } from "~/utils/http-response.server";
 import tryit from "~/utils/try-it";
 
 class DailyOrderEntity extends BaseEntity<DailyOrder> {
+  async delete(id: DailyOrder["id"]) {
+    if (!id) {
+      throw new Error("Id não informado, nào è possivel eliminar o registro");
+    }
+
+    return await this._delete(id);
+  }
+
   async createDailyOrder(dailyOrder: DailyOrder) {
     const dateToAdd = dailyOrder.date;
 
@@ -25,10 +33,7 @@ class DailyOrderEntity extends BaseEntity<DailyOrder> {
     return await this.create(dailyOrder);
   }
 
-  async findAllOrders(options?: {
-    order?: "asc" | "desc";
-    orderBy?: "date" | "totalOrdersAmount";
-  }) {
+  async findAllOrders(options?: { order?: "asc" | "desc"; orderBy?: "date" }) {
     const dailyOrders = await DailyOrderModel.findAll();
     const order = options?.order || "asc";
     const orderBy = options?.orderBy || "date";
@@ -59,7 +64,7 @@ class DailyOrderEntity extends BaseEntity<DailyOrder> {
     limit: number,
     options?: {
       order?: "asc" | "desc";
-      orderBy?: "date" | "totalOrdersAmount";
+      orderBy?: "date";
     }
   ) {
     const dailyOrders = await this.findAllOrders(options);
@@ -111,12 +116,8 @@ class DailyOrderEntity extends BaseEntity<DailyOrder> {
       updatedAt: null,
     });
 
-    console.log({ product: transaction.product });
-
     if (transaction.product === "Pizza Familía") {
       dailyOrder.restLargePizzaNumber = dailyOrder.restLargePizzaNumber - 1;
-
-      console.log({ restLargePizzaNumber: dailyOrder.restLargePizzaNumber });
 
       if (dailyOrder.restLargePizzaNumber < 0) {
         throw new Error(
@@ -141,9 +142,13 @@ class DailyOrderEntity extends BaseEntity<DailyOrder> {
         restLargePizzaNumber: dailyOrder.restLargePizzaNumber,
         restMediumPizzaNumber: dailyOrder.restMediumPizzaNumber,
         totalOrdersNumber: dailyOrder.totalOrdersNumber + 1,
-        totalOrdersAmount: dailyOrder.totalOrdersAmount + transaction.amount,
-        totalMotoboyAmount:
-          dailyOrder.totalMotoboyAmount + transaction.amountMotoboy,
+        finance: {
+          ...dailyOrder.finance,
+          totalOrdersAmount:
+            dailyOrder.finance.totalOrdersAmount + transaction.amount,
+          totalMotoboyAmount:
+            dailyOrder.finance.totalMotoboyAmount + transaction.amountMotoboy,
+        },
         transactions,
       })
     );
@@ -171,6 +176,21 @@ class DailyOrderEntity extends BaseEntity<DailyOrder> {
       createdAt: transactions[index].createdAt,
       updatedAt: new Date().toISOString(),
     };
+
+    // const record = await this.findTransactionsByOrderNumber(
+    //   dailyOrder?.id,
+    //   transaction.orderNumber
+    // );
+
+    // if (record) {
+    //   throw new Error(
+    //     `Já existe um pedido com a comanda numero ${
+    //       transaction.orderNumber
+    //     }. Proximo numero disponivel é ${
+    //       (dailyOrder?.lastOrderNumber || 0) + 1
+    //     }`
+    //   );
+    // }
 
     await this.update(id, {
       lastOrderNumber: transaction.orderNumber,
@@ -226,10 +246,14 @@ class DailyOrderEntity extends BaseEntity<DailyOrder> {
         restLargePizzaNumber: dailyOrder.restLargePizzaNumber,
         restMediumPizzaNumber: dailyOrder.restMediumPizzaNumber,
         totalOrdersNumber: dailyOrder.totalOrdersNumber - 1,
-        totalOrdersAmount:
-          dailyOrder.totalOrdersAmount - deletedTransaction.amount,
-        totalMotoboyAmount:
-          dailyOrder.totalMotoboyAmount - deletedTransaction.amountMotoboy,
+        finance: {
+          ...dailyOrder.finance,
+          totalOrdersAmount:
+            dailyOrder.finance.totalOrdersAmount - deletedTransaction.amount,
+          totalMotoboyAmount:
+            dailyOrder.finance.totalMotoboyAmount -
+            deletedTransaction.amountMotoboy,
+        },
         transactions,
       })
     );
@@ -237,6 +261,16 @@ class DailyOrderEntity extends BaseEntity<DailyOrder> {
     if (err) {
       throw new Error(err.message);
     }
+  }
+
+  async findTransactionsByOrderNumber(id: DailyOrder["id"], number: number) {
+    if (!id) return;
+
+    const record = await this.findById(id);
+
+    return record?.transactions.filter(
+      (t) => t.deletedAt === null && t.orderNumber === number
+    );
   }
 
   async findLastActiveTransaction(id: DailyOrder["id"]) {
@@ -302,7 +336,7 @@ class DailyOrderEntity extends BaseEntity<DailyOrder> {
     if (!id) return;
 
     const dailyOrder: DailyOrder | null = await this.findById(id);
-    const totalMotoboyAmount = dailyOrder?.totalMotoboyAmount || 0;
+    const totalMotoboyAmount = dailyOrder?.finance.totalMotoboyAmount || 0;
 
     await this.update(id, { totalMotoboyAmount: totalMotoboyAmount + amount });
   }
@@ -311,7 +345,7 @@ class DailyOrderEntity extends BaseEntity<DailyOrder> {
     if (!id) return;
 
     const dailyOrder: DailyOrder | null = await this.findById(id);
-    const totalMotoboyAmount = dailyOrder?.totalMotoboyAmount || 0;
+    const totalMotoboyAmount = dailyOrder?.finance.totalMotoboyAmount || 0;
 
     await this.update(id, { totalMotoboyAmount: totalMotoboyAmount - amount });
   }
@@ -320,7 +354,7 @@ class DailyOrderEntity extends BaseEntity<DailyOrder> {
     if (!id) return;
 
     const dailyOrder: DailyOrder | null = await this.findById(id);
-    const totalOrdersAmount = dailyOrder?.totalOrdersAmount || 0;
+    const totalOrdersAmount = dailyOrder?.finance.totalOrdersAmount || 0;
 
     await this.update(id, { totalAmount: totalOrdersAmount + amount });
   }
@@ -329,7 +363,7 @@ class DailyOrderEntity extends BaseEntity<DailyOrder> {
     if (!id) return;
 
     const dailyOrder: DailyOrder | null = await this.findById(id);
-    const totalOrdersAmount = dailyOrder?.totalOrdersAmount || 0;
+    const totalOrdersAmount = dailyOrder?.finance.totalOrdersAmount || 0;
 
     await this.update(id, { totalAmount: totalOrdersAmount - amount });
   }
