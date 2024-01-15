@@ -213,7 +213,12 @@ class MogoEntity {
   }
 }
 
-const mock = false;
+const envVar = process.env?.MOGO_MOCK_ORDERS_DELAYS_TIMELINE;
+let mock = false;
+
+if (envVar === "true") {
+  mock = true;
+}
 
 const mogoHttpClient = mock ? new MogoHttpClientMock() : new MogoHttpClient();
 
