@@ -53,7 +53,10 @@ export async function loader({ request }: LoaderArgs) {
     return ok({
         orders,
         lastRequestTime: now("HH:mm"),
-        locale: Intl.DateTimeFormat().resolvedOptions().locale,
+        int: {
+            locale: Intl.DateTimeFormat().resolvedOptions().locale,
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        },
         deliveryTimeSettings: {
             minTime: minDeliveryTimeSettings?.value || 0,
             maxTime: maxDeliveryTimeSettings?.value || 0,
@@ -452,7 +455,8 @@ export function OrdersTimelineSegmentationSettings({ showLabel = true }: OrdersT
     const loaderData = useLoaderData<typeof loader>()
     const deliveryTimeSettings = loaderData?.payload?.deliveryTimeSettings
     const counterTimeSettings = loaderData?.payload?.counterTimeSettings
-    const locale = loaderData?.payload?.locale
+    const locale = loaderData?.payload?.int.locale
+    const timezone = loaderData?.payload?.int.timezone
 
     return (
         <Dialog>
@@ -466,7 +470,11 @@ export function OrdersTimelineSegmentationSettings({ showLabel = true }: OrdersT
                 <DialogHeader>
                     <DialogTitle>Configurações</DialogTitle>
                     <DialogDescription>
-                        Locale: {locale}
+                        <div className="flex flex-col">
+                            <span>Locale: {locale}</span>
+                            <span>Timezone: {timezone}</span>
+                        </div>
+
                     </DialogDescription>
                 </DialogHeader>
 
