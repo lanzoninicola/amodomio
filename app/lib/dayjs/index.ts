@@ -17,6 +17,14 @@ export const now = (format: string = "DD/MM/YYYY") => {
   return dayjs().format(format);
 };
 
+export const nowUTC = (format?: string) => {
+  if (format) {
+    return dayjs.utc().format(format);
+  }
+
+  return dayjs.utc();
+};
+
 export const nowWithTime = () => {
   setup();
   return dayjs().format("DD/MM/YYYY HH:mm:ss");
