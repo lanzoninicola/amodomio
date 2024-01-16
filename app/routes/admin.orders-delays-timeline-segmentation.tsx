@@ -1,5 +1,6 @@
 import { LoaderArgs } from "@remix-run/node";
 import { Form, useLoaderData, useNavigation } from "@remix-run/react";
+import dayjs from "dayjs";
 import { ArrowBigDownDash, ArrowBigUpDash, HelpCircle, PersonStanding, Settings, Truck } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import Clock from "~/components/primitives/clock/clock";
@@ -52,7 +53,7 @@ export async function loader({ request }: LoaderArgs) {
 
     return ok({
         orders,
-        lastRequestTime: now("HH:mm"),
+        lastRequestTime: dayjs.utc().format("HH:mm"),
         int: {
             locale: Intl.DateTimeFormat().resolvedOptions().locale,
             timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
