@@ -6,8 +6,6 @@ import {
   MogoOrderWithDiffTime,
 } from "./types";
 import dayjs from "dayjs";
-import utc from "dayjs/plugin/utc";
-import timezone from "dayjs/plugin/timezone";
 import MogoHttpClient from "./mogo-http-client.server";
 import MogoHttpClientMock from "./mogo-http-client.mock.server";
 import convertMinutesToHHMM from "~/utils/convert-minutes-to-hhmm";
@@ -16,7 +14,6 @@ import {
   settingEntity,
 } from "../setting/setting.entity.server";
 import { Setting } from "../setting/setting.model.server";
-import { setup } from "~/lib/dayjs";
 
 interface MogoEntityProps {
   httpClient: MogoHttpClientInterface;
@@ -28,8 +25,6 @@ class MogoEntity {
   settings: SettingEntityInterface;
 
   constructor({ httpClient, settings }: MogoEntityProps) {
-    // setup();
-
     this.httpClient = httpClient;
     this.settings = settings;
   }
@@ -102,36 +97,33 @@ class MogoEntity {
         };
       }
 
-      // transform the mogo date and time in dayjs date time object
-      const parsedDate = this._convertMogoDateString(o.DataPedido);
-      const parsedTime = this._convertMogoTimeString(o.HoraPedido);
-      const orderDateTimeUtc = this._formatMogoDateTime(
-        parsedDate,
-        parsedTime.utc
+      const deliveryDateTimeExpectedUtc = this.calculateDeliveryTime(
+        o,
+        {
+          maxDeliveryTimeInMinutes: Number(
+            maxDeliveryTimeInMinutesSettings?.value || 0
+          ),
+          maxCounterTimeInMinutes: Number(
+            maxCounterTimeInMinutesSettings?.value || 0
+          ),
+        },
+        {
+          utc: true,
+        }
       );
+
+      const deliveryDateTimeExpectedLocal = dayjs(
+        deliveryDateTimeExpectedUtc
+      ).tz("America/Bahia");
+
+      const orderDateTimeUtc = this._createDayjsObject(
+        o.DataPedido,
+        o.HoraPedido,
+        { utc: true }
+      );
+
       /** Diff calculation */
       const now = dayjs().tz().utc();
-      let deliveryDateTimeExpectedUtc = dayjs().tz().utc();
-
-      if (o.isDelivery === true) {
-        deliveryDateTimeExpectedUtc = orderDateTimeUtc.add(
-          Number(maxDeliveryTimeInMinutesSettings?.value) || 0,
-          "m"
-        );
-      }
-
-      if (o.isDelivery === false) {
-        deliveryDateTimeExpectedUtc = orderDateTimeUtc.add(
-          Number(maxCounterTimeInMinutesSettings?.value) || 0,
-          "m"
-        );
-      }
-
-      console.log({
-        isDelivery: o.isDelivery,
-        deliveryDateTimeExpectedUtc,
-        orderDateTimeUtc,
-      });
 
       const diffMinutesOrderDateTimeToNow = now.diff(
         orderDateTimeUtc,
@@ -143,26 +135,23 @@ class MogoEntity {
       );
 
       // console.log({
-      //   fulldate: deliveryDateTimeExpectedUtc,
-      //   fulldateString: deliveryDateTimeExpectedUtc.format(
+      //   deliveryDateTimeExpectedUtc: deliveryDateTimeExpectedUtc.format(
       //     "DD/MM/YYYY HH:mm:ss"
       //   ),
-      //   timeString: dayjs(deliveryDateTimeExpectedUtc).local().format("HH:mm"),
-      //   timeStringUtc: deliveryDateTimeExpectedUtc.format("HH:mm"),
+      //   deliveryDateTimeExpectedLocal: deliveryDateTimeExpectedLocal.format(
+      //     "DD/MM/YYYY HH:mm:ss"
+      //   ),
+      //   orderDateTimeUtc: orderDateTimeUtc.format("DD/MM/YYYY HH:mm:ss"),
       // });
-
-      const deliveryTimeExpectedLocal = dayjs(deliveryDateTimeExpectedUtc).tz(
-        "America/Bahia"
-      );
 
       return {
         ...o,
         deliveryTimeExpected: {
-          fulldate: deliveryTimeExpectedLocal,
-          fulldateString: deliveryTimeExpectedLocal.format(
+          fulldate: deliveryDateTimeExpectedLocal,
+          fulldateString: deliveryDateTimeExpectedLocal.format(
             "DD/MM/YYYY HH:mm:ss"
           ),
-          timeString: deliveryTimeExpectedLocal.format("HH:mm"),
+          timeString: deliveryDateTimeExpectedLocal.format("HH:mm"),
           timeStringUtc: deliveryDateTimeExpectedUtc.format("HH:mm"),
         },
         diffOrderDateTimeToNow: {
@@ -177,60 +166,54 @@ class MogoEntity {
     });
   }
 
-  /**
-   * Create a single datetime object from separated date and time dayjs object
-   *
-   * Example:
-   * Mogo returns the "Data Pedido" and "Hora Pedido" in two separated fields
-   * "DataPedido": "04/01/2024 00:00:00",
-   * "HoraPedido": "20:50:50",
-   *
-   * First, I need to convert the two fields in a DayJS object then,
-   * this function will merge the separeted information in a single date object
-   * "dateTimeObject": "04/01/2024 20:50:50"
-   *
-   * @param parsedDate
-   * @param parsedTime
-   * @returns
-   */
-  private _formatMogoDateTime(
-    parsedDate: dayjs.Dayjs,
-    parsedTime: dayjs.Dayjs
+  calculateDeliveryTime(
+    order: MogoBaseOrder,
+    settings: {
+      maxDeliveryTimeInMinutes: number;
+      maxCounterTimeInMinutes: number;
+    },
+    options?: {
+      utc: boolean;
+    }
   ) {
-    return parsedDate
-      .set("hour", parsedTime.hour())
-      .set("minute", parsedTime.minute())
-      .set("second", parsedTime.second());
+    const orderDateTime = this._createDayjsObject(
+      order.DataPedido,
+      order.HoraPedido,
+      { utc: options?.utc || false }
+    );
+
+    if (order.isDelivery === true) {
+      return orderDateTime.add(
+        Number(settings.maxDeliveryTimeInMinutes) || 0,
+        "m"
+      );
+    }
+
+    return orderDateTime.add(
+      Number(settings.maxCounterTimeInMinutes) || 0,
+      "m"
+    );
   }
 
-  /**
-   * Convert the date string of Mogo returned object in a DayJS object
-   *
-   * @param dateStr The data field in string format (ex. "04/01/2024 00:00:00")
-   * @returns A DayJS object representing the "DataPedido" date string
-   *
-   */
-  private _convertMogoDateString(dateStr: string) {
-    const [day, month, year] = dateStr.split(/\/| /);
+  private _createDayjsObject(
+    mogoDate: string,
+    mogoTime: string,
+    options: { utc: boolean }
+  ) {
+    const [day, month, year] = mogoDate.split(/\/| /);
     const parsedDate = `${year}-${month}-${day}`;
 
-    return dayjs(parsedDate, "DD/MM/YYYY HH:mm:ss");
-  }
+    // Combine date and time strings
+    const dateTimeString = `${parsedDate} ${mogoTime}`;
 
-  /**
-   * Convert the time string of Mogo returned object in a DayJS object
-   *
-   * @param timeStr The time field in string format (ex. "20:50:50")
-   * @returns
-   */
-  private _convertMogoTimeString(timeStr: string) {
-    const [hour, minute, second] = timeStr.split(":");
-    const timeStringFormatted = `2000-01-01 ${hour}:${minute}:${second}`;
+    const dateTimeLocalTime = dayjs(dateTimeString);
+    const dateTimeLocalTimeUTC = dayjs.utc(dateTimeLocalTime);
 
-    return {
-      locale: dayjs(timeStringFormatted, "HH:mm:ss"),
-      utc: dayjs.tz(timeStringFormatted, "America/Bahia").utc(),
-    };
+    if (options.utc === true) {
+      return dateTimeLocalTimeUTC;
+    }
+
+    return dateTimeLocalTime;
   }
 }
 
