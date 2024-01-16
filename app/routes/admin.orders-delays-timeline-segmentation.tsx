@@ -15,7 +15,7 @@ import { MogoOrderWithDiffTime } from "~/domain/mogo/types";
 import { settingEntity } from "~/domain/setting/setting.entity.server";
 import { Setting } from "~/domain/setting/setting.model.server";
 import useFormResponse from "~/hooks/useFormResponse";
-import { now } from "~/lib/dayjs";
+import { now, nowUTC } from "~/lib/dayjs";
 import { cn } from "~/lib/utils";
 import { ok, serverError } from "~/utils/http-response.server";
 import tryit from "~/utils/try-it";
@@ -53,7 +53,7 @@ export async function loader({ request }: LoaderArgs) {
 
     return ok({
         orders,
-        lastRequestTime: dayjs.utc().format("HH:mm"),
+        lastRequestTime: nowUTC(),
         int: {
             locale: Intl.DateTimeFormat().resolvedOptions().locale,
             timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -83,7 +83,7 @@ export async function action({ request }: LoaderArgs) {
             return serverError(err)
         }
 
-        return ok({ orders, lastRequestTime: now("HH:mm") })
+        return ok({ orders, lastRequestTime: nowUTC() })
 
     }
 
@@ -218,7 +218,7 @@ export default function OrdersTimelineSegmentation() {
                         </Button>
                         <Separator orientation="vertical" />
                         {lastRequestTime && (
-                            <span>Ultima atualização {lastRequestTime}</span>
+                            <span>Ultima atualização {dayjs(lastRequestTime).format("HH:mm")}</span>
                         )}
                     </div>
 
