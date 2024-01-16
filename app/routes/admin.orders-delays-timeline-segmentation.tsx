@@ -165,7 +165,7 @@ export default function OrdersTimelineSegmentation() {
     const orderLess90Minutes = orders.filter(order => order?.diffOrderDateTimeToNow.minutes < 90 && order?.diffOrderDateTimeToNow.minutes >= 60)
     const orderMore90Minutes = orders.filter(order => order?.diffOrderDateTimeToNow.minutes >= 91)
 
-    // console.log({ orders, orderLess20Opened, orderLess40Minutes, orderLess60Minutes, orderLess90Minutes, orderMore90Minutes })
+    console.log({ orders, ordersDeliveryAmount, ordersCounterAmount, orderLess20Opened, orderLess40Minutes, orderLess60Minutes, orderLess90Minutes, orderMore90Minutes })
 
     if (status === 500) {
         return (
