@@ -1,5 +1,6 @@
 import { LoaderArgs } from "@remix-run/node";
 import { Form, useLoaderData, useNavigation } from "@remix-run/react";
+import dayjs from "dayjs";
 import { ArrowBigDownDash, ArrowBigUpDash, HelpCircle, PersonStanding, Settings, Truck } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import Clock from "~/components/primitives/clock/clock";
@@ -14,7 +15,7 @@ import { MogoOrderWithDiffTime } from "~/domain/mogo/types";
 import { settingEntity } from "~/domain/setting/setting.entity.server";
 import { Setting } from "~/domain/setting/setting.model.server";
 import useFormResponse from "~/hooks/useFormResponse";
-import { now } from "~/lib/dayjs";
+import { now, nowUTC } from "~/lib/dayjs";
 import { cn } from "~/lib/utils";
 import { ok, serverError } from "~/utils/http-response.server";
 import tryit from "~/utils/try-it";
@@ -52,7 +53,7 @@ export async function loader({ request }: LoaderArgs) {
 
     return ok({
         orders,
-        lastRequestTime: now("HH:mm"),
+        lastRequestTime: nowUTC(),
         int: {
             locale: Intl.DateTimeFormat().resolvedOptions().locale,
             timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -82,7 +83,7 @@ export async function action({ request }: LoaderArgs) {
             return serverError(err)
         }
 
-        return ok({ orders, lastRequestTime: now("HH:mm") })
+        return ok({ orders, lastRequestTime: nowUTC() })
 
     }
 
@@ -164,7 +165,7 @@ export default function OrdersTimelineSegmentation() {
     const orderLess90Minutes = orders.filter(order => order?.diffOrderDateTimeToNow.minutes < 90 && order?.diffOrderDateTimeToNow.minutes >= 60)
     const orderMore90Minutes = orders.filter(order => order?.diffOrderDateTimeToNow.minutes >= 91)
 
-    // console.log({ orders, orderLess20Opened, orderLess40Minutes, orderLess60Minutes, orderLess90Minutes, orderMore90Minutes })
+    // console.log({ orders, ordersDeliveryAmount, ordersCounterAmount, orderLess20Opened, orderLess40Minutes, orderLess60Minutes, orderLess90Minutes, orderMore90Minutes })
 
     if (status === 500) {
         return (
@@ -217,7 +218,7 @@ export default function OrdersTimelineSegmentation() {
                         </Button>
                         <Separator orientation="vertical" />
                         {lastRequestTime && (
-                            <span>Ultima atualização {lastRequestTime}</span>
+                            <span>Ultima atualização {dayjs(lastRequestTime).format("HH:mm")}</span>
                         )}
                     </div>
 
@@ -378,6 +379,9 @@ function OrderCard({
         5: "bg-red-400"
     }
 
+
+    const [tabShown, setTabShown] = useState("products")
+
     return (
 
         <div className="flex gap-x-0 shadow-xl hover:cursor-pointer hover:bg-slate-50 rounded-lg" >
@@ -391,48 +395,109 @@ function OrderCard({
                 }></div>
 
                 <div className="flex flex-col gap-4 px-4 py-2 w-full">
-                    <div className="flex flex-col">
+
+                    {/** Header */}
+
+                    <div className="grid grid-cols-2 w-full gap-4">
                         <div className="flex justify-between items-center">
-                            <div className="flex gap-2 items-center">
-                                {isDelivery === true ? <Truck /> : <PersonStanding />}
+                            <div className="flex gap-1 items-center">
+
                                 <span className="text-sm font-semibold">{number || "Não definido"}</span>
                             </div>
                             <span className="text-sm font-semibold">{time || "Não definido"}</span>
                         </div>
-                        <Separator className="my-2" />
-                        <div className="flex justify-between items-center">
-                            <span className="text-sm font-semibold">{isDelivery === true ? "Hora entrega:" : "Hora retirada:"}</span>
-                            <span className="text-sm font-semibold">{deliveryTime}</span>
+
+                        <div className="flex justify-end items-center ">
+                            <div className="flex gap-2 items-center bg-brand-blue rounded-lg py-1 px-3 text-white w-max">
+                                {/* <span className="text-sm font-semibold">{isDelivery === true ? "Entrega:" : "Retirada:"}</span> */}
+                                {isDelivery === true ? <Truck /> : <PersonStanding />}
+                                <span className="text-sm font-semibold">{deliveryTime}</span>
+                            </div>
                         </div>
                     </div>
 
-                    <div className="flex flex-col gap-2">
-                        <span className="text-xs">Cliente: {customerName || "Não definido"}</span>
-                        <div>
-                            <span className="flex gap-2 text-xs items-center">
-                                Pizzas: {pizzaItems.map((p, idx) => {
-                                    return (
-                                        <span key={idx} className="flex text-xs font-semibold items-center">
-                                            {p.IdProduto === 18 ? <ArrowBigDownDash /> : <ArrowBigUpDash />} ({p.Quantidade})
-                                        </span>
-                                    )
-                                })}
-                            </span>
-                        </div>
-                    </div>
+                    {/** Products */}
+                    {
+                        tabShown === "products" && (
+                            <div className="flex gap-2 items-center">
+                                <span className="text-xs">Pizzas:</span>
+                                <ul className="flex gap-2 text-sm items-center">
+                                    {pizzaItems.map((p, idx) => {
+
+                                        return (
+                                            <li key={idx} className="flex gap-1 font-semibold">
+                                                <span>{p.IdProduto === 18 ? "Medía" : "Familía"}</span>
+                                                <span>({p.Quantidade})</span>
+                                                {/* <ul>
+                                                {
+                                                    p.Sabores.map((s, idx) => {
+                                                        return (
+                                                            <li key={idx}>{s.Descricao}</li>
+                                                        )
+                                                    }
+                                                    )
+                                                }
+                                            </ul> */}
+                                            </li>
+                                        )
+
+                                        // return (
+                                        //     <span key={idx} className="flex text-xs font-semibold items-center">
+                                        //         {p.IdProduto === 18 ? <ArrowBigDownDash /> : <ArrowBigUpDash />} ({p.Quantidade})
+                                        //     </span>
+                                        // )
+                                    })}
+                                </ul>
+                            </div>
+                        )
+                    }
+
+
+                    {
+                        tabShown === "customer" && (
+                            <div className="flex flex-col gap-2">
+                                <span className="text-xs">Cliente: {customerName || "Não definido"}</span>
+                            </div>
+                        )
+                    }
+
+                    {/** Atrasos */}
+
+                    {
+                        tabShown === "delays" && (
+                            <div>
+                                <h2 className="text-xs mb-2 font-semibold">Atrasos respeito a:</h2>
+
+                                <div className="flex justify-between items-center">
+                                    <span className="text-xs ">Hora pedido: </span>
+                                    <span className="text-xs ">{delayStringOrderTime || "Não definido"}</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-xs ">Hora entrega: </span>
+                                    <span className="text-xs ">{delayStringDeliveryTime || "Não definido"}</span>
+                                </div>
+                            </div>
+                        )
+                    }
+
+                    {/** TAbs */}
 
                     <Separator className="my-0" />
-                    <div>
-                        <h2 className="text-xs mb-2 font-semibold">Atrasos respeito a:</h2>
 
-                        <div className="flex justify-between items-center">
-                            <span className="text-xs ">Hora pedido: </span>
-                            <span className="text-xs ">{delayStringOrderTime || "Não definido"}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                            <span className="text-xs ">Hora entrega: </span>
-                            <span className="text-xs ">{delayStringDeliveryTime || "Não definido"}</span>
-                        </div>
+                    <div className="grid grid-cols-3 justify-items-center">
+                        <span className={cn(
+                            "text-sm font-semibold",
+                            tabShown === "products" && "underline"
+                        )} onClick={() => setTabShown("products")}>PRODUTOS</span>
+                        <span className={cn(
+                            "text-sm font-semibold",
+                            tabShown === "customer" && "underline"
+                        )} onClick={() => setTabShown("customer")}>CLIENTE</span>
+                        <span className={cn(
+                            "text-sm font-semibold",
+                            tabShown === "delays" && "underline"
+                        )} onClick={() => setTabShown("delays")}>ATRASOS</span>
+
                     </div>
 
                 </div>
