@@ -6,7 +6,7 @@ import Clock from "~/components/primitives/clock/clock";
 import SubmitButton from "~/components/primitives/submit-button/submit-button";
 
 import { Button } from "~/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "~/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
 import { Separator } from "~/components/ui/separator";
 import mogoEntity from "~/domain/mogo/mogo.entity.server";
@@ -53,6 +53,10 @@ export async function loader({ request }: LoaderArgs) {
     return ok({
         orders,
         lastRequestTime: now("HH:mm"),
+        int: {
+            locale: Intl.DateTimeFormat().resolvedOptions().locale,
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        },
         deliveryTimeSettings: {
             minTime: minDeliveryTimeSettings?.value || 0,
             maxTime: maxDeliveryTimeSettings?.value || 0,
@@ -406,19 +410,12 @@ function OrderCard({
                         <span className="text-xs">Cliente: {customerName || "Não definido"}</span>
                         <div>
                             <span className="flex gap-2 text-xs items-center">
-                                Pizzas: {pizzaItems.map(p => {
-
-                                    // pizza media
-                                    if (p.IdProduto === 18) {
-                                        return <span className="flex text-xs font-semibold items-center"><ArrowBigDownDash /> ({p.Quantidade})</span>
-                                    }
-
-                                    // pizza familia
-                                    if (p.IdProduto === 19) {
-                                        return <span className="flex text-xs font-semibold items-center"><ArrowBigUpDash /> ({p.Quantidade})</span>
-                                    }
-
-
+                                Pizzas: {pizzaItems.map((p, idx) => {
+                                    return (
+                                        <span key={idx} className="flex text-xs font-semibold items-center">
+                                            {p.IdProduto === 18 ? <ArrowBigDownDash /> : <ArrowBigUpDash />} ({p.Quantidade})
+                                        </span>
+                                    )
                                 })}
                             </span>
                         </div>
@@ -458,7 +455,8 @@ export function OrdersTimelineSegmentationSettings({ showLabel = true }: OrdersT
     const loaderData = useLoaderData<typeof loader>()
     const deliveryTimeSettings = loaderData?.payload?.deliveryTimeSettings
     const counterTimeSettings = loaderData?.payload?.counterTimeSettings
-
+    const locale = loaderData?.payload?.int.locale
+    const timezone = loaderData?.payload?.int.timezone
 
     return (
         <Dialog>
@@ -471,9 +469,13 @@ export function OrdersTimelineSegmentationSettings({ showLabel = true }: OrdersT
             <DialogContent className="sm:max-w-[425px]">
                 <DialogHeader>
                     <DialogTitle>Configurações</DialogTitle>
-                    {/* <DialogDescription>
-                        Make changes to your profile here. Click save when you're done.
-                    </DialogDescription> */}
+                    <DialogDescription>
+                        <div className="flex flex-col">
+                            <span>Locale: {locale}</span>
+                            <span>Timezone: {timezone}</span>
+                        </div>
+
+                    </DialogDescription>
                 </DialogHeader>
 
                 <Form method="post" className="flex flex-col gap-4 mt-2">

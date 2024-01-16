@@ -6,7 +6,8 @@ import {
   MogoOrderWithDiffTime,
 } from "./types";
 import dayjs from "dayjs";
-import { setup } from "~/lib/dayjs";
+import utc from "dayjs/plugin/utc";
+import timezone from "dayjs/plugin/timezone";
 import MogoHttpClient from "./mogo-http-client.server";
 import MogoHttpClientMock from "./mogo-http-client.mock.server";
 import convertMinutesToHHMM from "~/utils/convert-minutes-to-hhmm";
@@ -14,8 +15,8 @@ import {
   SettingEntityInterface,
   settingEntity,
 } from "../setting/setting.entity.server";
-import { serverError } from "~/utils/http-response.server";
 import { Setting } from "../setting/setting.model.server";
+import { setup } from "~/lib/dayjs";
 
 interface MogoEntityProps {
   httpClient: MogoHttpClientInterface;
@@ -27,7 +28,7 @@ class MogoEntity {
   settings: SettingEntityInterface;
 
   constructor({ httpClient, settings }: MogoEntityProps) {
-    setup();
+    // setup();
 
     this.httpClient = httpClient;
     this.settings = settings;
@@ -69,13 +70,13 @@ class MogoEntity {
     );
 
     let maxDeliveryTimeInMinutesSettings: Setting | undefined;
-    let maxCountertimeInMinutesSettings: Setting | undefined;
+    let maxCounterTimeInMinutesSettings: Setting | undefined;
 
     if (settings) {
       maxDeliveryTimeInMinutesSettings = settings.find(
         (o: Setting) => o.name === "maxTimeDeliveryMinutes"
       );
-      maxCountertimeInMinutesSettings = settings.find(
+      maxCounterTimeInMinutesSettings = settings.find(
         (o: Setting) => o.name === "maxTimeCounterMinutes"
       );
     }
@@ -104,48 +105,65 @@ class MogoEntity {
       // transform the mogo date and time in dayjs date time object
       const parsedDate = this._convertMogoDateString(o.DataPedido);
       const parsedTime = this._convertMogoTimeString(o.HoraPedido);
-      const orderDateTime = this._formatMogoDateTime(parsedDate, parsedTime);
-
+      const orderDateTimeUtc = this._formatMogoDateTime(
+        parsedDate,
+        parsedTime.utc
+      );
       /** Diff calculation */
-      const now = dayjs();
-      let deliveryDateTimeExpected = now;
+      const now = dayjs().tz().utc();
+      let deliveryDateTimeExpectedUtc = dayjs().tz().utc();
 
-      if (o.isDelivery) {
-        deliveryDateTimeExpected = orderDateTime.add(
+      if (o.isDelivery === true) {
+        deliveryDateTimeExpectedUtc = orderDateTimeUtc.add(
           Number(maxDeliveryTimeInMinutesSettings?.value) || 0,
           "m"
         );
       }
 
       if (o.isDelivery === false) {
-        deliveryDateTimeExpected = orderDateTime.add(
-          Number(maxCountertimeInMinutesSettings?.value) || 0,
+        deliveryDateTimeExpectedUtc = orderDateTimeUtc.add(
+          Number(maxCounterTimeInMinutesSettings?.value) || 0,
           "m"
         );
       }
 
-      const diffMinutesOrderDateTimeToNow = now.diff(orderDateTime, "minute");
+      console.log({
+        isDelivery: o.isDelivery,
+        deliveryDateTimeExpectedUtc,
+        orderDateTimeUtc,
+      });
+
+      const diffMinutesOrderDateTimeToNow = now.diff(
+        orderDateTimeUtc,
+        "minute"
+      );
       const diffDeliveryDateTimeToNowMinutes = now.diff(
-        deliveryDateTimeExpected,
+        deliveryDateTimeExpectedUtc,
         "m"
       );
 
       // console.log({
-      //   nowString: now.format("DD/MM/YYYY hh:mm:ss"),
-      //   deliveryDateTimeExpected: deliveryDateTimeExpected.format(
+      //   fulldate: deliveryDateTimeExpectedUtc,
+      //   fulldateString: deliveryDateTimeExpectedUtc.format(
       //     "DD/MM/YYYY HH:mm:ss"
       //   ),
-      //   diffDeliveryDateTimeToNowMinutes,
+      //   timeString: dayjs(deliveryDateTimeExpectedUtc).local().format("HH:mm"),
+      //   timeStringUtc: deliveryDateTimeExpectedUtc.format("HH:mm"),
       // });
+
+      const deliveryTimeExpectedLocal = dayjs(deliveryDateTimeExpectedUtc).tz(
+        "America/Bahia"
+      );
 
       return {
         ...o,
         deliveryTimeExpected: {
-          fulldate: deliveryDateTimeExpected,
-          fulldateString: deliveryDateTimeExpected.format(
+          fulldate: deliveryTimeExpectedLocal,
+          fulldateString: deliveryTimeExpectedLocal.format(
             "DD/MM/YYYY HH:mm:ss"
           ),
-          timeString: deliveryDateTimeExpected.format("HH:mm"),
+          timeString: deliveryTimeExpectedLocal.format("HH:mm"),
+          timeStringUtc: deliveryDateTimeExpectedUtc.format("HH:mm"),
         },
         diffOrderDateTimeToNow: {
           minutes: diffMinutesOrderDateTimeToNow,
@@ -196,7 +214,7 @@ class MogoEntity {
     const [day, month, year] = dateStr.split(/\/| /);
     const parsedDate = `${year}-${month}-${day}`;
 
-    return dayjs(parsedDate, "DD/MM/YYYY HH:mm:ss", "pt-br");
+    return dayjs(parsedDate, "DD/MM/YYYY HH:mm:ss");
   }
 
   /**
@@ -209,11 +227,19 @@ class MogoEntity {
     const [hour, minute, second] = timeStr.split(":");
     const timeStringFormatted = `2000-01-01 ${hour}:${minute}:${second}`;
 
-    return dayjs(timeStringFormatted, "HH:mm:ss", "pt-br");
+    return {
+      locale: dayjs(timeStringFormatted, "HH:mm:ss"),
+      utc: dayjs.tz(timeStringFormatted, "America/Bahia").utc(),
+    };
   }
 }
 
-const mock = false;
+const envVar = process.env?.MOGO_MOCK_ORDERS_DELAYS_TIMELINE;
+let mock = false;
+
+if (envVar === "true") {
+  mock = true;
+}
 
 const mogoHttpClient = mock ? new MogoHttpClientMock() : new MogoHttpClient();
 
