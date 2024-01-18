@@ -187,7 +187,7 @@ export default function SingleProductNew() {
                         <Separator className="my-4" />
 
                         <div className="flex gap-2">
-                            <SubmitButton actionName="product-create" className="w-[150px] gap-2" />
+                            <SubmitButton actionName="product-create" className="w-[150px] gap-2" disabled={productsFilteredBySearch.length > 0} />
                         </div>
 
                     </Form>
