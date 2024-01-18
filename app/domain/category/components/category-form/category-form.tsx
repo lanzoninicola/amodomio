@@ -1,65 +1,56 @@
 import { Label } from "@radix-ui/react-label"
-import { Switch } from "@radix-ui/react-switch"
-import { Form } from "@remix-run/react"
-import { Link, Trash } from "lucide-react"
+import { useLoaderData, Form } from "@remix-run/react"
 import SubmitButton from "~/components/primitives/submit-button/submit-button"
-import { Button } from "~/components/ui/button"
 import Fieldset from "~/components/ui/fieldset"
+import { Input } from "~/components/ui/input"
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select"
+import { loader } from "~/routes/admin.cardapio._index"
+import { CategoryTypeSelectElement } from "../../category.entity.server"
 import { Category } from "../../category.model.server"
 
 interface CategoryFormProps {
-    category: Category
-    action: "category-create" | "category-edit"
+    action: "category-create" | "category-update"
+    category?: Category
 }
 
-export default function CategoryForm({ category, action }: CategoryFormProps) {
+export default function CategoryForm({ action, category }: CategoryFormProps) {
+    const loaderData = useLoaderData<typeof loader>()
+    const types = loaderData?.payload.types as CategoryTypeSelectElement[]
 
-    const submitButtonIdleText = action === "category-edit" ? "Atualizar" : "Criar"
-    const submitButtonLoadingText = action === "category-edit" ? "Atualizando..." : "Criando..."
 
     return (
+        <Form method="post">
+            <input type="hidden" name="id" value={category?.id} />
 
-        <div className="p-4 rounded-md border-2 border-muted">
-            <Form method="post" className="">
+            <Fieldset>
                 <div className="flex justify-between">
-                    <div className="flex gap-2 mb-4">
-                        <span className="text-xs font-semibold">Category ID:</span>
-                        <span className="text-xs">{category.id}</span>
+                    <Label htmlFor="name" className="pt-2">Nome</Label>
+                    <Input name="name" placeholder="Nome" defaultValue={category?.name || ""} className="max-w-[300px]" />
+                </div>
+            </Fieldset>
+
+            <Fieldset>
+                <div className="flex justify-between items-start ">
+                    <Label htmlFor="description" className="pt-2">Tipo</Label>
+                    <div className="flex flex-col gap-2 w-[300px]">
+                        <Select name="type" defaultValue={category?.type} required >
+                            <SelectTrigger>
+                                <SelectValue placeholder="Selecionar..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectGroup >
+                                    {types.map((t, idx) => {
+                                        return <SelectItem key={idx} value={t.value}>{t.label}</SelectItem>
+                                    })}
+                                </SelectGroup>
+                            </SelectContent>
+                        </Select>
                     </div>
-                    <Link to="/admin/categorias" className="text-xs underline">Voltar</Link>
                 </div>
-                <Fieldset>
-                    <InputItem type="hidden" name="id" defaultValue={category.id} />
-                    <InputItem type="text" name="name" defaultValue={category.name} placeholder="Nome categoria" />
-                </Fieldset>
-                <Fieldset>
-                    <Label htmlFor="visible" className="flex gap-2 items-center justify-end">
-                        Visível
-                        <Switch id="visible" name="visible" defaultChecked={category.visible} />
-                    </Label>
-                </Fieldset>
-                <Fieldset>
-                    <Label htmlFor="default" className="flex gap-2 items-center justify-end">
-                        Padrão
-                        <Switch id="default" name="default" defaultChecked={category.default} />
-                    </Label>
-                </Fieldset>
-                <div className="flex gap-4">
-                    <Button type="submit" variant="destructive" name="_action" value="category-delete" className="flex-1">
-                        <Trash size={16} className="mr-2" />
-                        Excluir
-                    </Button>
-                    <SubmitButton actionName={action} idleText={submitButtonIdleText} loadingText={submitButtonLoadingText} />
+            </Fieldset>
 
-                </div>
-            </Form>
-        </div>
 
-    )
-}
-
-function InputItem({ ...props }) {
-    return (
-        <Input className="text-lg p-2 placeholder:text-gray-400" {...props} autoComplete="nope" />
+            <SubmitButton actionName={action} />
+        </Form>
     )
 }

@@ -484,17 +484,19 @@ function OrderCard({
 
                     <Separator className="my-0" />
 
-                    <div className="grid grid-cols-3 justify-items-center">
+                    <div className="flex justify-between w-full">
                         <span className={cn(
-                            "text-sm font-semibold",
+                            "text-xs font-semibold",
                             tabShown === "products" && "underline"
                         )} onClick={() => setTabShown("products")}>PRODUTOS</span>
+                        <Separator orientation="vertical" className="m-0" />
                         <span className={cn(
-                            "text-sm font-semibold",
+                            "text-xs font-semibold",
                             tabShown === "customer" && "underline"
                         )} onClick={() => setTabShown("customer")}>CLIENTE</span>
+                        <Separator orientation="vertical" className="m-0" />
                         <span className={cn(
-                            "text-sm font-semibold",
+                            "text-xs font-semibold",
                             tabShown === "delays" && "underline"
                         )} onClick={() => setTabShown("delays")}>ATRASOS</span>
 
