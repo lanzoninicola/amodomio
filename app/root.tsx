@@ -12,6 +12,7 @@ import stylesheet from "~/tailwind.css";
 import { cssBundleHref } from "@remix-run/css-bundle";
 import GoogleTagManagerScriptTag from "./components/primitives/google-tag-manager/gtm-script";
 import GoogleTagManagerNoScriptTag from "./components/primitives/google-tag-manager/gtm-noscript";
+import { Analytics } from '@vercel/analytics/react';
 
 export const meta: V2_MetaFunction = () => {
   return [
@@ -91,6 +92,7 @@ export default function App() {
         <ScrollRestoration />
         <Scripts />
         <LiveReload />
+        <Analytics />
       </body>
     </html>
   );

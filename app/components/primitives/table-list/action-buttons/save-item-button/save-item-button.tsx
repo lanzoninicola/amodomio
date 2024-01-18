@@ -1,19 +1,31 @@
-import { Save, Trash } from "lucide-react";
+import { RotateCw, Save, SaveIcon, Trash } from "lucide-react";
 import Tooltip from "~/components/primitives/tooltip/tooltip";
 import { Button } from "~/components/ui/button";
+import { FormSubmissionnState } from "~/hooks/useFormSubmissionState";
+import { cn } from "~/lib/utils";
 
 interface SaveItemButtonProps {
     actionName: string;
     iconSize?: number;
     clazzName?: string
+    className?: string
+    // returned value of useFormSubmissionState() hook
+    formSubmissionState?: FormSubmissionnState
 }
 
-export default function SaveItemButton({ actionName, iconSize, clazzName }: SaveItemButtonProps) {
+export default function SaveItemButton({ actionName, iconSize = 16, clazzName, className, formSubmissionState }: SaveItemButtonProps) {
     return (
         <Tooltip content="Salvar">
             <Button type="submit" variant={"ghost"} size="sm" name="_action" value={actionName}
-                className={`text-black hover:bg-gray-200 ${clazzName}`}>
-                <Save size={iconSize || 16} />
+                className={cn(
+                    "text-black hover:bg-gray-200",
+                    clazzName,
+                    className
+                )}>
+                {formSubmissionState === "loading" || formSubmissionState === "submitting" ?
+                    <RotateCw className="animate-spin" size={iconSize} /> :
+                    <SaveIcon size={iconSize} />
+                }
             </Button>
         </Tooltip>
     )

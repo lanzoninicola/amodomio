@@ -16,6 +16,7 @@ import { productEntity } from "~/domain/product/product.entity";
 import { jsonParse, jsonStringify } from "~/utils/json-helper";
 import { Category } from "~/domain/category/category.model.server";
 import { toast } from "~/components/ui/use-toast";
+import { categoryEntity } from "~/domain/category/category.entity.server";
 
 
 export async function action({ request }: ActionArgs) {
@@ -23,12 +24,13 @@ export async function action({ request }: ActionArgs) {
     const { _action, ...values } = Object.fromEntries(formData);
 
     if (_action === "product-info-update") {
+        const category = await categoryEntity.findById(values?.categoryId as string)
 
         const [err, data] = await tryit(productEntity.update(values.productId as string, {
             "info.productId": values.productId as string,
             "info.type": values.type as ProductType,
             "info.description": values.description as string,
-            "info.category": jsonParse(values.category) as Category || null
+            "info.category": jsonStringify(category)
         }))
 
         if (err) {
@@ -57,7 +59,7 @@ export default function SingleProductInformation() {
     const product = context.product as Product
     const productTypes = context.productTypes
     const productInfo = product.info
-    const categories = context?.categories && context?.categories.filter(c => c.type === "generic")
+    const categories = context?.categories && context?.categories.filter(c => c.type === "product")
     const compositions = context.compositions
 
     const actionData = useActionData<typeof action>()
@@ -119,16 +121,16 @@ export default function SingleProductInformation() {
 
                         <Fieldset>
                             <div className="flex justify-between items-start ">
-                                <Label htmlFor="description" className="pt-2">Categoria</Label>
+                                <Label htmlFor="categoryId" className="pt-2">Categoria</Label>
                                 <div className="flex flex-col gap-2 w-[300px]">
-                                    <Select name="type" defaultValue={jsonStringify(productInfo?.category)} >
+                                    <Select name="categoryId" defaultValue={jsonParse(productInfo?.category)?.id} >
                                         <SelectTrigger>
                                             <SelectValue placeholder="Selecionar..." />
                                         </SelectTrigger>
                                         <SelectContent>
                                             <SelectGroup >
                                                 {categories && categories.map((c, idx) => {
-                                                    return <SelectItem key={idx} value={jsonStringify(c) || ""}>{c.name}</SelectItem>
+                                                    return <SelectItem key={idx} value={c?.id || ""}>{c.name}</SelectItem>
                                                 })}
                                             </SelectGroup>
                                         </SelectContent>

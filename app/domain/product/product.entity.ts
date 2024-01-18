@@ -257,6 +257,16 @@ export class ProductEntity extends BaseEntity<Product> {
       serverError("O nome do produto é obrigatório", { throwIt: true });
     }
   }
+
+  findAllByCategory(categoryId: string) {
+    return this.findAll([
+      {
+        field: "info.category.id",
+        op: "==",
+        value: categoryId,
+      },
+    ]);
+  }
 }
 
 export const productEntity = new ProductEntity(ProductModel);

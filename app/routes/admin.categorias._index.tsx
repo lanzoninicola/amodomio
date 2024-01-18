@@ -6,6 +6,7 @@ import Container from "~/components/layout/container/container";
 import NoRecordsFound from "~/components/primitives/no-records-found/no-records-found";
 import SortingOrderItems from "~/components/primitives/sorting-order-items/sorting-order-items";
 import SubmitButton from "~/components/primitives/submit-button/submit-button";
+import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import Fieldset from "~/components/ui/fieldset";
 import { Input } from "~/components/ui/input";
@@ -13,6 +14,7 @@ import { Label } from "~/components/ui/label";
 import { Switch } from "~/components/ui/switch";
 import { categoryEntity } from "~/domain/category/category.entity.server";
 import type { Category } from "~/domain/category/category.model.server";
+import { cn } from "~/lib/utils";
 import { ok } from "~/utils/http-response.server";
 
 export const meta: V2_MetaFunction = () => {
@@ -45,17 +47,11 @@ export async function action({ request }: LoaderArgs) {
             id: values.id as string,
             name: values.name as string,
             type: "menu",
-            visible: values.visible === "on" ? true : false,
-            default: values.default === "on" ? true : false
         }
 
         await categoryEntity.update(values.id as string, category)
     }
 
-    if (_action === "category-delete") {
-        await categoryEntity.delete(values.id as string)
-        return redirect(`/admin/categorias`)
-    }
 
     if (_action === "item-sortorder-up") {
         await categoryEntity.sortUp(values.id as string)
@@ -76,11 +72,11 @@ export default function AdminCategoriasIndex() {
 
     return (
 
-        <ul className="min-w-[350px]">
+        <ul className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {
                 categoriesSorted.map(category => {
                     return (
-                        <li key={category.id} className="mb-4">
+                        <li key={category.id} className="flex items-center mb-4">
                             <CategoryItem category={category} />
                         </li>
                     )
@@ -104,19 +100,20 @@ function CategoryItem({ category }: CategoryItemProps) {
     const action = searchParams.get("_action")
 
     return (
-        <div className={`border-2 border-muted rounded-lg p-4 flex flex-col gap-2 w-full`}>
+        <div className={`border-2 border-muted rounded-lg p-4 flex flex-col gap-2 w-full h-[130px]`}>
 
             <SortingOrderItems enabled={action === "categories-sortorder"} itemId={category.id}>
-                <div className="flex justify-between items-center mb-4">
-                    <h2 className="font-lg font-bold tracking-tight">{category.name}</h2>
-                    <Link to={`${category.id}`} >
-                        <Edit size={24} className="cursor-pointer" />
-                    </Link>
-                </div>
-                <div className="flex justify-between w-full">
-                    <span className="font-semibold text-sm">Pública no cardápio</span>
-                    <Switch id="visible" name="visible" defaultChecked={category.visible} disabled />
-                </div>
+                <Link to={`${category.id}`} >
+                    <div className="flex flex-col gap-4 justify-between">
+                        <h2 className="font-lg font-semibold tracking-tight">{category.name}</h2>
+                        <Badge className={
+                            cn(
+                                "w-max",
+                                category.type === "menu" ? "bg-brand-green" : "bg-brand-blue",
+                            )
+                        }>{category.type}</Badge>
+                    </div>
+                </Link>
             </SortingOrderItems>
         </div>
     )

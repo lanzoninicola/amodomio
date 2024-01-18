@@ -1,10 +1,12 @@
 import { useNavigation } from "@remix-run/react";
 
-export default function useFormSubmissionnState():
+export type FormSubmissionnState =
   | "idle"
   | "submitting"
   | "loading"
-  | "submittingOrLoading" {
+  | "submittingOrLoading";
+
+export default function useFormSubmissionnState(): FormSubmissionnState {
   const navigation = useNavigation();
 
   if (navigation.state === "submitting") {
