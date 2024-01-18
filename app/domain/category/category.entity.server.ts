@@ -1,7 +1,12 @@
 import { badRequest, serverError } from "~/utils/http-response.server";
-import type { Category } from "./category.model.server";
+import type { Category, CategoryType } from "./category.model.server";
 import { CategoryModel } from "./category.model.server";
 import { BaseEntity } from "../base.entity";
+
+export interface CategoryTypeSelectElement {
+  value: CategoryType;
+  label: string;
+}
 
 class CategoryEntity extends BaseEntity<Category> {
   override async create(category: Category): Promise<Category> {
@@ -123,7 +128,7 @@ class CategoryEntity extends BaseEntity<Category> {
     return current!;
   }
 
-  override async delete(id: string) {
+  async delete(id: string) {
     // TODO: check if category is being used in a catalog
 
     return await CategoryModel.delete(id);
@@ -150,6 +155,19 @@ class CategoryEntity extends BaseEntity<Category> {
     if (!category.name) {
       serverError("O nome do catálogo é obrigatório");
     }
+  }
+
+  getTypes(): CategoryTypeSelectElement[] {
+    return [
+      {
+        value: "product",
+        label: "Mercadoria",
+      },
+      {
+        value: "menu",
+        label: "Cardapío",
+      },
+    ];
   }
 }
 

@@ -1,14 +1,15 @@
 import { createFirestoreModel } from "~/lib/firestore-model/src";
 
+type CategoryType = "product" | "menu";
+
 interface Category {
   id?: string;
   name: string;
-  type: "generic" | "menu";
+  type: CategoryType;
+  // the sortOrder should be mandatory when the type is "menu"
   sortOrder?: number;
-  visible: boolean;
-  default?: boolean;
 }
 
 const CategoryModel = createFirestoreModel<Category>("categories");
 
-export { CategoryModel, type Category };
+export { CategoryModel, type Category, type CategoryType };

@@ -6,9 +6,16 @@ import { now, setup } from "~/lib/dayjs";
 export default class MogoHttpClientMock implements MogoHttpClientInterface {
   // format DD/MM/YYYY
   today: string;
+  currentTime: string;
 
   constructor() {
     this.today = now();
+    this.currentTime = dayjs.utc().format("HH:mm:ss");
+  }
+
+  calculateOrderTime() {
+    const orderTime = dayjs().subtract(30, "minutes");
+    return orderTime.format("HH:mm:ss");
   }
 
   async getOrdersOpened() {
@@ -58,7 +65,8 @@ export default class MogoHttpClientMock implements MogoHttpClientInterface {
         SubTotal: 189.9,
         TaxaEntrega: 0,
         DataPedido: `${this.today} 00:00:00`,
-        HoraPedido: "18:36:54",
+        // HoraPedido: "18:36:54",
+        HoraPedido: `${this.calculateOrderTime()}`,
         HoraEntrega: null,
         HoraAcerto: "",
         FormaPagamento: "Dinheiro",

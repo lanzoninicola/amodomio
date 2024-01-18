@@ -62,7 +62,7 @@ export function ComponentSelector({ parentProductId }: { parentProductId: string
     }
 
     const newComponentButton = (
-        <Link to={`/admin/products/new`}>
+        <Link to={`/admin/products/new?callbackUrl=/admin/products/${parentProductId}/components`}>
             <Button type="button" className="flex gap-2 w-full">
                 <Plus size={16} />
                 Criar novo componente

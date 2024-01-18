@@ -28,7 +28,7 @@ export interface ProductInfo {
   productId?: string;
   type: ProductType;
   description?: string;
-  category?: Category;
+  category?: Category | undefined | null;
 }
 
 export interface ProductStock {
@@ -48,7 +48,7 @@ export interface ProductComponent {
   quantity: number;
   unitCost: number;
   // if the product is a topping, for each component I can adjust the description for the menu
-  menuDescription?: string;
+  menuDescription: string;
 }
 
 export interface ProductPricing {

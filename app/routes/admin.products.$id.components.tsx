@@ -1,20 +1,16 @@
-import { Form, Link, useOutletContext } from "@remix-run/react";
+import { Form, Link, useActionData, useOutletContext } from "@remix-run/react";
 import { Input } from "~/components/ui/input";
 import { type ActionArgs } from "@remix-run/node";
 import errorMessage from "~/utils/error-message";
 import { badRequest, ok } from "~/utils/http-response.server";
 import tryit from "~/utils/try-it";
-import { ProductEntity, productEntity } from "~/domain/product/product.entity";
+import { productEntity } from "~/domain/product/product.entity";
 import type { ProductOutletContext } from "./admin.products.$id";
-import { Trash2, Save } from "lucide-react";
-import { Button } from "~/components/ui/button";
 import { TableRow, TableTitles, Table, DeleteItemButton } from "~/components/primitives/table-list";
 import useFormSubmissionnState from "~/hooks/useFormSubmissionState";
 import randomReactKey from "~/utils/random-react-key";
-import type { ComponentType } from "~/domain/product/product-composition.model.server";
 import NoRecordsFound from "~/components/primitives/no-records-found/no-records-found";
 import { ComponentSelector } from "./admin.resources.component-selector";
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import type { Product, ProductComponent } from "~/domain/product/product.model.server";
 import { jsonParse, jsonStringify } from "~/utils/json-helper";
 import toNumber from "~/utils/to-number";
@@ -30,23 +26,25 @@ export async function action({ request }: ActionArgs) {
 
     const parentProductId = values.parentId as string
 
-
-    if (!parentProductId) {
-        return badRequest({ action: "composition-add-component", message: "O ID do produto não foi informado" })
-    }
-
     if (_action === "composition-add-component") {
+
+        if (!parentProductId) {
+            return badRequest({ action: "composition-add-component", message: "O ID do produto não foi informado" })
+        }
 
         if (!jsonParse(values.component)) {
             return badRequest({ action: "composition-add-component", message: "Occorreu um erro adicionando o componente" })
         }
 
+        const product: Product = jsonParse(values.component)
+
         const newComponent: ProductComponent = {
             parentId: parentProductId,
-            product: jsonParse(values.component),
+            product: product,
             quantity: 0,
             unit: "un",
             unitCost: 0,
+            menuDescription: product.name
         }
 
         const [err, data] = await tryit(productEntity.addComponent(parentProductId, newComponent))
@@ -73,6 +71,7 @@ export async function action({ request }: ActionArgs) {
             unit: values.unit,
             quantity: toNumber(values.quantity),
             unitCost: toNumber(values.unitCost),
+            menuDescription: values.menuDescription !== "" ? values.menuDescription : component.product.name,
         }))
 
         if (err) {
@@ -84,7 +83,6 @@ export async function action({ request }: ActionArgs) {
     }
 
     if (_action === "composition-delete-component") {
-
         const component = jsonParse(values.component) as ProductComponent
 
         if (!component) {
@@ -109,6 +107,8 @@ export async function action({ request }: ActionArgs) {
 export default function SingleProductComposition() {
     const context = useOutletContext<ProductOutletContext>()
     const product = context.product as Product
+
+
 
     return (
         <div className="flex flex-col gap-8 h-full">
@@ -135,11 +135,12 @@ function ProductComponentList() {
 
         <Table>
             <TableTitles
-                clazzName="grid-cols-4"
+                clazzName="grid-cols-5"
                 titles={[
                     "Nome",
                     "Unidade",
                     "Quantidade",
+                    "Descriçao Cardapio",
                     "Ações"
                 ]}
             />
@@ -151,7 +152,7 @@ function ProductComponentList() {
                             <TableRow
                                 row={component}
                                 showDateColumns={false}
-                                clazzName="grid-cols-4"
+                                clazzName="grid-cols-5"
                             // isProcessing={formSubmissionState === "inProgress"}
                             >
 
@@ -166,9 +167,10 @@ function ProductComponentList() {
 
                                 </div>
                                 <SelectProductUnit />
-                                <Input name="quantity" defaultValue={component.quantity} className="w-full" />
+                                <Input name="quantity" defaultValue={component.quantity} className="w-[120px]" />
+                                <Input name="menuDescription" defaultValue={component.menuDescription} className="w-full" />
                                 <div className="flex gap-2">
-                                    <SaveItemButton actionName="composition-update-component" />
+                                    <SaveItemButton actionName="composition-update-component" formSubmissionState={formSubmissionState} />
                                     <DeleteItemButton actionName="composition-delete-component" />
                                 </div>
                             </TableRow>
