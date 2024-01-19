@@ -116,7 +116,7 @@ class MogoEntity {
 
       const deliveryDateTimeExpectedLocal = dayjs(
         deliveryDateTimeExpectedUtc
-      ).tz("America/Bahia");
+      ).tz();
 
       const orderDateTimeUtc = this._createDayjsObject(
         o.DataPedido,
@@ -137,6 +137,7 @@ class MogoEntity {
       );
 
       // console.log({
+      //   now: now.format("DD/MM/YYYY HH:mm:ss"),
       //   deliveryDateTimeExpectedUtc: deliveryDateTimeExpectedUtc.format(
       //     "DD/MM/YYYY HH:mm:ss"
       //   ),
