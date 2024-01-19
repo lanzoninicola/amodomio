@@ -1,5 +1,6 @@
 import { redirect, type ActionArgs } from "@remix-run/node";
 import { Form, useActionData, useLoaderData } from "@remix-run/react";
+import { useState } from "react";
 import Container from "~/components/layout/container/container";
 import SubmitButton from "~/components/primitives/submit-button/submit-button";
 import { Card, CardHeader, CardTitle, CardContent } from "~/components/ui/card";
@@ -13,7 +14,7 @@ import { categoryEntity } from "~/domain/category/category.entity.server";
 import { Category } from "~/domain/category/category.model.server";
 import SelectProductUnit from "~/domain/product/components/select-product-unit/select-product-unit";
 import { ProductEntity, ProductTypeHTMLSelectOption, productEntity } from "~/domain/product/product.entity";
-import type { ProductType, ProductUnit } from "~/domain/product/product.model.server";
+import type { Product, ProductType, ProductUnit } from "~/domain/product/product.model.server";
 import getSearchParam from "~/utils/get-search-param";
 import { ok, serverError } from "~/utils/http-response.server";
 import { jsonStringify } from "~/utils/json-helper";
@@ -21,6 +22,7 @@ import tryit from "~/utils/try-it";
 
 
 export async function loader({ request, params }: ActionArgs) {
+    const products = await productEntity.findAll()
     const categories = await categoryEntity.findAll()
     const types = ProductEntity.findAllProductTypes()
 
@@ -28,6 +30,7 @@ export async function loader({ request, params }: ActionArgs) {
     const callbackUrl = getSearchParam({ request, paramName: "callbackUrl" })
 
     return ok({
+        products,
         callbackUrl: callbackUrl || "",
         categories,
         types
@@ -74,6 +77,7 @@ export async function action({ request, params }: ActionArgs) {
 export default function SingleProductNew() {
 
     const loaderData = useLoaderData<typeof loader>()
+    const products: Product[] = loaderData?.payload.products || []
     const callbackUrl = loaderData?.payload.callbackUrl
     const categories: Category[] = loaderData?.payload.categories
     const types: ProductTypeHTMLSelectOption[] = loaderData?.payload.types || []
@@ -89,6 +93,9 @@ export default function SingleProductNew() {
         })
     }
 
+    const [searchTerm, setSearchTerm] = useState("")
+    const productsFilteredBySearch = products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()))
+
     return (
         <Container>
             <Card>
@@ -97,20 +104,38 @@ export default function SingleProductNew() {
                 </CardHeader>
                 <CardContent className="grid gap-6">
                     <Form method="post"  >
+                        <div className="flex flex-col">
+                            <div className="flex gap-2">
+                                <input type="hidden" name="callbackUrl" value={callbackUrl} />
+                                <Fieldset>
+                                    <Label htmlFor="product-name">Nome</Label>
+                                    <Input type="string" id="product-name" placeholder="Nome produto" name="name" required
+                                        autoComplete="off"
+                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                            const value = e.target.value
+                                            setSearchTerm(value)
+                                        }} />
+                                </Fieldset>
+                                <Fieldset>
 
-                        <div className="flex gap-2">
-                            <input type="hidden" name="callbackUrl" value={callbackUrl} />
-                            <Fieldset>
-                                <Label htmlFor="product-name">Nome</Label>
-                                <Input type="string" id="product-name" placeholder="Nome produto" name="name" required />
-                            </Fieldset>
-                            <Fieldset>
-
-                                <div className="max-w-[150px]">
-                                    <Label htmlFor="unit">Unidade</Label>
-                                    <SelectProductUnit />
-                                </div>
-                            </Fieldset>
+                                    <div className="max-w-[150px]">
+                                        <Label htmlFor="unit">Unidade</Label>
+                                        <SelectProductUnit />
+                                    </div>
+                                </Fieldset>
+                            </div>
+                            {
+                                (searchTerm.split("").length > 0) &&
+                                productsFilteredBySearch.length > 0 &&
+                                (
+                                    <div className="flex flex-col gap-4 text-red-500">
+                                        <span className="text-xs font-semibold">Produtos encontrados:</span>
+                                        <ul className="flex gap-2 text-xs">
+                                            {productsFilteredBySearch.map(p => <li key={p.id}>{p.name}</li>)}
+                                        </ul>
+                                    </div>
+                                )
+                            }
                         </div>
 
                         <Separator className="my-4" />
@@ -137,7 +162,7 @@ export default function SingleProductNew() {
                             </div>
                         </Fieldset>
 
-                        {/* Descrição de produto */}
+                        {/* Categoria */}
 
                         <Fieldset>
                             <div className="flex justify-between items-start ">
@@ -162,7 +187,7 @@ export default function SingleProductNew() {
                         <Separator className="my-4" />
 
                         <div className="flex gap-2">
-                            <SubmitButton actionName="product-create" className="w-[150px] gap-2" />
+                            <SubmitButton actionName="product-create" className="w-[150px] gap-2" disabled={productsFilteredBySearch.length > 0} />
                         </div>
 
                     </Form>

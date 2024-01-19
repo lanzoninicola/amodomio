@@ -25,8 +25,6 @@ export async function loader({ request }: LoaderArgs) {
 
     const [err, orders] = await tryit(mogoEntity.getOrdersOpenedWithDiffTime())
 
-    // console.log(orders)
-
     if (err) {
         return serverError(err)
     }

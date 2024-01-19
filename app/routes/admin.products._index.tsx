@@ -1,5 +1,6 @@
 import type { ActionArgs, LoaderArgs } from "@remix-run/node"
 import { useLoaderData, useNavigation, Form, Link, useActionData } from "@remix-run/react"
+import { useState } from "react"
 import Container from "~/components/layout/container/container"
 import { TableTitles, TableRows, TableRow, Table, EditItemButton, DeleteItemButton } from "~/components/primitives/table-list"
 import { Input } from "~/components/ui/input"
@@ -75,13 +76,24 @@ export default function ProducstIndex() {
         })
     }
 
+    const [searchTerm, setSearchTerm] = useState("")
+
+    const productsFilteredBySearch = products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()))
+
     return (
         <Container>
             <div className="flex flex-col gap-2">
-                <div data-element="filters" className="flex gap-4 items-center border rounded-md p-4 mb-2">
-                    <span className="text-sm">Filtrar por:</span>
-                    <ProductsFilters />
+                <div data-element="filters" className="flex justify-between border rounded-md p-4 mb-2">
+                    <div className="flex gap-4 items-center">
+                        <span className="text-sm">Filtrar por:</span>
+                        <ProductsFilters />
+                    </div>
+                    <ProductsSearch onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                        const value = e.target.value
+                        setSearchTerm(value)
+                    }} />
                 </div>
+
                 <Table>
                     <TableTitles
                         clazzName="grid-cols-5"
@@ -94,7 +106,7 @@ export default function ProducstIndex() {
                         ]}
                     />
                     <TableRows>
-                        {products.map((p) => {
+                        {productsFilteredBySearch.map((p) => {
                             return <ProductTableRow key={p.id} product={p} className="grid-cols-5" />;
                         })}
                     </TableRows>
@@ -163,4 +175,17 @@ function ProductsFilters() {
         </ul >
     )
 
+}
+
+
+interface ProductsSearchProps {
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => void
+}
+
+function ProductsSearch({ ...props }) {
+    return (
+        <div className="flex gap-4">
+            <Input type="text" name="search" placeholder="Buscar" className="w-full" {...props} />
+        </div>
+    )
 }
