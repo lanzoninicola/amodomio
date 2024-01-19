@@ -5,7 +5,6 @@ import {
   MogoOrderHttpResponse,
   MogoOrderWithDiffTime,
 } from "./types";
-import dayjs from "dayjs";
 import MogoHttpClient from "./mogo-http-client.server";
 import MogoHttpClientMock from "./mogo-http-client.mock.server";
 import convertMinutesToHHMM from "~/utils/convert-minutes-to-hhmm";
@@ -14,6 +13,7 @@ import {
   settingEntity,
 } from "../setting/setting.entity.server";
 import { Setting } from "../setting/setting.model.server";
+import { dayjs, utc } from "~/lib/dayjs";
 
 interface MogoEntityProps {
   httpClient: MogoHttpClientInterface;
@@ -27,6 +27,8 @@ class MogoEntity {
   constructor({ httpClient, settings }: MogoEntityProps) {
     this.httpClient = httpClient;
     this.settings = settings;
+
+    dayjs.extend(utc);
   }
 
   async getOrdersOpened(): Promise<MogoBaseOrder[]> {
