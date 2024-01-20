@@ -125,7 +125,7 @@ class MogoEntity {
       );
 
       /** Diff calculation */
-      const now = dayjs().tz().utc();
+      const now = dayjs();
 
       const diffMinutesOrderDateTimeToNow = now.diff(
         orderDateTimeUtc,
@@ -136,16 +136,16 @@ class MogoEntity {
         "m"
       );
 
-      // console.log({
-      //   now: now.format("DD/MM/YYYY HH:mm:ss"),
-      //   deliveryDateTimeExpectedUtc: deliveryDateTimeExpectedUtc.format(
-      //     "DD/MM/YYYY HH:mm:ss"
-      //   ),
-      //   deliveryDateTimeExpectedLocal: deliveryDateTimeExpectedLocal.format(
-      //     "DD/MM/YYYY HH:mm:ss"
-      //   ),
-      //   orderDateTimeUtc: orderDateTimeUtc.format("DD/MM/YYYY HH:mm:ss"),
-      // });
+      console.log({
+        now: now.format("DD/MM/YYYY HH:mm:ss"),
+        deliveryDateTimeExpectedUtc: deliveryDateTimeExpectedUtc.format(
+          "DD/MM/YYYY HH:mm:ss"
+        ),
+        deliveryDateTimeExpectedLocal: deliveryDateTimeExpectedLocal.format(
+          "DD/MM/YYYY HH:mm:ss"
+        ),
+        orderDateTimeUtc: orderDateTimeUtc.format("DD/MM/YYYY HH:mm:ss"),
+      });
 
       return {
         ...o,
@@ -179,20 +179,20 @@ class MogoEntity {
       utc: boolean;
     }
   ) {
-    const orderDateTime = this._createDayjsObject(
+    const orderLocalDateTime = this._createDayjsObject(
       order.DataPedido,
       order.HoraPedido,
       { utc: options?.utc || false }
     );
 
     if (order.isDelivery === true) {
-      return orderDateTime.add(
+      return orderLocalDateTime.add(
         Number(settings.maxDeliveryTimeInMinutes) || 0,
         "m"
       );
     }
 
-    return orderDateTime.add(
+    return orderLocalDateTime.add(
       Number(settings.maxCounterTimeInMinutes) || 0,
       "m"
     );
@@ -207,16 +207,24 @@ class MogoEntity {
     const parsedDate = `${year}-${month}-${day}`;
 
     // Combine date and time strings
-    const dateTimeString = `${parsedDate} ${mogoTime}`;
+    const localDateTimeString = `${parsedDate} ${mogoTime}`;
 
-    const dateTimeLocalTime = dayjs(dateTimeString);
-    const dateTimeLocalTimeUTC = dayjs.utc(dateTimeLocalTime);
+    const localDateTime = dayjs(localDateTimeString);
+    const utcDateTime = dayjs.utc(localDateTime);
+
+    console.log({
+      name: "_createDayjsObject",
+      localDateTime: localDateTime.format("DD/MM/YYYY HH:mm:ss"),
+      utcDateTime: utcDateTime.format("DD/MM/YYYY HH:mm:ss"),
+      utcOption: options.utc,
+      localDateTimeString,
+    });
 
     if (options.utc === true) {
-      return dateTimeLocalTimeUTC;
+      return utcDateTime;
     }
 
-    return dateTimeLocalTime;
+    return localDateTime;
   }
 }
 
