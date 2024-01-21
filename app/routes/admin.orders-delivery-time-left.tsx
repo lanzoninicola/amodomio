@@ -1,10 +1,10 @@
 import { LoaderArgs } from "@remix-run/node";
 import { Form, useLoaderData, useNavigation } from "@remix-run/react";
 import dayjs from "dayjs";
-import { ArrowBigDownDash, ArrowBigUpDash, HelpCircle, PersonStanding, Settings, Truck } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { Settings } from "lucide-react";
+import { useCallback, useEffect, useRef } from "react";
 import KanbanCol from "~/components/kanban-col/kanban-col";
-import KanbanOrderCard from "~/components/kanban-order-card/kanban-order-card";
+import KanbanOrderCard, { DelaySeverity } from "~/components/kanban-order-card/kanban-order-card";
 import Clock from "~/components/primitives/clock/clock";
 import SubmitButton from "~/components/primitives/submit-button/submit-button";
 
@@ -17,8 +17,8 @@ import { MogoOrderWithDiffTime } from "~/domain/mogo/types";
 import { settingEntity } from "~/domain/setting/setting.entity.server";
 import { Setting } from "~/domain/setting/setting.model.server";
 import useFormResponse from "~/hooks/useFormResponse";
-import { now, nowUTC } from "~/lib/dayjs";
-import { cn } from "~/lib/utils";
+import { nowUTC } from "~/lib/dayjs";
+import createDecreasingArray from "~/utils/create-decrease-array";
 import { ok, serverError } from "~/utils/http-response.server";
 import tryit from "~/utils/try-it";
 
@@ -147,25 +147,11 @@ interface FormResponseData {
     lastRequestTime: string
 }
 
-export default function OrdersTimelineSegmentation() {
+export default function OrdersDeliveryTimeLeft() {
 
     const loaderData = useLoaderData<typeof loader>()
     const status = loaderData?.status
     const message = loaderData?.message
-
-    let orders: MogoOrderWithDiffTime[] = loaderData?.payload?.orders || []
-    let lastRequestTime: string = loaderData?.payload?.lastRequestTime || null
-
-    let ordersDeliveryAmount = orders.filter(o => o.isDelivery === true).length
-    let ordersCounterAmount = orders.filter(o => o.isDelivery === false).length
-
-    const orderLess20Opened = orders.filter(order => order?.diffOrderDateTimeToNow.minutes < 20 && order?.diffOrderDateTimeToNow.minutes >= 0)
-    const orderLess40Minutes = orders.filter(order => order?.diffOrderDateTimeToNow.minutes < 40 && order?.diffOrderDateTimeToNow.minutes >= 20)
-    const orderLess60Minutes = orders.filter(order => order?.diffOrderDateTimeToNow.minutes < 60 && order?.diffOrderDateTimeToNow.minutes >= 40)
-    const orderLess90Minutes = orders.filter(order => order?.diffOrderDateTimeToNow.minutes < 90 && order?.diffOrderDateTimeToNow.minutes >= 60)
-    const orderMore90Minutes = orders.filter(order => order?.diffOrderDateTimeToNow.minutes >= 91)
-
-    // console.log({ orders, ordersDeliveryAmount, ordersCounterAmount, orderLess20Opened, orderLess40Minutes, orderLess60Minutes, orderLess90Minutes, orderMore90Minutes })
 
     if (status === 500) {
         return (
@@ -174,6 +160,64 @@ export default function OrdersTimelineSegmentation() {
             </div>
         )
     }
+
+    let orders: MogoOrderWithDiffTime[] = loaderData?.payload?.orders || []
+
+    const arrayMinutes = useCallback(() => createDecreasingArray(90, 30), [])
+    const ordersDeliveryTimeExpired = orders.filter(order => order?.diffDeliveryDateTimeToNow.minutes < 0) || []
+
+    return (
+        <div className="flex flex-col gap-4 px-6 pt-16 min-h-screen">
+            <Header />
+            <div className="grid grid-cols-5 gap-x-0 h-full">
+                {
+                    arrayMinutes().map((min, index) => {
+
+                        const ordersFiltered = orders.filter(order => order?.diffDeliveryDateTimeToNow.minutes <= min && order?.diffDeliveryDateTimeToNow.minutes > 0)
+
+                        return (
+                            <KanbanCol
+                                severity={index + 1}
+                                title={`Falta ${min} minutos`}
+                                description={`Previsão de entrega em ${min} minutos`}
+                                itemsNumber={ordersFiltered.length}
+                            >
+                                {ordersFiltered.map((o, index) => {
+                                    return (
+                                        <KanbanOrderCard key={o.NumeroPedido} order={o} orderTimeSeverity={index + 1 as DelaySeverity} />
+                                    )
+                                })}
+                            </KanbanCol>
+                        )
+                    })
+                }
+                <KanbanCol
+                    severity={5}
+                    title={`Limite Superado`}
+                    description={`Pedidos que foi superado limite de entrega`}
+                    itemsNumber={ordersDeliveryTimeExpired.length}
+                >
+                    {ordersDeliveryTimeExpired.map((o, index) => {
+                        return (
+                            <KanbanOrderCard key={o.NumeroPedido} order={o} orderTimeSeverity={5} />
+                        )
+                    })}
+                </KanbanCol>
+
+            </div>
+        </div >
+    )
+}
+
+
+function Header() {
+    const loaderData = useLoaderData<typeof loader>()
+
+    let orders: MogoOrderWithDiffTime[] = loaderData?.payload?.orders || []
+    let lastRequestTime: string = loaderData?.payload?.lastRequestTime || null
+
+    let ordersDeliveryAmount = orders.filter(o => o.isDelivery === true).length
+    let ordersCounterAmount = orders.filter(o => o.isDelivery === false).length
 
     const navigation = useNavigation()
 
@@ -187,8 +231,6 @@ export default function OrdersTimelineSegmentation() {
     if (formData?.lastRequestTime) {
         lastRequestTime = formData?.lastRequestTime
     }
-
-
 
     const refreshSubmitButton = useRef<HTMLButtonElement | null>(null);
 
@@ -204,95 +246,41 @@ export default function OrdersTimelineSegmentation() {
     }, []);
 
     return (
-        <div className="flex flex-col gap-4 px-6 pt-16 min-h-screen">
-            <div className="grid grid-cols-3 w-full">
-                <Form method="post">
-                    <div className="flex gap-2 items-center">
-                        <Button type="submit" className="text-2xl"
-                            name="_action"
-                            value="kanban-timing-refresh"
-                            ref={refreshSubmitButton}
-                        >
-                            {navigation.state !== "idle" ? "Atualizando..." : "Atualizar"}
+        <div className="grid grid-cols-3 w-full">
+            <Form method="post">
+                <div className="flex gap-2 items-center">
+                    <Button type="submit" className="text-2xl"
+                        name="_action"
+                        value="kanban-timing-refresh"
+                        ref={refreshSubmitButton}
+                    >
+                        {navigation.state !== "idle" ? "Atualizando..." : "Atualizar"}
 
-                        </Button>
-                        <Separator orientation="vertical" />
-                        {lastRequestTime && (
-                            <span>Ultima atualização {dayjs(lastRequestTime).format("HH:mm")}</span>
-                        )}
-                    </div>
-
-                </Form>
-                <div className="flex justify-center gap-4">
-                    <div className="flex gap-2 items-center shadow-sm border rounded-lg px-4 py-2">
-                        <span className="text-sm font-semibold">Pedidos delivery:</span>
-                        <span className="text-lg font-mono font-semibold">{ordersDeliveryAmount}</span>
-                    </div>
-                    <div className="flex gap-2 items-center shadow-sm border rounded-lg px-4 py-2">
-                        <span className="text-sm font-semibold">Pedidos balcão:</span>
-                        <span className="text-lg font-mono font-semibold">{ordersCounterAmount}</span>
-                    </div>
+                    </Button>
+                    <Separator orientation="vertical" />
+                    {lastRequestTime && (
+                        <span>Ultima atualização {dayjs(lastRequestTime).format("HH:mm")}</span>
+                    )}
                 </div>
-                <div className="flex gap-4 justify-end">
-                    <Clock />
-                    <OrdersTimelineSegmentationSettings showLabel={false} />
+
+            </Form>
+            <div className="flex justify-center gap-4">
+                <div className="flex gap-2 items-center shadow-sm border rounded-lg px-4 py-2">
+                    <span className="text-sm font-semibold">Pedidos delivery:</span>
+                    <span className="text-lg font-mono font-semibold">{ordersDeliveryAmount}</span>
+                </div>
+                <div className="flex gap-2 items-center shadow-sm border rounded-lg px-4 py-2">
+                    <span className="text-sm font-semibold">Pedidos balcão:</span>
+                    <span className="text-lg font-mono font-semibold">{ordersCounterAmount}</span>
                 </div>
             </div>
-            <div className="grid grid-cols-5 gap-x-0 h-full">
-                <KanbanCol
-                    severity={1}
-                    title="Menos de 20 minutos"
-                    description="Pedidos abertos há menos de 20 minutos"
-                    itemsNumber={orderLess20Opened.length}
-                >
-                    {orderLess20Opened.map(o => {
-                        return (
-                            <KanbanOrderCard key={o.NumeroPedido} order={o} orderTimeSeverity={1} />
-                        )
-                    })}
-                </KanbanCol >
-
-                <KanbanCol
-                    severity={2}
-                    title="Mais de 20 minutos"
-                    description="Pedidos abertos entre 21 e 40 minutos"
-                    itemsNumber={orderLess40Minutes.length}
-                >
-                    {orderLess40Minutes.map(o => <KanbanOrderCard key={o.NumeroPedido} order={o} orderTimeSeverity={2} />)}
-                </KanbanCol >
-
-                <KanbanCol
-                    severity={3}
-                    title="Mais de 40 minutos"
-                    description="Pedidos abertos entre 41 e 60 minutos"
-                    itemsNumber={orderLess60Minutes.length}
-                >
-                    {orderLess60Minutes.map(o => <KanbanOrderCard key={o.NumeroPedido} order={o} orderTimeSeverity={3} />)}
-                </KanbanCol >
-                <KanbanCol
-                    severity={4}
-                    title="Mais de 60 minutos"
-                    description="Pedidos abertos entre 61 e 90 minutos"
-                    itemsNumber={orderLess90Minutes.length}
-                >
-                    {orderLess90Minutes.map(o => <KanbanOrderCard key={o.NumeroPedido} order={o} orderTimeSeverity={4} />)}
-                </KanbanCol >
-                <KanbanCol
-                    severity={5}
-                    title="Mais de 90 minutos"
-                    description="Pedidos abertos há mais de 90 minutos"
-                    itemsNumber={orderMore90Minutes.length}
-                >
-                    {orderMore90Minutes.map(o => <KanbanOrderCard key={o.NumeroPedido} order={o} orderTimeSeverity={5} />)}
-                </KanbanCol >
+            <div className="flex gap-4 justify-end">
+                <Clock />
+                <OrdersTimelineSegmentationSettings showLabel={false} />
             </div>
-        </div >
+        </div>
     )
 }
-
-
-
-
 
 
 

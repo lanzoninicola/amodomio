@@ -56,6 +56,7 @@ export default function AdminOutlet() {
                         { label: "Lista de supermercado", to: "/admin/grocery-list" },
                         { label: "Pedidos", to: "/admin/daily-orders" },
                         { label: "Linha do tempo", to: "/admin/orders-delays-timeline-segmentation" },
+                        { label: "Linha do tempo Entrega", to: "/admin/orders-delivery-time-left" },
                         { label: "Massa", to: "/admin/dough" },
                         { label: "Opções", to: "/admin/options" },
                         { label: "Sair", to: "/logout" },
