@@ -24,9 +24,6 @@ dayjs.extend(isToday);
 dayjs.extend(isTomorrow);
 dayjs.extend(relativeTime);
 
-// dayjs.locale("pt-br");
-dayjs.tz.setDefault("America/Sao_Paulo");
-
 /**
  *
  * @returns string date formatted DD/MM/YYYY
