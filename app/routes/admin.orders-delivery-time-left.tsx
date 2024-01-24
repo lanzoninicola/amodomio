@@ -1,5 +1,5 @@
 import { LoaderArgs } from "@remix-run/node";
-import { Form, useLoaderData, useNavigation } from "@remix-run/react";
+import { Form, Link, useLoaderData, useNavigation } from "@remix-run/react";
 import dayjs from "dayjs";
 import { Settings } from "lucide-react";
 import { useCallback, useEffect, useRef } from "react";
@@ -19,11 +19,16 @@ import { Setting } from "~/domain/setting/setting.model.server";
 import useFormResponse from "~/hooks/useFormResponse";
 import { nowUTC } from "~/lib/dayjs";
 import { createDecreasingArray } from "~/utils/create-decrease-array";
+import getSearchParam from "~/utils/get-search-param";
 import { ok, serverError } from "~/utils/http-response.server";
 import tryit from "~/utils/try-it";
 
 
 export async function loader({ request }: LoaderArgs) {
+
+    const filterSearchParams = getSearchParam({ request, paramName: "filter" })
+
+    console.log({ filterSearchParams })
 
     const [err, orders] = await tryit(mogoEntity.getOrdersOpenedWithDiffTime())
 
@@ -51,8 +56,18 @@ export async function loader({ request }: LoaderArgs) {
         maxCounterTimeSettings = settings.find((o: Setting) => o.name === "maxTimeCounterMinutes")
     }
 
+    let ordersToRender = [...orders]
+
+    if (filterSearchParams === "only-delivery") {
+        ordersToRender = ordersToRender.filter(o => o.isDelivery === true)
+    }
+
+    if (filterSearchParams === "only-counter") {
+        ordersToRender = ordersToRender.filter(o => o.isDelivery === false)
+    }
+
     return ok({
-        orders,
+        orders: ordersToRender,
         lastRequestTime: nowUTC(),
         int: {
             locale: Intl.DateTimeFormat().resolvedOptions().locale,
@@ -272,14 +287,24 @@ function Header() {
 
             </Form>
             <div className="flex justify-center gap-4">
-                <div className="flex gap-2 items-center shadow-sm border rounded-lg px-4 py-2">
-                    <span className="text-sm font-semibold">Pedidos delivery:</span>
-                    <span className="text-lg font-mono font-semibold">{ordersDeliveryAmount}</span>
-                </div>
-                <div className="flex gap-2 items-center shadow-sm border rounded-lg px-4 py-2">
-                    <span className="text-sm font-semibold">Pedidos balcão:</span>
-                    <span className="text-lg font-mono font-semibold">{ordersCounterAmount}</span>
-                </div>
+                <Link to="?filter=all">
+                    <div className="flex gap-2 items-center shadow-sm border rounded-lg px-4 py-1">
+                        <span className="text-sm">Pedidos:</span>
+                        <span className="text-lg font-mono font-semibold">{orders.length || 0}</span>
+                    </div>
+                </Link>
+                <Link to="?filter=only-delivery">
+                    <div className="flex gap-2 items-center shadow-sm border rounded-lg px-4 py-1">
+                        <span className="text-sm">Delivery:</span>
+                        <span className="text-lg font-mono font-semibold">{ordersDeliveryAmount}</span>
+                    </div>
+                </Link>
+                <Link to="?filter=only-counter">
+                    <div className="flex gap-2 items-center shadow-sm border rounded-lg px-4 py-1">
+                        <span className="text-sm">Balcão:</span>
+                        <span className="text-lg font-mono font-semibold">{ordersCounterAmount}</span>
+                    </div>
+                </Link>
             </div>
             <div className="flex gap-4 justify-end">
                 <Clock />
