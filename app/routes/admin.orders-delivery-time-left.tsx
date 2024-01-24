@@ -1,5 +1,5 @@
 import { LoaderArgs } from "@remix-run/node";
-import { Form, useLoaderData, useNavigation } from "@remix-run/react";
+import { Form, Link, useLoaderData, useNavigation, useSearchParams } from "@remix-run/react";
 import dayjs from "dayjs";
 import { Settings } from "lucide-react";
 import { useCallback, useEffect, useRef } from "react";
@@ -18,12 +18,16 @@ import { settingEntity } from "~/domain/setting/setting.entity.server";
 import { Setting } from "~/domain/setting/setting.model.server";
 import useFormResponse from "~/hooks/useFormResponse";
 import { nowUTC } from "~/lib/dayjs";
+import { cn } from "~/lib/utils";
 import { createDecreasingArray } from "~/utils/create-decrease-array";
+import getSearchParam from "~/utils/get-search-param";
 import { ok, serverError } from "~/utils/http-response.server";
 import tryit from "~/utils/try-it";
 
 
 export async function loader({ request }: LoaderArgs) {
+
+    const filterSearchParams = getSearchParam({ request, paramName: "filter" })
 
     const [err, orders] = await tryit(mogoEntity.getOrdersOpenedWithDiffTime())
 
@@ -33,7 +37,6 @@ export async function loader({ request }: LoaderArgs) {
 
     const [errSettings, settings] = await tryit(settingEntity.findSettingsByContext("order-timeline-segmentation-delivery-time"))
 
-    // console.log({ settings })
 
     if (errSettings) {
         return serverError(errSettings)
@@ -51,8 +54,18 @@ export async function loader({ request }: LoaderArgs) {
         maxCounterTimeSettings = settings.find((o: Setting) => o.name === "maxTimeCounterMinutes")
     }
 
+    let ordersToRender = [...orders]
+
+    if (filterSearchParams === "only-delivery") {
+        ordersToRender = ordersToRender.filter(o => o.isDelivery === true)
+    }
+
+    if (filterSearchParams === "only-counter") {
+        ordersToRender = ordersToRender.filter(o => o.isDelivery === false)
+    }
+
     return ok({
-        orders,
+        orders: ordersToRender,
         lastRequestTime: nowUTC(),
         int: {
             locale: Intl.DateTimeFormat().resolvedOptions().locale,
@@ -88,8 +101,6 @@ export async function action({ request }: LoaderArgs) {
     }
 
     if (_action === "order-timeline-segmentation-settings-change") {
-
-        // console.log(values)
 
         const context = values.context as string
         const minTime = String(Number(values.minTimeDeliveryMinutes || 0))
@@ -177,14 +188,17 @@ export default function OrdersDeliveryTimeLeft() {
 
                         const ordersFiltered = orders.filter(order => {
                             const deliveryTimeLeftMinutes = order?.diffDeliveryDateTimeToNow.minutes
-                            return (deliveryTimeLeftMinutes <= max && deliveryTimeLeftMinutes >= min) && deliveryTimeLeftMinutes > 0
+
+                            console.log({ deliveryTimeLeftMinutes, min, max })
+
+                            return (deliveryTimeLeftMinutes <= max && deliveryTimeLeftMinutes >= min)
                         })
 
                         return (
                             <KanbanCol
                                 key={index}
                                 severity={index + 1}
-                                title={`Falta ${max} minutos`}
+                                title={max === 0 ? "Da entregar" : `Menos o igual a ${max}'`}
                                 description={`Previsão de entrega em ${max} minutos`}
                                 itemsNumber={ordersFiltered.length}
                             >
@@ -206,7 +220,7 @@ export default function OrdersDeliveryTimeLeft() {
                 >
                     {ordersDeliveryTimeExpired.map((o, index) => {
                         return (
-                            <KanbanOrderCard key={o.NumeroPedido} order={o} orderTimeSeverity={5} />
+                            <KanbanOrderCard key={o.NumeroPedido} order={o} orderTimeSeverity={5} showDeliveryTimeExpectedLabel={false} />
                         )
                     })}
                 </KanbanCol>
@@ -252,6 +266,9 @@ function Header() {
         return () => clearInterval(interval); // Cleanup the interval on component unmount
     }, []);
 
+
+    const [searchParams, setSearchParams] = useSearchParams()
+
     return (
         <div className="grid grid-cols-3 w-full">
             <Form method="post">
@@ -272,14 +289,39 @@ function Header() {
 
             </Form>
             <div className="flex justify-center gap-4">
-                <div className="flex gap-2 items-center shadow-sm border rounded-lg px-4 py-2">
-                    <span className="text-sm font-semibold">Pedidos delivery:</span>
-                    <span className="text-lg font-mono font-semibold">{ordersDeliveryAmount}</span>
-                </div>
-                <div className="flex gap-2 items-center shadow-sm border rounded-lg px-4 py-2">
-                    <span className="text-sm font-semibold">Pedidos balcão:</span>
-                    <span className="text-lg font-mono font-semibold">{ordersCounterAmount}</span>
-                </div>
+                <Link to="?filter=all">
+                    <div className={
+                        cn(
+                            "flex gap-2 items-center shadow-sm border rounded-lg px-4 py-1",
+                            searchParams.get("filter") === "all" && "border-black"
+                        )
+                    }>
+                        <span className="text-sm">Todos:</span>
+                        <span className="text-lg font-mono font-semibold">{orders.length || 0}</span>
+                    </div>
+                </Link>
+                <Link to="?filter=only-delivery">
+                    <div className={
+                        cn(
+                            "flex gap-2 items-center shadow-sm border rounded-lg px-4 py-1",
+                            searchParams.get("filter") === "only-delivery" && "border-black"
+                        )
+                    }>
+                        <span className="text-sm">Delivery:</span>
+                        <span className="text-lg font-mono font-semibold">{ordersDeliveryAmount}</span>
+                    </div>
+                </Link>
+                <Link to="?filter=only-counter">
+                    <div className={
+                        cn(
+                            "flex gap-2 items-center shadow-sm border rounded-lg px-4 py-1",
+                            searchParams.get("filter") === "only-counter" && "border-black"
+                        )
+                    }>
+                        <span className="text-sm">Balcão:</span>
+                        <span className="text-lg font-mono font-semibold">{ordersCounterAmount}</span>
+                    </div>
+                </Link>
             </div>
             <div className="flex gap-4 justify-end">
                 <Clock />

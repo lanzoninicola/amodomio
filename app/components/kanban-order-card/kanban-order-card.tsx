@@ -9,12 +9,14 @@ export type DelaySeverity = 1 | 2 | 3 | 4 | 5
 
 interface OrderCardProps {
     order: MogoOrderWithDiffTime,
-    orderTimeSeverity: DelaySeverity
+    orderTimeSeverity: DelaySeverity,
+    showDeliveryTimeExpectedLabel?: boolean,
 }
 
 export default function KanbanOrderCard({
     order,
-    orderTimeSeverity
+    orderTimeSeverity,
+    showDeliveryTimeExpectedLabel = true
 }: OrderCardProps) {
     const number = order.NumeroPedido
     const orderTime = order.HoraPedido || "Não definido"
@@ -79,10 +81,14 @@ export default function KanbanOrderCard({
                                 </div>
                             </div>
                         </div>
-                        <div className="flex justify-between text-xs">
-                            <span>Entrega programada em</span>
-                            <span className="font-semibold">{delayStringDeliveryTime}</span>
-                        </div>
+                        {
+                            showDeliveryTimeExpectedLabel === true && (
+                                <div className="flex justify-between text-xs">
+                                    <span>Entrega programada em</span>
+                                    <span className="font-semibold">{delayStringDeliveryTime}</span>
+                                </div>
+                            )
+                        }
                     </div>
 
                     {/** Products */}
