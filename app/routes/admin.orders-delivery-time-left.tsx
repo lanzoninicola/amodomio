@@ -1,5 +1,5 @@
 import { LoaderArgs } from "@remix-run/node";
-import { Form, Link, useLoaderData, useNavigation } from "@remix-run/react";
+import { Form, Link, useLoaderData, useNavigation, useSearchParams } from "@remix-run/react";
 import dayjs from "dayjs";
 import { Settings } from "lucide-react";
 import { useCallback, useEffect, useRef } from "react";
@@ -18,6 +18,7 @@ import { settingEntity } from "~/domain/setting/setting.entity.server";
 import { Setting } from "~/domain/setting/setting.model.server";
 import useFormResponse from "~/hooks/useFormResponse";
 import { nowUTC } from "~/lib/dayjs";
+import { cn } from "~/lib/utils";
 import { createDecreasingArray } from "~/utils/create-decrease-array";
 import getSearchParam from "~/utils/get-search-param";
 import { ok, serverError } from "~/utils/http-response.server";
@@ -267,6 +268,11 @@ function Header() {
         return () => clearInterval(interval); // Cleanup the interval on component unmount
     }, []);
 
+
+    const [searchParams, setSearchParams] = useSearchParams()
+
+    console.log(searchParams)
+
     return (
         <div className="grid grid-cols-3 w-full">
             <Form method="post">
@@ -288,19 +294,34 @@ function Header() {
             </Form>
             <div className="flex justify-center gap-4">
                 <Link to="?filter=all">
-                    <div className="flex gap-2 items-center shadow-sm border rounded-lg px-4 py-1">
-                        <span className="text-sm">Pedidos:</span>
+                    <div className={
+                        cn(
+                            "flex gap-2 items-center shadow-sm border rounded-lg px-4 py-1",
+                            searchParams.get("filter") === "all" && "border-black"
+                        )
+                    }>
+                        <span className="text-sm">Todos:</span>
                         <span className="text-lg font-mono font-semibold">{orders.length || 0}</span>
                     </div>
                 </Link>
                 <Link to="?filter=only-delivery">
-                    <div className="flex gap-2 items-center shadow-sm border rounded-lg px-4 py-1">
+                    <div className={
+                        cn(
+                            "flex gap-2 items-center shadow-sm border rounded-lg px-4 py-1",
+                            searchParams.get("filter") === "only-delivery" && "border-black"
+                        )
+                    }>
                         <span className="text-sm">Delivery:</span>
                         <span className="text-lg font-mono font-semibold">{ordersDeliveryAmount}</span>
                     </div>
                 </Link>
                 <Link to="?filter=only-counter">
-                    <div className="flex gap-2 items-center shadow-sm border rounded-lg px-4 py-1">
+                    <div className={
+                        cn(
+                            "flex gap-2 items-center shadow-sm border rounded-lg px-4 py-1",
+                            searchParams.get("filter") === "only-counter" && "border-black"
+                        )
+                    }>
                         <span className="text-sm">Balcão:</span>
                         <span className="text-lg font-mono font-semibold">{ordersCounterAmount}</span>
                     </div>
