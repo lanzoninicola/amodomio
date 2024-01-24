@@ -188,9 +188,6 @@ export default function OrdersDeliveryTimeLeft() {
 
                         const ordersFiltered = orders.filter(order => {
                             const deliveryTimeLeftMinutes = order?.diffDeliveryDateTimeToNow.minutes
-
-                            console.log({ deliveryTimeLeftMinutes, min, max })
-
                             return (deliveryTimeLeftMinutes <= max && deliveryTimeLeftMinutes >= min)
                         })
 
