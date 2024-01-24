@@ -29,8 +29,6 @@ export async function loader({ request }: LoaderArgs) {
 
     const filterSearchParams = getSearchParam({ request, paramName: "filter" })
 
-    console.log({ filterSearchParams })
-
     const [err, orders] = await tryit(mogoEntity.getOrdersOpenedWithDiffTime())
 
     if (err) {
@@ -39,7 +37,6 @@ export async function loader({ request }: LoaderArgs) {
 
     const [errSettings, settings] = await tryit(settingEntity.findSettingsByContext("order-timeline-segmentation-delivery-time"))
 
-    // console.log({ settings })
 
     if (errSettings) {
         return serverError(errSettings)
@@ -104,8 +101,6 @@ export async function action({ request }: LoaderArgs) {
     }
 
     if (_action === "order-timeline-segmentation-settings-change") {
-
-        // console.log(values)
 
         const context = values.context as string
         const minTime = String(Number(values.minTimeDeliveryMinutes || 0))
@@ -193,14 +188,17 @@ export default function OrdersDeliveryTimeLeft() {
 
                         const ordersFiltered = orders.filter(order => {
                             const deliveryTimeLeftMinutes = order?.diffDeliveryDateTimeToNow.minutes
-                            return (deliveryTimeLeftMinutes <= max && deliveryTimeLeftMinutes >= min) && deliveryTimeLeftMinutes > 0
+
+                            console.log({ deliveryTimeLeftMinutes, min, max })
+
+                            return (deliveryTimeLeftMinutes <= max && deliveryTimeLeftMinutes >= min)
                         })
 
                         return (
                             <KanbanCol
                                 key={index}
                                 severity={index + 1}
-                                title={`Falta ${max} minutos`}
+                                title={max === 0 ? "Da entregar" : `Menos o igual a ${max}'`}
                                 description={`Previsão de entrega em ${max} minutos`}
                                 itemsNumber={ordersFiltered.length}
                             >
@@ -222,7 +220,7 @@ export default function OrdersDeliveryTimeLeft() {
                 >
                     {ordersDeliveryTimeExpired.map((o, index) => {
                         return (
-                            <KanbanOrderCard key={o.NumeroPedido} order={o} orderTimeSeverity={5} />
+                            <KanbanOrderCard key={o.NumeroPedido} order={o} orderTimeSeverity={5} showDeliveryTimeExpectedLabel={false} />
                         )
                     })}
                 </KanbanCol>
@@ -270,8 +268,6 @@ function Header() {
 
 
     const [searchParams, setSearchParams] = useSearchParams()
-
-    console.log(searchParams)
 
     return (
         <div className="grid grid-cols-3 w-full">
