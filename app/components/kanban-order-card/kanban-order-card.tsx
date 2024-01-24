@@ -58,7 +58,7 @@ export default function KanbanOrderCard({
 
                     {/** Header */}
 
-                    <div className="flex flex-col gap-3">
+                    <div className="flex flex-col gap-3" onClick={() => setTabShown("")}>
                         <div className="grid grid-cols-2 w-full gap-4 ">
                             <div className="flex flex-col text-xs font-semibold">
                                 <div className="flex gap-1 items-center">
