@@ -48,12 +48,20 @@ class MogoEntity {
       return {
         ...o,
         isDelivery: o.Bairro !== "" ? true : false,
+        isTaglio:
+          o.Itens.filter((i) => i.Descricao.includes("Taglio")).length > 0
+            ? true
+            : false,
       };
     });
   }
 
   async getOrdersOpenedWithDiffTime(): Promise<MogoOrderWithDiffTime[]> {
-    const [err, ordersRes] = await tryit(this.getOrdersOpened());
+    const [err, ordersResponse] = await tryit(this.getOrdersOpened());
+
+    const ordersRes = ordersResponse?.filter(
+      (o: MogoBaseOrder) => o.isTaglio === false
+    );
 
     if (err) {
       throw err;
@@ -121,21 +129,21 @@ class MogoEntity {
         "m"
       );
 
-      console.log({
-        now: now.format("DD/MM/YYYY HH:mm:ss"),
-        deliveryDateTimeExpected: deliveryDateTimeExpected.format(
-          "DD/MM/YYYY HH:mm:ss"
-        ),
-        orderDateTime: orderDateTime.format("DD/MM/YYYY HH:mm:ss"),
-        diffOrderDateTimeToNow: {
-          minutes: diffMinutesOrderDateTimeToNow,
-          timeString: convertMinutesToHHMM(diffMinutesOrderDateTimeToNow),
-        },
-        diffDeliveryDateTimeToNow: {
-          minutes: diffDeliveryDateTimeToNowMinutes,
-          timeString: convertMinutesToHHMM(diffDeliveryDateTimeToNowMinutes),
-        },
-      });
+      // console.log({
+      //   now: now.format("DD/MM/YYYY HH:mm:ss"),
+      //   deliveryDateTimeExpected: deliveryDateTimeExpected.format(
+      //     "DD/MM/YYYY HH:mm:ss"
+      //   ),
+      //   orderDateTime: orderDateTime.format("DD/MM/YYYY HH:mm:ss"),
+      //   diffOrderDateTimeToNow: {
+      //     minutes: diffMinutesOrderDateTimeToNow,
+      //     timeString: convertMinutesToHHMM(diffMinutesOrderDateTimeToNow),
+      //   },
+      //   diffDeliveryDateTimeToNow: {
+      //     minutes: diffDeliveryDateTimeToNowMinutes,
+      //     timeString: convertMinutesToHHMM(diffDeliveryDateTimeToNowMinutes),
+      //   },
+      // });
 
       return {
         ...o,
@@ -196,11 +204,11 @@ class MogoEntity {
     // Combine date and time strings
     const dateTimeString = `${parsedDate} ${mogoTime}`;
 
-    console.log({
-      name: "_createDayjsObject",
-      localDateTime: dayjs(dateTimeString).format("DD/MM/YYYY HH:mm:ss"),
-      dateTimeString,
-    });
+    // console.log({
+    //   name: "_createDayjsObject",
+    //   localDateTime: dayjs(dateTimeString).format("DD/MM/YYYY HH:mm:ss"),
+    //   dateTimeString,
+    // });
 
     return dayjs(dateTimeString);
   }

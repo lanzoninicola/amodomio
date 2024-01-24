@@ -1,5 +1,5 @@
 
-import { Truck, PersonStanding } from "lucide-react"
+import { Truck, PersonStanding, ChevronRight, ChevronRightIcon, ClockIcon } from "lucide-react"
 import { useState } from "react"
 import { MogoOrderWithDiffTime } from "~/domain/mogo/types"
 import { cn } from "~/lib/utils"
@@ -17,7 +17,10 @@ export default function KanbanOrderCard({
     orderTimeSeverity
 }: OrderCardProps) {
     const number = order.NumeroPedido
-    const time = order.HoraPedido
+    const orderTime = order.HoraPedido || "Não definido"
+
+    const [orderHH, orderMin] = orderTime.split(":")
+
     const customerName = order.Cliente
     const deliveryTime = order.deliveryTimeExpected.timeString
     const delayStringOrderTime = order.diffOrderDateTimeToNow.timeString
@@ -37,7 +40,7 @@ export default function KanbanOrderCard({
     }
 
 
-    const [tabShown, setTabShown] = useState("products")
+    const [tabShown, setTabShown] = useState("")
 
     return (
 
@@ -55,21 +58,30 @@ export default function KanbanOrderCard({
 
                     {/** Header */}
 
-                    <div className="grid grid-cols-2 w-full gap-4">
-                        <div className="flex justify-between items-center">
-                            <div className="flex gap-1 items-center">
-
-                                <span className="text-sm font-semibold">{number || "Não definido"}</span>
+                    <div className="flex flex-col gap-3">
+                        <div className="grid grid-cols-2 w-full gap-4 ">
+                            <div className="flex flex-col text-xs font-semibold">
+                                <div className="flex gap-1 items-center">
+                                    <ChevronRightIcon size={14} />
+                                    <span>{number || "Não definido"}</span>
+                                </div>
+                                <div className="flex gap-1 items-center">
+                                    <ClockIcon size={14} />
+                                    <span>{`${orderHH}:${orderMin}`}</span>
+                                </div>
                             </div>
-                            <span className="text-sm font-semibold">{time || "Não definido"}</span>
+
+                            <div className="flex justify-end items-center ">
+                                <div className="flex gap-2 items-center bg-brand-blue rounded-lg py-1 px-2 text-white w-max">
+                                    {/* <span className="text-sm font-semibold">{isDelivery === true ? "Entrega:" : "Retirada:"}</span> */}
+                                    {isDelivery === true ? <Truck size={15} /> : <PersonStanding size={14} />}
+                                    <span className="text-sm font-semibold">{deliveryTime}</span>
+                                </div>
+                            </div>
                         </div>
-
-                        <div className="flex justify-end items-center ">
-                            <div className="flex gap-2 items-center bg-brand-blue rounded-lg py-1 px-3 text-white w-max">
-                                {/* <span className="text-sm font-semibold">{isDelivery === true ? "Entrega:" : "Retirada:"}</span> */}
-                                {isDelivery === true ? <Truck /> : <PersonStanding />}
-                                <span className="text-sm font-semibold">{deliveryTime}</span>
-                            </div>
+                        <div className="flex justify-between text-xs">
+                            <span>Entrega programada em</span>
+                            <span className="font-semibold">{delayStringDeliveryTime}</span>
                         </div>
                     </div>
 
@@ -123,15 +135,11 @@ export default function KanbanOrderCard({
                     {
                         tabShown === "delays" && (
                             <div>
-                                <h2 className="text-xs mb-2 font-semibold">Atrasos respeito a:</h2>
+                                <h2 className="text-xs mb-2 font-semibold">Desde a criação pedido:</h2>
 
                                 <div className="flex justify-between items-center">
-                                    <span className="text-xs ">Hora pedido: </span>
+                                    <span className="text-xs ">Tempo decorrido: </span>
                                     <span className="text-xs ">{delayStringOrderTime || "Não definido"}</span>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-xs ">Hora entrega: </span>
-                                    <span className="text-xs ">{delayStringDeliveryTime || "Não definido"}</span>
                                 </div>
                             </div>
                         )
@@ -155,7 +163,7 @@ export default function KanbanOrderCard({
                         <span className={cn(
                             "text-xs font-semibold",
                             tabShown === "delays" && "underline"
-                        )} onClick={() => setTabShown("delays")}>ATRASOS</span>
+                        )} onClick={() => setTabShown("delays")}>TEMPO</span>
 
                     </div>
 

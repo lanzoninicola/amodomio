@@ -18,7 +18,7 @@ import { settingEntity } from "~/domain/setting/setting.entity.server";
 import { Setting } from "~/domain/setting/setting.model.server";
 import useFormResponse from "~/hooks/useFormResponse";
 import { nowUTC } from "~/lib/dayjs";
-import createDecreasingArray from "~/utils/create-decrease-array";
+import { createDecreasingArray } from "~/utils/create-decrease-array";
 import { ok, serverError } from "~/utils/http-response.server";
 import tryit from "~/utils/try-it";
 
@@ -171,15 +171,21 @@ export default function OrdersDeliveryTimeLeft() {
             <Header />
             <div className="grid grid-cols-5 gap-x-0 h-full">
                 {
-                    arrayMinutes().map((min, index) => {
+                    arrayMinutes().map((step, index) => {
 
-                        const ordersFiltered = orders.filter(order => order?.diffDeliveryDateTimeToNow.minutes <= min && order?.diffDeliveryDateTimeToNow.minutes > 0)
+                        const { min, max } = step
+
+                        const ordersFiltered = orders.filter(order => {
+                            const deliveryTimeLeftMinutes = order?.diffDeliveryDateTimeToNow.minutes
+                            return (deliveryTimeLeftMinutes <= max && deliveryTimeLeftMinutes >= min) && deliveryTimeLeftMinutes > 0
+                        })
 
                         return (
                             <KanbanCol
+                                key={index}
                                 severity={index + 1}
-                                title={`Falta ${min} minutos`}
-                                description={`Previsão de entrega em ${min} minutos`}
+                                title={`Falta ${max} minutos`}
+                                description={`Previsão de entrega em ${max} minutos`}
                                 itemsNumber={ordersFiltered.length}
                             >
                                 {ordersFiltered.map((o, index) => {
@@ -192,6 +198,7 @@ export default function OrdersDeliveryTimeLeft() {
                     })
                 }
                 <KanbanCol
+                    key={999999}
                     severity={5}
                     title={`Limite Superado`}
                     description={`Pedidos que foi superado limite de entrega`}

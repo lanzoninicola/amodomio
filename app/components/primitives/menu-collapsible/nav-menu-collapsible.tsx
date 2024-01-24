@@ -1,14 +1,12 @@
 import { Link } from "@remix-run/react"
 import { ChevronRight, ChevronsUpDown } from "lucide-react"
 import { useState } from "react"
+import { NavItem } from "~/components/app-menu/app-menu"
 import { Button } from "~/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "~/components/ui/collapsible"
 
 
-export interface NavItemCollapsible {
-    label: string
-    to: string
-}
+export interface NavItemCollapsible extends NavItem { }
 
 interface NavMenuCollapsibleProps {
     navItems: NavItemCollapsible[]

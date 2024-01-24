@@ -1,11 +1,11 @@
-export default function createDecreasingArray(
-  startNumber: number,
-  step: number
-) {
+export function createDecreasingArray(startNumber: number, step: number) {
   const resultArray = [];
 
   while (startNumber >= 0) {
-    resultArray.push(startNumber);
+    resultArray.push({
+      max: startNumber,
+      min: startNumber - (step - 1),
+    });
     startNumber -= step;
   }
 

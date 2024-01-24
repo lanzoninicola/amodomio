@@ -40,6 +40,8 @@ export const loader: LoaderFunction = async ({ request }: LoaderArgs) => {
 }
 
 
+
+
 export default function AdminOutlet() {
     const loggedUser = useLoaderData<typeof loader>();
 
@@ -70,4 +72,3 @@ export default function AdminOutlet() {
         </div>
     )
 }
-
