@@ -1,7 +1,6 @@
 import dayjs from "dayjs";
-import timezone from "dayjs/plugin/timezone";
 import { MogoHttpClientInterface, MogoOrderHttpResponse } from "./types";
-import { now, setup } from "~/lib/dayjs";
+import { now } from "~/lib/dayjs";
 
 export default class MogoHttpClientMock implements MogoHttpClientInterface {
   // format DD/MM/YYYY
@@ -65,8 +64,8 @@ export default class MogoHttpClientMock implements MogoHttpClientInterface {
         SubTotal: 189.9,
         TaxaEntrega: 0,
         DataPedido: `${this.today} 00:00:00`,
-        // HoraPedido: "18:36:54",
-        HoraPedido: `${this.calculateOrderTime()}`,
+        HoraPedido: "12:36:54",
+        // HoraPedido: `${this.calculateOrderTime()}`,
         HoraEntrega: null,
         HoraAcerto: "",
         FormaPagamento: "Dinheiro",
@@ -130,7 +129,7 @@ export default class MogoHttpClientMock implements MogoHttpClientInterface {
         SubTotal: 89.9,
         TaxaEntrega: 8,
         DataPedido: `${this.today} 00:00:00`,
-        HoraPedido: "18:50:19",
+        HoraPedido: "12:20:19",
         HoraEntrega: null,
         HoraAcerto: "",
         FormaPagamento: "Dinheiro",

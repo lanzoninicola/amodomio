@@ -40,6 +40,8 @@ export const loader: LoaderFunction = async ({ request }: LoaderArgs) => {
 }
 
 
+
+
 export default function AdminOutlet() {
     const loggedUser = useLoaderData<typeof loader>();
 
@@ -55,7 +57,8 @@ export default function AdminOutlet() {
                         { label: "Categorias", to: "/admin/categorias" },
                         { label: "Lista de supermercado", to: "/admin/grocery-list" },
                         { label: "Pedidos", to: "/admin/daily-orders" },
-                        { label: "Linha do tempo", to: "/admin/orders-delays-timeline-segmentation" },
+                        { label: "Linha do tempo Pedidos", to: "/admin/orders-delays-timeline-segmentation" },
+                        { label: "Linha do tempo Entrega", to: "/admin/orders-delivery-time-left" },
                         { label: "Massa", to: "/admin/dough" },
                         { label: "Opções", to: "/admin/options" },
                         { label: "Sair", to: "/logout" },
@@ -69,4 +72,3 @@ export default function AdminOutlet() {
         </div>
     )
 }
-

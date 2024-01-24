@@ -53,6 +53,7 @@ export interface MogoOrderHttpResponse {
 
 export interface MogoBaseOrder extends MogoOrderHttpResponse {
   isDelivery: boolean;
+  isTaglio: boolean;
 }
 
 export interface MogoOrderWithDiffTime extends MogoBaseOrder {

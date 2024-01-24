@@ -13,7 +13,7 @@ import "dayjs/locale/pt-br";
 
 //github.com/iamkun/dayjs/issues/1379#issuecomment-1007052536
 
-https: dayjs.extend(utc);
+dayjs.extend(utc);
 dayjs.extend(timezone);
 dayjs.extend(localizedFormat);
 dayjs.extend(advancedFormat);
@@ -23,8 +23,6 @@ dayjs.extend(isYesterday);
 dayjs.extend(isToday);
 dayjs.extend(isTomorrow);
 dayjs.extend(relativeTime);
-
-dayjs.locale("pt-br");
 
 /**
  *
