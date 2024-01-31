@@ -1,5 +1,8 @@
-import type { LoaderArgs } from "@remix-run/node";
-import { Link, Outlet, useLoaderData, useLocation } from "@remix-run/react";
+import { redirect, type ActionArgs, type LoaderArgs } from "@remix-run/node";
+import { Form, Link, Outlet, useLoaderData, useLocation } from "@remix-run/react";
+import { useState } from "react";
+import InputItem from "~/components/primitives/form/input-item/input-item";
+import SaveItemButton from "~/components/primitives/table-list/action-buttons/save-item-button/save-item-button";
 import { categoryEntity } from "~/domain/category/category.entity.server";
 import type { Category } from "~/domain/category/category.model.server";
 import { ProductEntity, productEntity } from "~/domain/product/product.entity";
@@ -7,6 +10,8 @@ import type { ProductComponent, ProductType } from "~/domain/product/product.mod
 import { type Product } from "~/domain/product/product.model.server";
 import type { HttpResponse } from "~/utils/http-response.server";
 import { badRequest, ok } from "~/utils/http-response.server";
+import { jsonParse, jsonStringify } from "~/utils/json-helper";
+import tryit from "~/utils/try-it";
 import { lastUrlSegment, urlAt } from "~/utils/url";
 
 export interface ProductOutletContext {
@@ -51,27 +56,52 @@ export async function loader({ request }: LoaderArgs) {
 
 }
 
+export async function action({ request }: ActionArgs) {
+    let formData = await request.formData();
+    const { _action, ...values } = Object.fromEntries(formData);
+
+    if (_action === "product-name-update") {
+        const product = await productEntity.findById(values?.productId as string)
+
+        const [err, data] = await tryit(productEntity.update(values.productId as string, {
+            ...product,
+            name: values.name as string
+        }))
+
+        if (err) {
+            return badRequest(err)
+        }
+
+        return redirect(`/admin/products/${values.productId}/info`)
+    }
+
+    return null
+}
+
 
 export default function SingleProduct() {
     const location = useLocation()
     const activeTab = lastUrlSegment(location.pathname)
+
     const loaderData: HttpResponse | null = useLoaderData<typeof loader>()
+
     const product = loaderData?.payload?.product as Product
     const components = loaderData?.payload?.components as ProductComponent[]
     const categories = loaderData?.payload?.categories as Category[]
     const productTypes = loaderData?.payload?.productTypes as ProductType[]
     const compositions = loaderData?.payload?.compositions as Product[]
 
-    const productId = product.id
+    const productId = product?.id
 
-    const activeTabStyle = "bg-primary text-white rounded-md py-1"
+    const activeTabStyle = "bg-white text-black font-semibold rounded-md py-1"
 
     const productType = product?.info?.type
 
     return (
         <>
             <div className="mb-8">
-                <h3 className="text-xl font-semibold text-muted-foreground mb-3">{`Produto: ${product?.name}` || "Produto singolo"}</h3>
+                {/* <h3 className="text-xl font-semibold text-muted-foreground mb-3">{`Produto: ${product?.name}` || "Produto singolo"}</h3> */}
+                <ProductName />
             </div>
 
 
@@ -97,14 +127,14 @@ export default function SingleProduct() {
                         <span>Preços</span>
                     </div>
                 </Link >
-                {
-                    (productType === "simple") &&
+                {/* {
+                    (productType === "simple" || productType === "topping") &&
                     <Link to={`/admin/products/${productId}/menu`} className="w-full text-center">
                         <div className={`${activeTab === "menu" && activeTabStyle} ${activeTab}`}>
                             <span>Cardápio</span>
                         </div>
                     </Link >
-                }
+                } */}
                 <Link to={`/admin/products/${productId}/dashboard`} className="w-full text-center">
                     <div className={`${activeTab === "dashboard" && activeTabStyle}`}>
                         <span>Relatorio</span>
@@ -114,5 +144,36 @@ export default function SingleProduct() {
 
             <Outlet context={{ product, components, categories, productTypes, compositions }} />
         </>
+    )
+}
+
+
+function ProductName() {
+    const loaderData: HttpResponse | null = useLoaderData<typeof loader>()
+    const product = loaderData?.payload?.product as Product
+
+    const [name, setName] = useState(product?.name || "Produto singolo")
+    const [isNameChanged, setIsNameChanged] = useState(false)
+
+    return (
+        <Form method="post">
+            <input type="hidden" name="productId" value={product?.id} />
+            <div className="flex gap-2 mb-3 items-center">
+                <div className="flex gap-2 items-center">
+                    <span className="text-xl font-semibold text-muted-foreground">Produto:</span>
+                    <InputItem className="text-xl font-semibold text-muted-foreground w-max" ghost={true}
+                        name="name"
+                        value={name}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                            setName(e.target.value)
+                            setIsNameChanged(true)
+                        }}
+                    />
+                </div>
+                {isNameChanged &&
+                    product?.name !== name &&
+                    <SaveItemButton actionName="product-name-update" />}
+            </div>
+        </Form>
     )
 }

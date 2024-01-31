@@ -1,4 +1,5 @@
 import { Link, useSearchParams } from "@remix-run/react"
+import { cn } from "~/lib/utils"
 
 export interface TabItem {
     id: string
@@ -13,21 +14,27 @@ export interface TabsProps {
     bgStyle?: string
     activeTabStyle?: string
     inactiveTabStyle?: string
-    clazzName?: HTMLDivElement["className"]
+    className?: string
 }
 
 
-export default function Tabs({ tabs, bgStyle, activeTabStyle, inactiveTabStyle, clazzName }: TabsProps) {
+export default function Tabs({ tabs, bgStyle, activeTabStyle, inactiveTabStyle, className }: TabsProps) {
     const [searchParams, setSearchParams] = useSearchParams()
     let currentActiveTab = searchParams.get("tab")
 
     let baseActiveTabStyle = "rounded-md py-1"
-    activeTabStyle = activeTabStyle ? `${baseActiveTabStyle} ${activeTabStyle}` : `${baseActiveTabStyle} bg-primary text-white`
+    activeTabStyle = activeTabStyle ? `${baseActiveTabStyle} ${activeTabStyle}` : `${baseActiveTabStyle} bg-white text-black font-semibold`
     const backgroundStyle = bgStyle ? bgStyle : "bg-muted"
 
 
     return (
-        <div className={`relative flex flex-wrap justify-center min-w-fit items-center p-1 rounded-md text-muted-foreground mb-6 ${backgroundStyle} ${clazzName}`}>
+        <div className={
+            cn(
+                `relative flex flex-wrap justify-center min-w-fit items-center p-1 rounded-md text-muted-foreground mb-6 ${backgroundStyle}`,
+                backgroundStyle,
+                className
+            )
+        }>
 
             {tabs.map((tab, idx) => {
 
@@ -38,7 +45,13 @@ export default function Tabs({ tabs, bgStyle, activeTabStyle, inactiveTabStyle, 
                 }
 
                 const children = (
-                    <div className={`${currentActiveTab === tab.id ? activeTabStyle : inactiveTabStyle} m-1`}>
+                    <div className={
+                        cn(
+                            `m-1`,
+                            currentActiveTab === tab.id ? activeTabStyle : inactiveTabStyle,
+                            currentActiveTab === tab.id ? "cursor-default" : "cursor-pointer"
+                        )
+                    }>
                         <span>{tab.name}</span>
                     </div>
                 )

@@ -19,13 +19,13 @@ export const meta: V2_MetaFunction = () => [
 
 
 export const links: LinksFunction = () => [
-    { rel: "preconnect", href: "https://fonts.googleapis.com" },
+    { rel: "preconnect", href: "https://api.fonts.coollabs.io" },
     {
         rel: "preconnect",
         href: "https://fonts.gstatic.com",
     },
     {
-        href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap",
+        href: "https://api.fonts.coollabs.io/css2?family=Inter:wght@400;600;800&display=swap",
         rel: "stylesheet",
     },
 ];
