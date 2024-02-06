@@ -41,6 +41,9 @@ export const nowUTC = (format?: string) => {
   return dayjs.utc();
 };
 
+/**
+ * @returns string date formatted DD/MM/YYYY HH:mm:ss
+ */
 export const nowWithTime = () => {
   return dayjs().format("DD/MM/YYYY HH:mm:ss");
 };

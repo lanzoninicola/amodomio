@@ -1,3 +1,3 @@
-import { mongoClient } from "./client.server";
+import { mongoClient } from "./mongo-client.server";
 
 export { mongoClient };

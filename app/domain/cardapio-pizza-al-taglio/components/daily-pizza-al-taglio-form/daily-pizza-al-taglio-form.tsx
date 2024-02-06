@@ -1,5 +1,5 @@
 import { Form } from "@remix-run/react"
-import { MenuPizzaAlTaglio } from "../../menu-pizza-al-taglio.model.server"
+import { MenuPizzaAlTaglio } from "../../cardapio-pizza-al-taglio.model.server"
 import InputItem from "~/components/primitives/form/input-item/input-item"
 
 interface MenuPizzaAlTaglioFormProps {
