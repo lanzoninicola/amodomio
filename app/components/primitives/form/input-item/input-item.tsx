@@ -1,8 +1,21 @@
 import { Input } from "~/components/ui/input";
+import { cn } from "~/lib/utils";
 
-export default function InputItem({ ghost = false, ...props }) {
+interface InputItemProps {
+    ghost?: boolean,
+    className?: string
+    [x: string]: any,
+}
 
+
+export default function InputItem({ ghost, className, ...props }: InputItemProps) {
     return (
-        <Input className={`text-lg p-2 placeholder:text-gray-400 ${ghost === true ? `border-none` : ``}`} {...props} autoComplete="nope" />
+        <Input className={
+            cn(
+                `text-lg p-2 placeholder:text-gray-400`,
+                ghost === true && "border-none focus-visible:ring-transparent",
+                className
+            )
+        } {...props} autoComplete="nope" />
     )
 }

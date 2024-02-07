@@ -17,6 +17,7 @@ import { jsonParse, jsonStringify } from "~/utils/json-helper";
 import { Category } from "~/domain/category/category.model.server";
 import { toast } from "~/components/ui/use-toast";
 import { categoryEntity } from "~/domain/category/category.entity.server";
+import { TrashIcon } from "lucide-react";
 
 
 export async function action({ request }: ActionArgs) {
@@ -66,6 +67,8 @@ export default function SingleProductInformation() {
     const status = actionData?.status
     const message = actionData?.message
 
+    console.log({ category: jsonParse(productInfo?.category) })
+
     if (status && status >= 400) {
         toast({
             title: "Erro",
@@ -79,8 +82,10 @@ export default function SingleProductInformation() {
                 <Form method="post" className="w-full">
                     <div className="mb-4 flex justify-end">
                         <div className="flex gap-2">
-                            <SubmitButton actionName="product-delete" size="lg" idleText="Excluir" loadingText="Excluindo" variant={"destructive"} />
-                            <SubmitButton actionName="product-info-update" size="lg" />
+                            <SubmitButton actionName="product-delete" idleText="Excluir" loadingText="Excluindo" variant={"destructive"}
+                                icon={<TrashIcon size={16} />}
+                            />
+                            <SubmitButton actionName="product-info-update" />
                         </div>
                     </div>
                     <div className="border-2 border-muted rounded-lg px-4 py-8">

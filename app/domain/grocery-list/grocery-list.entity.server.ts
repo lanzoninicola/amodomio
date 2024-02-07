@@ -116,6 +116,8 @@ class GroceryListEntity extends BaseEntity<GroceryList> {
       (item) => item.id !== itemId
     );
 
+    console.log({ nextItemsListFiltered, itemId });
+
     await this.update(listId, {
       items: nextItemsListFiltered,
     });

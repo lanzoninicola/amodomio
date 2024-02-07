@@ -21,7 +21,7 @@ export async function loader({ request }: LoaderArgs) {
         {
             field: new FieldPath("info", "type"),
             op: "in",
-            value: ["ingredient", "simple"]
+            value: ["simple", "processed"]
         }
     ])
 
@@ -70,6 +70,9 @@ export function ComponentSelector({ parentProductId }: { parentProductId: string
         </Link>
     )
 
+    const [showList, setShowList] = useState(false)
+
+    const showListLabel = showList === true ? "Esconder" : "Visualizar"
 
     return (
 
@@ -100,6 +103,8 @@ export function ComponentSelector({ parentProductId }: { parentProductId: string
                                                 type: "include",
                                                 value: e.target.value
                                             })
+
+                                            setShowList(true)
                                         }} />
                                     </div>
                                     {newComponentButton}
@@ -112,18 +117,25 @@ export function ComponentSelector({ parentProductId }: { parentProductId: string
                                         })
                                     }} />
                             </div>
-                            <ul className="flex flex-wrap">
+                            <div className='flex flex-col gap-2'>
+                                <span className='text-xs underline cursor-pointer' onClick={() => setShowList(!showList)}>{showListLabel}</span>
+                                {
+                                    showList && (
+                                        <ul className="flex flex-wrap">
 
-                                {componentsFiltered?.map((c, idx) => {
-                                    const ingredientNameStartWith = searchParam.get('ingredientNameStartWith')
+                                            {componentsFiltered?.map((c, idx) => {
+                                                const ingredientNameStartWith = searchParam.get('ingredientNameStartWith')
 
-                                    if (ingredientNameStartWith && c.name.startsWith(ingredientNameStartWith)) {
-                                        return <ComponentName key={idx} component={c} parentProductId={parentProductId} />
-                                    }
+                                                if (ingredientNameStartWith && c.name.startsWith(ingredientNameStartWith)) {
+                                                    return <ComponentName key={idx} component={c} parentProductId={parentProductId} />
+                                                }
 
-                                    return <ComponentName key={idx} component={c} parentProductId={parentProductId} />
-                                })}
-                            </ul>
+                                                return <ComponentName key={idx} component={c} parentProductId={parentProductId} />
+                                            })}
+                                        </ul>
+                                    )
+                                }
+                            </div>
                         </>
                     )}
 

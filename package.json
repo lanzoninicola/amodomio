@@ -4,12 +4,13 @@
   "scripts": {
     "build": "remix build",
     "dev": "npm-run-all build --parallel \"dev:*\"",
-    "dev:node": "cross-env NODE_ENV=development TZ=UTC nodemon --require dotenv/config ./server.js --watch ./server.js",
+    "dev:node": "cross-env NODE_ENV=development nodemon --require dotenv/config ./server.js --watch ./server.js",
     "dev:remix": "remix watch",
     "start": "cross-env NODE_ENV=production node ./server.js",
     "typecheck": "tsc"
   },
   "dependencies": {
+    "@radix-ui/react-accordion": "^1.1.2",
     "@radix-ui/react-alert-dialog": "^1.0.4",
     "@radix-ui/react-checkbox": "^1.0.4",
     "@radix-ui/react-collapsible": "^1.0.3",
@@ -43,6 +44,7 @@
     "http-status": "^1.6.2",
     "isbot": "^3.6.8",
     "lucide-react": "^0.221.0",
+    "mongodb": "^6.3.0",
     "morgan": "^1.10.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
@@ -60,6 +62,7 @@
     "@types/compression": "^1.7.2",
     "@types/express": "^4.17.17",
     "@types/morgan": "^1.9.4",
+    "@types/node": "^20.11.16",
     "@types/react": "^18.0.35",
     "@types/react-dom": "^18.0.11",
     "dotenv": "^16.0.3",

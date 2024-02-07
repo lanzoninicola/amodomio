@@ -19,13 +19,13 @@ export const meta: V2_MetaFunction = () => [
 
 
 export const links: LinksFunction = () => [
-    { rel: "preconnect", href: "https://fonts.googleapis.com" },
+    { rel: "preconnect", href: "https://api.fonts.coollabs.io" },
     {
         rel: "preconnect",
         href: "https://fonts.gstatic.com",
     },
     {
-        href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap",
+        href: "https://api.fonts.coollabs.io/css2?family=Inter:wght@400;600;800&display=swap",
         rel: "stylesheet",
     },
 ];
@@ -38,6 +38,8 @@ export const loader: LoaderFunction = async ({ request }: LoaderArgs) => {
     }
     return user
 }
+
+
 
 
 export default function AdminOutlet() {
@@ -53,9 +55,10 @@ export default function AdminOutlet() {
                         { label: "Cardápio", to: "/cardapio" },
                         { label: "Produtos", to: "/admin/products" },
                         { label: "Categorias", to: "/admin/categorias" },
-                        { label: "Lista de supermercado", to: "/admin/grocery-list" },
+                        { label: "Lista de supermercado", to: "/admin/grocery-shopping-list" },
                         { label: "Pedidos", to: "/admin/daily-orders" },
-                        { label: "Linha do tempo", to: "/admin/orders-delays-timeline-segmentation" },
+                        { label: "Linha do tempo Pedidos", to: "/admin/orders-delays-timeline-segmentation" },
+                        { label: "Linha do tempo Entrega", to: "/admin/orders-delivery-time-left" },
                         { label: "Massa", to: "/admin/dough" },
                         { label: "Opções", to: "/admin/options" },
                         { label: "Sair", to: "/logout" },
@@ -69,4 +72,3 @@ export default function AdminOutlet() {
         </div>
     )
 }
-

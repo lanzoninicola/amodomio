@@ -101,6 +101,13 @@ export async function action({ request }: ActionArgs) {
 
     }
 
+    if (_action === "cucu") {
+
+        console.log(values)
+
+        return null
+    }
+
     return null
 }
 
@@ -132,7 +139,6 @@ function ProductComponentList() {
     }
 
     return (
-
         <Table>
             <TableTitles
                 clazzName="grid-cols-5"

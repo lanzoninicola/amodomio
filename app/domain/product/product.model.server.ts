@@ -1,4 +1,7 @@
-import { createFirestoreModel } from "~/lib/firestore-model/src";
+import {
+  TFirestoreModel,
+  createFirestoreModel,
+} from "~/lib/firestore-model/src";
 import type { LatestSellPrice } from "../sell-price/sell-price.model.server";
 import { type SellPrice } from "../sell-price/sell-price.model.server";
 import type { LatestCost } from "../purchase-price/purchase-price.model.server";
