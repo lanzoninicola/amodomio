@@ -2,8 +2,6 @@ import { Link, Outlet } from "@remix-run/react";
 import Container from "~/components/layout/container/container";
 
 export default function CardapioPizzaAlTaglio() {
-
-
     return (
         <Container className="mt-12">
             <div className="w-full p-6 bg-muted mb-2 rounded-lg" >
