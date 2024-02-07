@@ -1,10 +1,8 @@
 import { Link, Outlet } from "@remix-run/react";
 import Container from "~/components/layout/container/container";
 
-
-
-
 export default function CardapioPizzaAlTaglio() {
+
 
     return (
         <Container className="mt-12">
@@ -14,7 +12,7 @@ export default function CardapioPizzaAlTaglio() {
                     <div className="flex flex-col gap-4">
                         <Link to="new" className="mr-4 py-2 px-4 rounded-md bg-black">
                             <span className=" text-white font-semibold">
-                                Novo dia
+                                Novo cardapio
                             </span>
                         </Link>
                         <Link to="/admin/cardapio-pizza-al-taglio" className="mr-4">

@@ -3,10 +3,9 @@ import InputItem from "~/components/primitives/form/input-item/input-item"
 import { Label } from "~/components/ui/label"
 import { CardapioPizzaAlTaglio } from "../../cardapio-pizza-al-taglio.model.server"
 import { useState } from "react"
-import { Separator } from "~/components/ui/separator"
 import { MinusCircleIcon, PlusCircleIcon } from "lucide-react"
 import SubmitButton from "~/components/primitives/submit-button/submit-button"
-import SelectPizzaAlTaglioCategory from "../select-pizza-al-taglio-type/select-pizza-al-taglio-type"
+import { ObjectId } from "mongodb"
 
 interface CardapioPizzaAlTaglioFormProps {
     action: "cardapio-create" | "cardapio-update"
@@ -20,13 +19,8 @@ export default function CardapioPizzaAlTaglioForm({ action, cardapio }: Cardapio
     return (
         <div className="max-w-2xl">
             <Form method="post" >
-                <input type="hidden" name="id" value={cardapio?._id} />
+                <input type="hidden" name="id" value={new ObjectId(cardapio?._id).toString()} />
                 <input type="hidden" name="toppingNumbers" value={toppingsNumber} />
-                <div className="flex gap-4 items-center">
-                    <Label htmlFor="date">Data</Label>
-                    <InputItem type="date" name="date" className="w-max" defaultValue={cardapio?.date} required />
-                </div>
-                <Separator className="mt-4 mb-6" />
                 <div className="flex flex-col gap-4 w-full ">
                     {
                         Array.from({ length: toppingsNumber }, (_, i) => (
@@ -34,7 +28,7 @@ export default function CardapioPizzaAlTaglioForm({ action, cardapio }: Cardapio
                                 <InputItem key={i} type="text" name={`topping_${i + 1}`} defaultValue={cardapio?.slices[i].topping || ""} required
                                     className="md:min-w-[350px]"
                                 />
-                                <SelectPizzaAlTaglioCategory name={`category_${i + 1}`} className="md:min-w-[130px]" />
+                                {/* <SelectPizzaAlTaglioCategory name={`category_${i + 1}`} className="md:min-w-[130px]" /> */}
                             </div>
                         )).map((input, i) => (
                             <div key={i} className="flex gap-4 items-center justify-between">

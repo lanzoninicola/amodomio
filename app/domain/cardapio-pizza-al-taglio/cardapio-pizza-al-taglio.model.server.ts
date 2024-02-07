@@ -7,20 +7,16 @@ export type SliceTaglio = {
   topping: string;
   category: SliceTaglioCategory;
   amount: number;
+  outOfStock: boolean;
 };
 
 interface CardapioPizzaAlTaglio {
   _id?: ObjectId;
-  // dayjs date format DD/MM/YYYY
-  date: string;
   slices: SliceTaglio[];
   // dayjs date format DD/MM/YYYY HH:mm:ss
-  fullDate: string;
+  publishedDate: string | null;
+  published: boolean;
 }
-
-// const CardapioPizzaAlTaglioModel = createFirestoreModel<CardapioPizzaAlTaglio>(
-//   "daily_pizza_al_taglio"
-// );
 
 const CardapioPizzaAlTaglioModel = createMongoCollection<CardapioPizzaAlTaglio>(
   "daily_pizza_al_taglio"

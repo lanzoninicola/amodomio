@@ -1,3 +1,4 @@
+import { ObjectId } from "mongodb";
 import {
   CardapioPizzaAlTaglio,
   CardapioPizzaAlTaglioModel,
@@ -8,15 +9,6 @@ class CardapioPizzaAlTaglioEntity extends MongoBaseEntity<
   typeof CardapioPizzaAlTaglioModel
 > {
   async create(newRecord: CardapioPizzaAlTaglio) {
-    // check if already exist the record in the same date, if so returns error otherwise insert one
-    const record = await this.model.findOne({ date: newRecord.date });
-
-    if (record) {
-      throw new Error(
-        `Já existe um registro para esta data: ${newRecord.date}`
-      );
-    }
-
     return await this.model.insertOne(newRecord);
   }
 
@@ -28,21 +20,24 @@ class CardapioPizzaAlTaglioEntity extends MongoBaseEntity<
    */
   async createOrUpdate(newRecord: CardapioPizzaAlTaglio) {
     // check if already exist the record in the same date, if so returns error otherwise insert one
-    const record = await this.model.findOne({ date: newRecord.date });
+    const record = await this.model.findOne({
+      _id: new ObjectId(newRecord?._id),
+    });
 
     if (!record) {
       return await this.create(newRecord);
     }
 
     return await this.model.updateOne(
-      { date: newRecord.date },
+      { _id: new ObjectId(newRecord?._id) },
       {
         $set: {
-          date: newRecord.date,
           slices: {
             ...record.slices,
             ...newRecord.slices,
           },
+          publishedDate: newRecord.publishedDate,
+          published: newRecord.published,
         },
       }
     );
