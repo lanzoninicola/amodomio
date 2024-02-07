@@ -1,13 +1,19 @@
+import { ObjectId } from "mongodb";
 import createMongoCollection from "~/lib/atlas-mongodb/create-mongo-collection.server";
-import { createFirestoreModel } from "~/lib/firestore-model/src";
 
-export type ToppingTaglio = string;
+export type SliceTaglioCategory = "margherita" | "vegetariana" | "carne";
+
+export type SliceTaglio = {
+  topping: string;
+  category: SliceTaglioCategory;
+  amount: number;
+};
 
 interface CardapioPizzaAlTaglio {
-  id?: string;
+  _id?: ObjectId;
   // dayjs date format DD/MM/YYYY
   date: string;
-  sabores?: ToppingTaglio[] | null;
+  slices: SliceTaglio[];
   // dayjs date format DD/MM/YYYY HH:mm:ss
   fullDate: string;
 }

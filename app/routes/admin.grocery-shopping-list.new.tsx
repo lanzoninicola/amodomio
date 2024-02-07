@@ -1,6 +1,5 @@
 import { redirect, type ActionArgs } from "@remix-run/node";
 import { Form } from "@remix-run/react";
-import Container from "~/components/layout/container/container";
 import SubmitButton from "~/components/primitives/submit-button/submit-button";
 import { Card, CardHeader, CardTitle, CardContent } from "~/components/ui/card";
 import Fieldset from "~/components/ui/fieldset";
@@ -25,7 +24,7 @@ export async function action({ request }: ActionArgs) {
             return serverError(err)
         }
 
-        return redirect(`/admin/grocery-list/${record.id}`)
+        return redirect(`/admin/grocery-shopping-list/${record.id}`)
     }
 
     return null

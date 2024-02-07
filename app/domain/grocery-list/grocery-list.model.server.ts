@@ -11,7 +11,7 @@ interface GroceryList {
   id?: string;
   name: string;
   items?: GroceryListItem[] | null;
-  purchaseDate: string;
+  purchaseDate?: string;
 }
 
 const GroceryListModel = createFirestoreModel<GroceryList>("grocery_list");

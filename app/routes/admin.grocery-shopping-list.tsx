@@ -13,7 +13,7 @@ export default function GroceryList() {
                                 Nova Lista
                             </span>
                         </Link>
-                        <Link to="/admin/grocery-list" className="mr-4">
+                        <Link to="/admin/grocery-shopping-list" className="mr-4">
                             <span className="text-sm underline">Voltar</span>
                         </Link>
                     </div>

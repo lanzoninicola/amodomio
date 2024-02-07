@@ -19,7 +19,7 @@ export async function loader({ request, params }: LoaderArgs) {
     const listId = params?.id
 
     if (!listId) {
-        return redirect("/admin/grocery-list")
+        return redirect("/admin/grocery-shopping-list")
     }
 
     const [err, list] = await tryit(groceryListEntity.findById(listId))

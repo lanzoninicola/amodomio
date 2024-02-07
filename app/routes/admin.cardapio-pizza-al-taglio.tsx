@@ -17,7 +17,7 @@ export default function CardapioPizzaAlTaglio() {
                                 Novo dia
                             </span>
                         </Link>
-                        <Link to="/admin/categorias" className="mr-4">
+                        <Link to="/admin/cardapio-pizza-al-taglio" className="mr-4">
                             <span className="text-sm underline">Voltar</span>
                         </Link>
                     </div>

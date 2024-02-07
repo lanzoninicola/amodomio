@@ -55,7 +55,7 @@ export default function AdminOutlet() {
                         { label: "Cardápio", to: "/cardapio" },
                         { label: "Produtos", to: "/admin/products" },
                         { label: "Categorias", to: "/admin/categorias" },
-                        { label: "Lista de supermercado", to: "/admin/grocery-list" },
+                        { label: "Lista de supermercado", to: "/admin/grocery-shopping-list" },
                         { label: "Pedidos", to: "/admin/daily-orders" },
                         { label: "Linha do tempo Pedidos", to: "/admin/orders-delays-timeline-segmentation" },
                         { label: "Linha do tempo Entrega", to: "/admin/orders-delivery-time-left" },

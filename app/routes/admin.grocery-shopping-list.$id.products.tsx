@@ -17,7 +17,7 @@ import tryit from "~/utils/try-it";
 
 export async function loader({ request, params }: LoaderArgs) {
     if (params?.id) {
-        redirect("/admin/grocery-list")
+        redirect("/admin/grocery-shopping-list")
     }
 
     const listId = params?.id
@@ -73,7 +73,7 @@ export async function action({ request }: ActionArgs) {
                 return serverError(err)
             }
 
-            return redirect(`/admin/grocery-list/${listId}`)
+            return redirect(`/admin/grocery-shopping-list/${listId}`)
 
         }
 
@@ -93,7 +93,7 @@ export async function action({ request }: ActionArgs) {
             return serverError(err)
         }
 
-        return redirect(`/admin/grocery-list/${listId}`)
+        return redirect(`/admin/grocery-shopping-list/${listId}`)
     }
 
     return null
