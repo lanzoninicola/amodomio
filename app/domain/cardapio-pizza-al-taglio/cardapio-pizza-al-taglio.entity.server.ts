@@ -1,4 +1,4 @@
-import { ObjectId } from "mongodb";
+import { DeleteOptions, Filter, ObjectId } from "mongodb";
 import {
   CardapioPizzaAlTaglio,
   CardapioPizzaAlTaglioModel,

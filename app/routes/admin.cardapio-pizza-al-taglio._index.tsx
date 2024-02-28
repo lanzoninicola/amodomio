@@ -50,19 +50,21 @@ export async function action({ request }: ActionArgs) {
 
         const [err, returnedData] = await queryIt(cardapioPizzaAlTaglioEntity.model.deleteOne({ _id: new ObjectId(cardapioId) }))
 
-        if (err) {
-            return serverError(err)
-        }
+        // if (err) {
+        //     return serverError(err)
+        // }
 
         return ok("Registro apagado.")
     }
+
+    return null
 
 }
 
 
 export default function CardapioPizzaAlTaglioIndex() {
     const loaderData = useLoaderData<typeof loader>()
-    const cardapios = loaderData.payload.cardapios as CardapioPizzaAlTaglio[] || []
+    const cardapios = loaderData?.payload?.cardapios as CardapioPizzaAlTaglio[] || []
 
     if (loaderData?.status >= 400) {
         toast({
@@ -81,7 +83,7 @@ export default function CardapioPizzaAlTaglioIndex() {
 
                 <div className="flex gap-4 ">
                     <PageNumber config={{
-                        totalPages: loaderData.payload.totalPages,
+                        totalPages: loaderData?.payload.totalPages || 0,
                         defaultValue: 1,
                     }} />
                     <span className="text-slate-200">|</span>
