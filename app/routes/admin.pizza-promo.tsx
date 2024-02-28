@@ -230,6 +230,7 @@ export default function PromoPizzaAdmin() {
     const records = loaderData.payload?.records || []
 
     const [showForm, setShowForm] = useState(false)
+    const [showFormUpdate, setShowFormUpdate] = useState(false)
 
     const actionData = useActionData<typeof action>()
     const status = actionData?.status
@@ -272,7 +273,10 @@ export default function PromoPizzaAdmin() {
             <Separator className="mb-8" />
 
             <div className="flex flex-col">
-                <h2 className="text-2xl font-semibold mb-6">{`Listas das pizzas (${records.length})`}</h2>
+                <div className="flex justify-between items-center">
+                    <h2 className="text-2xl font-semibold mb-6">{`Listas das pizzas (${records.length})`}</h2>
+                    <span className="text-sm underline cursor-pointer" onClick={() => setShowFormUpdate(!showFormUpdate)}>Abilitar alteraçoes</span>
+                </div>
                 <ul className="flex flex-col">
                     {
                         records.map((r: PromoPizzaPhoto) => {
@@ -300,7 +304,7 @@ export default function PromoPizzaAdmin() {
                                                                     className="border-none outline-none font-semibold text-xl w-max"
                                                                 />
                                                             </div>
-                                                            <SaveItemButton actionName="record-update-pizza-name" />
+                                                            {showFormUpdate && <SaveItemButton actionName="record-update-pizza-name" />}
                                                         </div>
                                                     </Form>
 
@@ -313,7 +317,7 @@ export default function PromoPizzaAdmin() {
                                                                         type="text" name="pizzaIngredients" defaultValue={r.pizza.ingredients}
                                                                         className="border-none outline-none"
                                                                     />
-                                                                    <SaveItemButton actionName="record-update-pizza-ingredients" />
+                                                                    {showFormUpdate && <SaveItemButton actionName="record-update-pizza-ingredients" />}
                                                                 </div>
                                                             </Form>
                                                         )
@@ -335,7 +339,7 @@ export default function PromoPizzaAdmin() {
                                                                             type="text" name="pizzaValue" defaultValue={r.pizza.value}
                                                                             className="border-none outline-none text-sm w-[75px]"
                                                                         />
-                                                                        <SaveItemButton actionName="record-update-pizza-value" />
+                                                                        {showFormUpdate && <SaveItemButton actionName="record-update-pizza-value" />}
                                                                     </div>
                                                                 </div>
                                                             </Form>
@@ -348,7 +352,7 @@ export default function PromoPizzaAdmin() {
                                                                             type="text" name="pizzaPromoValue" defaultValue={r.pizza.promoValue}
                                                                             className="border-none outline-none text-sm w-[75px]"
                                                                         />
-                                                                        <SaveItemButton actionName="record-update-pizza-promo-value" />
+                                                                        {showFormUpdate && <SaveItemButton actionName="record-update-pizza-promo-value" />}
                                                                     </div>
                                                                 </div>
                                                             </Form>
