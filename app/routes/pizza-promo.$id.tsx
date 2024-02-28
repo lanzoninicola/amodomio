@@ -53,7 +53,7 @@ export const action: ActionFunction = async ({ request }) => {
                 bairro: neighborhood as string,
                 cep: zipCode as string,
                 endereço: address as string,
-                nome: fullName as string,
+                name: fullName as string,
                 phoneNumber: phoneNumber as string
             }
         }))
@@ -120,7 +120,7 @@ export default function SinglePizzaPromo() {
                         <p className="text-sm text-gray-500">* Todos os campos são obrigatórios</p>
                     </div>
                     <div className="flex flex-col gap-4">
-                        <Link to="pizza-promo" className="border rounded-sm w-full text-center text-sm py-2 text-gray-700 border-brand-blue">Voltar</Link>
+                        <Link to="/pizza-promo" className="border rounded-sm w-full text-center text-sm py-2 text-gray-700 border-brand-blue">Voltar</Link>
                         <SubmitButton actionName="pizza-promo-record-customer-info-save" idleText="Confirmar" loadingText="Confirmando" className="bg-brand-blue" />
                     </div>
                 </Form>
