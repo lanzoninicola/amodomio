@@ -75,8 +75,6 @@ export default function SinglePizzaPromo() {
     const pizzaSelected = loaderData.payload?.pizzaSelected;
     const recordId = loaderData.payload?.id;
 
-    console.log({ pizzaSelected, recordId })
-
     const actionData = useActionData<typeof action>()
     const status = actionData?.status
     const message = actionData?.message
