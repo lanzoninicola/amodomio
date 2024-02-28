@@ -32,7 +32,7 @@ export async function loader({ request, params }: ActionArgs) {
     return ok({
         products,
         callbackUrl: callbackUrl || "",
-        categories,
+        categories: categories.filter(c => c.type === "product"),
         types
     })
 }
@@ -79,7 +79,7 @@ export default function SingleProductNew() {
     const loaderData = useLoaderData<typeof loader>()
     const products: Product[] = loaderData?.payload.products || []
     const callbackUrl = loaderData?.payload.callbackUrl
-    const categories: Category[] = loaderData?.payload.categories
+    const categories: Category[] = loaderData?.payload.categories || []
     const types: ProductTypeHTMLSelectOption[] = loaderData?.payload.types || []
 
     const actionData = useActionData<typeof action>()
@@ -94,7 +94,7 @@ export default function SingleProductNew() {
     }
 
     const [searchTerm, setSearchTerm] = useState("")
-    const productsFilteredBySearch = products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()))
+    const productsFilteredBySearch = products.filter(p => p.info?.type !== "topping").filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()))
 
     return (
         <Container>
@@ -130,7 +130,7 @@ export default function SingleProductNew() {
                                 (
                                     <div className="flex flex-col gap-4 text-red-500">
                                         <span className="text-xs font-semibold">Produtos encontrados:</span>
-                                        <ul className="flex gap-2 text-xs">
+                                        <ul className="flex gap-2 text-xs flex-wrap">
                                             {productsFilteredBySearch.map(p => <li key={p.id}>{p.name}</li>)}
                                         </ul>
                                     </div>
@@ -187,7 +187,7 @@ export default function SingleProductNew() {
                         <Separator className="my-4" />
 
                         <div className="flex gap-2">
-                            <SubmitButton actionName="product-create" className="w-[150px] gap-2" disabled={productsFilteredBySearch.length > 0} />
+                            <SubmitButton actionName="product-create" className="w-[150px] gap-2" />
                         </div>
 
                     </Form>

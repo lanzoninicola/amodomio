@@ -10,11 +10,15 @@ import type { LatestSellPrice } from "../sell-price/sell-price.model.server";
 import { BaseEntity } from "../base.entity";
 import tryit from "~/utils/try-it";
 import dayjs from "dayjs";
+import { Category } from "../category/category.model.server";
+import { jsonParse } from "~/utils/json-helper";
 
 export interface ProductTypeHTMLSelectOption {
   value: ProductType;
   label: string;
 }
+
+export type TCategoryProducts = Record<Category["name"], Product[]>;
 
 type FieldOrderBy = "name" | "createdAt" | "updatedAt";
 
@@ -63,6 +67,27 @@ export class ProductEntity extends BaseEntity<Product> {
     return orientation === "asc"
       ? products.slice().sort(compareFunction)
       : products.slice().sort(compareFunction).reverse();
+  }
+
+  async findAllGroupedByCategory() {
+    const products = await this.findAllOrderedBy("name", "asc");
+
+    const categories = products.reduce((acc, product) => {
+      const categoryStringify = product.info?.category;
+
+      const category = jsonParse(categoryStringify) as Category;
+
+      const categoryName = category?.name || "Não definido";
+
+      if (!acc[categoryName]) {
+        acc[categoryName] = [];
+      }
+      acc[categoryName].push(product);
+
+      return acc;
+    }, {} as TCategoryProducts);
+
+    return categories;
   }
 
   async deleteProduct(id: Product["id"]) {

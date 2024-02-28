@@ -148,6 +148,14 @@ export class FirestoreModel<T> {
         documentId
       );
 
+      if (updatedData["_client"]) {
+        delete updatedData._client;
+      }
+
+      if (updatedData["_collectionName"]) {
+        delete updatedData._collectionName;
+      }
+
       await updateDoc(docRef, {
         ...updatedData,
         updatedAt: new Date().toISOString(),

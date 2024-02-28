@@ -4,6 +4,7 @@ export interface NavItem {
     group?: "administração" | "cozinha" | "atendimento"
     label: string
     to: string
+    disabled?: boolean
 }
 
 
