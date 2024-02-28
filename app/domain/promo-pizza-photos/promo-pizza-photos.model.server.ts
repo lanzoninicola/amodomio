@@ -3,6 +3,8 @@ import { createFirestoreModel } from "~/lib/firestore-model/src";
 export interface PromoPizzaPhotoPizzaIncluded {
   name: string;
   ingredients: string;
+  value: string;
+  promoValue: string;
 }
 
 export interface PromoPizzaPhotoCustomer {
