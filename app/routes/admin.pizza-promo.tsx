@@ -1,6 +1,6 @@
 import { ActionFunction, LoaderFunction } from "@remix-run/node";
-import { Form, Link, useActionData, useLoaderData } from "@remix-run/react";
-import { MinusSquareIcon, PlusSquareIcon } from "lucide-react";
+import { Form, useActionData, useLoaderData } from "@remix-run/react";
+import { CheckSquareIcon, MinusSquareIcon, PlusSquareIcon } from "lucide-react";
 import { useState } from "react";
 import Container from "~/components/layout/container/container";
 import InputItem from "~/components/primitives/form/input-item/input-item";
@@ -8,7 +8,6 @@ import TextareaItem from "~/components/primitives/form/textarea-item/textarea-it
 import SubmitButton from "~/components/primitives/submit-button/submit-button";
 import { DeleteItemButton } from "~/components/primitives/table-list";
 import SaveItemButton from "~/components/primitives/table-list/action-buttons/save-item-button/save-item-button";
-import { Button } from "~/components/ui/button";
 import Fieldset from "~/components/ui/fieldset";
 import { Label } from "~/components/ui/label";
 import { Separator } from "~/components/ui/separator";
@@ -273,7 +272,7 @@ export default function PromoPizzaAdmin() {
             <Separator className="mb-8" />
 
             <div className="flex flex-col">
-                <h2 className="text-2xl font-semibold mb-6">Listas das pizzas</h2>
+                <h2 className="text-2xl font-semibold mb-6">{`Listas das pizzas (${records.length})`}</h2>
                 <ul className="flex flex-col">
                     {
                         records.map((r: PromoPizzaPhoto) => {
@@ -295,7 +294,7 @@ export default function PromoPizzaAdmin() {
                                                         <input type="hidden" name="recordId" value={r.id} />
                                                         <div className="flex gap-2 items-center">
                                                             <div className="flex items-center">
-                                                                <span>🍕 </span>
+                                                                <span>{r.isSelected === false ? "🍕" : <CheckSquareIcon />}</span>
                                                                 <InputItem
                                                                     type="text" name="pizzaName" defaultValue={r.pizza.name}
                                                                     className="border-none outline-none font-semibold text-xl w-max"
@@ -324,34 +323,38 @@ export default function PromoPizzaAdmin() {
 
                                                 {/* <!-- Valores --> */}
 
-                                                <div className="flex gap-2 items-center">
-                                                    <Form method="post">
-                                                        <input type="hidden" name="recordId" value={r.id} />
+                                                {
+                                                    r.isSelected === false && (
                                                         <div className="flex gap-2 items-center">
-                                                            <div className="flex items-center">
-                                                                <span className="text-sm">Preço: </span>
-                                                                <InputItem
-                                                                    type="text" name="pizzaValue" defaultValue={r.pizza.value}
-                                                                    className="border-none outline-none text-sm w-[75px]"
-                                                                />
-                                                                <SaveItemButton actionName="record-update-pizza-value" />
-                                                            </div>
+                                                            <Form method="post">
+                                                                <input type="hidden" name="recordId" value={r.id} />
+                                                                <div className="flex gap-2 items-center">
+                                                                    <div className="flex items-center">
+                                                                        <span className="text-sm">Preço: </span>
+                                                                        <InputItem
+                                                                            type="text" name="pizzaValue" defaultValue={r.pizza.value}
+                                                                            className="border-none outline-none text-sm w-[75px]"
+                                                                        />
+                                                                        <SaveItemButton actionName="record-update-pizza-value" />
+                                                                    </div>
+                                                                </div>
+                                                            </Form>
+                                                            <Form method="post">
+                                                                <input type="hidden" name="recordId" value={r.id} />
+                                                                <div className="flex gap-2 items-center">
+                                                                    <div className="flex items-center">
+                                                                        <span className="text-sm">Preço promocional: </span>
+                                                                        <InputItem
+                                                                            type="text" name="pizzaPromoValue" defaultValue={r.pizza.promoValue}
+                                                                            className="border-none outline-none text-sm w-[75px]"
+                                                                        />
+                                                                        <SaveItemButton actionName="record-update-pizza-promo-value" />
+                                                                    </div>
+                                                                </div>
+                                                            </Form>
                                                         </div>
-                                                    </Form>
-                                                    <Form method="post">
-                                                        <input type="hidden" name="recordId" value={r.id} />
-                                                        <div className="flex gap-2 items-center">
-                                                            <div className="flex items-center">
-                                                                <span className="text-sm">Preço promocional: </span>
-                                                                <InputItem
-                                                                    type="text" name="pizzaPromoValue" defaultValue={r.pizza.promoValue}
-                                                                    className="border-none outline-none text-sm w-[75px]"
-                                                                />
-                                                                <SaveItemButton actionName="record-update-pizza-promo-value" />
-                                                            </div>
-                                                        </div>
-                                                    </Form>
-                                                </div>
+                                                    )
+                                                }
 
                                             </div>
 

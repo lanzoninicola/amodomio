@@ -7,6 +7,7 @@ const navItems: NavItem[] = [
     { group: "atendimento", label: "Cardápio", to: "/cardapio", disabled: true },
     { group: "administração", label: "Produtos", to: "/admin/products", disabled: false },
     { group: "administração", label: "Categorias", to: "/admin/categorias", disabled: false },
+    { group: "administração", label: "Promo 'Fotos Cardapio'", to: "/admin/pizza-promo", disabled: false },
     { group: "cozinha", label: "Lista de compras", to: "/admin/grocery-shopping-list", disabled: false },
     { group: "atendimento", label: "Pedidos", to: "/admin/daily-orders", disabled: false },
     { group: "atendimento", label: "Linha do tempo Pedidos", to: "/admin/orders-delays-timeline-segmentation", disabled: true },
