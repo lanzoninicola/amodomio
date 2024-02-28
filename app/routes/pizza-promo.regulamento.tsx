@@ -1,14 +1,18 @@
-import { LoaderArgs, LoaderFunction, redirect } from "@remix-run/node";
+import { V2_MetaFunction } from "@remix-run/node";
 import { Link } from "@remix-run/react";
-import { ok } from "assert";
 import PromoRules from "~/domain/promo-pizza-photos/components/promo-rules/promo-rules";
-import { promoPizzaPhotoEntity } from "~/domain/promo-pizza-photos/promo-pizza-photos.entity.server";
-import tryit from "~/utils/try-it";
-import { urlAt } from "~/utils/url";
 
+export const meta: V2_MetaFunction = () => {
+    return [
+        { title: "Regulamento promo 'Fotos cardápio'" },
+        {
+            name: "description",
+            content: "Regulamento da promo 'Fotos cardápio' do dia 05 de Março 2024",
+        },
+    ];
+};
 
 export default function SinglePizzaPromoThankYou() {
-
 
     return (
         <div className="flex flex-col gap-6">
