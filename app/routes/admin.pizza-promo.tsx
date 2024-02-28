@@ -363,7 +363,7 @@ export default function PromoPizzaAdmin() {
                                             </div>
 
                                             {
-                                                r.isSelected && (
+                                                r.isSelected === true && (
                                                     <Form method="post">
                                                         <input type="hidden" name="recordId" value={r.id} />
                                                         <div className="flex gap-2">
@@ -374,12 +374,12 @@ export default function PromoPizzaAdmin() {
                                                                 variant={"outline"}
 
                                                             />
-                                                            <SubmitButton actionName="record-attach-customer"
+                                                            {/* <SubmitButton actionName="record-attach-customer"
                                                                 className="bg-brand-blue font-semibold"
                                                                 idleText="Vincular"
                                                                 loadingText="Vinculando..."
 
-                                                            />
+                                                            /> */}
                                                         </div>
                                                     </Form>
                                                 )
