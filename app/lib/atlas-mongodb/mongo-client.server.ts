@@ -1,4 +1,4 @@
-import { mongoDbName, mongoUri } from "./config";
+import { mongoDbName, mongoUri } from "./config.server";
 
 const { MongoClient, ServerApiVersion } = require("mongodb");
 const uri = mongoUri;
