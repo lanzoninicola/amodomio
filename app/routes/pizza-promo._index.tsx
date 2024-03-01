@@ -65,7 +65,7 @@ export default function PizzaPromoIndex() {
             <div className="mb-8">
                 <div className="mb-4">
                     <h1 className="text-xl font-bold">Promo "Fotos Cardápio"</h1>
-                    <p className="tracking-tight">Escolha uma dessas <span>{pizzasNumber}</span> pizzas, aproveita de <span className="font-semibold text-brand-blue">20% de desconto, e a entrega é por nossa conta</span></p>
+                    <p className="tracking-tight">Escolha uma dessas pizzas, aproveita de <span className="font-semibold text-brand-blue">20% de desconto, e a entrega é por nossa conta</span></p>
                 </div>
                 <DialogRules />
             </div>
