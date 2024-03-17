@@ -1,6 +1,6 @@
 import { ActionArgs, LoaderArgs } from "@remix-run/node"
 import { Form, Link, useLoaderData, useSearchParams } from "@remix-run/react"
-import { ObjectId } from "mongodb"
+
 import ItemsPerPage from "~/components/pagination/items-per-page"
 import PageNumber from "~/components/pagination/page-number"
 import { DeleteItemButton } from "~/components/primitives/table-list"
@@ -45,17 +45,17 @@ export async function action({ request }: ActionArgs) {
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);
 
-    if (_action === "cardapio-delete") {
-        const cardapioId = values["cardapioId"] as string
+    // if (_action === "cardapio-delete") {
+    //     const cardapioId = values["cardapioId"] as string
 
-        const [err, returnedData] = await queryIt(cardapioPizzaAlTaglioEntity.model.deleteOne({ _id: new ObjectId(cardapioId) }))
+    //     const [err, returnedData] = await queryIt(cardapioPizzaAlTaglioEntity.model.deleteOne({ _id: new ObjectId(cardapioId) }))
 
-        // if (err) {
-        //     return serverError(err)
-        // }
+    //     // if (err) {
+    //     //     return serverError(err)
+    //     // }
 
-        return ok("Registro apagado.")
-    }
+    //     return ok("Registro apagado.")
+    // }
 
     return null
 
@@ -126,7 +126,7 @@ function CardapioItem({ cardapio }: CardapioItemProps) {
                     <div className="flex justify-between items-center">
                         <div className="flex flex-col">
                             <h3 className="text-xs font-semibold tracking-tight mb-1">Cardápio do dia</h3>
-                            <h2 className="text-lg font-semibold tracking-tight">{cardapio.publishedDate}</h2>
+                            {/* <h2 className="text-lg font-semibold tracking-tight">{cardapio.publishedDate}</h2> */}
                         </div>
                         <div className="flex flex-col">
                             <span className="text-xs mb-2">Publica</span>

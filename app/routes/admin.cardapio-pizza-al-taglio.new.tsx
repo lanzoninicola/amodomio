@@ -68,13 +68,5 @@ export default function CardapioPizzaAlTaglioNew() {
         })
     }
 
-    return (
-        <div className="flex flex-col mt-4">
-            <h3 className="text-xl font-semibold text-muted-foreground mb-6">Novo cardapio</h3>
-            <div className="border rounded-md p-4 md:p-6">
-                <CardapioPizzaAlTaglioForm action={"cardapio-create"} />
-
-            </div>
-        </div>
-    )
+    return <div>Hello world</div>
 }

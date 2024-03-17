@@ -1,24 +1,20 @@
 import { ObjectId } from "mongodb";
-import createMongoCollection from "~/lib/atlas-mongodb/create-mongo-collection.server";
+import { createFirestoreModel } from "~/lib/firestore-model/src";
+import { PizzaSlice } from "../pizza-al-taglio/pizza-al-taglio.model.server";
 
-export type SliceTaglioCategory = "margherita" | "vegetariana" | "carne";
-
-export type SliceTaglio = {
-  topping: string;
-  category: SliceTaglioCategory;
-  amount: number;
-  outOfStock: boolean;
-};
+export interface CardapioPizzaSlice extends PizzaSlice {
+  isAvailable: boolean;
+}
 
 interface CardapioPizzaAlTaglio {
   _id?: ObjectId;
-  slices: SliceTaglio[];
+  slices: CardapioPizzaSlice[];
   // dayjs date format DD/MM/YYYY HH:mm:ss
-  publishedDate: string | null;
-  published: boolean;
+  validFrom: string;
+  validTo: string;
 }
 
-const CardapioPizzaAlTaglioModel = createMongoCollection<CardapioPizzaAlTaglio>(
+const CardapioPizzaAlTaglioModel = createFirestoreModel<CardapioPizzaAlTaglio>(
   "daily_pizza_al_taglio"
 );
 
