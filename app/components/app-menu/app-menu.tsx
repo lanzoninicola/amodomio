@@ -1,11 +1,7 @@
+import { NavItem } from "~/domain/website-navigation/nav-items.constant"
 
 
-export interface NavItem {
-    group?: "administração" | "cozinha" | "atendimento"
-    label: string
-    to: string
-    disabled?: boolean
-}
+
 
 
 

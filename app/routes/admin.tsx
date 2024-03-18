@@ -1,6 +1,8 @@
 import { LoaderFunction, type LinksFunction, MetaFunction, V2_MetaFunction, LoaderArgs, redirect } from "@remix-run/node";
 import { Outlet, useLoaderData } from "@remix-run/react";
 import { useState } from "react";
+import { AdminHeader } from "~/components/layout/admin-header/admin-header";
+import { PageHeader } from "~/components/layout/page-header/page-header";
 import { NavMenuCollapsible } from "~/components/primitives/menu-collapsible/nav-menu-collapsible";
 import { authenticator } from "~/domain/auth/google.server";
 import { LoggedUser } from "~/domain/auth/types.server";
@@ -46,29 +48,34 @@ export default function AdminOutlet() {
     const loggedUser = useLoaderData<typeof loader>();
 
     return (
+        <>
+            <AdminHeader />
+            <div className="mt-12">
+                <Outlet context={{
+                    loggedUser,
 
-        <div className="flex flex-col">
-            <div className="fixed h-auto w-full bg-muted z-50">
-                <NavMenuCollapsible navItems={
-                    [
-                        { label: "Gerençiar cardápio", to: "/admin/cardapio" },
-                        { label: "Cardápio", to: "/cardapio" },
-                        { label: "Produtos", to: "/admin/products" },
-                        { label: "Categorias", to: "/admin/categorias" },
-                        { label: "Lista de supermercado", to: "/admin/grocery-shopping-list" },
-                        { label: "Pedidos", to: "/admin/daily-orders" },
-                        { label: "Linha do tempo Pedidos", to: "/admin/orders-delays-timeline-segmentation" },
-                        { label: "Linha do tempo Entrega", to: "/admin/orders-delivery-time-left" },
-                        { label: "Massa", to: "/admin/dough" },
-                        { label: "Opções", to: "/admin/options" },
-                        { label: "Sair", to: "/logout" },
-                    ]
-                } />
+                }} />
             </div>
-            <Outlet context={{
-                loggedUser,
+            {/* <div className="flex flex-col">
+                <div className="fixed h-auto w-full bg-muted z-50">
+                    <NavMenuCollapsible navItems={
+                        [
+                            { label: "Gerençiar cardápio", to: "/admin/cardapio" },
+                            { label: "Cardápio", to: "/cardapio" },
+                            { label: "Produtos", to: "/admin/products" },
+                            { label: "Categorias", to: "/admin/categorias" },
+                            { label: "Lista de supermercado", to: "/admin/grocery-shopping-list" },
+                            { label: "Pedidos", to: "/admin/daily-orders" },
+                            { label: "Linha do tempo Pedidos", to: "/admin/orders-delays-timeline-segmentation" },
+                            { label: "Linha do tempo Entrega", to: "/admin/orders-delivery-time-left" },
+                            { label: "Massa", to: "/admin/dough" },
+                            { label: "Opções", to: "/admin/options" },
+                            { label: "Sair", to: "/logout" },
+                        ]
+                    } />
+                </div>
 
-            }} />
-        </div>
+            </div> */}
+        </>
     )
 }

@@ -1,6 +1,6 @@
 import { ActionFunction, LoaderFunction } from "@remix-run/node";
 import { Form, useActionData, useLoaderData } from "@remix-run/react";
-import { CheckSquareIcon, MinusSquareIcon, PlusSquareIcon } from "lucide-react";
+import { Beef, CheckSquareIcon, LeafyGreen, MinusSquareIcon, Pizza, PlusSquareIcon } from "lucide-react";
 import { useState } from "react";
 import Container from "~/components/layout/container/container";
 import InputItem from "~/components/primitives/form/input-item/input-item";
@@ -13,8 +13,9 @@ import { Label } from "~/components/ui/label";
 import { Separator } from "~/components/ui/separator";
 import { Textarea } from "~/components/ui/textarea";
 import { toast } from "~/components/ui/use-toast";
+import SelectPizzaAlTaglioCategory from "~/domain/cardapio-pizza-al-taglio/components/select-pizza-al-taglio-type/select-pizza-al-taglio-type";
 import { pizzaSliceEntity } from "~/domain/pizza-al-taglio/pizza-al-taglio.entity.server";
-import { PizzaSlice } from "~/domain/pizza-al-taglio/pizza-al-taglio.model.server";
+import { PizzaSlice, PizzaSliceCategory } from "~/domain/pizza-al-taglio/pizza-al-taglio.model.server";
 import { promoPizzaPhotoEntity } from "~/domain/promo-pizza-photos/promo-pizza-photos.entity.server";
 import { PromoPizzaPhoto } from "~/domain/promo-pizza-photos/promo-pizza-photos.model.server";
 import { cn } from "~/lib/utils";
@@ -34,94 +35,37 @@ export const action: ActionFunction = async ({ request }) => {
     let formData = await request.formData();
     const { _action } = Object.fromEntries(formData);
 
-    const recordId = formData.get('recordId');
-    const pizzaName = formData.get('pizzaName');
-    const pizzaIngredients = formData.get('pizzaIngredients');
-    const pizzaValue = formData.get('pizzaValue');
-    const pizzaPromoValue = formData.get('pizzaPromoValue');
+    const id = formData.get('id') as string;
+    const toppings = formData.get('toppings') as string;
+    const category = formData.get('category') as PizzaSliceCategory;
 
-    if (_action === "record-detach-customer") {
-        const [err, record] = await tryit(promoPizzaPhotoEntity.findById(recordId as string))
-
-        if (err) {
-            return serverError(err)
-        }
-
-        const [errUpdate, recordUpdate] = await tryit(promoPizzaPhotoEntity.update(recordId as string, {
-            ...record,
-            isSelected: false,
-            selectedBy: null
-
-        }))
-
-        if (errUpdate) {
-            return serverError("Erro ao salvar os dados do endereço. Por favor contate o (46) 99127-2525")
-        }
-
-        return ok("Atualizado com sucesso")
-    }
 
     if (_action === "record-add-pizza") {
 
-        const newRecord: PromoPizzaPhoto = {
-            isSelected: false,
-            pizza: {
-                name: pizzaName as string,
-                ingredients: pizzaIngredients as string,
-                value: pizzaValue as string,
-                promoValue: pizzaPromoValue as string,
-
-            },
-            promoCode: process.env.PIZZA_PHOTOS_PROMO_CODE as string,
-            selectedBy: null,
+        const newRecord: PizzaSlice = {
+            toppings,
+            category
         }
 
-        const [err, record] = await tryit(promoPizzaPhotoEntity.create(newRecord))
+        const [err, record] = await tryit(pizzaSliceEntity.create(newRecord))
 
         if (err) {
             return serverError(err)
         }
     }
 
-    if (_action === "record-update-pizza-name") {
+    if (_action === "record-update") {
 
-        const [err, record] = await tryit(promoPizzaPhotoEntity.findById(recordId as string))
-
-        if (err) {
-            return serverError(err)
-        }
-
-        const [errUpdate, recordUpdate] = await tryit(promoPizzaPhotoEntity.update(recordId as string, {
-            ...record,
-            pizza: {
-                ...record?.pizza,
-                name: pizzaName as string,
-
-            }
-        }))
-
-        if (errUpdate) {
-            return serverError("Erro ao salvar os dados da pizza. Por favor contate o (46) 99127-2525")
-        }
-
-        return ok("Nome pizza atualizado com successo")
-    }
-
-    if (_action === "record-update-toppings") {
-
-        const [err, record] = await tryit(promoPizzaPhotoEntity.findById(recordId as string))
+        const [err, record] = await tryit(pizzaSliceEntity.findById(id as string))
 
         if (err) {
             return serverError(err)
         }
 
-        const [errUpdate, recordUpdate] = await tryit(promoPizzaPhotoEntity.update(recordId as string, {
+        const [errUpdate, recordUpdate] = await tryit(pizzaSliceEntity.update(id as string, {
             ...record,
-            pizza: {
-                ...record?.pizza,
-                ingredients: pizzaIngredients as string,
-
-            }
+            toppings,
+            category
         }))
 
         if (errUpdate) {
@@ -131,54 +75,8 @@ export const action: ActionFunction = async ({ request }) => {
         return ok("Ingredientes atualizados com sucesso")
     }
 
-    if (_action === "record-update-pizza-value") {
-
-        const [err, record] = await tryit(promoPizzaPhotoEntity.findById(recordId as string))
-
-        if (err) {
-            return serverError(err)
-        }
-
-        const [errUpdate, recordUpdate] = await tryit(promoPizzaPhotoEntity.update(recordId as string, {
-            ...record,
-            pizza: {
-                ...record?.pizza,
-                value: pizzaValue as string,
-            }
-        }))
-
-        if (errUpdate) {
-            return serverError("Erro ao salvar os dados da pizza. Por favor contate o (46) 99127-2525")
-        }
-
-        return ok("Valor atualizado com sucesso")
-    }
-
-    if (_action === "record-update-pizza-promo-value") {
-
-        const [err, record] = await tryit(promoPizzaPhotoEntity.findById(recordId as string))
-
-        if (err) {
-            return serverError(err)
-        }
-
-        const [errUpdate, recordUpdate] = await tryit(promoPizzaPhotoEntity.update(recordId as string, {
-            ...record,
-            pizza: {
-                ...record?.pizza,
-                promoValue: pizzaPromoValue as string,
-            }
-        }))
-
-        if (errUpdate) {
-            return serverError("Erro ao salvar os dados da pizza. Por favor contate o (46) 99127-2525")
-        }
-
-        return ok("Valor promocional atualizado com sucesso")
-    }
-
     if (_action === "record-delete") {
-        const [err, record] = await tryit(promoPizzaPhotoEntity.delete(recordId as string))
+        const [err, record] = await tryit(pizzaSliceEntity.delete(id as string))
 
         if (err) {
             return serverError(err)
@@ -244,48 +142,53 @@ export default function PizzaSlicesAdmin() {
                     <h2 className="text-2xl font-semibold mb-6">{`Listas das pizzas (${records.length})`}</h2>
                     <span className="text-sm underline cursor-pointer" onClick={() => setShowFormUpdate(!showFormUpdate)}>Abilitar alteraçoes</span>
                 </div>
-                <ul className="flex flex-col">
+                <ul className="grid grid-cols-3 gap-4 ">
                     {
                         records.map((r: PizzaSlice) => {
                             return (
                                 <li key={r.id} className={
                                     cn(
-                                        "p-2 rounded-sm",
+                                        "p-4 rounded-md border hover:bg-slate-50",
                                     )
                                 }>
                                     <div className="flex flex-col gap-2">
                                         <div className="flex justify-between items-center">
-
                                             <div className="flex flex-col">
 
                                                 {/* <!-- Nome e ingredientes --> */}
-
-                                                <div className="flex flex-col">
-
+                                                <div className="flex flex-col gap-6">
 
                                                     <Form method="post">
-                                                        <input type="hidden" name="recordId" value={r.id} />
-                                                        <div className="flex gap-2 items-start">
-                                                            <TextareaItem
-                                                                type="text" name="toppings" defaultValue={r.toppings}
-                                                                className="border-none outline-none"
-                                                            />
-                                                            {showFormUpdate && <SaveItemButton actionName="record-update-toppings" />}
+                                                        <input type="hidden" name="id" value={r.id} />
+                                                        <div className="flex flex-col gap-6">
+                                                            <div className="flex justify-between">
+                                                                <div className="flex flex-col gap-4">
+                                                                    <TextareaItem
+                                                                        type="text" name="toppings" defaultValue={r.toppings}
+                                                                        className="border-none outline-none w-full text-lg"
+                                                                    />
+                                                                    <SelectPizzaAlTaglioCategory name={"category"} className="border-none outline-none w-full" />
+                                                                </div>
+                                                                {r.category === "vegetariana" && <LeafyGreen />}
+                                                                {r.category === "carne" && <Beef />}
+                                                                {r.category === "margherita" && <Pizza />}
+                                                            </div>
+                                                            {showFormUpdate && (
+
+                                                                <div className="flex gap-2">
+                                                                    <SaveItemButton actionName="record-update" />
+                                                                    <DeleteItemButton actionName="record-delete" />
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     </Form>
 
 
                                                 </div>
-
-
-
                                             </div>
-
-
                                         </div>
 
                                     </div>
-                                    <Separator className="my-2" />
                                 </li>
 
 
@@ -307,19 +210,8 @@ function FormAddPizza() {
     return (
         <Form method="post">
             <div className="flex flex-col gap-2">
-                <div className="flex gap-2 items-center mb-6">
-                    <Label className="font-semibold">Codigo Promo</Label>
-                    <InputItem
-                        type="text" name="promoCode" placeholder="Codigo promo" required defaultValue={promoCode}
-                        className="border-none outline-none"
-                    />
-                </div>
-
                 <Fieldset>
-                    <InputItem type="text" name="pizzaName" placeholder="Nome pizza" required />
-                </Fieldset>
-                <Fieldset>
-                    <Textarea name="pizzaIngredients" placeholder="Ingredientes" required
+                    <Textarea name="toppings" placeholder="Ingredientes" required
                         className={
                             cn(
                                 `text-lg p-2 placeholder:text-gray-400`,
@@ -329,11 +221,7 @@ function FormAddPizza() {
                 </Fieldset>
 
                 <Fieldset>
-                    <InputItem type="text" name="pizzaValue" placeholder="Valor" required />
-                </Fieldset>
-
-                <Fieldset>
-                    <InputItem type="text" name="pizzaPromoValue" placeholder="Valor em Promoçao" />
+                    <SelectPizzaAlTaglioCategory name={"category"} />
                 </Fieldset>
 
             </div>

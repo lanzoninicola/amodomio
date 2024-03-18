@@ -1,6 +1,6 @@
 import { createFirestoreModel } from "~/lib/firestore-model/src";
 
-export type PizzaSliceCategory = "vegetariano" | "carne" | "margherita";
+export type PizzaSliceCategory = "vegetariana" | "carne" | "margherita";
 
 export interface PizzaSlice {
   id?: string;
