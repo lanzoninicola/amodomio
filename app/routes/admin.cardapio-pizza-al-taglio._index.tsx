@@ -13,31 +13,19 @@ import queryIt from "~/lib/atlas-mongodb/query-it.server"
 import getSearchParam from "~/utils/get-search-param"
 import { ok, serverError } from "~/utils/http-response.server"
 import randomReactKey from "~/utils/random-react-key"
+import tryit from "~/utils/try-it"
 
 export async function loader({ request }: LoaderArgs) {
 
-    console.log("execution loader index...")
+    const [err, records] = await tryit(cardapioPizzaAlTaglioEntity.findAll())
 
-    let pageParamName = getSearchParam({ request, paramName: "page" })
-    let itemsPerPageParamName = getSearchParam({ request, paramName: "itemsPerPage" })
-
-    if (Number.isNaN(pageParamName)) pageParamName = String(1)
-    if (Number.isNaN(itemsPerPageParamName)) itemsPerPageParamName = String(10)
-
-    const [err, data] = await queryIt(cardapioPizzaAlTaglioEntity.findPaginated({
-        pageNumber: Number(pageParamName) || 1,
-        pageSize: Number(itemsPerPageParamName) || 10,
-    }))
-
-    console.log("execution loader index...", { err, data })
 
     if (err) {
         return serverError(err)
     }
 
     return ok({
-        cardapios: data?.documents,
-        totalPages: data?.totalPages
+        records
     })
 }
 
@@ -81,7 +69,7 @@ export default function CardapioPizzaAlTaglioIndex() {
 
                 </Form> */}
 
-                <div className="flex gap-4 ">
+                {/* <div className="flex gap-4 ">
                     <PageNumber config={{
                         totalPages: loaderData?.payload.totalPages || 0,
                         defaultValue: 1,
@@ -91,7 +79,7 @@ export default function CardapioPizzaAlTaglioIndex() {
                         itemsPerPage: [10, 20, 40, 60],
                         defaultValue: 10,
                     }} />
-                </div>
+                </div> */}
 
                 <Separator className="mb-4" />
                 <ul className="grid grid-cols-2 md:grid-cols-4 gap-4">

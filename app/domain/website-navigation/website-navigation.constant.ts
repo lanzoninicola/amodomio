@@ -96,8 +96,8 @@ export const WEBSITE_NAVIGATION_ITEMS: WebsiteNavigation = {
           disabled: false,
         },
         {
-          title: "Pizza Al Taglio",
-          href: "/admin/pizza-al-taglio",
+          title: "Cardápio Pizza Al Taglio",
+          href: "/admin/cardapio-pizza-al-taglio",
           items: [],
           disabled: false,
         },
@@ -112,7 +112,6 @@ export const WEBSITE_NAVIGATION_ITEMS: WebsiteNavigation = {
           items: [],
           disabled: false,
         },
-
         {
           title: "Massa",
           href: "/admin/dough",
@@ -120,6 +119,18 @@ export const WEBSITE_NAVIGATION_ITEMS: WebsiteNavigation = {
           disabled: false,
         },
 
+        {
+          title: "Pizza Al Taglio",
+          href: "/admin/pizza-al-taglio",
+          items: [],
+          disabled: false,
+        },
+      ],
+    },
+    {
+      title: "Administração",
+      disabled: true,
+      items: [
         {
           title: "Usuários",
           href: "/admin/users",

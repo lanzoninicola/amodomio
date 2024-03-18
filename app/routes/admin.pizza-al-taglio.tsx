@@ -1,5 +1,5 @@
 import { ActionFunction, LoaderFunction } from "@remix-run/node";
-import { Form, useActionData, useLoaderData } from "@remix-run/react";
+import { Form, Link, useActionData, useLoaderData } from "@remix-run/react";
 import { Beef, CheckSquareIcon, LeafyGreen, MinusSquareIcon, Pizza, PlusSquareIcon } from "lucide-react";
 import { useState } from "react";
 import Container from "~/components/layout/container/container";
@@ -119,12 +119,19 @@ export default function PizzaSlicesAdmin() {
     return (
         <Container className="mt-16">
 
-            <div className="flex flex-col mb-4">
-                <div className="flex items-center gap-2 mb-4 cursor-pointer hover:font-semibold" onClick={() => setShowForm(!showForm)}>
-                    <span className="text-sm underline">{
-                        showForm === false ? "Adicionar pizza" : "Fechar formulário"
-                    }</span>
-                    {showForm === false ? <PlusSquareIcon /> : <MinusSquareIcon />}
+            <div className="flex flex-col ">
+                <div className="flex gap-4 items-center mb-4 justify-between">
+                    <div className="flex items-center gap-2 cursor-pointer hover:font-semibold" onClick={() => setShowForm(!showForm)}>
+                        <span className="text-sm underline">{
+                            showForm === false ? "Adicionar pizza" : "Fechar formulário"
+                        }</span>
+                        {showForm === false ? <PlusSquareIcon /> : <MinusSquareIcon />}
+                    </div>
+                    <Link to="/admin/cardapio-pizza-al-taglio" className="py-2 px-4 rounded-md bg-black">
+                        <span className=" text-white font-semibold">
+                            Novo cardapio al taglio
+                        </span>
+                    </Link>
                 </div>
 
                 {
@@ -132,6 +139,7 @@ export default function PizzaSlicesAdmin() {
                         <FormAddPizza />
                     )
                 }
+
             </div>
 
 
