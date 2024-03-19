@@ -36,13 +36,6 @@ export async function action({ request }: ActionArgs) {
     const { _action, ...values } = Object.fromEntries(formData);
 
     if (_action === "cardapio-create") {
-
-
-        return ok("Sabores publicados")
-
-    }
-
-    if (_action === "cardapio-add-pizza-slices") {
         const slices = jsonParse(values.pizzaSlicesState) as unknown as CardapioPizzaSlice[]
 
         const [err, _] = await tryit(cardapioPizzaAlTaglioEntity.create({
@@ -114,7 +107,7 @@ export default function CardapioPizzaAlTaglioNew() {
                 <input type="hidden" name={`pizzaSlicesState`} value={jsonStringify(itemsChoosable.filter(i => Number(i.quantity) > 0))} />
                 <div className="flex flex-col gap-4 ">
                     <div className="fixed bg-white w-[320px] md:w-[720px]">
-                        <SubmitButton actionName="cardapio-add-pizza-slices" className="mb-4" />
+                        <SubmitButton actionName="cardapio-create" className="mb-4" />
                         <Separator className="hidden md:block" />
                     </div>
                     <ul className="mt-16">

@@ -2,6 +2,7 @@ import type { whereCompoundConditions } from "~/lib/firestore-model/src";
 import type { FirestoreModel } from "~/lib/firestore-model/src/lib/firestore-model.server";
 
 import NodeCache from "node-cache";
+import { jsonStringify } from "~/utils/json-helper";
 
 export class BaseEntity<T> {
   protected model: FirestoreModel<T>;
@@ -17,13 +18,23 @@ export class BaseEntity<T> {
     const cacheKey = `findById:${id}`;
     // Try to get data from cache
     let result = this.cache.get<T>(cacheKey);
+
     if (result) {
+      if (typeof result === "string") {
+        result = JSON.parse(result);
+      }
+
       return result;
     }
     // Cache miss, fetch from Firestore
     result = await this.model.findById(id);
+
     // Update cache
-    this.cache.set(cacheKey, result);
+    // I stringify the value because the "_client" and "_collectionName" fields of a Firestore document
+    // are not clonable, which causes issues with the "node-cache" package when trying to store them directly.
+    // This approach allows us to cache document data as a string, which can then be parsed back into an object when needed.
+    // Note: Consider parsing the string back to an object immediately after retrieval if you need to work with the document data.
+    this.cache.set(cacheKey, jsonStringify(result));
     return result;
   }
 
