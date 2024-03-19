@@ -1,21 +1,20 @@
-import { ObjectId } from "mongodb";
 import { createFirestoreModel } from "~/lib/firestore-model/src";
 import { PizzaSlice } from "../pizza-al-taglio/pizza-al-taglio.model.server";
 
 export interface CardapioPizzaSlice extends PizzaSlice {
   isAvailable: boolean;
+  quantity: string;
 }
 
 interface CardapioPizzaAlTaglio {
-  _id?: ObjectId;
+  id?: string;
   slices: CardapioPizzaSlice[];
-  // dayjs date format DD/MM/YYYY HH:mm:ss
-  validFrom: string;
-  validTo: string;
+  public: boolean;
+  name?: string;
 }
 
 const CardapioPizzaAlTaglioModel = createFirestoreModel<CardapioPizzaAlTaglio>(
-  "daily_pizza_al_taglio"
+  "cardapio-pizza-al-taglio"
 );
 
 export { CardapioPizzaAlTaglioModel, type CardapioPizzaAlTaglio };

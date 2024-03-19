@@ -1,13 +1,35 @@
 
-import { ActionArgs } from "@remix-run/node";
-import { useActionData } from "@remix-run/react";
+import { ActionArgs, redirect } from "@remix-run/node";
+import { Form, useActionData, useLoaderData } from "@remix-run/react";
+import { MinusCircleIcon, PlusCircleIcon } from "lucide-react";
+import { useState } from "react";
+import SubmitButton from "~/components/primitives/submit-button/submit-button";
+import { Input } from "~/components/ui/input";
+import { Separator } from "~/components/ui/separator";
 
 import { toast } from "~/components/ui/use-toast";
 import { cardapioPizzaAlTaglioEntity } from "~/domain/cardapio-pizza-al-taglio/cardapio-pizza-al-taglio.entity.server";
-import { SliceTaglio, SliceTaglioCategory } from "~/domain/cardapio-pizza-al-taglio/cardapio-pizza-al-taglio.model.server";
-import CardapioPizzaAlTaglioForm from "~/domain/cardapio-pizza-al-taglio/components/cardapio-pizza-al-taglio-form/cardapio-pizza-al-taglio-form";
-import queryIt from "~/lib/atlas-mongodb/query-it.server";
-import { badRequest, serverError, ok } from "~/utils/http-response.server";
+import { CardapioPizzaSlice } from "~/domain/cardapio-pizza-al-taglio/cardapio-pizza-al-taglio.model.server";
+import { pizzaSliceEntity } from "~/domain/pizza-al-taglio/pizza-al-taglio.entity.server";
+import { now } from "~/lib/dayjs";
+import { serverError, ok } from "~/utils/http-response.server";
+import { jsonParse, jsonStringify } from "~/utils/json-helper";
+import tryit from "~/utils/try-it";
+
+
+export async function loader() {
+
+    const [err, records] = await tryit(pizzaSliceEntity.findAll())
+
+
+    if (err) {
+        return serverError(err)
+    }
+
+    return ok({
+        records
+    })
+}
 
 export async function action({ request }: ActionArgs) {
     let formData = await request.formData();
@@ -15,48 +37,33 @@ export async function action({ request }: ActionArgs) {
 
     if (_action === "cardapio-create") {
 
-        const toppingNumbers = Number(values?.toppingNumbers) || 1
-        const slices: SliceTaglio[] = []
 
-        Array.from({ length: toppingNumbers }).forEach((_, i) => {
+        return ok("Sabores publicados")
 
-            const category = values[`category_${i + 1}`] as SliceTaglioCategory
-            const amount = category === "margherita" ? 13 : category === "vegetariana" ? 17 : 24
+    }
 
-            const slice = {
-                topping: values[`topping_${i + 1}`] as string,
-                category: category,
-                amount: amount,
-                outOfStock: false
-            }
-            slices.push(slice)
+    if (_action === "cardapio-add-pizza-slices") {
+        const slices = jsonParse(values.pizzaSlicesState) as unknown as CardapioPizzaSlice[]
 
-        })
-
-        const [err, record] = await queryIt(cardapioPizzaAlTaglioEntity.createOrUpdate({
-            slices: slices,
-            published: false,
-            publishedDate: null,
+        const [err, _] = await tryit(cardapioPizzaAlTaglioEntity.create({
+            slices,
+            public: false,
+            name: `Cardápio do dia ${now()}`
         }))
 
         if (err) {
             return serverError(err)
         }
 
-        if (record?.acknowledged === false) {
-            return badRequest("Registro nao criado")
-        }
-
-        console.log({ err, record })
-
-        return ok("Sabores publicados")
-
+        return redirect("/admin/cardapio-pizza-al-taglio")
     }
 
     return null
 }
 
 export default function CardapioPizzaAlTaglioNew() {
+    const loaderData = useLoaderData<typeof loader>()
+    const pizzaSlices: CardapioPizzaSlice[] = loaderData?.payload?.records || []
     const actionData = useActionData<typeof action>()
     const status = actionData?.status
     const message = actionData?.message
@@ -68,5 +75,92 @@ export default function CardapioPizzaAlTaglioNew() {
         })
     }
 
-    return <div>Hello world</div>
+    if (actionData && actionData.status !== 200) {
+        toast({
+            title: "Erro",
+            description: actionData.message,
+        })
+    }
+
+    if (actionData && actionData.status === 200) {
+        toast({
+            title: "OK",
+            description: actionData.message
+        })
+    }
+
+    const [itemsChoosable, setItemsChoosable] = useState<CardapioPizzaSlice[]>(pizzaSlices)
+
+    const changeQuantity = (item: CardapioPizzaSlice, action: "increase" | "decrease") => {
+        const itemFound = itemsChoosable.find(i => i.id === item.id)
+        const nextQuantity = action === "increase" ?
+            String(Number(itemFound?.quantity || 0) + 1) :
+            String(Number(itemFound?.quantity || 0) - 1)
+
+        const nextItem = {
+            ...item,
+            quantity: nextQuantity
+        }
+
+        setItemsChoosable([
+            ...itemsChoosable.filter(i => i.id !== item.id),
+            nextItem
+        ])
+    }
+
+    return (
+        <div className="flex flex-col gap-6 max-h-[350px] p-4 md:p-6 border rounded-lg">
+            <Form method="post" className="overflow-auto">
+                <input type="hidden" name={`pizzaSlicesState`} value={jsonStringify(itemsChoosable.filter(i => Number(i.quantity) > 0))} />
+                <div className="flex flex-col gap-4 ">
+                    <div className="fixed bg-white w-[320px] md:w-[720px]">
+                        <SubmitButton actionName="cardapio-add-pizza-slices" className="mb-4" />
+                        <Separator className="hidden md:block" />
+                    </div>
+                    <ul className="mt-16">
+                        {
+                            pizzaSlices.map((pizza) => {
+                                return (
+                                    <li key={pizza.id} className="flex justify-between mb-4 items-center max-w-xl ">
+                                        <FormPizzaSliceRow pizza={itemsChoosable.find(i => i.id === pizza.id)} changeQuantity={changeQuantity} />
+                                    </li>
+                                )
+                            })
+                        }
+                    </ul>
+                </div>
+            </Form>
+        </div>
+
+
+    )
+}
+
+interface FormPizzaSliceRowProps {
+    pizza: CardapioPizzaSlice | undefined,
+    changeQuantity: (item: CardapioPizzaSlice, action: "increase" | "decrease") => void,
+}
+
+function FormPizzaSliceRow({ pizza, changeQuantity }: FormPizzaSliceRowProps) {
+    if (!pizza) {
+        return null
+    }
+
+    return (
+        <>
+            <div className="flex flex-col gap-1 md:max-w-xs">
+                <span className="text-sm font-semibold leading-tight md:leading-normal">{pizza.toppings}</span>
+                <span className="text-xs">{pizza.category}</span>
+
+            </div>
+            <div>
+                <div className="flex gap-2 items-center">
+                    <MinusCircleIcon onClick={() => changeQuantity(pizza, "decrease")} className="hover:text-slate-500 cursor-pointer" />
+                    <Input type="text" value={pizza.quantity || "0"} className="bg-white w-16 text-lg text-center border-none outline-none" min={0} readOnly />
+                    <PlusCircleIcon onClick={() => changeQuantity(pizza, "increase")} className="hover:text-slate-500 cursor-pointer" />
+                </div>
+            </div>
+        </>
+
+    )
 }

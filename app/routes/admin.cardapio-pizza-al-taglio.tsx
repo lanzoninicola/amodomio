@@ -8,7 +8,7 @@ export default function CardapioPizzaAlTaglio() {
                 <div className="flex justify-between mb-4 items-start">
                     <div className="flex flex-col gap-4">
                         <h1 className="font-bold text-xl">Cardapio Pizza Al Taglio</h1>
-                        <div className="flex gap-4">
+                        <div className="flex gap-4 justify-between md:justify-start">
                             <Link to="new" className="py-2 px-4 rounded-md bg-black">
                                 <span className=" text-white font-semibold">
                                     Novo cardapio
@@ -16,7 +16,7 @@ export default function CardapioPizzaAlTaglio() {
                             </Link>
                             <Link to="/admin/pizza-al-taglio" className="py-2 px-4 rounded-md border border-black">
                                 <span className="font-semibold">
-                                    Novos sabores
+                                    Pizzas Al Taglio
                                 </span>
                             </Link>
                         </div>

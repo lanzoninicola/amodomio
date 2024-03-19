@@ -2,8 +2,8 @@ import { LoaderArgs } from "@remix-run/node"
 import { useLoaderData } from "@remix-run/react"
 import { cardapioPizzaAlTaglioEntity } from "~/domain/cardapio-pizza-al-taglio/cardapio-pizza-al-taglio.entity.server"
 import { CardapioPizzaAlTaglio } from "~/domain/cardapio-pizza-al-taglio/cardapio-pizza-al-taglio.model.server"
-import queryIt from "~/lib/atlas-mongodb/query-it.server"
 import { ok, serverError } from "~/utils/http-response.server"
+import tryit from "~/utils/try-it"
 
 
 export async function loader({ request, params }: LoaderArgs) {
@@ -14,7 +14,7 @@ export async function loader({ request, params }: LoaderArgs) {
         return serverError('Cardapio não encontrado')
     }
 
-    const [err, cardapio] = await queryIt(cardapioPizzaAlTaglioEntity.findOne([{
+    const [err, cardapio] = await tryit(cardapioPizzaAlTaglioEntity.findOne([{
         field: "id",
         op: "==",
         value: cardapioId

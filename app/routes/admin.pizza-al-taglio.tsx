@@ -173,7 +173,9 @@ export default function PizzaSlicesAdmin() {
                                                                 <div className="flex flex-col gap-4">
                                                                     <TextareaItem
                                                                         type="text" name="toppings" defaultValue={r.toppings}
-                                                                        className="border-none outline-none w-full text-lg"
+                                                                        className="border-none outline-none w-full text-md"
+                                                                        rows={4}
+
                                                                     />
                                                                     <SelectPizzaAlTaglioCategory name={"category"} className="border-none outline-none w-full" />
                                                                 </div>
