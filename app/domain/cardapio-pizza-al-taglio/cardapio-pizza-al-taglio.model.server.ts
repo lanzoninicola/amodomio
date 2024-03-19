@@ -4,6 +4,7 @@ import { PizzaSlice } from "../pizza-al-taglio/pizza-al-taglio.model.server";
 export interface CardapioPizzaSlice extends PizzaSlice {
   isAvailable: boolean;
   quantity: string;
+  value?: string;
 }
 
 interface CardapioPizzaAlTaglio {

@@ -38,10 +38,8 @@ export async function action({ request }: ActionArgs) {
     if (_action === "cardapio-create") {
         const slices = jsonParse(values.pizzaSlicesState) as unknown as CardapioPizzaSlice[]
 
-        const [err, _] = await tryit(cardapioPizzaAlTaglioEntity.create({
-            slices,
-            public: false,
-            name: `Cardápio do dia ${now()}`
+        const [err, _] = await tryit(cardapioPizzaAlTaglioEntity.add({
+            slices
         }))
 
         if (err) {

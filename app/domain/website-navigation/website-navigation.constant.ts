@@ -38,9 +38,15 @@ export const WEBSITE_NAVIGATION_ITEMS: WebsiteNavigation = {
       title: "Gerenciamento",
       items: [
         {
-          title: "Gerençiar cardápio",
+          title: "Cardápio Delivery",
           href: "/admin/cardapio",
           items: [],
+        },
+        {
+          title: "Cardápio Pizza Al Taglio",
+          href: "/admin/cardapio-pizza-al-taglio",
+          items: [],
+          disabled: false,
         },
         {
           title: "Produtos",
@@ -92,12 +98,6 @@ export const WEBSITE_NAVIGATION_ITEMS: WebsiteNavigation = {
         {
           title: "Linha do tempo Entrega",
           href: "/admin/orders-delivery-time-left",
-          items: [],
-          disabled: false,
-        },
-        {
-          title: "Cardápio Pizza Al Taglio",
-          href: "/admin/cardapio-pizza-al-taglio",
           items: [],
           disabled: false,
         },

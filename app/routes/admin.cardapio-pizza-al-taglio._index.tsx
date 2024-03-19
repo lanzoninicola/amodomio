@@ -1,7 +1,7 @@
 import { ActionArgs, LoaderArgs } from "@remix-run/node"
 import { Form, Link, useActionData, useLoaderData, useSearchParams } from "@remix-run/react"
 import dayjs from "dayjs"
-import { BadgeCheck, BadgeX } from "lucide-react"
+import { BadgeCheck, BadgeX, Check, Eye, EyeOff, RotateCcw, X } from "lucide-react"
 import { useState } from "react"
 
 import ItemsPerPage from "~/components/pagination/items-per-page"
@@ -27,8 +27,12 @@ export async function loader({ request }: LoaderArgs) {
         return serverError(err)
     }
 
+    const publicCardapio = records.filter(r => r.public === true)[0]
+    const privateCardapios = records.filter(r => r.public === false)
+
     return ok({
-        records
+        publicCardapio,
+        privateCardapios,
     })
 }
 
@@ -41,8 +45,6 @@ export async function action({ request }: ActionArgs) {
     if (_action === "cardapio-publish") {
 
         const [err, returnedData] = await tryit(cardapioPizzaAlTaglioEntity.publish(cardapioId))
-
-        console.log({ err, returnedData })
 
         if (err) {
             return serverError(err)
@@ -75,6 +77,31 @@ export async function action({ request }: ActionArgs) {
         return ok("Registro apagado.")
     }
 
+    if (_action === "cardapio-slice-out-of-stock") {
+        const sliceId = values["sliceId"] as string
+
+        const [err, returnedData] = await tryit(cardapioPizzaAlTaglioEntity.sliceOutOfStock(cardapioId, sliceId))
+
+        if (err) {
+            return serverError(err)
+        }
+
+        return ok("Pedaço esgotado")
+    }
+
+    if (_action === "cardapio-slice-out-of-stock-recover") {
+        const sliceId = values["sliceId"] as string
+
+        const [err, returnedData] = await tryit(cardapioPizzaAlTaglioEntity.sliceOutOfStockRecover(cardapioId, sliceId))
+
+        if (err) {
+            return serverError(err)
+        }
+
+        return ok("Pedaço esgotado")
+    }
+
+
     return null
 
 }
@@ -83,9 +110,10 @@ export async function action({ request }: ActionArgs) {
 export default function CardapioPizzaAlTaglioIndex() {
     const loaderData = useLoaderData<typeof loader>()
     const actionData = useActionData<typeof action>()
-    const cardapios = loaderData?.payload?.records as CardapioPizzaAlTaglio[] || []
+    const publicCardapio = loaderData?.payload?.publicCardapio as CardapioPizzaAlTaglio || undefined
+    const privateCardapios = loaderData?.payload?.privateCardapios as CardapioPizzaAlTaglio[] || []
 
-    const cardapiosPublicNumber = cardapios.filter(c => c.public).length
+    const cardapios = [publicCardapio, ...privateCardapios]
 
     if (loaderData?.status >= 400) {
         toast({
@@ -108,13 +136,16 @@ export default function CardapioPizzaAlTaglioIndex() {
         })
     }
 
+    const [showPrivateCardapio, setShowPrivateCardapio] = useState(false)
+
+
+
     return (
         <div className="flex flex-col mt-4">
             <div className="flex justify-between items-center mb-6">
                 <h3 className="text-xl font-semibold text-muted-foreground ">{`Lista do cardapios (${cardapios.length})`}</h3>
-                <span className="text-sm font-semibold">{`Publicados: ${cardapiosPublicNumber}`}</span>
             </div>
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-8">
                 {/* <Form method="post">
 
                 </Form> */}
@@ -131,17 +162,44 @@ export default function CardapioPizzaAlTaglioIndex() {
                     }} />
                 </div> */}
 
-                <ul className="grid grid-cols-2 gap-4">
+                {
+                    publicCardapio !== undefined && (
+                        <section className="flex flex-col ">
+                            <h2 className="font-semibold text-muted-foreground">Cardapio Público</h2>
+                            <Separator className="mb-4" />
+                            <CardapioItem cardapio={publicCardapio} />
+                        </section>
+                    )
+                }
+
+                <section className="flex flex-col gap-2">
+                    <div className="flex justify-between items-center">
+                        <h2 className="font-semibold text-muted-foreground">{`Cardapio Privados (${privateCardapios.length})`}</h2>
+                        <div onClick={() => setShowPrivateCardapio(!showPrivateCardapio)} className="flex gap-2 items-center cursor-pointer">
+                            {/* <span className="text-sm">{showPrivateCardapio ? "Esconder" : "Mostrar"}</span> */}
+                            {showPrivateCardapio ? <Eye /> : <EyeOff />}
+
+                        </div>
+                    </div>
+                    <Separator className="mb-4" />
                     {
-                        cardapios.map(c => {
-                            return (
-                                <li key={randomReactKey()} className="flex items-center mb-4">
-                                    <CardapioItem cardapio={c} />
-                                </li>
-                            )
-                        })
+                        showPrivateCardapio && (
+                            <ul className="grid md:grid-cols-2 gap-4">
+                                {
+                                    privateCardapios.map(c => {
+                                        return (
+                                            <li key={randomReactKey()} className="flex items-center mb-4">
+                                                <CardapioItem cardapio={c} />
+                                            </li>
+                                        )
+                                    })
+                                }
+                            </ul>
+                        )
                     }
-                </ul>
+                </section>
+
+
 
             </div>
         </div>
@@ -159,10 +217,10 @@ function CardapioItem({ cardapio }: CardapioItemProps) {
 
     return (
         // <Link to={`${cardapio.id}`} className={`border-2 border-muted rounded-lg p-4 flex flex-col gap-2 w-full h-[130px] hover:bg-slate-100 cursor-pointer`} >
-        <Form method="post" className={`border-2 border-muted rounded-lg p-4 flex flex-col gap-2 w-full hover:border-muted-foreground`}>
-            <input type="hidden" name="cardapioId" value={cardapio.id} />
+        <div className={`border-2 border-muted rounded-lg p-4 flex flex-col gap-2 w-full hover:border-muted-foreground`}>
+
             <div className="flex flex-col gap-4 justify-between">
-                <div className="flex justify-between items-center">
+                <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 md:gap-0">
                     <div className="flex flex-col">
                         <h3 className="text-md font-semibold tracking-tight mb-1">{cardapio.name}</h3>
                         {/* @ts-ignore */}
@@ -188,12 +246,37 @@ function CardapioItem({ cardapio }: CardapioItemProps) {
                         {showSlices ? "Esconder sabores" : "Mostrar sabores"}
                     </span>
                     {
-                        showSlices && (
+                        showSlices === false && (
                             <ul className="flex flex-col gap-1">
                                 {
                                     cardapio.slices.map((slice: CardapioPizzaSlice) => {
                                         return (
-                                            <li key={slice.id} className="text-xs">{`${slice.toppings} (${slice.quantity})`}</li>
+                                            <li key={slice.id} >
+                                                <Form method="post" className="grid grid-cols-6 text-xs md:text-base items-center">
+                                                    <input type="hidden" name="cardapioId" value={cardapio.id} />
+                                                    <input type="hidden" name="sliceId" value={slice.id} />
+                                                    <span className="leading-tight col-span-3">{slice.toppings}</span>
+                                                    <span className="text-center">{slice.quantity}</span>
+                                                    {
+                                                        slice.isAvailable === true && (
+                                                            <SubmitButton
+                                                                className="col-span-2"
+                                                                actionName="cardapio-slice-out-of-stock" idleText="Esgotar" loadingText="Esgotando..."
+                                                                variant={"outline"}
+                                                                icon={<X />} />
+                                                        )
+                                                    }
+                                                    {
+                                                        slice.isAvailable === false && (
+                                                            <SubmitButton
+                                                                className="col-span-2"
+                                                                actionName="cardapio-slice-out-of-stock-recover" idleText="Recuperar" loadingText="Recuperando..."
+
+                                                                icon={<Check />} />
+                                                        )
+                                                    }
+                                                </Form>
+                                            </li>
                                         )
                                     })
                                 }
@@ -201,9 +284,12 @@ function CardapioItem({ cardapio }: CardapioItemProps) {
                         )
                     }
                 </div>
-                <div className="w-full flex justify-end">
-                    <DeleteItemButton actionName="cardapio-delete" />
-                </div>
+                <Form method="post">
+                    <input type="hidden" name="cardapioId" value={cardapio.id} />
+                    <div className="w-full flex justify-end">
+                        <DeleteItemButton actionName="cardapio-delete" />
+                    </div>
+                </Form>
                 {/* <Badge className={
                             cn(
                                 "w-max",
@@ -212,7 +298,7 @@ function CardapioItem({ cardapio }: CardapioItemProps) {
                         }>{category.type}</Badge> */}
 
             </div>
-        </Form>
+        </div>
         // </Link>
     )
 }
