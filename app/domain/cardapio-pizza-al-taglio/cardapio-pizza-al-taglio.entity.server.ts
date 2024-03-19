@@ -1,57 +1,36 @@
-import { DeleteOptions, Filter, ObjectId } from "mongodb";
+import { CardapioPizzaAlTaglioEntityFirestore } from "./cardapio-pizza-al-taglio.entity.firestore.server";
 import {
   CardapioPizzaAlTaglio,
   CardapioPizzaAlTaglioModel,
 } from "./cardapio-pizza-al-taglio.model.server";
-import { MongoBaseEntity } from "~/lib/atlas-mongodb/mongo-base.entity.server";
+import { FirestoreModel } from "~/lib/firestore-model/src/lib/firestore-model.server";
 
-class CardapioPizzaAlTaglioEntity extends MongoBaseEntity<
-  typeof CardapioPizzaAlTaglioModel
-> {
-  async create(newRecord: CardapioPizzaAlTaglio) {
-    return await this.model.insertOne(newRecord);
-  }
+/*
+const dbEngine = process.env.CARDAPIO_PIZZA_AL_TAGLIO_DB_ENGINE;
 
-  /**
-   * if the record is found it will updated
-   *
-   * @param newRecord the data to insert
-   * @returns
-   */
-  async createOrUpdate(newRecord: CardapioPizzaAlTaglio) {
-    // check if already exist the record in the same date, if so returns error otherwise insert one
-    const record = await this.model.findOne({
-      _id: new ObjectId(newRecord?._id),
-    });
+let cardapioPizzaAlTaglioEntity:
+  | CardapioPizzaAlTaglioEntityMongo
+  | CardapioPizzaAlTaglioEntityFirestore;
 
-    if (!record) {
-      return await this.create(newRecord);
-    }
-
-    return await this.model.updateOne(
-      { _id: new ObjectId(newRecord?._id) },
-      {
-        $set: {
-          slices: {
-            ...record.slices,
-            ...newRecord.slices,
-          },
-          publishedDate: newRecord.publishedDate,
-          published: newRecord.published,
-        },
-      }
-    );
-  }
-
-  //   async findAll() {
-  //     const cursor = await this.model.find().sort({ date: 1 });
-
-  //       await cursor.(document => {
-  //       console.log(document);
-  //     });
-  //   }
+if (!dbEngine) {
+  throw new Error("CardapioPizzaAlTaglioEntity - DB_ENGINE not defined");
 }
 
-export const cardapioPizzaAlTaglioEntity = new CardapioPizzaAlTaglioEntity({
-  model: CardapioPizzaAlTaglioModel,
-});
+if (dbEngine === "mongo") {
+  cardapioPizzaAlTaglioEntity = new CardapioPizzaAlTaglioEntityMongo({
+    model: CardapioPizzaAlTaglioModel as Collection,
+  });
+}
+
+if (dbEngine === "firestore") {
+  cardapioPizzaAlTaglioEntity = new CardapioPizzaAlTaglioEntityFirestore(
+    CardapioPizzaAlTaglioModel as FirestoreModel<CardapioPizzaAlTaglio>
+  );
+}
+ */
+
+const cardapioPizzaAlTaglioEntity = new CardapioPizzaAlTaglioEntityFirestore(
+  CardapioPizzaAlTaglioModel as FirestoreModel<CardapioPizzaAlTaglio>
+);
+
+export { cardapioPizzaAlTaglioEntity };

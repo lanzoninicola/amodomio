@@ -159,7 +159,7 @@ export default function AdminCardapio() {
 
     return (
         <Container>
-            <div className="fixed top-[35px] left-0  w-full p-4 bg-muted z-10" >
+            <div className="left-0  w-full p-4 bg-muted z-10" >
                 <div className="flex items-center justify-between mb-4">
                     <h1 className="font-bold text-xl">Cardapio</h1>
                     {(action !== "menu-item-edit") &&
@@ -185,7 +185,7 @@ export default function AdminCardapio() {
                 </div>
                 <MenuItemForm item={itemToEdit} action={action} />
             </div>
-            <div className="mt-40 min-w-[350px]">
+            <div className="mt-6 min-w-[350px]">
                 <div className="flex flex-col gap-4">
                     <MenuItemListStat items={itemsFilteredSorted} />
                     <MenuItemList items={itemsFilteredSorted} action={action} />

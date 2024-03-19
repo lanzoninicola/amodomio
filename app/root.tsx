@@ -36,8 +36,12 @@ export const links: LinksFunction = () => [
     rel: "preconnect",
     href: "https://fonts.gstatic.com",
   },
+  // {
+  //   href: "https://api.fonts.coollabs.io/css2?family=Antonio:wght@400;700&family=Inter&family=Montagu+Slab:opsz,wght@16..144,400;16..144,600;16..144,700&display=swap",
+  //   rel: "stylesheet",
+  // },
   {
-    href: "https://api.fonts.coollabs.io/css2?family=Antonio:wght@400;700&family=Inter&family=Montagu+Slab:opsz,wght@16..144,400;16..144,600;16..144,700&display=swap",
+    href: "https://fonts.googleapis.com/css2?family=Antonio:wght@400;700&family=Inter&family=Montagu+Slab:opsz,wght@16..144,400;16..144,600;16..144,700&display=swap",
     rel: "stylesheet",
   },
   // {
