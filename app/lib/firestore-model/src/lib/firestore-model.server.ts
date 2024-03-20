@@ -81,7 +81,7 @@ export class FirestoreModel<T> {
    * @param {string} documentId
    * @returns {object} - FirestoreDocumentResponse - {ok: boolean, payload: DocumentData | null, error: any}
    */
-  async findById(documentId: string): Promise<T | null> {
+  async findById(documentId: string): Promise<T | undefined> {
     const docRef = doc(
       this._client.connection,
       this._collectionName,
@@ -90,10 +90,29 @@ export class FirestoreModel<T> {
     const docSnap = await getDoc(docRef);
 
     if (docSnap.exists()) {
-      return Object.assign(this, { ...docSnap.data(), id: docSnap.id }) as T;
+      const obj = Object.assign(this, {
+        ...docSnap.data(),
+        id: docSnap.id,
+      }) as T;
+
+      // // 2024-03-18 Delete the key due a problem with the "node-cache" package
+      // //@ts-ignore
+      // if (obj["_client"]) {
+      //   //@ts-ignore
+      //   delete obj._client;
+      // }
+
+      // // 2024-03-18 Delete the key due a problem with the "node-cache" package
+      // //@ts-ignore
+      // if (obj["_collectionName"]) {
+      //   //@ts-ignore
+      //   delete obj._collectionName;
+      // }
+
+      return obj;
     }
 
-    return null;
+    return undefined;
   }
 
   /**
@@ -303,11 +322,11 @@ export class FirestoreModel<T> {
    * @param value  - The value to search
    * @returns  - An array of documents
    */
-  async findOne(conditions: whereCompoundConditions): Promise<T | null> {
+  async findOne(conditions: whereCompoundConditions): Promise<T | undefined> {
     const result = await this.whereCompound(conditions);
 
     if (result.length === 0) {
-      return null;
+      return undefined;
     }
 
     return result[0] as T;
