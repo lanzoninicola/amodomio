@@ -82,11 +82,41 @@ export default function CardapioPizzaAlTaglioNew() {
 
     const [itemsChoosable, setItemsChoosable] = useState<CardapioPizzaSlice[]>(pizzaSlices)
 
+    const [toppingsAmount, setToppingsAmount] = useState({
+        "vegetarian": 0,
+        "meat": 0,
+        "margherita": 0
+    })
+
     const changeQuantity = (item: CardapioPizzaSlice, action: "increase" | "decrease") => {
         const itemFound = itemsChoosable.find(i => i.id === item.id)
-        const nextQuantity = action === "increase" ?
-            String(Number(itemFound?.quantity || 0) + 1) :
-            String(Number(itemFound?.quantity || 0) - 1)
+        let nextQuantity = "0"
+        // const nextQuantity = action === "increase" ?
+        //     String(Number(itemFound?.quantity || 0) + 1) :
+        //     String(Number(itemFound?.quantity || 0) - 1)
+
+        if (action === "increase") {
+            nextQuantity = String(Number(itemFound?.quantity || 0) + 1)
+
+            setToppingsAmount({
+                ...toppingsAmount,
+                vegetarian: itemFound?.toppings === "vegetarian" ? toppingsAmount.vegetarian + 1 : toppingsAmount.vegetarian,
+                meat: itemFound?.toppings === "meat" ? toppingsAmount.meat + 1 : toppingsAmount.meat,
+                margherita: itemFound?.toppings === "margherita" ? toppingsAmount.margherita + 1 : toppingsAmount.margherita,
+            })
+        }
+
+        if (action === "decrease") {
+            nextQuantity = String(Number(itemFound?.quantity || 0) - 1)
+
+            setToppingsAmount({
+                ...toppingsAmount,
+                vegetarian: itemFound?.toppings === "vegetarian" ? toppingsAmount.vegetarian - 1 : toppingsAmount.vegetarian,
+                meat: itemFound?.toppings === "meat" ? toppingsAmount.meat - 1 : toppingsAmount.meat,
+                margherita: itemFound?.toppings === "margherita" ? toppingsAmount.margherita - 1 : toppingsAmount.margherita,
+            })
+        }
+
 
         const nextItem = {
             ...item,
@@ -105,8 +135,16 @@ export default function CardapioPizzaAlTaglioNew() {
                 <input type="hidden" name={`pizzaSlicesState`} value={jsonStringify(itemsChoosable.filter(i => Number(i.quantity) > 0))} />
                 <div className="flex flex-col gap-4 ">
                     <div className="fixed bg-white w-[320px] md:w-[720px]">
-                        <SubmitButton actionName="cardapio-create" className="mb-4" />
+                        <div className="flex justify-between items-center mb-2">
+                            <SubmitButton actionName="cardapio-create" className="mb-4" />
+                            <div className="flex text-sm leading-snug gap-4">
+                                <span>{`Margherita: ${toppingsAmount.margherita}`}</span>
+                                <span>{`Vegetariana: ${toppingsAmount.vegetarian}`}</span>
+                                <span>{`Carne: ${toppingsAmount.meat}`}</span>
+                            </div>
+                        </div>
                         <Separator className="hidden md:block" />
+
                     </div>
                     <ul className="mt-16">
                         {
