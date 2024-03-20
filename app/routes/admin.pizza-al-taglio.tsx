@@ -14,6 +14,7 @@ import { Separator } from "~/components/ui/separator";
 import { Textarea } from "~/components/ui/textarea";
 import { toast } from "~/components/ui/use-toast";
 import SelectPizzaAlTaglioCategory from "~/domain/cardapio-pizza-al-taglio/components/select-pizza-al-taglio-type/select-pizza-al-taglio-type";
+import FormAddPizzaSlice from "~/domain/pizza-al-taglio/components/form-pizza-al-taglio/form-pizza-al-taglio";
 import { pizzaSliceEntity } from "~/domain/pizza-al-taglio/pizza-al-taglio.entity.server";
 import { PizzaSlice, PizzaSliceCategory } from "~/domain/pizza-al-taglio/pizza-al-taglio.model.server";
 import { promoPizzaPhotoEntity } from "~/domain/promo-pizza-photos/promo-pizza-photos.entity.server";
@@ -40,7 +41,7 @@ export const action: ActionFunction = async ({ request }) => {
     const category = formData.get('category') as PizzaSliceCategory;
 
 
-    if (_action === "record-add-pizza") {
+    if (_action === "add-pizza-al-taglio") {
 
         const newRecord: PizzaSlice = {
             toppings,
@@ -136,7 +137,7 @@ export default function PizzaSlicesAdmin() {
 
                 {
                     showForm && (
-                        <FormAddPizza />
+                        <FormAddPizzaSlice />
                     )
                 }
 
@@ -210,37 +211,5 @@ export default function PizzaSlicesAdmin() {
         </Container>
     )
 
-}
-
-function FormAddPizza() {
-
-    const loaderData = useLoaderData<typeof loader>()
-    const promoCode = loaderData.payload?.promoCode
-
-    return (
-        <Form method="post">
-            <div className="flex flex-col gap-2">
-                <Fieldset>
-                    <Textarea name="toppings" placeholder="Ingredientes" required
-                        className={
-                            cn(
-                                `text-lg p-2 placeholder:text-gray-400`,
-                            )
-                        }
-                    />
-                </Fieldset>
-
-                <Fieldset>
-                    <SelectPizzaAlTaglioCategory name={"category"} />
-                </Fieldset>
-
-            </div>
-            <SubmitButton actionName="record-add-pizza"
-                idleText="Salvar"
-                loadingText="Salvando..."
-            />
-
-        </Form>
-    )
 }
 

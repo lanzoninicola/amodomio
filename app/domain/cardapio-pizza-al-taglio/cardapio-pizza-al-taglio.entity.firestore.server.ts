@@ -95,6 +95,21 @@ export class CardapioPizzaAlTaglioEntityFirestore extends BaseEntity<CardapioPiz
     return await this.update(id, nextCardapio);
   }
 
+  async sliceDelete(id: string, sliceId: string) {
+    const cardapio = await this.findById(id);
+
+    if (!cardapio) {
+      throw new Error("Cardapio não encontrado");
+    }
+
+    const nextSlice = cardapio.slices.filter((slice) => slice.id !== sliceId);
+
+    return await this.update(id, {
+      ...cardapio,
+      slices: nextSlice,
+    });
+  }
+
   async sliceOutOfStock(id: string, sliceId: string) {
     const cardapio = await this.findById(id);
 
@@ -113,14 +128,19 @@ export class CardapioPizzaAlTaglioEntityFirestore extends BaseEntity<CardapioPiz
       return slice;
     });
 
-    console.log({ nextSlice });
-
     return await this.update(id, {
       ...cardapio,
       slices: nextSlice,
     });
   }
 
+  /**
+   * Recover the stock of slice
+   *
+   * @param id cardapioId
+   * @param sliceId
+   * @returns
+   */
   async sliceOutOfStockRecover(id: string, sliceId: string) {
     const cardapio = await this.findById(id);
 
@@ -137,6 +157,32 @@ export class CardapioPizzaAlTaglioEntityFirestore extends BaseEntity<CardapioPiz
       }
 
       return slice;
+    });
+
+    return await this.update(id, {
+      ...cardapio,
+      slices: nextSlice,
+    });
+  }
+
+  /**
+   * Recover the stock of all slices
+   *
+   * @param id cardapioId
+   * @returns
+   */
+  async outOfStockRecover(id: string) {
+    const cardapio = await this.findById(id);
+
+    if (!cardapio) {
+      throw new Error("Cardapio não encontrado");
+    }
+
+    const nextSlice = cardapio.slices.map((slice) => {
+      return {
+        ...slice,
+        isAvailable: true,
+      };
     });
 
     return await this.update(id, {
