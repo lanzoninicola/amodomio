@@ -3,14 +3,23 @@ import { Form, useActionData, useLoaderData } from "@remix-run/react"
 import dayjs from "dayjs"
 import { BadgeCheck, BadgeX, Check, Edit, Eye, EyeOff, X } from "lucide-react"
 import { useState } from "react"
+import InputItem from "~/components/primitives/form/input-item/input-item"
+import TextareaItem from "~/components/primitives/form/textarea-item/textarea-item"
 
 import SubmitButton from "~/components/primitives/submit-button/submit-button"
 import { DeleteItemButton } from "~/components/primitives/table-list"
+import SaveItemButton from "~/components/primitives/table-list/action-buttons/save-item-button/save-item-button"
+import Fieldset from "~/components/ui/fieldset"
 import { Separator } from "~/components/ui/separator"
+import { Textarea } from "~/components/ui/textarea"
 import { toast } from "~/components/ui/use-toast"
 import { cardapioPizzaAlTaglioEntity } from "~/domain/cardapio-pizza-al-taglio/cardapio-pizza-al-taglio.entity.server"
 import { CardapioPizzaAlTaglio, CardapioPizzaSlice } from "~/domain/cardapio-pizza-al-taglio/cardapio-pizza-al-taglio.model.server"
+import SelectPizzaAlTaglioCategory from "~/domain/cardapio-pizza-al-taglio/components/select-pizza-al-taglio-type/select-pizza-al-taglio-type"
 import FormAddPizzaSlice from "~/domain/pizza-al-taglio/components/form-pizza-al-taglio/form-pizza-al-taglio"
+import { pizzaSliceEntity } from "~/domain/pizza-al-taglio/pizza-al-taglio.entity.server"
+import { PizzaSliceCategory } from "~/domain/pizza-al-taglio/pizza-al-taglio.model.server"
+import { cn } from "~/lib/utils"
 import { ok, serverError } from "~/utils/http-response.server"
 import randomReactKey from "~/utils/random-react-key"
 import tryit from "~/utils/try-it"
@@ -71,6 +80,64 @@ export async function action({ request }: ActionArgs) {
         return ok("Registro apagado.")
     }
 
+    if (_action === "cardapio-slice-add") {
+        const toppings = values["sliceToppings"] as string
+        const category = values["sliceCategory"] as PizzaSliceCategory
+        const quantity = values["sliceQuantity"] as string
+
+        if (isNaN(Number(quantity))) {
+            return serverError("Quantidade inválida")
+        }
+
+        const [err, returnedData] = await tryit(cardapioPizzaAlTaglioEntity.sliceAdd(
+            cardapioId,
+            {
+                toppings,
+                category,
+            },
+            Number(quantity)
+        ))
+
+        if (err) {
+            return serverError(err)
+        }
+
+        return ok("Pedaço adiçionado")
+    }
+
+    if (_action === "cardapio-slice-update-toppings") {
+        const sliceId = values["sliceId"] as string
+        const toppings = values["sliceToppings"] as string
+
+        const [err, returnedData] = await tryit(cardapioPizzaAlTaglioEntity.sliceUpdateToppings(cardapioId, sliceId, toppings))
+
+        if (err) {
+            return serverError(err)
+        }
+
+        return ok("Pedaço atualizado")
+    }
+
+    if (_action === "cardapio-slice-update-quantity") {
+        const sliceId = values["sliceId"] as string
+        const quantity = values["sliceQuantity"] as string
+
+        if (isNaN(Number(quantity))) {
+            return serverError("Quantidade inválida")
+        }
+
+        const [err, returnedData] = await tryit(cardapioPizzaAlTaglioEntity.sliceUpdateQuantity(cardapioId, sliceId, Number(quantity)))
+
+        if (err) {
+            return serverError(err)
+        }
+
+        return ok("Pedaço atualizado")
+    }
+
+
+
+
     if (_action === "cardapio-slice-delete") {
         const sliceId = values["sliceId"] as string
 
@@ -107,7 +174,8 @@ export async function action({ request }: ActionArgs) {
         return ok("O pedaçõ voltou disponivel")
     }
 
-    console.log({ _action, values })
+
+
 
     if (_action === "cardapio-slice-out-of-stock-recover-all") {
         const [err, returnedData] = await tryit(cardapioPizzaAlTaglioEntity.outOfStockRecover(cardapioId))
@@ -293,7 +361,7 @@ function CardapioItem({ cardapio }: CardapioItemProps) {
                             <span className="text-xs cursor-pointer hover:font-semibold text-muted-foreground" onClick={() => setShowSlices(!showSlices)}>
                                 {showSlices === true ? "Esconder sabores" : "Mostrar sabores"}
                             </span>
-                            <div className="flex gap-2 text-sm">
+                            <div className="flex gap-2 text-xs font-semibold">
                                 <span>{`Vegetariano: ${vegetarianAmount}`}</span>
                                 <span>{`Carne: ${meatAmount}`}</span>
                                 <span>{`Margherita: ${margheritaAmount}`}</span>
@@ -310,55 +378,89 @@ function CardapioItem({ cardapio }: CardapioItemProps) {
                         }
 
                     </section>
-                    {
-                        showSlices && (
-                            <ul className="flex flex-col gap-1">
-                                {
-                                    cardapio.slices.map((slice: CardapioPizzaSlice) => {
-                                        return (
-                                            <li key={slice.id} >
-                                                <Form method="post" className="grid grid-cols-6 text-xs md:text-base items-center mb-2">
-                                                    <input type="hidden" name="cardapioId" value={cardapio.id} />
-                                                    <input type="hidden" name="sliceId" value={slice.id} />
-                                                    <span className="leading-tight col-span-3">{slice.toppings}</span>
-                                                    <span className="text-center">{slice.quantity}</span>
-                                                    {
-                                                        showEdit === false && slice.isAvailable === true && (
-                                                            <SubmitButton
-                                                                className="col-span-2"
-                                                                actionName="cardapio-slice-out-of-stock" idleText="Esgotar" loadingText="Esgotando..."
-                                                                variant={"outline"}
-                                                                icon={<X />} />
-                                                        )
-                                                    }
-                                                    {
-                                                        showEdit === false && slice.isAvailable === false && (
-                                                            <SubmitButton
-                                                                className="col-span-2"
-                                                                actionName="cardapio-slice-out-of-stock-recover-slice" idleText="Restorar" loadingText="Restorando..."
+                    <section className="flex flex-col gap-2">
+                        {showEdit &&
+                            <FormAddPizzaSliceIntoCardapio cardapio={cardapio} />
+                        }
 
-                                                                icon={<Check />} />
-                                                        )
-                                                    }
-                                                    {
-                                                        showEdit === true && (
-                                                            <DeleteItemButton actionName="cardapio-slice-delete" />
-                                                        )
-                                                    }
+                        {
+                            showSlices && (
+                                <ul className="flex flex-col gap-1">
+                                    {
+                                        cardapio.slices.map((slice: CardapioPizzaSlice) => {
+                                            return (
+                                                <li key={slice.id} >
+                                                    <Form method="post" className="grid grid-cols-6 text-xs md:text-base items-center mb-2">
+                                                        <input type="hidden" name="cardapioId" value={cardapio.id} />
+                                                        <input type="hidden" name="sliceId" value={slice.id} />
+                                                        <TextareaItem type="text" rows={2}
+                                                            className="border-none outline-none leading-tight col-span-3 text-sm" name="sliceToppings"
+                                                            defaultValue={slice.toppings}
+                                                            disabled={showEdit === false}
+                                                        />
+                                                        <InputItem type="text"
+                                                            className="border-none outline-none text-sm max-w-[50px]" name="sliceQuantity"
+                                                            defaultValue={slice.quantity}
+                                                            disabled={showEdit === false}
+                                                            autocomplete="off"
+                                                        />
+                                                        {
+                                                            showEdit === false && slice.isAvailable === true && (
+                                                                <SubmitButton
+                                                                    className="col-span-2"
+                                                                    actionName="cardapio-slice-out-of-stock" idleText="Esgotar" loadingText="Esgotando..."
+                                                                    variant={"outline"}
+                                                                    icon={<X />} />
+                                                            )
+                                                        }
+                                                        {
+                                                            showEdit === false && slice.isAvailable === false && (
+                                                                <SubmitButton
+                                                                    className="col-span-2"
+                                                                    actionName="cardapio-slice-out-of-stock-recover-slice" idleText="Restorar" loadingText="Restorando..."
 
-                                                </Form>
-                                            </li>
-                                        )
-                                    })
-                                }
-                            </ul>
-                        )
-                    }
+                                                                    icon={<Check />} />
+                                                            )
+                                                        }
+                                                        {
+                                                            showEdit === true && (
+                                                                <div className="flex gap-2 items-center justify-evenly col-span-2">
+                                                                    <div className="flex flex-col gap-0">
+                                                                        <span className="text-xs">Sabores</span>
+                                                                        <SaveItemButton actionName="cardapio-slice-update-toppings" tooltipLabel="Atualizar Sabores" />
+                                                                    </div>
+                                                                    <div className="flex flex-col gap-0">
+                                                                        <span className="text-xs">Quantitade</span>
+                                                                        <SaveItemButton actionName="cardapio-slice-update-quantity" tooltipLabel="Atualizar Quantitade" />
+                                                                    </div>
+                                                                    <div className="flex flex-col gap-0">
+                                                                        <span className="text-xs text-red-500">Deletar</span>
+                                                                        <DeleteItemButton actionName="cardapio-slice-delete" />
+                                                                    </div>
+
+                                                                </div>
+
+                                                            )
+                                                        }
+
+                                                    </Form>
+                                                </li>
+                                            )
+                                        })
+                                    }
+                                </ul>
+                            )
+                        }
+                    </section>
+
                 </div>
                 <Form method="post">
                     <input type="hidden" name="cardapioId" value={cardapio.id} />
                     <div className="w-full flex justify-end">
-                        <DeleteItemButton actionName="cardapio-delete" />
+                        <div className="flex gap-0 items-center hover:bg-red-200 rounded-md p-1 cursor-pointer">
+                            <span className="text-xs text-red-500 ">Deletar o cardápio</span>
+                            <DeleteItemButton actionName="cardapio-delete" />
+                        </div>
                     </div>
                 </Form>
                 {/* <Badge className={
@@ -371,5 +473,50 @@ function CardapioItem({ cardapio }: CardapioItemProps) {
             </div>
         </div>
         // </Link>
+    )
+}
+
+interface FormAddPizzaSliceIntoCardapioProps {
+    cardapio: CardapioPizzaAlTaglio,
+}
+
+
+function FormAddPizzaSliceIntoCardapio({ cardapio }: FormAddPizzaSliceIntoCardapioProps) {
+    return (
+        <div className="flex flex-col gap-4">
+            <h4 className="text-xs font-semibold">Adicionar um novo sabor</h4>
+            <Form method="post">
+                <input type="hidden" name="cardapioId" value={cardapio.id} />
+                <div className="flex flex-col gap-2">
+                    <Fieldset>
+                        <Textarea name="sliceToppings" placeholder="Ingredientes" required
+                            className={
+                                cn(
+                                    `text-lg p-2 placeholder:text-gray-400`,
+                                )
+                            }
+                        />
+                    </Fieldset>
+
+                    <Fieldset>
+                        <SelectPizzaAlTaglioCategory name={"sliceCategory"} />
+                    </Fieldset>
+
+                    <Fieldset>
+                        <InputItem type="text"
+                            className="text-sm max-w-[150px]" name="sliceQuantity"
+                            autocomplete="off"
+                            placeholder="Quantidade"
+                        />
+                    </Fieldset>
+
+                </div>
+                <SubmitButton actionName="cardapio-slice-add"
+                    idleText="Adicionar Sabor"
+                    loadingText="Adicionando..."
+                />
+
+            </Form>
+        </div>
     )
 }
