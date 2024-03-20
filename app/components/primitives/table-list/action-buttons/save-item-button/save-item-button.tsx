@@ -11,11 +11,12 @@ interface SaveItemButtonProps {
     className?: string
     // returned value of useFormSubmissionState() hook
     formSubmissionState?: FormSubmissionnState
+    tooltipLabel?: string
 }
 
-export default function SaveItemButton({ actionName, iconSize = 16, clazzName, className, formSubmissionState }: SaveItemButtonProps) {
+export default function SaveItemButton({ actionName, iconSize = 16, clazzName, className, formSubmissionState, tooltipLabel = "Salvar" }: SaveItemButtonProps) {
     return (
-        <Tooltip content="Salvar">
+        <Tooltip content={tooltipLabel}>
             <Button type="submit" variant={"ghost"} size="sm" name="_action" value={actionName}
                 className={cn(
                     "text-black hover:bg-gray-200",

@@ -1,8 +1,12 @@
 import { FindPaginatedProps } from "~/lib/atlas-mongodb/mongo-base.entity.server";
 import { BaseEntity } from "../base.entity";
-import { CardapioPizzaAlTaglio } from "./cardapio-pizza-al-taglio.model.server";
+import {
+  CardapioPizzaAlTaglio,
+  CardapioPizzaSlice,
+} from "./cardapio-pizza-al-taglio.model.server";
 import { now } from "~/lib/dayjs";
 import { PizzaSlice } from "../pizza-al-taglio/pizza-al-taglio.model.server";
+import { pizzaSliceEntity } from "../pizza-al-taglio/pizza-al-taglio.entity.server";
 
 export class CardapioPizzaAlTaglioEntityFirestore extends BaseEntity<CardapioPizzaAlTaglio> {
   private meatSlicePriceAmount: number = 24;
@@ -93,6 +97,99 @@ export class CardapioPizzaAlTaglioEntityFirestore extends BaseEntity<CardapioPiz
     };
 
     return await this.update(id, nextCardapio);
+  }
+
+  async sliceAdd(id: string, slice: PizzaSlice, quantity: number) {
+    const cardapio = await this.findById(id);
+
+    if (!cardapio) {
+      throw new Error("Cardapio não encontrado");
+    }
+
+    const newSlice = await pizzaSliceEntity.create({
+      ...slice,
+      toppings: slice.toppings,
+      category: slice.category,
+    });
+
+    if (!newSlice) {
+      throw new Error("Erro ao criar a fatia de pizza");
+    }
+
+    // @ts-ignore
+    delete newSlice._client;
+    // @ts-ignore
+    delete newSlice._collectionName;
+
+    return await this.update(id, {
+      ...cardapio,
+      slices: [
+        ...cardapio.slices,
+        {
+          ...newSlice,
+          quantity,
+          isAvailable: true,
+          value: this.setSlicePrice(slice),
+        },
+      ],
+    });
+  }
+
+  async sliceUpdateToppings(id: string, sliceId: string, toppings: string) {
+    const cardapio = await this.findById(id);
+
+    if (!cardapio) {
+      throw new Error("Cardapio não encontrado");
+    }
+
+    const sliceFound = cardapio.slices.find((s) => s.id === sliceId);
+
+    if (!sliceFound) {
+      return;
+    }
+
+    // update the pizza slice record
+    await pizzaSliceEntity.update(sliceId, {
+      ...sliceFound,
+      toppings,
+    });
+
+    // update the pizza slice record inside the cardapio record
+    return await this.update(id, {
+      ...cardapio,
+      slices: cardapio.slices.map((slice) => {
+        if (slice.id === sliceId) {
+          return {
+            ...slice,
+            toppings,
+          };
+        }
+
+        return slice;
+      }),
+    });
+  }
+
+  async sliceUpdateQuantity(id: string, sliceId: string, quantity: number) {
+    const cardapio = await this.findById(id);
+
+    if (!cardapio) {
+      throw new Error("Cardapio não encontrado");
+    }
+
+    return await this.update(id, {
+      ...cardapio,
+      slices: cardapio.slices.map((slice) => {
+        if (slice.id === sliceId) {
+          return {
+            ...slice,
+            quantity,
+          };
+        }
+
+        return slice;
+      }),
+    });
   }
 
   async sliceDelete(id: string, sliceId: string) {

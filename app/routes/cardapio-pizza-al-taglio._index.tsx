@@ -1,4 +1,5 @@
 import { useLoaderData } from "@remix-run/react"
+import { AlertCircle } from "lucide-react"
 import React from "react"
 import WhatsAppButton from "~/components/primitives/whatsapp/whatsapp"
 import WhatsAppButtonExtended from "~/components/primitives/whatsapp/whatsapp-button-extended"
@@ -37,14 +38,18 @@ export default function CardapioPizzaAlTaglioIndex() {
 
     if (isSlicesNotAvailable) {
         return (
-            <div className="grid place-items-center">
-                <div className="bg-white rounded-md p-4">
+            <div className="grid place-items-center min-h-[200px] md:min-h-[300px] ">
+                <div className="bg-white rounded-lg shadow-xl p-4">
+                    <div className="flex gap-2 items-center mb-4">
+                        <AlertCircle />
+                        <h1 className="font-semibold">Atenção</h1>
+                    </div>
                     <p className="leading-snug">
-                        O cardápio de pizzas al taglio ainda não é disponivel.
+                        O cardápio das pizzas al taglio ainda não está disponivel.
                         Por gentileza, aguarde.
                         <br />
                         <br />
-                        Equipe A Modo Mio
+                        <span className="font-semibold text-sm">Equipe A Modo Mio</span>
 
                     </p>
                 </div>
