@@ -236,6 +236,10 @@ function CardapioItem({ cardapio }: CardapioItemProps) {
 
     const someIsNotAvailable = cardapio.slices.filter(s => s.isAvailable === false).length > 0
 
+    const vegetarianAmount = cardapio.slices.filter(s => s.category === "vegetariana").length
+    const meatAmount = cardapio.slices.filter(s => s.category === "carne").length
+    const margheritaAmount = cardapio.slices.filter(s => s.category === "margherita").length
+
     return (
         // <Link to={`${cardapio.id}`} className={`border-2 border-muted rounded-lg p-4 flex flex-col gap-2 w-full h-[130px] hover:bg-slate-100 cursor-pointer`} >
         <div className={`border-2 border-muted rounded-lg p-4 flex flex-col gap-2 w-full hover:border-muted-foreground`}>
@@ -285,9 +289,16 @@ function CardapioItem({ cardapio }: CardapioItemProps) {
                 </div>
                 <div className="flex flex-col gap-2">
                     <section className="flex justify-between items-center mb-4">
-                        <span className="text-xs cursor-pointer hover:font-semibold text-muted-foreground" onClick={() => setShowSlices(!showSlices)}>
-                            {showSlices === true ? "Esconder sabores" : "Mostrar sabores"}
-                        </span>
+                        <div className="flex flex-col gap-2">
+                            <span className="text-xs cursor-pointer hover:font-semibold text-muted-foreground" onClick={() => setShowSlices(!showSlices)}>
+                                {showSlices === true ? "Esconder sabores" : "Mostrar sabores"}
+                            </span>
+                            <div className="flex gap-2 text-sm">
+                                <span>{`Vegetariano: ${vegetarianAmount}`}</span>
+                                <span>{`Carne: ${meatAmount}`}</span>
+                                <span>{`Margherita: ${margheritaAmount}`}</span>
+                            </div>
+                        </div>
                         {
                             showSlices === true && (
 
