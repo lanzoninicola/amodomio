@@ -2,17 +2,24 @@ import { Link } from "@remix-run/react";
 import { Delete, Trash } from "lucide-react";
 import Tooltip from "~/components/primitives/tooltip/tooltip";
 import { Button } from "~/components/ui/button";
+import { cn } from "~/lib/utils";
 
 
 interface DeleteItemButtonProps {
   actionName: string;
   iconSize?: number;
+  className?: string;
 }
 
-export default function DeleteItemButton({ actionName, iconSize }: DeleteItemButtonProps) {
+export default function DeleteItemButton({ actionName, iconSize, className }: DeleteItemButtonProps) {
   return (
     <Tooltip content="Deletar">
-      <Button type="submit" variant={"ghost"} size="sm" name="_action" value={actionName} className="text-red-500 hover:bg-red-200">
+      <Button type="submit" variant={"ghost"} size="sm" name="_action" value={actionName} className={
+        cn(
+          "text-red-500 hover:bg-red-200",
+          className
+        )
+      }>
         <Trash size={iconSize || 16} />
       </Button>
     </Tooltip>

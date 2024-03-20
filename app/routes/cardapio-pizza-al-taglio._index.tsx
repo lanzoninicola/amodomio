@@ -27,25 +27,34 @@ export async function loader() {
 export default function CardapioPizzaAlTaglioIndex() {
 
     const loaderData = useLoaderData<typeof loader>()
-    const vegetarianSlices = loaderData.payload?.slices["vegetarian"]
-    const meatSlices = loaderData.payload?.slices["meat"]
-    const margheritaSlices = loaderData.payload?.slices["margherita"]
+    const vegetarianSlices: CardapioPizzaSlice[] = loaderData.payload?.slices["vegetarian"]
+    const meatSlices: CardapioPizzaSlice[] = loaderData.payload?.slices["meat"]
+    const margheritaSlices: CardapioPizzaSlice[] = loaderData.payload?.slices["margherita"]
 
     const isSlicesNotAvailable = vegetarianSlices.length === 0 &&
-        meatSlices.lenght === 0 &&
+        meatSlices.length === 0 &&
         margheritaSlices.length === 0
 
     if (isSlicesNotAvailable) {
         return (
             <div className="grid place-items-center">
-                <span className="font-semibold text-muted-foreground">Nenhum pedaçõ de pizza disponivel</span>
+                <div className="bg-white rounded-md p-4">
+                    <p className="leading-snug">
+                        O cardápio de pizzas al taglio ainda não é disponivel.
+                        Por gentileza, aguarde.
+                        <br />
+                        <br />
+                        Equipe A Modo Mio
+
+                    </p>
+                </div>
             </div>
         )
     }
 
     return (
         <div className="h-full">
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-4 mb-8">
 
                 {
                     vegetarianSlices.length > 0 && (
@@ -109,8 +118,7 @@ function SectionTitle({ children }: SectionTitleProps) {
 function RowTitle() {
     return (
         <div className="grid grid-cols-6 items-start mb-1 text-xs font-semibold">
-            <span className="leading-tight col-span-4">Sabores</span>
-            <span className="text-center">Quantitade</span>
+            <span className="leading-tight col-span-5">Sabores</span>
             <span className="text-end">Valor</span>
         </div>
     )
@@ -133,11 +141,10 @@ function PizzaSliceRow({ slice }: PizzaSliceRowProps) {
         }>
             <span className={
                 cn(
-                    "leading-tight col-span-4",
+                    "leading-tight col-span-5",
                     slice.isAvailable === false && "line-through"
                 )
             }>{slice.toppings}</span>
-            <span className="text-center text-sm">{slice.isAvailable === true ? slice.quantity : 0}</span>
             <span className="text-end text-sm font-semibold">{slice.value}</span>
         </li>
     )
