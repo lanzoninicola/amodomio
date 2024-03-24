@@ -1,5 +1,5 @@
 import { useLoaderData } from "@remix-run/react"
-import { AlertCircle } from "lucide-react"
+import { AlertCircle, Beef, LeafyGreen } from "lucide-react"
 import React from "react"
 import WhatsAppButton from "~/components/primitives/whatsapp/whatsapp"
 import WhatsAppButtonExtended from "~/components/primitives/whatsapp/whatsapp-button-extended"
@@ -64,7 +64,7 @@ export default function CardapioPizzaAlTaglioIndex() {
                 {
                     vegetarianSlices.length > 0 && (
                         <section>
-                            <SectionTitle>Vegetariano</SectionTitle>
+                            <SectionTitle icon={<LeafyGreen />}>Vegetariano</SectionTitle>
                             <RowTitle />
                             <ul className="flex flex-col">
                                 {vegetarianSlices.map((s: CardapioPizzaSlice) => {
@@ -78,7 +78,7 @@ export default function CardapioPizzaAlTaglioIndex() {
                 {
                     meatSlices.length > 0 && (
                         <section>
-                            <SectionTitle>Com Carne</SectionTitle>
+                            <SectionTitle icon={<Beef />}>Com Carne</SectionTitle>
                             <RowTitle />
                             <ul className="flex flex-col">
                                 {meatSlices.map((s: CardapioPizzaSlice) => {
@@ -113,10 +113,24 @@ export default function CardapioPizzaAlTaglioIndex() {
 
 interface SectionTitleProps {
     children: React.ReactNode
+    icon?: React.ReactNode
 }
 
-function SectionTitle({ children }: SectionTitleProps) {
-    return <h2 className="text-lg tracking-tight font-bold mb-2">{children}</h2>
+function SectionTitle({ children, icon }: SectionTitleProps) {
+
+    const titleStyle = "text-lg tracking-tight font-bold "
+
+    if (icon) {
+        return (
+            <div className="flex gap-2 items-center mb-2">
+                {icon}
+                <h2 className={cn(titleStyle)}>{children}</h2>
+            </div>
+
+        )
+    }
+
+    return <h2 className={cn(titleStyle, "mb-2")}>{children}</h2>
 
 }
 

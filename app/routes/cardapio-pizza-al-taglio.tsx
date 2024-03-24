@@ -19,7 +19,7 @@ export const meta: V2_MetaFunction = () => {
 
 export default function CardapioPizzaAlTaglio() {
     return (
-        <div className="bg-orange-50 min-h-screen">
+        <div className="min-h-screen">
             <Container className="min-h-screen">
                 <div className="flex flex-col mb-6">
                     <div className="flex flex-col justify-center items-center w-full md:pt-6">
@@ -27,7 +27,7 @@ export default function CardapioPizzaAlTaglio() {
                             <Logo color="black" />
                         </div>
                     </div>
-                    <h1 className="font-accent font-semibold text-2xl md:text-4xl mb-2">Cardápio Pizza Al Taglio</h1>
+                    <h1 className="font-accent font-semibold text-2xl md:text-4xl mb-2 uppercase">Cardápio Pizza Al Taglio</h1>
                     <h2 className="">Escolha seus pedaços de pizza de hoje:</h2>
                 </div>
                 <Outlet />
