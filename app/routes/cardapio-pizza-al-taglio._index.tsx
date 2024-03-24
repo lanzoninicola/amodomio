@@ -63,10 +63,10 @@ export default function CardapioPizzaAlTaglioIndex() {
 
                 {
                     vegetarianSlices.length > 0 && (
-                        <section>
+                        <section className="mb-4 ">
                             <SectionTitle icon={<LeafyGreen />}>Vegetariano</SectionTitle>
-                            <RowTitle />
-                            <ul className="flex flex-col">
+                            {/* <RowTitle /> */}
+                            <ul className="flex flex-col gap-4">
                                 {vegetarianSlices.map((s: CardapioPizzaSlice) => {
                                     return <PizzaSliceRow key={s.id} slice={s} />
                                 })}
@@ -77,10 +77,10 @@ export default function CardapioPizzaAlTaglioIndex() {
 
                 {
                     meatSlices.length > 0 && (
-                        <section>
+                        <section className="mb-4">
                             <SectionTitle icon={<Beef />}>Com Carne</SectionTitle>
-                            <RowTitle />
-                            <ul className="flex flex-col">
+                            {/* <RowTitle /> */}
+                            <ul className="flex flex-col gap-4">
                                 {meatSlices.map((s: CardapioPizzaSlice) => {
                                     return <PizzaSliceRow key={s.id} slice={s} />
                                 })}
@@ -91,10 +91,10 @@ export default function CardapioPizzaAlTaglioIndex() {
 
                 {
                     margheritaSlices.length > 0 && (
-                        <section>
+                        <section className="mb-4">
                             <SectionTitle>Margherita</SectionTitle>
-                            <RowTitle />
-                            <ul className="flex flex-col">
+                            {/* <RowTitle /> */}
+                            <ul className="flex flex-col gap-4">
                                 {margheritaSlices.map((s: CardapioPizzaSlice) => {
                                     return <PizzaSliceRow key={s.id} slice={s} />
                                 })}
@@ -118,7 +118,7 @@ interface SectionTitleProps {
 
 function SectionTitle({ children, icon }: SectionTitleProps) {
 
-    const titleStyle = "text-lg tracking-tight font-bold "
+    const titleStyle = "text-lg tracking-normal font-bold font-accent uppercase"
 
     if (icon) {
         return (
@@ -147,6 +147,28 @@ interface PizzaSliceRowProps {
     slice: CardapioPizzaSlice
 }
 
+// function PizzaSliceRow({ slice }: PizzaSliceRowProps) {
+
+//     return (
+
+
+//         <li className={
+//             cn(
+//                 "grid grid-cols-6 items-start mb-4 text-md",
+//                 slice.isAvailable === false && "opacity-50"
+//             )
+//         }>
+//             <span className={
+//                 cn(
+//                     "leading-tight col-span-5",
+//                     slice.isAvailable === false && "line-through"
+//                 )
+//             }>{slice.toppings}</span>
+//             <span className="text-end text-sm font-semibold">{slice.value}</span>
+//         </li>
+//     )
+// }
+
 function PizzaSliceRow({ slice }: PizzaSliceRowProps) {
 
     return (
@@ -154,17 +176,17 @@ function PizzaSliceRow({ slice }: PizzaSliceRowProps) {
 
         <li className={
             cn(
-                "grid grid-cols-6 items-start mb-4 text-md",
+                "flex flex-col gap-4 p-4 rounded-md shadow-md shadow-slate-200 ",
                 slice.isAvailable === false && "opacity-50"
             )
         }>
             <span className={
                 cn(
-                    "leading-tight col-span-5",
+                    "text-lg leading-5",
                     slice.isAvailable === false && "line-through"
                 )
             }>{slice.toppings}</span>
-            <span className="text-end text-sm font-semibold">{slice.value}</span>
+            <span className="text-end text-sm font-semibold text-brand-blue">{slice.value}</span>
         </li>
     )
 }
