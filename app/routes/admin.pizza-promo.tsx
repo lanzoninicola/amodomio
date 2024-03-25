@@ -412,7 +412,7 @@ export default function PromoPizzaAdmin() {
                                                             </WhatsappExternalLink>
                                                             <WhatsappExternalLink
                                                                 // phoneNumber={r.selectedBy?.phoneNumber || "46991052049"}
-                                                                phoneNumber={"46991052049"}
+                                                                phoneNumber={"+46991052049"}
                                                                 message={waMessageRemember(dateStringPT, {
                                                                     endereço: r.selectedBy?.endereço,
                                                                     bairro: r.selectedBy?.bairro,
