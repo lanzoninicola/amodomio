@@ -19,15 +19,17 @@ export default function WhatsappExternalLink({
     className,
     style
 }: WhatsappExternalLinkProps) {
-    const whatsappLink = message
-        ? `https://wa.me/send?phone=${phoneNumber}&text=${message}`
-        : `https://wa.me/${phoneNumber}`;
+    // https://faq.whatsapp.com/5913398998672934?helpref=faq_content
+    // https://wa.me/whatsappphonenumber/?text=urlencodedtext
 
-    const clazzName = style ? style : "relative w-full";
+    let waLink = `https://wa.me/${phoneNumber}`
+    if (message) {
+        waLink += `?text=${encodeURIComponent(message)}`
+    }
 
     return (
         <ExternalLink
-            to={whatsappLink}
+            to={waLink}
             ariaLabel={`${ariaLabel} com WhatsApp`}
             className={cn(
                 className
