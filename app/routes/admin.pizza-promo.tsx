@@ -411,8 +411,7 @@ export default function PromoPizzaAdmin() {
                                                                 <span className="font-semibold text-sm text-white">Saindo para entrega</span>
                                                             </WhatsappExternalLink>
                                                             <WhatsappExternalLink
-                                                                // phoneNumber={r.selectedBy?.phoneNumber || "46991052049"}
-                                                                phoneNumber={"46991052049"}
+                                                                phoneNumber={r.selectedBy?.phoneNumber || "46991052049"}
                                                                 message={waMessageRemember(dateStringPT, {
                                                                     endereço: r.selectedBy?.endereço,
                                                                     bairro: r.selectedBy?.bairro,
@@ -503,12 +502,12 @@ const waMessageRemember = (
 ): string => {
 
     return `Olá!\n\nHoje, ${date}, é o dia da nossa sessão de fotos de cardápio.\n
-Se você confirmou, lembramos que sua pizza terá 20% de desconto, a entrega será gratuita, e o envio será feito aproximadamente entre 18:30 e 20:30 no endereço:\n\n
-${endereço || ""}\n
-${bairro || ""}\n
-${cep || ""}\n\n
+Se você confirmou, lembramos que sua pizza terá *20% de desconto*, a *entrega será gratuita*, e o envio será feito aproximadamente *entre 18:30 e 20:30* no endereço:\n
+${endereço || ""}
+${bairro || ""}
+${cep || ""}\n
 
-Obrigado,\n
+Obrigado,
 Equipe, pizzaria "A Modo Mio"`
 }
 
