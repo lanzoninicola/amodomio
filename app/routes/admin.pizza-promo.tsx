@@ -1,13 +1,16 @@
 import { ActionFunction, LoaderFunction } from "@remix-run/node";
 import { Form, useActionData, useLoaderData } from "@remix-run/react";
 import { CheckSquareIcon, MinusSquareIcon, PlusSquareIcon } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import Container from "~/components/layout/container/container";
+import CopyButton from "~/components/primitives/copy-button/copy-button";
 import InputItem from "~/components/primitives/form/input-item/input-item";
 import TextareaItem from "~/components/primitives/form/textarea-item/textarea-item";
 import SubmitButton from "~/components/primitives/submit-button/submit-button";
 import { DeleteItemButton } from "~/components/primitives/table-list";
 import SaveItemButton from "~/components/primitives/table-list/action-buttons/save-item-button/save-item-button";
+import WhatsappExternalLink from "~/components/primitives/whatsapp/whatsapp-external-link";
+import WhatsAppIcon from "~/components/primitives/whatsapp/whatsapp-icon";
 import Fieldset from "~/components/ui/fieldset";
 import { Label } from "~/components/ui/label";
 import { Separator } from "~/components/ui/separator";
@@ -228,6 +231,7 @@ export default function PromoPizzaAdmin() {
     // ]
 
     const records = loaderData.payload?.records || []
+    const promoCode = loaderData.payload?.promoCode || ""
 
     const [showForm, setShowForm] = useState(false)
     const [showFormUpdate, setShowFormUpdate] = useState(false)
@@ -249,6 +253,13 @@ export default function PromoPizzaAdmin() {
             description: message,
         })
     }
+
+    const dateStr = promoCode.substring(0, 8);
+    const year = dateStr.substring(0, 4);
+    const month = dateStr.substring(4, 6);
+    const day = dateStr.substring(6, 8);
+    const dateStringPT = `${day}/${month}/${year}`
+
 
 
     return (
@@ -273,11 +284,11 @@ export default function PromoPizzaAdmin() {
             <Separator className="mb-8" />
 
             <div className="flex flex-col">
-                <div className="flex justify-between items-center">
-                    <h2 className="text-2xl font-semibold mb-6">{`Listas das pizzas (${records.length})`}</h2>
+                <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-xl md:text-2xl font-semibold ">{`Listas das pizzas (${records.length})`}</h2>
                     <span className="text-sm underline cursor-pointer" onClick={() => setShowFormUpdate(!showFormUpdate)}>Abilitar alteraçoes</span>
                 </div>
-                <ul className="flex flex-col">
+                <ul className="flex flex-col gap-4">
                     {
                         records.map((r: PromoPizzaPhoto) => {
                             return (
@@ -287,12 +298,10 @@ export default function PromoPizzaAdmin() {
                                     )
                                 }>
                                     <div className="flex flex-col gap-2">
-                                        <div className="flex justify-between items-center">
+                                        <div className="flex flex-col md:flex-row justify-between items-center w-full">
 
                                             <div className="flex flex-col">
-
                                                 {/* <!-- Nome e ingredientes --> */}
-
                                                 <div className="flex flex-col">
                                                     <Form method="post">
                                                         <input type="hidden" name="recordId" value={r.id} />
@@ -354,22 +363,18 @@ export default function PromoPizzaAdmin() {
                                                         </div>
                                                     </Form>
                                                 </div>
-
-
-
                                             </div>
 
                                             {
                                                 r.isSelected === true && (
-                                                    <Form method="post">
+                                                    <Form method="post" className="w-full md:w-auto">
                                                         <input type="hidden" name="recordId" value={r.id} />
-                                                        <div className="flex gap-2">
+                                                        <div className="flex gap-2 w-full">
 
                                                             <SubmitButton actionName="record-detach-customer"
                                                                 idleText="Svincular"
                                                                 loadingText="Svinculando..."
                                                                 variant={"outline"}
-
                                                             />
                                                             {/* <SubmitButton actionName="record-attach-customer"
                                                                 className="bg-brand-blue font-semibold"
@@ -390,17 +395,40 @@ export default function PromoPizzaAdmin() {
                                                 )
                                             }
                                         </div>
+
+                                        {/** Nome cliente */}
                                         {
                                             r.isSelected && (
-                                                <div className="flex flex-col md:max-w-lg">
-                                                    <div className="flex justify-between">
-                                                        <span className="font-semibold text-brand-blue">{r.selectedBy?.name}</span>
-                                                        <span className="font-semibold text-brand-blue">{r.selectedBy?.phoneNumber}</span>
+                                                <div className="flex flex-col md:grid md:grid-cols-2">
+                                                    <div className="flex flex-col mb-2">
+                                                        <div className="flex flex-col md:flex-row gap-4 mb-1">
+                                                            <span className="font-semibold text-brand-blue">{r.selectedBy?.name}</span>
+
+                                                        </div>
+                                                        <span className="text-brand-blue">{r.selectedBy?.endereço}</span>
+                                                        <span className="text-brand-blue">{r.selectedBy?.bairro}</span>
+                                                        <span className="text-brand-blue">{r.selectedBy?.cep}</span>
+                                                        <span className="text-brand-blue">Tel: {r.selectedBy?.phoneNumber}</span>
                                                     </div>
-                                                    <span className="text-brand-blue">{r.selectedBy?.endereço}</span>
-                                                    <span className="text-brand-blue">{r.selectedBy?.bairro}</span>
-                                                    <span className="text-brand-blue">{r.selectedBy?.cep}</span>
+                                                    <div className="flex flex-col gap-2 md:grid md:grid-cols-2 md:gap-4">
+                                                        <CopyButton
+                                                            label="Mensagen de lembrete promo"
+                                                            classNameLabel="text-sm md:text-xs"
+                                                            className="w-full md:w-max md:px-4 py-1"
+                                                            textToCopy={waMessageRemember(dateStringPT, {
+                                                                endereço: r.selectedBy?.endereço,
+                                                                bairro: r.selectedBy?.bairro,
+                                                                cep: r.selectedBy?.cep,
+                                                            })} />
+                                                        <CopyButton
+                                                            label="Mensagem pronta entrega"
+                                                            classNameLabel="text-sm md:text-xs"
+                                                            className="w-full md:w-max md:px-4 py-1 md:text-sm"
+                                                            textToCopy={`Olá, a sua pizza *${r.pizza.name}* está a caminho para entrega. Obrigado.`} />
+                                                    </div>
+
                                                 </div>
+
                                             )
                                         }
 
@@ -465,4 +493,22 @@ function FormAddPizzaSlice() {
         </Form>
     )
 }
+
+const waMessageRemember = (
+    date: string,
+    { endereço, bairro, cep }: { endereço: string | undefined, bairro: string | undefined, cep: string | undefined }
+): string => {
+
+    return `Olá!\n\nHoje, ${date}, é o dia da nossa sessão de fotos de cardápio.\n
+Se você confirmou, lembramos que sua pizza terá *20% de desconto*, a *entrega será gratuita*, e o envio será feito aproximadamente *entre 18:30 e 20:30* no endereço:\n
+${endereço || ""}
+${bairro || ""}
+${cep || ""}
+
+Obrigado,
+Equipe, pizzaria "A Modo Mio"`
+}
+
+
+
 
