@@ -3,6 +3,7 @@ import { Form, useActionData, useLoaderData } from "@remix-run/react";
 import { CheckSquareIcon, MinusSquareIcon, PlusSquareIcon } from "lucide-react";
 import { useCallback, useState } from "react";
 import Container from "~/components/layout/container/container";
+import CopyButton from "~/components/primitives/copy-button/copy-button";
 import InputItem from "~/components/primitives/form/input-item/input-item";
 import TextareaItem from "~/components/primitives/form/textarea-item/textarea-item";
 import SubmitButton from "~/components/primitives/submit-button/submit-button";
@@ -398,39 +399,36 @@ export default function PromoPizzaAdmin() {
                                         {/** Nome cliente */}
                                         {
                                             r.isSelected && (
-                                                <div className="flex flex-col md:max-w-4xl">
-                                                    <div className="flex flex-col md:flex-row md:justify-between mb-4">
-                                                        <span className="font-semibold text-brand-blue mb-2 md:mb-0">{r.selectedBy?.name}</span>
-                                                        <div className="flex flex-col gap-2 md:flex-row md:gap-4 ">
-                                                            <WhatsappExternalLink
-                                                                phoneNumber={r.selectedBy?.phoneNumber || "46991052049"} message="A sua pizza esta saindo para entrega."
-                                                                ariaLabel="Whatsapp message: A sua pizza esta saindo para entrega."
-                                                                className="flex gap-2 items-center bg-green-400 justify-center rounded-md py-1 px-4"
-                                                            >
-                                                                <WhatsAppIcon />
-                                                                <span className="font-semibold text-sm text-white">Saindo para entrega</span>
-                                                            </WhatsappExternalLink>
-                                                            <WhatsappExternalLink
-                                                                phoneNumber={r.selectedBy?.phoneNumber || "46991052049"}
-                                                                message={waMessageRemember(dateStringPT, {
-                                                                    endereço: r.selectedBy?.endereço,
-                                                                    bairro: r.selectedBy?.bairro,
-                                                                    cep: r.selectedBy?.cep,
-                                                                })}
-                                                                ariaLabel="Mensagem de lembrança"
-                                                                className="flex gap-2 items-center bg-green-400 justify-center rounded-md py-1 px-4"
-                                                            >
-                                                                <WhatsAppIcon />
-                                                                <span className="font-semibold text-sm text-white">Lembrar da promo</span>
-                                                            </WhatsappExternalLink>
-                                                        </div>
+                                                <div className="flex flex-col md:grid md:grid-cols-2">
+                                                    <div className="flex flex-col mb-2">
+                                                        <div className="flex flex-col md:flex-row gap-4 mb-1">
+                                                            <span className="font-semibold text-brand-blue">{r.selectedBy?.name}</span>
 
+                                                        </div>
+                                                        <span className="text-brand-blue">{r.selectedBy?.endereço}</span>
+                                                        <span className="text-brand-blue">{r.selectedBy?.bairro}</span>
+                                                        <span className="text-brand-blue">{r.selectedBy?.cep}</span>
+                                                        <span className="text-brand-blue">Tel: {r.selectedBy?.phoneNumber}</span>
                                                     </div>
-                                                    <span className="text-brand-blue">{r.selectedBy?.endereço}</span>
-                                                    <span className="text-brand-blue">{r.selectedBy?.bairro}</span>
-                                                    <span className="text-brand-blue">{r.selectedBy?.cep}</span>
-                                                    <span className="text-brand-blue">Tel: {r.selectedBy?.phoneNumber}</span>
+                                                    <div className="flex flex-col gap-2 md:grid md:grid-cols-2 md:gap-4">
+                                                        <CopyButton
+                                                            label="Mensagen de lembrete promo"
+                                                            classNameLabel="text-sm md:text-xs"
+                                                            className="w-full md:w-max md:px-4 py-1"
+                                                            textToCopy={waMessageRemember(dateStringPT, {
+                                                                endereço: r.selectedBy?.endereço,
+                                                                bairro: r.selectedBy?.bairro,
+                                                                cep: r.selectedBy?.cep,
+                                                            })} />
+                                                        <CopyButton
+                                                            label="Mensagem pronta entrega"
+                                                            classNameLabel="text-sm md:text-xs"
+                                                            className="w-full md:w-max md:px-4 py-1 md:text-sm"
+                                                            textToCopy={`Olá, a sua pizza *${r.pizza.name}* está a caminho para entrega. Obrigado.`} />
+                                                    </div>
+
                                                 </div>
+
                                             )
                                         }
 
@@ -505,7 +503,7 @@ const waMessageRemember = (
 Se você confirmou, lembramos que sua pizza terá *20% de desconto*, a *entrega será gratuita*, e o envio será feito aproximadamente *entre 18:30 e 20:30* no endereço:\n
 ${endereço || ""}
 ${bairro || ""}
-${cep || ""}\n
+${cep || ""}
 
 Obrigado,
 Equipe, pizzaria "A Modo Mio"`
