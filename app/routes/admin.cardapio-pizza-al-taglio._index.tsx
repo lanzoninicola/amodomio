@@ -3,6 +3,7 @@ import { Form, useActionData, useLoaderData } from "@remix-run/react"
 import dayjs from "dayjs"
 import { BadgeCheck, BadgeX, Check, Edit, Eye, EyeOff, X } from "lucide-react"
 import { useState } from "react"
+import CopyButton from "~/components/primitives/copy-button/copy-button"
 import InputItem from "~/components/primitives/form/input-item/input-item"
 import TextareaItem from "~/components/primitives/form/textarea-item/textarea-item"
 
@@ -18,7 +19,7 @@ import { CardapioPizzaAlTaglio, CardapioPizzaSlice } from "~/domain/cardapio-piz
 import SelectPizzaAlTaglioCategory from "~/domain/cardapio-pizza-al-taglio/components/select-pizza-al-taglio-type/select-pizza-al-taglio-type"
 import FormAddPizzaSlice from "~/domain/pizza-al-taglio/components/form-pizza-al-taglio/form-pizza-al-taglio"
 import { pizzaSliceEntity } from "~/domain/pizza-al-taglio/pizza-al-taglio.entity.server"
-import { PizzaSliceCategory } from "~/domain/pizza-al-taglio/pizza-al-taglio.model.server"
+import { PizzaSlice, PizzaSliceCategory } from "~/domain/pizza-al-taglio/pizza-al-taglio.model.server"
 import { cn } from "~/lib/utils"
 import { ok, serverError } from "~/utils/http-response.server"
 import randomReactKey from "~/utils/random-react-key"
@@ -298,6 +299,39 @@ interface CardapioItemProps {
 }
 
 
+function pizzaSliceTextToPrint(cardapio: CardapioPizzaAlTaglio) {
+
+    const vegetarianSlices = cardapio.slices.filter(s => s.category === "vegetariana")
+    const meatSlices = cardapio.slices.filter(s => s.category === "carne")
+    const margheritaSlices = cardapio.slices.filter(s => s.category === "margherita")
+
+    let text = ``
+
+    if (vegetarianSlices.length > 0) {
+        const vegetarianSlicesText = vegetarianSlices.map(s => {
+            return `- ${s.toppings}\n`
+        })
+
+        text += `*Vegetariana\n${vegetarianSlicesText.join("")}\n`
+    }
+
+    if (meatSlices.length > 0) {
+        const meatSlicesText = meatSlices.map(s => {
+            return `- ${s.toppings}\n`
+        })
+        text += `*Com carne\n${meatSlicesText.join("")}\n`
+    }
+
+    if (margheritaSlices.length > 0) {
+        const margheritaSlicesText = margheritaSlices.map(s => {
+            return `- ${s.toppings}\n`
+        })
+        text += `*Margherita\n${margheritaSlicesText.join("")}\n`
+    }
+
+    return text
+}
+
 function CardapioItem({ cardapio }: CardapioItemProps) {
     const [showSlices, setShowSlices] = useState(false)
     const [showEdit, setShowEdit] = useState(false)
@@ -314,11 +348,20 @@ function CardapioItem({ cardapio }: CardapioItemProps) {
 
             <div className="flex flex-col gap-4 justify-between">
                 <div className="flex flex-col gap-4">
-                    <div className="flex flex-col">
-                        <h3 className="text-md font-semibold tracking-tight mb-1">{cardapio.name}</h3>
-                        {/* @ts-ignore */}
-                        <h2 className="text-xs font-semibold tracking-tight text-muted-foreground">{`Criado no dia ${dayjs(cardapio!.createdAt).format("DD/MM/YYYY")}`}</h2>
+                    <div className="flex flex-col md:grid md:grid-cols-2">
+                        <div className="flex flex-col">
+                            <h3 className="text-md font-semibold tracking-tight mb-1">{cardapio.name}</h3>
+                            {/* @ts-ignore */}
+                            <h2 className="text-xs font-semibold tracking-tight text-muted-foreground">{`Criado no dia ${dayjs(cardapio!.createdAt).format("DD/MM/YYYY")}`}</h2>
+                        </div>
+                        <CopyButton
+                            label="Copiar elenco"
+                            classNameLabel="text-sm md:text-xs"
+                            className="md:w-max md:px-4 py-1 md:text-sm md:justify-self-end"
+                            textToCopy={pizzaSliceTextToPrint(cardapio)} />
+
                     </div>
+
                     <Form method="post" className="flex flex-col md:flex-row gap-4 mb-6">
                         <input type="hidden" name="cardapioId" value={cardapio.id} />
                         {
