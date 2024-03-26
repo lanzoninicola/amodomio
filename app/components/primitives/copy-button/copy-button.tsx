@@ -26,7 +26,7 @@ const CopyButton = ({ textToCopy, label, variant = "default", className, classNa
     };
 
     return (
-        <div className="relative w-full">
+        <div className="relative">
             <Button
                 variant={variant}
                 className={
