@@ -355,14 +355,15 @@ function CardapioItem({ cardapio }: CardapioItemProps) {
                             <h2 className="text-xs font-semibold tracking-tight text-muted-foreground">{`Criado no dia ${dayjs(cardapio!.createdAt).format("DD/MM/YYYY")}`}</h2>
                         </div>
                         <CopyButton
-                            label="Copiar elenco"
+                            label="Copiar elenco para imprimir"
                             classNameLabel="text-sm md:text-xs"
-                            className="md:w-max md:px-4 py-1 md:text-sm md:justify-self-end"
+                            classNameButton="px-4"
+                            classNameContainer="md:justify-self-end"
                             textToCopy={pizzaSliceTextToPrint(cardapio)} />
 
                     </div>
-
-                    <Form method="post" className="flex flex-col md:flex-row gap-4 mb-6">
+                    <Separator />
+                    <Form method="post" className="flex flex-col md:flex-row gap-4 ">
                         <input type="hidden" name="cardapioId" value={cardapio.id} />
                         {
                             cardapio.public === false && (
@@ -397,6 +398,7 @@ function CardapioItem({ cardapio }: CardapioItemProps) {
                             )
                         }
                     </Form>
+                    <Separator className="mb-6" />
                 </div>
                 <div className="flex flex-col gap-2">
                     <section className="flex justify-between items-center mb-4">
@@ -445,7 +447,7 @@ function CardapioItem({ cardapio }: CardapioItemProps) {
                                                             className="border-none outline-none text-sm max-w-[50px]" name="sliceQuantity"
                                                             defaultValue={slice.quantity}
                                                             disabled={showEdit === false}
-                                                            autocomplete="off"
+                                                            autoComplete="yep"
                                                         />
                                                         {
                                                             showEdit === false && slice.isAvailable === true && (
@@ -548,7 +550,7 @@ function FormAddPizzaSliceIntoCardapio({ cardapio }: FormAddPizzaSliceIntoCardap
                     <Fieldset>
                         <InputItem type="text"
                             className="text-sm max-w-[150px]" name="sliceQuantity"
-                            autocomplete="off"
+                            autoComplete="off"
                             placeholder="Quantidade"
                         />
                     </Fieldset>
