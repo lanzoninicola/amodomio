@@ -1,32 +1,29 @@
 import { ActionFunction, LoaderFunction } from "@remix-run/node";
 import { Form, Link, useActionData, useLoaderData } from "@remix-run/react";
-import { Beef, CheckSquareIcon, LeafyGreen, MinusSquareIcon, Pizza, PlusSquareIcon } from "lucide-react";
+import { Beef, LeafyGreen, MinusSquareIcon, Pizza, PlusSquareIcon } from "lucide-react";
 import { useState } from "react";
 import Container from "~/components/layout/container/container";
-import InputItem from "~/components/primitives/form/input-item/input-item";
 import TextareaItem from "~/components/primitives/form/textarea-item/textarea-item";
-import SubmitButton from "~/components/primitives/submit-button/submit-button";
 import { DeleteItemButton } from "~/components/primitives/table-list";
 import SaveItemButton from "~/components/primitives/table-list/action-buttons/save-item-button/save-item-button";
-import Fieldset from "~/components/ui/fieldset";
-import { Label } from "~/components/ui/label";
 import { Separator } from "~/components/ui/separator";
-import { Textarea } from "~/components/ui/textarea";
 import { toast } from "~/components/ui/use-toast";
 import SelectPizzaAlTaglioCategory from "~/domain/cardapio-pizza-al-taglio/components/select-pizza-al-taglio-type/select-pizza-al-taglio-type";
 import FormAddPizzaSlice from "~/domain/pizza-al-taglio/components/form-pizza-al-taglio/form-pizza-al-taglio";
 import { pizzaSliceEntity } from "~/domain/pizza-al-taglio/pizza-al-taglio.entity.server";
 import { PizzaSlice, PizzaSliceCategory } from "~/domain/pizza-al-taglio/pizza-al-taglio.model.server";
-import { promoPizzaPhotoEntity } from "~/domain/promo-pizza-photos/promo-pizza-photos.entity.server";
-import { PromoPizzaPhoto } from "~/domain/promo-pizza-photos/promo-pizza-photos.model.server";
 import { cn } from "~/lib/utils";
+import formatDate from "~/utils/format-date";
 import { ok, serverError } from "~/utils/http-response.server";
 
 import tryit from "~/utils/try-it";
 
 
 export const loader: LoaderFunction = async () => {
-    const [err, records] = await tryit(pizzaSliceEntity.findAll())
+    const [err, records] = await tryit(pizzaSliceEntity.findAllSlices({
+        order: "desc",
+        orderBy: "createdAt"
+    }))
 
     return ok({ records });
 
@@ -172,12 +169,16 @@ export default function PizzaSlicesAdmin() {
                                                         <div className="flex flex-col gap-6">
                                                             <div className="flex justify-between">
                                                                 <div className="flex flex-col gap-4">
-                                                                    <TextareaItem
-                                                                        type="text" name="toppings" defaultValue={r.toppings}
-                                                                        className="border-none outline-none w-full text-md"
-                                                                        rows={4}
+                                                                    <div className="flex flex-col gap-2">
+                                                                        <TextareaItem
+                                                                            type="text" name="toppings" defaultValue={r.toppings}
+                                                                            className="border-none outline-none w-full text-md"
+                                                                            rows={4}
 
-                                                                    />
+                                                                        />
+                                                                        {/* @ts-ignore */}
+                                                                        <span className="text-sm text-muted-foreground">Criado em: {formatDate(r.createdAt)}</span>
+                                                                    </div>
                                                                     <SelectPizzaAlTaglioCategory name={"category"} className="border-none outline-none w-full" />
                                                                 </div>
                                                                 {r.category === "vegetariana" && <LeafyGreen />}

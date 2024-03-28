@@ -12,6 +12,7 @@ import { cardapioPizzaAlTaglioEntity } from "~/domain/cardapio-pizza-al-taglio/c
 import { CardapioPizzaSlice } from "~/domain/cardapio-pizza-al-taglio/cardapio-pizza-al-taglio.model.server";
 import { pizzaSliceEntity } from "~/domain/pizza-al-taglio/pizza-al-taglio.entity.server";
 import { now } from "~/lib/dayjs";
+import formatDate from "~/utils/format-date";
 import { serverError, ok } from "~/utils/http-response.server";
 import { jsonParse, jsonStringify } from "~/utils/json-helper";
 import tryit from "~/utils/try-it";
@@ -19,7 +20,10 @@ import tryit from "~/utils/try-it";
 
 export async function loader() {
 
-    const [err, records] = await tryit(pizzaSliceEntity.findAll())
+    const [err, records] = await tryit(pizzaSliceEntity.findAllSlices({
+        order: "desc",
+        orderBy: "createdAt"
+    }))
 
 
     if (err) {
@@ -129,6 +133,8 @@ export default function CardapioPizzaAlTaglioNew() {
         ])
     }
 
+    console.log({ pizzaSlices })
+
     return (
         <div className="flex flex-col gap-6 max-h-[350px] p-4 md:p-6 border rounded-lg">
             <Form method="post" className="overflow-auto">
@@ -146,11 +152,11 @@ export default function CardapioPizzaAlTaglioNew() {
                         <Separator className="hidden md:block" />
 
                     </div>
-                    <ul className="mt-16">
+                    <ul className="mt-20">
                         {
                             pizzaSlices.map((pizza) => {
                                 return (
-                                    <li key={pizza.id} className="flex justify-between mb-4 items-center max-w-xl ">
+                                    <li key={pizza.id} className="grid grid-cols-4 gap-4 items-center max-w-3xl mb-2" >
                                         <FormPizzaSliceRow pizza={itemsChoosable.find(i => i.id === pizza.id)} changeQuantity={changeQuantity} />
                                     </li>
                                 )
@@ -177,15 +183,17 @@ function FormPizzaSliceRow({ pizza, changeQuantity }: FormPizzaSliceRowProps) {
 
     return (
         <>
-            <div className="flex flex-col gap-1 md:max-w-xs">
+            <div className="flex flex-col gap-1 md:max-w-xs col-span-2">
                 <span className="text-sm font-semibold leading-tight md:leading-normal">{pizza.toppings}</span>
                 <span className="text-xs">{pizza.category}</span>
 
             </div>
+            {/* @ts-ignore */}
+            <span className="text-xs text-muted-foreground">{formatDate(pizza.createdAt)}</span>
             <div>
                 <div className="flex gap-2 items-center">
                     <MinusCircleIcon onClick={() => changeQuantity(pizza, "decrease")} className="hover:text-slate-500 cursor-pointer" />
-                    <Input type="text" value={pizza.quantity || "0"} className="bg-white w-16 text-lg text-center border-none outline-none" min={0} readOnly />
+                    <Input type="text" value={"0"} className="bg-white w-16 text-lg text-center border-none outline-none" min={0} readOnly />
                     <PlusCircleIcon onClick={() => changeQuantity(pizza, "increase")} className="hover:text-slate-500 cursor-pointer" />
                 </div>
             </div>
