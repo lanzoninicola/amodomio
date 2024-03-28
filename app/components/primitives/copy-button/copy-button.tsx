@@ -7,13 +7,14 @@ import { cn } from "~/lib/utils";
 interface CopyButtonProps {
     textToCopy: string;
     label?: string
-    className?: string
+    classNameContainer?: string
+    classNameButton?: string
     classNameLabel?: string
     variant?: "ghost" | "default" | "destructive" | "link" | "outline" | "secondary"
 }
 
 
-const CopyButton = ({ textToCopy, label, variant = "default", className, classNameLabel }: CopyButtonProps) => {
+const CopyButton = ({ textToCopy, label, variant = "default", classNameContainer, classNameButton, classNameLabel }: CopyButtonProps) => {
     const [copied, setCopied] = useState(false);
 
     const copyTextToClipboard = () => {
@@ -26,13 +27,18 @@ const CopyButton = ({ textToCopy, label, variant = "default", className, classNa
     };
 
     return (
-        <div className="relative">
+        <div className={
+            cn(
+                "relative",
+                classNameContainer
+            )
+        }>
             <Button
                 variant={variant}
                 className={
                     cn(
                         "mr-2 px-0 text-base hover:bg-transparent focus-visible:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 flex gap-2 hover:text-black",
-                        className
+                        classNameButton
                     )
                 }
                 onClick={copyTextToClipboard}
