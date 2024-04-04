@@ -11,7 +11,9 @@ class PizzaSliceEntity extends BaseEntity<PizzaSlice> {
     const orderBy = options?.orderBy || "createdAt";
 
     slices.sort((a, b) => {
+      // @ts-ignore
       const valueA = a[orderBy];
+      // @ts-ignore
       const valueB = b[orderBy];
 
       if (valueA === undefined || valueB === undefined) {
