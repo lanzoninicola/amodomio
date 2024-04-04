@@ -99,14 +99,19 @@ export default function CardapioPizzaAlTaglioNew() {
         //     String(Number(itemFound?.quantity || 0) + 1) :
         //     String(Number(itemFound?.quantity || 0) - 1)
 
+        const isVegetariana = () => itemFound?.category === "vegetariana"
+        const isCarne = () => itemFound?.category === "carne"
+        const isMargherita = () => itemFound?.category === "margherita"
+
+
         if (action === "increase") {
             nextQuantity = String(Number(itemFound?.quantity || 0) + 1)
 
             setToppingsAmount({
                 ...toppingsAmount,
-                vegetarian: itemFound?.toppings === "vegetarian" ? toppingsAmount.vegetarian + 1 : toppingsAmount.vegetarian,
-                meat: itemFound?.toppings === "meat" ? toppingsAmount.meat + 1 : toppingsAmount.meat,
-                margherita: itemFound?.toppings === "margherita" ? toppingsAmount.margherita + 1 : toppingsAmount.margherita,
+                vegetarian: isVegetariana() ? toppingsAmount.vegetarian + 1 : toppingsAmount.vegetarian,
+                meat: isCarne() ? toppingsAmount.meat + 1 : toppingsAmount.meat,
+                margherita: isMargherita() ? toppingsAmount.margherita + 1 : toppingsAmount.margherita,
             })
         }
 
@@ -115,9 +120,9 @@ export default function CardapioPizzaAlTaglioNew() {
 
             setToppingsAmount({
                 ...toppingsAmount,
-                vegetarian: itemFound?.toppings === "vegetarian" ? toppingsAmount.vegetarian - 1 : toppingsAmount.vegetarian,
-                meat: itemFound?.toppings === "meat" ? toppingsAmount.meat - 1 : toppingsAmount.meat,
-                margherita: itemFound?.toppings === "margherita" ? toppingsAmount.margherita - 1 : toppingsAmount.margherita,
+                vegetarian: isVegetariana() ? toppingsAmount.vegetarian - 1 : toppingsAmount.vegetarian,
+                meat: isCarne() ? toppingsAmount.meat - 1 : toppingsAmount.meat,
+                margherita: isMargherita() ? toppingsAmount.margherita - 1 : toppingsAmount.margherita,
             })
         }
 
@@ -141,10 +146,11 @@ export default function CardapioPizzaAlTaglioNew() {
                     <div className="fixed bg-white w-[320px] md:w-[720px]">
                         <div className="flex flex-col md:flex-row md:justify-between md:items-center mb-4 md:mb-2">
                             <SubmitButton actionName="cardapio-create" className="mb-4" />
-                            <div className="flex text-sm leading-snug gap-4">
-                                <span>{`Margherita: ${toppingsAmount.margherita}`}</span>
-                                <span>{`Vegetariana: ${toppingsAmount.vegetarian}`}</span>
-                                <span>{`Carne: ${toppingsAmount.meat}`}</span>
+                            <div className="flex text-sm leading-snug gap-4 items-center">
+                                <span className="font-semibold text-sm">{`Total: ${toppingsAmount.margherita + toppingsAmount.vegetarian + toppingsAmount.meat}`}</span>
+                                <span className="text-xs">{`Margherita: ${toppingsAmount.margherita}`}</span>
+                                <span className="text-xs">{`Vegetariana: ${toppingsAmount.vegetarian}`}</span>
+                                <span className="text-xs">{`Carne: ${toppingsAmount.meat}`}</span>
                             </div>
                         </div>
                         <Separator className="hidden md:block" />
