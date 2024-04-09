@@ -7,15 +7,30 @@ import { Input } from "~/components/ui/input"
 import { toast } from "~/components/ui/use-toast"
 import ProductTypeBadge from "~/domain/product/components/product-type-badge/product-type-badge"
 import { ProductEntity, productPrismaEntity } from "~/domain/product/product.entity"
+import type { ProductType } from "~/domain/product/product.model.server"
 import { type Product } from "~/domain/product/product.model.server"
 import { cn } from "~/lib/utils"
-import { ok, serverError } from "~/utils/http-response.server"
+import errorMessage from "~/utils/error-message"
+import getSearchParam from "~/utils/get-search-param"
+import { badRequest, ok, serverError } from "~/utils/http-response.server"
 import tryit from "~/utils/try-it"
 
 
 export async function loader({ request }: LoaderArgs) {
 
-    const [err, products] = await tryit(productPrismaEntity.findAll())
+    const productTypeParam = getSearchParam({ request, paramName: "type" })
+
+    if (!productTypeParam || productTypeParam === "all") {
+        const [err, products] = await tryit(productPrismaEntity.findAll())
+
+        if (err) {
+            return serverError(err)
+        }
+
+        return ok({ products })
+    }
+
+    const [err, products] = await tryit(productPrismaEntity.findByType(productTypeParam as ProductType))
 
     if (err) {
         return serverError(err)
@@ -32,7 +47,7 @@ export async function action({ request }: ActionArgs) {
 
     if (_action === "product-delete") {
 
-        const [err, data] = await tryit(productPrismaEntity.delete(values.id as string))
+        const [err, data] = await tryit(productPrismaEntity.deleteProduct(values.id as string))
 
         if (err) {
             return serverError(err)
@@ -69,9 +84,10 @@ export default function ProducstIndex() {
         <Container>
             <div className="flex flex-col gap-2">
                 <div data-element="filters" className="flex justify-between border rounded-md p-4 mb-2">
-
-                    {/* <ProductsFilters /> */}
-
+                    <div className="flex gap-4 items-center">
+                        <span className="text-sm">Filtrar por:</span>
+                        <ProductsFilters />
+                    </div>
                     <ProductsSearch onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                         const value = e.target.value
                         setSearchTerm(value)
@@ -132,15 +148,13 @@ function ProductTableRow({ product, className }: ProductTableRowProps) {
 }
 
 
-/**
+
 function ProductsFilters() {
 
     const productTypes = ProductEntity.findAllProductTypes()
 
     return (
-    <div className="flex gap-4 items-center">
-                        <span className="text-sm">Filtrar por:</span>
-                        <ul className="flex gap-2 flex-wrap">
+        <ul className="flex gap-2 flex-wrap">
             <li key={"all"}>
                 <Link to={`/admin/products?type=all`}>
                     <span className="border px-4 py-1 rounded-full text-xs text-gray-800 font-semibold tracking-wide max-w-max">Todos</span>
@@ -159,14 +173,10 @@ function ProductsFilters() {
                 })
             }
         </ul >
-                    </div >
-
-
     )
 
 }
 
- */
 
 interface ProductsSearchProps {
     onChange: (e: React.ChangeEvent<HTMLInputElement>) => void

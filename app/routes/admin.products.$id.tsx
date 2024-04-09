@@ -3,9 +3,9 @@ import { Form, Link, Outlet, useLoaderData, useLocation } from "@remix-run/react
 import { useState } from "react";
 import InputItem from "~/components/primitives/form/input-item/input-item";
 import SaveItemButton from "~/components/primitives/table-list/action-buttons/save-item-button/save-item-button";
-import { categoryEntity } from "~/domain/category/category.entity.server";
+import { categoryEntity, categoryPrismaEntity } from "~/domain/category/category.entity.server";
 import type { Category } from "~/domain/category/category.model.server";
-import { ProductEntity, productEntity } from "~/domain/product/product.entity";
+import { ProductEntity, productPrismaEntity } from "~/domain/product/product.entity";
 import type { ProductComponent, ProductType } from "~/domain/product/product.model.server";
 import { type Product } from "~/domain/product/product.model.server";
 import type { HttpResponse } from "~/utils/http-response.server";
@@ -29,29 +29,22 @@ export async function loader({ request }: LoaderArgs) {
         return null
     }
 
-    const product = await productEntity.findById(productId)
+    const product = await productPrismaEntity.findById(productId)
 
     if (!product) {
         return badRequest({ message: "Produto não encontrado" })
     }
 
-    const productTypes = ProductEntity.findAllProductTypes()
-
     let categories = null
 
     if (product?.id) {
-        categories = await categoryEntity.findAll()
+        categories = await categoryPrismaEntity.findAll()
     }
-
-    // Retrieve all compositions that include this particular product.
-    const compositions = await productEntity.findCompositionWithProduct(productId)
 
 
     return ok({
         product,
         categories,
-        productTypes,
-        compositions
     })
 
 }
@@ -61,9 +54,9 @@ export async function action({ request }: ActionArgs) {
     const { _action, ...values } = Object.fromEntries(formData);
 
     if (_action === "product-name-update") {
-        const product = await productEntity.findById(values?.productId as string)
+        const product = await productPrismaEntity.findById(values?.productId as string)
 
-        const [err, data] = await tryit(productEntity.update(values.productId as string, {
+        const [err, data] = await tryit(productPrismaEntity.update(values.productId as string, {
             ...product,
             name: values.name as string
         }))
@@ -106,7 +99,7 @@ export default function SingleProduct() {
 
 
             <div className="grid grid-cols-2 grid-rows-3 md:grid-cols-5 md:grid-rows-1 h-20 md:h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground mb-6">
-                <Link to={`/admin/products/${productId}/info`} className="w-full text-center">
+                <Link to={`/admin/products/${productId}`} className="w-full text-center">
                     <div className={`${activeTab === "info" && activeTabStyle} ${activeTab}`}>
                         <span>Dados gerais</span>
                     </div>

@@ -1,0 +1,120 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("PRISMA_DB_URL")
+}
+
+model Product {
+  id            String       @id @default(uuid())
+  name          String
+  unitId        String?
+  categoryId    String?      @map("category_id")
+  subCategoryId String?      @map("sub_category_id")
+  showInMenu    Boolean      @map("show_in_menu")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+  Unit          Unit?        @relation(fields: [unitId], references: [id])
+  Category      Category?    @relation(fields: [categoryId], references: [id])
+  SubCategory   SubCategory? @relation(fields: [subCategoryId], references: [id])
+  Ingredients   Ingredient[] @relation("ProductIngredients")
+
+  @@map("products")
+}
+
+enum RecipeType {
+  semiFinished @map("semi-finished")
+  topping      @map("topping")
+}
+
+model Recipe {
+  id            String            @id @default(uuid())
+  name          String
+  type          RecipeType        @default(semiFinished)
+  description   String?
+  showInMenu    Boolean           @default(false) @map("show_in_menu")
+  hasVariations Boolean           @default(false) @map("has_variations")
+  isVegetarian  Boolean           @default(false) @map("is_vegetarian")
+  isGlutenFree  Boolean           @default(false) @map("is_gluten_free")
+  createdAt     DateTime          @default(now()) @map("created_at")
+  updatedAt     DateTime          @updatedAt @map("updated_at")
+  Ingredients   Ingredient[]      @relation("RecipeIngredients")
+  Variations    RecipeVariation[]
+
+  @@map("recipes")
+}
+
+// Polymorphic Relationship => Not supported by Prisma
+model Ingredient {
+  id           String   @id @default(uuid())
+  name         String
+  unitId       String?  @map("unit_id")
+  quantity     String
+  type         String // Field to indicate whether the ingredient is linked to a Product or Recipe
+  recipeRefId  String?  @map("recipe_ref_id")
+  productRefId String?  @map("product_ref_id") // New field for product reference
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  Recipe       Recipe?  @relation(fields: [recipeRefId], references: [id], name: "RecipeIngredients")
+  Unit         Unit?    @relation(fields: [unitId], references: [id])
+  Product      Product? @relation(fields: [productRefId], references: [id], name: "ProductIngredients")
+
+  @@map("ingredients")
+}
+
+model RecipeVariation {
+  id           String   @id @default(uuid())
+  recipeId     String   @map("recipe_id")
+  name         String
+  description  String
+  factorType   String   @map("factor_type")
+  factorNumber Float    @map("factor_number")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  Recipe       Recipe   @relation(fields: [recipeId], references: [id])
+
+  @@map("recipes_variations")
+}
+
+model Unit {
+  id          String       @id @default(uuid())
+  name        String
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+  Ingredients Ingredient[]
+  Product     Product[]
+
+  @@map("units")
+}
+
+model Category {
+  id            String        @id @default(uuid())
+  name          String
+  sortOrder     Int           @map("sort_order")
+  type          String
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+  Products      Product[]
+  SubCategories SubCategory[] @relation("CategorySubCategories")
+
+  @@map("categories")
+}
+
+model SubCategory {
+  id         String     @id @default(uuid())
+  name       String
+  createdAt  DateTime   @default(now()) @map("created_at")
+  updatedAt  DateTime   @updatedAt @map("updated_at")
+  Categories Category[] @relation("CategorySubCategories")
+  Product    Product[]
+
+  @@map("sub_categories")
+}

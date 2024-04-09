@@ -25,7 +25,8 @@ export type ProductType =
   | "topping" // topping is merely a topping of products that cannot be sold neither separately nor as a topping
   // | "pizza" // pizza is a product that is produced and sold by the company itself. The components are raw materials and semi-pizza products. They suffer a transformation process and are cannot be sold.
   // | "ingredient" // raw material is a product that is bought from a supplier and is used to produce pizza products
-  | "processed"; // semi-manufactured is a product that is bought from a supplier or produced by the company and is used to produce pizza products
+  | "processed" // semi-manufactured is a product that is bought from a supplier or produced by the company and is used to produce pizza products
+  | "semi-finished"; // semi-finished is a product that is bought from a supplier or produced by the company and is used to produce pizza products
 
 export interface ProductInfo {
   productId?: string;
