@@ -1,7 +1,7 @@
 import { ActionFunction, LoaderFunction } from "@remix-run/node";
-import { Form, useActionData, useLoaderData } from "@remix-run/react";
+import { Form, Link, useActionData, useLoaderData } from "@remix-run/react";
 import { CheckSquareIcon, MinusSquareIcon, PlusSquareIcon } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import Container from "~/components/layout/container/container";
 import CopyButton from "~/components/primitives/copy-button/copy-button";
 import InputItem from "~/components/primitives/form/input-item/input-item";
@@ -9,14 +9,12 @@ import TextareaItem from "~/components/primitives/form/textarea-item/textarea-it
 import SubmitButton from "~/components/primitives/submit-button/submit-button";
 import { DeleteItemButton } from "~/components/primitives/table-list";
 import SaveItemButton from "~/components/primitives/table-list/action-buttons/save-item-button/save-item-button";
-import WhatsappExternalLink from "~/components/primitives/whatsapp/whatsapp-external-link";
-import WhatsAppIcon from "~/components/primitives/whatsapp/whatsapp-icon";
 import Fieldset from "~/components/ui/fieldset";
 import { Label } from "~/components/ui/label";
 import { Separator } from "~/components/ui/separator";
 import { Textarea } from "~/components/ui/textarea";
 import { toast } from "~/components/ui/use-toast";
-import { promoPizzaPhotoEntity } from "~/domain/promo-pizza-photos/promo-pizza-photos.entity.server";
+import { PromoCode, promoPizzaPhotoEntity } from "~/domain/promo-pizza-photos/promo-pizza-photos.entity.server";
 import { PromoPizzaPhoto } from "~/domain/promo-pizza-photos/promo-pizza-photos.model.server";
 import { cn } from "~/lib/utils";
 import { ok, serverError } from "~/utils/http-response.server";
@@ -26,11 +24,10 @@ import tryit from "~/utils/try-it";
 export const loader: LoaderFunction = async () => {
     const [err, records] = await tryit(promoPizzaPhotoEntity.findAll())
 
-    const promoCode = process.env.PIZZA_PHOTOS_PROMO_CODE
+    const promoCodes = promoPizzaPhotoEntity.getAllPromoCodes()
+    const currentPromoCodeActive = promoPizzaPhotoEntity.getActivePromoCode()
 
-    const recordsCurrentPromo = records?.filter(p => p.promoCode === promoCode)
-
-    return ok({ records: recordsCurrentPromo, promoCode });
+    return ok({ records, promoCodes, currentPromoCodeActive });
 
 };
 
@@ -194,47 +191,34 @@ export const action: ActionFunction = async ({ request }) => {
     return null;
 };
 
+function getDateFromPromoCode(promoCode: string | undefined) {
+
+    if (!promoCode) {
+        return ""
+    }
+
+    const dateStr = promoCode.substring(0, 8);
+    const year = dateStr.substring(0, 4);
+    const month = dateStr.substring(4, 6);
+    const day = dateStr.substring(6, 8);
+    const dateStringPT = `${day}/${month}/${year}`;
+
+    return dateStringPT;
+}
+
 export default function PromoPizzaAdmin() {
 
     const loaderData = useLoaderData<typeof loader>()
-    // const records: PromoPizzaPhoto[] = [
-    //     {
-    //         "pizza": {
-    //             "ingredients": "Molho de tomate, Muçarela de Bufala em bolinha",
-    //             "name": "Margherita di napoli",
-    //             "value": "89.90",
-    //             "promoValue": "70.0"
-    //         },
-    //         "selectedBy": {
-    //             "endereço": "Rua Prefeito Placido Machado",
-    //             "bairro": "La Salle",
-    //             "cep": "85505190",
-    //             "name": "Nicola Lanzoni",
-    //             "phoneNumber": "46991052049"
-    //         },
-    //         "isSelected": true,
-    //         "promoCode": "20240305-pizza-photos",
-    //         "id": "zbkTq25Y5aLgMet38PcU"
-    //     },
-    //     {
-    //         "pizza": {
-    //             "ingredients": "Molho de tomate, Muçarela,Bacon defumado,Provolone defumado",
-    //             "name": "Affumicata",
-    //             "value": "89.90",
-    //             "promoValue": "70.0"
-    //         },
-    //         "selectedBy": null,
-    //         "isSelected": false,
-    //         "promoCode": "20240305-pizza-photos",
-    //         "id": "zbkTq25Y5aLgdet38PcU"
-    //     }
-    // ]
 
     const records = loaderData.payload?.records || []
-    const promoCode = loaderData.payload?.promoCode || ""
+    const promoCodes: PromoCode[] = loaderData.payload?.promoCodes || []
+    const currentPromoCodeActive = loaderData.payload?.currentPromoCodeActive || undefined
+    const dateStringPT = getDateFromPromoCode(currentPromoCodeActive)
 
-    const [showForm, setShowForm] = useState(false)
-    const [showFormUpdate, setShowFormUpdate] = useState(false)
+    const [showFormAddPizza, setShowFormAddPizza] = useState(false)
+    const [enableEdit, setEnableEdit] = useState(false)
+
+    const [showPromoCodes, setShowPromoCodes] = useState(false)
 
     const actionData = useActionData<typeof action>()
     const status = actionData?.status
@@ -247,18 +231,13 @@ export default function PromoPizzaAdmin() {
         })
     }
 
-    if (status && status >= 400) {
+    if (status && status !== 200) {
         toast({
             title: "Erro",
             description: message,
         })
     }
 
-    const dateStr = promoCode.substring(0, 8);
-    const year = dateStr.substring(0, 4);
-    const month = dateStr.substring(4, 6);
-    const day = dateStr.substring(6, 8);
-    const dateStringPT = `${day}/${month}/${year}`
 
 
 
@@ -266,15 +245,15 @@ export default function PromoPizzaAdmin() {
         <Container className="mt-16">
 
             <div className="flex flex-col mb-4">
-                <div className="flex items-center gap-2 mb-4 cursor-pointer hover:font-semibold" onClick={() => setShowForm(!showForm)}>
+                <div className="flex items-center gap-2 mb-4 cursor-pointer hover:font-semibold" onClick={() => setShowFormAddPizza(!showFormAddPizza)}>
                     <span className="text-sm underline">{
-                        showForm === false ? "Adicionar pizza" : "Fechar formulário"
+                        showFormAddPizza === false ? "Adicionar pizza" : "Fechar formulário"
                     }</span>
-                    {showForm === false ? <PlusSquareIcon /> : <MinusSquareIcon />}
+                    {showFormAddPizza === false ? <PlusSquareIcon /> : <MinusSquareIcon />}
                 </div>
 
                 {
-                    showForm && (
+                    showFormAddPizza && (
                         <FormAddPizzaSlice />
                     )
                 }
@@ -284,9 +263,63 @@ export default function PromoPizzaAdmin() {
             <Separator className="mb-8" />
 
             <div className="flex flex-col">
-                <div className="flex justify-between items-center mb-6">
+                <div className="flex justify-between items-center mb-4">
                     <h2 className="text-xl md:text-2xl font-semibold ">{`Listas das pizzas (${records.length})`}</h2>
-                    <span className="text-sm underline cursor-pointer" onClick={() => setShowFormUpdate(!showFormUpdate)}>Abilitar alteraçoes</span>
+
+                    <span className="text-sm underline cursor-pointer" onClick={() => setEnableEdit(!enableEdit)}>Abilitar alteraçoes</span>
+                </div>
+                <div className="mb-8">
+                    <div className="flex gap-2 items-center">
+                        <span>Filtrar por: </span>
+                        <ul className="flex gap-4">
+                            <li className={
+                                cn(
+                                    "text-sm cursor-pointer rounded-md px-2 py-1 bg-muted-foreground text-white hover:underline hover:bg-muted hover:text-black",
+                                )
+                            }>
+                                <Link to={`?filter="all"`}>
+                                    Todos
+                                </Link>
+                            </li>
+                            <li className={
+                                cn(
+                                    "text-sm cursor-pointer rounded-md px-2 py-1 bg-muted-foreground text-white hover:underline hover:bg-muted hover:text-black",
+                                )
+                            }>
+                                <Link to={`?filter="only-active"`}>
+                                    Ativo
+                                </Link>
+
+                            </li>
+                            <li
+                                onClick={() => setShowPromoCodes(!showPromoCodes)}
+                                className={
+                                    cn(
+                                        "text-sm cursor-pointer rounded-md px-2 py-1 bg-muted-foreground text-white hover:underline hover:bg-muted hover:text-black",
+                                    )
+                                }>
+                                Codigo
+                            </li>
+
+                        </ul>
+                    </div>
+                    <ul className="mt-4 flex gap-2 text-sm">
+                        {
+                            showPromoCodes === true && promoCodes.map(p => {
+                                return (
+                                    <li key={p.code} >
+                                        <Link to={`?filter=${p.code}`} className={
+                                            cn("flex items-center gap-1 hover:underline ",
+                                                p.active === true && "font-semibold",
+                                            )}>
+                                            <span>{p.active === currentPromoCodeActive ? "🔥" : "🍕"}</span>
+                                            <span>{p.code}</span>
+                                        </Link>
+                                    </li>
+                                )
+                            })
+                        }
+                    </ul>
                 </div>
                 <ul className="flex flex-col gap-4">
                     {
@@ -313,7 +346,7 @@ export default function PromoPizzaAdmin() {
                                                                     className="border-none outline-none font-semibold text-xl w-max"
                                                                 />
                                                             </div>
-                                                            {showFormUpdate && <SaveItemButton actionName="record-update-pizza-name" />}
+                                                            {enableEdit && <SaveItemButton actionName="record-update-pizza-name" />}
                                                         </div>
                                                     </Form>
 
@@ -326,7 +359,7 @@ export default function PromoPizzaAdmin() {
                                                                         type="text" name="pizzaIngredients" defaultValue={r.pizza.ingredients}
                                                                         className="border-none outline-none"
                                                                     />
-                                                                    {showFormUpdate && <SaveItemButton actionName="record-update-pizza-ingredients" />}
+                                                                    {enableEdit && <SaveItemButton actionName="record-update-pizza-ingredients" />}
                                                                 </div>
                                                             </Form>
                                                         )
@@ -345,7 +378,7 @@ export default function PromoPizzaAdmin() {
                                                                     type="text" name="pizzaValue" defaultValue={r.pizza.value}
                                                                     className="border-none outline-none text-sm w-[75px]"
                                                                 />
-                                                                {showFormUpdate && <SaveItemButton actionName="record-update-pizza-value" />}
+                                                                {enableEdit && <SaveItemButton actionName="record-update-pizza-value" />}
                                                             </div>
                                                         </div>
                                                     </Form>
@@ -358,7 +391,7 @@ export default function PromoPizzaAdmin() {
                                                                     type="text" name="pizzaPromoValue" defaultValue={r.pizza.promoValue}
                                                                     className="border-none outline-none text-sm w-[75px]"
                                                                 />
-                                                                {showFormUpdate && <SaveItemButton actionName="record-update-pizza-promo-value" />}
+                                                                {enableEdit && <SaveItemButton actionName="record-update-pizza-promo-value" />}
                                                             </div>
                                                         </div>
                                                     </Form>
@@ -366,7 +399,7 @@ export default function PromoPizzaAdmin() {
                                             </div>
 
                                             {
-                                                r.isSelected === true && (
+                                                r.isSelected === true && enableEdit && (
                                                     <Form method="post" className="w-full md:w-auto">
                                                         <input type="hidden" name="recordId" value={r.id} />
                                                         <div className="flex gap-2 w-full">
@@ -414,7 +447,7 @@ export default function PromoPizzaAdmin() {
                                                         <CopyButton
                                                             label="Mensagen de lembrete promo"
                                                             classNameLabel="text-sm md:text-xs"
-                                                            className="w-full md:w-max md:px-4 py-1"
+                                                            classNameButton="w-full md:w-max md:px-4 py-1"
                                                             textToCopy={waMessageRemember(dateStringPT, {
                                                                 endereço: r.selectedBy?.endereço,
                                                                 bairro: r.selectedBy?.bairro,
@@ -423,7 +456,7 @@ export default function PromoPizzaAdmin() {
                                                         <CopyButton
                                                             label="Mensagem pronta entrega"
                                                             classNameLabel="text-sm md:text-xs"
-                                                            className="w-full md:w-max md:px-4 py-1 md:text-sm"
+                                                            classNameButton="w-full md:w-max md:px-4 py-1 md:text-sm"
                                                             textToCopy={`Olá, a sua pizza *${r.pizza.name}* está a caminho para entrega. Obrigado.`} />
                                                     </div>
 
@@ -447,52 +480,6 @@ export default function PromoPizzaAdmin() {
 
 }
 
-function FormAddPizzaSlice() {
-
-    const loaderData = useLoaderData<typeof loader>()
-    const promoCode = loaderData.payload?.promoCode
-
-    return (
-        <Form method="post">
-            <div className="flex flex-col gap-2">
-                <div className="flex gap-2 items-center mb-6">
-                    <Label className="font-semibold">Codigo Promo</Label>
-                    <InputItem
-                        type="text" name="promoCode" placeholder="Codigo promo" required defaultValue={promoCode}
-                        className="border-none outline-none"
-                    />
-                </div>
-
-                <Fieldset>
-                    <InputItem type="text" name="pizzaName" placeholder="Nome pizza" required />
-                </Fieldset>
-                <Fieldset>
-                    <Textarea name="pizzaIngredients" placeholder="Ingredientes" required
-                        className={
-                            cn(
-                                `text-lg p-2 placeholder:text-gray-400`,
-                            )
-                        }
-                    />
-                </Fieldset>
-
-                <Fieldset>
-                    <InputItem type="text" name="pizzaValue" placeholder="Valor" required />
-                </Fieldset>
-
-                <Fieldset>
-                    <InputItem type="text" name="pizzaPromoValue" placeholder="Valor em Promoçao" />
-                </Fieldset>
-
-            </div>
-            <SubmitButton actionName="add-pizza-al-taglio"
-                idleText="Salvar"
-                loadingText="Salvando..."
-            />
-
-        </Form>
-    )
-}
 
 const waMessageRemember = (
     date: string,
