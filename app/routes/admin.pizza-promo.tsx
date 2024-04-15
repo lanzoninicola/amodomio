@@ -17,17 +17,51 @@ import { toast } from "~/components/ui/use-toast";
 import { PromoCode, promoPizzaPhotoEntity } from "~/domain/promo-pizza-photos/promo-pizza-photos.entity.server";
 import { PromoPizzaPhoto } from "~/domain/promo-pizza-photos/promo-pizza-photos.model.server";
 import { cn } from "~/lib/utils";
+import getSearchParam from "~/utils/get-search-param";
 import { ok, serverError } from "~/utils/http-response.server";
+import { jsonParse } from "~/utils/json-helper";
 import tryit from "~/utils/try-it";
 
 
-export const loader: LoaderFunction = async () => {
+export const loader: LoaderFunction = async ({ request, params }) => {
     const [err, records] = await tryit(promoPizzaPhotoEntity.findAll())
+
+    const filter = getSearchParam({ request, paramName: "filter" })
 
     const promoCodes = promoPizzaPhotoEntity.getAllPromoCodes()
     const currentPromoCodeActive = promoPizzaPhotoEntity.getActivePromoCode()
 
-    return ok({ records, promoCodes, currentPromoCodeActive });
+    let pizzas: PromoPizzaPhoto[] = []
+
+    console.log({ filter })
+
+    if (!filter || filter === "all") {
+
+        if (records === undefined) {
+            return
+        }
+
+        pizzas = [...records]
+    }
+
+    if (filter === "active") {
+        if (records === undefined) {
+            return
+        }
+        pizzas = records.filter(r => r.promoCode === currentPromoCodeActive?.code)
+    }
+
+    const filterObj: { [key: string]: string } = jsonParse(filter)
+
+    if (filterObj?.code) {
+        if (records === undefined) {
+            return
+        }
+
+        pizzas = records.filter(r => r.promoCode === filterObj.code)
+    }
+
+    return ok({ records: pizzas, promoCodes, currentPromoCodeActive });
 
 };
 
@@ -193,9 +227,11 @@ export const action: ActionFunction = async ({ request }) => {
 
 function getDateFromPromoCode(promoCode: string | undefined) {
 
-    if (!promoCode) {
+    if (promoCode === undefined) {
         return ""
     }
+
+    console.log({ promoCode })
 
     const dateStr = promoCode.substring(0, 8);
     const year = dateStr.substring(0, 4);
@@ -212,8 +248,8 @@ export default function PromoPizzaAdmin() {
 
     const records = loaderData.payload?.records || []
     const promoCodes: PromoCode[] = loaderData.payload?.promoCodes || []
-    const currentPromoCodeActive = loaderData.payload?.currentPromoCodeActive || undefined
-    const dateStringPT = getDateFromPromoCode(currentPromoCodeActive)
+    const currentPromoCodeActive: PromoCode = loaderData.payload?.currentPromoCodeActive || undefined
+    const dateStringPT = getDateFromPromoCode(currentPromoCodeActive.code)
 
     const [showFormAddPizza, setShowFormAddPizza] = useState(false)
     const [enableEdit, setEnableEdit] = useState(false)
@@ -239,7 +275,7 @@ export default function PromoPizzaAdmin() {
     }
 
 
-
+    let title = `Listas das pizzas (${records.length})`
 
     return (
         <Container className="mt-16">
@@ -263,12 +299,15 @@ export default function PromoPizzaAdmin() {
             <Separator className="mb-8" />
 
             <div className="flex flex-col">
-                <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-xl md:text-2xl font-semibold ">{`Listas das pizzas (${records.length})`}</h2>
+                <div className="flex justify-between items-center mb-6">
+                    <div className="flex flex-col gap-1">
+                        <h2 className="text-xl md:text-2xl font-semibold ">{title}</h2>
+                        <h3 className="text-xs">Código promocional atualmente ativo: {currentPromoCodeActive.code}</h3>
+                    </div>
 
                     <span className="text-sm underline cursor-pointer" onClick={() => setEnableEdit(!enableEdit)}>Abilitar alteraçoes</span>
                 </div>
-                <div className="mb-8">
+                <div className="mb-8 rounded-md p-4 border">
                     <div className="flex gap-2 items-center">
                         <span>Filtrar por: </span>
                         <ul className="flex gap-4">
@@ -277,7 +316,7 @@ export default function PromoPizzaAdmin() {
                                     "text-sm cursor-pointer rounded-md px-2 py-1 bg-muted-foreground text-white hover:underline hover:bg-muted hover:text-black",
                                 )
                             }>
-                                <Link to={`?filter="all"`}>
+                                <Link to={`?filter=all`}>
                                     Todos
                                 </Link>
                             </li>
@@ -286,7 +325,7 @@ export default function PromoPizzaAdmin() {
                                     "text-sm cursor-pointer rounded-md px-2 py-1 bg-muted-foreground text-white hover:underline hover:bg-muted hover:text-black",
                                 )
                             }>
-                                <Link to={`?filter="only-active"`}>
+                                <Link to={`?filter=active`}>
                                     Ativo
                                 </Link>
 
@@ -298,7 +337,7 @@ export default function PromoPizzaAdmin() {
                                         "text-sm cursor-pointer rounded-md px-2 py-1 bg-muted-foreground text-white hover:underline hover:bg-muted hover:text-black",
                                     )
                                 }>
-                                Codigo
+                                Codigo Promo
                             </li>
 
                         </ul>
@@ -308,11 +347,9 @@ export default function PromoPizzaAdmin() {
                             showPromoCodes === true && promoCodes.map(p => {
                                 return (
                                     <li key={p.code} >
-                                        <Link to={`?filter=${p.code}`} className={
+                                        <Link to={`?filter={"code": "${p.code}"}`} className={
                                             cn("flex items-center gap-1 hover:underline ",
-                                                p.active === true && "font-semibold",
                                             )}>
-                                            <span>{p.active === currentPromoCodeActive ? "🔥" : "🍕"}</span>
                                             <span>{p.code}</span>
                                         </Link>
                                     </li>
@@ -321,6 +358,9 @@ export default function PromoPizzaAdmin() {
                         }
                     </ul>
                 </div>
+                {
+                    records.length === 0 && <span className="font-semibold">Nenhuma pizza encontrada</span>
+                }
                 <ul className="flex flex-col gap-4">
                     {
                         records.map((r: PromoPizzaPhoto) => {
@@ -478,6 +518,53 @@ export default function PromoPizzaAdmin() {
         </Container>
     )
 
+}
+
+function FormAddPizzaSlice() {
+
+    const loaderData = useLoaderData<typeof loader>()
+    const promoCode = loaderData.payload?.promoCode
+
+    return (
+        <Form method="post">
+            <div className="flex flex-col gap-2">
+                <div className="flex gap-2 items-center mb-6">
+                    <Label className="font-semibold">Codigo Promo</Label>
+                    <InputItem
+                        type="text" name="promoCode" placeholder="Codigo promo" required defaultValue={promoCode}
+                        className="border-none outline-none"
+                    />
+                </div>
+
+                <Fieldset>
+                    <InputItem type="text" name="pizzaName" placeholder="Nome pizza" required />
+                </Fieldset>
+                <Fieldset>
+                    <Textarea name="pizzaIngredients" placeholder="Ingredientes" required
+                        className={
+                            cn(
+                                `text-lg p-2 placeholder:text-gray-400`,
+                            )
+                        }
+                    />
+                </Fieldset>
+
+                <Fieldset>
+                    <InputItem type="text" name="pizzaValue" placeholder="Valor" required />
+                </Fieldset>
+
+                <Fieldset>
+                    <InputItem type="text" name="pizzaPromoValue" placeholder="Valor em Promoçao" />
+                </Fieldset>
+
+            </div>
+            <SubmitButton actionName="add-pizza-al-taglio"
+                idleText="Salvar"
+                loadingText="Salvando..."
+            />
+
+        </Form>
+    )
 }
 
 

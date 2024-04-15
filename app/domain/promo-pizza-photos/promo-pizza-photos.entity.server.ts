@@ -38,7 +38,14 @@ class PromoPizzaPhotoEntity extends BaseEntity<PromoPizzaPhoto> {
       },
     ];
 
-    return codes;
+    const shouldPromoCodeActive = process.env.PIZZA_PHOTOS_PROMO_CODE;
+
+    return codes.map((c) => {
+      return {
+        ...c,
+        active: c.code === shouldPromoCodeActive,
+      };
+    });
   }
 
   getActivePromoCode() {
