@@ -9,6 +9,19 @@ import { type PurchasePrice } from "../purchase-price/purchase-price.model.serve
 import { ProductMenu } from "./product-menu.model.server";
 import { Category } from "../category/category.model.server";
 
+export interface IProduct {
+  id?: string;
+  name: string;
+  unit: ProductUnit;
+  showInMenu: boolean;
+  category: TProductCategory;
+  subCategory: TProductSubCategory;
+}
+
+export type TProductCategory = Record<string, string>;
+
+export type TProductSubCategory = Record<string, string>;
+
 export interface Product {
   id?: string;
   name: string;
