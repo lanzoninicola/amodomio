@@ -258,14 +258,11 @@ export default function PromoPizzaAdmin() {
     const loaderData = useLoaderData<typeof loader>()
 
     const records = loaderData.payload?.records || []
-    const promoCodes: PromoCode[] = loaderData.payload?.promoCodes || []
     const currentPromoCodeActive: PromoCode = loaderData.payload?.currentPromoCodeActive || undefined
-    const dateStringPT = getDateFromPromoCode(currentPromoCodeActive.code)
 
     const [showFormAddPizza, setShowFormAddPizza] = useState(false)
     const [enableEdit, setEnableEdit] = useState(false)
-
-    const [showPromoCodes, setShowPromoCodes] = useState(false)
+    const [showFilters, setShowFilters] = useState(false)
 
     const actionData = useActionData<typeof action>()
     const status = actionData?.status
@@ -310,268 +307,22 @@ export default function PromoPizzaAdmin() {
             <Separator className="mb-8" />
 
             <div className="flex flex-col">
-                <div className="flex justify-between items-center mb-6">
+                <div className="flex flex-col md:flex-row justify-between md:items-center mb-6 gap-4">
                     <div className="flex flex-col gap-1">
                         <h2 className="text-xl md:text-2xl font-semibold ">{title}</h2>
                         <h3 className="text-xs">Código promocional configurado: {currentPromoCodeActive.code}</h3>
                     </div>
 
-                    <span className="text-sm underline cursor-pointer" onClick={() => setEnableEdit(!enableEdit)}>Abilitar alteraçoes</span>
-                </div>
-                <div className="mb-8 rounded-md p-4 border">
-                    <div className="flex items-start justify-between">
-
-                        <div className="flex flex-col gap-2">
-                            <div className="flex gap-2 items-center">
-                                <span>Filtrar por: </span>
-                                <ul className="flex gap-4">
-                                    <li className={
-                                        cn(
-                                            "text-sm cursor-pointer rounded-md px-2 py-1 bg-muted-foreground text-white hover:underline hover:bg-muted hover:text-black",
-                                        )
-                                    }>
-                                        <Link to={`?filter=all`}>
-                                            Todas as pizzas das promos
-                                        </Link>
-                                    </li>
-                                    <li className={
-                                        cn(
-                                            "text-sm cursor-pointer rounded-md px-2 py-1 bg-muted-foreground text-white hover:underline hover:bg-muted hover:text-black",
-                                        )
-                                    }>
-                                        <Link to={`?filter=active`}>
-                                            Atualmente Ativo
-                                        </Link>
-
-                                    </li>
-                                    <li
-                                        onClick={() => setShowPromoCodes(!showPromoCodes)}
-                                        className={
-                                            cn(
-                                                "text-sm cursor-pointer rounded-md px-2 py-1 bg-muted-foreground text-white hover:underline hover:bg-muted hover:text-black",
-                                            )
-                                        }>
-                                        Codigo Promo
-                                    </li>
-
-                                </ul>
-                            </div>
-                            {
-                                showPromoCodes === true && (
-                                    <ul className="mt-4 flex gap-2 text-sm">
-                                        {
-                                            promoCodes.map(p => {
-                                                return (
-                                                    <li key={p.code} >
-                                                        <Link to={`?filter={"code": "${p.code}"}`} className={
-                                                            cn("flex items-center gap-1 hover:underline ",
-                                                            )}>
-                                                            <span>{p.code}</span>
-                                                        </Link>
-                                                    </li>
-                                                )
-                                            })
-                                        }
-                                    </ul>
-                                )
-                            }
-                        </div>
-                        <Link to={``} className={
-                            cn("flex items-center gap-1 hover:underline hover:font-semibold ",
-                            )}>
-                            <span className="text-sm">Cancelar Filtro </span>
-                            <XCircle size={16} />
-                        </Link>
-
+                    <div className="flex gap-2">
+                        <span className="text-sm underline cursor-pointer hover:font-semibold" onClick={() => setEnableEdit(!enableEdit)}>Abilitar alteraçoes</span>
+                        <span className="text-sm underline cursor-pointer  hover:font-semibold" onClick={() => setShowFilters(!showFilters)}>Visualizar filtros</span>
                     </div>
                 </div>
+                {showFilters && <PizzasPromoFilters />}
                 {
                     records.length === 0 && <span className="font-semibold">Nenhuma pizza encontrada</span>
                 }
-                <ul className="flex flex-col gap-4">
-                    {
-                        records.map((r: PromoPizzaPhoto) => {
-                            return (
-                                <li key={r.id} className={
-                                    cn(
-                                        "p-2 rounded-sm",
-                                    )
-                                }>
-                                    <div className="flex flex-col gap-2">
-                                        <div className="flex flex-col md:flex-row justify-between items-center w-full">
-
-                                            <div className="flex flex-col">
-                                                {/* <!-- Nome e ingredientes --> */}
-                                                <div className="flex flex-col">
-                                                    <Form method="post">
-                                                        <input type="hidden" name="recordId" value={r.id} />
-                                                        <div className="flex gap-2 items-center">
-                                                            <div className="flex items-center">
-                                                                {/* <span>{r.isSelected === false ? "🍕" : <CheckSquareIcon />}</span> */}
-                                                                <InputItem
-                                                                    type="text" name="pizzaName" defaultValue={r.pizza.name}
-                                                                    className="border-none outline-none font-semibold text-xl w-max"
-                                                                />
-                                                                <div className="flex gap-2 items-center">
-                                                                    <span className={
-                                                                        cn(
-                                                                            "rounded-md  text-white text-xs font-semibold px-2 py-1",
-                                                                            r.isSelected === false ? "bg-green-500" : "bg-red-500"
-                                                                        )
-                                                                    }>
-                                                                        {r.isSelected === false ? "Disponivel" : "Escolhida"}
-                                                                    </span>
-                                                                    {/* <span className={
-                                                                        cn(
-                                                                            "rounded-md  text-white text-xs font-semibold px-2 py-1",
-                                                                            r.public === false ? "bg-red-500" : "bg-green-500"
-                                                                        )
-                                                                    }>
-                                                                        {r.public === false ? "Uso interno" : "Para o cliente"}
-                                                                    </span> */}
-                                                                </div>
-                                                            </div>
-                                                            {enableEdit && <SaveItemButton actionName="record-update-pizza-name" />}
-                                                        </div>
-                                                    </Form>
-
-                                                    {
-                                                        r.isSelected === false && (
-                                                            <Form method="post">
-                                                                <input type="hidden" name="recordId" value={r.id} />
-                                                                <div className="flex gap-2 items-start">
-                                                                    <TextareaItem
-                                                                        type="text" name="pizzaIngredients" defaultValue={r.pizza.ingredients}
-                                                                        className="border-none outline-none"
-                                                                    />
-                                                                    {enableEdit && <SaveItemButton actionName="record-update-pizza-ingredients" />}
-                                                                </div>
-                                                            </Form>
-                                                        )
-                                                    }
-
-                                                </div>
-
-                                                {/* <!-- Valores --> */}
-                                                <div className="flex gap-2 items-center">
-                                                    <Form method="post">
-                                                        <input type="hidden" name="recordId" value={r.id} />
-                                                        <div className="flex gap-2 items-center">
-                                                            <div className="flex items-center">
-                                                                <span className="text-sm">Preço: </span>
-                                                                <InputItem
-                                                                    type="text" name="pizzaValue" defaultValue={r.pizza.value}
-                                                                    className="border-none outline-none text-sm w-[75px]"
-                                                                />
-                                                                {enableEdit && <SaveItemButton actionName="record-update-pizza-value" />}
-                                                            </div>
-                                                        </div>
-                                                    </Form>
-                                                    <Form method="post">
-                                                        <input type="hidden" name="recordId" value={r.id} />
-                                                        <div className="flex gap-2 items-center">
-                                                            <div className="flex items-center">
-                                                                <span className="text-sm">Preço promocional: </span>
-                                                                <InputItem
-                                                                    type="text" name="pizzaPromoValue" defaultValue={r.pizza.promoValue}
-                                                                    className="border-none outline-none text-sm w-[75px]"
-                                                                />
-                                                                {enableEdit && <SaveItemButton actionName="record-update-pizza-promo-value" />}
-                                                            </div>
-                                                        </div>
-                                                    </Form>
-                                                </div>
-                                            </div>
-
-                                            {
-                                                r.isSelected === true && enableEdit && (
-                                                    <Form method="post" className="w-full md:w-auto">
-                                                        <input type="hidden" name="recordId" value={r.id} />
-                                                        <div className="flex gap-2 w-full">
-
-                                                            <SubmitButton actionName="record-detach-customer"
-                                                                idleText="Svincular"
-                                                                loadingText="Svinculando..."
-                                                                variant={"outline"}
-                                                            />
-                                                            {/* <SubmitButton actionName="record-attach-customer"
-                                                                className="bg-brand-blue font-semibold"
-                                                                idleText="Vincular"
-                                                                loadingText="Vinculando..."
-
-                                                            /> */}
-                                                        </div>
-                                                    </Form>
-                                                )
-                                            }
-                                            {
-                                                !r.isSelected && enableEdit && (
-                                                    <Form method="post">
-                                                        <input type="hidden" name="recordId" value={r.id} />
-                                                        <DeleteItemButton actionName="record-delete" />
-                                                    </Form>
-                                                )
-                                            }
-                                        </div>
-
-                                        {/** Nome cliente */}
-                                        {
-                                            r.isSelected && (
-                                                <div className="flex flex-col md:grid md:grid-cols-2">
-                                                    <div className="flex flex-col mb-2">
-                                                        <div className="flex flex-col md:flex-row gap-4 mb-1">
-                                                            <span className="font-semibold text-brand-blue">{r.selectedBy?.name}</span>
-
-                                                        </div>
-                                                        <span className="text-brand-blue">{r.selectedBy?.endereço}</span>
-                                                        <span className="text-brand-blue">{r.selectedBy?.bairro}</span>
-                                                        <span className="text-brand-blue">{r.selectedBy?.cep}</span>
-                                                        <span className="text-brand-blue">Tel: {r.selectedBy?.phoneNumber}</span>
-                                                    </div>
-                                                    <div className="flex flex-col gap-2">
-                                                        <div className="flex flex-col gap-2 md:grid md:grid-cols-2 md:gap-4">
-                                                            <CopyButton
-                                                                label="Mensagen de lembrete promo"
-                                                                classNameLabel="text-sm md:text-xs"
-                                                                classNameButton="w-full md:w-max md:px-4 py-1"
-                                                                textToCopy={waMessageRemember(dateStringPT, {
-                                                                    endereço: r.selectedBy?.endereço,
-                                                                    bairro: r.selectedBy?.bairro,
-                                                                    cep: r.selectedBy?.cep,
-                                                                })} />
-                                                            <CopyButton
-                                                                label="Mensagem pronta entrega"
-                                                                classNameLabel="text-sm md:text-xs"
-                                                                classNameButton="w-full md:w-max md:px-4 py-1 md:text-sm"
-                                                                textToCopy={`Olá, a sua pizza *${r.pizza.name}* está a caminho para entrega. Obrigado.`} />
-                                                        </div>
-                                                        <CopyButton
-                                                            label="CUPOM MOTOBOY"
-                                                            classNameLabel="text-sm md:text-xs font-semibold"
-                                                            classNameButton="w-full md:w-max md:px-4 py-1 bg-brand-blue"
-                                                            textToCopy={motoboyMessage(dateStringPT, {
-                                                                nome: r.selectedBy?.name,
-                                                                endereço: r.selectedBy?.endereço,
-                                                                bairro: r.selectedBy?.bairro,
-                                                                cep: r.selectedBy?.cep,
-                                                                valor: r.pizza.value,
-                                                            })} />
-                                                    </div>
-
-                                                </div>
-
-                                            )
-                                        }
-
-                                    </div>
-                                    <Separator className="my-2" />
-                                </li>
-
-
-                            )
-                        })
-                    }
-                </ul >
+                <PizzaPromoList enableEdit={enableEdit} />
             </div >
         </Container >
     )
@@ -633,6 +384,282 @@ function FormAddPizzaSlice() {
     )
 }
 
+function PizzasPromoFilters() {
+    const loaderData = useLoaderData<typeof loader>()
+    const promoCodes: PromoCode[] = loaderData.payload?.promoCodes || []
+
+    const [showPromoCodes, setShowPromoCodes] = useState(false)
+
+
+    return (
+        <div className="mb-8 rounded-md p-4 border">
+            <div className="flex items-start justify-between">
+
+                <div className="flex flex-col gap-2">
+                    <div className="flex gap-2 items-center">
+                        <span>Filtrar por: </span>
+                        <ul className="flex gap-4">
+                            <li className={
+                                cn(
+                                    "text-sm cursor-pointer rounded-md px-2 py-1 bg-muted-foreground text-white hover:underline hover:bg-muted hover:text-black",
+                                )
+                            }>
+                                <Link to={`?filter=all`}>
+                                    Todas as pizzas das promos
+                                </Link>
+                            </li>
+                            <li className={
+                                cn(
+                                    "text-sm cursor-pointer rounded-md px-2 py-1 bg-muted-foreground text-white hover:underline hover:bg-muted hover:text-black",
+                                )
+                            }>
+                                <Link to={`?filter=active`}>
+                                    Atualmente Ativo
+                                </Link>
+
+                            </li>
+                            <li
+                                onClick={() => setShowPromoCodes(!showPromoCodes)}
+                                className={
+                                    cn(
+                                        "text-sm cursor-pointer rounded-md px-2 py-1 bg-muted-foreground text-white hover:underline hover:bg-muted hover:text-black",
+                                    )
+                                }>
+                                Codigo Promo
+                            </li>
+
+                        </ul>
+                    </div>
+                    {
+                        showPromoCodes === true && (
+                            <ul className="mt-4 flex gap-2 text-sm">
+                                {
+                                    promoCodes.map(p => {
+                                        return (
+                                            <li key={p.code} >
+                                                <Link to={`?filter={"code": "${p.code}"}`} className={
+                                                    cn("flex items-center gap-1 hover:underline ",
+                                                    )}>
+                                                    <span>{p.code}</span>
+                                                </Link>
+                                            </li>
+                                        )
+                                    })
+                                }
+                            </ul>
+                        )
+                    }
+                </div>
+                <Link to={``} className={
+                    cn("flex items-center gap-1 hover:underline hover:font-semibold ",
+                    )}>
+                    <span className="text-sm">Cancelar Filtro </span>
+                    <XCircle size={16} />
+                </Link>
+
+            </div>
+        </div>
+    )
+}
+
+interface PizzaPromoListProps {
+    enableEdit: boolean
+}
+
+function PizzaPromoList({ enableEdit }: PizzaPromoListProps) {
+    const loaderData = useLoaderData<typeof loader>()
+
+    const records = loaderData.payload?.records || []
+    const currentPromoCodeActive: PromoCode = loaderData.payload?.currentPromoCodeActive || undefined
+    const dateStringPT = getDateFromPromoCode(currentPromoCodeActive.code)
+
+    return (
+        <ul className="flex flex-col gap-4 p-4 md:p-0" data-component="PizzaPromoList">
+            {
+                records.map((r: PromoPizzaPhoto) => {
+                    return (
+                        <li key={r.id} className={
+                            cn(
+                                "p-2 rounded-sm",
+                            )
+                        }>
+                            <div className="flex flex-col gap-2">
+                                <div className="flex flex-col md:flex-row justify-between items-center w-full">
+
+                                    <div className="flex flex-col">
+                                        {/* <!-- Nome e ingredientes --> */}
+                                        <div className="flex flex-col">
+                                            <Form method="post">
+                                                <input type="hidden" name="recordId" value={r.id} />
+                                                <div className="flex gap-2 items-center">
+                                                    <div className="flex items-center">
+                                                        {/* <span>{r.isSelected === false ? "🍕" : <CheckSquareIcon />}</span> */}
+                                                        <InputItem
+                                                            type="text" name="pizzaName" defaultValue={r.pizza.name}
+                                                            className="border-none outline-none font-semibold text-xl w-max"
+                                                        />
+                                                        <div className="flex gap-2 items-center">
+                                                            <span className={
+                                                                cn(
+                                                                    "rounded-md  text-white text-xs font-semibold px-2 py-1",
+                                                                    r.isSelected === false ? "bg-green-500" : "bg-red-500"
+                                                                )
+                                                            }>
+                                                                {r.isSelected === false ? "Disponivel" : "Escolhida"}
+                                                            </span>
+                                                            {/* <span className={
+                                                                        cn(
+                                                                            "rounded-md  text-white text-xs font-semibold px-2 py-1",
+                                                                            r.public === false ? "bg-red-500" : "bg-green-500"
+                                                                        )
+                                                                    }>
+                                                                        {r.public === false ? "Uso interno" : "Para o cliente"}
+                                                                    </span> */}
+                                                        </div>
+                                                    </div>
+                                                    {enableEdit && <SaveItemButton actionName="record-update-pizza-name" />}
+                                                </div>
+                                            </Form>
+
+                                            {
+                                                r.isSelected === false && (
+                                                    <Form method="post">
+                                                        <input type="hidden" name="recordId" value={r.id} />
+                                                        <div className="flex gap-2 items-start">
+                                                            <TextareaItem
+                                                                type="text" name="pizzaIngredients" defaultValue={r.pizza.ingredients}
+                                                                className="border-none outline-none min-h-[120px]"
+                                                            />
+                                                            {enableEdit && <SaveItemButton actionName="record-update-pizza-ingredients" />}
+                                                        </div>
+                                                    </Form>
+                                                )
+                                            }
+
+                                        </div>
+
+                                        {/* <!-- Valores --> */}
+                                        <div className="flex gap-2 items-center">
+                                            <Form method="post">
+                                                <input type="hidden" name="recordId" value={r.id} />
+                                                <div className="flex gap-2 items-center">
+                                                    <div className="flex items-center">
+                                                        <span className="text-sm">Preço: </span>
+                                                        <InputItem
+                                                            type="text" name="pizzaValue" defaultValue={r.pizza.value}
+                                                            className="border-none outline-none text-sm w-[75px]"
+                                                        />
+                                                        {enableEdit && <SaveItemButton actionName="record-update-pizza-value" />}
+                                                    </div>
+                                                </div>
+                                            </Form>
+                                            <Form method="post">
+                                                <input type="hidden" name="recordId" value={r.id} />
+                                                <div className="flex gap-2 items-center">
+                                                    <div className="flex items-center">
+                                                        <span className="text-sm">Preço promocional: </span>
+                                                        <InputItem
+                                                            type="text" name="pizzaPromoValue" defaultValue={r.pizza.promoValue}
+                                                            className="border-none outline-none text-sm w-[75px]"
+                                                        />
+                                                        {enableEdit && <SaveItemButton actionName="record-update-pizza-promo-value" />}
+                                                    </div>
+                                                </div>
+                                            </Form>
+                                        </div>
+                                    </div>
+
+                                    {
+                                        r.isSelected === true && enableEdit && (
+                                            <Form method="post" className="w-full md:w-auto">
+                                                <input type="hidden" name="recordId" value={r.id} />
+                                                <div className="flex gap-2 w-full">
+
+                                                    <SubmitButton actionName="record-detach-customer"
+                                                        idleText="Svincular"
+                                                        loadingText="Svinculando..."
+                                                        variant={"outline"}
+                                                    />
+                                                    {/* <SubmitButton actionName="record-attach-customer"
+                                                                className="bg-brand-blue font-semibold"
+                                                                idleText="Vincular"
+                                                                loadingText="Vinculando..."
+
+                                                            /> */}
+                                                </div>
+                                            </Form>
+                                        )
+                                    }
+                                    {
+                                        !r.isSelected && enableEdit && (
+                                            <Form method="post">
+                                                <input type="hidden" name="recordId" value={r.id} />
+                                                <DeleteItemButton actionName="record-delete" />
+                                            </Form>
+                                        )
+                                    }
+                                </div>
+
+                                {/** Nome cliente */}
+                                {
+                                    r.isSelected && (
+                                        <div className="flex flex-col md:grid md:grid-cols-2">
+                                            <div className="flex flex-col mb-2">
+                                                <div className="flex flex-col md:flex-row gap-4 mb-1">
+                                                    <span className="font-semibold text-brand-blue">{r.selectedBy?.name}</span>
+
+                                                </div>
+                                                <span className="text-brand-blue">{r.selectedBy?.endereço}</span>
+                                                <span className="text-brand-blue">{r.selectedBy?.bairro}</span>
+                                                <span className="text-brand-blue">{r.selectedBy?.cep}</span>
+                                                <span className="text-brand-blue">Tel: {r.selectedBy?.phoneNumber}</span>
+                                            </div>
+                                            <div className="flex flex-col gap-2">
+                                                <div className="flex flex-col gap-2 md:grid md:grid-cols-2 md:gap-4">
+                                                    <CopyButton
+                                                        label="Mensagen de lembrete promo"
+                                                        classNameLabel="text-sm md:text-xs"
+                                                        classNameButton="w-full md:w-max md:px-4 py-1"
+                                                        textToCopy={waMessageRemember(dateStringPT, {
+                                                            endereço: r.selectedBy?.endereço,
+                                                            bairro: r.selectedBy?.bairro,
+                                                            cep: r.selectedBy?.cep,
+                                                        })} />
+                                                    <CopyButton
+                                                        label="Mensagem pronta entrega"
+                                                        classNameLabel="text-sm md:text-xs"
+                                                        classNameButton="w-full md:w-max md:px-4 py-1 md:text-sm"
+                                                        textToCopy={`Olá, a sua pizza *${r.pizza.name}* está a caminho para entrega. Obrigado.`} />
+                                                </div>
+                                                <CopyButton
+                                                    label="CUPOM MOTOBOY"
+                                                    classNameLabel="text-sm md:text-xs font-semibold"
+                                                    classNameButton="w-full md:w-max md:px-4 py-1 bg-brand-blue"
+                                                    textToCopy={motoboyMessage(dateStringPT, {
+                                                        nome: r.selectedBy?.name,
+                                                        endereço: r.selectedBy?.endereço,
+                                                        bairro: r.selectedBy?.bairro,
+                                                        cep: r.selectedBy?.cep,
+                                                        valor: r.pizza.value,
+                                                    })} />
+                                            </div>
+
+                                        </div>
+
+                                    )
+                                }
+
+                            </div>
+                            <Separator className="my-2" />
+                        </li>
+
+
+                    )
+                })
+            }
+        </ul >
+    )
+}
 
 const waMessageRemember = (
     date: string,
