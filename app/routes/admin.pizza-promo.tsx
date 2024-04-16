@@ -474,7 +474,7 @@ function PizzaPromoList({ enableEdit }: PizzaPromoListProps) {
     const dateStringPT = getDateFromPromoCode(currentPromoCodeActive.code)
 
     return (
-        <ul className="flex flex-col gap-4 p-4 md:p-0" data-component="PizzaPromoList">
+        <ul className="flex flex-col gap-4" data-component="PizzaPromoList">
             {
                 records.map((r: PromoPizzaPhoto) => {
                     return (
@@ -484,41 +484,41 @@ function PizzaPromoList({ enableEdit }: PizzaPromoListProps) {
                             )
                         }>
                             <div className="flex flex-col gap-2">
-                                <div className="flex flex-col md:flex-row justify-between items-center w-full">
+                                <div className="flex flex-col md:grid md:grid-cols-2 md:gap-8 justify-between items-center w-full">
 
                                     <div className="flex flex-col">
                                         {/* <!-- Nome e ingredientes --> */}
                                         <div className="flex flex-col">
                                             <Form method="post">
                                                 <input type="hidden" name="recordId" value={r.id} />
-                                                <div className="flex gap-2 items-center">
-                                                    <div className="flex items-center">
-                                                        {/* <span>{r.isSelected === false ? "🍕" : <CheckSquareIcon />}</span> */}
+                                                <div className="flex flex-col gap-2">
+                                                    <div className="flex gap-2 items-center">
+                                                        <span className={
+                                                            cn(
+                                                                "rounded-md  text-white text-xs font-semibold px-2 py-1",
+                                                                r.isSelected === false ? "bg-green-500" : "bg-red-500"
+                                                            )
+                                                        }>
+                                                            {r.isSelected === false ? "Disponivel" : "Escolhida"}
+                                                        </span>
+                                                        <span className={
+                                                            cn(
+                                                                "rounded-md  text-white text-xs font-semibold px-2 py-1",
+                                                                r.public === false ? "bg-red-500" : "bg-green-500"
+                                                            )
+                                                        }>
+                                                            {r.public === false ? "Uso interno" : "Para o cliente"}
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex gap-2 items-center">
                                                         <InputItem
                                                             type="text" name="pizzaName" defaultValue={r.pizza.name}
-                                                            className="border-none outline-none font-semibold text-xl w-max"
+                                                            className="border-none outline-none font-semibold text-lg w-max"
                                                         />
-                                                        <div className="flex gap-2 items-center">
-                                                            <span className={
-                                                                cn(
-                                                                    "rounded-md  text-white text-xs font-semibold px-2 py-1",
-                                                                    r.isSelected === false ? "bg-green-500" : "bg-red-500"
-                                                                )
-                                                            }>
-                                                                {r.isSelected === false ? "Disponivel" : "Escolhida"}
-                                                            </span>
-                                                            {/* <span className={
-                                                                        cn(
-                                                                            "rounded-md  text-white text-xs font-semibold px-2 py-1",
-                                                                            r.public === false ? "bg-red-500" : "bg-green-500"
-                                                                        )
-                                                                    }>
-                                                                        {r.public === false ? "Uso interno" : "Para o cliente"}
-                                                                    </span> */}
-                                                        </div>
+                                                        {enableEdit && <SaveItemButton actionName="record-update-pizza-name" />}
                                                     </div>
-                                                    {enableEdit && <SaveItemButton actionName="record-update-pizza-name" />}
                                                 </div>
+
                                             </Form>
 
                                             {
@@ -528,7 +528,7 @@ function PizzaPromoList({ enableEdit }: PizzaPromoListProps) {
                                                         <div className="flex gap-2 items-start">
                                                             <TextareaItem
                                                                 type="text" name="pizzaIngredients" defaultValue={r.pizza.ingredients}
-                                                                className="border-none outline-none min-h-[120px]"
+                                                                className="border-none outline-none min-h-[100px] text-base"
                                                             />
                                                             {enableEdit && <SaveItemButton actionName="record-update-pizza-ingredients" />}
                                                         </div>
@@ -571,22 +571,15 @@ function PizzaPromoList({ enableEdit }: PizzaPromoListProps) {
 
                                     {
                                         r.isSelected === true && enableEdit && (
-                                            <Form method="post" className="w-full md:w-auto">
+                                            <Form method="post" className="w-full md:w-auto flex justify-end">
                                                 <input type="hidden" name="recordId" value={r.id} />
-                                                <div className="flex gap-2 w-full">
 
-                                                    <SubmitButton actionName="record-detach-customer"
-                                                        idleText="Svincular"
-                                                        loadingText="Svinculando..."
-                                                        variant={"outline"}
-                                                    />
-                                                    {/* <SubmitButton actionName="record-attach-customer"
-                                                                className="bg-brand-blue font-semibold"
-                                                                idleText="Vincular"
-                                                                loadingText="Vinculando..."
+                                                <SubmitButton actionName="record-detach-customer"
+                                                    idleText="Svincular"
+                                                    loadingText="Svinculando..."
+                                                    variant={"outline"}
 
-                                                            /> */}
-                                                </div>
+                                                />
                                             </Form>
                                         )
                                     }
@@ -603,16 +596,16 @@ function PizzaPromoList({ enableEdit }: PizzaPromoListProps) {
                                 {/** Nome cliente */}
                                 {
                                     r.isSelected && (
-                                        <div className="flex flex-col md:grid md:grid-cols-2">
-                                            <div className="flex flex-col mb-2">
+                                        <div className="flex flex-col md:grid md:grid-cols-2 md:gap-8">
+                                            <div className="flex flex-col mb-2 rounded-md bg-muted p-4 text-sm">
                                                 <div className="flex flex-col md:flex-row gap-4 mb-1">
-                                                    <span className="font-semibold text-brand-blue">{r.selectedBy?.name}</span>
+                                                    <span className="font-semibold">{r.selectedBy?.name}</span>
 
                                                 </div>
-                                                <span className="text-brand-blue">{r.selectedBy?.endereço}</span>
-                                                <span className="text-brand-blue">{r.selectedBy?.bairro}</span>
-                                                <span className="text-brand-blue">{r.selectedBy?.cep}</span>
-                                                <span className="text-brand-blue">Tel: {r.selectedBy?.phoneNumber}</span>
+                                                <span>{r.selectedBy?.endereço}</span>
+                                                <span>{r.selectedBy?.bairro}</span>
+                                                <span>{r.selectedBy?.cep}</span>
+                                                <span>Tel: {r.selectedBy?.phoneNumber}</span>
                                             </div>
                                             <div className="flex flex-col gap-2">
                                                 <div className="flex flex-col gap-2 md:grid md:grid-cols-2 md:gap-4">
@@ -631,8 +624,9 @@ function PizzaPromoList({ enableEdit }: PizzaPromoListProps) {
                                                         classNameButton="w-full md:w-max md:px-4 py-1 md:text-sm"
                                                         textToCopy={`Olá, a sua pizza *${r.pizza.name}* está a caminho para entrega. Obrigado.`} />
                                                 </div>
+                                                <Separator className="my-2" />
                                                 <CopyButton
-                                                    label="CUPOM MOTOBOY"
+                                                    label="Cupom Motoboy"
                                                     classNameLabel="text-sm md:text-xs font-semibold"
                                                     classNameButton="w-full md:w-max md:px-4 py-1 bg-brand-blue"
                                                     textToCopy={motoboyMessage(dateStringPT, {
