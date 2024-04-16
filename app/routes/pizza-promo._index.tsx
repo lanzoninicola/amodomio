@@ -16,7 +16,9 @@ import tryit from "~/utils/try-it";
 export const loader: LoaderFunction = async () => {
     const [err, records] = await tryit(promoPizzaPhotoEntity.findAll())
 
-    const recordsCurrentPromo = records?.filter(p => p.public === true)
+    const currentPromoCodeActive = promoPizzaPhotoEntity.getActivePromoCode()
+
+    const recordsCurrentPromo = records?.filter(p => p.public === true && p.promoCode === currentPromoCodeActive?.code)
 
     return ok({ records: recordsCurrentPromo, pizzasNumber: recordsCurrentPromo?.length });
 
