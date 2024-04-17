@@ -9,20 +9,32 @@ interface DeleteItemButtonProps {
   actionName: string;
   iconSize?: number;
   className?: string;
+  label?: string
 }
 
-export default function DeleteItemButton({ actionName, iconSize, className }: DeleteItemButtonProps) {
+export default function DeleteItemButton({ actionName, iconSize, className, label }: DeleteItemButtonProps) {
   return (
-    <Tooltip content="Deletar">
-      <Button type="submit" variant={"ghost"} size="sm" name="_action" value={actionName} className={
+    <Tooltip content={label ? label : "Deletar"}>
+      <div className={
         cn(
-          "text-red-500 hover:bg-red-200",
-          className
+          "flex gap-0 items-center justify-between",
+          label && "min-w-[110px]"
         )
       }>
-        <Trash size={iconSize || 16} />
-      </Button>
+        {label && <span className="text-xs">{label}</span>}
+
+        <Button type="submit" variant={"ghost"} size="sm" name="_action" value={actionName} className={
+          cn(
+            "text-red-500 hover:bg-red-200",
+            className
+          )
+        }>
+          <Trash size={iconSize || 16} />
+        </Button>
+
+      </div>
     </Tooltip>
+
   )
 }
 

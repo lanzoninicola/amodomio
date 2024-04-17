@@ -21,6 +21,7 @@ export interface PromoPizzaPhoto {
   pizza: PromoPizzaPhotoPizzaIncluded;
   promoCode: string;
   selectedBy: PromoPizzaPhotoCustomer | null;
+  public?: boolean;
 }
 
 const PromoPizzaPhotoModel =

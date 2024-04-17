@@ -29,7 +29,7 @@ const CopyButton = ({ textToCopy, label, variant = "default", classNameContainer
     return (
         <div className={
             cn(
-                "relative",
+                "relative w-max",
                 classNameContainer
             )
         }>

@@ -1,6 +1,6 @@
 import { LoaderFunction } from "@remix-run/node";
 import { useLoaderData, Link } from "@remix-run/react";
-import { ChevronRightSquareIcon, Settings } from "lucide-react";
+import { AlertCircle, ChevronRightSquareIcon, Settings } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "~/components/ui/dialog";
 import { Separator } from "~/components/ui/separator";
@@ -16,49 +16,41 @@ import tryit from "~/utils/try-it";
 export const loader: LoaderFunction = async () => {
     const [err, records] = await tryit(promoPizzaPhotoEntity.findAll())
 
-    const promoCode = process.env.PIZZA_PHOTOS_PROMO_CODE
-    const pizzasNumber = process.env.PIZZA_PHOTOS_PIZZAS_NUMBER
+    const currentPromoCodeActive = promoPizzaPhotoEntity.getActivePromoCode()
 
-    const recordsCurrentPromo = records?.filter(p => p.promoCode === promoCode)
+    const recordsCurrentPromo = records?.filter(p => p.public === true && p.promoCode === currentPromoCodeActive?.code)
 
-    return ok({ records: recordsCurrentPromo, pizzasNumber });
+    return ok({ records: recordsCurrentPromo, pizzasNumber: recordsCurrentPromo?.length });
 
 };
 
 
 export default function PizzaPromoIndex() {
     const loaderData = useLoaderData<typeof loader>()
-    // const pizzas: PromoPizzaPhoto[] = [
-    //     {
-    //         "pizza": {
-    //             "ingredients": "Molho de tomate, Muçarela de Bufala em bolinha",
-    //             "name": "Margherita di napoli"
-    //         },
-    //         "selectedBy": {
-    //             "endereço": "Rua Prefeito Placido Machado",
-    //             "bairro": "La Salle",
-    //             "cep": "85505190",
-    //             "name": "Nicola Lanzoni",
-    //             "phoneNumber": "46991052049"
-    //         },
-    //         "isSelected": false,
-    //         "promoCode": "20240305-pizza-photos",
-    //         "id": "zbkTq25Y5aLgMet38PcU"
-    //     },
-    //     {
-    //         "pizza": {
-    //             "ingredients": "Molho de tomate, Muçarela,Bacon defumado,Provolone defumado",
-    //             "name": "Affumicata"
-    //         },
-    //         "selectedBy": null,
-    //         "isSelected": false,
-    //         "promoCode": "20240305-pizza-photos",
-    //         "id": "zbkTq25Y5aLgdet38PcU"
-    //     }
-    // ]
+
 
     const records = loaderData.payload?.records || []
     const pizzasNumber = loaderData.payload?.pizzasNumber
+
+    if (pizzasNumber === 0) {
+        return (
+            <div className="grid place-items-center min-h-[200px] md:min-h-[300px] ">
+                <div className="bg-white rounded-lg shadow-xl p-4 md:p-6">
+                    <div className="flex gap-2 items-center mb-4">
+                        <AlertCircle />
+                        <h1 className="font-semibold">Atenção</h1>
+                    </div>
+                    <p className="leading-snug">
+                        Atualmente, não há nenhuma promoção ativa.
+                        <br />
+                        <br />
+                        <span className="font-semibold text-sm">Equipe A Modo Mio</span>
+
+                    </p>
+                </div>
+            </div>
+        )
+    }
 
     return (
         <>
@@ -69,47 +61,51 @@ export default function PizzaPromoIndex() {
                 </div>
                 <DialogRules />
             </div>
-            <div>
-                <h2 className="text-lg font-bold mb-4">Pizzas</h2>
-                <ul className="flex flex-col gap-6">
-                    {
-                        records.map((p: PromoPizzaPhoto) => {
-                            return (
+            {
+                pizzasNumber > 0 && (
+                    <div>
+                        <h2 className="text-lg font-bold mb-4">Pizzas</h2>
+                        <ul className="flex flex-col gap-6">
+                            {
+                                records.map((p: PromoPizzaPhoto) => {
+                                    return (
 
-                                <li key={p.id} className={
-                                    cn(
+                                        <li key={p.id} className={
+                                            cn(
 
-                                        p.isSelected && "opacity-50"
+                                                p.isSelected && "opacity-50"
+                                            )
+                                        }>
+                                            <div className="flex justify-between items-center mb-4">
+                                                <div className="flex flex-col">
+                                                    <div className="flex items-center gap-2">
+                                                        <ChevronRightSquareIcon size={16} />
+                                                        <h2 className="text-lg font-semibold text-brand-blue">{p.pizza.name}</h2>
+                                                    </div>
+                                                    <div className="flex gap-2 items-center mb-2">
+                                                        <span className="text-sm">Preço:</span>
+                                                        <span className="text-sm text-slate-400 line-through">R${p.pizza.value}</span>
+                                                        <span className="text-sm font-semibold">R${p.pizza.promoValue}</span>
+                                                    </div>
+                                                    <span className="text-sm tracking-tight">{p.pizza.ingredients}</span>
+                                                </div>
+
+                                                <Link to={p.isSelected === true ? `/pizza-promo` : `/pizza-promo/${p.id}`}>
+                                                    <Button className="bg-brand-blue font-semibold" disabled={p.isSelected === true}>{
+                                                        p.isSelected === true ? "Não disponivel" : "Selecionar"
+                                                    }</Button>
+                                                </Link>
+                                            </div>
+                                            <Separator />
+                                        </li>
+
                                     )
-                                }>
-                                    <div className="flex justify-between items-center mb-4">
-                                        <div className="flex flex-col">
-                                            <div className="flex items-center gap-2">
-                                                <ChevronRightSquareIcon size={16} />
-                                                <h2 className="text-lg font-semibold text-brand-blue">{p.pizza.name}</h2>
-                                            </div>
-                                            <div className="flex gap-2 items-center mb-2">
-                                                <span className="text-sm">Preço:</span>
-                                                <span className="text-sm text-slate-400 line-through">R${p.pizza.value}</span>
-                                                <span className="text-sm font-semibold">R${p.pizza.promoValue}</span>
-                                            </div>
-                                            <span className="text-sm tracking-tight">{p.pizza.ingredients}</span>
-                                        </div>
-
-                                        <Link to={p.isSelected === true ? `/pizza-promo` : `/pizza-promo/${p.id}`}>
-                                            <Button className="bg-brand-blue font-semibold" disabled={p.isSelected === true}>{
-                                                p.isSelected === true ? "Não disponivel" : "Selecionar"
-                                            }</Button>
-                                        </Link>
-                                    </div>
-                                    <Separator />
-                                </li>
-
-                            )
-                        })
-                    }
-                </ul>
-            </div >
+                                })
+                            }
+                        </ul>
+                    </div >
+                )
+            }
         </>
     )
 }
