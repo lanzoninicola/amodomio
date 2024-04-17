@@ -1,28 +1,27 @@
+import { Recipe } from "@prisma/client"
 import { Separator } from "@radix-ui/react-separator"
 import type { ActionArgs, LoaderArgs } from "@remix-run/node"
-import { useLoaderData, useNavigation, Form, Link, useActionData } from "@remix-run/react"
+import { useLoaderData, Form, useActionData } from "@remix-run/react"
 import { useState } from "react"
 import Container from "~/components/layout/container/container"
-import { TableTitles, TableRows, TableRow, Table, EditItemButton, DeleteItemButton } from "~/components/primitives/table-list"
+import { EditItemButton, DeleteItemButton } from "~/components/primitives/table-list"
 import { Input } from "~/components/ui/input"
 import { toast } from "~/components/ui/use-toast"
-import ProductTypeBadge from "~/domain/product/components/product-type-badge/product-type-badge"
-import { ProductEntity, productPrismaEntity } from "~/domain/product/product.entity"
-import { IProduct, type Product } from "~/domain/product/product.model.server"
-import { cn } from "~/lib/utils"
+import { recipeEntity } from "~/domain/recipe/recipe.entity"
+
 import { ok, serverError } from "~/utils/http-response.server"
 import tryit from "~/utils/try-it"
 
 
 export async function loader({ request }: LoaderArgs) {
 
-    const [err, products] = await tryit(productPrismaEntity.findAll())
+    const [err, recipes] = await tryit(recipeEntity.findAll())
 
     if (err) {
         return serverError(err)
     }
 
-    return ok({ products })
+    return ok({ recipes })
 
 }
 
@@ -31,9 +30,9 @@ export async function action({ request }: ActionArgs) {
     const { _action, ...values } = Object.fromEntries(formData);
 
 
-    if (_action === "product-delete") {
+    if (_action === "recipe-delete") {
 
-        const [err, data] = await tryit(productPrismaEntity.delete(values.id as string))
+        const [err, data] = await tryit(recipeEntity.delete(values.id as string))
 
         if (err) {
             return serverError(err)
@@ -49,7 +48,7 @@ export async function action({ request }: ActionArgs) {
 
 export default function ProducstIndex() {
     const loaderData = useLoaderData<typeof loader>()
-    const products = loaderData?.payload.products as Product[]
+    const recipes = loaderData?.payload.recipes as Recipe[]
 
     const actionData = useActionData<typeof action>()
     const status = actionData?.status
@@ -64,24 +63,24 @@ export default function ProducstIndex() {
 
     const [searchTerm, setSearchTerm] = useState("")
 
-    const productsFilteredBySearch = products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()))
+    const recipesFilteredBySearch = recipes.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()))
 
     return (
         <Container>
             <div className="flex flex-col gap-2">
                 <div data-element="filters" className="flex justify-between border rounded-md p-4 mb-2">
 
-                    {/* <ProductsFilters /> */}
+                    {/* <RecipesFilters /> */}
 
-                    <ProductsSearch onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                    <RecipesSearch onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                         const value = e.target.value
                         setSearchTerm(value)
                     }} />
                 </div>
 
-                <ul data-element="products" className="flex flex-col gap-4 md:grid md:grid-cols-3">
+                <ul data-element="recipes" className="flex flex-col gap-4 md:grid md:grid-cols-3">
                     {
-                        productsFilteredBySearch.map(p => <ProductItem item={p} key={p.id} />)
+                        recipesFilteredBySearch.map(p => <RecipeItem item={p} key={p.id} />)
                     }
                 </ul>
             </div>
@@ -89,11 +88,11 @@ export default function ProducstIndex() {
     )
 }
 
-interface ProductItemProps {
-    item: Product
+interface RecipeItemProps {
+    item: Recipe
 }
 
-function ProductItem({ item }: ProductItemProps) {
+function RecipeItem({ item }: RecipeItemProps) {
     return (
         <Form method="post"
             className="flex flex-col p-4
@@ -101,13 +100,13 @@ function ProductItem({ item }: ProductItemProps) {
 
             <div className="flex items-center justify-between w-full mb-4">
                 <h3 className="text-md font-semibold tracking-tight">{item.name}</h3>
-                <EditItemButton to={`/admin/products/${item.id}`} />
+                <EditItemButton to={`/admin/recipes/${item.id}`} />
             </div>
 
             <Separator className="mb-4" />
 
             <div className="flex gap-2 md:gap-2 justify-end">
-                <DeleteItemButton actionName="product-delete" />
+                <DeleteItemButton actionName="recipe-delete" />
                 <Input type="hidden" name="id" value={item.id} />
             </div>
         </Form>
@@ -116,26 +115,26 @@ function ProductItem({ item }: ProductItemProps) {
 
 
 /**
-function ProductsFilters() {
+function RecipesFilters() {
 
-    const productTypes = ProductEntity.findAllProductTypes()
+    const recipeTypes = RecipeEntity.findAllRecipeTypes()
 
     return (
     <div className="flex gap-4 items-center">
                         <span className="text-sm">Filtrar por:</span>
                         <ul className="flex gap-2 flex-wrap">
             <li key={"all"}>
-                <Link to={`/admin/products?type=all`}>
+                <Link to={`/admin/recipes?type=all`}>
                     <span className="border px-4 py-1 rounded-full text-xs text-gray-800 font-semibold tracking-wide max-w-max">Todos</span>
                 </Link>
             </li>
             {
-                productTypes.map((type) => {
+                recipeTypes.map((type) => {
                     return (
                         <li key={type.value}>
-                            <Link to={`/admin/products?type=${type.value}`}
+                            <Link to={`/admin/recipes?type=${type.value}`}
                                 className={cn("text-sm")}>
-                                <ProductTypeBadge type={type.value} />
+                                <RecipeTypeBadge type={type.value} />
                             </Link>
                         </li>
                     )
@@ -151,7 +150,7 @@ function ProductsFilters() {
 
  */
 
-function ProductsSearch({ ...props }) {
+function RecipesSearch({ ...props }) {
     return (
         <div className="flex gap-4">
             <Input type="text" name="search" placeholder="Buscar" className="w-full" {...props} />

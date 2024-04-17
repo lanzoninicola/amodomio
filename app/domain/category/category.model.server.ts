@@ -2,10 +2,6 @@ import { createFirestoreModel } from "~/lib/firestore-model/src";
 
 type CategoryType = "product" | "menu";
 
-export type TCategory = Record<string, string>;
-
-export type TSubCategory = Record<string, string>;
-
 interface Category {
   id?: string;
   name: string;

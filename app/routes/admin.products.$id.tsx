@@ -1,3 +1,4 @@
+import { Category, Product } from "@prisma/client";
 import { redirect, type ActionArgs, type LoaderArgs } from "@remix-run/node";
 import { Form, Link, Outlet, useLoaderData, useLocation } from "@remix-run/react";
 import { useState } from "react";
@@ -6,10 +7,8 @@ import SaveItemButton from "~/components/primitives/table-list/action-buttons/sa
 import { Select } from "~/components/ui/select";
 import { Switch } from "~/components/ui/switch";
 import { categoryPrismaEntity } from "~/domain/category/category.entity.server";
-import type { Category, TCategory } from "~/domain/category/category.model.server";
 import SelectCategory from "~/domain/category/components/select-categories/select-categories";
 import { productPrismaEntity } from "~/domain/product/product.entity";
-import { IProduct, type Product } from "~/domain/product/product.model.server";
 import type { HttpResponse } from "~/utils/http-response.server";
 import { badRequest, ok } from "~/utils/http-response.server";
 import { jsonStringify } from "~/utils/json-helper";
@@ -78,8 +77,8 @@ export default function SingleProduct() {
 
     const loaderData: HttpResponse | null = useLoaderData<typeof loader>()
 
-    const product = loaderData?.payload?.product as IProduct
-    const categories = loaderData?.payload?.categories as TCategory[]
+    const product = loaderData?.payload?.product as Product
+    const categories = loaderData?.payload?.categories as Category[]
 
     const productId = product?.id
 
@@ -92,6 +91,7 @@ export default function SingleProduct() {
                 <div className="md:grid md:grid-cols-2 md:items-start flex flex-col gap-4 border rounded-md p-4 ">
                     <div className="flex flex-col gap-4">
                         <ProductName />
+                        {/*
                         <div className="flex flex-col gap-2">
                             <div className="flex gap-2 items-center">
                                 <span className="text-sm">Categoria</span>
@@ -102,15 +102,9 @@ export default function SingleProduct() {
                                 <SelectCategory categories={categories} />
                             </div>
                         </div>
+                        */}
                     </div>
-                    <div className="flex gap-2 items-center justify-end">
-                        <span className="text-sm">Publicar no menu</span>
-                        <Switch name={product.id} value={String(product.showInMenu)} />
-                    </div>
-
                 </div>
-
-
             </div>
 
             <div className="grid grid-cols-2 grid-rows-3 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground mb-6 h-20

@@ -1,9 +1,9 @@
+import { Category } from "@prisma/client";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
-import { TCategory } from "../../category.model.server";
 
 
 interface SelectCategoryProps {
-    categories: TCategory[]
+    categories: Category[]
 }
 
 
