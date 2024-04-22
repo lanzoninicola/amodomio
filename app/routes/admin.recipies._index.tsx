@@ -1,4 +1,3 @@
-import { Separator } from "@radix-ui/react-separator"
 import type { ActionArgs, LoaderArgs } from "@remix-run/node"
 import { useLoaderData, useNavigation, Form, Link, useActionData } from "@remix-run/react"
 import { useState } from "react"
@@ -8,15 +7,30 @@ import { Input } from "~/components/ui/input"
 import { toast } from "~/components/ui/use-toast"
 import ProductTypeBadge from "~/domain/product/components/product-type-badge/product-type-badge"
 import { ProductEntity, productPrismaEntity } from "~/domain/product/product.entity"
-import { IProduct, type Product } from "~/domain/product/product.model.server"
+import type { ProductType } from "~/domain/product/product.model.server"
+import { type Product } from "~/domain/product/product.model.server"
 import { cn } from "~/lib/utils"
-import { ok, serverError } from "~/utils/http-response.server"
+import errorMessage from "~/utils/error-message"
+import getSearchParam from "~/utils/get-search-param"
+import { badRequest, ok, serverError } from "~/utils/http-response.server"
 import tryit from "~/utils/try-it"
 
 
 export async function loader({ request }: LoaderArgs) {
 
-    const [err, products] = await tryit(productPrismaEntity.findAll())
+    const productTypeParam = getSearchParam({ request, paramName: "type" })
+
+    if (!productTypeParam || productTypeParam === "all") {
+        const [err, products] = await tryit(productPrismaEntity.findAll())
+
+        if (err) {
+            return serverError(err)
+        }
+
+        return ok({ products })
+    }
+
+    const [err, products] = await tryit(productPrismaEntity.findByType(productTypeParam as ProductType))
 
     if (err) {
         return serverError(err)
@@ -33,7 +47,7 @@ export async function action({ request }: ActionArgs) {
 
     if (_action === "product-delete") {
 
-        const [err, data] = await tryit(productPrismaEntity.delete(values.id as string))
+        const [err, data] = await tryit(productPrismaEntity.deleteProduct(values.id as string))
 
         if (err) {
             return serverError(err)
@@ -55,7 +69,7 @@ export default function ProducstIndex() {
     const status = actionData?.status
     const message = actionData?.message
 
-    if (status && status !== 200) {
+    if (status && status >= 400) {
         toast({
             title: "Erro",
             description: message,
@@ -70,60 +84,77 @@ export default function ProducstIndex() {
         <Container>
             <div className="flex flex-col gap-2">
                 <div data-element="filters" className="flex justify-between border rounded-md p-4 mb-2">
-
-                    {/* <ProductsFilters /> */}
-
+                    <div className="flex gap-4 items-center">
+                        <span className="text-sm">Filtrar por:</span>
+                        <ProductsFilters />
+                    </div>
                     <ProductsSearch onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                         const value = e.target.value
                         setSearchTerm(value)
                     }} />
                 </div>
 
-                <ul data-element="products" className="flex flex-col gap-4 md:grid md:grid-cols-3">
-                    {
-                        productsFilteredBySearch.map(p => <ProductItem item={p} key={p.id} />)
-                    }
-                </ul>
+                <Table>
+                    <TableTitles
+                        clazzName="grid-cols-5"
+                        titles={[
+                            "Ações",
+                            "Nome",
+                            "Tipo",
+                            "Criado em",
+                            "Atualizado em",
+                        ]}
+                    />
+                    <TableRows>
+                        {productsFilteredBySearch.map((p) => {
+                            return <ProductTableRow key={p.id} product={p} className="grid-cols-5" />;
+                        })}
+                    </TableRows>
+                </Table>
             </div>
         </Container>
     )
 }
 
-interface ProductItemProps {
-    item: Product
+
+interface ProductTableRowProps {
+    product: Product;
+    className?: string;
 }
 
-function ProductItem({ item }: ProductItemProps) {
+function ProductTableRow({ product, className }: ProductTableRowProps) {
+    const navigation = useNavigation()
+
     return (
-        <Form method="post"
-            className="flex flex-col p-4
-                                rounded-lg border border-muted hover:border-muted-foreground hover:cursor-pointer w-full">
 
-            <div className="flex items-center justify-between w-full mb-4">
-                <h3 className="text-md font-semibold tracking-tight">{item.name}</h3>
-                <EditItemButton to={`/admin/products/${item.id}`} />
-            </div>
-
-            <Separator className="mb-4" />
-
-            <div className="flex gap-2 md:gap-2 justify-end">
-                <DeleteItemButton actionName="product-delete" />
-                <Input type="hidden" name="id" value={item.id} />
-            </div>
+        <Form method="post" >
+            <TableRow
+                row={product}
+                isProcessing={navigation.state !== "idle"}
+                className={cn("grid-cols-5 text-sm p-0", className)}
+            >
+                <div className="flex gap-2 md:gap-2">
+                    <EditItemButton to={`/admin/products/${product.id}/info`} />
+                    <DeleteItemButton actionName="product-delete" />
+                </div>
+                <div>
+                    <Input type="hidden" name="id" value={product.id} />
+                    <Input name="name" defaultValue={product.name} className="border-none w-full" readOnly />
+                </div>
+                <ProductTypeBadge type={product?.info?.type} />
+            </TableRow>
         </Form>
     )
 }
 
 
-/**
+
 function ProductsFilters() {
 
     const productTypes = ProductEntity.findAllProductTypes()
 
     return (
-    <div className="flex gap-4 items-center">
-                        <span className="text-sm">Filtrar por:</span>
-                        <ul className="flex gap-2 flex-wrap">
+        <ul className="flex gap-2 flex-wrap">
             <li key={"all"}>
                 <Link to={`/admin/products?type=all`}>
                     <span className="border px-4 py-1 rounded-full text-xs text-gray-800 font-semibold tracking-wide max-w-max">Todos</span>
@@ -142,14 +173,14 @@ function ProductsFilters() {
                 })
             }
         </ul >
-                    </div >
-
-
     )
 
 }
 
- */
+
+interface ProductsSearchProps {
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => void
+}
 
 function ProductsSearch({ ...props }) {
     return (
