@@ -12,6 +12,10 @@ import tryit from "~/utils/try-it";
 import dayjs from "dayjs";
 import { Category } from "../category/category.model.server";
 import { jsonParse } from "~/utils/json-helper";
+import { prismaClient } from "~/lib/prisma/prisma-it.server";
+import { Prisma, PrismaClient } from "@prisma/client";
+import { DefaultArgs } from "@prisma/client/runtime/library";
+import { PrismaEntityProps } from "~/lib/prisma/types.server";
 
 export interface ProductTypeHTMLSelectOption {
   value: ProductType;
@@ -272,6 +276,7 @@ export class ProductEntity extends BaseEntity<Product> {
       // { value: "pizza", label: "Pizza" },
       // { value: "ingredient", label: "Ingrediente" },
       { value: "topping", label: "Sabor" },
+      { value: "semi-finished", label: "Semi-acabado" },
       { value: "processed", label: "Produzido" },
       { value: "simple", label: "Simples" },
     ];
@@ -294,4 +299,46 @@ export class ProductEntity extends BaseEntity<Product> {
   }
 }
 
+export class ProductPrismaEntity {
+  client;
+  constructor({ client }: PrismaEntityProps) {
+    this.client = client;
+  }
+
+  async findAll(where?: Prisma.ProductWhereInput) {
+    if (!where) {
+      return await this.client.product.findMany();
+    }
+
+    return await this.client.product.findMany({ where });
+  }
+
+  async findAllByCategory(categoryId: string) {
+    return await this.client.product.findMany({
+      where: {
+        categoryId: categoryId,
+      },
+    });
+  }
+
+  async findById(id: string) {
+    return await this.client.product.findUnique({ where: { id } });
+  }
+
+  async create(data: Prisma.ProductCreateInput) {
+    return await this.client.product.create({ data });
+  }
+
+  async update(id: string, data: Prisma.ProductUpdateInput) {
+    return await this.client.product.update({ where: { id }, data });
+  }
+
+  async delete(id: string) {
+    return await this.client.product.delete({ where: { id } });
+  }
+}
+
 export const productEntity = new ProductEntity(ProductModel);
+export const productPrismaEntity = new ProductPrismaEntity({
+  client: prismaClient,
+});

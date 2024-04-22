@@ -49,8 +49,25 @@ export const WEBSITE_NAVIGATION_ITEMS: WebsiteNavigation = {
           disabled: false,
         },
         {
+          title: "Promo 'Fotos Cardapio'",
+          href: "/admin/pizza-promo",
+          items: [],
+          disabled: false,
+        },
+      ],
+    },
+    {
+      title: "Cadastro",
+      items: [
+        {
           title: "Produtos",
           href: "/admin/products",
+          items: [],
+          disabled: false,
+        },
+        {
+          title: "Receitas",
+          href: "/admin/recipes",
           items: [],
           disabled: false,
         },
@@ -60,12 +77,7 @@ export const WEBSITE_NAVIGATION_ITEMS: WebsiteNavigation = {
           items: [],
           disabled: false,
         },
-        {
-          title: "Promo 'Fotos Cardapio'",
-          href: "/admin/pizza-promo",
-          items: [],
-          disabled: false,
-        },
+
         {
           title: "Opções",
           href: "/admin/options",

@@ -2,6 +2,9 @@ import { badRequest, serverError } from "~/utils/http-response.server";
 import type { Category, CategoryType } from "./category.model.server";
 import { CategoryModel } from "./category.model.server";
 import { BaseEntity } from "../base.entity";
+import { prismaClient } from "~/lib/prisma/prisma-it.server";
+import { Prisma } from "@prisma/client";
+import { PrismaEntityProps } from "~/lib/prisma/types.server";
 
 export interface CategoryTypeSelectElement {
   value: CategoryType;
@@ -171,6 +174,38 @@ class CategoryEntity extends BaseEntity<Category> {
   }
 }
 
-const categoryEntity = new CategoryEntity(CategoryModel);
+export class CategoryPrismaEntity {
+  client;
+  constructor({ client }: PrismaEntityProps) {
+    this.client = client;
+  }
 
-export { categoryEntity };
+  async findAll(where?: Prisma.CategoryWhereInput) {
+    if (!where) {
+      return await this.client.category.findMany();
+    }
+
+    return await this.client.category.findMany({ where });
+  }
+
+  async findById(id: string) {
+    return await this.client.category.findUnique({ where: { id } });
+  }
+
+  async create(data: Prisma.CategoryCreateInput) {
+    return await this.client.category.create({ data });
+  }
+
+  async update(id: string, data: Prisma.CategoryUpdateInput) {
+    return await this.client.category.update({ where: { id }, data });
+  }
+
+  async delete(id: string) {
+    return await this.client.category.delete({ where: { id } });
+  }
+}
+
+export const categoryEntity = new CategoryEntity(CategoryModel);
+export const categoryPrismaEntity = new CategoryPrismaEntity({
+  client: prismaClient,
+});
