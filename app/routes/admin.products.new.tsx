@@ -13,7 +13,7 @@ import { toast } from "~/components/ui/use-toast";
 import { categoryEntity } from "~/domain/category/category.entity.server";
 import { Category } from "~/domain/category/category.model.server";
 import SelectProductUnit from "~/domain/product/components/select-product-unit/select-product-unit";
-import { ProductEntity, ProductTypeHTMLSelectOption, productEntity } from "~/domain/product/product.entity";
+import { ProductEntity, ProductTypeHTMLSelectOption, productPrismaEntity } from "~/domain/product/product.entity";
 import type { Product, ProductType, ProductUnit } from "~/domain/product/product.model.server";
 import getSearchParam from "~/utils/get-search-param";
 import { ok, serverError } from "~/utils/http-response.server";
@@ -22,7 +22,7 @@ import tryit from "~/utils/try-it";
 
 
 export async function loader({ request, params }: ActionArgs) {
-    const products = await productEntity.findAll()
+    const products = await productPrismaEntity.findAll()
     const categories = await categoryEntity.findAll()
     const types = ProductEntity.findAllProductTypes()
 
@@ -49,7 +49,7 @@ export async function action({ request, params }: ActionArgs) {
         const category = await categoryEntity.findById(values?.categoryId as string)
 
 
-        const [err, data] = await tryit(productEntity.create({
+        const [err, data] = await tryit(productPrismaEntity.create({
             name: values.name as string,
             unit: values.unit as ProductUnit,
             info: {
