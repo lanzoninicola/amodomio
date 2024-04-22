@@ -1,5 +1,5 @@
 import { prismaClient } from "~/lib/prisma/prisma-it.server";
-import { Prisma } from "@prisma/client";
+import { Prisma, RecipeType } from "@prisma/client";
 import { PrismaEntityProps } from "~/lib/prisma/types.server";
 
 export class RecipeEntity {
@@ -30,6 +30,22 @@ export class RecipeEntity {
 
   async delete(id: string) {
     return await this.client.recipe.delete({ where: { id } });
+  }
+
+  static getTypes(): {
+    key: RecipeType;
+    value: string;
+  }[] {
+    return [
+      {
+        key: "pizzaTopping",
+        value: "Sabor Pizza",
+      },
+      {
+        key: "semiFinished",
+        value: "Produzido",
+      },
+    ];
   }
 }
 

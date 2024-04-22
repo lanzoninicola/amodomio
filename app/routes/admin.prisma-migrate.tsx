@@ -1,3 +1,4 @@
+import { RecipeType } from "@prisma/client"
 import { ActionArgs } from "@remix-run/node"
 import { Form, useActionData, useLoaderData } from "@remix-run/react"
 import Container from "~/components/layout/container/container"
@@ -89,15 +90,14 @@ export async function action({ request }: ActionArgs) {
         const recipesProcessed = recordsProcessed.map(r => {
             return {
                 name: r.name,
-                type: "semi-finished"
+                type: "semi-finished" as RecipeType
             }
         })
 
         const recipesTopping = recordsTopping.map(r => {
-
             return {
                 name: r.name,
-                type: "topping"
+                type: "pizza-topping" as RecipeType
             }
         })
 

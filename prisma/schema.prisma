@@ -16,12 +16,11 @@ datasource db {
 model Product {
   id            String       @id @default(uuid())
   name          String
-  unitId        String?
+  um            String?      @default("UN")
   categoryId    String?      @map("category_id")
   subCategoryId String?      @map("sub_category_id")
   createdAt     DateTime     @default(now()) @map("created_at")
   updatedAt     DateTime     @updatedAt @map("updated_at")
-  Unit          Unit?        @relation(fields: [unitId], references: [id])
   Category      Category?    @relation(fields: [categoryId], references: [id])
   SubCategory   SubCategory? @relation(fields: [subCategoryId], references: [id])
   Ingredients   Ingredient[] @relation("ProductIngredients")
@@ -31,7 +30,7 @@ model Product {
 
 enum RecipeType {
   semiFinished @map("semi-finished")
-  topping      @map("topping")
+  pizzaTopping @map("pizza-topping")
 }
 
 model Recipe {
@@ -54,7 +53,7 @@ model Recipe {
 model Ingredient {
   id           String   @id @default(uuid())
   name         String
-  unitId       String?  @map("unit_id")
+  um           String?  @default("UN")
   quantity     String
   type         String // Field to indicate whether the ingredient is linked to a Product or Recipe
   recipeRefId  String?  @map("recipe_ref_id")
@@ -62,7 +61,6 @@ model Ingredient {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
   Recipe       Recipe?  @relation(fields: [recipeRefId], references: [id], name: "RecipeIngredients")
-  Unit         Unit?    @relation(fields: [unitId], references: [id])
   Product      Product? @relation(fields: [productRefId], references: [id], name: "ProductIngredients")
 
   @@map("ingredients")
@@ -80,17 +78,6 @@ model RecipeVariation {
   Recipe       Recipe   @relation(fields: [recipeId], references: [id])
 
   @@map("recipes_variations")
-}
-
-model Unit {
-  id          String       @id @default(uuid())
-  name        String
-  createdAt   DateTime     @default(now()) @map("created_at")
-  updatedAt   DateTime     @updatedAt @map("updated_at")
-  Ingredients Ingredient[]
-  Product     Product[]
-
-  @@map("units")
 }
 
 model Category {

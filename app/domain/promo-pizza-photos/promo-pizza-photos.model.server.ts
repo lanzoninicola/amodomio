@@ -22,6 +22,7 @@ export interface PromoPizzaPhoto {
   promoCode: string;
   selectedBy: PromoPizzaPhotoCustomer | null;
   public?: boolean;
+  checkedTerms?: boolean;
 }
 
 const PromoPizzaPhotoModel =

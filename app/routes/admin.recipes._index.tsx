@@ -4,10 +4,13 @@ import type { ActionArgs, LoaderArgs } from "@remix-run/node"
 import { useLoaderData, Form, useActionData } from "@remix-run/react"
 import { useState } from "react"
 import Container from "~/components/layout/container/container"
+import Badge from "~/components/primitives/badge/badge"
 import { EditItemButton, DeleteItemButton } from "~/components/primitives/table-list"
 import { Input } from "~/components/ui/input"
 import { toast } from "~/components/ui/use-toast"
+import RecipeBadge from "~/domain/recipe/components/recipe-badge/recipe-badge"
 import { recipeEntity } from "~/domain/recipe/recipe.entity"
+import { cn } from "~/lib/utils"
 
 import { ok, serverError } from "~/utils/http-response.server"
 import tryit from "~/utils/try-it"
@@ -93,6 +96,9 @@ interface RecipeItemProps {
 }
 
 function RecipeItem({ item }: RecipeItemProps) {
+
+    console.log({ recipe: item })
+
     return (
         <Form method="post"
             className="flex flex-col p-4
@@ -103,6 +109,7 @@ function RecipeItem({ item }: RecipeItemProps) {
                 <EditItemButton to={`/admin/recipes/${item.id}`} />
             </div>
 
+            <RecipeBadge item={item} />
             <Separator className="mb-4" />
 
             <div className="flex gap-2 md:gap-2 justify-end">
@@ -112,6 +119,8 @@ function RecipeItem({ item }: RecipeItemProps) {
         </Form>
     )
 }
+
+
 
 
 /**
