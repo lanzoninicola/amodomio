@@ -78,7 +78,7 @@ export const loader: LoaderFunction = async ({ request, params }) => {
 
 export const action: ActionFunction = async ({ request }) => {
     let formData = await request.formData();
-    const { _action } = Object.fromEntries(formData);
+    const { _action, ...values } = Object.fromEntries(formData);
 
     const promoCode = formData.get('promoCode');
     const recordId = formData.get('recordId');
@@ -159,105 +159,20 @@ export const action: ActionFunction = async ({ request }) => {
             vegetarian: vegetarian === "on" ? true : false
         }
 
+        // @ts-ignore
+        delete nextRecord._client
+        // @ts-ignore
+        delete nextRecord._collectionName
+
+        // console.log({ nextRecord })
+
         const [err, record] = await tryit(promoPizzaPhotoEntity.update(recordId as string, nextRecord))
 
         if (err) {
             return serverError(err)
         }
-    }
 
-    if (_action === "record-update-pizza-name") {
-
-        const [err, record] = await tryit(promoPizzaPhotoEntity.findById(recordId as string))
-
-        if (err) {
-            return serverError(err)
-        }
-
-        const [errUpdate, recordUpdate] = await tryit(promoPizzaPhotoEntity.update(recordId as string, {
-            ...record,
-            pizza: {
-                ...record?.pizza,
-                name: pizzaName as string,
-
-            }
-        }))
-
-        if (errUpdate) {
-            return serverError("Erro ao salvar os dados da pizza. Por favor contate o (46) 99127-2525")
-        }
-
-        return ok("Nome pizza atualizado com successo")
-    }
-
-    if (_action === "record-update-pizza-ingredients") {
-
-        const [err, record] = await tryit(promoPizzaPhotoEntity.findById(recordId as string))
-
-        if (err) {
-            return serverError(err)
-        }
-
-        const [errUpdate, recordUpdate] = await tryit(promoPizzaPhotoEntity.update(recordId as string, {
-            ...record,
-            pizza: {
-                ...record?.pizza,
-                ingredients: pizzaIngredients as string,
-
-            }
-        }))
-
-        if (errUpdate) {
-            return serverError("Erro ao salvar os dados da pizza. Por favor contate o (46) 99127-2525")
-        }
-
-        return ok("Ingredientes atualizados com sucesso")
-    }
-
-    if (_action === "record-update-pizza-value") {
-
-        const [err, record] = await tryit(promoPizzaPhotoEntity.findById(recordId as string))
-
-        if (err) {
-            return serverError(err)
-        }
-
-        const [errUpdate, recordUpdate] = await tryit(promoPizzaPhotoEntity.update(recordId as string, {
-            ...record,
-            pizza: {
-                ...record?.pizza,
-                value: pizzaValue as string,
-            }
-        }))
-
-        if (errUpdate) {
-            return serverError("Erro ao salvar os dados da pizza. Por favor contate o (46) 99127-2525")
-        }
-
-        return ok("Valor atualizado com sucesso")
-    }
-
-    if (_action === "record-update-pizza-promo-value") {
-
-        const [err, record] = await tryit(promoPizzaPhotoEntity.findById(recordId as string))
-
-        if (err) {
-            return serverError(err)
-        }
-
-        const [errUpdate, recordUpdate] = await tryit(promoPizzaPhotoEntity.update(recordId as string, {
-            ...record,
-            pizza: {
-                ...record?.pizza,
-                promoValue: pizzaPromoValue as string,
-            }
-        }))
-
-        if (errUpdate) {
-            return serverError("Erro ao salvar os dados da pizza. Por favor contate o (46) 99127-2525")
-        }
-
-        return ok("Valor promocional atualizado com sucesso")
+        return ok("Record atualizado")
     }
 
     if (_action === "record-delete") {
@@ -511,9 +426,6 @@ function PizzaPromoList({ enableEdit }: PizzaPromoListProps) {
     const loaderData = useLoaderData<typeof loader>()
     const records = loaderData.payload?.records || []
 
-    const currentPromoCodeActive: PromoCode = loaderData.payload?.currentPromoCodeActive || undefined
-    const dateStringPT = getDateFromPromoCode(currentPromoCodeActive.code)
-
     return (
         <ul className="flex flex-col gap-4" data-component="PizzaPromoList">
             {
@@ -548,6 +460,7 @@ function PizzaPromoList({ enableEdit }: PizzaPromoListProps) {
 
                                 <Form method="post" className="mb-4">
                                     <input type="hidden" name="recordId" value={r.id} />
+                                    <input type="hidden" name="promoCode" value={r.promoCode} />
                                     {/* <!-- Nome e ingredientes --> */}
 
                                     <div className="flex flex-col md:grid md:grid-cols-2 gap-4">
@@ -594,7 +507,7 @@ function PizzaPromoList({ enableEdit }: PizzaPromoListProps) {
 
                                             <Fieldset className="md:grid-cols-3">
                                                 <Label htmlFor="vegetarian" className="flex gap-2 items-center">
-                                                    <Switch id="vegetarian" name="vegetarian" defaultChecked={false} />
+                                                    <Switch id="vegetarian" name="vegetarian" defaultChecked={r.vegetarian} />
                                                     Vegetariana
                                                 </Label>
                                             </Fieldset>
@@ -602,18 +515,17 @@ function PizzaPromoList({ enableEdit }: PizzaPromoListProps) {
 
                                             <Fieldset className="md:grid-cols-2">
                                                 <Label htmlFor="public" className="flex gap-2 items-center">
-                                                    <Switch id="public" name="public" defaultChecked={false} />
-                                                    Visível
+                                                    <Switch id="public" name="public" defaultChecked={r.public} />
+                                                    Visível ao publico
                                                 </Label>
                                             </Fieldset>
 
                                             {
                                                 enableEdit && (
-                                                    <Form method="post" className="flex flex-col md:flex-row gap-4 items-center mt-4">
-                                                        <input type="hidden" name="recordId" value={r.id} />
+                                                    <div className="flex flex-col md:flex-row gap-4 items-center mt-4">
                                                         <SaveItemButton variant={"outline"} actionName="record-update" label="Salvar" className="w-full text-lg md:text-xs" />
                                                         <DeleteItemButton variant={"outline"} actionName="record-delete" disabled={r.isSelected} label="Deletar" className="w-full text-lg md:text-xs border-red-500" />
-                                                    </Form>
+                                                    </div>
                                                 )
                                             }
 
@@ -655,24 +567,46 @@ Obrigado,
 Equipe, pizzaria "A Modo Mio"`
 }
 
-const motoboyMessage = (
-    date: string,
-    { nome, endereço, bairro, cep, valor }: { nome: string | undefined, endereço: string | undefined, bairro: string | undefined, cep: string | undefined, valor: string }
+const printCupomMotoboy = (
+    record: PromoPizzaPhoto
 ): string => {
 
     return `
-NOME: ${nome || ""}
+PIZZA: ${record.pizza.name || ""}
 
-=========================
+===============
+
+NOME: ${record.selectedBy?.name || ""}
+TELEFONE: ${record.selectedBy?.phoneNumber || ""}
+
+===============
 
 ENDEREÇO:
-${endereço || ""}
-${bairro || ""}
-${cep || ""}
+${record.selectedBy?.endereço || ""}
+${record.selectedBy?.bairro || ""}
+${record.selectedBy?.cep || ""}
 
-=========================
+===============
 
-VALOR: ${valor || ""}
+VALOR: ${record.pizza.promoValue || ""}
+`
+}
+
+const printCupomKitchen = (
+    record: PromoPizzaPhoto
+): string => {
+
+    return `
+PIZZA: ${record.pizza.name || ""}
+
+===============
+
+NOME: ${record.selectedBy?.name || ""}
+TELEFONE: ${record.selectedBy?.phoneNumber || ""}
+
+===============
+
+VALOR: ${record.pizza.promoValue || ""}
 `
 }
 
@@ -737,13 +671,7 @@ function FormPizzaClienteBounded({ record }: FormPizzaClienteBoundedProps) {
                         classNameButton="px-4 w-full"
                         classNameContainer="w-full"
 
-                        textToCopy={motoboyMessage(dateStringPT, {
-                            nome: record.selectedBy?.name,
-                            endereço: record.selectedBy?.endereço,
-                            bairro: record.selectedBy?.bairro,
-                            cep: record.selectedBy?.cep,
-                            valor: record.pizza.value,
-                        })} />
+                        textToCopy={printCupomMotoboy(record)} />
 
                     <CopyButton
                         label="Cupom Cozinha"
@@ -752,13 +680,7 @@ function FormPizzaClienteBounded({ record }: FormPizzaClienteBoundedProps) {
                         classNameButton="px-4 w-full"
                         classNameContainer="w-full"
 
-                        textToCopy={motoboyMessage(dateStringPT, {
-                            nome: record.selectedBy?.name,
-                            endereço: record.selectedBy?.endereço,
-                            bairro: record.selectedBy?.bairro,
-                            cep: record.selectedBy?.cep,
-                            valor: record.pizza.value,
-                        })} />
+                        textToCopy={printCupomKitchen(record)} />
                 </div>
 
             </div>
