@@ -23,6 +23,7 @@ export interface PromoPizzaPhoto {
   selectedBy: PromoPizzaPhotoCustomer | null;
   public?: boolean;
   checkedTerms?: boolean;
+  vegetarian?: boolean;
 }
 
 const PromoPizzaPhotoModel =
