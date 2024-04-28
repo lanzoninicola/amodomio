@@ -87,6 +87,7 @@ export const action: ActionFunction = async ({ request }) => {
     const pizzaValue = formData.get('pizzaValue');
     const pizzaPromoValue = formData.get('pizzaPromoValue');
     const visible = formData.get('public');
+    const vegetarian = formData.get('vegetarian');
 
     if (_action === "record-detach-customer") {
         const [err, record] = await tryit(promoPizzaPhotoEntity.findById(recordId as string))
@@ -109,7 +110,7 @@ export const action: ActionFunction = async ({ request }) => {
         return ok("Atualizado com sucesso")
     }
 
-    if (_action === "add-pizza-al-taglio") {
+    if (_action === "add-pizza") {
 
         const newRecord: PromoPizzaPhoto = {
             isSelected: false,
@@ -123,6 +124,7 @@ export const action: ActionFunction = async ({ request }) => {
             promoCode: promoCode as string,
             selectedBy: null,
             public: visible === "on" ? true : false,
+            vegetarian: vegetarian === "on" ? true : false
         }
 
         const [err, record] = await tryit(promoPizzaPhotoEntity.create(newRecord))
@@ -374,8 +376,15 @@ function FormAddPizzaSlice() {
                     </Label>
                 </Fieldset>
 
+                <Fieldset>
+                    <Label htmlFor="vegetarian" className="flex gap-2 items-center justify-end">
+                        Visível
+                        <Switch id="vegetarian" name="vegetarian" defaultChecked={false} />
+                    </Label>
+                </Fieldset>
+
             </div>
-            <SubmitButton actionName="add-pizza-al-taglio"
+            <SubmitButton actionName="add-pizza"
                 idleText="Salvar"
                 loadingText="Salvando..."
             />
@@ -491,6 +500,9 @@ function PizzaPromoList({ enableEdit }: PizzaPromoListProps) {
                                         <div className="flex flex-col">
                                             <Form method="post">
                                                 <input type="hidden" name="recordId" value={r.id} />
+
+                                                {/* <!-- Badges and Pizza Name --> */}
+
                                                 <div className="flex flex-col gap-2">
                                                     <div className="flex gap-2 items-center">
                                                         <span className={
@@ -517,9 +529,12 @@ function PizzaPromoList({ enableEdit }: PizzaPromoListProps) {
                                                         />
                                                         {enableEdit && <SaveItemButton actionName="record-update-pizza-name" />}
                                                     </div>
+
                                                 </div>
 
                                             </Form>
+
+                                            {/* <!-- Pizza Ingredients --> */}
 
                                             {
                                                 r.isSelected === false && (
@@ -535,6 +550,11 @@ function PizzaPromoList({ enableEdit }: PizzaPromoListProps) {
                                                     </Form>
                                                 )
                                             }
+
+                                            <Label htmlFor="vegetarian" className="flex gap-2 items-center">
+                                                <Switch id="vegetarian" name="vegetarian" defaultChecked={false} />
+                                                Vegetariana
+                                            </Label>
 
                                         </div>
 
@@ -567,6 +587,13 @@ function PizzaPromoList({ enableEdit }: PizzaPromoListProps) {
                                                 </div>
                                             </Form>
                                         </div>
+
+                                        {/* <!-- Publica --> */}
+
+                                        <Label htmlFor="public" className="flex gap-2 items-center">
+                                            <Switch id="public" name="public" defaultChecked={false} />
+                                            Visível
+                                        </Label>
                                     </div>
 
                                     {
