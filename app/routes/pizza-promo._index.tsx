@@ -72,31 +72,49 @@ export default function PizzaPromoIndex() {
 
                                         <li key={p.id} className={
                                             cn(
-
+                                                "rounded border p-4",
                                                 p.isSelected && "opacity-50"
                                             )
                                         }>
-                                            <div className="flex justify-between items-center mb-4">
-                                                <div className="flex flex-col">
-                                                    <div className="flex items-center gap-2">
-                                                        <ChevronRightSquareIcon size={16} />
-                                                        <h2 className="text-lg font-semibold text-brand-blue">{p.pizza.name}</h2>
+                                            <div className="flex flex-col gap-12 justify-between">
+                                                <div className="flex flex-col gap-6">
+                                                    <div className="flex flex-col gap-2">
+                                                        <div className="flex items-center gap-2">
+                                                            {/* <ChevronRightSquareIcon size={16} /> */}
+                                                            <h2 className="text-xl font-semibold text-brand-blue">{p.pizza.name}</h2>
+                                                        </div>
+                                                        <div className="flex gap-2 items-center mb-2">
+                                                            <span className="text-sm">Preço:</span>
+                                                            <span className="text-sm text-slate-400 line-through">R${p.pizza.value}</span>
+                                                            <span className="text-sm font-semibold">R${p.pizza.promoValue}</span>
+                                                        </div>
+
+                                                        <div className={
+                                                            cn(
+                                                                "rounded-lg px-4 py-1 w-max text-xs",
+                                                                p.isSelected && "opacity-50",
+                                                                p.vegetarian === true ? "bg-green-200" : "bg-red-800"
+                                                            )
+                                                        }>
+                                                            <span className={
+                                                                p.vegetarian === true ? "bg-green-200" : "text-red-50"
+                                                            }>
+                                                                {p.vegetarian ? "Vegetariana" : "Com carne"}
+                                                            </span>
+                                                        </div>
+
                                                     </div>
-                                                    <div className="flex gap-2 items-center mb-2">
-                                                        <span className="text-sm">Preço:</span>
-                                                        <span className="text-sm text-slate-400 line-through">R${p.pizza.value}</span>
-                                                        <span className="text-sm font-semibold">R${p.pizza.promoValue}</span>
-                                                    </div>
-                                                    <span className="text-sm tracking-tight">{p.pizza.ingredients}</span>
+
+                                                    <span className="tracking-tight">{p.pizza.ingredients}</span>
                                                 </div>
 
                                                 <Link to={p.isSelected === true ? `/pizza-promo` : `/pizza-promo/${p.id}`}>
-                                                    <Button className="bg-brand-blue font-semibold" disabled={p.isSelected === true}>{
+                                                    <Button className="bg-brand-blue font-semibold w-full md:w-max" disabled={p.isSelected === true}>{
                                                         p.isSelected === true ? "Não disponivel" : "Selecionar"
                                                     }</Button>
                                                 </Link>
                                             </div>
-                                            <Separator />
+
                                         </li>
 
                                     )

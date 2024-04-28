@@ -20,9 +20,10 @@ export interface PromoPizzaPhoto {
   isSelected: boolean;
   pizza: PromoPizzaPhotoPizzaIncluded;
   promoCode: string;
-  selectedBy: PromoPizzaPhotoCustomer | null;
+  selectedBy?: PromoPizzaPhotoCustomer | null;
   public?: boolean;
   checkedTerms?: boolean;
+  vegetarian?: boolean;
 }
 
 const PromoPizzaPhotoModel =

@@ -10,11 +10,13 @@ interface CopyButtonProps {
     classNameContainer?: string
     classNameButton?: string
     classNameLabel?: string
+    classNameIcon?: string
     variant?: "ghost" | "default" | "destructive" | "link" | "outline" | "secondary"
+    iconSize?: number
 }
 
 
-const CopyButton = ({ textToCopy, label, variant = "default", classNameContainer, classNameButton, classNameLabel }: CopyButtonProps) => {
+const CopyButton = ({ textToCopy, label, variant = "default", classNameContainer, classNameButton, classNameLabel, classNameIcon, iconSize }: CopyButtonProps) => {
     const [copied, setCopied] = useState(false);
 
     const copyTextToClipboard = () => {
@@ -43,7 +45,12 @@ const CopyButton = ({ textToCopy, label, variant = "default", classNameContainer
                 }
                 onClick={copyTextToClipboard}
             >
-                <CopyIcon />
+                <CopyIcon size={iconSize || 16} className={
+                    cn(
+                        "text-black",
+                        classNameIcon
+                    )
+                } />
                 {label && <span className={
                     cn(
                         classNameLabel
