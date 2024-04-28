@@ -15,12 +15,14 @@ interface SaveItemButtonProps {
     label?: string
     labelClassName?: string
     variant?: "ghost" | "link" | "default" | "destructive" | "outline" | "secondary" | null | undefined
+    disabled?: boolean
 }
 
-export default function SaveItemButton({ variant = "ghost", actionName, iconSize = 16, clazzName, className, formSubmissionState, tooltipLabel = "Salvar", label, labelClassName }: SaveItemButtonProps) {
+export default function SaveItemButton({ variant = "ghost", actionName, iconSize = 16, clazzName, className, formSubmissionState, tooltipLabel = "Salvar", label, labelClassName, disabled }: SaveItemButtonProps) {
     return (
         <Tooltip content={tooltipLabel}>
             <Button type="submit" variant={variant} size="sm" name="_action" value={actionName}
+                disabled={disabled}
                 className={cn(
                     "text-black hover:bg-gray-200",
                     clazzName,
@@ -32,7 +34,7 @@ export default function SaveItemButton({ variant = "ghost", actionName, iconSize
                 }
                 {label && <span className={
                     cn(
-                        "pl-2 text-sm",
+                        "pl-2 text-xs",
                         labelClassName
                     )
                 }>{label}</span>}

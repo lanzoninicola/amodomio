@@ -12,32 +12,29 @@ interface DeleteItemButtonProps {
   label?: string
   labelClassName?: string
   variant?: "ghost" | "link" | "default" | "destructive" | "outline" | "secondary" | null | undefined
+  disabled?: boolean
 }
 
-export default function DeleteItemButton({ variant = "ghost", actionName, iconSize, className, label, labelClassName }: DeleteItemButtonProps) {
+export default function DeleteItemButton({ variant = "ghost", actionName, iconSize, className, label, labelClassName, disabled }: DeleteItemButtonProps) {
   return (
     <Tooltip content={label ? label : "Deletar"}>
-      <div className={
-        cn(
-          "flex gap-0 items-center justify-between",
-        )
-      }>
-        <Button type="submit" variant={variant} size="sm" name="_action" value={actionName} className={
+
+      <Button type="submit" variant={variant} size="sm" name="_action" value={actionName}
+        disabled={disabled}
+        className={
           cn(
             "text-red-500 hover:bg-red-200",
             className
           )
         }>
-          <Trash size={iconSize || 16} />
-          {label && <span className={
-            cn(
-              "pl-2 text-xs",
-              labelClassName
-            )
-          }>{label}</span>}
-        </Button>
-
-      </div>
+        <Trash size={iconSize || 16} />
+        {label && <span className={
+          cn(
+            "pl-2 text-xs",
+            labelClassName
+          )
+        }>{label}</span>}
+      </Button>
     </Tooltip>
 
   )
