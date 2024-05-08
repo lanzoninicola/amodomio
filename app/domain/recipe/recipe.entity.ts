@@ -20,11 +20,11 @@ export class RecipeEntity {
     return await this.client.recipe.findUnique({ where: { id } });
   }
 
-  async create(data: Prisma.ProductCreateInput) {
+  async create(data: Prisma.RecipeCreateInput) {
     return await this.client.recipe.create({ data });
   }
 
-  async update(id: string, data: Prisma.ProductUpdateInput) {
+  async update(id: string, data: Prisma.RecipeUpdateInput) {
     return await this.client.recipe.update({ where: { id }, data });
   }
 

@@ -1,68 +1,33 @@
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { RecipeEntity } from "../../recipe.entity";
-import Fieldset from "~/components/ui/fieldset";
-import { Label } from "@radix-ui/react-label";
 import { RecipeType } from "@prisma/client";
+import { cn } from "~/lib/utils";
 
 
 interface SelectRecipeTypeProps {
-    withLabel?: boolean
-    type: RecipeType
+    defaultValue?: RecipeType
+    className?: string
 }
 
 
-export default function SelectRecipeType({ withLabel, type }: SelectRecipeTypeProps) {
-
-    console.log({ type })
-
-    if (withLabel === true) {
-        return (
-            <LabelHtml>
-                <SelectHtml type={type} />
-            </LabelHtml>
-        )
-    }
-
-    return <SelectHtml type={type} />
-}
-
-interface SelectHtmlProps {
-    type: RecipeType
-}
-
-function SelectHtml({ type }: SelectHtmlProps) {
+export default function SelectRecipeType({ defaultValue, className }: SelectRecipeTypeProps) {
 
     return (
-        <Select name="type" required defaultValue={type}>
-            <SelectTrigger>
+        <Select name="type" required={true} defaultValue={defaultValue || ""}>
+            <SelectTrigger id="type" className={
+                cn(
+                    className,
+                )
+            }>
                 <SelectValue placeholder="Selecionar..." />
             </SelectTrigger>
             <SelectContent >
-                <SelectGroup >
-                    {
-                        RecipeEntity.getTypes().map(t => (
-                            <SelectItem key={t.key} value={t.key}>{t.value}</SelectItem>
-                        ))
-                    }
-                </SelectGroup>
+                {
+                    RecipeEntity.getTypes().map(t => (
+                        <SelectItem key={t.key} value={t.key}>{t.value}</SelectItem>
+                    ))
+                }
             </SelectContent>
         </Select>
     )
-}
-
-interface LabelHtmlProps {
-    children: React.ReactNode
-}
-
-function LabelHtml({ children }: LabelHtmlProps) {
-
-    return (
-        <Fieldset>
-            <div className="flex flex-row gap-4">
-                <Label htmlFor="recipe-type" className="pt-2">Tipo</Label>
-                {children}
-            </div>
-        </Fieldset>
-    )
-
 }
