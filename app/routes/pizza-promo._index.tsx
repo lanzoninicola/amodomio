@@ -63,9 +63,9 @@ export default function PizzaPromoIndex() {
             </div>
             {
                 pizzasNumber > 0 && (
-                    <div>
+                    <div className="mb-16">
                         <h2 className="text-lg font-bold mb-4">Pizzas</h2>
-                        <ul className="flex flex-col gap-6">
+                        <ul className="flex flex-col gap-6 md:grid md:grid-cols-2">
                             {
                                 records.map((p: PromoPizzaPhoto) => {
                                     return (
