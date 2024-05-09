@@ -5,8 +5,13 @@ import { Save } from "lucide-react";
 import { useState } from "react";
 import InputItem from "~/components/primitives/form/input-item/input-item";
 import SaveItemButton from "~/components/primitives/table-list/action-buttons/save-item-button/save-item-button";
+import Fieldset from "~/components/ui/fieldset";
+import { Label } from "~/components/ui/label";
+import { Switch } from "~/components/ui/switch";
+import { Textarea } from "~/components/ui/textarea";
 import { toast } from "~/components/ui/use-toast";
 import { categoryPrismaEntity } from "~/domain/category/category.entity.server";
+import RecipeForm from "~/domain/recipe/components/recipe-form/recipe-form";
 import SelectRecipeType from "~/domain/recipe/components/select-recipe-type/select-recipe-type";
 import { recipeEntity } from "~/domain/recipe/recipe.entity";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
@@ -22,8 +27,8 @@ export interface RecipeOutletContext {
 }
 
 
-export async function loader({ request }: LoaderArgs) {
-    const recipeId = urlAt(request.url, -1)
+export async function loader({ request, params }: LoaderArgs) {
+    const recipeId = params?.id
 
     if (!recipeId) {
         return null
@@ -56,21 +61,27 @@ export async function action({ request }: ActionArgs) {
     if (_action === "recipe-update") {
         const recipe = await recipeEntity.findById(values?.recipeId as string)
 
-        const nextRecipe = { ...values }
-        delete nextRecipe.recipeId
+        const nextRecipe = {
+            ...recipe,
+            name: values.name as string,
+            type: values.type as RecipeType,
+            description: values?.description as string || "",
+            hasVariations: values.hasVariations === "on" ? true : false,
+            isGlutenFree: values.isGlutenFree === "on" ? true : false,
+            isVegetarian: values.isVegetarian === "on" ? true : false,
+        }
+        delete nextRecipe.id
 
         const [err, data] = await prismaIt(recipeEntity.update(values.recipeId as string, {
             ...recipe,
             ...nextRecipe
         }))
 
-        console.log({ err })
-
         if (err) {
             return badRequest(err)
         }
 
-        return redirect(`/admin/recipes/${values.recipeId}`)
+        return redirect(`/admin/recipes/${values.recipeId}/ingredients`)
     }
 
     return null
@@ -92,13 +103,6 @@ export default function SingleRecipe() {
 
     const actionData = useActionData<typeof action>()
 
-    // if (loaderData?.status >= 400) {
-    //     toast({
-    //         title: "Erro",
-    //         description: loaderData?.message,
-    //     })
-    // }
-
     if (actionData && actionData.status !== 200) {
         toast({
             title: "Erro",
@@ -108,35 +112,8 @@ export default function SingleRecipe() {
 
     return (
         <>
-            <Form method="post">
-                <input type="hidden" name="recipeId" value={recipe?.id} />
-                <div className="mb-8">
-                    <div className="flex flex-row mb-4 justify-end" >
-                        <SaveItemButton actionName="recipe-update" label="Salvar" labelClassName="uppercase font-semibold tracking-wider text-xs" variant={"outline"} />
-                    </div>
-                    <div className="md:grid md:grid-cols-2 md:items-start flex flex-col gap-4 border rounded-md p-4 ">
-                        <div className="flex flex-col gap-4">
 
-                            <RecipeName name={recipe?.name} type={recipe?.type} />
-
-                            <div className="flex flex-col gap-2">
-                                <SelectRecipeType withLabel={true} type={recipe?.type} />
-                                {/* <div className="flex gap-2 items-center">
-                                <span className="text-sm">Categoria</span>
-                                <SelectCategory categories={categories} />
-                            </div>
-                            <div className="flex gap-2 items-center">
-                                <span className="text-sm">Sub-categoria</span>
-                                <SelectCategory categories={categories} />
-                            </div> */}
-                            </div>
-
-                        </div>
-                    </div>
-                </div>
-
-            </Form>
-
+            <RecipeForm recipe={recipe} actionName="recipe-update" />
             <div className="grid grid-cols-2 grid-rows-3 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground mb-6 h-20
                                 md:grid-cols-2 md:grid-rows-1 md:h-10
                             ">
@@ -153,21 +130,5 @@ export default function SingleRecipe() {
 
             <Outlet context={{ recipe, categories }} />
         </>
-    )
-}
-
-
-function RecipeName({ type, name }: { type: RecipeType, name: string }) {
-
-    return (
-        <div className="flex gap-2 items-center">
-            <span className="text-xl font-semibold text-muted-foreground">
-                {type === "pizzaTopping" ? "Sabor:" : "Ricetta:"}
-            </span>
-            <InputItem className="text-xl font-semibold text-muted-foreground w-max" ghost={true}
-                name="name"
-                defaultValue={name}
-            />
-        </div>
     )
 }

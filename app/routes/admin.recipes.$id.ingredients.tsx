@@ -1,6 +1,8 @@
 import { Outlet } from "@remix-run/react";
 import { PlusSquare } from "lucide-react";
 import LinkButton from "~/components/primitives/table-list/action-buttons/link-button/link-button";
+
+
 export default function RecipeSingleIngredients() {
     return (
         <div className="p-4">
