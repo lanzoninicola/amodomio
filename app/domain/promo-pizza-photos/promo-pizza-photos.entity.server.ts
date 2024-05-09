@@ -36,6 +36,10 @@ class PromoPizzaPhotoEntity extends BaseEntity<PromoPizzaPhoto> {
         code: "2024014-pizza-photos",
         active: false,
       },
+      {
+        code: "20240514-pizza-photos",
+        active: false,
+      },
     ];
 
     const shouldPromoCodeActive = process.env.PIZZA_PHOTOS_PROMO_CODE;

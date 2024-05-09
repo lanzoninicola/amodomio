@@ -1,6 +1,6 @@
 import { ActionFunction, LoaderFunction } from "@remix-run/node";
 import { Form, Link, useActionData, useLoaderData } from "@remix-run/react";
-import { XCircle } from "lucide-react";
+import { AlertCircle, XCircle } from "lucide-react";
 import { CheckSquareIcon, MinusSquareIcon, PlusSquareIcon, X } from "lucide-react";
 import { useState } from "react";
 import Container from "~/components/layout/container/container";
@@ -20,7 +20,7 @@ import { PromoCode, promoPizzaPhotoEntity } from "~/domain/promo-pizza-photos/pr
 import { PromoPizzaPhoto } from "~/domain/promo-pizza-photos/promo-pizza-photos.model.server";
 import { cn } from "~/lib/utils";
 import getSearchParam from "~/utils/get-search-param";
-import { ok, serverError } from "~/utils/http-response.server";
+import { badRequest, ok, serverError } from "~/utils/http-response.server";
 import { jsonParse } from "~/utils/json-helper";
 import tryit from "~/utils/try-it";
 
@@ -69,6 +69,12 @@ export const loader: LoaderFunction = async ({ request, params }) => {
     //     }
     //     pizzas = records.filter(r => r.promoCode === currentPromoCodeActive?.code)
     // }
+
+    console.log({ currentPromoCodeActive })
+
+    if (!currentPromoCodeActive) {
+        return badRequest("Codigo da promoção não definido")
+    }
 
 
 
@@ -209,6 +215,20 @@ export default function PromoPizzaAdmin() {
     const records = loaderData.payload?.records || []
     const currentPromoCodeActive: PromoCode = loaderData.payload?.currentPromoCodeActive || undefined
 
+    if (loaderData?.status !== 200) {
+        return (
+            <div className="grid place-items-center min-h-screen w-full">
+                <div className="flex flex-col gap-4 rounded border p-6">
+                    <div className="flex gap-2 text-red-500">
+                        <AlertCircle />
+                        <p className="font-semibold">{loaderData?.message}</p>
+                    </div>
+                    <span className="text-xs text-muted-foreground font-mono">currentPromoCodeActive variable value: {!currentPromoCodeActive?.code ? "undefined" : currentPromoCodeActive?.code}</span>
+                </div>
+            </div>
+        )
+    }
+
     const [showFormAddPizza, setShowFormAddPizza] = useState(false)
     const [enableEdit, setEnableEdit] = useState(true)
     const [showFilters, setShowFilters] = useState(false)
@@ -259,7 +279,7 @@ export default function PromoPizzaAdmin() {
                 <div className="flex flex-col md:flex-row justify-between md:items-center mb-6 gap-4">
                     <div className="flex flex-col gap-1">
                         <h2 className="text-xl md:text-2xl font-semibold ">{title}</h2>
-                        <h3 className="text-xs">Código promocional configurado: {currentPromoCodeActive.code}</h3>
+                        <h3 className="text-xs">Código promocional configurado: {currentPromoCodeActive?.code}</h3>
                     </div>
 
                     <div className="flex gap-2">
@@ -286,11 +306,11 @@ function FormAddPizzaSlice() {
     return (
         <Form method="post">
             <div className="flex flex-col gap-2">
-                <input type="hidden" name="promoCode" value={currentPromoCodeActive.code} />
+                <input type="hidden" name="promoCode" value={currentPromoCodeActive?.code} />
                 <div className="flex gap-2 items-center mb-6">
                     <Label className="font-semibold">Codigo Promo</Label>
                     <InputItem
-                        type="text" name="promoCode" placeholder="Codigo promo" required defaultValue={currentPromoCodeActive.code}
+                        type="text" name="promoCode" placeholder="Codigo promo" required defaultValue={currentPromoCodeActive?.code}
                         className="border-none outline-none"
                     />
                 </div>
@@ -318,14 +338,14 @@ function FormAddPizzaSlice() {
 
                 <Fieldset>
                     <Label htmlFor="public" className="flex gap-2 items-center justify-end">
-                        Visível
+                        Publico
                         <Switch id="public" name="public" defaultChecked={false} />
                     </Label>
                 </Fieldset>
 
                 <Fieldset>
                     <Label htmlFor="vegetarian" className="flex gap-2 items-center justify-end">
-                        Visível
+                        Vegetariano
                         <Switch id="vegetarian" name="vegetarian" defaultChecked={false} />
                     </Label>
                 </Fieldset>
@@ -618,7 +638,7 @@ function FormPizzaClienteBounded({ record }: FormPizzaClienteBoundedProps) {
     const loaderData = useLoaderData<typeof loader>()
 
     const currentPromoCodeActive: PromoCode = loaderData.payload?.currentPromoCodeActive || undefined
-    const dateStringPT = getDateFromPromoCode(currentPromoCodeActive.code)
+    const dateStringPT = getDateFromPromoCode(currentPromoCodeActive?.code)
 
     return (
         <div className="flex flex-col justify-between rounded-md bg-muted p-4">
