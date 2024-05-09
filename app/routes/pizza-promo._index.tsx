@@ -99,7 +99,7 @@ export default function PizzaPromoIndex() {
                                                             <span className={
                                                                 p.vegetarian === true ? "bg-green-200" : "text-red-50"
                                                             }>
-                                                                {p.vegetarian ? "Vegetariana" : "Com carne"}
+                                                                {p.vegetarian ? "Vegetariana" : "Carne ou peixe"}
                                                             </span>
                                                         </div>
 
