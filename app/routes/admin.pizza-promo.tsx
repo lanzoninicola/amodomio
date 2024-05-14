@@ -661,7 +661,6 @@ function FormPizzaClienteBounded({ record }: FormPizzaClienteBoundedProps) {
                 <div className="flex flex-col gap-2 md:grid md:grid-cols-2 md:gap-4">
                     <CopyButton
                         label="Mensagen de lembrete promo"
-                        classNameContainer="w-full"
                         classNameLabel="text-sm md:text-xs"
                         classNameButton="w-full md:w-max md:px-4 py-1"
                         classNameIcon="text-white"
@@ -672,7 +671,6 @@ function FormPizzaClienteBounded({ record }: FormPizzaClienteBoundedProps) {
                         })} />
                     <CopyButton
                         label="Mensagem pronta entrega"
-                        classNameContainer="w-full"
                         classNameLabel="text-sm md:text-xs"
                         classNameButton="w-full md:w-max md:px-4 py-1 md:text-sm"
                         classNameIcon="text-white"
@@ -689,7 +687,6 @@ function FormPizzaClienteBounded({ record }: FormPizzaClienteBoundedProps) {
                         variant="outline"
                         classNameLabel="text-sm md:text-xs font-semibold"
                         classNameButton="px-4 w-full"
-                        classNameContainer="w-full"
 
                         textToCopy={printCupomMotoboy(record)} />
 
@@ -698,7 +695,6 @@ function FormPizzaClienteBounded({ record }: FormPizzaClienteBoundedProps) {
                         variant="outline"
                         classNameLabel="text-sm md:text-xs font-semibold"
                         classNameButton="px-4 w-full"
-                        classNameContainer="w-full"
 
                         textToCopy={printCupomKitchen(record)} />
                 </div>
