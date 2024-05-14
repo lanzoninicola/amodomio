@@ -14,16 +14,16 @@ datasource db {
 }
 
 model Product {
-  id            String       @id @default(uuid())
-  name          String
-  um            String?      @default("UN")
-  categoryId    String?      @map("category_id")
-  subCategoryId String?      @map("sub_category_id")
-  createdAt     DateTime     @default(now()) @map("created_at")
-  updatedAt     DateTime     @updatedAt @map("updated_at")
-  Category      Category?    @relation(fields: [categoryId], references: [id])
-  SubCategory   SubCategory? @relation(fields: [subCategoryId], references: [id])
-  Ingredients   Ingredient[] @relation("ProductIngredients")
+  id                     String                   @id @default(uuid())
+  name                   String
+  um                     String?                  @default("UN")
+  categoryId             String?                  @map("category_id")
+  subCategoryId          String?                  @map("sub_category_id")
+  createdAt              DateTime                 @default(now()) @map("created_at")
+  updatedAt              DateTime                 @updatedAt @map("updated_at")
+  Category               Category?                @relation(fields: [categoryId], references: [id])
+  SubCategory            SubCategory?             @relation(fields: [subCategoryId], references: [id])
+  RecipesIngredientsLink RecipesIngredientsLink[]
 
   @@map("products")
 }
@@ -34,36 +34,61 @@ enum RecipeType {
 }
 
 model Recipe {
-  id            String            @id @default(uuid())
-  name          String
-  type          RecipeType        @default(semiFinished)
-  description   String?
-  hasVariations Boolean           @default(false) @map("has_variations")
-  isVegetarian  Boolean           @default(false) @map("is_vegetarian")
-  isGlutenFree  Boolean           @default(false) @map("is_gluten_free")
-  createdAt     DateTime          @default(now()) @map("created_at")
-  updatedAt     DateTime          @updatedAt @map("updated_at")
-  Ingredients   Ingredient[]      @relation("RecipeIngredients")
-  Variations    RecipeVariation[]
+  id                     String                   @id @default(uuid())
+  name                   String
+  type                   RecipeType               @default(semiFinished)
+  description            String?
+  hasVariations          Boolean                  @default(false) @map("has_variations")
+  isVegetarian           Boolean                  @default(false) @map("is_vegetarian")
+  isGlutenFree           Boolean                  @default(false) @map("is_gluten_free")
+  createdAt              DateTime                 @default(now()) @map("created_at")
+  updatedAt              DateTime                 @updatedAt @map("updated_at")
+  ingredients            RecipesIngredient[]
+  RecipeVariation        RecipeVariation[]
+  RecipesIngredientsLink RecipesIngredientsLink[]
 
   @@map("recipes")
 }
 
-// Polymorphic Relationship => Not supported by Prisma
-model Ingredient {
+model RecipesIngredient {
   id           String   @id @default(uuid())
-  name         String
-  um           String?  @default("UN")
-  quantity     String
-  type         String // Field to indicate whether the ingredient is linked to a Product or Recipe
-  recipeRefId  String?  @map("recipe_ref_id")
-  productRefId String?  @map("product_ref_id") // New field for product reference
+  recipeId     String   @map("recipe_id")
+  ingredientId String   @map("ingredient_id")
+  um           String   @db.VarChar
+  quantity     String   @db.VarChar
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
-  Recipe       Recipe?  @relation(fields: [recipeRefId], references: [id], name: "RecipeIngredients")
-  Product      Product? @relation(fields: [productRefId], references: [id], name: "ProductIngredients")
+
+  recipe     Recipe                   @relation(fields: [recipeId], references: [id])
+  ingredient Ingredient               @relation(fields: [ingredientId], references: [id])
+  links      RecipesIngredientsLink[]
+
+  @@map("recipes_ingredients")
+}
+
+model Ingredient {
+  id        String              @id @default(uuid())
+  name      String              @db.VarChar
+  um        String              @db.VarChar
+  createdAt DateTime            @default(now()) @map("created_at")
+  updatedAt DateTime            @updatedAt @map("updated_at")
+  recipes   RecipesIngredient[]
 
   @@map("ingredients")
+}
+
+model RecipesIngredientsLink {
+  id                 String  @id @default(uuid())
+  recipeIngredientId String  @map("recipe_ingredient_id")
+  type               String  @db.VarChar
+  productId          String?
+  recipeId           String?
+
+  recipeIngredient RecipesIngredient @relation(fields: [recipeIngredientId], references: [id])
+  Product          Product?          @relation(fields: [productId], references: [id])
+  Recipe           Recipe?           @relation(fields: [recipeId], references: [id])
+
+  @@map("recipes_ingredients_links")
 }
 
 model RecipeVariation {
