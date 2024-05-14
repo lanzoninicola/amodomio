@@ -1,74 +1,98 @@
+import { Heart, Map, MapPin, MenuSquare, Share2 } from "lucide-react";
 import TypewriterComponent from "typewriter-effect";
 import Container from "~/components/layout/container/container";
 import Logo from "~/components/primitives/logo/logo";
+import WhatsAppIcon from "~/components/primitives/whatsapp/whatsapp-icon";
 
 // https://smart-pizza-marketing.framer.ai/
 
 export default function HomePage() {
     return (
-        <div className="min-h-screen bg-brand-blue md:py-16 ">
-            <Container clazzName="py-8">
-                <div className="flex justify-center flex-col items-center gap-4 mb-8 md:mb-16">
-                    <div className="w-[120px] md:w-[180px]">
-                        <Logo />
-                    </div>
-                    <div className="flex flex-col gap-0 items-center text-white font-accent text-sm">
-                        <span>Rua Araribóia, 964 - La Salle</span>
-                        <span>Pato Branco</span>
-                    </div>
+        <div className="bg-black h-screen p-8 md:py-24 md:px-32 lg:px-96">
+
+            <div className="bg-white h-full rounded-lg">
+
+                {/* <!-- Mobile screen -> */}
+                <div className="md:hidden grid grid-cols-1 grid-rows-5 ">
+                    <WebsiteCardHeader />
+                    {/* <img src="/images/hero-image.jpg" alt="Nicola sticando a massa" /> */}
+                    <div className="bg-hero bg-center bg-cover bg-no-repeat"></div>
+                    <WebsiteActionBar />
                 </div>
-                <div className="p-4 md:max-w-prose md:mx-auto">
-                    <TypewriterHomepage />
+
+
+                {/* <!-- Large screen -> */}
+                <div className="hidden md:grid md:grid-cols-2 md:h-full">
+                    <div className="bg-hero bg-center bg-cover bg-no-repeat"></div>
+                    <div className="flex flex-col p-8">
+                        <WebsiteCardHeader />
+                        <WebsiteActionBar />
+                    </div>
+
                 </div>
-            </Container>
+
+            </div>
+
+
         </div>
     )
 }
 
+function WebsiteContent() {
+    return (
+        <>
+            <WebsiteCardHeader />
+            <img src="/images/hero-image.jpg" alt="Nicola sticando a massa" />
+        </>
+    )
+}
 
+function WebsiteCardHeader() {
+    return (
+        <div className="grid grid-cols-4 items-center font-body-website p-4">
+            <Logo color="black" className="w-[45px]" tagline={false} />
+            <div className="flex flex-col col-span-2 ">
+                <h1 className="text-sm font-bold leading-none tracking-tight">A Modo Mio</h1>
+                <h2 className="text-xs tracking-tight">La vera pizza italiana</h2>
 
+            </div>
 
-function TypewriterHomepage() {
+            <MapPin className="justify-self-end" />
 
-    const doubleBreakLine = "<br /><br />"
+        </div>
+    )
+}
 
-    let text = "Caros amigos e amantes de pizza,"
-    text += doubleBreakLine
-    text += "Estamos emocionados em anunciar a futura abertura da nossa pizzaria, onde traremos algo único para a cidade!"
-    text += doubleBreakLine
-    text += "Aqui, vocês terâo a oportunidade de saborear autênticas pizzas de massa italiana, preparadas por um verdadeiro italiano, nascido e crescido em Verona, Itàlia."
-    text += doubleBreakLine
-    text += "Nosso compromisso è trazer para vocês a verdadeira essência da pizza italiana, com toda a tradição e sabor que vocês merecem, claro, sem esquecer o gostinho preferidos dos brasileiros."
-    text += doubleBreakLine
-    text += "Além disso, teremos o prazer de oferecer a famosa Pizza Al Taglio, uma delìcia italia que conquistou corações ao redor do mundo."
-    text += doubleBreakLine
-    text += "Com uma massa leve, coberta com ingredientes frescos e saborosos, essa opção será uma alternativa irresistivel para os amantes da pizza."
-    text += doubleBreakLine
-    text += "Mal podemos esperar para abri nossas portas e compartilhar com vocês o melhor da cozinha italiana."
-    text += doubleBreakLine
-    text += "Aguardem ansiosos, pois em breve estaremos prontos para recebê-los e encantà-los com nossas pizzas de qualidade indiscutivel."
-    text += doubleBreakLine
-    text += "Ci vediamo presto..."
-    text += doubleBreakLine
-    text += "Atenciosamente, Team A Modo Mio"
-
-
-
-
+function WebsiteActionBar() {
 
     return (
-        <div className="text-white text-lg md:text-xl tracking-wide">
-            <TypewriterComponent
-                options={{
-                    strings: text,
-                    autoStart: true,
-                    loop: false,
-                    delay: 75,
-                }}
+        <div className="grid grid-cols-4 font-body-website">
+
+            <div className="flex flex-col gap-2 justify-center items-center">
+                <Share2 />
+                <span className="text-xs tracking-normal font-semibold">Compartilhe</span>
+            </div>
 
 
-            />
+            <div className="flex flex-col gap-2 justify-center items-center">
+                <Heart />
+                <span className="text-xs tracking-normal font-semibold">Curtir</span>
+            </div>
+
+
+            <div className="flex flex-col gap-2 justify-center items-center">
+                <WhatsAppIcon color="black" />
+                <span className="text-xs tracking-normal font-semibold">Atendimento</span>
+            </div>
+
+            <div className="flex flex-col gap-2 justify-center items-center">
+                <MenuSquare />
+                <span className="text-xs tracking-normal font-semibold">Cardápio</span>
+            </div>
 
         </div>
     )
 }
+
+
+

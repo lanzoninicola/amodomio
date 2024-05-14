@@ -1,4 +1,4 @@
-import type { LinksFunction, V2_MetaFunction } from "@remix-run/node";
+import type { LinkDescriptor, LinksFunction, V2_MetaFunction } from "@remix-run/node";
 import {
   Links,
   LiveReload,
@@ -28,6 +28,28 @@ export const meta: V2_MetaFunction = () => {
   ];
 };
 
+const fontsVariants = (font: string) => {
+  // const variants = ["Black", "Bold", "Light", "Medium", "Regular", "Semibold", "Thin"]
+  const variants = ["Medium"]
+
+  return variants.map(v => `${font}${v}`)
+}
+
+const linkFontVariant = (font: string) => {
+
+  return fontsVariants(font).map(variant => {
+    return {
+      rel: "preload",
+      href: `/fonts/${variant}.ttf`,
+      as: "font",
+      type: "font/ttf",
+      crossOrigin: "anonymous",
+    }
+  })
+}
+
+
+// @ts-ignore
 export const links: LinksFunction = () => [
   ...(cssBundleHref ? [{ rel: "stylesheet", href: cssBundleHref }] : []),
   { rel: "stylesheet", href: stylesheet },
@@ -75,6 +97,9 @@ export const links: LinksFunction = () => [
   // },
   // { rel: 'manifest', href: '/site.webmanifest' },
   // { rel: 'icon', href: '/favicon.ico' },
+
+  // ...linkFontVariant("Lufga"),
+
 ];
 
 const GTM_ID = process.env.GOOGLE_TAG_MANAGER_ID
