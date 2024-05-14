@@ -49,7 +49,7 @@
 
     --font-sans: Inter;
 
-    --font-sans-public: Advent Pro;
+    --font-sans-website: Lufga;
 
     --font-title: Montagu Slab;
 
@@ -94,5 +94,63 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+@layer base {
+  @font-face {
+    font-family: "Lufga";
+    src: url("/fonts/LufgaLight.ttf") format("truetype");
+    font-weight: 200;
+    font-style: normal;
+    font-display: swap;
+  }
+
+  @font-face {
+    font-family: "Lufga";
+    src: url("/fonts/LufgaThin.ttf") format("truetype");
+    font-weight: 300;
+    font-style: normal;
+    font-display: swap;
+  }
+
+  @font-face {
+    font-family: "Lufga";
+    src: url("/fonts/LufgaRegular.ttf") format("truetype");
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+  }
+
+  @font-face {
+    font-family: "Lufga";
+    src: url("/fonts/LufgaMedium.ttf") format("truetype");
+    font-weight: 500;
+    font-style: normal;
+    font-display: swap;
+  }
+
+  @font-face {
+    font-family: "Lufga";
+    src: url("/fonts/LufgaSemiBold.ttf") format("truetype");
+    font-weight: 600;
+    font-style: normal;
+    font-display: swap;
+  }
+
+  @font-face {
+    font-family: "Lufga";
+    src: url("/fonts/LufgaBold.ttf") format("truetype");
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+  }
+
+  @font-face {
+    font-family: "Lufga";
+    src: url("/fonts/LufgaBlack.ttf") format("truetype");
+    font-weight: 900;
+    font-style: normal;
+    font-display: swap;
   }
 }
