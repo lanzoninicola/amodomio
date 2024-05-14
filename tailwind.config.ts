@@ -74,7 +74,7 @@ module.exports = {
       fontFamily: {
         sans: ["var(--font-sans)", ...fontFamily.sans],
         body: ["var(--font-sans)", ...fontFamily.sans],
-        bodyPublic: ["var(--font-sans-public)", ...fontFamily.sans],
+        "body-website": ["var(--font-sans-website)", ...fontFamily.sans],
         accent: ["var(--font-accent)", ...fontFamily.sans],
         title: ["var(--font-title)", ...fontFamily.sans],
       },
@@ -122,6 +122,9 @@ module.exports = {
         pulseFast: "pulse .5s ease-in-out infinite",
         pulse: "pulse 1s ease-in-out infinite",
         pulseSlow: "pulse 2s ease-in-out infinite",
+      },
+      backgroundImage: {
+        hero: "url('/images/hero-image.jpg')",
       },
     },
   },
