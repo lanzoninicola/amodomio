@@ -23,173 +23,18 @@ export async function loader({ request }: LoaderArgs) {
     }
 
     const publicCardapio = records.filter(r => r.public === true)[0]
-    const privateCardapios = records.filter(r => r.public === false)
 
     return ok({
         publicCardapio,
-        privateCardapios,
     })
 }
 
-export async function action({ request }: ActionArgs) {
-    let formData = await request.formData();
-    const { _action, ...values } = Object.fromEntries(formData);
 
-    const cardapioId = values["cardapioId"] as string
-
-    if (_action === "cardapio-publish") {
-
-        const [err, returnedData] = await tryit(cardapioPizzaAlTaglioEntity.publish(cardapioId))
-
-        if (err) {
-            return serverError(err)
-        }
-
-        return ok("Registro publicado.")
-    }
-
-    if (_action === "cardapio-mask") {
-
-        const [err, returnedData] = await tryit(cardapioPizzaAlTaglioEntity.mask(cardapioId))
-
-        if (err) {
-            return serverError(err)
-        }
-
-        return ok("Registro ocultado.")
-    }
-
-    if (_action === "cardapio-delete") {
-
-        const [err, returnedData] = await tryit(cardapioPizzaAlTaglioEntity.delete(cardapioId))
-
-        if (err) {
-            return serverError(err)
-        }
-
-        return ok("Registro apagado.")
-    }
-
-    if (_action === "cardapio-slice-add") {
-        const toppings = values["sliceToppings"] as string
-        const category = values["sliceCategory"] as PizzaSliceCategory
-        const quantity = values["sliceQuantity"] as string
-
-        if (isNaN(Number(quantity))) {
-            return serverError("Quantidade inválida")
-        }
-
-        const [err, returnedData] = await tryit(cardapioPizzaAlTaglioEntity.sliceAdd(
-            cardapioId,
-            {
-                toppings,
-                category,
-            },
-            Number(quantity)
-        ))
-
-        if (err) {
-            return serverError(err)
-        }
-
-        return ok("Pedaço adiçionado")
-    }
-
-    if (_action === "cardapio-slice-update-toppings") {
-        const sliceId = values["sliceId"] as string
-        const toppings = values["sliceToppings"] as string
-
-        const [err, returnedData] = await tryit(cardapioPizzaAlTaglioEntity.sliceUpdateToppings(cardapioId, sliceId, toppings))
-
-        if (err) {
-            return serverError(err)
-        }
-
-        return ok("Pedaço atualizado")
-    }
-
-    if (_action === "cardapio-slice-update-quantity") {
-        const sliceId = values["sliceId"] as string
-        const quantity = values["sliceQuantity"] as string
-
-        if (isNaN(Number(quantity))) {
-            return serverError("Quantidade inválida")
-        }
-
-        const [err, returnedData] = await tryit(cardapioPizzaAlTaglioEntity.sliceUpdateQuantity(cardapioId, sliceId, Number(quantity)))
-
-        if (err) {
-            return serverError(err)
-        }
-
-        return ok("Pedaço atualizado")
-    }
-
-
-
-
-    if (_action === "cardapio-slice-delete") {
-        const sliceId = values["sliceId"] as string
-
-        const [err, returnedData] = await tryit(cardapioPizzaAlTaglioEntity.sliceDelete(cardapioId, sliceId))
-
-        if (err) {
-            return serverError(err)
-        }
-
-        return ok("Pedaço removido")
-    }
-
-    if (_action === "cardapio-slice-out-of-stock") {
-        const sliceId = values["sliceId"] as string
-
-        const [err, returnedData] = await tryit(cardapioPizzaAlTaglioEntity.sliceOutOfStock(cardapioId, sliceId))
-
-        if (err) {
-            return serverError(err)
-        }
-
-        return ok("Pedaço esgotado")
-    }
-
-    if (_action === "cardapio-slice-out-of-stock-recover-slice") {
-        const sliceId = values["sliceId"] as string
-
-        const [err, returnedData] = await tryit(cardapioPizzaAlTaglioEntity.sliceOutOfStockRecover(cardapioId, sliceId))
-
-        if (err) {
-            return serverError(err)
-        }
-
-        return ok("O pedaçõ voltou disponivel")
-    }
-
-
-
-
-    if (_action === "cardapio-slice-out-of-stock-recover-all") {
-        const [err, returnedData] = await tryit(cardapioPizzaAlTaglioEntity.outOfStockRecover(cardapioId))
-
-        if (err) {
-            return serverError(err)
-        }
-
-        return ok("Stock disponivel de todos os pedaços")
-    }
-
-
-    return null
-
-}
 
 
 export default function CardapioPizzaAlTaglioIndex() {
     const loaderData = useLoaderData<typeof loader>()
-    const actionData = useActionData<typeof action>()
     const publicCardapio = loaderData?.payload?.publicCardapio as CardapioPizzaAlTaglio || undefined
-    const privateCardapios = loaderData?.payload?.privateCardapios as CardapioPizzaAlTaglio[] || []
-
-    const cardapios = [publicCardapio, ...privateCardapios]
 
     if (loaderData?.status !== 200) {
         <Alert>
@@ -200,21 +45,6 @@ export default function CardapioPizzaAlTaglioIndex() {
             </AlertDescription>
         </Alert>
     }
-
-    if (actionData && actionData.status !== 200) {
-        toast({
-            title: "Erro",
-            description: actionData.message,
-        })
-    }
-
-    if (actionData && actionData.status === 200) {
-        toast({
-            title: "OK",
-            description: actionData.message
-        })
-    }
-
 
 
     const [showPrivateCardapios, setShowPrivateCardapios] = useState(false)

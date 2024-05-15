@@ -135,6 +135,36 @@ export class CardapioPizzaAlTaglioEntityFirestore extends BaseEntity<CardapioPiz
     });
   }
 
+  async sliceUpdate(
+    cardapioId: string,
+    sliceId: string,
+    data: { toppings: string; quantity: number }
+  ) {
+    const cardapio = await this.findById(cardapioId);
+
+    if (!cardapio) {
+      throw new Error("Cardapio não encontrado");
+    }
+
+    const slices = cardapio.slices;
+
+    const nextSlices = slices.map((s) => {
+      if (s.id === sliceId) {
+        return {
+          ...s,
+          ...data,
+        };
+      }
+
+      return s;
+    });
+
+    return await this.update(cardapioId, {
+      ...cardapio,
+      slices: nextSlices,
+    });
+  }
+
   async sliceUpdateToppings(id: string, sliceId: string, toppings: string) {
     const cardapio = await this.findById(id);
 

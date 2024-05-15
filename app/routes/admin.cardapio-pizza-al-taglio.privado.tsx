@@ -1,5 +1,5 @@
 import { LoaderArgs } from "@remix-run/node"
-import { useLoaderData } from "@remix-run/react"
+import { Link, useLoaderData } from "@remix-run/react"
 import { Separator } from "~/components/ui/separator"
 import { toast } from "~/components/ui/use-toast"
 import { cardapioPizzaAlTaglioEntity } from "~/domain/cardapio-pizza-al-taglio/cardapio-pizza-al-taglio.entity.server"
@@ -10,6 +10,7 @@ import tryit from "~/utils/try-it"
 import CardapioPizzaAlTaglioItem from "~/domain/cardapio-pizza-al-taglio/components/cardapio-pizza-al-taglio-item/cardapio-pizza-al-taglio-item"
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert"
 import { AlertCircle } from "lucide-react"
+import dayjs from "dayjs"
 
 export async function loader({ request }: LoaderArgs) {
 
@@ -35,7 +36,6 @@ export default function CardapioPizzaAlTaglioPrivado() {
     const loaderData = useLoaderData<typeof loader>()
     const privateCardapios = loaderData?.payload?.privateCardapios as CardapioPizzaAlTaglio[] || []
 
-
     if (loaderData?.status !== 200) {
         toast({
             title: "Erro",
@@ -54,9 +54,22 @@ export default function CardapioPizzaAlTaglioPrivado() {
                 {
                     privateCardapios.map(c => {
                         return (
-                            <li key={randomReactKey()} className="flex items-center mb-4">
-                                <CardapioPizzaAlTaglioItem cardapio={c} />
-                            </li>
+                            <Link to={`/admin/cardapio-pizza-al-taglio/${c.id}?type=private`} key={randomReactKey()}>
+                                <div className={`border-2 border-muted rounded-lg p-4 flex flex-col gap-2 w-full hover:border-muted-foreground`}>
+                                    <div className="flex flex-col">
+                                        <h3 className="text-sm font-semibold tracking-tight mb-1">{c.name}</h3>
+                                        {/* @ts-ignore */}
+                                        <h2 className="text-xs font-semibold tracking-tight text-muted-foreground">{`Criado no dia ${dayjs(c!.createdAt).format("DD/MM/YYYY")}`}</h2>
+                                    </div>
+
+                                    <ul className="list-disc px-4">
+                                        {
+                                            c.slices.map(s => <li key={s.id} className="text-xs text-muted-foreground">{s.toppings}</li>)
+                                        }
+                                    </ul>
+
+                                </div>
+                            </Link>
                         )
                     })
                 }

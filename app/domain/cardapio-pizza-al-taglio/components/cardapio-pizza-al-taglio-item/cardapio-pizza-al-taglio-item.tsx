@@ -31,7 +31,6 @@ export default function CardapioPizzaAlTaglioItem({ cardapio }: CardapioPizzaAlT
     const margheritaAmount = cardapio.slices.filter(s => s.category === "margherita").length
 
     return (
-        // <Link to={`${cardapio.id}`} className={`border-2 border-muted rounded-lg p-4 flex flex-col gap-2 w-full h-[130px] hover:bg-slate-100 cursor-pointer`} >
         <div className={`border-2 border-muted rounded-lg p-4 flex flex-col gap-2 w-full hover:border-muted-foreground`}>
 
             <div className="flex flex-col gap-4 justify-between">
