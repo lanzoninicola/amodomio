@@ -16,7 +16,7 @@ import { Analytics } from '@vercel/analytics/react';
 
 export const meta: V2_MetaFunction = () => {
   return [
-    { title: "A Modio Mio - La vera pizza italiana di Pato Branco" },
+    { title: "A Modo Mio - La vera pizza italiana di Pato Branco" },
     {
       name: "description",
       content: "Bem vindo ao cardápio da Pizza Delivery A Modo Mio",
@@ -28,28 +28,6 @@ export const meta: V2_MetaFunction = () => {
   ];
 };
 
-const fontsVariants = (font: string) => {
-  // const variants = ["Black", "Bold", "Light", "Medium", "Regular", "Semibold", "Thin"]
-  const variants = ["Medium"]
-
-  return variants.map(v => `${font}${v}`)
-}
-
-const linkFontVariant = (font: string) => {
-
-  return fontsVariants(font).map(variant => {
-    return {
-      rel: "preload",
-      href: `/fonts/${variant}.ttf`,
-      as: "font",
-      type: "font/ttf",
-      crossOrigin: "anonymous",
-    }
-  })
-}
-
-
-// @ts-ignore
 export const links: LinksFunction = () => [
   ...(cssBundleHref ? [{ rel: "stylesheet", href: cssBundleHref }] : []),
   { rel: "stylesheet", href: stylesheet },
@@ -97,8 +75,6 @@ export const links: LinksFunction = () => [
   // },
   // { rel: 'manifest', href: '/site.webmanifest' },
   // { rel: 'icon', href: '/favicon.ico' },
-
-  // ...linkFontVariant("Lufga"),
 
 ];
 
