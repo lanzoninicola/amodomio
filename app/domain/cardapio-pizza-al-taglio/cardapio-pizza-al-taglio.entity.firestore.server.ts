@@ -20,6 +20,16 @@ export class CardapioPizzaAlTaglioEntityFirestore extends BaseEntity<CardapioPiz
   //   throw new Error("Method not implemented.");
   // }
 
+  async addCardapio(record: CardapioPizzaAlTaglio) {
+    const newRecord = {
+      ...record,
+      slices: [],
+      name: record?.name || `Cardápio do dia ${now()}`,
+    };
+
+    return await this.create(newRecord);
+  }
+
   async add(record: Omit<CardapioPizzaAlTaglio, "public" | "name">) {
     const newSlices = record.slices.map((slice) => ({
       ...slice,

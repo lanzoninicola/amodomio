@@ -1,21 +1,15 @@
 import { LoaderArgs } from "@remix-run/node"
 import { Link, useLoaderData } from "@remix-run/react"
-import { Separator } from "~/components/ui/separator"
 import { toast } from "~/components/ui/use-toast"
 import { cardapioPizzaAlTaglioEntity } from "~/domain/cardapio-pizza-al-taglio/cardapio-pizza-al-taglio.entity.server"
 import { CardapioPizzaAlTaglio } from "~/domain/cardapio-pizza-al-taglio/cardapio-pizza-al-taglio.model.server"
 import { serverError, badRequest, ok } from "~/utils/http-response.server"
 import randomReactKey from "~/utils/random-react-key"
 import tryit from "~/utils/try-it"
-import CardapioPizzaAlTaglioItem from "~/domain/cardapio-pizza-al-taglio/components/cardapio-pizza-al-taglio-item/cardapio-pizza-al-taglio-item"
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert"
 import { AlertCircle } from "lucide-react"
 import dayjs from "dayjs"
 import { useState } from "react"
-import { Label } from "@radix-ui/react-label"
-import Fieldset from "~/components/ui/fieldset"
-import { Input } from "~/components/ui/input"
-import cardapio from "./cardapio"
 
 export async function loader({ request }: LoaderArgs) {
 

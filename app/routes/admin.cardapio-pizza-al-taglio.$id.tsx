@@ -1,25 +1,12 @@
-import { ActionArgs, LoaderArgs } from "@remix-run/node"
-import { Form, useActionData, useLoaderData } from "@remix-run/react"
-import dayjs from "dayjs"
-import { AlertCircle, BadgeCheck, BadgeX, Check, Edit, Plus, Save, X } from "lucide-react"
-import { useState } from "react"
-import CopyButton from "~/components/primitives/copy-button/copy-button"
-import InputItem from "~/components/primitives/form/input-item/input-item"
-import TextareaItem from "~/components/primitives/form/textarea-item/textarea-item"
-import SubmitButton from "~/components/primitives/submit-button/submit-button"
-import { DeleteItemButton } from "~/components/primitives/table-list"
-import SaveItemButton from "~/components/primitives/table-list/action-buttons/save-item-button/save-item-button"
+import { ActionArgs, LoaderArgs, redirect } from "@remix-run/node"
+import { useActionData, useLoaderData } from "@remix-run/react"
+import { AlertCircle } from "lucide-react"
 import { Alert, AlertTitle, AlertDescription } from "~/components/ui/alert"
-import Fieldset from "~/components/ui/fieldset"
-import { Label } from "~/components/ui/label"
-import { Separator } from "~/components/ui/separator"
 import { toast } from "~/components/ui/use-toast"
 import { cardapioPizzaAlTaglioEntity } from "~/domain/cardapio-pizza-al-taglio/cardapio-pizza-al-taglio.entity.server"
-import { CardapioPizzaAlTaglio, CardapioPizzaSlice } from "~/domain/cardapio-pizza-al-taglio/cardapio-pizza-al-taglio.model.server"
+import { CardapioPizzaAlTaglio } from "~/domain/cardapio-pizza-al-taglio/cardapio-pizza-al-taglio.model.server"
 import CardapioPizzaAlTaglioItem from "~/domain/cardapio-pizza-al-taglio/components/cardapio-pizza-al-taglio-item/cardapio-pizza-al-taglio-item"
-import FormAddPizzaSliceIntoCardapio from "~/domain/cardapio-pizza-al-taglio/components/form-add-pizza-al-taglio-into-cardapio/form-add-pizza-al-taglio-into-cardapio"
-import { PizzaSlice, PizzaSliceCategory } from "~/domain/pizza-al-taglio/pizza-al-taglio.model.server"
-import getSearchParam from "~/utils/get-search-param"
+import { PizzaSliceCategory } from "~/domain/pizza-al-taglio/pizza-al-taglio.model.server"
 import { badRequest, ok, serverError } from "~/utils/http-response.server"
 import tryit from "~/utils/try-it"
 
@@ -85,7 +72,7 @@ export async function action({ request }: ActionArgs) {
             return serverError(err)
         }
 
-        return ok("Registro apagado.")
+        return redirect("/admin/cardapio-pizza-al-taglio")
     }
 
     if (_action === "cardapio-slice-add") {
@@ -216,49 +203,8 @@ export default function SingleCardapioPizzaAlTaglio() {
         })
     }
 
-    if (loaderData?.status !== 200) {
-        <Alert>
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Oops</AlertTitle>
-            <AlertDescription>
-                {loaderData?.message}
-            </AlertDescription>
-        </Alert>
-    }
 
 
     return <CardapioPizzaAlTaglioItem cardapio={cardapio} />
 }
 
-function pizzaSliceTextToPrint(cardapio: CardapioPizzaAlTaglio) {
-
-    const vegetarianSlices = cardapio.slices.filter(s => s.category === "vegetariana")
-    const meatSlices = cardapio.slices.filter(s => s.category === "carne")
-    const margheritaSlices = cardapio.slices.filter(s => s.category === "margherita")
-
-    let text = ``
-
-    if (vegetarianSlices.length > 0) {
-        const vegetarianSlicesText = vegetarianSlices.map(s => {
-            return `- ${s.toppings}\n`
-        })
-
-        text += `*Vegetariana\n${vegetarianSlicesText.join("")}\n`
-    }
-
-    if (meatSlices.length > 0) {
-        const meatSlicesText = meatSlices.map(s => {
-            return `- ${s.toppings}\n`
-        })
-        text += `*Com carne\n${meatSlicesText.join("")}\n`
-    }
-
-    if (margheritaSlices.length > 0) {
-        const margheritaSlicesText = margheritaSlices.map(s => {
-            return `- ${s.toppings}\n`
-        })
-        text += `*Margherita\n${margheritaSlicesText.join("")}\n`
-    }
-
-    return text
-}

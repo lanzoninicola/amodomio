@@ -232,10 +232,7 @@ export default function CardapioPizzaAlTaglioItem({ cardapio }: CardapioPizzaAlT
                 <Form method="post">
                     <input type="hidden" name="cardapioId" value={cardapio.id} />
                     <div className="w-full flex justify-end">
-                        <div className="flex gap-0 items-center hover:bg-red-200 rounded-md p-1 cursor-pointer">
-                            <span className="text-xs text-red-500 ">Deletar o cardápio</span>
-                            <DeleteItemButton actionName="cardapio-delete" />
-                        </div>
+                        <DeleteItemButton actionName="cardapio-delete" label="Deletar o cardápio" />
                     </div>
                 </Form>
             </div>
@@ -256,21 +253,21 @@ function pizzaSliceTextToPrint(cardapio: CardapioPizzaAlTaglio) {
             return `- ${s.toppings}\n`
         })
 
-        text += `*Vegetariana\n${vegetarianSlicesText.join("")}\n`
+        text += `*Vegetariana*\n${vegetarianSlicesText.join("")}\n`
     }
 
     if (meatSlices.length > 0) {
         const meatSlicesText = meatSlices.map(s => {
             return `- ${s.toppings}\n`
         })
-        text += `*Com carne\n${meatSlicesText.join("")}\n`
+        text += `*Com carne*\n${meatSlicesText.join("")}\n`
     }
 
     if (margheritaSlices.length > 0) {
         const margheritaSlicesText = margheritaSlices.map(s => {
             return `- ${s.toppings}\n`
         })
-        text += `*Margherita\n${margheritaSlicesText.join("")}\n`
+        text += `*Margherita*\n${margheritaSlicesText.join("")}\n`
     }
 
     return text
