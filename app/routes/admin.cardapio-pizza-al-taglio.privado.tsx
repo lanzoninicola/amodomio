@@ -11,6 +11,11 @@ import CardapioPizzaAlTaglioItem from "~/domain/cardapio-pizza-al-taglio/compone
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert"
 import { AlertCircle } from "lucide-react"
 import dayjs from "dayjs"
+import { useState } from "react"
+import { Label } from "@radix-ui/react-label"
+import Fieldset from "~/components/ui/fieldset"
+import { Input } from "~/components/ui/input"
+import cardapio from "./cardapio"
 
 export async function loader({ request }: LoaderArgs) {
 
@@ -43,6 +48,8 @@ export default function CardapioPizzaAlTaglioPrivado() {
         })
     }
 
+    const [cardapios, setCardapios] = useState(privateCardapios)
+
     return (
         <section className="flex flex-col gap-2 mt-8">
             <Alert className="px-16 mb-8 bg-red-500 text-white">
@@ -50,9 +57,40 @@ export default function CardapioPizzaAlTaglioPrivado() {
                 <AlertTitle className="font-semibold">Atenção!</AlertTitle>
                 <AlertDescription className="text-sm">Esse é a lista dos cardápio antigos</AlertDescription>
             </Alert>
+
+            {/*
+
+                IT DOES NOT WORK
+                <Separator />
+            <Fieldset className="flex gap-4 items-center mb-0">
+                <Label htmlFor="searchPizzaSlice" className="text-xs text-muted-foreground">Pesquisar</Label>
+                <Input id="searchPizzaSlice"
+                    className="w-full"
+                    onChange={(e) => {
+                        const value = e.target?.value
+
+                        if (value === "") {
+                            setCardapios(privateCardapios)
+                            return
+                        }
+
+                        const founded = privateCardapios.filter(pc => {
+
+                            const slice = pc?.slices.filter(ps => ps.toppings.toLowerCase().includes(value))
+                            const records = slice.length > 0 ? [pc] : []
+
+                            return records
+                        })
+
+                        console.log({ value, founded })
+
+                        setCardapios(founded)
+                    }} />
+            </Fieldset>
+            <Separator className="mb-6" /> */}
             <ul className="grid md:grid-cols-2 gap-4">
                 {
-                    privateCardapios.map(c => {
+                    cardapios.map(c => {
                         return (
                             <Link to={`/admin/cardapio-pizza-al-taglio/${c.id}?type=private`} key={randomReactKey()}>
                                 <div className={`border-2 border-muted rounded-lg p-4 flex flex-col gap-2 w-full hover:border-muted-foreground`}>

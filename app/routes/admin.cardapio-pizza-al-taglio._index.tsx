@@ -29,7 +29,142 @@ export async function loader({ request }: LoaderArgs) {
     })
 }
 
+export async function action({ request }: ActionArgs) {
+    let formData = await request.formData();
+    const { _action, ...values } = Object.fromEntries(formData);
 
+    const cardapioId = values["cardapioId"] as string
+
+    if (_action === "cardapio-publish") {
+
+        const [err, returnedData] = await tryit(cardapioPizzaAlTaglioEntity.publish(cardapioId))
+
+        if (err) {
+            return serverError(err)
+        }
+
+        return ok("Registro publicado.")
+    }
+
+    if (_action === "cardapio-mask") {
+
+        const [err, returnedData] = await tryit(cardapioPizzaAlTaglioEntity.mask(cardapioId))
+
+        if (err) {
+            return serverError(err)
+        }
+
+        return ok("Registro ocultado.")
+    }
+
+    if (_action === "cardapio-delete") {
+
+        const [err, returnedData] = await tryit(cardapioPizzaAlTaglioEntity.delete(cardapioId))
+
+        if (err) {
+            return serverError(err)
+        }
+
+        return ok("Registro apagado.")
+    }
+
+    if (_action === "cardapio-slice-add") {
+        const toppings = values["sliceToppings"] as string
+        const category = values["sliceCategory"] as PizzaSliceCategory
+        const quantity = values["sliceQuantity"] as string
+
+        if (isNaN(Number(quantity))) {
+            return serverError("Quantidade inválida")
+        }
+
+        const [err, returnedData] = await tryit(cardapioPizzaAlTaglioEntity.sliceAdd(
+            cardapioId,
+            {
+                toppings,
+                category,
+            },
+            Number(quantity)
+        ))
+
+        if (err) {
+            return serverError(err)
+        }
+
+        return ok("Pedaço adiçionado")
+    }
+
+    if (_action === "cardapio-slice-update") {
+        const sliceId = values["sliceId"] as string
+        const toppings = values["sliceToppings"] as string
+        const quantity = values["sliceQuantity"] as string
+
+        if (isNaN(Number(quantity))) {
+            return serverError("Quantidade inválida")
+        }
+
+        const [err, returnedData] = await tryit(cardapioPizzaAlTaglioEntity.sliceUpdate(cardapioId, sliceId, {
+            toppings,
+            quantity: Number(quantity)
+        }))
+
+        if (err) {
+            return serverError(err)
+        }
+
+        return ok("Registro publicado.")
+    }
+
+
+    if (_action === "cardapio-slice-delete") {
+        const sliceId = values["sliceId"] as string
+
+        const [err, returnedData] = await tryit(cardapioPizzaAlTaglioEntity.sliceDelete(cardapioId, sliceId))
+
+        if (err) {
+            return serverError(err)
+        }
+
+        return ok("Pedaço removido")
+    }
+
+    if (_action === "cardapio-slice-out-of-stock") {
+        const sliceId = values["sliceId"] as string
+
+        const [err, returnedData] = await tryit(cardapioPizzaAlTaglioEntity.sliceOutOfStock(cardapioId, sliceId))
+
+        if (err) {
+            return serverError(err)
+        }
+
+        return ok("Pedaço esgotado")
+    }
+
+    if (_action === "cardapio-slice-out-of-stock-recover-slice") {
+        const sliceId = values["sliceId"] as string
+
+        const [err, returnedData] = await tryit(cardapioPizzaAlTaglioEntity.sliceOutOfStockRecover(cardapioId, sliceId))
+
+        if (err) {
+            return serverError(err)
+        }
+
+        return ok("O pedaçõ voltou disponivel")
+    }
+
+    if (_action === "cardapio-slice-out-of-stock-recover-all") {
+        const [err, returnedData] = await tryit(cardapioPizzaAlTaglioEntity.outOfStockRecover(cardapioId))
+
+        if (err) {
+            return serverError(err)
+        }
+
+        return ok("Stock disponivel de todos os pedaços")
+    }
+
+
+    return null
+
+}
 
 
 export default function CardapioPizzaAlTaglioIndex() {
@@ -47,20 +182,15 @@ export default function CardapioPizzaAlTaglioIndex() {
     }
 
 
-    const [showPrivateCardapios, setShowPrivateCardapios] = useState(false)
-
-
     return (
         <div className="flex flex-col mt-4">
             <div className="flex justify-between items-center mb-6">
                 <h3 className="text-xl font-semibold text-muted-foreground ">Cardapios</h3>
-                <span className="text-xs underline cursor-pointer"
-                    onClick={() => setShowPrivateCardapios(!showPrivateCardapios)}>Visualizar os cardapios privados</span>
             </div>
 
 
 
-            <CardapioPizzaAlTaglioTabs showPrivateCardapios={showPrivateCardapios} />
+            <CardapioPizzaAlTaglioTabs />
 
             <section className="flex flex-col">
                 {
@@ -82,11 +212,7 @@ export default function CardapioPizzaAlTaglioIndex() {
     )
 }
 
-interface CardapioPizzaAlTaglioTabsProps {
-    showPrivateCardapios: boolean,
-}
-
-function CardapioPizzaAlTaglioTabs({ showPrivateCardapios }: CardapioPizzaAlTaglioTabsProps) {
+function CardapioPizzaAlTaglioTabs() {
 
     const location = useLocation()
     const activeTab = lastUrlSegment(location.pathname)
@@ -107,19 +233,16 @@ function CardapioPizzaAlTaglioTabs({ showPrivateCardapios }: CardapioPizzaAlTagl
                 </div>
             </Link >
 
-            {
-                showPrivateCardapios && (
-                    <Link to={`privado`} className="w-full text-center">
-                        <div className={
-                            cn(
-                                activeTab === "privado" && activeTabStyle
-                            )
-                        }>
-                            <span className="text-sm">Privado</span>
-                        </div>
-                    </Link>
-                )
-            }
+
+            <Link to={`privado`} className="w-full text-center">
+                <div className={
+                    cn(
+                        activeTab === "privado" && activeTabStyle
+                    )
+                }>
+                    <span className="text-sm">Privado</span>
+                </div>
+            </Link>
         </div >
     )
 
