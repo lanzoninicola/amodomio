@@ -20,6 +20,16 @@ export class CardapioPizzaAlTaglioEntityFirestore extends BaseEntity<CardapioPiz
   //   throw new Error("Method not implemented.");
   // }
 
+  async addCardapio(record: CardapioPizzaAlTaglio) {
+    const newRecord = {
+      ...record,
+      slices: [],
+      name: record?.name || `Cardápio do dia ${now()}`,
+    };
+
+    return await this.create(newRecord);
+  }
+
   async add(record: Omit<CardapioPizzaAlTaglio, "public" | "name">) {
     const newSlices = record.slices.map((slice) => ({
       ...slice,
@@ -132,6 +142,36 @@ export class CardapioPizzaAlTaglioEntityFirestore extends BaseEntity<CardapioPiz
           value: this.setSlicePrice(slice),
         },
       ],
+    });
+  }
+
+  async sliceUpdate(
+    cardapioId: string,
+    sliceId: string,
+    data: { toppings: string; quantity: number }
+  ) {
+    const cardapio = await this.findById(cardapioId);
+
+    if (!cardapio) {
+      throw new Error("Cardapio não encontrado");
+    }
+
+    const slices = cardapio.slices;
+
+    const nextSlices = slices.map((s) => {
+      if (s.id === sliceId) {
+        return {
+          ...s,
+          ...data,
+        };
+      }
+
+      return s;
+    });
+
+    return await this.update(cardapioId, {
+      ...cardapio,
+      slices: nextSlices,
     });
   }
 
