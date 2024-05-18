@@ -1,88 +1,81 @@
 
 import { ActionArgs, redirect } from "@remix-run/node";
-import { Form, useActionData, useLoaderData } from "@remix-run/react";
-import { MinusCircleIcon, PlusCircleIcon } from "lucide-react";
-import { useState } from "react";
+import { Form, useActionData } from "@remix-run/react";
 import SubmitButton from "~/components/primitives/submit-button/submit-button";
+import Fieldset from "~/components/ui/fieldset";
 import { Input } from "~/components/ui/input";
-import { Separator } from "~/components/ui/separator";
+import { Label } from "~/components/ui/label";
+import { Switch } from "~/components/ui/switch";
 
 import { toast } from "~/components/ui/use-toast";
 import { cardapioPizzaAlTaglioEntity } from "~/domain/cardapio-pizza-al-taglio/cardapio-pizza-al-taglio.entity.server";
-import { CardapioPizzaSlice } from "~/domain/cardapio-pizza-al-taglio/cardapio-pizza-al-taglio.model.server";
-import { pizzaSliceEntity } from "~/domain/pizza-al-taglio/pizza-al-taglio.entity.server";
 import { now } from "~/lib/dayjs";
-import formatDate from "~/utils/format-date";
-import { serverError, ok } from "~/utils/http-response.server";
-import { jsonParse, jsonStringify } from "~/utils/json-helper";
+import { serverError } from "~/utils/http-response.server";
 import tryit from "~/utils/try-it";
 
-
-export async function loader() {
-
-    const [err, records] = await tryit(pizzaSliceEntity.findAllSlices({
-        order: "desc",
-        orderBy: "createdAt"
-    }))
-
-
-    if (err) {
-        return serverError(err)
-    }
-
-    return ok({
-        records
-    })
-}
 
 export async function action({ request }: ActionArgs) {
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);
 
     if (_action === "cardapio-create") {
-        const slices = jsonParse(values.pizzaSlicesState) as unknown as CardapioPizzaSlice[]
-
-        const [err, _] = await tryit(cardapioPizzaAlTaglioEntity.add({
-            slices
+        const [err, record] = await tryit(cardapioPizzaAlTaglioEntity.addCardapio({
+            public: values.public === "on" ? true : false,
+            name: values.name as string,
+            slices: [],
         }))
 
         if (err) {
             return serverError(err)
         }
 
-        return redirect("/admin/cardapio-pizza-al-taglio")
+        if (record.public === true) {
+            return redirect(`/admin/cardapio-pizza-al-taglio`)
+        }
+
+        return redirect(`/admin/cardapio-pizza-al-taglio/${record.id}`)
     }
 
     return null
 }
 
 export default function CardapioPizzaAlTaglioNew() {
-    const loaderData = useLoaderData<typeof loader>()
-    const pizzaSlices: CardapioPizzaSlice[] = loaderData?.payload?.records || []
     const actionData = useActionData<typeof action>()
-    const status = actionData?.status
-    const message = actionData?.message
 
-    if (status && status >= 400) {
+    if (actionData && actionData?.status !== 200) {
         toast({
             title: "Erro",
-            description: message,
+            description: actionData?.message,
         })
     }
 
-    if (actionData && actionData.status !== 200) {
-        toast({
-            title: "Erro",
-            description: actionData.message,
-        })
-    }
-
-    if (actionData && actionData.status === 200) {
+    if (actionData && actionData?.status === 200) {
         toast({
             title: "OK",
-            description: actionData.message
+            description: actionData?.message
         })
     }
+
+    return (
+        <Form method="post" className="rounded border p-4 md:max-w-xl mt-4">
+            <h3 className="text-sm text-muted-foreground font-semibold mb-4">Novo cardápio</h3>
+            <Fieldset className="grid-cols-3">
+                <Label htmlFor="name">Nome</Label>
+                <Input type="text" id="name" name="name" required className="col-span-2" defaultValue={`Cardápio do dia ${now()}`} />
+            </Fieldset>
+            <Fieldset className="grid-cols-3">
+                <Label htmlFor="public">Publico</Label>
+                <Switch id="public" name="public" />
+            </Fieldset>
+            <SubmitButton actionName="cardapio-create" className="mb-4" />
+        </Form>
+    )
+}
+
+/*
+function PizzaSlicesSelector() {
+    const loaderData = useLoaderData<typeof loader>()
+    const pizzaSlices: CardapioPizzaSlice[] = loaderData?.payload?.records || []
 
     const [itemsChoosable, setItemsChoosable] = useState<CardapioPizzaSlice[]>(pizzaSlices)
 
@@ -92,7 +85,7 @@ export default function CardapioPizzaAlTaglioNew() {
         "margherita": 0
     })
 
-    const changeQuantity = (item: CardapioPizzaSlice, action: "increase" | "decrease") => {
+     const changeQuantity = (item: CardapioPizzaSlice, action: "increase" | "decrease") => {
         const itemFound = itemsChoosable.find(i => i.id === item.id)
         let nextQuantity = "0"
         // const nextQuantity = action === "increase" ?
@@ -138,6 +131,8 @@ export default function CardapioPizzaAlTaglioNew() {
         ])
     }
 
+
+
     return (
         <div className="flex flex-col gap-6 max-h-[350px] p-4 md:p-6 border rounded-lg">
             <Form method="post" className="overflow-auto">
@@ -170,8 +165,6 @@ export default function CardapioPizzaAlTaglioNew() {
                 </div>
             </Form>
         </div>
-
-
     )
 }
 
@@ -192,7 +185,7 @@ function FormPizzaSliceRow({ pizza, changeQuantity }: FormPizzaSliceRowProps) {
                 <span className="text-xs">{pizza.category}</span>
 
             </div>
-            {/* @ts-ignore */}
+
             <span className="text-xs text-muted-foreground">{formatDate(pizza.createdAt)}</span>
             <div className="flex gap-2 items-center justify-end md:justify-start">
                 <MinusCircleIcon onClick={() => changeQuantity(pizza, "decrease")} className="hover:text-slate-500 cursor-pointer" />
@@ -203,3 +196,5 @@ function FormPizzaSliceRow({ pizza, changeQuantity }: FormPizzaSliceRowProps) {
 
     )
 }
+
+*/

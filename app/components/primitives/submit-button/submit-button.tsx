@@ -43,10 +43,10 @@ export default function SubmitButton({
 
 
     return (
-        <Button type="submit" name="_action" value={actionName} disabled={disabled} {...props}
+        <Button type="submit" name="_action" size="sm" value={actionName} disabled={disabled} {...props}
             className={
                 cn(
-                    `flex gap-2 w-full md:max-w-max md:px-8 md:py`,
+                    `flex gap-2 w-full md:max-w-max md:px-8`,
                     className
                 )
             } >
