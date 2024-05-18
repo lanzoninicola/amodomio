@@ -9,6 +9,7 @@ import WhatsappExternalLink from "~/components/primitives/whatsapp/whatsapp-exte
 import WhatsAppIcon from "~/components/primitives/whatsapp/whatsapp-icon";
 import { Separator } from "~/components/ui/separator";
 import { cn } from "~/lib/utils";
+import randomReactKey from "~/utils/random-react-key";
 
 const posts = [
     {
@@ -68,7 +69,7 @@ function MobileHomePage() {
             <MobileHeader />
             <div className="mt-[110px] mb-24">
                 {
-                    posts.map(p => <MobilePost title={p.title} content={p.content} imgSrc={p.imgSrc} imgAlt={p.imgAlt} />)
+                    posts.map(p => <MobilePost key={randomReactKey()} title={p.title} content={p.content} imgSrc={p.imgSrc} imgAlt={p.imgAlt} />)
                 }
             </div>
             <MobileFooter />
@@ -115,7 +116,7 @@ function MobileHeader() {
 function MobileFooter() {
 
     return (
-        <footer className="fixed inset-x-0 bottom-0 py-2 grid grid-cols-3 bg-white">
+        <footer className="fixed inset-x-0 bottom-0 py-2 grid grid-cols-4 bg-white">
             <WhatsappExternalLink phoneNumber="46991272525"
                 ariaLabel="Envia uma mensagem com WhatsApp"
                 message={"Olá, gostaria fazer um pedido"}
@@ -127,7 +128,7 @@ function MobileFooter() {
 
             <Link to={'cardapio'} className="flex flex-col gap-1 justify-center items-center">
                 <MenuSquare />
-                <span className="text-xs tracking-normal font-semibold font-body-website">Cardápio</span>
+                <span className="text-xs tracking-normal font-semibold font-body-website text-center">Cardápio</span>
             </Link>
 
             <MakeMogoOrderButton
