@@ -141,8 +141,14 @@ export const WEBSITE_NAVIGATION_ITEMS: WebsiteNavigation = {
     },
     {
       title: "Administração",
-      disabled: true,
+      disabled: false,
       items: [
+        {
+          title: "Chatbot",
+          href: "/admin/wapp",
+          items: [],
+          disabled: false,
+        },
         {
           title: "Usuários",
           href: "/admin/users",

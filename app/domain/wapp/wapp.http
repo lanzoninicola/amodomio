@@ -1,0 +1,9 @@
+###
+POST http://localhost:8081/api/NERDWHATS_AMERICA/start-session
+Content-Type: application/json
+Authorization: Bearer $2b$10$yuQR.5yW1N_Qu4sCPOtdFuVRH9XJJw1vJAYlWh7tq8fGkWavJcE0K
+
+{
+  "webhook": "",
+  "waitQrCode": true
+}
