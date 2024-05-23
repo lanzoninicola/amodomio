@@ -69,7 +69,7 @@ export default function VagaSingle() {
             <section className="mb-8">
                 <h3 className="text-base font-semibold mb-2">Como se candidar</h3>
                 <p>
-                    Candidate-se clicando no botão "Candidatar-me" abaixo. Analisaremos todas as candidaturas e entraremos em contato com os candidatos selecionados para a próxima fase do processo seletivo.
+                    Candidate-se clicando no botão <strong className="uppercase text-sm">Candidatar-me</strong> abaixo. Analisaremos todas as candidaturas e entraremos em contato com os candidatos selecionados para a próxima fase do processo seletivo.
                 </p>
             </section>
 
