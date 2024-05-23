@@ -10,7 +10,7 @@ export const meta: V2_MetaFunction = () => {
         },
         {
             name: "description",
-            content: "Vaga de Auxiliar De Cozinha na Pizzaria A Modo Mio"
+            content: "Detalhes vaga de Auxiliar De Cozinha na Pizzaria A Modo Mio"
         }
     ];
 };
