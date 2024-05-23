@@ -14,10 +14,8 @@ export default function CardapioPizzaAlTaglio() {
                                     Novo cardapio
                                 </span>
                             </Link>
-                            <Link to="/admin/pizza-al-taglio" className="py-2 px-4 rounded-md border border-black">
-                                <span className="font-semibold">
-                                    Pizzas Al Taglio
-                                </span>
+                            <Link to="/admin/pizza-al-taglio" className="py-2 px-4 font-semibold hover:text-muted-foreground hover:underline">
+                                Pizzas Al Taglio
                             </Link>
                         </div>
 
