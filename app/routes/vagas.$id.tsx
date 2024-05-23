@@ -69,12 +69,12 @@ export default function VagaSingle() {
             <section className="mb-8">
                 <h3 className="text-base font-semibold mb-2">Como se candidar</h3>
                 <p>
-                    Interessados devem preencher o formulário de candidatura disponível <a href="https://forms.gle/fRbMznRjVrxFbmzFA" target="_blank" className="underline text-blue-400">aqui</a>. Analisaremos todas as candidaturas e entraremos em contato com os candidatos selecionados para a próxima fase do processo seletivo.
+                    Candidate-se clicando no botão "Candidatar-me" abaixo. Analisaremos todas as candidaturas e entraremos em contato com os candidatos selecionados para a próxima fase do processo seletivo.
                 </p>
             </section>
 
             <ExternalLink to="https://forms.gle/fRbMznRjVrxFbmzFA" ariaLabel="Canditarme" className="flex w-full justify-center bg-green-400 rounded-xl uppercase font-semibold tracking-wider py-2">
-                Canditarme
+                Candidatar-me
             </ExternalLink>
         </Container>
     )
