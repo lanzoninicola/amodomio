@@ -574,11 +574,12 @@ function PizzaPromoList({ enableEdit }: PizzaPromoListProps) {
 
 const waMessageRemember = (
     date: string,
+    pizza: string,
     { endereço, bairro, cep }: { endereço: string | undefined, bairro: string | undefined, cep: string | undefined }
 ): string => {
 
     return `Olá!\n\nHoje, ${date}, é o dia da nossa sessão de fotos de cardápio.\n
-Se você confirmou, lembramos que sua pizza terá *20% de desconto*, a *entrega será gratuita*, e o envio será feito aproximadamente *entre 18:30 e 20:30* no endereço:\n
+Se você confirmou, lembramos que a sua pizza *${pizza}* terá *20% de desconto*, a *entrega será gratuita*, e o envio será feito aproximadamente *entre 18:30 e 20:30* no endereço:\n
 ${endereço || ""}
 ${bairro || ""}
 ${cep || ""}
@@ -664,7 +665,7 @@ function FormPizzaClienteBounded({ record }: FormPizzaClienteBoundedProps) {
                         classNameLabel="text-sm md:text-xs"
                         classNameButton="w-full md:w-max md:px-4 py-1"
                         classNameIcon="text-white"
-                        textToCopy={waMessageRemember(dateStringPT, {
+                        textToCopy={waMessageRemember(dateStringPT, record.pizza.name, {
                             endereço: record.selectedBy?.endereço,
                             bairro: record.selectedBy?.bairro,
                             cep: record.selectedBy?.cep,
