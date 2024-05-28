@@ -28,7 +28,7 @@ export default function VagaSingle() {
 
             <div className="flex items-center mb-8 gap-4">
                 <span className="text-sm text-muted-foreground">Status vaga: </span>
-                <span className="grid place-items-center rounded-lg px-4 pl-2 bg-green-300 text-md font-semibold  uppercase tracking tracking-wider">Aberta</span>
+                <span className="grid place-items-center rounded-lg px-4 pl-2 bg-red-300 text-md font-semibold  uppercase tracking tracking-wider">Fechada no momento</span>
             </div>
 
             <section className="mb-8">
