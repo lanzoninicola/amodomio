@@ -14,6 +14,7 @@ import { Input } from "~/components/ui/input";
 import { Separator } from "~/components/ui/separator";
 import mogoEntity from "~/domain/mogo/mogo.entity.server";
 import { MogoOrderWithDiffTime } from "~/domain/mogo/types";
+import OrdersDeliveryTimeLeftDialogSettings from "~/domain/order-delivery-time-left/components/order-delivery-time-left-dialog-settings/order-delivery-time-left-dialog-settings";
 import { settingEntity } from "~/domain/setting/setting.entity.server";
 import { Setting } from "~/domain/setting/setting.model.server";
 import useFormResponse from "~/hooks/useFormResponse";
@@ -164,7 +165,8 @@ export default function OrdersDeliveryTimeLeft() {
     const status = loaderData?.status
     const message = loaderData?.message
 
-    if (status === 500) {
+
+    if (status >= 400) {
         return (
             <div className="font-semibold text-red-500 text-center mt-32">
                 Erro: {message}
@@ -174,13 +176,13 @@ export default function OrdersDeliveryTimeLeft() {
 
     let orders: MogoOrderWithDiffTime[] = loaderData?.payload?.orders || []
 
+
     const arrayMinutes = useCallback(() => createDecreasingArray(90, 30), [])
-    const ordersDeliveryTimeExpired = orders.filter(order => order?.diffDeliveryDateTimeToNow.minutes < 0) || []
 
     return (
-        <div className="flex flex-col gap-4 px-6 pt-16 min-h-screen">
+        <div className="flex flex-col gap-4 px-6 pt-16 md:pt-0 min-h-screen">
             <Header />
-            <div className="grid grid-cols-5 gap-x-0 h-full">
+            <div className="grid grid-cols-4 gap-x-0 h-full">
                 {
                     arrayMinutes().map((step, index) => {
 
@@ -196,31 +198,19 @@ export default function OrdersDeliveryTimeLeft() {
                                 key={index}
                                 severity={index + 1}
                                 title={max === 0 ? "Da entregar" : `Menos o igual a ${max}'`}
-                                description={`Previsão de entrega em ${max} minutos`}
+                                description={max === 0 ? "Da entregar" : `Previsão de entrega em ${max} minutos`}
                                 itemsNumber={ordersFiltered.length}
                             >
                                 {ordersFiltered.map((o, index) => {
                                     return (
-                                        <KanbanOrderCard key={o.NumeroPedido} order={o} orderTimeSeverity={index + 1 as DelaySeverity} />
+                                        <KanbanOrderCard key={o.NumeroPedido} order={o} orderTimeSeverity={5} />
                                     )
                                 })}
                             </KanbanCol>
                         )
                     })
                 }
-                <KanbanCol
-                    key={999999}
-                    severity={5}
-                    title={`Limite Superado`}
-                    description={`Pedidos que foi superado limite de entrega`}
-                    itemsNumber={ordersDeliveryTimeExpired.length}
-                >
-                    {ordersDeliveryTimeExpired.map((o, index) => {
-                        return (
-                            <KanbanOrderCard key={o.NumeroPedido} order={o} orderTimeSeverity={5} showDeliveryTimeExpectedLabel={false} />
-                        )
-                    })}
-                </KanbanCol>
+
 
             </div>
         </div >
@@ -233,6 +223,7 @@ function Header() {
 
     let orders: MogoOrderWithDiffTime[] = loaderData?.payload?.orders || []
     let lastRequestTime: string = loaderData?.payload?.lastRequestTime || null
+    const maxDeliveryTimeSettings = loaderData?.payload?.deliveryTimeSettings?.maxTime
 
     let ordersDeliveryAmount = orders.filter(o => o.isDelivery === true).length
     let ordersCounterAmount = orders.filter(o => o.isDelivery === false).length
@@ -267,7 +258,7 @@ function Header() {
     const [searchParams, setSearchParams] = useSearchParams()
 
     return (
-        <div className="grid grid-cols-3 w-full">
+        <div className="grid grid-cols-3 w-full items-center">
             <Form method="post">
                 <div className="flex gap-2 items-center">
                     <Button type="submit" className="text-2xl"
@@ -285,44 +276,47 @@ function Header() {
                 </div>
 
             </Form>
-            <div className="flex justify-center gap-4">
-                <Link to="?filter=all">
-                    <div className={
-                        cn(
-                            "flex gap-2 items-center shadow-sm border rounded-lg px-4 py-1",
-                            searchParams.get("filter") === "all" && "border-black"
-                        )
-                    }>
-                        <span className="text-sm">Todos:</span>
-                        <span className="text-lg font-mono font-semibold">{orders.length || 0}</span>
-                    </div>
-                </Link>
-                <Link to="?filter=only-delivery">
-                    <div className={
-                        cn(
-                            "flex gap-2 items-center shadow-sm border rounded-lg px-4 py-1",
-                            searchParams.get("filter") === "only-delivery" && "border-black"
-                        )
-                    }>
-                        <span className="text-sm">Delivery:</span>
-                        <span className="text-lg font-mono font-semibold">{ordersDeliveryAmount}</span>
-                    </div>
-                </Link>
-                <Link to="?filter=only-counter">
-                    <div className={
-                        cn(
-                            "flex gap-2 items-center shadow-sm border rounded-lg px-4 py-1",
-                            searchParams.get("filter") === "only-counter" && "border-black"
-                        )
-                    }>
-                        <span className="text-sm">Balcão:</span>
-                        <span className="text-lg font-mono font-semibold">{ordersCounterAmount}</span>
-                    </div>
-                </Link>
-            </div>
-            <div className="flex gap-4 justify-end">
-                <Clock />
-                <OrdersTimelineSegmentationSettings showLabel={false} />
+            <h4 >Tempo maximo de entrega <span className="font-semibold text-lg">{maxDeliveryTimeSettings} minutos</span> </h4>
+            <div className="flex justify-between items-center gap-4">
+                <div className="flex justify-center gap-4">
+                    <Link to="?filter=all">
+                        <div className={
+                            cn(
+                                "flex gap-2 items-center shadow-sm border rounded-lg px-4 py-1",
+                                searchParams.get("filter") === "all" && "border-black"
+                            )
+                        }>
+                            <span className="text-sm">Todos:</span>
+                            <span className="text-lg font-mono font-semibold">{orders.length || 0}</span>
+                        </div>
+                    </Link>
+                    <Link to="?filter=only-delivery">
+                        <div className={
+                            cn(
+                                "flex gap-2 items-center shadow-sm border rounded-lg px-4 py-1",
+                                searchParams.get("filter") === "only-delivery" && "border-black"
+                            )
+                        }>
+                            <span className="text-sm">Delivery:</span>
+                            <span className="text-lg font-mono font-semibold">{ordersDeliveryAmount}</span>
+                        </div>
+                    </Link>
+                    <Link to="?filter=only-counter">
+                        <div className={
+                            cn(
+                                "flex gap-2 items-center shadow-sm border rounded-lg px-4 py-1",
+                                searchParams.get("filter") === "only-counter" && "border-black"
+                            )
+                        }>
+                            <span className="text-sm">Balcão:</span>
+                            <span className="text-lg font-mono font-semibold">{ordersCounterAmount}</span>
+                        </div>
+                    </Link>
+                </div>
+                <div className="flex gap-4 justify-end">
+                    <Clock />
+                    <OrdersDeliveryTimeLeftDialogSettings showLabel={false} />
+                </div>
             </div>
         </div>
     )
@@ -330,81 +324,5 @@ function Header() {
 
 
 
-interface OrdersTimelineSegmentationSettingsProps {
-    showLabel?: boolean
-}
 
 
-export function OrdersTimelineSegmentationSettings({ showLabel = true }: OrdersTimelineSegmentationSettingsProps) {
-
-    const loaderData = useLoaderData<typeof loader>()
-    const deliveryTimeSettings = loaderData?.payload?.deliveryTimeSettings
-    const counterTimeSettings = loaderData?.payload?.counterTimeSettings
-    const locale = loaderData?.payload?.int.locale
-    const timezone = loaderData?.payload?.int.timezone
-
-    return (
-        <Dialog>
-            <DialogTrigger asChild>
-                <Button variant="ghost">
-                    <Settings />
-                    {showLabel && <span className="ml-2">Configuraçoes</span>}
-                </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
-                <DialogHeader>
-                    <DialogTitle>Configurações</DialogTitle>
-                    <DialogDescription>
-                        <div className="flex flex-col">
-                            <span>Locale: {locale}</span>
-                            <span>Timezone: {timezone}</span>
-                        </div>
-
-                    </DialogDescription>
-                </DialogHeader>
-
-                <Form method="post" className="flex flex-col gap-4 mt-2">
-                    <div className="flex flex-col gap-2">
-                        <h3 className="font-semibold">Retiro no balcão (minutos)</h3>
-                        <input type="hidden" name="context" value="order-timeline-segmentation-delivery-time" />
-                        <div className="flex flex-col gap-2">
-                            <div className="flex gap-4 items-center justify-between">
-                                <span>Tempo minimo</span>
-                                <Input type="text" id="minTimeCounterMinutes" name="minTimeCounterMinutes" maxLength={2} className="w-[72px] bg-white"
-                                    defaultValue={counterTimeSettings?.minTime || 0}
-                                />
-                            </div>
-                            <div className="flex gap-4 items-center justify-between">
-                                <span>Tempo maximo</span>
-                                <Input type="text" id="maxTimeCounterMinutes" name="maxTimeCounterMinutes" maxLength={2} className="w-[72px] bg-white"
-                                    defaultValue={counterTimeSettings?.maxTime || 0}
-                                />
-                            </div>
-                        </div>
-                    </div>
-                    <div className="flex flex-col gap-2">
-                        <h3 className="font-semibold">Tempo de entrega (minutos)</h3>
-                        <input type="hidden" name="context" value="order-timeline-segmentation-delivery-time" />
-                        <div className="flex flex-col gap-2">
-                            <div className="flex gap-4 items-center justify-between">
-                                <span>Tempo minimo</span>
-                                <Input type="text" id="minTimeDeliveryMinutes" name="minTimeDeliveryMinutes" maxLength={2} className="w-[72px] bg-white"
-                                    defaultValue={deliveryTimeSettings?.minTime || 0}
-                                />
-                            </div>
-                            <div className="flex gap-4 items-center justify-between">
-                                <span>Tempo maximo</span>
-                                <Input type="text" id="maxTimeDeliveryMinutes" name="maxTimeDeliveryMinutes" maxLength={2} className="w-[72px] bg-white"
-                                    defaultValue={deliveryTimeSettings?.maxTime || 0}
-                                />
-                            </div>
-                        </div>
-                    </div>
-                    <div className="flex justify-end">
-                        <SubmitButton actionName="order-timeline-segmentation-settings-change" />
-                    </div>
-                </Form>
-            </DialogContent>
-        </Dialog>
-    )
-}
