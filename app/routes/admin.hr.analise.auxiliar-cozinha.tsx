@@ -1,7 +1,7 @@
 import Container from "~/components/layout/container/container"
 import candidatosJson from "~/domain/hr/db/vagas-24-05-25-candidatos.json"
 import right from "~/utils/right"
-import { ok } from "~/utils/http-response.server"
+ import { ok } from "~/utils/http-response.server"
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert"
 import { useLoaderData } from "@remix-run/react"
 import { AlertCircle } from "lucide-react"
