@@ -140,6 +140,17 @@ export const WEBSITE_NAVIGATION_ITEMS: WebsiteNavigation = {
       ],
     },
     {
+      title: "HR",
+      items: [
+        {
+          title: "Analise candidatos 'Auxiliar Cozinha'",
+          href: "/admin/hr/analise/auxiliar-cozinha",
+          items: [],
+          disabled: false,
+        },
+      ],
+    },
+    {
       title: "Administração",
       disabled: true,
       items: [
