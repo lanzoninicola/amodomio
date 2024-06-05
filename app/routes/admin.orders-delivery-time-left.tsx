@@ -4,7 +4,7 @@ import dayjs from "dayjs";
 import { Settings } from "lucide-react";
 import { useCallback, useEffect, useRef } from "react";
 import KanbanCol from "~/components/kanban-col/kanban-col";
-import KanbanOrderCard, { DelaySeverity } from "~/components/kanban-order-card/kanban-order-card";
+import KanbanOrderCardLargeScreen from "~/components/kanban-order-card/kanban-order-card-large-screen";
 import Clock from "~/components/primitives/clock/clock";
 import SubmitButton from "~/components/primitives/submit-button/submit-button";
 
@@ -203,7 +203,7 @@ export default function OrdersDeliveryTimeLeft() {
                             >
                                 {ordersFiltered.map((o, index) => {
                                     return (
-                                        <KanbanOrderCard key={o.NumeroPedido} order={o} orderTimeSeverity={5} />
+                                        <KanbanOrderCardLargeScreen key={o.NumeroPedido} order={o} orderTimeSeverity={5} />
                                     )
                                 })}
                             </KanbanCol>

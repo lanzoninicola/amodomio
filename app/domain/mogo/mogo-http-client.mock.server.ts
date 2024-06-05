@@ -60,6 +60,48 @@ export default class MogoHttpClientMock implements MogoHttpClientInterface {
               },
             ],
           },
+          {
+            IdProduto: 18,
+            IdItemPedido: 0,
+            Descricao: "Pizza Tamanho Médio",
+            Observacao: "",
+            Quantidade: 1,
+            ValorUnitario: 89.9,
+            Adicionais: [],
+            Sabores: [
+              {
+                Descricao: "Affumicata",
+                Quantidade: 1,
+                Valor: 89.9,
+              },
+              {
+                Descricao: "Mortazza",
+                Quantidade: 1,
+                Valor: 119.9,
+              },
+            ],
+          },
+          {
+            IdProduto: 18,
+            IdItemPedido: 0,
+            Descricao: "Pizza Tamanho Médio",
+            Observacao: "",
+            Quantidade: 1,
+            ValorUnitario: 89.9,
+            Adicionais: [],
+            Sabores: [
+              {
+                Descricao: "Affumicata",
+                Quantidade: 1,
+                Valor: 89.9,
+              },
+              {
+                Descricao: "Mortazza",
+                Quantidade: 1,
+                Valor: 119.9,
+              },
+            ],
+          },
         ],
         SubTotal: 189.9,
         TaxaEntrega: 0,
