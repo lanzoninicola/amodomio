@@ -13,7 +13,7 @@ interface OrderCardProps {
     showDeliveryTimeExpectedLabel?: boolean,
 }
 
-export default function KanbanOrderCard({
+export default function KanbanOrderCardMediumScreen({
     order,
     orderTimeSeverity,
     showDeliveryTimeExpectedLabel = true
