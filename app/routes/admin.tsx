@@ -3,6 +3,8 @@ import { Outlet, useLoaderData } from "@remix-run/react";
 import { AdminHeader } from "~/components/layout/admin-header/admin-header";
 import { authenticator } from "~/domain/auth/google.server";
 import { LoggedUser } from "~/domain/auth/types.server";
+import { ok } from "~/utils/http-response.server";
+import { lastUrlSegment } from "~/utils/url";
 
 
 export interface AdminOutletContext {
@@ -34,18 +36,25 @@ export const loader: LoaderFunction = async ({ request }: LoaderArgs) => {
     if (!user) {
         return redirect("/login");
     }
-    return user
+
+    const urlSegment = lastUrlSegment(request.url)
+
+    return ok({ user, urlSegment })
 }
 
 
 
 
 export default function AdminOutlet() {
-    const loggedUser = useLoaderData<typeof loader>();
+    const loaderData = useLoaderData<typeof loader>();
+
+    const loggedUser = loaderData?.payload?.user;
+    const urlSegment = loaderData?.payload?.urlSegment;
+
 
     return (
         <>
-            <AdminHeader />
+            <AdminHeader urlSegment={urlSegment} />
             <div className="mt-12">
                 <Outlet context={{
                     loggedUser,

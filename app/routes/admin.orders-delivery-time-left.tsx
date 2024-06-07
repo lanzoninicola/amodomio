@@ -1,6 +1,7 @@
 import { LoaderArgs } from "@remix-run/node";
 import { Form, Link, useLoaderData, useNavigation, useSearchParams } from "@remix-run/react";
 import dayjs from "dayjs";
+import { loadBundle } from "firebase/firestore";
 import { Settings } from "lucide-react";
 import { useCallback, useEffect, useRef } from "react";
 import KanbanCol from "~/components/kanban-col/kanban-col";
@@ -12,6 +13,7 @@ import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
 import { Separator } from "~/components/ui/separator";
+import { calculateTotalTime } from "~/domain/mogo/mogo-timing-utils";
 import mogoEntity from "~/domain/mogo/mogo.entity.server";
 import { MogoOrderWithDiffTime } from "~/domain/mogo/types";
 import OrdersDeliveryTimeLeftDialogSettings from "~/domain/order-delivery-time-left/components/order-delivery-time-left-dialog-settings/order-delivery-time-left-dialog-settings";
@@ -80,6 +82,7 @@ export async function loader({ request }: LoaderArgs) {
             minTime: minCounterTimeSettings?.value || 0,
             maxTime: maxCounterTimeSettings?.value || 0,
         }
+
     })
 
 
@@ -159,6 +162,7 @@ interface FormResponseData {
     lastRequestTime: string
 }
 
+
 export default function OrdersDeliveryTimeLeft() {
 
     const loaderData = useLoaderData<typeof loader>()
@@ -175,6 +179,7 @@ export default function OrdersDeliveryTimeLeft() {
     }
 
     let orders: MogoOrderWithDiffTime[] = loaderData?.payload?.orders || []
+
 
 
     const arrayMinutes = useCallback(() => createDecreasingArray(90, 30), [])
@@ -225,8 +230,12 @@ function Header() {
     let lastRequestTime: string = loaderData?.payload?.lastRequestTime || null
     const maxDeliveryTimeSettings = loaderData?.payload?.deliveryTimeSettings?.maxTime
 
-    let ordersDeliveryAmount = orders.filter(o => o.isDelivery === true).length
-    let ordersCounterAmount = orders.filter(o => o.isDelivery === false).length
+    const totPreparationTime = calculateTotalTime(orders, "preparationTime")
+    const totCookingTime = calculateTotalTime(orders, "cookingTime")
+
+
+    console.log({ totTime: totPreparationTime + totCookingTime })
+
 
     const navigation = useNavigation()
 
@@ -249,13 +258,13 @@ function Header() {
             if (refreshSubmitButton.current) {
                 refreshSubmitButton.current.click();
             }
-        }, 300_000); // Trigger click every 60 seconds (5 minute)
+        }, 180_000); // Trigger click every 60 seconds (5 minute)
 
         return () => clearInterval(interval); // Cleanup the interval on component unmount
     }, []);
 
 
-    const [searchParams, setSearchParams] = useSearchParams()
+
 
     return (
         <div className="grid grid-cols-3 w-full items-center">
@@ -276,53 +285,72 @@ function Header() {
                 </div>
 
             </Form>
-            <h4 >Tempo maximo de entrega <span className="font-semibold text-lg">{maxDeliveryTimeSettings} minutos</span> </h4>
-            <div className="flex justify-between items-center gap-4">
-                <div className="flex justify-center gap-4">
-                    <Link to="?filter=all">
-                        <div className={
-                            cn(
-                                "flex gap-2 items-center shadow-sm border rounded-lg px-4 py-1",
-                                searchParams.get("filter") === "all" && "border-black"
-                            )
-                        }>
-                            <span className="text-sm">Todos:</span>
-                            <span className="text-lg font-mono font-semibold">{orders.length || 0}</span>
-                        </div>
-                    </Link>
-                    <Link to="?filter=only-delivery">
-                        <div className={
-                            cn(
-                                "flex gap-2 items-center shadow-sm border rounded-lg px-4 py-1",
-                                searchParams.get("filter") === "only-delivery" && "border-black"
-                            )
-                        }>
-                            <span className="text-sm">Delivery:</span>
-                            <span className="text-lg font-mono font-semibold">{ordersDeliveryAmount}</span>
-                        </div>
-                    </Link>
-                    <Link to="?filter=only-counter">
-                        <div className={
-                            cn(
-                                "flex gap-2 items-center shadow-sm border rounded-lg px-4 py-1",
-                                searchParams.get("filter") === "only-counter" && "border-black"
-                            )
-                        }>
-                            <span className="text-sm">Balcão:</span>
-                            <span className="text-lg font-mono font-semibold">{ordersCounterAmount}</span>
-                        </div>
-                    </Link>
-                </div>
-                <div className="flex gap-4 justify-end">
-                    <Clock />
-                    <OrdersDeliveryTimeLeftDialogSettings showLabel={false} />
-                </div>
+            <div className="flex gap-4 items-center justify-center">
+                <span>Hora do último despacho:</span>
+                <Clock minutesToAdd={totPreparationTime + totCookingTime} highContrast={true} showSeconds={false} />
+            </div>
+
+
+
+            <div className="flex gap-4 justify-end items-center">
+                <h4 >Tempo maximo de entrega <span className="font-semibold text-lg">{maxDeliveryTimeSettings} minutos</span> </h4>
+                <OrdersDeliveryTimeLeftDialogSettings showLabel={false} />
             </div>
         </div>
     )
 }
 
 
+
+function Filters() {
+    const loaderData = useLoaderData<typeof loader>()
+
+    let orders: MogoOrderWithDiffTime[] = loaderData?.payload?.orders || []
+    let ordersDeliveryAmount = orders.filter(o => o.isDelivery === true).length
+    let ordersCounterAmount = orders.filter(o => o.isDelivery === false).length
+
+    const [searchParams, setSearchParams] = useSearchParams()
+
+    return (
+
+        <div className="flex justify-center gap-4">
+            <Link to="?filter=all">
+                <div className={
+                    cn(
+                        "flex gap-2 items-center shadow-sm border rounded-lg px-4 py-1",
+                        searchParams.get("filter") === "all" && "border-black"
+                    )
+                }>
+                    <span className="text-sm">Todos:</span>
+                    <span className="text-lg font-mono font-semibold">{orders.length || 0}</span>
+                </div>
+            </Link>
+            <Link to="?filter=only-delivery">
+                <div className={
+                    cn(
+                        "flex gap-2 items-center shadow-sm border rounded-lg px-4 py-1",
+                        searchParams.get("filter") === "only-delivery" && "border-black"
+                    )
+                }>
+                    <span className="text-sm">Delivery:</span>
+                    <span className="text-lg font-mono font-semibold">{ordersDeliveryAmount}</span>
+                </div>
+            </Link>
+            <Link to="?filter=only-counter">
+                <div className={
+                    cn(
+                        "flex gap-2 items-center shadow-sm border rounded-lg px-4 py-1",
+                        searchParams.get("filter") === "only-counter" && "border-black"
+                    )
+                }>
+                    <span className="text-sm">Balcão:</span>
+                    <span className="text-lg font-mono font-semibold">{ordersCounterAmount}</span>
+                </div>
+            </Link>
+        </div>
+
+    )
+}
 
 
 

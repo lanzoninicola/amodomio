@@ -41,9 +41,6 @@ export default function KanbanOrderCardLargeScreen({
         5: "bg-red-400"
     }
 
-
-    const [tabShown, setTabShown] = useState("")
-
     return (
 
         <div className="flex gap-x-0 shadow-xl hover:cursor-pointer hover:bg-slate-50 rounded-lg" >
