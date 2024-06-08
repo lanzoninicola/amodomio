@@ -14,7 +14,7 @@ import { cn } from "~/lib/utils";
 
 export default function HomePage() {
     return (
-        <div className="bg-black h-screen p-8 md:py-24 md:px-32 lg:px-96">
+        <div className="bg-black h-screen p-4 md:py-24 md:px-32 lg:px-96">
 
             <div className="bg-white h-full rounded-lg">
 
