@@ -24,6 +24,16 @@ export default class MogoHttpClientMock implements MogoHttpClientInterface {
         NumeroPedido: "000755",
         Itens: [
           {
+            IdProduto: 15,
+            IdItemPedido: 0,
+            Descricao: "Coca cola grande",
+            Observacao: "",
+            Quantidade: 1,
+            ValorUnitario: 10,
+            Adicionais: [],
+            Sabores: [],
+          },
+          {
             IdProduto: 19,
             IdItemPedido: 0,
             Descricao: "Pizza Tamanho Grande",
@@ -106,7 +116,7 @@ export default class MogoHttpClientMock implements MogoHttpClientInterface {
         SubTotal: 189.9,
         TaxaEntrega: 0,
         DataPedido: `${this.today} 00:00:00`,
-        HoraPedido: "12:36:54",
+        HoraPedido: "12:00:54",
         // HoraPedido: `${this.calculateOrderTime()}`,
         HoraEntrega: null,
         HoraAcerto: "",

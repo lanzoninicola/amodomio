@@ -13,7 +13,6 @@ import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
 import { Separator } from "~/components/ui/separator";
-import { calculateTotalTime } from "~/domain/mogo/mogo-timing-utils";
 import mogoEntity from "~/domain/mogo/mogo.entity.server";
 import { MogoOrderWithDiffTime } from "~/domain/mogo/types";
 import OrdersDeliveryTimeLeftDialogSettings from "~/domain/order-delivery-time-left/components/order-delivery-time-left-dialog-settings/order-delivery-time-left-dialog-settings";
@@ -182,6 +181,8 @@ export default function OrdersDeliveryTimeLeft() {
 
 
 
+
+
     const arrayMinutes = useCallback(() => createDecreasingArray(90, 30), [])
 
     return (
@@ -195,8 +196,11 @@ export default function OrdersDeliveryTimeLeft() {
 
                         const ordersFiltered = orders.filter(order => {
                             const deliveryTimeLeftMinutes = order?.diffDeliveryDateTimeToNow.minutes
+                            console.log({ order: order?.Id, deliveryTimeLeftMinutes })
                             return (deliveryTimeLeftMinutes <= max && deliveryTimeLeftMinutes >= min)
                         })
+
+                        console.log({ ordersFiltered })
 
                         return (
                             <KanbanCol
@@ -230,11 +234,6 @@ function Header() {
     let lastRequestTime: string = loaderData?.payload?.lastRequestTime || null
     const maxDeliveryTimeSettings = loaderData?.payload?.deliveryTimeSettings?.maxTime
 
-    const totPreparationTime = calculateTotalTime(orders, "preparationTime")
-    const totCookingTime = calculateTotalTime(orders, "cookingTime")
-
-
-    console.log({ totTime: totPreparationTime + totCookingTime })
 
 
     const navigation = useNavigation()
@@ -252,6 +251,9 @@ function Header() {
 
     const refreshSubmitButton = useRef<HTMLButtonElement | null>(null);
 
+
+    const totDispatchTime = orders.map(o => o.totDispatchTimeInMinutes).reduce((a, b) => a + b, 0)
+
     useEffect(() => {
         const interval = setInterval(() => {
             // Simulate button click
@@ -262,8 +264,6 @@ function Header() {
 
         return () => clearInterval(interval); // Cleanup the interval on component unmount
     }, []);
-
-
 
 
     return (
@@ -287,7 +287,7 @@ function Header() {
             </Form>
             <div className="flex gap-4 items-center justify-center">
                 <span>Hora do último despacho:</span>
-                <Clock minutesToAdd={totPreparationTime + totCookingTime} highContrast={true} showSeconds={false} />
+                <Clock minutesToAdd={totDispatchTime} highContrast={true} showSeconds={false} />
             </div>
 
 
