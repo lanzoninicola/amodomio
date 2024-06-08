@@ -196,11 +196,8 @@ export default function OrdersDeliveryTimeLeft() {
 
                         const ordersFiltered = orders.filter(order => {
                             const deliveryTimeLeftMinutes = order?.diffDeliveryDateTimeToNow.minutes
-                            console.log({ order: order?.Id, deliveryTimeLeftMinutes })
                             return (deliveryTimeLeftMinutes <= max && deliveryTimeLeftMinutes >= min)
                         })
-
-                        console.log({ ordersFiltered })
 
                         return (
                             <KanbanCol
