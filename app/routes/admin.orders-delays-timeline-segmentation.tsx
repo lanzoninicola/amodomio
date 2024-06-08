@@ -4,7 +4,8 @@ import dayjs from "dayjs";
 import { ArrowBigDownDash, ArrowBigUpDash, HelpCircle, PersonStanding, Settings, Truck } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import KanbanCol from "~/components/kanban-col/kanban-col";
-import KanbanOrderCard from "~/components/kanban-order-card/kanban-order-card";
+import KanbanOrderCardMediumScreen from "~/components/kanban-order-card/kanban-order-card-medium-screen";
+
 import Clock from "~/components/primitives/clock/clock";
 import SubmitButton from "~/components/primitives/submit-button/submit-button";
 
@@ -247,7 +248,7 @@ export default function OrdersTimelineSegmentation() {
                 >
                     {orderLess20Opened.map(o => {
                         return (
-                            <KanbanOrderCard key={o.NumeroPedido} order={o} orderTimeSeverity={1} />
+                            <KanbanOrderCardMediumScreen key={o.NumeroPedido} order={o} orderTimeSeverity={1} />
                         )
                     })}
                 </KanbanCol >
@@ -258,7 +259,7 @@ export default function OrdersTimelineSegmentation() {
                     description="Pedidos abertos entre 21 e 40 minutos"
                     itemsNumber={orderLess40Minutes.length}
                 >
-                    {orderLess40Minutes.map(o => <KanbanOrderCard key={o.NumeroPedido} order={o} orderTimeSeverity={2} />)}
+                    {orderLess40Minutes.map(o => <KanbanOrderCardMediumScreen key={o.NumeroPedido} order={o} orderTimeSeverity={2} />)}
                 </KanbanCol >
 
                 <KanbanCol
@@ -267,7 +268,7 @@ export default function OrdersTimelineSegmentation() {
                     description="Pedidos abertos entre 41 e 60 minutos"
                     itemsNumber={orderLess60Minutes.length}
                 >
-                    {orderLess60Minutes.map(o => <KanbanOrderCard key={o.NumeroPedido} order={o} orderTimeSeverity={3} />)}
+                    {orderLess60Minutes.map(o => <KanbanOrderCardMediumScreen key={o.NumeroPedido} order={o} orderTimeSeverity={3} />)}
                 </KanbanCol >
                 <KanbanCol
                     severity={4}
@@ -275,7 +276,7 @@ export default function OrdersTimelineSegmentation() {
                     description="Pedidos abertos entre 61 e 90 minutos"
                     itemsNumber={orderLess90Minutes.length}
                 >
-                    {orderLess90Minutes.map(o => <KanbanOrderCard key={o.NumeroPedido} order={o} orderTimeSeverity={4} />)}
+                    {orderLess90Minutes.map(o => <KanbanOrderCardMediumScreen key={o.NumeroPedido} order={o} orderTimeSeverity={4} />)}
                 </KanbanCol >
                 <KanbanCol
                     severity={5}
@@ -283,7 +284,7 @@ export default function OrdersTimelineSegmentation() {
                     description="Pedidos abertos há mais de 90 minutos"
                     itemsNumber={orderMore90Minutes.length}
                 >
-                    {orderMore90Minutes.map(o => <KanbanOrderCard key={o.NumeroPedido} order={o} orderTimeSeverity={5} />)}
+                    {orderMore90Minutes.map(o => <KanbanOrderCardMediumScreen key={o.NumeroPedido} order={o} orderTimeSeverity={5} />)}
                 </KanbanCol >
             </div>
         </div >
