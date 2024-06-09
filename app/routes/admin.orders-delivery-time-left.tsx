@@ -180,9 +180,6 @@ export default function OrdersDeliveryTimeLeft() {
     let orders: MogoOrderWithDiffTime[] = loaderData?.payload?.orders || []
 
 
-
-
-
     const arrayMinutes = useCallback(() => createDecreasingArray(90, 30), [])
 
     return (
@@ -192,10 +189,16 @@ export default function OrdersDeliveryTimeLeft() {
                 {
                     arrayMinutes().map((step, index) => {
 
-                        const { min, max } = step
+                        const { min, max, isFirstStep } = step
 
                         const ordersFiltered = orders.filter(order => {
+
                             const deliveryTimeLeftMinutes = order?.diffDeliveryDateTimeToNow.minutes
+
+                            if (isFirstStep === true) {
+                                return deliveryTimeLeftMinutes >= min
+                            }
+
                             return (deliveryTimeLeftMinutes <= max && deliveryTimeLeftMinutes >= min)
                         })
 
@@ -231,13 +234,10 @@ function Header() {
     let lastRequestTime: string = loaderData?.payload?.lastRequestTime || null
     const maxDeliveryTimeSettings = loaderData?.payload?.deliveryTimeSettings?.maxTime
 
-
-
     const navigation = useNavigation()
 
     const formResponse = useFormResponse()
     const formData = formResponse.data as unknown as FormResponseData
-
     if (Array.isArray(formData?.orders) === true) {
         orders = formData?.orders || []
     }
@@ -246,11 +246,8 @@ function Header() {
         lastRequestTime = formData?.lastRequestTime
     }
 
+    /** start - refresh mechanism */
     const refreshSubmitButton = useRef<HTMLButtonElement | null>(null);
-
-
-    const totDispatchTime = orders.map(o => o.totDispatchTimeInMinutes).reduce((a, b) => a + b, 0)
-
     useEffect(() => {
         const interval = setInterval(() => {
             // Simulate button click
@@ -261,7 +258,9 @@ function Header() {
 
         return () => clearInterval(interval); // Cleanup the interval on component unmount
     }, []);
+    /** end - refresh mechanism */
 
+    const totDispatchTime = orders.map(o => o.totDispatchTimeInMinutes).reduce((a, b) => a + b, 0)
 
     return (
         <div className="grid grid-cols-3 w-full items-center">
@@ -283,7 +282,10 @@ function Header() {
 
             </Form>
             <div className="flex gap-4 items-center justify-center">
-                <span>Hora do último despacho:</span>
+                <div className="flex flex-col">
+                    <span>Hora do último despacho:</span>
+                    <span className="text-xs">totDispatchTime: {totDispatchTime}</span>
+                </div>
                 <Clock minutesToAdd={totDispatchTime} highContrast={true} showSeconds={false} />
             </div>
 
