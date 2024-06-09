@@ -116,7 +116,7 @@ export default class MogoHttpClientMock implements MogoHttpClientInterface {
         SubTotal: 189.9,
         TaxaEntrega: 0,
         DataPedido: `${this.today} 00:00:00`,
-        HoraPedido: "12:00:54",
+        HoraPedido: "11:00:54",
         // HoraPedido: `${this.calculateOrderTime()}`,
         HoraEntrega: null,
         HoraAcerto: "",

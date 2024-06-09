@@ -1,9 +1,13 @@
-export function createDecreasingArray(startNumber: number, step: number) {
+export function createDecreasingArray(
+  startNumber: number,
+  stepTimeAmount: number
+) {
   const resultArray = [];
+  let stepNumber = 0;
 
   while (startNumber >= 0) {
     const maxRange = startNumber;
-    let minRange = startNumber - (step - 1);
+    let minRange = startNumber - (stepTimeAmount - 1);
 
     if (minRange < 0) {
       minRange = 0;
@@ -11,9 +15,19 @@ export function createDecreasingArray(startNumber: number, step: number) {
     resultArray.push({
       max: maxRange,
       min: minRange,
+      stepNumber: ++stepNumber,
     });
-    startNumber -= step;
+    startNumber -= stepTimeAmount;
   }
 
-  return resultArray;
+  const maxStepNumber = resultArray.length;
+
+  return resultArray.map((r) => {
+    return {
+      ...r,
+      maxStepNumber,
+      isFirstStep: r.stepNumber === 1,
+      isLastStep: r.stepNumber === maxStepNumber,
+    };
+  });
 }
