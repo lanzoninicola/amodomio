@@ -6,7 +6,6 @@ import { Link } from "@remix-run/react";
 import { ArrowUpRight } from "lucide-react";
 import Container from "~/components/layout/container/container";
 import { Separator } from "~/components/ui/separator";
-import PromoRules from "~/domain/dia-dos-namorados/components/promo-rules/promo-rules";
 
 export const meta: V2_MetaFunction = () => {
     return [
@@ -33,7 +32,7 @@ export default function DiaDosNamoradosRegulamento() {
                 <h3 className="text-sm font-semibold mb-4 uppercase leading-none tracking-wide">Como Funciona a Reserva</h3>
                 <ul className="list-decimal list-inside flex flex-col gap-2">
                     <li><span className="font-semibold">Reserva Antecipada: </span>A prioridade será dada aos clientes que fizerem a reserva antecipada da pizza.</li>
-                    <li><span className="font-semibold">Escolha do Horário de Entrega: </span>Oferecemos a flexibilidade de escolher o horário de entrega que mais lhe convier. No entanto, em caso de alto volume de pedidos, pode ser que não consigamos cumprir exatamente o horário solicitado, mas faremos o possível para entregar no horário estabelecido.</li>
+                    <li><span className="font-semibold">Escolha do Horário de Entrega: </span>Oferecemos a flexibilidade de escolher o horário de entrega que mais lhe convier, <span className="font-semibold">dentro do nosso horário de funcionamento, das 18h às 22h</span>. No entanto, em caso de alto volume de pedidos, pode ser que não consigamos cumprir exatamente o horário solicitado, mas faremos o possível para entregar no horário estabelecido.</li>
                     <li><span className="font-semibold">Envio da Reserva: </span>As reservas devem ser enviadas via WhatsApp para o número da nossa pizzaria: <span className="font-semibold">(46) 9127-2525</span></li>
                 </ul>
             </section>
