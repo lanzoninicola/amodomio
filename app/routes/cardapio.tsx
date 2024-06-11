@@ -111,7 +111,7 @@ function CardapioCarousel({
                 <CarouselContent>
                     {cardapioArray.map((item, index) => (
 
-                        <CarouselItem key={index} className="top-[10%]">
+                        <CarouselItem key={index} className="h-screen">
                             <img src={item}
                                 loading="lazy"
                                 decoding="async"
@@ -176,7 +176,7 @@ function BottomActionBar({ currentSlide, showBarOnPageNumber, topPosition, botto
                         </div>
                     </Link>
                 </div> */}
-                <WebsiteActionBar />
+                <ActionBar />
             </FadeIn>
 
         </div>
@@ -187,7 +187,7 @@ function BottomActionBar({ currentSlide, showBarOnPageNumber, topPosition, botto
 
 
 
-function WebsiteActionBar() {
+function ActionBar() {
 
     const [likeIt, setLikeIt] = useState(false)
 
@@ -206,7 +206,7 @@ function WebsiteActionBar() {
                 <span className="text-xs tracking-normal font-semibold">Atendimento</span>
             </WhatsappExternalLink>
 
-            <Link to={'finalizar'} className="flex flex-col gap-2 justify-center items-center">
+            <Link to={"/pdf/cardapio/amodomio-cardapio.pdf"} className="flex flex-col gap-2 justify-center items-center" download>
                 <ArrowDown />
                 <span className="text-xs tracking-normal font-semibold">
                     Baixar PDF
