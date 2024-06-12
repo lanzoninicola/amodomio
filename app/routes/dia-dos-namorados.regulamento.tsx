@@ -23,9 +23,7 @@ export default function DiaDosNamoradosRegulamento() {
         <Container className="py-12 px-8 bg-slate-50">
             <section >
                 <h1 className="font-semibold mb-4 uppercase leading-tight tracking-wide">Regulamento de Reserva de Pizza para o Dia dos Namorados</h1>
-                <p >Sabemos que a nossa produção de pizzas é limitada, e para garantir que você tenha a sua pizza no Dia dos Namorados,
-                    estamos oferecendo a possibilidade de reservar antecipadamente. A reserva é uma oportunidade especial para assegurar
-                    que você desfrute da nossa deliciosa pizza sem preocupações.</p>
+                <p >Para garantir que você tenha a sua pizza no Dia dos Namorados, estamos oferecendo a possibilidade de reservar antecipadamente. A reserva é uma oportunidade especial para assegurar que você desfrute da nossa deliciosa pizza sem preocupações.</p>
             </section>
             <Separator className="my-8" />
             <section >
