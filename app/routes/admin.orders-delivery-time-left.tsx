@@ -254,7 +254,7 @@ function Header() {
             if (refreshSubmitButton.current) {
                 refreshSubmitButton.current.click();
             }
-        }, 180_000); // Trigger click every 60 seconds (5 minute)
+        }, 180_000); // Trigger click every 60 seconds (3 minutes)
 
         return () => clearInterval(interval); // Cleanup the interval on component unmount
     }, []);
@@ -286,7 +286,7 @@ function Header() {
                     <span>Hora do último despacho:</span>
                     <span className="text-xs">totDispatchTime: {totDispatchTime}</span>
                 </div>
-                <Clock minutesToAdd={totDispatchTime} highContrast={true} showSeconds={false} />
+                <Clock minutesToAdd={totDispatchTime} highContrast={true} />
             </div>
 
 
