@@ -18,16 +18,17 @@ const Clock = ({
 
     const [currentTime, setCurrentTime] = useState(dayjs().format(timeFormat));
 
-    const currentDate = minutesToAdd > 0 ? dayjs().add(minutesToAdd, 'minute') : dayjs()
-    const formattedDate = currentDate.format(timeFormat);
+
 
     useEffect(() => {
         const interval = setInterval(() => {
+            const currentDate = minutesToAdd > 0 ? dayjs().add(minutesToAdd, 'minute') : dayjs()
+            const formattedDate = currentDate.format(timeFormat);
             setCurrentTime(formattedDate);
         }, 1000);
 
         return () => clearInterval(interval);
-    }, []);
+    }, [showSeconds, minutesToAdd]);
 
     return (
         <div className={
