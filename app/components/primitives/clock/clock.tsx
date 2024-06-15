@@ -36,7 +36,7 @@ const Clock = ({
                 highContrast && "bg-brand-blue py-1 px-4 rounded-md text-white"
             )
         }>
-            <p className="text-4xl font-semibold">{currentTime}</p>
+            <p className="text-5xl font-semibold">{currentTime}</p>
         </div>
     );
 };
