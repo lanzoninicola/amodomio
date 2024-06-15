@@ -91,6 +91,23 @@ class MogoEntity {
             ? true
             : false,
         totDispatchTimeInMinutes,
+        // pizzaSizeAmount: o.Itens.map((i) => {
+        //   let mediumAmount = 0;
+        //   let largeAmount = 0;
+
+        //   if (i.IdProduto === 18) {
+        //     mediumAmount = mediumAmount++;
+        //   }
+
+        //   if (i.IdProduto === 19) {
+        //     largeAmount = largeAmount++;
+        //   }
+
+        //   return {
+        //     mediumAmount,
+        //     largeAmount,
+        //   };
+        // }),
       };
     });
   }
@@ -237,10 +254,6 @@ class MogoEntity {
   }
 
   calculateProductDispatchTime(item: MogoOrderItem) {
-    const idProdutoStr = String(item.IdProduto) as
-      | MogoPizzaFamiliaId
-      | MogoPizzaMediaId;
-
     const preparationTime = this.getProductPreparationTime(item);
 
     const cookingTime = this.getProductCookingTime(item);

@@ -292,7 +292,8 @@ function Header() {
 
 
             <div className="flex gap-4 justify-end items-center">
-                <h4 >Tempo maximo de entrega <span className="font-semibold text-lg">{maxDeliveryTimeSettings} minutos</span> </h4>
+                {/* <h4 >Tempo maximo de entrega <span className="font-semibold text-lg">{maxDeliveryTimeSettings} minutos</span> </h4> */}
+                <Clock />
                 <OrdersDeliveryTimeLeftDialogSettings showLabel={false} />
             </div>
         </div>
