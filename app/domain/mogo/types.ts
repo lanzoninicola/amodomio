@@ -42,6 +42,10 @@ export interface MogoBaseOrder extends MogoOrderHttpResponse {
   isDelivery: boolean;
   isTaglio: boolean;
   totDispatchTimeInMinutes: number;
+  // pizzaSizeAmount: {
+  //   medium: number;
+  //   large: number;
+  // };
 }
 
 export interface MogoOrderItem {
