@@ -6,6 +6,8 @@ import {
   Outlet,
   Scripts,
   ScrollRestoration,
+  isRouteErrorResponse,
+  useRouteError,
 } from "@remix-run/react";
 import { Toaster } from "./components/ui/toaster";
 import stylesheet from "~/tailwind.css";
@@ -127,22 +129,29 @@ export default function App() {
   );
 }
 
-// export function ErrorBoundary({ error }) {
-//   console.error(error);
-//   return (
-//     <html>
-//       <head>
-//         <title>Oh no!</title>
-//         <Meta />
-//         <Links />
-//       </head>
-//       <body>
-//         <div className="m-4 p-4 bg-red-300">
-//           <h1>Oh no!</h1>
-//           <p className="text-red-700">{error?.message || "Erro generico"}</p>
-//         </div>
-//         <Scripts />
-//       </body>
-//     </html>
-//   );
-// }
+
+
+
+export function ErrorBoundary() {
+  const error = useRouteError();
+
+  return (
+    <html>
+      <head>
+        <title>Oops!</title>
+        <Meta />
+        <Links />
+      </head>
+      <body>
+        <h1>
+          {isRouteErrorResponse(error)
+            ? `${error.status} ${error.statusText}`
+            : error instanceof Error
+              ? error.message
+              : "Unknown Error"}
+        </h1>
+        <Scripts />
+      </body>
+    </html>
+  );
+}
