@@ -114,6 +114,7 @@ model Category {
   updatedAt     DateTime      @updatedAt @map("updated_at")
   Products      Product[]
   SubCategories SubCategory[] @relation("CategorySubCategories")
+  MenuItems     MenuItem[]
 
   @@map("categories")
 }
@@ -127,4 +128,23 @@ model SubCategory {
   Product    Product[]
 
   @@map("sub_categories")
+}
+
+model MenuItem {
+  id          String          @id @default(uuid())
+  name        String
+  description String
+  ingredients String
+  categoryId  String          @map("category_id")
+  Category    Category        @relation(fields: [categoryId], references: [id])
+  prices      MenuItemPrice[]
+  imageBase64 String
+}
+
+model MenuItemPrice {
+  id         String    @id @default(uuid())
+  MenuItem   MenuItem? @relation(fields: [menuItemId], references: [id])
+  menuItemId String?
+  label      String
+  amount     Float
 }

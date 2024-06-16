@@ -12,6 +12,7 @@ interface SubmitButtonProps extends ButtonProps {
     disableLoadingAnimation?: boolean,
     onlyIcon?: boolean
     className?: string
+    labelClassName?: string
     size?: "sm" | "lg" | "default" | null | undefined,
     icon?: JSX.Element
 }
@@ -25,6 +26,7 @@ export default function SubmitButton({
     className,
     size = "default",
     icon,
+    labelClassName,
     ...props
 }: SubmitButtonProps) {
 
@@ -56,7 +58,8 @@ export default function SubmitButton({
                     cn(
                         size === "sm" && "text-sm",
                         size === "lg" && "text-lg",
-                        size === "default" && "text-md"
+                        size === "default" && "text-md",
+                        labelClassName
                     )
                 }>
                     {text}

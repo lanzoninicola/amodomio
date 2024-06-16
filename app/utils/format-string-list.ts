@@ -11,11 +11,11 @@
 export default function formatStringList(
   strings: string[] | undefined,
   options?: { firstLetterCapitalized: true }
-): string[] {
+): string {
   if (!strings) return "";
   if (strings.length === 0) return "";
 
-  return strings.map((str) => {
+  const nextStrings = strings.map((str) => {
     const trimmedStr = str.trim();
 
     if (options?.firstLetterCapitalized === true) {
@@ -26,4 +26,5 @@ export default function formatStringList(
 
     return trimmedStr;
   });
+  return nextStrings.join(", ");
 }
