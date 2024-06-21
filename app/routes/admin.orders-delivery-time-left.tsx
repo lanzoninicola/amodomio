@@ -184,6 +184,8 @@ export default function OrdersDeliveryTimeLeft() {
 
     const ordersDisplayed: MogoOrderWithDiffTime[] = []
 
+    console.log({ orders })
+
 
     return (
         <div className="flex flex-col gap-4 px-6 pt-16 md:pt-0 min-h-screen relative">
