@@ -3,6 +3,7 @@ import {
   MogoBaseOrder,
   MogoHttpClientInterface,
   MogoOrderHttpResponse,
+  MogoOrderItem,
   MogoOrderWithDiffTime,
 } from "./types";
 import MogoHttpClient from "./mogo-http-client.server";
@@ -22,10 +23,34 @@ interface MogoEntityProps {
   serverTimezoneOffset: number;
 }
 
+export type MogoPizzaFamiliaId = "19";
+export type MogoPizzaMediaId = "18";
+
+export type PreparationAndCookingTimeConfig = {
+  [key in MogoPizzaFamiliaId | MogoPizzaMediaId]: {
+    preparationTime: number;
+    cookingTime: number;
+  };
+};
+
 class MogoEntity {
   httpClient: MogoHttpClientInterface;
   settings: SettingEntityInterface;
   serverTimezoneOffset: number;
+
+  // Define preparation times for each product
+  timeConfig: PreparationAndCookingTimeConfig = {
+    // pizza familia
+    "19": {
+      preparationTime: 10,
+      cookingTime: 7,
+    },
+    // pizza media
+    "18": {
+      preparationTime: 4,
+      cookingTime: 4,
+    },
+  };
 
   constructor({ httpClient, settings, serverTimezoneOffset }: MogoEntityProps) {
     this.httpClient = httpClient;
@@ -45,13 +70,44 @@ class MogoEntity {
     }
 
     return ordersRes.map((o: MogoOrderHttpResponse) => {
+      let totDispatchTimeInMinutes: number = 0;
+
       return {
         ...o,
+        Itens: o.Itens.map((i) => {
+          const dispatchTime = this.calculateProductDispatchTime(i);
+          totDispatchTimeInMinutes = totDispatchTimeInMinutes + dispatchTime;
+
+          return {
+            ...i,
+            preparationTime: this.getProductPreparationTime(i),
+            cookingTime: this.getProductCookingTime(i),
+            dispatchTime,
+          };
+        }),
         isDelivery: o.Bairro !== "" ? true : false,
         isTaglio:
           o.Itens.filter((i) => i.Descricao.includes("Taglio")).length > 0
             ? true
             : false,
+        totDispatchTimeInMinutes,
+        // pizzaSizeAmount: o.Itens.map((i) => {
+        //   let mediumAmount = 0;
+        //   let largeAmount = 0;
+
+        //   if (i.IdProduto === 18) {
+        //     mediumAmount = mediumAmount++;
+        //   }
+
+        //   if (i.IdProduto === 19) {
+        //     largeAmount = largeAmount++;
+        //   }
+
+        //   return {
+        //     mediumAmount,
+        //     largeAmount,
+        //   };
+        // }),
       };
     });
   }
@@ -195,6 +251,30 @@ class MogoEntity {
       Number(settings.maxCounterTimeInMinutes) || 0,
       "m"
     );
+  }
+
+  calculateProductDispatchTime(item: MogoOrderItem) {
+    const preparationTime = this.getProductPreparationTime(item);
+
+    const cookingTime = this.getProductCookingTime(item);
+
+    return preparationTime + cookingTime;
+  }
+
+  getProductPreparationTime(item: MogoOrderItem) {
+    const idProdutoStr = String(item.IdProduto) as
+      | MogoPizzaFamiliaId
+      | MogoPizzaMediaId;
+
+    return this.timeConfig[idProdutoStr]?.preparationTime || 0;
+  }
+
+  getProductCookingTime(item: MogoOrderItem) {
+    const idProdutoStr = String(item.IdProduto) as
+      | MogoPizzaFamiliaId
+      | MogoPizzaMediaId;
+
+    return this.timeConfig[idProdutoStr]?.cookingTime || 0;
   }
 
   private _createDayjsObject(mogoDate: string, mogoTime: string) {

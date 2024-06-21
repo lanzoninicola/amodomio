@@ -2,10 +2,25 @@
 import { Link } from "@remix-run/react";
 import { Globe, Shield } from "lucide-react";
 import { WebsiteNavigation } from "../mobile-nav/mobile-nav";
+import { cn } from "~/lib/utils";
 
-export function AdminHeader() {
+
+interface AdminHeaderProps {
+    urlSegment?: string
+}
+
+
+export function AdminHeader({ urlSegment }: AdminHeaderProps) {
+
+
     return (
-        <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <header className={
+            cn(
+                "sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60",
+                urlSegment === "orders-delivery-time-left" && "hidden"
+
+            )
+        }>
             <div className="container flex h-14 max-w-screen-2xl items-center">
                 <WebsiteNavigation />
                 <div className="flex flex-1 items-center justify-between space-x-2 md:justify-end">

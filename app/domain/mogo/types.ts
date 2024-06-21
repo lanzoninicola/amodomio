@@ -3,20 +3,7 @@ import dayjs from "dayjs";
 export interface MogoOrderHttpResponse {
   Id: number;
   NumeroPedido: string;
-  Itens: {
-    IdProduto: number;
-    IdItemPedido: number;
-    Descricao: string;
-    Observacao: string | null;
-    Quantidade: number;
-    ValorUnitario: number;
-    Adicionais: any[]; // Pode ser um array de objetos com propriedades específicas
-    Sabores: {
-      Descricao: string;
-      Quantidade: number;
-      Valor: number;
-    }[];
-  }[];
+  Itens: MogoOrderItem[];
   SubTotal: number;
   TaxaEntrega: number;
   DataPedido: string;
@@ -54,6 +41,26 @@ export interface MogoOrderHttpResponse {
 export interface MogoBaseOrder extends MogoOrderHttpResponse {
   isDelivery: boolean;
   isTaglio: boolean;
+  totDispatchTimeInMinutes: number;
+  // pizzaSizeAmount: {
+  //   medium: number;
+  //   large: number;
+  // };
+}
+
+export interface MogoOrderItem {
+  IdProduto: number;
+  IdItemPedido: number;
+  Descricao: string;
+  Observacao: string | null;
+  Quantidade: number;
+  ValorUnitario: number;
+  Adicionais: any[]; // Pode ser um array de objetos com propriedades específicas
+  Sabores: {
+    Descricao: string;
+    Quantidade: number;
+    Valor: number;
+  }[];
 }
 
 export interface MogoOrderWithDiffTime extends MogoBaseOrder {

@@ -27,6 +27,11 @@ class MenuItemEntity extends BaseEntity<MenuItem> {
     return await super.save(menuItem);
   }
 
+  async delete(id: MenuItem["id"]): Promise<void> {
+    if (!id) return;
+    await this._delete(id);
+  }
+
   async resetSortOrder(): Promise<void> {
     const all = await MenuItemModel.whereCompound([
       {
@@ -196,6 +201,26 @@ class MenuItemEntity extends BaseEntity<MenuItem> {
   }
 }
 
+function mapPriceLabel(label: string): string {
+  if (label === "media") {
+    return "Média";
+  }
+
+  if (label === "familia") {
+    return "Família";
+  }
+
+  if (label === "fatia") {
+    return "Fatía";
+  }
+
+  if (label === "individual") {
+    return "Individual";
+  }
+
+  return "";
+}
+
 const menuEntity = new MenuItemEntity(MenuItemModel);
 
-export { menuEntity };
+export { menuEntity, mapPriceLabel };

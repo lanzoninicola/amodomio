@@ -1,10 +1,11 @@
 import { LoaderArgs } from "@remix-run/node";
 import { Form, Link, useLoaderData, useNavigation, useSearchParams } from "@remix-run/react";
 import dayjs from "dayjs";
+import { loadBundle } from "firebase/firestore";
 import { Settings } from "lucide-react";
 import { useCallback, useEffect, useRef } from "react";
 import KanbanCol from "~/components/kanban-col/kanban-col";
-import KanbanOrderCard, { DelaySeverity } from "~/components/kanban-order-card/kanban-order-card";
+import KanbanOrderCardLargeScreen from "~/components/kanban-order-card/kanban-order-card-large-screen";
 import Clock from "~/components/primitives/clock/clock";
 import SubmitButton from "~/components/primitives/submit-button/submit-button";
 
@@ -14,6 +15,7 @@ import { Input } from "~/components/ui/input";
 import { Separator } from "~/components/ui/separator";
 import mogoEntity from "~/domain/mogo/mogo.entity.server";
 import { MogoOrderWithDiffTime } from "~/domain/mogo/types";
+import OrdersDeliveryTimeLeftDialogSettings from "~/domain/order-delivery-time-left/components/order-delivery-time-left-dialog-settings/order-delivery-time-left-dialog-settings";
 import { settingEntity } from "~/domain/setting/setting.entity.server";
 import { Setting } from "~/domain/setting/setting.model.server";
 import useFormResponse from "~/hooks/useFormResponse";
@@ -79,6 +81,7 @@ export async function loader({ request }: LoaderArgs) {
             minTime: minCounterTimeSettings?.value || 0,
             maxTime: maxCounterTimeSettings?.value || 0,
         }
+
     })
 
 
@@ -158,13 +161,15 @@ interface FormResponseData {
     lastRequestTime: string
 }
 
+
 export default function OrdersDeliveryTimeLeft() {
 
     const loaderData = useLoaderData<typeof loader>()
     const status = loaderData?.status
     const message = loaderData?.message
 
-    if (status === 500) {
+
+    if (status >= 400) {
         return (
             <div className="font-semibold text-red-500 text-center mt-32">
                 Erro: {message}
@@ -174,56 +179,108 @@ export default function OrdersDeliveryTimeLeft() {
 
     let orders: MogoOrderWithDiffTime[] = loaderData?.payload?.orders || []
 
+
     const arrayMinutes = useCallback(() => createDecreasingArray(90, 30), [])
-    const ordersDeliveryTimeExpired = orders.filter(order => order?.diffDeliveryDateTimeToNow.minutes < 0) || []
+
+    const ordersDisplayed: MogoOrderWithDiffTime[] = []
+
 
     return (
-        <div className="flex flex-col gap-4 px-6 pt-16 min-h-screen">
+        <div className="flex flex-col gap-4 px-6 pt-16 md:pt-0 min-h-screen relative">
             <Header />
-            <div className="grid grid-cols-5 gap-x-0 h-full">
+            <div className="grid grid-cols-4 gap-x-0 h-full">
                 {
                     arrayMinutes().map((step, index) => {
 
-                        const { min, max } = step
+                        const { min, max, isFirstStep } = step
 
                         const ordersFiltered = orders.filter(order => {
+
                             const deliveryTimeLeftMinutes = order?.diffDeliveryDateTimeToNow.minutes
+
+                            if (isFirstStep === true) {
+                                return deliveryTimeLeftMinutes >= min
+                            }
+
                             return (deliveryTimeLeftMinutes <= max && deliveryTimeLeftMinutes >= min)
                         })
+
+                        ordersDisplayed.push(...ordersFiltered)
 
                         return (
                             <KanbanCol
                                 key={index}
                                 severity={index + 1}
                                 title={max === 0 ? "Da entregar" : `Menos o igual a ${max}'`}
-                                description={`Previsão de entrega em ${max} minutos`}
+                                description={max === 0 ? "Da entregar" : `Previsão de entrega em ${max} minutos`}
                                 itemsNumber={ordersFiltered.length}
                             >
                                 {ordersFiltered.map((o, index) => {
                                     return (
-                                        <KanbanOrderCard key={o.NumeroPedido} order={o} orderTimeSeverity={index + 1 as DelaySeverity} />
+                                        <KanbanOrderCardLargeScreen key={o.NumeroPedido} order={o} orderTimeSeverity={5} />
                                     )
                                 })}
                             </KanbanCol>
                         )
                     })
                 }
-                <KanbanCol
-                    key={999999}
-                    severity={5}
-                    title={`Limite Superado`}
-                    description={`Pedidos que foi superado limite de entrega`}
-                    itemsNumber={ordersDeliveryTimeExpired.length}
-                >
-                    {ordersDeliveryTimeExpired.map((o, index) => {
-                        return (
-                            <KanbanOrderCard key={o.NumeroPedido} order={o} orderTimeSeverity={5} showDeliveryTimeExpectedLabel={false} />
-                        )
-                    })}
-                </KanbanCol>
+
 
             </div>
+            <AlertsIngredients orders={ordersDisplayed} />
         </div >
+    )
+}
+
+function AlertsIngredients({ orders }: { orders: MogoOrderWithDiffTime[] }) {
+
+    const ordersWithBatataAoForno = orders.filter(o => o.Itens.some(i => i.Sabores.some(s => s.Descricao === "Bacon e Batata ao Forno")))
+    const ordersWithBatataFrita = orders.filter(o => o.Itens.some(i => i.Sabores.some(s => s.Descricao === "Calabresa e Batata Frita")))
+    const ordersWithAbobrinha = orders.filter(o => o.Itens.some(i => i.Sabores.some(s => (s.Descricao === "Delicata" || s.Descricao === "Delicatissima" || s.Descricao === "Ortolana"))))
+    const ordersWithBeringela = orders.filter(o => o.Itens.some(i => i.Sabores.some(s => s.Descricao === "Siciliana")))
+
+    const AlertCardContent = ({ order }: { order: MogoOrderWithDiffTime }) => {
+        const orderTime = order.HoraPedido || "Não definido"
+
+        const [orderHH, orderMin] = orderTime.split(":")
+
+        return (
+            <>
+                <span className="font-semibold text-lg">{order.NumeroPedido}</span>
+                <span className="font-semibold text-lg">{`${orderHH}:${orderMin}`}</span>
+            </>
+        )
+    }
+
+    const AlertCard = ({ title, payload }: { title: string, payload: MogoOrderWithDiffTime[] }) => {
+        return (
+            <div className="flex flex-col items-start gap-2 rounded-lg border px-4 py-2 text-left text-sm transition-all hover:bg-accent bg-orange-300">
+                <h4 className="text-2xl font-semibold tracking-tight">{`${title} (${payload.length})`}</h4>
+                <div className="grid grid-cols-2 gap-x-6">
+                    <span className="text-[10px]">Pedido numero</span>
+                    <span className="text-[10px]">Hórario pedido</span>
+                    {payload.map(o => <AlertCardContent key={o.Id} order={o} />)}
+                </div>
+
+            </div>
+        )
+
+    }
+
+    return (
+        <div className="absolute bottom-[70px] left-0 right-0 backdrop-blur-md">
+            <div className="w-full h-full px-8 py-4 flex gap-4">
+                {ordersWithBatataAoForno.length > 0 && <AlertCard title="Batatas ao Forno" payload={ordersWithBatataAoForno} />}
+
+                {ordersWithBatataFrita.length > 0 && <AlertCard title="Batatas Frita" payload={ordersWithBatataFrita} />}
+
+                {ordersWithAbobrinha.length > 0 && <AlertCard title="Abobrinha ao Forno" payload={ordersWithAbobrinha} />}
+
+                {ordersWithBeringela.length > 0 && <AlertCard title="Beringela ao Forno" payload={ordersWithBeringela} />}
+
+            </div>
+
+        </div>
     )
 }
 
@@ -233,15 +290,12 @@ function Header() {
 
     let orders: MogoOrderWithDiffTime[] = loaderData?.payload?.orders || []
     let lastRequestTime: string = loaderData?.payload?.lastRequestTime || null
-
-    let ordersDeliveryAmount = orders.filter(o => o.isDelivery === true).length
-    let ordersCounterAmount = orders.filter(o => o.isDelivery === false).length
+    const maxDeliveryTimeSettings = loaderData?.payload?.deliveryTimeSettings?.maxTime
 
     const navigation = useNavigation()
 
     const formResponse = useFormResponse()
     const formData = formResponse.data as unknown as FormResponseData
-
     if (Array.isArray(formData?.orders) === true) {
         orders = formData?.orders || []
     }
@@ -250,24 +304,24 @@ function Header() {
         lastRequestTime = formData?.lastRequestTime
     }
 
+    /** start - refresh mechanism */
     const refreshSubmitButton = useRef<HTMLButtonElement | null>(null);
-
     useEffect(() => {
         const interval = setInterval(() => {
             // Simulate button click
             if (refreshSubmitButton.current) {
                 refreshSubmitButton.current.click();
             }
-        }, 300_000); // Trigger click every 60 seconds (5 minute)
+        }, 180_000); // Trigger click every 60 seconds (3 minutes)
 
         return () => clearInterval(interval); // Cleanup the interval on component unmount
     }, []);
+    /** end - refresh mechanism */
 
-
-    const [searchParams, setSearchParams] = useSearchParams()
+    const totDispatchTime = orders.map(o => o.totDispatchTimeInMinutes).reduce((a, b) => a + b, 0)
 
     return (
-        <div className="grid grid-cols-3 w-full">
+        <div className="grid grid-cols-3 w-full items-center">
             <Form method="post">
                 <div className="flex gap-2 items-center">
                     <Button type="submit" className="text-2xl"
@@ -285,44 +339,20 @@ function Header() {
                 </div>
 
             </Form>
-            <div className="flex justify-center gap-4">
-                <Link to="?filter=all">
-                    <div className={
-                        cn(
-                            "flex gap-2 items-center shadow-sm border rounded-lg px-4 py-1",
-                            searchParams.get("filter") === "all" && "border-black"
-                        )
-                    }>
-                        <span className="text-sm">Todos:</span>
-                        <span className="text-lg font-mono font-semibold">{orders.length || 0}</span>
-                    </div>
-                </Link>
-                <Link to="?filter=only-delivery">
-                    <div className={
-                        cn(
-                            "flex gap-2 items-center shadow-sm border rounded-lg px-4 py-1",
-                            searchParams.get("filter") === "only-delivery" && "border-black"
-                        )
-                    }>
-                        <span className="text-sm">Delivery:</span>
-                        <span className="text-lg font-mono font-semibold">{ordersDeliveryAmount}</span>
-                    </div>
-                </Link>
-                <Link to="?filter=only-counter">
-                    <div className={
-                        cn(
-                            "flex gap-2 items-center shadow-sm border rounded-lg px-4 py-1",
-                            searchParams.get("filter") === "only-counter" && "border-black"
-                        )
-                    }>
-                        <span className="text-sm">Balcão:</span>
-                        <span className="text-lg font-mono font-semibold">{ordersCounterAmount}</span>
-                    </div>
-                </Link>
+            <div className="flex gap-4 items-center justify-center">
+                <div className="flex flex-col">
+                    <span>Hora do último despacho:</span>
+                    <span className="text-xs">totDispatchTime: {totDispatchTime}</span>
+                </div>
+                <Clock minutesToAdd={totDispatchTime} highContrast={true} showSeconds={false} />
             </div>
-            <div className="flex gap-4 justify-end">
+
+
+
+            <div className="flex gap-4 justify-end items-center">
+                {/* <h4 >Tempo maximo de entrega <span className="font-semibold text-lg">{maxDeliveryTimeSettings} minutos</span> </h4> */}
                 <Clock />
-                <OrdersTimelineSegmentationSettings showLabel={false} />
+                <OrdersDeliveryTimeLeftDialogSettings showLabel={false} />
             </div>
         </div>
     )
@@ -330,81 +360,55 @@ function Header() {
 
 
 
-interface OrdersTimelineSegmentationSettingsProps {
-    showLabel?: boolean
-}
-
-
-export function OrdersTimelineSegmentationSettings({ showLabel = true }: OrdersTimelineSegmentationSettingsProps) {
-
+function Filters() {
     const loaderData = useLoaderData<typeof loader>()
-    const deliveryTimeSettings = loaderData?.payload?.deliveryTimeSettings
-    const counterTimeSettings = loaderData?.payload?.counterTimeSettings
-    const locale = loaderData?.payload?.int.locale
-    const timezone = loaderData?.payload?.int.timezone
+
+    let orders: MogoOrderWithDiffTime[] = loaderData?.payload?.orders || []
+    let ordersDeliveryAmount = orders.filter(o => o.isDelivery === true).length
+    let ordersCounterAmount = orders.filter(o => o.isDelivery === false).length
+
+    const [searchParams, setSearchParams] = useSearchParams()
 
     return (
-        <Dialog>
-            <DialogTrigger asChild>
-                <Button variant="ghost">
-                    <Settings />
-                    {showLabel && <span className="ml-2">Configuraçoes</span>}
-                </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
-                <DialogHeader>
-                    <DialogTitle>Configurações</DialogTitle>
-                    <DialogDescription>
-                        <div className="flex flex-col">
-                            <span>Locale: {locale}</span>
-                            <span>Timezone: {timezone}</span>
-                        </div>
 
-                    </DialogDescription>
-                </DialogHeader>
+        <div className="flex justify-center gap-4">
+            <Link to="?filter=all">
+                <div className={
+                    cn(
+                        "flex gap-2 items-center shadow-sm border rounded-lg px-4 py-1",
+                        searchParams.get("filter") === "all" && "border-black"
+                    )
+                }>
+                    <span className="text-sm">Todos:</span>
+                    <span className="text-lg font-mono font-semibold">{orders.length || 0}</span>
+                </div>
+            </Link>
+            <Link to="?filter=only-delivery">
+                <div className={
+                    cn(
+                        "flex gap-2 items-center shadow-sm border rounded-lg px-4 py-1",
+                        searchParams.get("filter") === "only-delivery" && "border-black"
+                    )
+                }>
+                    <span className="text-sm">Delivery:</span>
+                    <span className="text-lg font-mono font-semibold">{ordersDeliveryAmount}</span>
+                </div>
+            </Link>
+            <Link to="?filter=only-counter">
+                <div className={
+                    cn(
+                        "flex gap-2 items-center shadow-sm border rounded-lg px-4 py-1",
+                        searchParams.get("filter") === "only-counter" && "border-black"
+                    )
+                }>
+                    <span className="text-sm">Balcão:</span>
+                    <span className="text-lg font-mono font-semibold">{ordersCounterAmount}</span>
+                </div>
+            </Link>
+        </div>
 
-                <Form method="post" className="flex flex-col gap-4 mt-2">
-                    <div className="flex flex-col gap-2">
-                        <h3 className="font-semibold">Retiro no balcão (minutos)</h3>
-                        <input type="hidden" name="context" value="order-timeline-segmentation-delivery-time" />
-                        <div className="flex flex-col gap-2">
-                            <div className="flex gap-4 items-center justify-between">
-                                <span>Tempo minimo</span>
-                                <Input type="text" id="minTimeCounterMinutes" name="minTimeCounterMinutes" maxLength={2} className="w-[72px] bg-white"
-                                    defaultValue={counterTimeSettings?.minTime || 0}
-                                />
-                            </div>
-                            <div className="flex gap-4 items-center justify-between">
-                                <span>Tempo maximo</span>
-                                <Input type="text" id="maxTimeCounterMinutes" name="maxTimeCounterMinutes" maxLength={2} className="w-[72px] bg-white"
-                                    defaultValue={counterTimeSettings?.maxTime || 0}
-                                />
-                            </div>
-                        </div>
-                    </div>
-                    <div className="flex flex-col gap-2">
-                        <h3 className="font-semibold">Tempo de entrega (minutos)</h3>
-                        <input type="hidden" name="context" value="order-timeline-segmentation-delivery-time" />
-                        <div className="flex flex-col gap-2">
-                            <div className="flex gap-4 items-center justify-between">
-                                <span>Tempo minimo</span>
-                                <Input type="text" id="minTimeDeliveryMinutes" name="minTimeDeliveryMinutes" maxLength={2} className="w-[72px] bg-white"
-                                    defaultValue={deliveryTimeSettings?.minTime || 0}
-                                />
-                            </div>
-                            <div className="flex gap-4 items-center justify-between">
-                                <span>Tempo maximo</span>
-                                <Input type="text" id="maxTimeDeliveryMinutes" name="maxTimeDeliveryMinutes" maxLength={2} className="w-[72px] bg-white"
-                                    defaultValue={deliveryTimeSettings?.maxTime || 0}
-                                />
-                            </div>
-                        </div>
-                    </div>
-                    <div className="flex justify-end">
-                        <SubmitButton actionName="order-timeline-segmentation-settings-change" />
-                    </div>
-                </Form>
-            </DialogContent>
-        </Dialog>
     )
 }
+
+
+

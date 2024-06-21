@@ -15,13 +15,13 @@ class CategoryEntity extends BaseEntity<Category> {
   override async create(category: Category): Promise<Category> {
     this.validate(category);
 
-    const latest = await this.getLatest();
+    // const latest = await this.getLatest();
 
-    if (latest) {
-      category.sortOrder = (latest?.sortOrder || 0) + 1000;
-    } else {
-      category.sortOrder = 1000;
-    }
+    // if (latest) {
+    //   category.sortOrder = (latest?.sortOrder || 0) + 1000;
+    // } else {
+    //   category.sortOrder = 1000;
+    // }
 
     return await super.save(category);
   }
@@ -150,6 +150,10 @@ class CategoryEntity extends BaseEntity<Category> {
         value: true,
       },
     ]);
+
+    if (!defaultCategory) {
+      return null;
+    }
 
     return defaultCategory;
   }
