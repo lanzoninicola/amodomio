@@ -13,7 +13,7 @@ export default function MenuItemList({ items, action }: MenuItemListProps) {
     if (action === "menu-item-edit" || action === "menu-item-create") return null
 
     return (
-        <ul className="md:grid md:grid-cols-3 gap-4">
+        <ul className="flex flex-col">
             {
                 (!items || items.length === 0) ?
                     <NoRecordsFound text="Nenhum itens no menu" />
