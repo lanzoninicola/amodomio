@@ -182,8 +182,11 @@ export default function OrdersDeliveryTimeLeft() {
 
     const arrayMinutes = useCallback(() => createDecreasingArray(90, 30), [])
 
+    const ordersDisplayed: MogoOrderWithDiffTime[] = []
+
+
     return (
-        <div className="flex flex-col gap-4 px-6 pt-16 md:pt-0 min-h-screen">
+        <div className="flex flex-col gap-4 px-6 pt-16 md:pt-0 min-h-screen relative">
             <Header />
             <div className="grid grid-cols-4 gap-x-0 h-full">
                 {
@@ -201,6 +204,8 @@ export default function OrdersDeliveryTimeLeft() {
 
                             return (deliveryTimeLeftMinutes <= max && deliveryTimeLeftMinutes >= min)
                         })
+
+                        ordersDisplayed.push(...ordersFiltered)
 
                         return (
                             <KanbanCol
@@ -222,7 +227,60 @@ export default function OrdersDeliveryTimeLeft() {
 
 
             </div>
+            <AlertsIngredients orders={ordersDisplayed} />
         </div >
+    )
+}
+
+function AlertsIngredients({ orders }: { orders: MogoOrderWithDiffTime[] }) {
+
+    const ordersWithBatataAoForno = orders.filter(o => o.Itens.some(i => i.Sabores.some(s => s.Descricao === "Bacon e Batata ao Forno")))
+    const ordersWithBatataFrita = orders.filter(o => o.Itens.some(i => i.Sabores.some(s => s.Descricao === "Calabresa e Batata Frita")))
+    const ordersWithAbobrinha = orders.filter(o => o.Itens.some(i => i.Sabores.some(s => (s.Descricao === "Delicata" || s.Descricao === "Delicatissima" || s.Descricao === "Ortolana"))))
+    const ordersWithBeringela = orders.filter(o => o.Itens.some(i => i.Sabores.some(s => s.Descricao === "Siciliana")))
+
+    const AlertCardContent = ({ order }: { order: MogoOrderWithDiffTime }) => {
+        const orderTime = order.HoraPedido || "Não definido"
+
+        const [orderHH, orderMin] = orderTime.split(":")
+
+        return (
+            <>
+                <span className="font-semibold text-lg">{order.NumeroPedido}</span>
+                <span className="font-semibold text-lg">{`${orderHH}:${orderMin}`}</span>
+            </>
+        )
+    }
+
+    const AlertCard = ({ title, payload }: { title: string, payload: MogoOrderWithDiffTime[] }) => {
+        return (
+            <div className="flex flex-col items-start gap-2 rounded-lg border px-4 py-2 text-left text-sm transition-all hover:bg-accent bg-orange-300">
+                <h4 className="text-2xl font-semibold tracking-tight">{`${title} (${payload.length})`}</h4>
+                <div className="grid grid-cols-2 gap-x-6">
+                    <span className="text-[10px]">Pedido numero</span>
+                    <span className="text-[10px]">Hórario pedido</span>
+                    {payload.map(o => <AlertCardContent key={o.Id} order={o} />)}
+                </div>
+
+            </div>
+        )
+
+    }
+
+    return (
+        <div className="absolute bottom-[70px] left-0 right-0 backdrop-blur-md">
+            <div className="w-full h-full px-8 py-4 flex gap-4">
+                {ordersWithBatataAoForno.length > 0 && <AlertCard title="Batatas ao Forno" payload={ordersWithBatataAoForno} />}
+
+                {ordersWithBatataFrita.length > 0 && <AlertCard title="Batatas Frita" payload={ordersWithBatataFrita} />}
+
+                {ordersWithAbobrinha.length > 0 && <AlertCard title="Abobrinha ao Forno" payload={ordersWithAbobrinha} />}
+
+                {ordersWithBeringela.length > 0 && <AlertCard title="Beringela ao Forno" payload={ordersWithBeringela} />}
+
+            </div>
+
+        </div>
     )
 }
 
