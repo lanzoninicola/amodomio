@@ -1,12 +1,12 @@
 import NoRecordsFound from "~/components/primitives/no-records-found/no-records-found"
-import { MenuItem } from "~/domain/menu-item/menu-item.model.server"
-import { MenuItemActionSearchParam } from "~/routes/admin.cardapio._index"
+import { MenuItemActionSearchParam } from "~/routes/admin.gerenciamento.cardapio._index"
 import MenuItemCard from "../menu-item-card/menu-item-card"
 import { Separator } from "~/components/ui/separator"
+import { MenuItem } from "@prisma/client"
 
 interface MenuItemListProps {
     items: MenuItem[]
-    action: Partial<MenuItemActionSearchParam>
+    action?: Partial<MenuItemActionSearchParam>
 }
 
 export default function MenuItemList({ items, action }: MenuItemListProps) {

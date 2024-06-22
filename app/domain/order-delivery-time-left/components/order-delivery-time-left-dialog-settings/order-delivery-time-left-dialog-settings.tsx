@@ -2,7 +2,7 @@ import { Form, useLoaderData } from "@remix-run/react"
 import { Settings } from "lucide-react"
 import { Button } from "~/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "~/components/ui/dialog"
-import { loader } from "~/routes/admin.cardapio._index"
+import { loader } from "~/routes/admin.gerenciamento.cardapio._index"
 import OrdersDeliveryTimeLeftSettings from "../order-delivery-time-left-settings/order-delivery-time-left-settings"
 
 interface OrdersDeliveryTimeLeftDialogSettingsProps {

@@ -19,8 +19,8 @@ model Product {
   um                     String?                  @default("UN")
   categoryId             String?                  @map("category_id")
   subCategoryId          String?                  @map("sub_category_id")
-  createdAt              DateTime                 @default(now()) @map("created_at")
-  updatedAt              DateTime                 @updatedAt @map("updated_at")
+  createdAt              DateTime                 @map("created_at")
+  updatedAt              DateTime                 @default(now()) @updatedAt @map("updated_at")
   Category               Category?                @relation(fields: [categoryId], references: [id])
   SubCategory            SubCategory?             @relation(fields: [subCategoryId], references: [id])
   RecipesIngredientsLink RecipesIngredientsLink[]
@@ -41,8 +41,8 @@ model Recipe {
   hasVariations          Boolean                  @default(false) @map("has_variations")
   isVegetarian           Boolean                  @default(false) @map("is_vegetarian")
   isGlutenFree           Boolean                  @default(false) @map("is_gluten_free")
-  createdAt              DateTime                 @default(now()) @map("created_at")
-  updatedAt              DateTime                 @updatedAt @map("updated_at")
+  createdAt              DateTime                 @map("created_at")
+  updatedAt              DateTime                 @default(now()) @updatedAt @map("updated_at")
   ingredients            RecipesIngredient[]
   RecipeVariation        RecipeVariation[]
   RecipesIngredientsLink RecipesIngredientsLink[]
@@ -56,8 +56,8 @@ model RecipesIngredient {
   ingredientId String   @map("ingredient_id")
   um           String   @db.VarChar
   quantity     String   @db.VarChar
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  createdAt    DateTime @map("created_at")
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at")
 
   recipe     Recipe                   @relation(fields: [recipeId], references: [id])
   ingredient Ingredient               @relation(fields: [ingredientId], references: [id])
@@ -70,8 +70,8 @@ model Ingredient {
   id        String              @id @default(uuid())
   name      String              @db.VarChar
   um        String              @db.VarChar
-  createdAt DateTime            @default(now()) @map("created_at")
-  updatedAt DateTime            @updatedAt @map("updated_at")
+  createdAt DateTime            @map("created_at")
+  updatedAt DateTime            @default(now()) @updatedAt @map("updated_at")
   recipes   RecipesIngredient[]
 
   @@map("ingredients")
@@ -98,8 +98,8 @@ model RecipeVariation {
   description  String
   factorType   String   @map("factor_type")
   factorNumber Float    @map("factor_number")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  createdAt    DateTime @map("created_at")
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at")
   Recipe       Recipe   @relation(fields: [recipeId], references: [id])
 
   @@map("recipes_variations")
@@ -110,8 +110,8 @@ model Category {
   name          String
   sortOrder     Int           @map("sort_order")
   type          String
-  createdAt     DateTime      @default(now()) @map("created_at")
-  updatedAt     DateTime      @updatedAt @map("updated_at")
+  createdAt     DateTime      @map("created_at")
+  updatedAt     DateTime      @default(now()) @updatedAt @map("updated_at")
   Products      Product[]
   SubCategories SubCategory[] @relation("CategorySubCategories")
   MenuItems     MenuItem[]
@@ -122,8 +122,8 @@ model Category {
 model SubCategory {
   id         String     @id @default(uuid())
   name       String
-  createdAt  DateTime   @default(now()) @map("created_at")
-  updatedAt  DateTime   @updatedAt @map("updated_at")
+  createdAt  DateTime   @map("created_at")
+  updatedAt  DateTime   @default(now()) @updatedAt @map("updated_at")
   Categories Category[] @relation("CategorySubCategories")
   Product    Product[]
 
@@ -139,12 +139,21 @@ model MenuItem {
   Category    Category        @relation(fields: [categoryId], references: [id])
   prices      MenuItemPrice[]
   imageBase64 String
+  visible     Boolean
+  createdAt   DateTime        @map("created_at")
+  updatedAt   DateTime        @default(now()) @updatedAt @map("updated_at")
+
+  @@map("menu_item")
 }
 
 model MenuItemPrice {
   id         String    @id @default(uuid())
   MenuItem   MenuItem? @relation(fields: [menuItemId], references: [id])
-  menuItemId String?
+  menuItemId String?   @map("menu_item_id")
   label      String
   amount     Float
+  createdAt  DateTime  @map("created_at")
+  updatedAt  DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  @@map("menu_item_price")
 }

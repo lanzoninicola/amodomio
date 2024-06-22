@@ -9,11 +9,13 @@ export class MenuItemPrismaEntity {
   }
 
   async findAll(where?: Prisma.MenuItemWhereInput) {
-    if (!where) {
-      return await this.client.menuItem.findMany();
-    }
-
-    return await this.client.menuItem.findMany({ where });
+    return await this.client.menuItem.findMany({
+      where,
+      include: {
+        prices: true,
+        Category: true,
+      },
+    });
   }
 
   async findById(id: string) {

@@ -1,7 +1,7 @@
 import { useLoaderData } from "@remix-run/react"
 import SubmitButton from "~/components/primitives/submit-button/submit-button"
 import { Input } from "~/components/ui/input"
-import { loader } from "~/routes/admin.cardapio._index"
+import { loader } from "~/routes/admin.gerenciamento.cardapio._index"
 
 export default function OrdersDeliveryTimeLeftSettings() {
     const loaderData = useLoaderData<typeof loader>()
