@@ -236,7 +236,7 @@ function AlertsIngredients({ orders }: { orders: MogoOrderWithDiffTime[] }) {
 
     const ordersWithBatataAoForno = orders.filter(o => o.Itens.some(i => i.Sabores.some(s => s.Descricao === "Bacon e Batata ao Forno")))
     const ordersWithBatataFrita = orders.filter(o => o.Itens.some(i => i.Sabores.some(s => s.Descricao === "Calabresa e Batata Frita")))
-    const ordersWithAbobrinha = orders.filter(o => o.Itens.some(i => i.Sabores.some(s => (s.Descricao === "Delicata" || s.Descricao === "Delicatissima" || s.Descricao === "Ortolana"))))
+    const ordersWithAbobrinha = orders.filter(o => o.Itens.some(i => i.Sabores.some(s => (s.Descricao === "Delicata" || s.Descricao === "Delicatissima" || s.Descricao === "Ortolana" || s.Descricao === "Italia"))))
     const ordersWithBeringela = orders.filter(o => o.Itens.some(i => i.Sabores.some(s => s.Descricao === "Siciliana")))
 
     const AlertCardContent = ({ order }: { order: MogoOrderWithDiffTime }) => {
@@ -344,7 +344,7 @@ function Header() {
                     <span>Hora do último despacho:</span>
                     <span className="text-xs">totDispatchTime: {totDispatchTime}</span>
                 </div>
-                <Clock minutesToAdd={totDispatchTime} highContrast={true} showSeconds={false} />
+                <Clock minutesToAdd={totDispatchTime} highContrast={true} />
             </div>
 
 

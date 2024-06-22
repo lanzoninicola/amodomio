@@ -31,7 +31,7 @@ export const meta: V2_MetaFunction = () => {
 const numberOfPages = 10
 const cardapioArray = Array.from({ length: numberOfPages }, (_, index) => {
 
-    const prefix = "/images/cardapio-new/cardapio_pagina_"
+    const prefix = "/images/cardapio-new/cardapio_web_pagina_"
 
     return index <= 8 ? `${prefix}0${index + 1}.png` : `${prefix}${index + 1}.png`
 });
