@@ -1,4 +1,4 @@
-import { MenuItemPriceVariation } from "@prisma/client"
+import { MenuItem, MenuItemPriceVariation } from "@prisma/client"
 import { Separator } from "@radix-ui/react-separator"
 import { Form } from "@remix-run/react"
 import { Save } from "lucide-react"
@@ -8,16 +8,15 @@ import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import { MenuItemWithAssociations } from "~/domain/menu-item/menu-item.prisma.entity.server"
 import { cn } from "~/lib/utils"
-import { MenuItemPriceVariationSuggestion } from "../menu-item-form/menu-item-form"
 
 
 interface MenuItemPriceVariationsFormProps {
+    basePrice: MenuItem["basePriceAmount"]
     prices: MenuItemPriceVariation[]
-    suggestedPrice: MenuItemPriceVariationSuggestion | null
     action: "menu-item-create" | "menu-item-update"
 }
 
-export default function MenuItemPriceVariationsForm({ prices, action, suggestedPrice }: MenuItemPriceVariationsFormProps) {
+export default function MenuItemPriceVariationsForm({ prices, action, basePrice }: MenuItemPriceVariationsFormProps) {
 
     let pricesToRender: MenuItemPriceVariation[] = []
 
@@ -28,7 +27,7 @@ export default function MenuItemPriceVariationsForm({ prices, action, suggestedP
     }
 
 
-
+    const suggestedPrice = suggestPriceVariations(basePrice)
 
     return (
         <div className="md:grid md:grid-cols-4 w-full md:col-span-4 col-span-4">
@@ -131,4 +130,31 @@ function mapPriceVariationsLabel(label: string): string {
     }
 
     return "";
+}
+
+export type MenuItemPriceVariationSuggestion = Record<string, number>
+
+function suggestPriceVariations(priceRef: number): MenuItemPriceVariationSuggestion {
+    const priceRanges: Record<string, number[]> = {
+        '69.9': [69.90, 149.90],
+        '79.9': [79.90, 159.90,],
+        '89.9': [89.90, 179.90,],
+        '99.9': [99.90, 189.90,],
+        '119.9': [119.90, 219.90,],
+    }
+
+    const range = priceRanges[String(priceRef)]
+
+    const media = range ? range[0] : 0
+    const familia = range ? range[1] : 0
+    const individual = priceRef > 0 ? priceRef / 1.75 : 0
+    const fatia = priceRef > 0 ? familia / 8 : 0
+
+    return {
+        'media': media,
+        'familia': familia,
+        'individual': individual,
+        'fatia': fatia
+    }
+
 }

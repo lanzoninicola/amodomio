@@ -29,18 +29,7 @@ export default function MenuItemForm({ item, action, className }: MenuItemFormPr
 
     const category = categories.find(category => category.id === item?.categoryId)
 
-    const [suggestedPriceVariations, setSuggestedPriceVariations] = useState<MenuItemPriceVariationSuggestion | null>(null)
-
-
-    function onChangeBasePrice(e: React.ChangeEvent<HTMLInputElement>) {
-        const value = e.target.value
-
-        if (isNaN(Number(value))) return
-
-        const priceVariationsCalculate = suggestPriceVariations(Number(value))
-
-        setSuggestedPriceVariations(priceVariationsCalculate)
-    }
+    const [currentBasePrice, setCurrentBasePrice] = useState(0)
 
     return (
 
@@ -73,7 +62,12 @@ export default function MenuItemForm({ item, action, className }: MenuItemFormPr
                         <div className="grid grid-cols-4 items-center" >
                             <Label className="uppercase tracking-wider text-xs font-semibold col-span-1">Preço Base</Label>
                             <Input type="text" name="basePriceAmount"
-                                onChange={onChangeBasePrice}
+                                onChange={(e) => {
+                                    const value = e.target.value
+                                    if (isNaN(Number(value))) return
+
+                                    setCurrentBasePrice(Number(value))
+                                }}
                                 defaultValue={item?.basePriceAmount || "0"}
                                 className={
                                     cn(
@@ -126,7 +120,7 @@ export default function MenuItemForm({ item, action, className }: MenuItemFormPr
 
             <Separator className="my-4" />
 
-            <MenuItemPriceVariationsForm prices={item?.priceVariations || []} action={action} suggestedPrice={suggestedPriceVariations} />
+            <MenuItemPriceVariationsForm prices={item?.priceVariations || []} action={action} basePrice={currentBasePrice || 0} />
         </div>
 
     )
@@ -134,29 +128,3 @@ export default function MenuItemForm({ item, action, className }: MenuItemFormPr
 
 
 
-export type MenuItemPriceVariationSuggestion = Record<string, number>
-
-function suggestPriceVariations(priceRef: number): MenuItemPriceVariationSuggestion {
-    const priceRanges: Record<string, number[]> = {
-        '69.9': [69.90, 149.90],
-        '79.9': [79.90, 159.90,],
-        '89.9': [89.90, 179.90,],
-        '99.9': [99.90, 189.90,],
-        '119.9': [119.90, 219.90,],
-    }
-
-    const range = priceRanges[String(priceRef)]
-
-    const media = range ? range[0] : 0
-    const familia = range ? range[1] : 0
-    const individual = priceRef > 0 ? priceRef / 1.75 : 0
-    const fatia = priceRef > 0 ? familia / 8 : 0
-
-    return {
-        'media': media,
-        'familia': familia,
-        'individual': individual,
-        'fatia': fatia
-    }
-
-}
