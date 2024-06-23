@@ -5,10 +5,11 @@ import SortingOrderItems from "~/components/primitives/sorting-order-items/sorti
 import { Separator } from "~/components/ui/separator"
 import { loader } from "~/routes/admin.gerenciamento.cardapio._index"
 import MenuItemForm from "../menu-item-form/menu-item-form"
+import { MenuItemWithAssociations } from "~/domain/menu-item/menu-item.prisma.entity.server"
 
 
 interface MenuItemCardProps {
-    item: MenuItem
+    item: MenuItemWithAssociations
 }
 
 export default function MenuItemCard({ item }: MenuItemCardProps) {

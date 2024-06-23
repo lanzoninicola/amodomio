@@ -3,9 +3,10 @@ import { MenuItemActionSearchParam } from "~/routes/admin.gerenciamento.cardapio
 import MenuItemCard from "../menu-item-card/menu-item-card"
 import { Separator } from "~/components/ui/separator"
 import { MenuItem } from "@prisma/client"
+import { MenuItemWithAssociations } from "~/domain/menu-item/menu-item.prisma.entity.server"
 
 interface MenuItemListProps {
-    items: MenuItem[]
+    items: MenuItemWithAssociations[]
     action?: Partial<MenuItemActionSearchParam>
 }
 

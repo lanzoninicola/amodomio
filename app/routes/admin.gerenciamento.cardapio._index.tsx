@@ -9,9 +9,9 @@ import { badRequest, ok } from "~/utils/http-response.server";
 import trim from "~/utils/trim";
 import MenuItemForm from "~/domain/cardapio/components/menu-item-form/menu-item-form";
 import MenuItemList from "~/domain/cardapio/components/menu-item-list/menu-item-list";
-import { menuItemPrismaEntity } from "~/domain/menu-item/menu-item.prisma.entity.server";
+import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/menu-item/menu-item.prisma.entity.server";
 import tryit from "~/utils/try-it";
-import { MenuItem } from "@prisma/client";
+import { MenuItem, Prisma } from "@prisma/client";
 import { jsonParse } from "~/utils/json-helper";
 import { Separator } from "~/components/ui/separator";
 import { toast } from "~/components/ui/use-toast";
@@ -24,19 +24,16 @@ export const meta: V2_MetaFunction = () => {
         },
         {
             name: "title",
-            content: "Administração do cardápio",
+            content: "Cardápio - Gerençiamento",
         }
     ];
 };
 
-type MenuWithCreateDate = MenuItem & { createdAt: string }
 
 export async function loader({ request }: LoaderArgs) {
     const categories = await categoryPrismaEntity.findAll()
 
     const items = await menuItemPrismaEntity.findAll()
-
-    console.log({ items })
 
     return ok({ categories, items })
 
@@ -46,7 +43,6 @@ export async function action({ request }: LoaderArgs) {
 
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);
-
 
     console.log({ action: _action, values })
 
@@ -58,12 +54,13 @@ export async function action({ request }: LoaderArgs) {
             return badRequest("Categoria não seleçionada")
         }
 
-        const menuItem = {
+        const menuItem: Prisma.MenuItemCreateInput = {
             name: values.name as string,
             ingredients: values.ingredients as string,
             description: values?.description as string || "",
-            visible: values.visible === "on" ? true : false,
+            visible: values?.visible === "on" ? true : false,
             imageBase64: values.imageBase64 as string || "",
+            basePriceAmount: values?.basePriceAmount ? parseFloat(values.basePriceAmount as string) : 0,
             Category: {
                 connect: {
                     id: category.id
@@ -130,7 +127,7 @@ export type MenuItemActionSearchParam = "menu-item-create" | "menu-item-edit" | 
 export default function AdminCardapio() {
     const loaderData = useLoaderData<typeof loader>()
     const actionData = useActionData<typeof action>()
-    const items = loaderData.payload.items as MenuItem[]
+    const items = loaderData.payload.items as MenuItemWithAssociations[]
     const categories = loaderData.payload.categories as Category[]
 
     // const [searchParams, setSearchParams] = useSearchParams()
@@ -149,8 +146,8 @@ export default function AdminCardapio() {
     }
 
     return (
-        <Container>
-            <div className="left-0  w-full p-4 bg-muted z-10" >
+        <Container className="mb-24">
+            <div className="left-0 w-full p-4 bg-muted z-10" >
                 <div className="flex items-center justify-between mb-4">
                     <h1 className="font-bold text-xl">Cardapio</h1>
                 </div>
@@ -164,11 +161,9 @@ export default function AdminCardapio() {
             </div>
             <MenuItemForm action="menu-item-create" className="my-8 border rounded-xl p-4" />
             <Separator className="my-6" />
-            <div className="min-w-[350px]">
-                <div className="flex flex-col gap-4">
-                    {/* <MenuItemListStat items={items} /> */}
-                    <MenuItemList items={items} />
-                </div>
+            <div className="flex flex-col gap-4">
+                {/* <MenuItemListStat items={items} /> */}
+                <MenuItemList items={items} />
             </div>
 
         </Container>

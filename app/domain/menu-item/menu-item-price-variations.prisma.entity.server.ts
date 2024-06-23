@@ -1,25 +1,26 @@
 import { PrismaEntityProps } from "~/lib/prisma/types.server";
 import { MenuItemPrismaEntity } from "./menu-item.prisma.entity.server";
 import { prismaClient } from "~/lib/prisma/prisma-it.server";
+import { MenuItemPriceVariation } from "@prisma/client";
 
-export type MenuItemPriceHTMLSelectLabel =
+export type MenuItemPriceVariationLabel =
   | "media"
   | "familia"
   | "fatia"
   | "individual";
-export type MenuItemPriceHTMLSelectOption = {
-  label: MenuItemPriceHTMLSelectLabel;
+export type MenuItemPriceVariationsOptions = {
+  label: MenuItemPriceVariationLabel;
   value: string;
 };
 
-export class MenuItemPricesPrismaEntity {
+export class MenuItemPriceVariationsPrismaEntity {
   client;
   constructor({ client }: PrismaEntityProps) {
     this.client = client;
   }
 
   async findByItemId(id: string) {
-    return await this.client.menuItemPrice.findMany({
+    return await this.client.menuItemPriceVariation.findMany({
       where: { menuItemId: id },
     });
   }
@@ -32,29 +33,9 @@ export class MenuItemPricesPrismaEntity {
       { label: "individual", value: "Individual" },
     ];
   }
-
-  mapPriceLabel(label: string): string {
-    if (label === "media") {
-      return "Média";
-    }
-
-    if (label === "familia") {
-      return "Família";
-    }
-
-    if (label === "fatia") {
-      return "Fatía";
-    }
-
-    if (label === "individual") {
-      return "Individual";
-    }
-
-    return "";
-  }
 }
 
-const menuItemPricesEntity = new MenuItemPricesPrismaEntity({
+const menuItemPricesEntity = new MenuItemPriceVariationsPrismaEntity({
   client: prismaClient,
 });
 

@@ -1,6 +1,17 @@
-import { Prisma } from "@prisma/client";
+import {
+  Category,
+  MenuItem,
+  MenuItemPriceVariation,
+  Prisma,
+} from "@prisma/client";
 import { prismaClient } from "~/lib/prisma/prisma-it.server";
 import { PrismaEntityProps } from "~/lib/prisma/types.server";
+
+export interface MenuItemWithAssociations extends MenuItem {
+  priceVariations: MenuItemPriceVariation[];
+  categoryId: string;
+  Category: Category;
+}
 
 export class MenuItemPrismaEntity {
   client;
@@ -9,13 +20,17 @@ export class MenuItemPrismaEntity {
   }
 
   async findAll(where?: Prisma.MenuItemWhereInput) {
-    return await this.client.menuItem.findMany({
+    const records = await this.client.menuItem.findMany({
       where,
       include: {
-        prices: true,
+        priceVariations: true,
         Category: true,
       },
     });
+
+    console.log({ records }, { foo: records[0]?.Category });
+
+    return records;
   }
 
   async findById(id: string) {
