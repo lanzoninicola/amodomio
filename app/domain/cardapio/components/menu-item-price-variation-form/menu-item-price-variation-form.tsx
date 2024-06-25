@@ -44,18 +44,32 @@ export default function MenuItemPriceVariationForm({ action, price, basePrice }:
                     <div className="flex gap-2 items-center">
 
                         <Input type="text" name="amount"
-                            defaultValue={variationPrice.toFixed(2)}
+                            value={variationPrice.toFixed(2)}
                             className={
                                 cn(
                                     "text-xs md:text-sm text-center w-full py-2",
                                     action === "menu-item-create" && "border",
                                     action === "menu-item-update" && "p-0 border-none"
                                 )
-                            } />
+                            }
+
+                            onChange={(e) => {
+                                const value = e.target.value
+                                if (isNaN(Number(value))) return
+
+                                setVariationPrice(Number(value))
+                            }}
+                        />
 
                         <SaveItemButton actionName={'menu-item-price-variation-update'} labelClassName="text-xs" variant={"outline"} />
                     </div>
-                    <span className="text-xs text-muted-foreground">{`Sugerido: ${suggestedPrice.toFixed(2) || "0"}`}</span>
+                    <span className="text-xs text-muted-foreground hover:underline hover:cursor-pointer"
+                        onClick={() => {
+
+                            setVariationPrice(suggestedPrice)
+                            console.log("suggestion clicked", suggestedPrice, variationPrice)
+                        }}
+                    >{`Sugerido: ${suggestedPrice.toFixed(2) || "0"}`}</span>
                 </div>
             </div>
 
@@ -68,7 +82,7 @@ export default function MenuItemPriceVariationForm({ action, price, basePrice }:
 
 
 
-function mapPriceVariationsLabel(label: string): string {
+export function mapPriceVariationsLabel(label: string): string {
     if (label === "media") {
         return "Média";
     }

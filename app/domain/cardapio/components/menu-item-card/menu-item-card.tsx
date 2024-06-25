@@ -5,6 +5,8 @@ import SortingOrderItems from "~/components/primitives/sorting-order-items/sorti
 import MenuItemForm from "../menu-item-form/menu-item-form"
 import { MenuItemWithAssociations } from "~/domain/menu-item/menu-item.prisma.entity.server"
 import { AdminCardapioOutletContext } from "~/routes/admin.gerenciamento.cardapio"
+import MenuItemPriceVariationForm, { mapPriceVariationsLabel } from "../menu-item-price-variation-form/menu-item-price-variation-form"
+import { Switch } from "~/components/ui/switch"
 
 
 interface MenuItemCardProps {
@@ -26,25 +28,30 @@ export default function MenuItemCard({ item }: MenuItemCardProps) {
 
     return (
 
-        <div className={`border-2 border-muted rounded-lg p-4 flex flex-col gap-2`}>
-            <SortingOrderItems enabled={action === "menu-items-sortorder"} itemId={item.id} groupId={pizzaCategory?.id}>
+        <div className="flex flex-col gap-2 ">
 
-                <MenuItemForm item={item} action="menu-item-update" />
 
-                {missingInfo && item.visible === true && (
-                    <div className=" bg-orange-100 rounded-md py-2 px-4 mt-4">
-                        <div className="flex gap-2 items-center">
-                            <AlertCircle color="orange" size={16} />
-                            <div className="flex flex-col gap-1">
-                                {(item?.name === undefined || item.name === "") && <span className="text-xs font-semibold text-orange-500">Nome não cadastrado</span>}
-                                {/* {(item?.prices === undefined || item.prices.length === 0) && <span className="text-xs font-semibold text-orange-500">Preço não cadastrado</span>} */}
-                                {(item?.ingredients === undefined || item.ingredients.length === 0) && <span className="text-xs font-semibold text-orange-500">Ingredientes não cadastrados</span>}
+            <div className={`border-2 border-muted rounded-lg p-4 flex flex-col gap-2`}>
+                <SortingOrderItems enabled={action === "menu-items-sortorder"} itemId={item.id} groupId={pizzaCategory?.id}>
+
+
+                    <MenuItemForm item={item} action="menu-item-update" />
+
+                    {missingInfo && item.visible === true && (
+                        <div className=" bg-orange-100 rounded-md py-2 px-4 mt-4">
+                            <div className="flex gap-2 items-center">
+                                <AlertCircle color="orange" size={16} />
+                                <div className="flex flex-col gap-1">
+                                    {(item?.name === undefined || item.name === "") && <span className="text-xs font-semibold text-orange-500">Nome não cadastrado</span>}
+                                    {/* {(item?.prices === undefined || item.prices.length === 0) && <span className="text-xs font-semibold text-orange-500">Preço não cadastrado</span>} */}
+                                    {(item?.ingredients === undefined || item.ingredients.length === 0) && <span className="text-xs font-semibold text-orange-500">Ingredientes não cadastrados</span>}
+                                </div>
+
                             </div>
-
                         </div>
-                    </div>
-                )}
-            </SortingOrderItems>
+                    )}
+                </SortingOrderItems>
+            </div>
         </div>
 
     )
