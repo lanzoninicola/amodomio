@@ -6,6 +6,8 @@ import {
 } from "@prisma/client";
 import { prismaClient } from "~/lib/prisma/prisma-it.server";
 import { PrismaEntityProps } from "~/lib/prisma/types.server";
+import { Menu } from "lucide-react";
+import { MenuItemPriceVariationPrismaEntity } from "./menu-item-price-variations.prisma.entity.server";
 
 export interface MenuItemWithAssociations extends MenuItem {
   priceVariations: MenuItemPriceVariation[];
@@ -28,8 +30,6 @@ export class MenuItemPrismaEntity {
       },
     });
 
-    console.log({ records }, { foo: records[0]?.Category });
-
     return records;
   }
 
@@ -38,10 +38,20 @@ export class MenuItemPrismaEntity {
   }
 
   async create(data: Prisma.MenuItemCreateInput) {
+    data.priceVariations = {
+      createMany: {
+        data: MenuItemPriceVariationPrismaEntity.getInitialPriceVariations(),
+      },
+    };
+
     return await this.client.menuItem.create({ data });
   }
 
   async update(id: string, data: Prisma.MenuItemUpdateInput) {
+    if (!data.updatedAt) {
+      data.updatedAt = new Date().toISOString();
+    }
+
     return await this.client.menuItem.update({ where: { id }, data });
   }
 

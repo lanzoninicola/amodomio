@@ -1,7 +1,7 @@
 import { PrismaEntityProps } from "~/lib/prisma/types.server";
 import { MenuItemPrismaEntity } from "./menu-item.prisma.entity.server";
 import { prismaClient } from "~/lib/prisma/prisma-it.server";
-import { MenuItemPriceVariation } from "@prisma/client";
+import { MenuItemPriceVariation, Prisma } from "@prisma/client";
 
 export type MenuItemPriceVariationLabel =
   | "media"
@@ -13,10 +13,26 @@ export type MenuItemPriceVariationsOptions = {
   value: string;
 };
 
-export class MenuItemPriceVariationsPrismaEntity {
+export type PartialMenuItemPriceVariation = Omit<
+  MenuItemPriceVariation,
+  "createdAt" | "updatedAt" | "menuItemId"
+>;
+
+export class MenuItemPriceVariationPrismaEntity {
   client;
   constructor({ client }: PrismaEntityProps) {
     this.client = client;
+  }
+
+  async update(id: string, data: Prisma.MenuItemPriceVariationUpdateInput) {
+    if (!data.updatedAt) {
+      data.updatedAt = new Date().toISOString();
+    }
+
+    return await this.client.menuItemPriceVariation.update({
+      where: { id },
+      data,
+    });
   }
 
   async findByItemId(id: string) {
@@ -27,16 +43,28 @@ export class MenuItemPriceVariationsPrismaEntity {
 
   static getPricesOptions() {
     return [
-      { label: "media", value: "Média" },
-      { label: "familia", value: "Família" },
       { label: "fatia", value: "Fatía" },
       { label: "individual", value: "Individual" },
+      { label: "media", value: "Média" },
+      { label: "familia", value: "Família" },
     ];
+  }
+
+  static getInitialPriceVariations() {
+    const initialPriceVariations =
+      MenuItemPriceVariationPrismaEntity.getPricesOptions();
+
+    return initialPriceVariations.map((p) => ({
+      amount: 0,
+      label: p.label,
+      discountPercentage: 0,
+      createdAt: new Date().toISOString(),
+    }));
   }
 }
 
-const menuItemPricesEntity = new MenuItemPriceVariationsPrismaEntity({
+const menuItemPriceVariationsEntity = new MenuItemPriceVariationPrismaEntity({
   client: prismaClient,
 });
 
-export { menuItemPricesEntity };
+export { menuItemPriceVariationsEntity };

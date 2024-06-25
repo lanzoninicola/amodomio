@@ -11,8 +11,6 @@ interface MenuItemListProps {
 }
 
 export default function MenuItemList({ items, action }: MenuItemListProps) {
-    if (action === "menu-item-edit" || action === "menu-item-create") return null
-
     return (
         <ul className="flex flex-col">
             {

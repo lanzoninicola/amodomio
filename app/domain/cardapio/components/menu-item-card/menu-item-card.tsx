@@ -1,11 +1,10 @@
-import { Category, MenuItem } from "@prisma/client"
-import { useLoaderData, useSearchParams } from "@remix-run/react"
+import { Category } from "@prisma/client"
+import { useOutletContext, useSearchParams } from "@remix-run/react"
 import { AlertCircle } from "lucide-react"
 import SortingOrderItems from "~/components/primitives/sorting-order-items/sorting-order-items"
-import { Separator } from "~/components/ui/separator"
-import { loader } from "~/routes/admin.gerenciamento.cardapio._index"
 import MenuItemForm from "../menu-item-form/menu-item-form"
 import { MenuItemWithAssociations } from "~/domain/menu-item/menu-item.prisma.entity.server"
+import { AdminCardapioOutletContext } from "~/routes/admin.gerenciamento.cardapio"
 
 
 interface MenuItemCardProps {
@@ -13,8 +12,8 @@ interface MenuItemCardProps {
 }
 
 export default function MenuItemCard({ item }: MenuItemCardProps) {
-    const loaderData = useLoaderData<typeof loader>()
-    const categories = loaderData.payload.categories as Category[]
+    const outletContext: AdminCardapioOutletContext = useOutletContext()
+    const categories = outletContext.categories as Category[]
 
 
     const pizzaCategory = categories.find(category => category.id === item.categoryId)

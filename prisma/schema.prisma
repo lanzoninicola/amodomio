@@ -143,6 +143,7 @@ model MenuItem {
   visible         Boolean
   mogoId          String                   @map("mogo_id")
   isVegetarian    Boolean                  @map("is_vegetarian")
+  featured        Boolean
   createdAt       DateTime                 @map("created_at")
   updatedAt       DateTime                 @default(now()) @updatedAt @map("updated_at")
 
