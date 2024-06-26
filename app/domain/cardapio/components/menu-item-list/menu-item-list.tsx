@@ -11,19 +11,16 @@ interface MenuItemListProps {
 }
 
 export default function MenuItemList({ items, action }: MenuItemListProps) {
+
+    if (!items || items.length === 0) {
+        return <NoRecordsFound text="Nenhum item encontrado" />
+    }
+
+
     return (
-        <ul className="flex flex-col">
+        <ul className="flex flex-col gap-4">
             {
-                (!items || items.length === 0) ?
-                    <NoRecordsFound text="Nenhum itens no menu" />
-                    :
-                    items.map(item => {
-                        return (
-                            <li key={item.id} className="mb-4">
-                                <MenuItemCard item={item} />
-                            </li>
-                        )
-                    })
+                items.map(item => <MenuItemCard key={item.id} item={item} />)
             }
         </ul>
     )

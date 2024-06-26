@@ -142,10 +142,11 @@ model MenuItem {
   imageBase64     String
   visible         Boolean
   mogoId          String                   @map("mogo_id")
-  isVegetarian    Boolean                  @map("is_vegetarian")
-  featured        Boolean
   createdAt       DateTime                 @map("created_at")
   updatedAt       DateTime                 @default(now()) @updatedAt @map("updated_at")
+  tags            MenuItemTag[]
+  /// this track the position inside the menu
+  menuIndex       Int                      @default(0) @map("menu_index")
 
   @@map("menu_items")
 }
@@ -161,6 +162,19 @@ model MenuItemPriceVariation {
   updatedAt          DateTime  @default(now()) @updatedAt @map("updated_at")
 
   @@map("menu_item_price_variations")
+}
+
+/// here we can manage: featured (recommended), vegetarian, kids, meat
+model MenuItemTag {
+  id         String    @id @default(uuid())
+  MenuItem   MenuItem? @relation(fields: [menuItemId], references: [id])
+  menuItemId String?   @map("menu_item_id")
+  tag        String
+  deletedAt  DateTime  @map("deleted_at")
+  createdAt  DateTime  @map("created_at")
+  updatedAt  DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  @@map("menu_item_tags")
 }
 
 model Setting {

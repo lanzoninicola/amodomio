@@ -31,7 +31,7 @@ export async function loader({ request }: LoaderArgs) {
         return badRequest(errCategories)
     }
 
-    const [errItems, items] = await prismaIt(menuItemPrismaEntity.findAll())
+    const [errItems, items] = await prismaIt(menuItemPrismaEntity.findAll({ option: { sorted: true } }))
 
 
 

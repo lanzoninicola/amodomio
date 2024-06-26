@@ -21,7 +21,13 @@ export class MenuItemPrismaEntity {
     this.client = client;
   }
 
-  async findAll(where?: Prisma.MenuItemWhereInput) {
+  async findAll({
+    where,
+    option,
+  }: {
+    where?: Prisma.MenuItemWhereInput;
+    option?: { sorted?: boolean; orderBy?: "asc" | "desc" };
+  }) {
     const records = await this.client.menuItem.findMany({
       where,
       include: {
@@ -30,7 +36,17 @@ export class MenuItemPrismaEntity {
       },
     });
 
-    return records;
+    if (!option?.sorted) {
+      return records;
+    }
+
+    return records.sort((a, b) => {
+      if (option.orderBy === "asc") {
+        return a.menuIndex - b.menuIndex;
+      }
+
+      return b.menuIndex - a.menuIndex;
+    });
   }
 
   async findById(id: string) {
@@ -44,7 +60,18 @@ export class MenuItemPrismaEntity {
       },
     };
 
-    return await this.client.menuItem.create({ data });
+    const lastItem = await this.client.menuItem.findFirst({
+      orderBy: { menuIndex: "desc" },
+    });
+
+    const lastMenuIndex = lastItem?.menuIndex || 0;
+
+    const nextItem = {
+      ...data,
+      menuIndex: lastMenuIndex + 1,
+    };
+
+    return await this.client.menuItem.create({ data: nextItem });
   }
 
   async update(id: string, data: Prisma.MenuItemUpdateInput) {

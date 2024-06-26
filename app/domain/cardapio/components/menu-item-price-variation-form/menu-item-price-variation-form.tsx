@@ -1,6 +1,6 @@
 import { MenuItemPriceVariation } from "@prisma/client"
 import { Separator } from "@radix-ui/react-separator"
-import { Form } from "@remix-run/react"
+import { Form, useSubmit } from "@remix-run/react"
 import SaveItemButton from "~/components/primitives/table-list/action-buttons/save-item-button/save-item-button"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
@@ -20,7 +20,6 @@ export default function MenuItemPriceVariationForm({ action, price, basePrice }:
 
     const [variationPrice, setVariationPrice] = useState(price.amount)
     const [suggestedPrice, setSuggestedPrice] = useState(0)
-
 
 
     useEffect(() => {
@@ -67,7 +66,6 @@ export default function MenuItemPriceVariationForm({ action, price, basePrice }:
                         onClick={() => {
 
                             setVariationPrice(suggestedPrice)
-                            console.log("suggestion clicked", suggestedPrice, variationPrice)
                         }}
                     >{`Sugerido: ${suggestedPrice.toFixed(2) || "0"}`}</span>
                 </div>

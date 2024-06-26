@@ -1,5 +1,5 @@
-import { Category, MenuItemPriceVariation } from "@prisma/client"
-import { useLoaderData, Form, useOutletContext } from "@remix-run/react"
+import { Category } from "@prisma/client"
+import { Form, useOutletContext } from "@remix-run/react"
 import SubmitButton from "~/components/primitives/submit-button/submit-button"
 import { Input } from "~/components/ui/input"
 import { Separator } from "~/components/ui/separator"
@@ -11,12 +11,12 @@ import { DeleteItemButton } from "~/components/primitives/table-list"
 import { MenuItemWithAssociations } from "~/domain/menu-item/menu-item.prisma.entity.server"
 import { Label } from "~/components/ui/label"
 import { useState } from "react"
-import { MenuItemPriceVariationLabel, PartialMenuItemPriceVariation } from "~/domain/menu-item/menu-item-price-variations.prisma.entity.server"
+import { PartialMenuItemPriceVariation } from "~/domain/menu-item/menu-item-price-variations.prisma.entity.server"
 import MenuItemPriceVariationForm, { mapPriceVariationsLabel } from "../menu-item-price-variation-form/menu-item-price-variation-form"
-import { AdminCardapioOutletContext, loader } from "~/routes/admin.gerenciamento.cardapio"
+import { AdminCardapioOutletContext } from "~/routes/admin.gerenciamento.cardapio"
 import Fieldset from "~/components/ui/fieldset"
 import { Textarea } from "~/components/ui/textarea"
-import { ChevronDown, ChevronLeftIcon, ChevronRightIcon, ChevronRightSquare } from "lucide-react"
+import { ChevronDown, GripVertical } from "lucide-react"
 import { ChevronRight } from "lucide-react"
 
 
@@ -48,19 +48,21 @@ export default function MenuItemForm({ item, action, className }: MenuItemFormPr
 
                 <input type="hidden" name="id" value={item?.id} />
 
-
-
                 <section className="grid grid-cols-12 items-center">
-                    <Input type="text" name="name" defaultValue={item?.name}
-                        placeholder="Nome da pizza"
-                        className={
-                            cn(
-                                "text-lg font-bold tracking-tight col-span-4",
-                                action === "menu-item-create" && "border",
-                                action === "menu-item-update" && "border-none focus:px-2 p-0"
-                            )
-                        } />
-
+                    <div className="flex items-center col-span-4 gap-2">
+                        {showDetails === false && <GripVertical color="grey" className="cursor-move" />}
+                        <Input type="text" name="name" defaultValue={item?.name}
+                            placeholder="Nome da pizza"
+                            disabled={showDetails === false}
+                            className={
+                                cn(
+                                    "text-lg font-bold tracking-tight ",
+                                    action === "menu-item-create" && "border",
+                                    action === "menu-item-update" && "border-none focus:px-2 p-0",
+                                    showDetails === false && "disabled:opacity-100 disabled:cursor-auto"
+                                )
+                            } />
+                    </div>
                     <div className="grid grid-cols-4 col-span-4">
                         {item && item.priceVariations.map(pv => {
                             return (
@@ -150,16 +152,6 @@ export default function MenuItemForm({ item, action, className }: MenuItemFormPr
                             <Separator className="mb-4" />
 
                             <section className="flex flex-col">
-
-                                <Fieldset className="grid grid-cols-4 items-center">
-                                    <Label htmlFor="isVegetarian" className="font-semibold text-sm col-span-1">Vegetariano</Label>
-                                    <Switch id="isVegetarian" name="isVegetarian" defaultChecked={item?.isVegetarian || false} />
-                                </Fieldset>
-
-                                <Fieldset className="grid grid-cols-4 items-center">
-                                    <Label htmlFor="featured" className="font-semibold text-sm col-span-1">Em destaque</Label>
-                                    <Switch id="featured" name="featured" defaultChecked={item?.featured || false} />
-                                </Fieldset>
 
                                 <Fieldset className="grid grid-cols-4 items-center">
                                     <Label htmlFor="mogoId" className="font-semibold text-sm col-span-1">Mogo ID</Label>

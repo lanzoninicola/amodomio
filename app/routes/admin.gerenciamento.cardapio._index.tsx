@@ -21,41 +21,6 @@ export async function action({ request }: LoaderArgs) {
 
     console.log({ action: _action, values })
 
-    if (_action === "menu-item-create") {
-
-        const category = jsonParse(values.category as string)
-
-        if (!category?.id) {
-            return badRequest("Categoria não seleçionada")
-        }
-
-        const menuItem: Prisma.MenuItemCreateInput = {
-            name: values.name as string,
-            ingredients: values.ingredients as string,
-            description: values?.description as string || "",
-            visible: values?.visible === "on" ? true : false,
-            imageBase64: values.imageBase64 as string || "",
-            basePriceAmount: values?.basePriceAmount ? parseFloat(values.basePriceAmount as string) : 0,
-            featured: values?.featured === "on" ? true : false,
-            isVegetarian: values?.isVegetarian === "on" ? true : false,
-            mogoId: values?.mogoId as string || "",
-            createdAt: new Date().toISOString(),
-            Category: {
-                connect: {
-                    id: category.id
-                }
-            },
-        }
-
-        const [err, result] = await prismaIt(menuItemPrismaEntity.create(menuItem))
-
-        if (err) {
-            return badRequest(err)
-        }
-
-        return ok("Elemento criado com successo")
-
-    }
 
     if (_action === "menu-item-update") {
 
@@ -68,8 +33,6 @@ export async function action({ request }: LoaderArgs) {
             visible: values?.visible === "on" ? true : false,
             imageBase64: values.imageBase64 as string || "",
             basePriceAmount: values?.basePriceAmount ? parseFloat(values.basePriceAmount as string) : 0,
-            featured: values?.featured === "on" ? true : false,
-            isVegetarian: values?.isVegetarian === "on" ? true : false,
             mogoId: values?.mogoId as string || "",
             createdAt: new Date().toISOString(),
             Category: {
