@@ -86,6 +86,20 @@ export async function action({ request }: LoaderArgs) {
         return ok("Elemento atualizado com successo")
     }
 
+    if (values?.action === "menu-item-move") {
+        const itemDraggingId = values.itemDraggingId as string
+        const itemOveredId = values.itemOveredId as string
+        const overedPoint = values.overedPoint as "top" | "bottom"
+
+        const [err, res] = await prismaIt(menuItemPrismaEntity.move(itemDraggingId, itemOveredId, overedPoint))
+
+        if (err) {
+            return badRequest(err)
+        }
+
+        return ok("Elemento movido com successo")
+    }
+
     // if (_action === "item-sortorder-up") {
     //     await menuEntity.sortUp(values.id as string, values.groupId as string)
     // }

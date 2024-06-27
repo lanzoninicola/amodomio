@@ -9,13 +9,19 @@ import MenuItemPriceVariationForm, { mapPriceVariationsLabel } from "../menu-ite
 import { Switch } from "~/components/ui/switch"
 import { useState } from "react"
 import { cn } from "~/lib/utils"
+import { OveredPoint } from "../menu-item-list/menu-item-list"
 
 
 interface MenuItemCardProps {
     item: MenuItemWithAssociations
+    dragAndDrop?: {
+        itemDragging: MenuItemWithAssociations | null
+        itemOvered: MenuItemWithAssociations | null
+        overedPoint: OveredPoint
+    }
 }
 
-export default function MenuItemCard({ item }: MenuItemCardProps) {
+export default function MenuItemCard({ item, dragAndDrop }: MenuItemCardProps) {
     const outletContext: AdminCardapioOutletContext = useOutletContext()
     const categories = outletContext.categories as Category[]
 
@@ -24,66 +30,36 @@ export default function MenuItemCard({ item }: MenuItemCardProps) {
     // const [searchParams, setSearchParams] = useSearchParams()
     // const action = searchParams.get("_action")
 
-    const [itemDragging, setItemDragging] = useState<MenuItemWithAssociations | null>(null)
-    const [itemOvered, setItemOvered] = useState<MenuItemWithAssociations | null>(null)
 
-    const [overedPoint, setOveredPoint] = useState<"none" | "top" | "bottom">("none")
 
     return (
 
-        <li className="flex flex-col gap-2 bg-white"
+        <div className={
+            cn(
+                "my-2",
+                dragAndDrop?.itemOvered?.id === item.id && "border-t-red-500"
+            )
+        }
             draggable={true}
-            onDragStart={e => {
-                // e.dataTransfer.setData("text/plain", item.id)
-                setItemDragging(item)
-            }}
-            onDragOver={e => {
-                e.preventDefault()
-                e.dataTransfer.dropEffect = "move"
-                // if it is the element itself overed return
-                if (itemDragging !== null && item.id === itemDragging.id) return
-
-                // track the item overed (the record contains also the position)
-                setItemOvered(item)
-
-                // detetermine if the element dragged is on top or bottom
-                // of the element overed
-                let rect = e.currentTarget.getBoundingClientRect();
-                let midpoint = (rect.top + rect.bottom) / 2;
-                setOveredPoint(e.clientY <= midpoint ? "top" : "bottom");
-
-
-
-                console.log(item.name, item.menuIndex, overedPoint)
-            }}
-            onDragEnd={
-                e => {
-                    e.preventDefault()
-                    setItemDragging(null)
-                    setItemOvered(null)
-                }
-            }
         >
-
 
             <div className={
                 cn(
-                    "p-4 rounded-md border border-gray-200",
+                    "p-4 rounded-md border border-gray-200 bg-white",
                     // itemDragging === item.id && "border-2 border-dashed border-blue-500"
-                    itemDragging?.id === item.id && "border-2 border-dashed border-blue-500",
-                    itemOvered?.id === item.id && overedPoint === "top" && "bg-red-400"
+                    dragAndDrop?.itemDragging?.id === item.id && "border-2 border-dashed border-blue-500",
                 )
             }>
                 {/* <SortingOrderItems enabled={action === "menu-items-sortorder"} itemId={item.id} groupId={pizzaCategory?.id}> */}
                 <MenuItemForm item={item} action="menu-item-update" className={
                     cn(
                         "flex flex-col gap-2",
-                        itemDragging?.id === item.id && "opacity-20"
+                        dragAndDrop?.itemDragging?.id === item.id && "opacity-20"
                     )
                 } />
                 {/* </SortingOrderItems> */}
             </div>
-        </li>
+        </div>
 
     )
 }

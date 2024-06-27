@@ -31,9 +31,7 @@ export async function loader({ request }: LoaderArgs) {
         return badRequest(errCategories)
     }
 
-    const [errItems, items] = await prismaIt(menuItemPrismaEntity.findAll({ option: { sorted: true } }))
-
-
+    const [errItems, items] = await prismaIt(menuItemPrismaEntity.findAll({}))
 
     if (errItems) {
         return badRequest(errItems)
@@ -61,6 +59,8 @@ export default function AdminCardapioOutlet() {
         })
     }
 
+    console.log({ items })
+
     return (
         <Container className="mb-24">
             <div className="w-full p-6 bg-muted mb-8 rounded-lg" >
@@ -85,7 +85,7 @@ export default function AdminCardapioOutlet() {
             </div>
 
             <Outlet context={{
-                items,
+                items: items.sort((a, b) => a.menuIndex - b.menuIndex),
                 categories
             }} />
         </Container>

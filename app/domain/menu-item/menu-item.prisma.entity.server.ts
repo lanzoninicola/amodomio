@@ -85,6 +85,66 @@ export class MenuItemPrismaEntity {
   async delete(id: string) {
     return await this.client.menuItem.delete({ where: { id } });
   }
+
+  async move(
+    itemDraggingId: string,
+    itemOveredId: string,
+    overedPoint: "top" | "bottom" | "none"
+  ) {
+    const itemDragging = await this.findById(itemDraggingId);
+    const itemOvered = await this.findById(itemOveredId);
+
+    console.log({
+      itemDragging,
+      itemOvered,
+      overedPoint,
+    });
+
+    if (!itemDragging || !itemOvered) {
+      throw new Error("Item not found");
+    }
+
+    const currentPositionItemDragging = itemDragging.menuIndex;
+    const currentPositionItemOvered = itemOvered.menuIndex;
+
+    if (overedPoint === "none") return;
+
+    try {
+      // change the position for the item dragging
+      await this.client.menuItem.update({
+        where: { id: itemDraggingId },
+        data: { menuIndex: currentPositionItemOvered },
+      });
+
+      // change the position for the item overed
+      if (overedPoint === "top") {
+        await this.client.menuItem.update({
+          where: { id: itemOveredId },
+          data: { menuIndex: currentPositionItemDragging - 1 },
+        });
+      }
+
+      if (overedPoint === "bottom") {
+        await this.client.menuItem.update({
+          where: { id: itemDraggingId },
+          data: { menuIndex: currentPositionItemOvered + 1 },
+        });
+      }
+    } catch (error) {
+      // if error, we need to rollback the changes
+      await this.client.menuItem.update({
+        where: { id: itemDraggingId },
+        data: { menuIndex: currentPositionItemDragging },
+      });
+
+      await this.client.menuItem.update({
+        where: { id: itemOveredId },
+        data: { menuIndex: currentPositionItemOvered },
+      });
+
+      throw new Error("Failed to move item");
+    }
+  }
 }
 
 const menuItemPrismaEntity = new MenuItemPrismaEntity({
