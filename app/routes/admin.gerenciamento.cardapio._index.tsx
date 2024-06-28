@@ -2,13 +2,14 @@ import { useActionData, useOutletContext } from "@remix-run/react";
 import MenuItemList from "~/domain/cardapio/components/menu-item-list/menu-item-list";
 import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/menu-item/menu-item.prisma.entity.server";
 import { AdminCardapioOutletContext } from "./admin.gerenciamento.cardapio";
-import { MenuItemPriceVariation, Prisma } from "@prisma/client";
+import { MenuItem, MenuItemPriceVariation, Prisma } from "@prisma/client";
 import { LoaderArgs } from "@remix-run/node";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { badRequest, ok } from "~/utils/http-response.server";
 import { jsonParse } from "~/utils/json-helper";
 import { toast } from "~/components/ui/use-toast";
 import { MenuItemPriceVariationPrismaEntity, menuItemPriceVariationsEntity } from "~/domain/menu-item/menu-item-price-variations.prisma.entity.server";
+import tryit from "~/utils/try-it";
 
 
 
@@ -19,7 +20,7 @@ export async function action({ request }: LoaderArgs) {
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);
 
-    console.log({ action: _action, values })
+    // console.log({ action: _action, values })
 
 
     if (_action === "menu-item-update") {
@@ -43,8 +44,6 @@ export async function action({ request }: LoaderArgs) {
         }
 
         const [err, result] = await prismaIt(menuItemPrismaEntity.update(values.id as string, menuItem))
-
-        console.log({ err })
 
         if (err) {
             return badRequest(err)
@@ -87,27 +86,22 @@ export async function action({ request }: LoaderArgs) {
     }
 
     if (values?.action === "menu-item-move") {
-        const itemDraggingId = values.itemDraggingId as string
-        const itemOveredId = values.itemOveredId as string
-        const overedPoint = values.overedPoint as "top" | "bottom"
+        const items = JSON.parse(formData.get('items') as string);
 
-        const [err, res] = await prismaIt(menuItemPrismaEntity.move(itemDraggingId, itemOveredId, overedPoint))
+        type MenuItemWithIndex = MenuItem & { index: number };
+        const updateSortOrderIndexPromises = items.map((item: MenuItemWithIndex) => menuItemPrismaEntity.update(item.id, {
+            sortOrderIndex: item.index
+        }))
+
+        const [err, result] = await tryit(Promise.all(updateSortOrderIndexPromises))
 
         if (err) {
             return badRequest(err)
         }
 
-        return ok("Elemento movido com successo")
+        return ok("Ordenamento atualizado");
+
     }
-
-    // if (_action === "item-sortorder-up") {
-    //     await menuEntity.sortUp(values.id as string, values.groupId as string)
-    // }
-
-    // if (_action === "item-sortorder-down") {
-    //     await menuEntity.sortDown(values.id as string, values.groupId as string)
-    // }
-
 
     return null
 }
@@ -118,6 +112,8 @@ export default function AdminCardapio() {
 
     const actionData = useActionData<typeof action>()
 
+    console.log({ actionData })
+
     if (actionData && actionData.status > 399) {
         toast({
             title: "Erro",
@@ -125,22 +121,18 @@ export default function AdminCardapio() {
         })
     }
 
-
-    // const [searchParams, setSearchParams] = useSearchParams()
-    // const action = searchParams.get("_action") as MenuItemActionSearchParam
-
-    // const itemId = searchParams.get("id")
-    // const itemToEdit = items.find(item => item.id === itemId) as MenuItem
-
-    // const itemsFilteredSorted = sort(items, "sortOrder", "asc")
-
-
+    if (actionData && actionData.status === 200) {
+        toast({
+            title: "Ok",
+            description: actionData.message,
+        })
+    }
 
     return (
 
         <div className="flex flex-col gap-4 ">
             {/* <MenuItemListStat items={items} /> */}
-            <MenuItemList items={items} />
+            <MenuItemList initialItems={items} />
         </div>
 
     )

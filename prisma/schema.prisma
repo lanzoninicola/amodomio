@@ -146,7 +146,7 @@ model MenuItem {
   updatedAt       DateTime                 @default(now()) @updatedAt @map("updated_at")
   tags            MenuItemTag[]
   /// this track the position inside the menu
-  menuIndex       Int                      @default(0) @map("menu_index")
+  sortOrderIndex  Int                      @default(0) @map("sort_order_index")
 
   @@map("menu_items")
 }

@@ -37,7 +37,6 @@ export default function MenuItemCard({ item, dragAndDrop }: MenuItemCardProps) {
         <div className={
             cn(
                 "my-2",
-                dragAndDrop?.itemOvered?.id === item.id && "border-t-red-500"
             )
         }
             draggable={true}
@@ -46,18 +45,13 @@ export default function MenuItemCard({ item, dragAndDrop }: MenuItemCardProps) {
             <div className={
                 cn(
                     "p-4 rounded-md border border-gray-200 bg-white",
-                    // itemDragging === item.id && "border-2 border-dashed border-blue-500"
-                    dragAndDrop?.itemDragging?.id === item.id && "border-2 border-dashed border-blue-500",
                 )
             }>
-                {/* <SortingOrderItems enabled={action === "menu-items-sortorder"} itemId={item.id} groupId={pizzaCategory?.id}> */}
                 <MenuItemForm item={item} action="menu-item-update" className={
                     cn(
                         "flex flex-col gap-2",
-                        dragAndDrop?.itemDragging?.id === item.id && "opacity-20"
                     )
                 } />
-                {/* </SortingOrderItems> */}
             </div>
         </div>
 

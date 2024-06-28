@@ -114,8 +114,6 @@ function suggestPriceVariations(variation: MenuItemPriceVariationLabel, priceRef
 
     const range = priceRanges[String(priceRef)]
 
-    console.log('suggestPriceVariations', priceRef)
-
     const media = range ? range[0] : 0
     const familia = range ? range[1] : 0
     const individual = priceRef > 0 ? priceRef / 1.75 : 0

@@ -1,23 +1,15 @@
-import NoRecordsFound from "~/components/primitives/no-records-found/no-records-found"
-import { MenuItemActionSearchParam } from "~/routes/admin.gerenciamento.cardapio._index"
-import MenuItemCard from "../menu-item-card/menu-item-card"
-import { MenuItemWithAssociations } from "~/domain/menu-item/menu-item.prisma.entity.server"
-import { useState } from "react"
-import { useFetcher } from "@remix-run/react"
+// app/components/DraggableList.tsx
+import { useFetcher } from '@remix-run/react';
+import React, { useState } from 'react';
 
-interface MenuItemListProps {
-    initialItems: MenuItemWithAssociations[]
-    action?: Partial<MenuItemActionSearchParam>
+
+
+interface DraggableListProps {
+    initialItems: any[];
+    children?: React.ReactNode;
 }
 
-export type OveredPoint = "none" | "top" | "bottom"
-
-export default function MenuItemList({ initialItems, action }: MenuItemListProps) {
-
-    if (!initialItems || initialItems.length === 0) {
-        return <NoRecordsFound text="Nenhum item encontrado" />
-    }
-
+const DraggableList: React.FC<DraggableListProps> = ({ initialItems, children }) => {
     const [items, setItems] = useState<any[]>(initialItems);
     const [draggingItemIndex, setDraggingItemIndex] = useState<number | null>(null);
     const fetcher = useFetcher();
@@ -42,11 +34,8 @@ export default function MenuItemList({ initialItems, action }: MenuItemListProps
 
         // Update the database
         fetcher.submit(
-            {
-                action: "menu-item-move",
-                items: JSON.stringify(items.map((item, index) => ({ ...item, index })))
-            },
-            { method: 'post' }
+            { items: JSON.stringify(items.map((item, index) => ({ ...item, index }))) },
+            { method: 'post', action: '/items/reorder' }
         );
     };
 
@@ -59,12 +48,18 @@ export default function MenuItemList({ initialItems, action }: MenuItemListProps
                     onDragStart={() => handleDragStart(index)}
                     onDragOver={(event) => handleDragOver(event, index)}
                     onDragEnd={handleDragEnd}
-                    className="p-2 m-1 bg-muted cursor-grab rounded-sm"
+                    style={{
+                        padding: '8px',
+                        margin: '4px',
+                        backgroundColor: 'lightgray',
+                        cursor: 'grab',
+                    }}
                 >
-                    <MenuItemCard item={item} />
+                    {children }
                 </li>
             ))}
         </ul>
     );
-}
+};
 
+export default DraggableList;

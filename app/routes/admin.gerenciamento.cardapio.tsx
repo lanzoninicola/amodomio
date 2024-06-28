@@ -59,8 +59,6 @@ export default function AdminCardapioOutlet() {
         })
     }
 
-    console.log({ items })
-
     return (
         <Container className="mb-24">
             <div className="w-full p-6 bg-muted mb-8 rounded-lg" >
@@ -85,7 +83,7 @@ export default function AdminCardapioOutlet() {
             </div>
 
             <Outlet context={{
-                items: items.sort((a, b) => a.menuIndex - b.menuIndex),
+                items: items.sort((a, b) => a.sortOrderIndex - b.sortOrderIndex),
                 categories
             }} />
         </Container>
