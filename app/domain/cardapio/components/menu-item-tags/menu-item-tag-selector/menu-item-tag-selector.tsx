@@ -1,5 +1,5 @@
 import { MenuItemTag } from "@prisma/client"
-import { Form, useLoaderData, useOutletContext, useSubmit } from "@remix-run/react"
+import { Form, useFetcher, useFetchers, useLoaderData, useOutletContext, useSubmit } from "@remix-run/react"
 import { useRef, useState } from "react"
 import { Input } from "~/components/ui/input"
 import { menuItemTagPrismaEntity } from "~/domain/cardapio/menu-item-tags.prisma.entity.server"
@@ -26,23 +26,18 @@ export default function MenuItemTagSelector({ item, className }: MenuItemTagSele
     const [filteredTags, setFilteredTags] = useState<MenuItemTag[]>(tags)
     const [showList, setShowList] = useState(false)
 
-    const submitButtonRef = useRef<HTMLButtonElement | null>(null);
+    const fetcher = useFetcher()
 
-    function addTag() {
-        if (!submitButtonRef.current) return
-
-        submitButtonRef.current.click()
-    }
-
+    const fetchers = useFetchers()
 
     return (
-        <Form method="post" className={cn(
+        <div className={cn(
             "relative flex flex-col gap-2",
             className
         )}>
             <input type="hidden" name="item" value={jsonStringify(item)} />
             <Input name="tagName"
-                className=" border-none"
+                className=" border-none focus:outline-none"
                 placeholder="Pesquisar tag..."
                 value={searchedTag || ""}
                 onChange={(e) => {
@@ -78,7 +73,15 @@ export default function MenuItemTagSelector({ item, className }: MenuItemTagSele
                                         <li key={tag.id} className="text-sm cursor-pointer hover:underline"
                                             onClick={() => {
                                                 setSearchedTag(tag.name)
-                                                addTag()
+                                                fetcher.submit(
+                                                    {
+                                                        item: jsonStringify(item) || "",
+                                                        tagName: tag.name,
+                                                        _action: "menu-item-tag-add"
+                                                    },
+                                                    {
+                                                        replace: true
+                                                    })
                                                 setShowList(false)
                                             }}
                                         >{tag.name}</li>
@@ -90,10 +93,7 @@ export default function MenuItemTagSelector({ item, className }: MenuItemTagSele
                     </div>
                 )
             }
-            <button ref={submitButtonRef} type="submit"
-                className="hidden"
-                name="action"
-                value="menu-item-tag-add"></button>
-        </Form>
+
+        </div>
     )
 }

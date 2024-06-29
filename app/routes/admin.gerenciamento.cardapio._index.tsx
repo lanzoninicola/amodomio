@@ -2,7 +2,7 @@ import { useActionData, useOutletContext } from "@remix-run/react";
 import MenuItemList from "~/domain/cardapio/components/menu-item-list/menu-item-list";
 import { AdminCardapioOutletContext } from "./admin.gerenciamento.cardapio";
 import { MenuItem, MenuItemPriceVariation, Prisma } from "@prisma/client";
-import { LoaderArgs } from "@remix-run/node";
+import { LoaderArgs, redirect } from "@remix-run/node";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { badRequest, ok } from "~/utils/http-response.server";
 import { jsonParse } from "~/utils/json-helper";
@@ -107,9 +107,9 @@ export async function action({ request }: LoaderArgs) {
     if (values?.action === "menu-item-tag-add") {
 
         const menuItem: MenuItem = jsonParse(values.item as string)
-        const name = values?.tagName as string
+        const tagName = values?.tagName as string
 
-        const [err, result] = await prismaIt(menuItemPrismaEntity.addTag(menuItem, name))
+        const [err, result] = await prismaIt(menuItemPrismaEntity.addTag(menuItem, tagName))
 
         if (err) {
             return badRequest(err)
@@ -129,7 +129,7 @@ export async function action({ request }: LoaderArgs) {
             return badRequest(err)
         }
 
-        return ok("Tag removida")
+        return redirect('/admin/gerenciamento/cardapio')
     }
 
     return null

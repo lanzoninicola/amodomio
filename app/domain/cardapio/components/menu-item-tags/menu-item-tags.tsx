@@ -2,7 +2,7 @@ import { Badge } from "~/components/ui/badge"
 import { MenuItemWithAssociations } from "../../menu-item.prisma.entity.server"
 import MenuItemTagSelector from "./menu-item-tag-selector/menu-item-tag-selector"
 import { MenuItemTag } from "@prisma/client"
-import { Form } from "@remix-run/react"
+import { Form, useFetcher, useSubmit } from "@remix-run/react"
 import { jsonStringify } from "~/utils/json-helper"
 
 
@@ -27,16 +27,28 @@ export default function MenuItemTags({ item }: MenuItemTagsProps) {
 
 function BadgeTag({ item, tag }: { item: MenuItemWithAssociations, tag: MenuItemTag }) {
 
+    const submit = useSubmit()
+
+    const fetcher = useFetcher()
+
 
     return (
         <Badge>
-            <Form method="post">
-                <input type="hidden" name="itemId" value={item.id} />
-                <input type="hidden" name="tagName" value={tag.name} />
-                <button type="submit" name="_action" value="menu-item-tag-remove" className="hover:underline">
-                    {tag.name}
-                </button>
-            </Form>
+            <input type="hidden" name="itemId" value={item.id} />
+            <input type="hidden" name="tagName" value={tag.name} />
+            <button type="submit" name="_action"
+                value="menu-item-tag-remove"
+                className="hover:underline"
+                onClick={() => {
+                    fetcher.submit({
+                        tagName: tag.name,
+                        itemId: item.id,
+                        _action: "menu-item-tag-remove",
+                    }, { replace: true })
+                }}
+            >
+                {tag.name}
+            </button>
         </Badge>
     )
 }

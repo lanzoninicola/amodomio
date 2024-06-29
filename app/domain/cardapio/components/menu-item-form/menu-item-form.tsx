@@ -173,7 +173,7 @@ export default function MenuItemForm({ item, action, className }: MenuItemFormPr
                             <Separator className="my-4" />
 
 
-                            <section className="grid grid-cols-8 items-center">
+                            <section className="grid grid-cols-8 items-center px-2">
                                 <MenuItemTags item={item as MenuItemWithAssociations} />
                             </section>
 
