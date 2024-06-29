@@ -1,5 +1,5 @@
 import { Separator } from "~/components/ui/separator";
-import { MenuItem } from "~/domain/menu-item/menu-item.model.server";
+import { MenuItem } from "~/domain/cardapio/menu-item.model.server";
 
 export default function MenuItemListStat({ items }: { items: MenuItem[] }) {
 

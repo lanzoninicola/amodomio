@@ -3,7 +3,7 @@ import { LoaderArgs, redirect } from "@remix-run/node";
 import { useActionData } from "@remix-run/react";
 import { toast } from "~/components/ui/use-toast";
 import MenuItemForm from "~/domain/cardapio/components/menu-item-form/menu-item-form";
-import { menuItemPrismaEntity } from "~/domain/menu-item/menu-item.prisma.entity.server";
+import { menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { badRequest, ok } from "~/utils/http-response.server";
 import { jsonParse } from "~/utils/json-helper";

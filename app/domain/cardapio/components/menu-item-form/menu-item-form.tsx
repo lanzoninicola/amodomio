@@ -1,5 +1,5 @@
 import { Category } from "@prisma/client"
-import { Form, useOutletContext } from "@remix-run/react"
+import { Form, Link, useOutletContext } from "@remix-run/react"
 import SubmitButton from "~/components/primitives/submit-button/submit-button"
 import { Input } from "~/components/ui/input"
 import { Separator } from "~/components/ui/separator"
@@ -8,17 +8,19 @@ import formatStringList from "~/utils/format-string-list"
 import { cn } from "~/lib/utils"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select"
 import { DeleteItemButton } from "~/components/primitives/table-list"
-import { MenuItemWithAssociations } from "~/domain/menu-item/menu-item.prisma.entity.server"
 import { Label } from "~/components/ui/label"
 import { useState } from "react"
-import { PartialMenuItemPriceVariation } from "~/domain/menu-item/menu-item-price-variations.prisma.entity.server"
 import MenuItemPriceVariationForm, { mapPriceVariationsLabel } from "../menu-item-price-variation-form/menu-item-price-variation-form"
 import { AdminCardapioOutletContext } from "~/routes/admin.gerenciamento.cardapio"
 import Fieldset from "~/components/ui/fieldset"
 import { Textarea } from "~/components/ui/textarea"
 import { ChevronDown, GripVertical } from "lucide-react"
 import { ChevronRight } from "lucide-react"
-import { MenuItemTagSelector } from "~/routes/admin.resources.menu-item-tags-selector"
+import { MenuItemWithAssociations } from "../../menu-item.prisma.entity.server"
+import { PartialMenuItemPriceVariation } from "../../menu-item-price-variations.prisma.entity.server"
+import MenuItemTagSelector from "../menu-item-tags/menu-item-tag-selector/menu-item-tag-selector"
+import { Badge } from "~/components/ui/badge"
+import MenuItemTags from "../menu-item-tags/menu-item-tags"
 
 
 export type MenuItemFormAction = "menu-item-create" | "menu-item-update"
@@ -39,19 +41,18 @@ export default function MenuItemForm({ item, action, className }: MenuItemFormPr
 
     const priceVariations = item?.priceVariations ? item?.priceVariations : defaultItemsPriceVariations()
 
-    const [showDetails, setShowDetails] = useState(false)
+    const [showDetails, setShowDetails] = useState(true)
 
     return (
 
         <div className="flex flex-col">
 
-            <Form method="post" className={cn(className)} >
+            <Form method="post" className={cn(className)}  >
 
                 <input type="hidden" name="id" value={item?.id} />
 
-                <section className="grid grid-cols-12 items-center">
+                <section className="grid grid-cols-12 items-center w-full">
                     <div className="flex items-center col-span-4 gap-2">
-                        {showDetails === false && <GripVertical color="grey" className="cursor-move" />}
                         <Input type="text" name="name" defaultValue={item?.name}
                             placeholder="Nome da pizza"
                             disabled={showDetails === false}
@@ -172,22 +173,19 @@ export default function MenuItemForm({ item, action, className }: MenuItemFormPr
                             <Separator className="my-4" />
 
 
-                            <section className="flex flex-col">
-
-                                <Fieldset className="grid grid-cols-4 items-center">
-                                    <MenuItemTagSelector />
-                                </Fieldset>
-
+                            <section className="grid grid-cols-8 items-center">
+                                <MenuItemTags item={item as MenuItemWithAssociations} />
                             </section>
 
 
                             <Separator className="my-4" />
 
                             <div className="flex gap-4 justify-end">
+
+                                <SubmitButton actionName={action} labelClassName="text-xs" variant={"outline"} tabIndex={0} />
                                 {action === "menu-item-update" && (
                                     <DeleteItemButton actionName="menu-item-delete" label="Deletar" />
                                 )}
-                                <SubmitButton actionName={action} labelClassName="text-xs" variant={"outline"} />
                             </div>
                         </>
                     )

@@ -1,9 +1,11 @@
 import NoRecordsFound from "~/components/primitives/no-records-found/no-records-found"
 import { MenuItemActionSearchParam } from "~/routes/admin.gerenciamento.cardapio._index"
 import MenuItemCard from "../menu-item-card/menu-item-card"
-import { MenuItemWithAssociations } from "~/domain/menu-item/menu-item.prisma.entity.server"
 import { useState } from "react"
 import { useFetcher } from "@remix-run/react"
+import { MenuItemWithAssociations } from "../../menu-item.prisma.entity.server"
+import { GripVertical } from "lucide-react"
+import { cn } from "~/lib/utils"
 
 interface MenuItemListProps {
     initialItems: MenuItemWithAssociations[]
@@ -19,6 +21,9 @@ export default function MenuItemList({ initialItems, action }: MenuItemListProps
     }
 
     const [items, setItems] = useState<any[]>(initialItems);
+
+    const [dragEnable, setDragEnabled] = useState(false)
+
     const [draggingItemIndex, setDraggingItemIndex] = useState<number | null>(null);
     const fetcher = useFetcher();
 
@@ -51,20 +56,35 @@ export default function MenuItemList({ initialItems, action }: MenuItemListProps
     };
 
     return (
-        <ul>
-            {items.map((item, index) => (
-                <li
-                    key={item.id}
-                    draggable
-                    onDragStart={() => handleDragStart(index)}
-                    onDragOver={(event) => handleDragOver(event, index)}
-                    onDragEnd={handleDragEnd}
-                    className="p-2 m-1 bg-muted cursor-grab rounded-sm"
-                >
-                    <MenuItemCard item={item} />
-                </li>
-            ))}
-        </ul>
+        <div className="flex flex-col">
+            <div className="p-4 items-center mb-2">
+                <span className="text-sm cursor-pointer hover:underline text-muted-foreground"
+                    onClick={() => setDragEnabled(!dragEnable)}
+                >{dragEnable === true ? 'Desabilitar ordernamento' : 'Abilitar ordenamento'}</span>
+            </div>
+            <ul className="flex flex-col gap-y-4">
+                {items.map((item, index) => (
+                    <li
+                        key={item.id}
+                        draggable={dragEnable}
+                        onDragStart={() => handleDragStart(index)}
+                        onDragOver={(event) => handleDragOver(event, index)}
+                        onDragEnd={handleDragEnd}
+                        className={
+                            cn(
+                                dragEnable === true && "p-2 m-1 bg-muted rounded-sm"
+                            )
+                        }
+                    >
+                        <div className="flex gap-4 items-center w-full">
+                            {dragEnable === true && <GripVertical className="cursor-grab" />}
+                            <MenuItemCard item={item} />
+                        </div>
+
+                    </li>
+                ))}
+            </ul>
+        </div>
     );
 }
 

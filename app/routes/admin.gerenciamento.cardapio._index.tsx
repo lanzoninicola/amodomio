@@ -1,6 +1,5 @@
 import { useActionData, useOutletContext } from "@remix-run/react";
 import MenuItemList from "~/domain/cardapio/components/menu-item-list/menu-item-list";
-import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/menu-item/menu-item.prisma.entity.server";
 import { AdminCardapioOutletContext } from "./admin.gerenciamento.cardapio";
 import { MenuItem, MenuItemPriceVariation, Prisma } from "@prisma/client";
 import { LoaderArgs } from "@remix-run/node";
@@ -8,8 +7,10 @@ import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { badRequest, ok } from "~/utils/http-response.server";
 import { jsonParse } from "~/utils/json-helper";
 import { toast } from "~/components/ui/use-toast";
-import { MenuItemPriceVariationPrismaEntity, menuItemPriceVariationsEntity } from "~/domain/menu-item/menu-item-price-variations.prisma.entity.server";
+
 import tryit from "~/utils/try-it";
+import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
+import { menuItemPriceVariationsEntity } from "~/domain/cardapio/menu-item-price-variations.prisma.entity.server";
 
 
 
@@ -20,7 +21,7 @@ export async function action({ request }: LoaderArgs) {
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);
 
-    // console.log({ action: _action, values })
+    console.log({ action: _action, values })
 
 
     if (_action === "menu-item-update") {
@@ -103,6 +104,34 @@ export async function action({ request }: LoaderArgs) {
 
     }
 
+    if (values?.action === "menu-item-tag-add") {
+
+        const menuItem: MenuItem = jsonParse(values.item as string)
+        const name = values?.tagName as string
+
+        const [err, result] = await prismaIt(menuItemPrismaEntity.addTag(menuItem, name))
+
+        if (err) {
+            return badRequest(err)
+        }
+
+        return ok("Tag adicionada")
+    }
+
+    if (_action === "menu-item-tag-remove") {
+
+        const itemId = values?.itemId as string
+        const name = values?.tagName as string
+
+        const [err, result] = await prismaIt(menuItemPrismaEntity.removeTag(itemId, name))
+
+        if (err) {
+            return badRequest(err)
+        }
+
+        return ok("Tag removida")
+    }
+
     return null
 }
 
@@ -111,8 +140,6 @@ export default function AdminCardapio() {
     const items = outletContext.items as MenuItemWithAssociations[]
 
     const actionData = useActionData<typeof action>()
-
-    console.log({ actionData })
 
     if (actionData && actionData.status > 399) {
         toast({

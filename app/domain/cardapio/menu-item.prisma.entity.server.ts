@@ -2,16 +2,19 @@ import {
   Category,
   MenuItem,
   MenuItemPriceVariation,
+  MenuItemTag,
   Prisma,
 } from "@prisma/client";
 import { prismaClient } from "~/lib/prisma/prisma-it.server";
 import { PrismaEntityProps } from "~/lib/prisma/types.server";
 import { MenuItemPriceVariationPrismaEntity } from "./menu-item-price-variations.prisma.entity.server";
+import { menuItemTagPrismaEntity } from "./menu-item-tags.prisma.entity.server";
 
 export interface MenuItemWithAssociations extends MenuItem {
   priceVariations: MenuItemPriceVariation[];
   categoryId: string;
   Category: Category;
+  tags: MenuItemTag[];
 }
 
 interface MenuItemEntityFindAllProps {
@@ -34,6 +37,7 @@ export class MenuItemPrismaEntity {
       include: {
         priceVariations: true,
         Category: true,
+        tags: true,
       },
     });
 
@@ -89,6 +93,37 @@ export class MenuItemPrismaEntity {
 
   async delete(id: string) {
     return await this.client.menuItem.delete({ where: { id } });
+  }
+
+  async addTag(item: MenuItem, tagName: string) {
+    return await menuItemTagPrismaEntity.create({
+      name: tagName,
+      createdAt: new Date().toISOString(),
+      MenuItem: {
+        connect: {
+          id: item.id,
+        },
+      },
+    });
+  }
+
+  async removeTag(itemId: string, tagName: string) {
+    const tag = await this.client.menuItemTag.findFirst({
+      where: {
+        name: tagName,
+        menuItemId: itemId,
+      },
+    });
+
+    if (!tag) {
+      return;
+    }
+
+    return await this.client.menuItemTag.delete({
+      where: {
+        id: tag.id,
+      },
+    });
   }
 }
 

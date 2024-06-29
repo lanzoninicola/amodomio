@@ -18,7 +18,7 @@ export class MenuItemTagPrismaEntity {
 
   async findAllDistinct() {
     return await this.client.menuItemTag.findMany({
-      distinct: ["tag"],
+      distinct: ["name"],
     });
   }
 

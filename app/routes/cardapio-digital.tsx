@@ -3,8 +3,7 @@ import { redirect, type V2_MetaFunction } from "@remix-run/node";
 import { useLoaderData, useNavigate, useSearchParams } from "@remix-run/react";
 
 import { ok } from "~/utils/http-response.server";
-import { menuEntity } from "~/domain/menu-item/menu-item.entity.server";
-import type { MenuItem } from "~/domain/menu-item/menu-item.model.server";
+import type { MenuItem } from "~/domain/cardapio/menu-item.model.server";
 import { useEffect, useState } from "react";
 import { categoryEntity } from "~/domain/category/category.entity.server";
 import type { Category } from "~/domain/category/category.model.server";
@@ -38,12 +37,17 @@ export const links: LinksFunction = () => [
 ];
 
 export async function loader({ request }: LoaderArgs) {
-  const menuItems = await menuEntity.findAll() as MenuItem[]
-  const categories = await categoryEntity.findAll()
+  // const menuItems = await menuEntity.findAll() as MenuItem[]
+  // const categories = await categoryEntity.findAll()
+
+  // return ok({
+  //   items: menuItems.filter(item => item.visible).map(item => item as MenuItem),
+  //   categories: categories.filter(c => c.visible).map(c => c)
+  // })
 
   return ok({
-    items: menuItems.filter(item => item.visible).map(item => item as MenuItem),
-    categories: categories.filter(c => c.visible).map(c => c)
+    items: [],
+    categories: []
   })
 }
 
@@ -53,7 +57,7 @@ export async function action({ request }: ActionArgs) {
 
 export default function MenuPage() {
   const loaderData = useLoaderData<typeof loader>()
-  const items = loaderData.payload.items as MenuItem[]
+  const items = loaderData?.payload.items as MenuItem[]
   const categories = loaderData.payload.categories as Category[]
 
   const [searchParams, setSearchParams] = useSearchParams()
@@ -121,9 +125,7 @@ function Content({ items }: { items: MenuItem[] }) {
                   <PizzaTitle>{item.name}</PizzaTitle>
                   {item.description && <p>{item.description}</p>}
                   <p className="text-lg font-semibold font-menu leading-tight">{ingredientsString}</p>
-                  <ItalianIngredientList ingredients={item?.ingredientsIta || []} />
                   <p>{item.description}</p>
-                  <Price>{item.price}</Price>
                 </div>
 
               </li>

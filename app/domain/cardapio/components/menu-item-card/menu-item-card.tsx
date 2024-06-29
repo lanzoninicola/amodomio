@@ -1,15 +1,10 @@
 import { Category } from "@prisma/client"
-import { useOutletContext, useSearchParams } from "@remix-run/react"
-import { AlertCircle } from "lucide-react"
-import SortingOrderItems from "~/components/primitives/sorting-order-items/sorting-order-items"
+import { useOutletContext } from "@remix-run/react"
+import { AlertCircle, GripVertical } from "lucide-react"
 import MenuItemForm from "../menu-item-form/menu-item-form"
-import { MenuItemWithAssociations } from "~/domain/menu-item/menu-item.prisma.entity.server"
 import { AdminCardapioOutletContext } from "~/routes/admin.gerenciamento.cardapio"
-import MenuItemPriceVariationForm, { mapPriceVariationsLabel } from "../menu-item-price-variation-form/menu-item-price-variation-form"
-import { Switch } from "~/components/ui/switch"
-import { useState } from "react"
-import { cn } from "~/lib/utils"
 import { OveredPoint } from "../menu-item-list/menu-item-list"
+import { MenuItemWithAssociations } from "../../menu-item.prisma.entity.server"
 
 
 interface MenuItemCardProps {
@@ -34,12 +29,8 @@ export default function MenuItemCard({ item, dragAndDrop }: MenuItemCardProps) {
 
     return (
 
-        <div className="my-2"
-            draggable={true}
-        >
-            <div className="p-4 rounded-md border border-gray-200 bg-white">
-                <MenuItemForm item={item} action="menu-item-update" className="flex flex-col gap-2" />
-            </div>
+        <div className="p-4 rounded-md border border-gray-200 bg-white w-full">
+            <MenuItemForm item={item} action="menu-item-update" className="flex flex-col gap-2" />
         </div>
 
     )

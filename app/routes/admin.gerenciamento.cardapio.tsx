@@ -1,12 +1,12 @@
+import { MenuItemTag } from "@prisma/client";
 import { LoaderArgs } from "@remix-run/node";
-import { Link, Outlet, V2_MetaFunction, useActionData, useLoaderData } from "@remix-run/react";
-import { AlertCircle } from "lucide-react";
+import { Link, Outlet, V2_MetaFunction, useLoaderData } from "@remix-run/react";
 import Container from "~/components/layout/container/container";
-import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { toast } from "~/components/ui/use-toast";
+import { menuItemTagPrismaEntity } from "~/domain/cardapio/menu-item-tags.prisma.entity.server";
+import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { categoryPrismaEntity } from "~/domain/category/category.entity.server";
 import { Category } from "~/domain/category/category.model.server";
-import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/menu-item/menu-item.prisma.entity.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { badRequest, ok } from "~/utils/http-response.server";
 
@@ -37,7 +37,9 @@ export async function loader({ request }: LoaderArgs) {
         return badRequest(errItems)
     }
 
-    return ok({ categories, items })
+    const [_, tags] = await prismaIt(menuItemTagPrismaEntity.findAllDistinct())
+
+    return ok({ categories, items, tags })
 
 }
 
@@ -45,12 +47,14 @@ export async function loader({ request }: LoaderArgs) {
 export interface AdminCardapioOutletContext {
     categories: Category[]
     items: MenuItemWithAssociations[]
+    tags: MenuItemTag[]
 }
 
 export default function AdminCardapioOutlet() {
     const loaderData = useLoaderData<typeof loader>()
     const items = loaderData?.payload.items as MenuItemWithAssociations[] || []
     const categories = loaderData?.payload.categories as Category[] || []
+    const tags = loaderData?.payload.tags as MenuItemTag[] || []
 
     if (loaderData?.status > 399) {
         toast({
@@ -84,7 +88,8 @@ export default function AdminCardapioOutlet() {
 
             <Outlet context={{
                 items: items.sort((a, b) => a.sortOrderIndex - b.sortOrderIndex),
-                categories
+                categories,
+                tags
             }} />
         </Container>
 

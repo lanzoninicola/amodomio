@@ -169,8 +169,8 @@ model MenuItemTag {
   id         String    @id @default(uuid())
   MenuItem   MenuItem? @relation(fields: [menuItemId], references: [id])
   menuItemId String?   @map("menu_item_id")
-  tag        String
-  deletedAt  DateTime  @map("deleted_at")
+  name       String
+  deletedAt  DateTime? @map("deleted_at")
   createdAt  DateTime  @map("created_at")
   updatedAt  DateTime  @default(now()) @updatedAt @map("updated_at")
 
@@ -187,13 +187,4 @@ model Setting {
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
 
   @@map("settings")
-}
-
-model OrderDeliveryTimeLeftItem {
-  id       String @id @default(uuid())
-  orderId  String @map("order_id")
-  size     String
-  quantity Float
-
-  @@map("ord_del_tl_items")
 }
