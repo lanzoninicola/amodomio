@@ -18,6 +18,7 @@ import Fieldset from "~/components/ui/fieldset"
 import { Textarea } from "~/components/ui/textarea"
 import { ChevronDown, GripVertical } from "lucide-react"
 import { ChevronRight } from "lucide-react"
+import { MenuItemTagSelector } from "~/routes/admin.resources.menu-item-tags-selector"
 
 
 export type MenuItemFormAction = "menu-item-create" | "menu-item-update"
@@ -163,6 +164,18 @@ export default function MenuItemForm({ item, action, className }: MenuItemFormPr
                                             action === "menu-item-create" && "border",
                                             action === "menu-item-update" && "border-none focus:px-2 p-0"
                                         )} />
+                                </Fieldset>
+
+                            </section>
+
+
+                            <Separator className="my-4" />
+
+
+                            <section className="flex flex-col">
+
+                                <Fieldset className="grid grid-cols-4 items-center">
+                                    <MenuItemTagSelector />
                                 </Fieldset>
 
                             </section>

@@ -6,7 +6,6 @@ import {
 } from "@prisma/client";
 import { prismaClient } from "~/lib/prisma/prisma-it.server";
 import { PrismaEntityProps } from "~/lib/prisma/types.server";
-import { Menu } from "lucide-react";
 import { MenuItemPriceVariationPrismaEntity } from "./menu-item-price-variations.prisma.entity.server";
 
 export interface MenuItemWithAssociations extends MenuItem {
@@ -15,21 +14,23 @@ export interface MenuItemWithAssociations extends MenuItem {
   Category: Category;
 }
 
+interface MenuItemEntityFindAllProps {
+  where?: Prisma.MenuItemWhereInput;
+  option?: {
+    sorted?: boolean;
+    orderBy?: "asc" | "desc";
+  };
+}
+
 export class MenuItemPrismaEntity {
   client;
   constructor({ client }: PrismaEntityProps) {
     this.client = client;
   }
 
-  async findAll({
-    where,
-    option,
-  }: {
-    where?: Prisma.MenuItemWhereInput;
-    option?: { sorted?: boolean; orderBy?: "asc" | "desc" };
-  }) {
+  async findAll(params: MenuItemEntityFindAllProps) {
     const records = await this.client.menuItem.findMany({
-      where,
+      where: params?.where,
       include: {
         priceVariations: true,
         Category: true,
@@ -40,12 +41,12 @@ export class MenuItemPrismaEntity {
       return [];
     }
 
-    if (!option?.sorted) {
+    if (!params?.option?.sorted) {
       return records;
     }
 
     return records.sort((a, b) => {
-      if (option.orderBy === "asc") {
+      if (params?.option && params?.option.orderBy === "asc") {
         return a.sortOrderIndex - b.sortOrderIndex;
       }
 

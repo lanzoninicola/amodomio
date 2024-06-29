@@ -34,24 +34,11 @@ export default function MenuItemCard({ item, dragAndDrop }: MenuItemCardProps) {
 
     return (
 
-        <div className={
-            cn(
-                "my-2",
-            )
-        }
+        <div className="my-2"
             draggable={true}
         >
-
-            <div className={
-                cn(
-                    "p-4 rounded-md border border-gray-200 bg-white",
-                )
-            }>
-                <MenuItemForm item={item} action="menu-item-update" className={
-                    cn(
-                        "flex flex-col gap-2",
-                    )
-                } />
+            <div className="p-4 rounded-md border border-gray-200 bg-white">
+                <MenuItemForm item={item} action="menu-item-update" className="flex flex-col gap-2" />
             </div>
         </div>
 
