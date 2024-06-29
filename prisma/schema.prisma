@@ -188,3 +188,12 @@ model Setting {
 
   @@map("settings")
 }
+
+model OrderDeliveryTimeLeftItem {
+  id       String @id @default(uuid())
+  orderId  String @map("order_id")
+  size     String
+  quantity Float
+
+  @@map("ord_del_tl_items")
+}
