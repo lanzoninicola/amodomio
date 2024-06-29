@@ -13,7 +13,7 @@ export default function MenuItemTags({ item }: MenuItemTagsProps) {
     return (
         <>
             <span className="font-semibold text-sm col-span-1">Tags</span>
-            <div className="col-span-7 flex gap-4 border rounded-lg py-2 items-start ">
+            <div className="col-span-7 flex gap-4 ">
 
                 <MenuItemTagSelector item={item} className="col-span-3" />
                 <div className="flex gap-2 h-fit mt-2">
