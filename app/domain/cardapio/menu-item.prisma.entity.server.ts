@@ -59,7 +59,14 @@ export class MenuItemPrismaEntity {
   }
 
   async findById(id: string) {
-    return await this.client.menuItem.findUnique({ where: { id } });
+    return await this.client.menuItem.findUnique({
+      where: { id },
+      include: {
+        priceVariations: true,
+        Category: true,
+        tags: true,
+      },
+    });
   }
 
   async create(data: Prisma.MenuItemCreateInput) {
@@ -95,16 +102,27 @@ export class MenuItemPrismaEntity {
     return await this.client.menuItem.delete({ where: { id } });
   }
 
-  async addTag(item: MenuItem, tagName: string) {
+  async addTag(itemId: string, tagName: string) {
     return await menuItemTagPrismaEntity.create({
       name: tagName,
       createdAt: new Date().toISOString(),
       MenuItem: {
         connect: {
-          id: item.id,
+          id: itemId,
         },
       },
     });
+  }
+
+  async hasTag(itemId: string, tagName: string) {
+    const tag = await this.client.menuItemTag.findFirst({
+      where: {
+        name: tagName,
+        menuItemId: itemId,
+      },
+    });
+
+    return !!tag;
   }
 
   async removeTag(itemId: string, tagName: string) {

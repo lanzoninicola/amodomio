@@ -104,33 +104,7 @@ export async function action({ request }: LoaderArgs) {
 
     }
 
-    if (values?.action === "menu-item-tag-add") {
 
-        const menuItem: MenuItem = jsonParse(values.item as string)
-        const name = values?.tagName as string
-
-        const [err, result] = await prismaIt(menuItemPrismaEntity.addTag(menuItem, name))
-
-        if (err) {
-            return badRequest(err)
-        }
-
-        return ok("Tag adicionada")
-    }
-
-    if (_action === "menu-item-tag-remove") {
-
-        const itemId = values?.itemId as string
-        const name = values?.tagName as string
-
-        const [err, result] = await prismaIt(menuItemPrismaEntity.removeTag(itemId, name))
-
-        if (err) {
-            return badRequest(err)
-        }
-
-        return ok("Tag removida")
-    }
 
     return null
 }

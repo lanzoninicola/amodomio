@@ -26,6 +26,12 @@ export class MenuItemTagPrismaEntity {
     return await this.client.menuItemTag.findUnique({ where: { id } });
   }
 
+  async findByItemId(itemId: string) {
+    return await this.client.menuItemTag.findMany({
+      where: { menuItemId: itemId },
+    });
+  }
+
   async create(data: Prisma.MenuItemTagCreateInput) {
     return await this.client.menuItemTag.create({ data });
   }

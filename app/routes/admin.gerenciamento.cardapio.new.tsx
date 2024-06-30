@@ -1,12 +1,27 @@
-import { Prisma } from "@prisma/client";
+import { Category, Prisma } from "@prisma/client";
 import { LoaderArgs, redirect } from "@remix-run/node";
-import { useActionData } from "@remix-run/react";
+import { useActionData, useLoaderData } from "@remix-run/react";
 import { toast } from "~/components/ui/use-toast";
 import MenuItemForm from "~/domain/cardapio/components/menu-item-form/menu-item-form";
 import { menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
+import { categoryPrismaEntity } from "~/domain/category/category.entity.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
-import { badRequest, ok } from "~/utils/http-response.server";
+import { badRequest, ok, serverError } from "~/utils/http-response.server";
 import { jsonParse } from "~/utils/json-helper";
+
+
+export async function loader({ params }: LoaderArgs) {
+    const [err, categories] = await prismaIt(categoryPrismaEntity.findAll());
+
+    if (err) {
+        return serverError(err);
+    }
+
+    return ok({
+        categories
+    });
+}
+
 
 export async function action({ request }: LoaderArgs) {
 
@@ -65,6 +80,9 @@ export async function action({ request }: LoaderArgs) {
 }
 
 export default function NewCardapioItem() {
+    const loaderData = useLoaderData<typeof loader>()
+    const categories: Category[] = loaderData.payload?.categories
+
     const actionData = useActionData<typeof action>()
     if (actionData && actionData.status > 399) {
         toast({
@@ -72,5 +90,5 @@ export default function NewCardapioItem() {
             description: actionData.message,
         })
     }
-    return <MenuItemForm action="menu-item-create" className="my-8 border rounded-xl p-4" />
+    return <MenuItemForm action="menu-item-create" className="my-8 border rounded-xl p-4" categories={categories} />
 }
