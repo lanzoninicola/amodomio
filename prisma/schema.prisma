@@ -190,3 +190,12 @@ model Setting {
 
   @@map("settings")
 }
+
+model OrderDeliveryTimeLeftOrders {
+  id          String   @id @default(uuid())
+  orderNumber String   @map("order_number")
+  createdAt   DateTime @map("created_at")
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("odtl_orders")
+}
