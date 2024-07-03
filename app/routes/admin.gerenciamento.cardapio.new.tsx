@@ -90,5 +90,13 @@ export default function NewCardapioItem() {
             description: actionData.message,
         })
     }
+
+    if (actionData && actionData.status === 200) {
+        toast({
+            title: "Sucesso",
+            description: actionData.message,
+        })
+    }
+
     return <MenuItemForm action="menu-item-create" className="my-8 border rounded-xl p-4" categories={categories} />
 }

@@ -124,6 +124,11 @@ export default function MenuItemForm({ item, action, className, categories }: Me
 
                 <Separator className="mb-4" />
 
+                <Fieldset className="grid grid-cols-8 items-center">
+                    <Label htmlFor="imageFile" className="font-semibold text-sm col-span-2" >Imagem</Label>
+                    <Input id="imageFile" name="imageFile" type="file" className="col-span-6" />
+                </Fieldset>
+
                 <section className="flex flex-col">
 
                     <Fieldset className="grid grid-cols-4 items-center">

@@ -1,6 +1,6 @@
 import { PrismaEntityProps } from "~/lib/prisma/types.server";
 import { MenuItemPrismaEntity } from "./menu-item.prisma.entity.server";
-import { prismaClient } from "~/lib/prisma/prisma-it.server";
+import prismaClient from "~/lib/prisma/client.server";
 import { MenuItemPriceVariation, Prisma } from "@prisma/client";
 
 export type MenuItemPriceVariationLabel =

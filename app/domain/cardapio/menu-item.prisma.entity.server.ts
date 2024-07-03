@@ -5,7 +5,7 @@ import {
   MenuItemTag,
   Prisma,
 } from "@prisma/client";
-import { prismaClient } from "~/lib/prisma/prisma-it.server";
+import prismaClient from "~/lib/prisma/client.server";
 import { PrismaEntityProps } from "~/lib/prisma/types.server";
 import { MenuItemPriceVariationPrismaEntity } from "./menu-item-price-variations.prisma.entity.server";
 import { menuItemTagPrismaEntity } from "./menu-item-tags.prisma.entity.server";
