@@ -10,8 +10,6 @@ export default function OrdersDeliveryTimeLeftSettings() {
     const counterTimeSettings = loaderData?.payload?.counterTimeSettings
     const counterMassa = loaderData?.payload?.counterMassa
 
-    console.log({ counterMassa })
-
     return (
         <div className="flex flex-col gap-4">
             <Form method="post" className="flex flex-col gap-2">
