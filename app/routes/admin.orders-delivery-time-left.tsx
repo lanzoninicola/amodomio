@@ -1,3 +1,4 @@
+import { Setting } from "@prisma/client";
 import { LoaderArgs } from "@remix-run/node";
 import { Form, Link, useLoaderData, useNavigation, useSearchParams } from "@remix-run/react";
 import dayjs from "dayjs";
@@ -17,9 +18,11 @@ import mogoEntity from "~/domain/mogo/mogo.entity.server";
 import { MogoOrderWithDiffTime } from "~/domain/mogo/types";
 import OrdersDeliveryTimeLeftDialogSettings from "~/domain/order-delivery-time-left/components/order-delivery-time-left-dialog-settings/order-delivery-time-left-dialog-settings";
 import { settingEntity } from "~/domain/setting/setting.entity.server";
-import { Setting } from "~/domain/setting/setting.model.server";
+import { Setting as SettingFirebase } from "~/domain/setting/setting.model.server";
+import { settingPrismaEntity } from "~/domain/setting/setting.prisma.entity.server";
 import useFormResponse from "~/hooks/useFormResponse";
 import { nowUTC } from "~/lib/dayjs";
+import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { cn } from "~/lib/utils";
 import { createDecreasingArray } from "~/utils/create-decrease-array";
 import getSearchParam from "~/utils/get-search-param";
@@ -44,17 +47,28 @@ export async function loader({ request }: LoaderArgs) {
         return serverError(errSettings)
     }
 
-    let minDeliveryTimeSettings: Setting | undefined
-    let maxDeliveryTimeSettings: Setting | undefined
-    let minCounterTimeSettings: Setting | undefined
-    let maxCounterTimeSettings: Setting | undefined
+    let minDeliveryTimeSettings: SettingFirebase | undefined
+    let maxDeliveryTimeSettings: SettingFirebase | undefined
+    let minCounterTimeSettings: SettingFirebase | undefined
+    let maxCounterTimeSettings: SettingFirebase | undefined
 
     if (settings) {
-        minDeliveryTimeSettings = settings.find((o: Setting) => o.name === "minTimeDeliveryMinutes")
-        maxDeliveryTimeSettings = settings.find((o: Setting) => o.name === "maxTimeDeliveryMinutes")
-        minCounterTimeSettings = settings.find((o: Setting) => o.name === "minTimeCounterMinutes")
-        maxCounterTimeSettings = settings.find((o: Setting) => o.name === "maxTimeCounterMinutes")
+        minDeliveryTimeSettings = settings.find((o: SettingFirebase) => o.name === "minTimeDeliveryMinutes")
+        maxDeliveryTimeSettings = settings.find((o: SettingFirebase) => o.name === "maxTimeDeliveryMinutes")
+        minCounterTimeSettings = settings.find((o: SettingFirebase) => o.name === "minTimeCounterMinutes")
+        maxCounterTimeSettings = settings.find((o: SettingFirebase) => o.name === "maxTimeCounterMinutes")
     }
+
+    let counterMassaFamiliaSetting: Setting | undefined
+    let counterMassaMediaSetting: Setting | undefined
+
+    const [errSetting, counterMassa] = await prismaIt(settingPrismaEntity.findAllByContext("counterMassa"))
+
+    if (counterMassa && counterMassa?.length > 0) {
+        counterMassaFamiliaSetting = counterMassa.find((o: Setting) => o.name === "massaFamilia")
+        counterMassaMediaSetting = counterMassa.find((o: Setting) => o.name === "massaMedia")
+    }
+
 
     let ordersToRender = [...orders]
 
@@ -80,6 +94,10 @@ export async function loader({ request }: LoaderArgs) {
         counterTimeSettings: {
             minTime: minCounterTimeSettings?.value || 0,
             maxTime: maxCounterTimeSettings?.value || 0,
+        },
+        counterMassa: {
+            massaFamilia: counterMassaFamiliaSetting?.value || 0,
+            massaMedia: counterMassaMediaSetting?.value || 0,
         }
 
     })
@@ -104,6 +122,8 @@ export async function action({ request }: LoaderArgs) {
     }
 
     if (_action === "order-timeline-segmentation-settings-change") {
+
+
 
         const context = values.context as string
         const minTime = String(Number(values.minTimeDeliveryMinutes || 0))
@@ -150,6 +170,36 @@ export async function action({ request }: LoaderArgs) {
 
         return ok("Configuração atualizada com successo")
 
+    }
+
+    if (_action === "order-delivery-time-left-counterMassa-settings-change") {
+        const context = values.context as string
+        const massaFamiliaAmount = isNaN(Number(values.massaFamilia)) ? 0 : Number(values.massaFamilia)
+        const massaMediaAmount = isNaN(Number(values.massaMedia)) ? 0 : Number(values.massaMedia)
+
+        const massaFamiliaSetting: Partial<Setting> = {
+            context,
+            name: "massaFamilia",
+            type: "number",
+            value: String(massaFamiliaAmount),
+            createdAt: new Date(),
+            updatedAt: new Date()
+        }
+
+        const massaMediaSetting: Partial<Setting> = {
+            context,
+            name: "massaMedia",
+            type: "number",
+            value: String(massaMediaAmount),
+            createdAt: new Date(),
+            updatedAt: new Date()
+        }
+
+        const [err, value] = await prismaIt(settingPrismaEntity.updateOrCreateMany(
+            [massaFamiliaSetting, massaMediaSetting]
+        ))
+
+        return null
     }
 
     return null

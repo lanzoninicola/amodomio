@@ -39,18 +39,18 @@ export const WEBSITE_NAVIGATION_ITEMS: WebsiteNavigation = {
       items: [
         {
           title: "Cardápio Delivery",
-          href: "/admin/cardapio",
+          href: "/admin/gerenciamento/cardapio",
           items: [],
         },
         {
           title: "Cardápio Pizza Al Taglio",
-          href: "/admin/cardapio-pizza-al-taglio",
+          href: "/admin/gerenciamento/cardapio-pizza-al-taglio",
           items: [],
           disabled: false,
         },
         {
           title: "Promo 'Fotos Cardapio'",
-          href: "/admin/pizza-promo",
+          href: "/admin/gerenciamento/pizza-promo",
           items: [],
           disabled: false,
         },

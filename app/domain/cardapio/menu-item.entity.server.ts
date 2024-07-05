@@ -201,26 +201,6 @@ class MenuItemEntity extends BaseEntity<MenuItem> {
   }
 }
 
-function mapPriceLabel(label: string): string {
-  if (label === "media") {
-    return "Média";
-  }
-
-  if (label === "familia") {
-    return "Família";
-  }
-
-  if (label === "fatia") {
-    return "Fatía";
-  }
-
-  if (label === "individual") {
-    return "Individual";
-  }
-
-  return "";
-}
-
 const menuEntity = new MenuItemEntity(MenuItemModel);
 
-export { menuEntity, mapPriceLabel };
+export { menuEntity };

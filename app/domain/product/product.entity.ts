@@ -12,7 +12,7 @@ import tryit from "~/utils/try-it";
 import dayjs from "dayjs";
 import { Category } from "../category/category.model.server";
 import { jsonParse } from "~/utils/json-helper";
-import { prismaClient } from "~/lib/prisma/prisma-it.server";
+import prismaClient from "~/lib/prisma/client.server";
 import { Prisma, PrismaClient } from "@prisma/client";
 import { DefaultArgs } from "@prisma/client/runtime/library";
 import { PrismaEntityProps } from "~/lib/prisma/types.server";

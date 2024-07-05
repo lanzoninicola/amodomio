@@ -9,13 +9,15 @@
 // }
 
 export default function formatStringList(
-  strings: string[] | undefined,
+  strings: string | undefined,
   options?: { firstLetterCapitalized: true }
 ): string {
   if (!strings) return "";
   if (strings.length === 0) return "";
 
-  const nextStrings = strings.map((str) => {
+  const stringArray = Array.isArray(strings) ? strings : strings.split(",");
+
+  const nextStrings = stringArray.map((str) => {
     const trimmedStr = str.trim();
 
     if (options?.firstLetterCapitalized === true) {

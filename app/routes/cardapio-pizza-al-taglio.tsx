@@ -5,7 +5,7 @@ import Container from "~/components/layout/container/container";
 import Logo from "~/components/primitives/logo/logo";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "~/components/ui/dialog";
-import { loader } from "./admin.cardapio._index";
+import { loader } from "./admin.gerenciamento.cardapio._index";
 
 export const meta: V2_MetaFunction = () => {
     return [

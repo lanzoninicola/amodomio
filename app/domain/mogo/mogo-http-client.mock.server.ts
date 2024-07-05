@@ -59,7 +59,7 @@ export default class MogoHttpClientMock implements MogoHttpClientInterface {
             Adicionais: [],
             Sabores: [
               {
-                Descricao: "Affumicata",
+                Descricao: "Bacon e Batata ao Forno",
                 Quantidade: 1,
                 Valor: 89.9,
               },
@@ -85,7 +85,7 @@ export default class MogoHttpClientMock implements MogoHttpClientInterface {
                 Valor: 89.9,
               },
               {
-                Descricao: "Mortazza",
+                Descricao: "Calabresa e Batata Frita",
                 Quantidade: 1,
                 Valor: 119.9,
               },
@@ -161,7 +161,7 @@ export default class MogoHttpClientMock implements MogoHttpClientInterface {
             Adicionais: [],
             Sabores: [
               {
-                Descricao: "Affumicata",
+                Descricao: "Siciliana",
                 Quantidade: 1,
                 Valor: 89.9,
               },

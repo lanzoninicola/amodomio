@@ -2,7 +2,7 @@ import { badRequest, serverError } from "~/utils/http-response.server";
 import type { Category, CategoryType } from "./category.model.server";
 import { CategoryModel } from "./category.model.server";
 import { BaseEntity } from "../base.entity";
-import { prismaClient } from "~/lib/prisma/prisma-it.server";
+import prismaClient from "~/lib/prisma/client.server";
 import { Prisma } from "@prisma/client";
 import { PrismaEntityProps } from "~/lib/prisma/types.server";
 

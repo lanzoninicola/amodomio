@@ -3,7 +3,7 @@
     "remix.env.d.ts",
     "**/*.ts",
     "**/*.tsx",
-    "app/domain/menu-item/menu-item.model.server.ts"
+    "app/domain/cardapio/menu-item.model.server.ts"
   ],
   "compilerOptions": {
     "lib": ["DOM", "DOM.Iterable", "ES2019"],

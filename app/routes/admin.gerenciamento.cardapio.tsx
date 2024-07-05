@@ -1,0 +1,98 @@
+import { MenuItemTag } from "@prisma/client";
+import { LoaderArgs } from "@remix-run/node";
+import { Link, Outlet, V2_MetaFunction, useLoaderData } from "@remix-run/react";
+import Container from "~/components/layout/container/container";
+import { toast } from "~/components/ui/use-toast";
+import { menuItemTagPrismaEntity } from "~/domain/cardapio/menu-item-tags.prisma.entity.server";
+import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
+import { categoryPrismaEntity } from "~/domain/category/category.entity.server";
+import { Category } from "~/domain/category/category.model.server";
+import { prismaIt } from "~/lib/prisma/prisma-it.server";
+import { badRequest, ok } from "~/utils/http-response.server";
+
+export const meta: V2_MetaFunction = () => {
+    return [
+        {
+            name: "robots",
+            content: "noindex",
+        },
+        {
+            name: "title",
+            content: "Cardápio - Gerençiamento",
+        }
+    ];
+};
+
+
+export async function loader({ request }: LoaderArgs) {
+    const [errCategories, categories] = await prismaIt(categoryPrismaEntity.findAll())
+
+    if (errCategories) {
+        return badRequest(errCategories)
+    }
+
+    const [errItems, items] = await prismaIt(menuItemPrismaEntity.findAll({}))
+
+    if (errItems) {
+        return badRequest(errItems)
+    }
+
+    const [_, tags] = await prismaIt(menuItemTagPrismaEntity.findAllDistinct())
+
+    return ok({ categories, items, tags })
+
+}
+
+
+export interface AdminCardapioOutletContext {
+    categories: Category[]
+    items: MenuItemWithAssociations[]
+    tags: MenuItemTag[]
+}
+
+export default function AdminCardapioOutlet() {
+    const loaderData = useLoaderData<typeof loader>()
+    const items = loaderData?.payload.items as MenuItemWithAssociations[] || []
+    const categories = loaderData?.payload.categories as Category[] || []
+    const tags = loaderData?.payload.tags as MenuItemTag[] || []
+
+    if (loaderData?.status > 399) {
+        toast({
+            title: "Erro",
+            description: loaderData?.message,
+        })
+    }
+
+    return (
+        <Container className="mb-24">
+            <div className="w-full p-6 bg-muted mb-8 rounded-lg" >
+                <div className="flex justify-between mb-4 items-start">
+                    <div className="flex flex-col gap-4">
+                        <h1 className="font-bold text-xl">Cardapio</h1>
+                        <div className="flex gap-4 justify-between md:justify-start">
+                            <Link to="new" className="py-2 px-4 rounded-md bg-black">
+                                <span className=" text-white font-semibold">
+                                    Novo item
+                                </span>
+                            </Link>
+                        </div>
+
+                    </div>
+                    <Link to="/admin/gerenciamento/cardapio" className="mr-4">
+                        <span className="text-sm underline">Voltar</span>
+                    </Link>
+
+                </div>
+
+            </div>
+
+            <Outlet context={{
+                items: items.sort((a, b) => a.sortOrderIndex - b.sortOrderIndex),
+                categories,
+                tags
+            }} />
+        </Container>
+
+    )
+
+}

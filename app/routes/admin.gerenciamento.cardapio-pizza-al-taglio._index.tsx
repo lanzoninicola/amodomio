@@ -171,45 +171,19 @@ export default function CardapioPizzaAlTaglioIndex() {
     const loaderData = useLoaderData<typeof loader>()
     const publicCardapio = loaderData?.payload?.publicCardapio as CardapioPizzaAlTaglio || undefined
 
-    if (loaderData?.status !== 200) {
-        <Alert>
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Oops</AlertTitle>
-            <AlertDescription>
-                {loaderData?.message}
-            </AlertDescription>
-        </Alert>
+    if (loaderData?.status > 399) {
+        return (
+            <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Oops</AlertTitle>
+                <AlertDescription>
+                    {loaderData?.message}
+                </AlertDescription>
+            </Alert>
+        )
     }
 
 
-    return (
-        <div className="flex flex-col mt-4">
-            <div className="flex justify-between items-center mb-6">
-                <h3 className="text-xl font-semibold text-muted-foreground ">Cardapios</h3>
-            </div>
-
-
-
-            <CardapioPizzaAlTaglioTabs />
-
-            <section className="flex flex-col">
-                {
-                    !publicCardapio ? (
-                        <Alert className="w-max px-16">
-                            <AlertCircle className="h-4 w-4" />
-                            <AlertTitle className="font-semibold">Posha!</AlertTitle>
-                            <AlertDescription className="text-sm">Não foi publicado nenhum cardápio</AlertDescription>
-                        </Alert>
-                    ) : (
-                        <CardapioPizzaAlTaglioItem cardapio={publicCardapio} />
-                    )
-                }
-            </section>
-
-
-        </div>
-
-    )
 }
 
 function CardapioPizzaAlTaglioTabs() {
