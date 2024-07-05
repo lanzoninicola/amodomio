@@ -81,6 +81,8 @@ export async function loader({ request }: LoaderArgs) {
     const stockMassaMediaSetting = await SettingOptionModel.factory("massaMedia")
     // end: get settings
 
+    console.log({ stockMassaFamiliaSetting: stockMassaFamiliaSetting?.value })
+
 
     let ordersToRender = [...orders]
 
@@ -281,10 +283,6 @@ export default function OrdersDeliveryTimeLeft() {
 
                             if (isFirstStep === true) {
                                 return deliveryTimeLeftMinutes >= min
-                            }
-
-                            if (isLastStep === true) {
-                                return deliveryTimeLeftMinutes <= max
                             }
 
                             return (deliveryTimeLeftMinutes <= max && deliveryTimeLeftMinutes >= min)
