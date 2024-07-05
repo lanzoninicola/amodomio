@@ -474,8 +474,8 @@ function StockMassaStat() {
 
     return (
         <div className="flex gap-4">
-            <Stat label={`Familia (${stockMassa.initial.massaFamilia})`} number={stockMassa?.final.massaFamilia || 0} />
-            <Stat label={`Media (${stockMassa.initial.massaMedia})`} number={stockMassa?.final.massaMedia || 0} />
+            <Stat label={`Familia (${stockMassa?.initial.massaFamilia})`} number={stockMassa?.final.massaFamilia || 0} />
+            <Stat label={`Media (${stockMassa?.initial.massaMedia})`} number={stockMassa?.final.massaMedia || 0} />
         </div>
     )
 }
