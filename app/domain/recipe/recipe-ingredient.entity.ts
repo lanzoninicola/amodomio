@@ -1,4 +1,4 @@
-import { prismaClient } from "~/lib/prisma/prisma-it.server";
+import prismaClient from "~/lib/prisma/client.server";
 import { Prisma, RecipeType } from "@prisma/client";
 import { PrismaEntityProps } from "~/lib/prisma/types.server";
 

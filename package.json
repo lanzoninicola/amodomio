@@ -8,7 +8,7 @@
     "dev:remix": "remix watch",
     "start": "cross-env NODE_ENV=production node ./server.js",
     "typecheck": "tsc",
-    "prisma:migrate:dev": "npx prisma migrate dev --name"
+    "migrate:dev": "npx prisma migrate dev --name"
   },
   "dependencies": {
     "@prisma/client": "^5.12.1",
