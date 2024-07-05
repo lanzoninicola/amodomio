@@ -285,6 +285,10 @@ export default function OrdersDeliveryTimeLeft() {
                                 return deliveryTimeLeftMinutes >= min
                             }
 
+                            if (isLastStep === true) {
+                                return deliveryTimeLeftMinutes <= max
+                            }
+
                             return (deliveryTimeLeftMinutes <= max && deliveryTimeLeftMinutes >= min)
                         })
 
