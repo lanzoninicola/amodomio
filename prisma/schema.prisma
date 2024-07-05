@@ -192,10 +192,11 @@ model Setting {
 }
 
 model OrderDeliveryTimeLeftOrdersInbound {
-  id          String   @id @default(uuid())
-  orderNumber String   @map("order_number")
-  createdAt   DateTime @map("created_at")
-  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
+  id          String    @id @default(uuid())
+  orderNumber String    @map("order_number")
+  archivedAt  DateTime? @map("archived_at")
+  createdAt   DateTime  @map("created_at")
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at")
 
   @@map("odtl_orders_inbound")
 }

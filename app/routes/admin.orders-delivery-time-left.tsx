@@ -6,7 +6,7 @@ import { loadBundle } from "firebase/firestore";
 import { Settings } from "lucide-react";
 import { useCallback, useEffect, useRef } from "react";
 import KanbanCol from "~/components/kanban-col/kanban-col";
-import KanbanOrderCardLargeScreen from "~/components/kanban-order-card/kanban-order-card-large-screen";
+import KanbanOrderCardLargeScreen, { DelaySeverity } from "~/components/kanban-order-card/kanban-order-card-large-screen";
 import Clock from "~/components/primitives/clock/clock";
 import SubmitButton from "~/components/primitives/submit-button/submit-button";
 
@@ -17,8 +17,10 @@ import { Separator } from "~/components/ui/separator";
 import mogoEntity from "~/domain/mogo/mogo.entity.server";
 import { MogoOrderWithDiffTime } from "~/domain/mogo/types";
 import OrdersDeliveryTimeLeftDialogSettings from "~/domain/order-delivery-time-left/components/order-delivery-time-left-dialog-settings/order-delivery-time-left-dialog-settings";
+import { ordersDeliveryTimeLeftEntity } from "~/domain/order-delivery-time-left/order-delivery-time-left.entity.server";
 import { settingEntity } from "~/domain/setting/setting.entity.server";
 import { Setting as SettingFirebase } from "~/domain/setting/setting.model.server";
+import { SettingOptionModel } from "~/domain/setting/setting.option.model.server";
 import { settingPrismaEntity } from "~/domain/setting/setting.prisma.entity.server";
 import useFormResponse from "~/hooks/useFormResponse";
 import { nowUTC } from "~/lib/dayjs";
@@ -29,6 +31,10 @@ import getSearchParam from "~/utils/get-search-param";
 import { ok, serverError } from "~/utils/http-response.server";
 import tryit from "~/utils/try-it";
 
+export interface CounterMassaAvailableResponse {
+    massaFamilia: number | null;
+    massaMedia: number | null;
+}
 
 export async function loader({ request }: LoaderArgs) {
 
@@ -59,15 +65,9 @@ export async function loader({ request }: LoaderArgs) {
         maxCounterTimeSettings = settings.find((o: SettingFirebase) => o.name === "maxTimeCounterMinutes")
     }
 
-    let counterMassaFamiliaSetting: Setting | undefined
-    let counterMassaMediaSetting: Setting | undefined
 
-    const [errSetting, counterMassa] = await prismaIt(settingPrismaEntity.findAllByContext("counterMassa"))
-
-    if (counterMassa && counterMassa?.length > 0) {
-        counterMassaFamiliaSetting = counterMassa.find((o: Setting) => o.name === "massaFamilia")
-        counterMassaMediaSetting = counterMassa.find((o: Setting) => o.name === "massaMedia")
-    }
+    const stockMassaFamiliaSetting = await SettingOptionModel.factory("massaFamilia")
+    const stockMassaMediaSetting = await SettingOptionModel.factory("massaMedia")
 
 
     let ordersToRender = [...orders]
@@ -79,6 +79,15 @@ export async function loader({ request }: LoaderArgs) {
     if (filterSearchParams === "only-counter") {
         ordersToRender = ordersToRender.filter(o => o.isDelivery === false)
     }
+
+
+    const [errCounterMassa, stockMassa] = await prismaIt(ordersDeliveryTimeLeftEntity.getUpdatedCountersMassa(orders))
+
+    const stockAmountMassaAvailable = {
+        massaFamilia: errCounterMassa ? null : stockMassa.stockAmountMassaFamilia,
+        massaMedia: errCounterMassa ? null : stockMassa.stockAmountMassaMedia
+    }
+
 
     return ok({
         orders: ordersToRender,
@@ -95,11 +104,11 @@ export async function loader({ request }: LoaderArgs) {
             minTime: minCounterTimeSettings?.value || 0,
             maxTime: maxCounterTimeSettings?.value || 0,
         },
-        counterMassa: {
-            massaFamilia: counterMassaFamiliaSetting?.value || 0,
-            massaMedia: counterMassaMediaSetting?.value || 0,
-        }
-
+        stockMassaSettings: {
+            massaFamilia: stockMassaFamiliaSetting?.value || 0,
+            massaMedia: stockMassaMediaSetting?.value || 0,
+        },
+        stockAmountMassaAvailable
     })
 
 
@@ -117,13 +126,16 @@ export async function action({ request }: LoaderArgs) {
             return serverError(err)
         }
 
+        const trackOrdersPromise = orders.map(o => ordersDeliveryTimeLeftEntity.trackOrder(o))
+
+        await Promise.all(trackOrdersPromise)
+
+
         return ok({ orders, lastRequestTime: nowUTC() })
 
     }
 
     if (_action === "order-timeline-segmentation-settings-change") {
-
-
 
         const context = values.context as string
         const minTime = String(Number(values.minTimeDeliveryMinutes || 0))
@@ -172,16 +184,16 @@ export async function action({ request }: LoaderArgs) {
 
     }
 
-    if (_action === "order-delivery-time-left-counterMassa-settings-change") {
+    if (_action === "order-delivery-time-left-stockMassa-settings-change") {
         const context = values.context as string
-        const massaFamiliaAmount = isNaN(Number(values.massaFamilia)) ? 0 : Number(values.massaFamilia)
-        const massaMediaAmount = isNaN(Number(values.massaMedia)) ? 0 : Number(values.massaMedia)
+        const stockAmountMassaFamilia = isNaN(Number(values.massaFamilia)) ? 0 : Number(values.massaFamilia)
+        const stockAmountMassaMedia = isNaN(Number(values.massaMedia)) ? 0 : Number(values.massaMedia)
 
         const massaFamiliaSetting: Partial<Setting> = {
             context,
             name: "massaFamilia",
             type: "number",
-            value: String(massaFamiliaAmount),
+            value: String(stockAmountMassaFamilia),
             createdAt: new Date(),
             updatedAt: new Date()
         }
@@ -190,7 +202,7 @@ export async function action({ request }: LoaderArgs) {
             context,
             name: "massaMedia",
             type: "number",
-            value: String(massaMediaAmount),
+            value: String(stockAmountMassaMedia),
             createdAt: new Date(),
             updatedAt: new Date()
         }
@@ -200,6 +212,18 @@ export async function action({ request }: LoaderArgs) {
         ))
 
         return null
+    }
+
+    if (_action === "order-delivery-time-left-archive-active-records") {
+
+        const [err, _] = await prismaIt(ordersDeliveryTimeLeftEntity.archiveActiveRecords())
+
+        if (err) {
+            return serverError(err)
+        }
+
+        return ok("Registros arquivados")
+
     }
 
     return null
@@ -236,13 +260,13 @@ export default function OrdersDeliveryTimeLeft() {
 
 
     return (
-        <div className="flex flex-col gap-4 px-6 pt-16 md:pt-0 min-h-screen relative">
+        <div className="relative flex flex-col gap-4 px-6 pt-16 md:pt-0 min-h-screen">
             <Header />
             <div className="grid grid-cols-4 gap-x-0 h-full">
                 {
                     arrayMinutes().map((step, index) => {
 
-                        const { min, max, isFirstStep } = step
+                        const { min, max, isFirstStep, isLastStep } = step
 
                         const ordersFiltered = orders.filter(order => {
 
@@ -250,6 +274,10 @@ export default function OrdersDeliveryTimeLeft() {
 
                             if (isFirstStep === true) {
                                 return deliveryTimeLeftMinutes >= min
+                            }
+
+                            if (isLastStep === true) {
+                                return deliveryTimeLeftMinutes <= max
                             }
 
                             return (deliveryTimeLeftMinutes <= max && deliveryTimeLeftMinutes >= min)
@@ -261,13 +289,13 @@ export default function OrdersDeliveryTimeLeft() {
                             <KanbanCol
                                 key={index}
                                 severity={index + 1}
-                                title={max === 0 ? "Da entregar" : `Menos o igual a ${max}'`}
-                                description={max === 0 ? "Da entregar" : `Previsão de entrega em ${max} minutos`}
+                                title={max === 0 ? "Para entregar" : `Menos ou igual a ${max}'`}
+                                description={max === 0 ? "Para entregar" : `Previsão de entrega em ${max} minutos`}
                                 itemsNumber={ordersFiltered.length}
                             >
-                                {ordersFiltered.map((o, index) => {
+                                {ordersFiltered.map((o) => {
                                     return (
-                                        <KanbanOrderCardLargeScreen key={o.NumeroPedido} order={o} orderTimeSeverity={5} />
+                                        <KanbanOrderCardLargeScreen key={o.NumeroPedido} order={o} orderTimeSeverity={(index + 1) as DelaySeverity} />
                                     )
                                 })}
                             </KanbanCol>
@@ -296,7 +324,7 @@ function AlertsIngredients({ orders }: { orders: MogoOrderWithDiffTime[] }) {
 
         return (
             <>
-                <span className="font-semibold text-lg">{order.NumeroPedido}</span>
+                <span className="font-semibold">{order.NumeroPedido}</span>
                 <span className="font-semibold text-lg">{`${orderHH}:${orderMin}`}</span>
             </>
         )
@@ -305,7 +333,7 @@ function AlertsIngredients({ orders }: { orders: MogoOrderWithDiffTime[] }) {
     const AlertCard = ({ title, payload }: { title: string, payload: MogoOrderWithDiffTime[] }) => {
         return (
             <div className="flex flex-col items-start gap-2 rounded-lg border px-4 py-2 text-left text-sm transition-all hover:bg-accent bg-orange-300">
-                <h4 className="text-2xl font-semibold tracking-tight">{`${title} (${payload.length})`}</h4>
+                <h4 className="text-xl font-semibold tracking-tight">{`${title} (${payload.length})`}</h4>
                 <div className="grid grid-cols-2 gap-x-6">
                     <span className="text-[10px]">Pedido numero</span>
                     <span className="text-[10px]">Hórario pedido</span>
@@ -318,7 +346,7 @@ function AlertsIngredients({ orders }: { orders: MogoOrderWithDiffTime[] }) {
     }
 
     return (
-        <div className="absolute bottom-[70px] left-0 right-0 backdrop-blur-md">
+        <div className="fixed bottom-0 backdrop-blur-md">
             <div className="w-full h-full px-8 py-4 flex gap-4">
                 {ordersWithBatataAoForno.length > 0 && <AlertCard title="Batatas ao Forno" payload={ordersWithBatataAoForno} />}
 
@@ -371,8 +399,8 @@ function Header() {
     const totDispatchTime = orders.map(o => o.totDispatchTimeInMinutes).reduce((a, b) => a + b, 0)
 
     return (
-        <div className="grid grid-cols-3 w-full items-center">
-            <Form method="post">
+        <div className="grid grid-cols-12 w-full items-center">
+            <Form method="post" className="col-span-3">
                 <div className="flex gap-2 items-center">
                     <Button type="submit" className="text-2xl"
                         name="_action"
@@ -389,21 +417,56 @@ function Header() {
                 </div>
 
             </Form>
-            <div className="flex gap-4 items-center justify-center">
-                <div className="flex flex-col">
-                    <span>Hora do último despacho:</span>
-                    <span className="text-xs">totDispatchTime: {totDispatchTime}</span>
+
+            <div className="grid grid-cols-4 col-span-7">
+                <div className="flex gap-4 items-center justify-center col-span-2">
+                    <div className="flex flex-col">
+                        <span>Hora do último despacho:</span>
+                        <span className="text-xs">totDispatchTime: {totDispatchTime}</span>
+                    </div>
+                    <Clock minutesToAdd={totDispatchTime} highContrast={true} />
                 </div>
-                <Clock minutesToAdd={totDispatchTime} highContrast={true} />
+                <StockMassaStat />
+
             </div>
 
 
 
-            <div className="flex gap-4 justify-end items-center">
+            <div className="flex gap-4 justify-end items-center col-span-2">
                 {/* <h4 >Tempo maximo de entrega <span className="font-semibold text-lg">{maxDeliveryTimeSettings} minutos</span> </h4> */}
                 <Clock />
                 <OrdersDeliveryTimeLeftDialogSettings showLabel={false} />
             </div>
+        </div>
+    )
+}
+
+function StockMassaStat() {
+    const loaderData = useLoaderData<typeof loader>()
+
+    let stockAmountMassaAvailable: CounterMassaAvailableResponse = loaderData.payload?.stockAmountMassaAvailable || null
+
+    const Stat = ({ label, number }: { label: string, number: number }) => {
+        return (
+            <div className={
+                cn(
+                    "flex flex-col gap-0 justify-center py-1 px-4 rounded-md text-white text-center",
+                    number === 0 && "bg-gray-400",
+                    (number <= 2 && number > 0) && "bg-red-500",
+                    (number > 2 && number <= 4) && "bg-orange-500",
+                    number > 4 && "bg-brand-blue"
+                )
+            }>
+                <span className="text-xs">{label}</span>
+                <span className="text-3xl font-semibold">{number}</span>
+            </div>
+        )
+    }
+
+    return (
+        <div className="flex gap-4">
+            <Stat label="Familía" number={stockAmountMassaAvailable?.massaFamilia || 0} />
+            <Stat label="Medía" number={stockAmountMassaAvailable?.massaMedia || 0} />
         </div>
     )
 }
