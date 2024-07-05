@@ -3,6 +3,7 @@ import { MogoBaseOrder } from "../mogo/types";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import prismaClient from "~/lib/prisma/client.server";
 import { SettingOptionModel } from "../setting/setting.option.model.server";
+import { jsonStringify } from "~/utils/json-helper";
 
 class OrdersDeliveryTimeLeftEntity {
   client;
@@ -27,6 +28,7 @@ class OrdersDeliveryTimeLeftEntity {
     await this.client.orderDeliveryTimeLeftOrdersInbound.create({
       data: {
         orderNumber: order.NumeroPedido,
+        rawData: jsonStringify(order),
         createdAt: new Date(),
         updatedAt: new Date(),
       },

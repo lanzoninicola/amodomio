@@ -46,8 +46,12 @@ export async function loader({ request }: LoaderArgs) {
         return serverError(err)
     }
 
-    const [errSettings, settings] = await tryit(settingEntity.findSettingsByContext("order-timeline-segmentation-delivery-time"))
+    // track opened orders
+    const trackOrdersPromise = orders.map(o => ordersDeliveryTimeLeftEntity.trackOrder(o))
+    await Promise.all(trackOrdersPromise)
 
+    // start: get settings
+    const [errSettings, settings] = await tryit(settingEntity.findSettingsByContext("order-timeline-segmentation-delivery-time"))
 
     if (errSettings) {
         return serverError(errSettings)
@@ -68,6 +72,7 @@ export async function loader({ request }: LoaderArgs) {
 
     const stockMassaFamiliaSetting = await SettingOptionModel.factory("massaFamilia")
     const stockMassaMediaSetting = await SettingOptionModel.factory("massaMedia")
+    // end: get settings
 
 
     let ordersToRender = [...orders]
@@ -126,9 +131,7 @@ export async function action({ request }: LoaderArgs) {
             return serverError(err)
         }
 
-        const trackOrdersPromise = orders.map(o => ordersDeliveryTimeLeftEntity.trackOrder(o))
 
-        await Promise.all(trackOrdersPromise)
 
 
         return ok({ orders, lastRequestTime: nowUTC() })
