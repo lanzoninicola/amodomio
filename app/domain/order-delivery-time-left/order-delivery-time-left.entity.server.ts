@@ -3,7 +3,7 @@ import { MogoBaseOrder } from "../mogo/types";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import prismaClient from "~/lib/prisma/client.server";
 import { SettingOptionModel } from "../setting/setting.option.model.server";
-import { jsonStringify } from "~/utils/json-helper";
+import { jsonParse, jsonStringify } from "~/utils/json-helper";
 
 class OrdersDeliveryTimeLeftEntity {
   client;
@@ -35,6 +35,14 @@ class OrdersDeliveryTimeLeftEntity {
     });
   }
 
+  async getActiveTrackedOrders() {
+    return await this.client.orderDeliveryTimeLeftOrdersInbound.findMany({
+      where: {
+        archivedAt: null,
+      },
+    });
+  }
+
   async archiveActiveRecords() {
     return await this.client.orderDeliveryTimeLeftOrdersInbound.updateMany({
       where: {
@@ -46,7 +54,7 @@ class OrdersDeliveryTimeLeftEntity {
     });
   }
 
-  async getUpdatedCountersMassa(openedOrders: MogoBaseOrder[]) {
+  async getUpdatedStockMassa() {
     const stockMassaFamiliaSetting = await SettingOptionModel.factory(
       "massaFamilia"
     );
@@ -54,27 +62,37 @@ class OrdersDeliveryTimeLeftEntity {
       "massaMedia"
     );
 
-    const stockAmountMassaFamilia = stockMassaFamiliaSetting?.value || 0;
-    const stockAmountMassaMedia = stockMassaMediaSetting?.value || 0;
+    const initialStockMassaFamilia = stockMassaFamiliaSetting?.value || 0;
+    const initialStockMassaMedia = stockMassaMediaSetting?.value || 0;
 
-    let totMassaFamilia = 0;
-    let totMassaMedia = 0;
+    let totMassaFamiliaOut = 0;
+    let totMassaMediaOut = 0;
 
-    openedOrders.forEach((o) => {
+    const records = await this.getActiveTrackedOrders();
+
+    records.forEach((r) => {
+      const o: MogoBaseOrder = jsonParse(r.rawData);
+
       o.Itens.forEach((i) => {
         if (i.IdProduto === 19) {
-          totMassaFamilia = totMassaFamilia + 1;
+          totMassaFamiliaOut = totMassaFamiliaOut + 1;
         }
 
         if (i.IdProduto === 18) {
-          totMassaMedia = totMassaMedia + 1;
+          totMassaMediaOut = totMassaMediaOut + 1;
         }
       });
     });
 
     return {
-      stockAmountMassaFamilia: stockAmountMassaFamilia - totMassaFamilia,
-      stockAmountMassaMedia: stockAmountMassaMedia - totMassaMedia,
+      initial: {
+        massaFamilia: initialStockMassaFamilia,
+        massaMedia: initialStockMassaMedia,
+      },
+      final: {
+        massaFamilia: initialStockMassaFamilia - totMassaFamiliaOut,
+        massaMedia: initialStockMassaMedia - totMassaMediaOut,
+      },
     };
   }
 }

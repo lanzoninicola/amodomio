@@ -31,9 +31,16 @@ import getSearchParam from "~/utils/get-search-param";
 import { ok, serverError } from "~/utils/http-response.server";
 import tryit from "~/utils/try-it";
 
-export interface CounterMassaAvailableResponse {
-    massaFamilia: number | null;
-    massaMedia: number | null;
+export interface StockMassaResponse {
+    initial: {
+        massaFamilia: number
+        massaMedia: number
+    },
+    final: {
+        massaFamilia: number
+        massaMedia: number
+    }
+
 }
 
 export async function loader({ request }: LoaderArgs) {
@@ -86,12 +93,7 @@ export async function loader({ request }: LoaderArgs) {
     }
 
 
-    const [errCounterMassa, stockMassa] = await prismaIt(ordersDeliveryTimeLeftEntity.getUpdatedCountersMassa(orders))
-
-    const stockAmountMassaAvailable = {
-        massaFamilia: errCounterMassa ? null : stockMassa.stockAmountMassaFamilia,
-        massaMedia: errCounterMassa ? null : stockMassa.stockAmountMassaMedia
-    }
+    const [errCounterMassa, stockMassa] = await prismaIt(ordersDeliveryTimeLeftEntity.getUpdatedStockMassa())
 
 
     return ok({
@@ -113,7 +115,7 @@ export async function loader({ request }: LoaderArgs) {
             massaFamilia: stockMassaFamiliaSetting?.value || 0,
             massaMedia: stockMassaMediaSetting?.value || 0,
         },
-        stockAmountMassaAvailable
+        stockMassa
     })
 
 
@@ -447,7 +449,7 @@ function Header() {
 function StockMassaStat() {
     const loaderData = useLoaderData<typeof loader>()
 
-    let stockAmountMassaAvailable: CounterMassaAvailableResponse = loaderData.payload?.stockAmountMassaAvailable || null
+    let stockMassa: StockMassaResponse = loaderData.payload?.stockMassa || null
 
     const Stat = ({ label, number }: { label: string, number: number }) => {
         return (
@@ -468,8 +470,8 @@ function StockMassaStat() {
 
     return (
         <div className="flex gap-4">
-            <Stat label="Familía" number={stockAmountMassaAvailable?.massaFamilia || 0} />
-            <Stat label="Medía" number={stockAmountMassaAvailable?.massaMedia || 0} />
+            <Stat label={`Familia (${stockMassa.initial.massaFamilia})`} number={stockMassa?.final.massaFamilia || 0} />
+            <Stat label={`Media (${stockMassa.initial.massaMedia})`} number={stockMassa?.final.massaMedia || 0} />
         </div>
     )
 }
