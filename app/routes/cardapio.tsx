@@ -62,7 +62,7 @@ export default function CardapioPage() {
                 )
 
             }
-            <BottomActionBar currentSlide={currentSlide} bottomPosition={"1rem"} showBarOnPageNumber={5} />
+            <BottomActionBar currentSlide={currentSlide} bottomPosition={"0rem"} showBarOnPageNumber={5} />
             <div className="flex flex-col md:mt-24" >
                 <h1 className="hidden md:block font-semibold font-title tracking-tight text-4xl mb-6">Cardápio</h1>
                 <div ref={elementRef}>
@@ -194,26 +194,26 @@ function ActionBar() {
 
 
     return (
-        <div className="grid grid-cols-3 font-body-website bg-slate-300 py-2">
+        <div className="grid grid-cols-3 font-body-website bg-slate-300 py-1 px-4">
 
 
             <WhatsappExternalLink phoneNumber="46991272525"
                 ariaLabel="Envia uma mensagem com WhatsApp"
                 message={"Olá, gostaria fazer um pedido"}
-                className="flex flex-col gap-2 justify-center items-center"
+                className="flex flex-col justify-center items-center"
             >
                 <WhatsAppIcon color="black" />
                 <span className="text-xs tracking-normal font-semibold">Atendimento</span>
             </WhatsappExternalLink>
 
-            <Link to={"/pdf/cardapio/amodomio-cardapio.pdf"} className="flex flex-col gap-2 justify-center items-center" download>
+            <Link to={"/pdf/cardapio/amodomio-cardapio.pdf"} className="flex flex-col justify-center items-center" download>
                 <ArrowDown />
                 <span className="text-xs tracking-normal font-semibold">
                     Baixar PDF
                 </span>
             </Link>
 
-            <Link to={'finalizar'} className="flex flex-col gap-2 justify-center items-center">
+            <Link to={'finalizar'} className="flex flex-col justify-center items-center bg-brand-green rounded-lg p-1 shadow-md">
                 <ShoppingCart />
                 <span className="text-xs tracking-normal font-semibold">
                     Fazer Pedido
