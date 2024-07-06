@@ -29,6 +29,7 @@ import { cn } from "~/lib/utils";
 import { createDecreasingArray } from "~/utils/create-decrease-array";
 import getSearchParam from "~/utils/get-search-param";
 import { ok, serverError } from "~/utils/http-response.server";
+import toLowerCase from "~/utils/to-lower-case";
 import tryit from "~/utils/try-it";
 
 export interface StockMassaResponse {
@@ -321,10 +322,10 @@ export default function OrdersDeliveryTimeLeft() {
 
 function AlertsIngredients({ orders }: { orders: MogoOrderWithDiffTime[] }) {
 
-    const ordersWithBatataAoForno = orders.filter(o => o.Itens.some(i => i.Sabores.some(s => s.Descricao === "Bacon e Batata ao Forno")))
-    const ordersWithBatataFrita = orders.filter(o => o.Itens.some(i => i.Sabores.some(s => s.Descricao === "Calabresa e Batata Frita")))
-    const ordersWithAbobrinha = orders.filter(o => o.Itens.some(i => i.Sabores.some(s => (s.Descricao === "Delicata" || s.Descricao === "Delicatissima" || s.Descricao === "Ortolana" || s.Descricao === "Italia"))))
-    const ordersWithBeringela = orders.filter(o => o.Itens.some(i => i.Sabores.some(s => s.Descricao === "Siciliana")))
+    const ordersWithBatataAoForno = orders.filter(o => o.Itens.some(i => i.Sabores.some(s => toLowerCase(s.Descricao) === toLowerCase("Bacon e Batata ao Forno"))))
+    const ordersWithBatataFrita = orders.filter(o => o.Itens.some(i => i.Sabores.some(s => toLowerCase(s.Descricao) === toLowerCase("Calabresa e Batata Frita"))))
+    const ordersWithAbobrinha = orders.filter(o => o.Itens.some(i => i.Sabores.some(s => (toLowerCase(s.Descricao) === toLowerCase("Delicata") || toLowerCase(s.Descricao) === toLowerCase("Delicatissima") || toLowerCase(s.Descricao) === toLowerCase("Ortolana") || toLowerCase(s.Descricao) === toLowerCase("Italia")))))
+    const ordersWithBeringela = orders.filter(o => o.Itens.some(i => i.Sabores.some(s => toLowerCase(s.Descricao) === toLowerCase("Siciliana"))))
 
     const AlertCardContent = ({ order }: { order: MogoOrderWithDiffTime }) => {
         const orderTime = order.HoraPedido || "Não definido"
