@@ -2,6 +2,16 @@ import { Prisma } from "@prisma/client";
 import prismaClient from "~/lib/prisma/client.server";
 import { PrismaEntityProps } from "~/lib/prisma/types.server";
 
+export interface ISettingOption {
+  id: string;
+  context: string;
+  name: string;
+  type: string;
+  value: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export class SettingPrismaEntity {
   client;
   constructor({ client }: PrismaEntityProps) {
@@ -26,7 +36,7 @@ export class SettingPrismaEntity {
     });
   }
 
-  async findByName(name: string) {
+  async findByOptionName(name: string): Promise<ISettingOption | null> {
     return await this.client.setting.findFirst({ where: { name } });
   }
 

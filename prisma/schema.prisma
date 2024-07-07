@@ -10,6 +10,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  /// the url is override when the Prisma Client object is created
   url      = env("PRISMA_DB_URL")
 }
 
@@ -192,10 +193,13 @@ model Setting {
 }
 
 model OrderDeliveryTimeLeftOrdersInbound {
-  id          String   @id @default(uuid())
-  orderNumber String   @map("order_number")
-  createdAt   DateTime @map("created_at")
-  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
+  id          String    @id @default(uuid())
+  orderNumber String    @map("order_number")
+  /// rawData: JSON format of order object
+  rawData     String?   @map("raw_data")
+  archivedAt  DateTime? @map("archived_at")
+  createdAt   DateTime  @map("created_at")
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at")
 
   @@map("odtl_orders_inbound")
 }

@@ -1,9 +1,7 @@
 
-import { Truck, PersonStanding, ChevronRight, ChevronRightIcon, ClockIcon } from "lucide-react"
-import { useState } from "react"
+import { Truck, PersonStanding } from "lucide-react"
 import { MogoOrderWithDiffTime } from "~/domain/mogo/types"
 import { cn } from "~/lib/utils"
-import { Separator } from "../ui/separator"
 
 export type DelaySeverity = 1 | 2 | 3 | 4 | 5
 
@@ -11,12 +9,14 @@ interface OrderCardProps {
     order: MogoOrderWithDiffTime,
     orderTimeSeverity: DelaySeverity,
     showDeliveryTimeExpectedLabel?: boolean,
+    lighter?: boolean
 }
 
 export default function KanbanOrderCardLargeScreen({
     order,
     orderTimeSeverity,
-    showDeliveryTimeExpectedLabel = true
+    showDeliveryTimeExpectedLabel = true,
+    lighter = false
 }: OrderCardProps) {
     const number = order.NumeroPedido
     const orderTime = order.HoraPedido || "Não definido"
@@ -83,10 +83,14 @@ export default function KanbanOrderCardLargeScreen({
                         </div>
                     </div>
 
-                    <div className="flex justify-between gap-2 items-center px-2">
-                        <span className="text-[10px] text-center">Programado em</span>
-                        <span className="text-xl">{delayStringDeliveryTime}</span>
-                    </div>
+                    {
+                        lighter === false && (
+                            <div className="flex justify-between gap-2 items-center px-2">
+                                <span className="text-[10px] text-center">Programado em</span>
+                                <span className="text-xl">{delayStringDeliveryTime}</span>
+                            </div>
+                        )
+                    }
 
 
 
