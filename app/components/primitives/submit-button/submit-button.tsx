@@ -15,6 +15,7 @@ interface SubmitButtonProps extends ButtonProps {
     labelClassName?: string
     size?: "sm" | "lg" | "default" | null | undefined,
     icon?: JSX.Element
+    iconColor?: string
 }
 
 export default function SubmitButton({
@@ -26,6 +27,7 @@ export default function SubmitButton({
     className,
     size = "default",
     icon,
+    iconColor,
     labelClassName,
     ...props
 }: SubmitButtonProps) {
@@ -37,7 +39,7 @@ export default function SubmitButton({
         formSubmissionInProgress = false
     }
 
-    let buttonIcon = formSubmissionInProgress ? <Loader size={16} /> : <Save size={16} />
+    let buttonIcon = formSubmissionInProgress ? <Loader size={16} color={iconColor || "white"} /> : <Save size={16} color={iconColor || "white"} />
     let text = formSubmissionInProgress ? (loadingText || "Salvando...") : (idleText || "Salvar")
     let disabled = formSubmissionInProgress || props.disabled
 

@@ -10,6 +10,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  /// the url is override when the Prisma Client object is created
   url      = env("PRISMA_DB_URL")
 }
 

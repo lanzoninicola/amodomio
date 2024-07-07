@@ -82,9 +82,6 @@ export async function loader({ request }: LoaderArgs) {
     const stockMassaMediaSetting = await SettingOptionModel.factory("massaMedia")
     // end: get settings
 
-    console.log({ stockMassaFamiliaSetting: stockMassaFamiliaSetting?.value })
-
-
     let ordersToRender = [...orders]
 
     if (filterSearchParams === "only-delivery") {
@@ -265,9 +262,6 @@ export default function OrdersDeliveryTimeLeft() {
     const arrayMinutes = useCallback(() => createDecreasingArray(90, 30), [])
 
     const ordersDisplayed: MogoOrderWithDiffTime[] = []
-
-    console.log({ orders })
-
 
     return (
         <div className="relative flex flex-col gap-4 px-6 pt-16 md:pt-0 min-h-screen">
