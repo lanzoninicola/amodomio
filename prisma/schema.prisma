@@ -11,7 +11,7 @@ generator client {
 datasource db {
   provider = "postgresql"
   /// the url is override when the Prisma Client object is created
-  url      = env("PRISMA_DB_URL")
+  url      = env("PRISMA_DB_DEV_URL")
 }
 
 model Product {
@@ -160,6 +160,7 @@ model MenuItemPriceVariation {
   basePrice          Float     @default(0)
   amount             Float
   discountPercentage Float     @map("discount_percentage")
+  showOnCardapio     Boolean   @default(false) @map("show_on_cardapio")
   createdAt          DateTime  @map("created_at")
   updatedAt          DateTime  @default(now()) @updatedAt @map("updated_at")
 

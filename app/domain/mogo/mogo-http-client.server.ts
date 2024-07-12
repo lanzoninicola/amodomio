@@ -6,7 +6,7 @@ export default class MogoHttpClient implements MogoHttpClientInterface {
   dbName = process.env.MOGO_DB_NAME;
 
   async getOrdersOpened() {
-    const endpoint = `http://app.mogogourmet.com.br/snack/v1/GetPedidosAbertos?dbname=${this.dbName}&onlyNew=true`;
+    const endpoint = `http://app3.mogogourmet.com.br/snack/v1/GetPedidosAbertos?dbname=${this.dbName}&onlyNew=true`;
 
     if (!this.authToken) {
       throw new Error("Mogo: Token de autenticação não encontrado");
