@@ -54,6 +54,12 @@ export const WEBSITE_NAVIGATION_ITEMS: WebsiteNavigation = {
           items: [],
           disabled: false,
         },
+        {
+          title: "Stock Massa",
+          href: "/admin/gerenciamento/stock-massa-init",
+          items: [],
+          disabled: false,
+        },
       ],
     },
     {

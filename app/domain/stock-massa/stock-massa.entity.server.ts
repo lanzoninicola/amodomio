@@ -18,7 +18,7 @@ export interface StockProduct {
  * CURRENT STOCK = INITIAL STOCK - (OUTBOUND - INBOUND) => from tracking order delivery time left
  */
 
-class StockMassaLoaderEntity {
+class StockMassaEntity {
   #familia: StockProduct = {
     initial: 0,
     current: 0,
@@ -32,8 +32,6 @@ class StockMassaLoaderEntity {
 
   #settingClient: ISettingPrismaEntity | undefined;
 
-  #isLoaded: boolean = false;
-
   /**
    * 2024-07-13 At current date stock of "massa" is from setting
    */
@@ -41,7 +39,7 @@ class StockMassaLoaderEntity {
     this.#settingClient = settingClient;
   }
 
-  async get(): Promise<{ familia: StockProduct; media: StockProduct }> {
+  async loadInitial(): Promise<void> {
     const stockMassaFamiliaSetting = await SettingOptionModel.factory(
       "massaFamilia"
     );
@@ -49,16 +47,14 @@ class StockMassaLoaderEntity {
       "massaMedia"
     );
 
-    return {
-      familia: {
-        initial: stockMassaFamiliaSetting?.value || 0,
-        current: stockMassaFamiliaSetting?.value || 0,
-      },
+    this.#familia = {
+      ...this.#familia,
+      initial: stockMassaFamiliaSetting?.value || 0,
+    };
 
-      media: {
-        initial: stockMassaMediaSetting?.value || 0,
-        current: stockMassaMediaSetting?.value || 0,
-      },
+    this.#media = {
+      ...this.#media,
+      initial: stockMassaMediaSetting?.value || 0,
     };
   }
 
@@ -78,7 +74,7 @@ class StockMassaLoaderEntity {
     return this.#media.current;
   }
 
-  async initStockMassa({
+  async updateInitialStock({
     type,
     amount,
   }: {
@@ -145,8 +141,8 @@ class StockMassaLoaderEntity {
   //   }
 }
 
-const stockMassaLoader = new StockMassaLoaderEntity({
+const stockMassaEntity = new StockMassaEntity({
   settingClient: settingPrismaEntity,
 });
 
-export { stockMassaLoader };
+export { stockMassaEntity };
