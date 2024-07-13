@@ -1,7 +1,7 @@
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { SettingOptionModel } from "../setting/setting.option.model.server";
 import {
-  SettingPrismaEntity,
+  ISettingPrismaEntity,
   settingPrismaEntity,
 } from "../setting/setting.prisma.entity.server";
 import { Setting } from "@prisma/client";
@@ -10,6 +10,13 @@ export interface StockProduct {
   initial: number;
   current: number;
 }
+
+/**
+ * NOTE:
+ *
+ * INITIAL STOCK from setting
+ * CURRENT STOCK = INITIAL STOCK - (OUTBOUND - INBOUND) => from tracking order delivery time left
+ */
 
 class StockMassaEntity {
   #familia: StockProduct = {
@@ -23,11 +30,16 @@ class StockMassaEntity {
 
   #settingContext: string = "stockMassa";
 
-  #settingPrismaEntity: SettingPrismaEntity | undefined;
+  #settingClient: ISettingPrismaEntity | undefined;
 
-  async init() {
-    this.#settingPrismaEntity = settingPrismaEntity;
+  /**
+   * 2024-07-13 At current date stock of "massa" is from setting
+   */
+  constructor({ settingClient }: { settingClient: ISettingPrismaEntity }) {
+    this.#settingClient = settingClient;
+  }
 
+  async loadInitial(): Promise<void> {
     const stockMassaFamiliaSetting = await SettingOptionModel.factory(
       "massaFamilia"
     );
@@ -36,15 +48,14 @@ class StockMassaEntity {
     );
 
     this.#familia = {
+      ...this.#familia,
       initial: stockMassaFamiliaSetting?.value || 0,
-      current: stockMassaFamiliaSetting?.value || 0,
-    };
-    this.#media = {
-      initial: stockMassaMediaSetting?.value || 0,
-      current: stockMassaMediaSetting?.value || 0,
     };
 
-    console.log({ familia: this.#familia });
+    this.#media = {
+      ...this.#media,
+      initial: stockMassaMediaSetting?.value || 0,
+    };
   }
 
   getInitialFamilia() {
@@ -63,21 +74,14 @@ class StockMassaEntity {
     return this.#media.current;
   }
 
-  getAll() {
-    return {
-      familia: this.#familia,
-      media: this.#media,
-    };
-  }
-
-  async initStockMassa({
+  async updateInitialStock({
     type,
     amount,
   }: {
     type: "familia" | "media";
     amount: number;
   }) {
-    if (!this.#settingPrismaEntity) {
+    if (!this.#settingClient) {
       return;
     }
 
@@ -100,7 +104,7 @@ class StockMassaEntity {
       this.#media.initial = stockAmountMassa;
     }
 
-    return await this.#settingPrismaEntity.updateOrCreate(massaSetting);
+    return await this.#settingClient.updateOrCreate(massaSetting);
   }
 
   // TODO: implementar
@@ -137,10 +141,8 @@ class StockMassaEntity {
   //   }
 }
 
-const stockMassaEntity = new StockMassaEntity();
-
-(async () => {
-  await stockMassaEntity.init();
-})();
+const stockMassaEntity = new StockMassaEntity({
+  settingClient: settingPrismaEntity,
+});
 
 export { stockMassaEntity };

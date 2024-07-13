@@ -71,8 +71,9 @@ export default function AdminOutlet() {
 
 function EnvironmentAlert() {
     return (
-        <div className="fixed top-4 left-4 opacity-70 bg-red-600 p-4 rounded-lg z-50 hover:opacity-100 transition-opacity">
-            <p className="text-white">Ambiente de desenvolvimento</p>
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 opacity-70 bg-red-600 p-4 rounded-lg z-50 hover:opacity-100 transition-opacity">
+            <p className="text-white text-center leading-tight">Ambiente de desenvolvimento</p>
         </div>
+
     )
 }
