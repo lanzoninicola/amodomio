@@ -2,14 +2,14 @@ import { ActionFunction, LoaderFunction } from "@remix-run/node";
 import { Form, useLoaderData } from "@remix-run/react";
 import SubmitButton from "~/components/primitives/submit-button/submit-button";
 import { Input } from "~/components/ui/input";
-import { StockProduct, stockMassaEntity } from "~/domain/stock-massa/stock-massa.entity.server";
+import { StockProduct, stockMassaLoader } from "~/domain/stock-massa/stock-massa.entity.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { ok, serverError } from "~/utils/http-response.server";
 
 
 export const loader: LoaderFunction = async ({ request, params }) => {
 
-    const stock = stockMassaEntity.getAll()
+    const [err, stock] = await prismaIt(stockMassaLoader.get())
 
     console.log({ stock })
 

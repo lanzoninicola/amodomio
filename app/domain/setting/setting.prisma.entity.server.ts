@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 import prismaClient from "~/lib/prisma/client.server";
 import { PrismaEntityProps } from "~/lib/prisma/types.server";
 
@@ -12,7 +12,35 @@ export interface ISettingOption {
   updatedAt: Date;
 }
 
-export class SettingPrismaEntity {
+interface ISettingPrismaEntity {
+  client: PrismaClient;
+
+  findAll(where?: Prisma.SettingWhereInput): Promise<ISettingOption[]>;
+
+  findAllByContext(contextName: string): Promise<ISettingOption[]>;
+
+  findByOptionName(name: string): Promise<ISettingOption | null>;
+
+  findById(id: string): Promise<ISettingOption | null>;
+
+  updateOrCreate(
+    data: Prisma.SettingWhereInput
+  ): Promise<ISettingOption | undefined>;
+
+  updateOrCreateMany(
+    data: Prisma.SettingWhereInput[]
+  ): Promise<(ISettingOption | undefined)[]>;
+
+  create(data: Prisma.SettingCreateInput): Promise<ISettingOption>;
+
+  update(id: string, data: Prisma.SettingUpdateInput): Promise<ISettingOption>;
+
+  delete(id: string): Promise<ISettingOption>;
+
+  findAllContexts(): Promise<string[]>;
+}
+
+class SettingPrismaEntity implements ISettingPrismaEntity {
   client;
   constructor({ client }: PrismaEntityProps) {
     this.client = client;
@@ -96,4 +124,4 @@ const settingPrismaEntity = new SettingPrismaEntity({
   client: prismaClient,
 });
 
-export { settingPrismaEntity };
+export { settingPrismaEntity, type ISettingPrismaEntity };
