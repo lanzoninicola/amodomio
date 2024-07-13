@@ -46,15 +46,16 @@ export async function action({ request }: LoaderArgs) {
     // console.log({ action: _action, values })
 
     if (_action === "menu-item-price-variation-update") {
-        console.log({ values })
 
         const amount = isNaN(Number(values?.amount)) ? 0 : Number(values?.amount)
         const discountPercentage = isNaN(Number(values?.discountPercentage)) ? 0 : Number(values?.discountPercentage)
+        const showOnCardapio = values?.showOnCardapio === "on" ? true : false
 
         const nextPrice: Partial<MenuItemPriceVariation> = {
             id: values.id as string,
             amount,
             discountPercentage,
+            showOnCardapio
         }
 
         const [err, result] = await prismaIt(menuItemPriceVariationsEntity.update(values.id as string, nextPrice))

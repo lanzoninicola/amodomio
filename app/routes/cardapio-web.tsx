@@ -53,7 +53,7 @@ function CardapioFooter() {
             <div className="px-2 w-full">
                 <ExternalLink to="https://app.mogomenu.com.br/amodomio"
                     ariaLabel="Cardápio digital pizzaria A Modo Mio"
-                    className="flex justify-between font-body-website rounded-sm bg-brand-green py-2 px-4"
+                    className="flex justify-between font-body-website rounded-sm bg-green-400 py-2 px-4"
                 >
                     <span className="uppercase tracking-wide font-semibold">Fazer pedido</span>
                     <ArrowRight />

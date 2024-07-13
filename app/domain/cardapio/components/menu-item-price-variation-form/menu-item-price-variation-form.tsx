@@ -9,6 +9,8 @@ import { MenuItemFormAction } from "../menu-item-form/menu-item-form"
 import { useEffect, useState } from "react"
 import { mapPriceVariationsLabel, suggestPriceVariations } from "../../fn.utils"
 import { MenuItemPriceVariationLabel } from "../../menu-item-price-variations.prisma.entity.server"
+import { Switch } from "~/components/ui/switch"
+import Fieldset from "~/components/ui/fieldset"
 
 export type MenuItemPriceVariationFormAction = "menu-item-price-variation-update" | "menu-item-price-variation-create"
 
@@ -48,8 +50,8 @@ export default function MenuItemPriceVariationForm({ action, price, basePrice }:
                     {`Tamanho ${mapPriceVariationsLabel(price.label)}`}
                 </Label>
 
-                <div className="flex flex-col gap-1 col-span-3">
-                    <div className="flex gap-8 items-center">
+                <div className="flex flex-col gap-1 col-span-5">
+                    <div className="grid grid-cols-4 gap-x-4">
 
 
                         <div className="flex flex-col gap-0">
@@ -83,7 +85,15 @@ export default function MenuItemPriceVariationForm({ action, price, basePrice }:
                             />
                         </div>
 
-                        <SaveItemButton actionName={'menu-item-price-variation-update'} className="mt-2" labelClassName="text-xs" variant={"outline"} />
+                        <div className="flex flex-col gap-0">
+                            <Label htmlFor="showOnCardapio" className="text-xs text-muted-foreground tracking-tight font-semibold">Visualizar no cardápio</Label>
+                            <Switch id="showOnCardapio" name="showOnCardapio" defaultChecked={price?.showOnCardapio || false} />
+                        </div>
+
+
+                        <SaveItemButton actionName={'menu-item-price-variation-update'}
+                            className="mt-2" labelClassName="text-xs" variant={"outline"}
+                        />
                     </div>
                     <span className="text-xs text-muted-foreground hover:underline hover:cursor-pointer"
                         onClick={() => {
@@ -93,9 +103,6 @@ export default function MenuItemPriceVariationForm({ action, price, basePrice }:
                 </div>
             </div>
 
-
-
-            <Separator orientation="vertical" />
-        </Form>
+        </Form >
     )
 }

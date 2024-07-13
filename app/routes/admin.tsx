@@ -31,6 +31,8 @@ export const links: LinksFunction = () => [
 ];
 
 export const loader: LoaderFunction = async ({ request }: LoaderArgs) => {
+    const environment = process.env.NODE_ENV
+
     let user = await authenticator.isAuthenticated(request);
 
     if (!user) {
@@ -39,7 +41,7 @@ export const loader: LoaderFunction = async ({ request }: LoaderArgs) => {
 
     const urlSegment = lastUrlSegment(request.url)
 
-    return ok({ user, urlSegment })
+    return ok({ user, urlSegment, environment })
 }
 
 
@@ -50,11 +52,12 @@ export default function AdminOutlet() {
 
     const loggedUser = loaderData?.payload?.user;
     const urlSegment = loaderData?.payload?.urlSegment;
-
+    const env = loaderData?.payload?.environment
 
     return (
         <>
             <AdminHeader urlSegment={urlSegment} />
+            {env === "development" && <EnvironmentAlert />}
             <div className="mt-12">
                 <Outlet context={{
                     loggedUser,
@@ -62,5 +65,14 @@ export default function AdminOutlet() {
                 }} />
             </div>
         </>
+    )
+}
+
+
+function EnvironmentAlert() {
+    return (
+        <div className="fixed top-4 left-4 opacity-70 bg-red-600 p-4 rounded-lg z-50 hover:opacity-100 transition-opacity">
+            <p className="text-white">Ambiente de desenvolvimento</p>
+        </div>
     )
 }
