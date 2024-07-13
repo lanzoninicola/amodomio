@@ -73,9 +73,9 @@ export default function GerenciamentoInitialStockMassa() {
                 <h1 className="text-xl tracking-tight font-semibold">Inizializar estoque massa</h1>
                 <div className="flex flex-col gap-8">
                     <Form method="post" className="flex flex-col gap-2 rounded-lg border p-4 justify-center" >
-                        <h3 className="font-semibold mb-4 text-center md:text-2xl">Massa Familia</h3>
+                        <h3 className="font-semibold mb-4 md:mb-2 text-center md:text-xl">Massa Familia</h3>
                         <div className="flex justify-center w-full mb-4">
-                            <Input type="text" name="massaFamiliaAmount" maxLength={2} className="bg-white text-6xl py-8 w-[150px] text-center"
+                            <Input type="text" name="massaFamiliaAmount" maxLength={2} className="bg-white text-6xl md:text-4xl py-8 md:py-6 w-[150px] text-center"
                                 defaultValue={familiaAmount || 0}
                             />
                         </div>
@@ -84,9 +84,9 @@ export default function GerenciamentoInitialStockMassa() {
                         </div>
                     </Form>
                     <Form method="post" className="flex flex-col gap-2 rounded-lg border p-4">
-                        <h3 className="font-semibold mb-4 text-center md:text-2xl">Massa Media</h3>
+                        <h3 className="font-semibold mb-4 md:mb-2 text-center md:text-xl">Massa Media</h3>
                         <div className="flex justify-center w-full mb-4">
-                            <Input type="text" name="massaMediaAmount" maxLength={2} className="bg-white text-6xl py-8 w-[150px] text-center"
+                            <Input type="text" name="massaMediaAmount" maxLength={2} className="bg-white text-6xl md:text-4xl py-8 md:py-6 w-[150px] text-center"
                                 defaultValue={mediaAmount || 0}
                             />
                         </div>
