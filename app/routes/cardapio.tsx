@@ -1,6 +1,6 @@
 
 import { V2_MetaFunction } from "@remix-run/node";
-import { ArrowDown, ArrowLeft, Heart, MenuSquare, Share2, ShoppingCart } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, Heart, MenuSquare, Share2, ShoppingCart } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, Outlet } from "react-router-dom";
 import TypewriterComponent from "typewriter-effect";
@@ -52,17 +52,51 @@ export default function CardapioPage() {
             {
                 currentSlide === 1 && (
 
-                    <div className="absolute top-4 w-full grid place-items-center animate-pulse z-10 md:hidden">
-                        <div className="flex gap-2 items-center bg-slate-200 px-3 py-1 rounded-lg">
-                            <ArrowLeft size={16} />
-                            <span className="text-sm font-semibold">arrastar para esquerda</span>
-                            {/* <ArrowRight className="text-white" size={16} /> */}
+                    <>
+                        {/* <div className="absolute top-4 w-full grid place-items-center animate-pulse z-10 md:hidden">
+                            <div className="flex gap-2 items-center bg-yellow-300 px-3 py-1 rounded-lg">
+                                <ArrowLeft size={16} />
+                                <span className="text-xs tracking-wide font-semibold uppercase">arrastar para esquerda</span>
+                            </div>
+                        </div> */}
+
+                        <div className="absolute top-1/2 right-4 transform -translate-y-1/2 z-10 md:hidden ">
+
+
+                            <div className="flex gap-2 items-center bg-green-400 px-3 py-1 rounded-lg">
+                                <span className="text-xs tracking-wide font-semibold uppercase">continuar a ler</span>
+                                <ArrowRight size={16} />
+                            </div>
                         </div>
-                    </div>
+
+                    </>
+
+
                 )
 
             }
             <BottomActionBar currentSlide={currentSlide} bottomPosition={"0rem"} showBarOnPageNumber={5} />
+            <div className="absolute top-3 w-full flex gap-2 justify-center z-10 md:hidden">
+                {cardapioArray.map((item, index) => (
+
+                    <div key={index} className={cn(
+                        "w-[20px] h-[10px] rounded-lg border-green-400 border-2",
+                        currentSlide === index + 1 && "bg-green-400"
+                    )}></div>
+                    // <img src={item}
+                    //     loading="lazy"
+                    //     decoding="async"
+                    //     data-nimg="intrinsic"
+                    //     alt={`cardapio pagína ${index + 1}`}
+                    //     className={
+                    //         cn(
+                    //             "w-[16px] h-[24px] rounded-sm ",
+                    //             currentSlide === index + 1 && "border-2 border-yellow-500"
+                    //         )
+                    //     }
+                    // />
+                ))}
+            </div>
             <div className="flex flex-col md:mt-24" >
                 <h1 className="hidden md:block font-semibold font-title tracking-tight text-4xl mb-6">Cardápio</h1>
                 <div ref={elementRef}>
@@ -213,7 +247,7 @@ function ActionBar() {
                 </span>
             </Link>
 
-            <Link to={'finalizar'} className="flex flex-col justify-center items-center bg-brand-green rounded-lg p-1 shadow-md">
+            <Link to={'finalizar'} className="flex flex-col justify-center items-center bg-green-500 rounded-lg p-1 shadow-md">
                 <ShoppingCart />
                 <span className="text-xs tracking-normal font-semibold">
                     Fazer Pedido
