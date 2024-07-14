@@ -2,22 +2,18 @@ import { Setting } from "@prisma/client";
 import { LoaderArgs } from "@remix-run/node";
 import { Form, Link, useLoaderData, useNavigation, useSearchParams } from "@remix-run/react";
 import dayjs from "dayjs";
-import { loadBundle } from "firebase/firestore";
-import { Settings } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useRef } from "react";
 import KanbanCol from "~/components/kanban-col/kanban-col";
 import KanbanOrderCardLargeScreen, { DelaySeverity } from "~/components/kanban-order-card/kanban-order-card-large-screen";
 import Clock from "~/components/primitives/clock/clock";
-import SubmitButton from "~/components/primitives/submit-button/submit-button";
 
 import { Button } from "~/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "~/components/ui/dialog";
-import { Input } from "~/components/ui/input";
 import { Separator } from "~/components/ui/separator";
+import { mogoOrdersInboundEntity } from "~/domain/mogo-orders-inbound/mogo-orders-inbound.entity.server";
 import mogoEntity from "~/domain/mogo/mogo.entity.server";
 import { MogoOrderWithDiffTime } from "~/domain/mogo/types";
 import OrdersDeliveryTimeLeftDialogSettings from "~/domain/order-delivery-time-left/components/order-delivery-time-left-dialog-settings/order-delivery-time-left-dialog-settings";
-import { ordersDeliveryTimeLeftEntity } from "~/domain/order-delivery-time-left/order-delivery-time-left.entity.server";
 import { settingEntity } from "~/domain/setting/setting.entity.server";
 import { Setting as SettingFirebase } from "~/domain/setting/setting.model.server";
 import { SettingOptionModel } from "~/domain/setting/setting.option.model.server";
@@ -55,7 +51,7 @@ export async function loader({ request }: LoaderArgs) {
     }
 
     // track opened orders
-    const trackOrdersPromise = orders.map(o => ordersDeliveryTimeLeftEntity.trackOrder(o))
+    const trackOrdersPromise = orders.map(o => mogoOrdersInboundEntity.trackOrder(o))
     await Promise.all(trackOrdersPromise)
 
     // start: get settings
@@ -93,7 +89,7 @@ export async function loader({ request }: LoaderArgs) {
     }
 
 
-    const [errCounterMassa, stockMassa] = await prismaIt(ordersDeliveryTimeLeftEntity.getUpdatedStockMassa())
+    const [errCounterMassa, stockMassa] = await prismaIt(mogoOrdersInboundEntity.getUpdatedStockMassa())
 
 
     return ok({
@@ -221,7 +217,7 @@ export async function action({ request }: LoaderArgs) {
 
     if (_action === "order-delivery-time-left-archive-active-records") {
 
-        const [err, _] = await prismaIt(ordersDeliveryTimeLeftEntity.archiveActiveRecords())
+        const [err, _] = await prismaIt(mogoOrdersInboundEntity.archiveActiveRecords())
 
         if (err) {
             return serverError(err)
@@ -402,31 +398,43 @@ function Header() {
 
     const totDispatchTime = orders.map(o => o.totDispatchTimeInMinutes).reduce((a, b) => a + b, 0)
 
+    const buttonLabel = navigation.state !== "idle" ? "Atualizando..." : (
+        lastRequestTime && (
+            <div className="flex gap-2 items-center">
+                <RefreshCw />
+                <span>{dayjs(lastRequestTime).format("HH:mm")}</span>
+            </div>
+
+        )
+    )
+
     return (
         <div className="grid grid-cols-12 w-full items-center">
-            <Form method="post" className="col-span-3">
+            <Form method="post" className="col-span-1">
                 <div className="flex gap-2 items-center">
                     <Button type="submit" className="text-2xl"
                         name="_action"
                         value="kanban-timing-refresh"
                         ref={refreshSubmitButton}
                     >
-                        {navigation.state !== "idle" ? "Atualizando..." : "Atualizar"}
+                        {buttonLabel}
 
                     </Button>
                     <Separator orientation="vertical" />
-                    {lastRequestTime && (
-                        <span>Ultima atualização {dayjs(lastRequestTime).format("HH:mm")}</span>
-                    )}
+
                 </div>
 
             </Form>
+            <div className="col-span-3">
+                <FinanceData orders={orders} />
 
-            <div className="grid grid-cols-4 col-span-7">
+            </div>
+
+            <div className="grid grid-cols-4 col-span-6">
                 <div className="flex gap-4 items-center justify-center col-span-2">
                     <div className="flex flex-col">
-                        <span>Hora do último despacho:</span>
-                        <span className="text-xs">totDispatchTime: {totDispatchTime}</span>
+                        <span>Último despacho as:</span>
+                        {/* <span className="text-xs">totDispatchTime: {totDispatchTime}</span> */}
                     </div>
                     <Clock minutesToAdd={totDispatchTime} highContrast={true} />
                 </div>
@@ -471,6 +479,44 @@ function StockMassaStat() {
         <div className="flex gap-4">
             <Stat label={`Familia (${stockMassa?.initial.massaFamilia})`} number={stockMassa?.final.massaFamilia || 0} />
             <Stat label={`Media (${stockMassa?.initial.massaMedia})`} number={stockMassa?.final.massaMedia || 0} />
+        </div>
+    )
+}
+
+interface FinanceDataProps {
+    orders: MogoOrderWithDiffTime[]
+}
+
+function FinanceData({ orders }: FinanceDataProps) {
+
+    // THE DATA SOURCE SHOULD BE THE TRACK TABLE
+
+
+    const totReceita = orders.map(o => o.SubTotal).reduce((a, b) => a + b, 0)
+
+    // deliverys
+    const totDeliveriesAmount = orders.filter(o => o.isDelivery === true).length
+    const totReceitaEntrega = orders.map(o => o.TaxaEntrega).reduce((a, b) => a + b, 0)
+
+    const totCustoEntrega = (totDeliveriesAmount * 10) - totReceitaEntrega
+
+    //
+    const subTotal_01 = totReceita - totCustoEntrega
+
+
+
+    return (
+        <div className="flex gap-2 border rounded-md p-2">
+            {/* <div className="flex flex-col gap-0 justify-center">
+                <span className="text-xs text-muted-foreground">Receita Bruta</span>
+                <span className="text-md font-mono font-semibold">{totReceita.toFixed(2)}</span>
+            </div> */}
+
+            <div className="flex flex-col gap-0">
+                <span className="text-xs text-muted-foreground">Receita Liquida</span>
+                <span className="text-md font-mono font-semibold">{subTotal_01.toFixed(2)}</span>
+            </div>
+
         </div>
     )
 }
