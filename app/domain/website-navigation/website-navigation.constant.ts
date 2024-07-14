@@ -63,6 +63,17 @@ export const WEBSITE_NAVIGATION_ITEMS: WebsiteNavigation = {
       ],
     },
     {
+      title: "Financeiro",
+      items: [
+        {
+          title: "Fechamento do dia",
+          href: "/admin/financeiro/fechamento-dia",
+          items: [],
+          disabled: false,
+        },
+      ],
+    },
+    {
       title: "Cadastro",
       items: [
         {
