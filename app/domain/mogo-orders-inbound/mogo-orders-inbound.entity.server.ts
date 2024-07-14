@@ -5,7 +5,18 @@ import prismaClient from "~/lib/prisma/client.server";
 import { SettingOptionModel } from "../setting/setting.option.model.server";
 import { jsonParse, jsonStringify } from "~/utils/json-helper";
 
-class OrdersDeliveryTimeLeftEntity {
+export interface MogoOrderInbound {
+  id: string;
+  orderNumber: string;
+  orderDateStr: string | null;
+  orderTimeStr: string | null;
+  rawData: string | null;
+  archivedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+class MogoOrdersInboundEntity {
   client;
   constructor({ client }: PrismaEntityProps) {
     this.client = client;
@@ -13,7 +24,7 @@ class OrdersDeliveryTimeLeftEntity {
 
   async trackOrder(order: MogoBaseOrder) {
     const [err, record] = await prismaIt(
-      this.client.orderDeliveryTimeLeftOrdersInbound.findFirst({
+      this.client.mogoOrdersInbound.findFirst({
         where: {
           orderNumber: order.NumeroPedido,
           archivedAt: null,
@@ -25,9 +36,11 @@ class OrdersDeliveryTimeLeftEntity {
 
     if (record) return;
 
-    await this.client.orderDeliveryTimeLeftOrdersInbound.create({
+    await this.client.mogoOrdersInbound.create({
       data: {
         orderNumber: order.NumeroPedido,
+        orderDateStr: order.DataPedido,
+        orderTimeStr: order.HoraPedido,
         rawData: jsonStringify(order),
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -36,7 +49,7 @@ class OrdersDeliveryTimeLeftEntity {
   }
 
   async getActiveTrackedOrders() {
-    return await this.client.orderDeliveryTimeLeftOrdersInbound.findMany({
+    return await this.client.mogoOrdersInbound.findMany({
       where: {
         archivedAt: null,
       },
@@ -44,7 +57,7 @@ class OrdersDeliveryTimeLeftEntity {
   }
 
   async archiveActiveRecords() {
-    return await this.client.orderDeliveryTimeLeftOrdersInbound.updateMany({
+    return await this.client.mogoOrdersInbound.updateMany({
       where: {
         archivedAt: null,
       },
@@ -97,8 +110,8 @@ class OrdersDeliveryTimeLeftEntity {
   }
 }
 
-const ordersDeliveryTimeLeftEntity = new OrdersDeliveryTimeLeftEntity({
+const mogoOrdersInboundEntity = new MogoOrdersInboundEntity({
   client: prismaClient,
 });
 
-export { ordersDeliveryTimeLeftEntity };
+export { mogoOrdersInboundEntity };
