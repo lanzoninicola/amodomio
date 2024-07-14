@@ -5,6 +5,17 @@ import prismaClient from "~/lib/prisma/client.server";
 import { SettingOptionModel } from "../setting/setting.option.model.server";
 import { jsonParse, jsonStringify } from "~/utils/json-helper";
 
+export interface MogoOrderInbound {
+  id: string;
+  orderNumber: string;
+  orderDateStr: string | null;
+  orderTimeStr: string | null;
+  rawData: string | null;
+  archivedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 class MogoOrdersInboundEntity {
   client;
   constructor({ client }: PrismaEntityProps) {

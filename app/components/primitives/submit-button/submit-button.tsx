@@ -7,8 +7,9 @@ import { cn } from "~/lib/utils";
 
 interface SubmitButtonProps extends ButtonProps {
     actionName: string,
-    loadingText?: string,
+    showText?: boolean
     idleText?: string,
+    loadingText?: string,
     disableLoadingAnimation?: boolean,
     onlyIcon?: boolean
     className?: string
@@ -20,8 +21,9 @@ interface SubmitButtonProps extends ButtonProps {
 
 export default function SubmitButton({
     actionName,
-    loadingText,
+    showText = true,
     idleText,
+    loadingText,
     disableLoadingAnimation,
     onlyIcon = false,
     className,
@@ -64,7 +66,7 @@ export default function SubmitButton({
                         labelClassName
                     )
                 }>
-                    {text}
+                    {showText === true && text}
                 </span>)
             }
         </Button>
