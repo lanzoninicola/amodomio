@@ -40,18 +40,13 @@ export const loader: LoaderFunction = async ({ request }) => {
 
 
 
-    return null
+    return ok({ resultados })
 };
 
 
 export default function FechamentoDia() {
     const loaderData = useLoaderData<typeof loader>()
     const resultados: FechamentoDiaResultados | null = loaderData.payload?.resultados || null
-
-    console.log({
-        loaderData
-
-    })
 
     const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
