@@ -1,12 +1,14 @@
 import { LoaderFunction } from "@remix-run/node";
-import { useLoaderData, useNavigate } from "@remix-run/react";
-import { ArrowRight } from "lucide-react";
+import { useLoaderData, useNavigate, useSearchParams } from "@remix-run/react";
+import dayjs from "dayjs";
+import { ArrowRight, LoaderIcon } from "lucide-react";
 import { useState } from "react";
 import Container from "~/components/layout/container/container";
 import SubmitButton from "~/components/primitives/submit-button/submit-button";
 import { DatePicker } from "~/components/ui/date-picker";
-import { FechamentoDiaResultados, financeEntity } from "~/domain/finance/finance.entity.server";
-import { MogoOrderInbound } from "~/domain/mogo-orders-inbound/mogo-orders-inbound.entity.server";
+import FinanceEntity, { ResultadoFinanceiro } from "~/domain/finance/finance.entity.server";
+import { MogoOrderInbound, mogoOrdersInboundEntity } from "~/domain/mogo-orders-inbound/mogo-orders-inbound.entity.server";
+import useFormSubmissionnState from "~/hooks/useFormSubmissionState";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { cn } from "~/lib/utils";
 
@@ -18,26 +20,18 @@ export const loader: LoaderFunction = async ({ request }) => {
     const url = new URL(request.url);
     const date = url.searchParams.get("date");
 
-    let resultados: FechamentoDiaResultados | null = null
+    let resultados: ResultadoFinanceiro | null = null
+
+    const orders = await mogoOrdersInboundEntity.findByDate(date || "")
+
+    const finance = new FinanceEntity({
+        orders,
+    })
 
     if (date) {
-        const [err, relatorioDia] = await prismaIt(financeEntity.fechamentoDia(date))
-
-        if (err) {
-            return serverError(err)
-        }
-
-        console.log()
-
-        resultados = {
-            ...relatorioDia
-        }
-
+        const resultados = finance.fechamento()
         return ok({ resultados })
-    } else {
-        resultados = null
     }
-
 
 
     return ok({ resultados })
@@ -46,17 +40,25 @@ export const loader: LoaderFunction = async ({ request }) => {
 
 export default function FechamentoDia() {
     const loaderData = useLoaderData<typeof loader>()
-    const resultados: FechamentoDiaResultados | null = loaderData.payload?.resultados || null
+    const resultados: ResultadoFinanceiro | null = loaderData.payload?.resultados || null
 
-    const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+    const [searchParams, _] = useSearchParams()
+    const dateFiltered = searchParams.get("date")
+
+    const [selectedDate, setSelectedDate] = useState<Date>(dayjs(dateFiltered).toDate() || new Date());
 
     const navigate = useNavigate();
+
+    const formSubmission = useFormSubmissionnState()
+
 
     const handleDateChange = (date: Date) => {
         setSelectedDate(date);
 
+        const currentDateString = dayjs(date).format("YYYY/MM/DD");
+
         if (date) {
-            navigate(`?date=${date.toISOString().split("T")[0]}`);
+            navigate(`?date=${currentDateString}`);
         } else {
             navigate("");
         }
@@ -64,52 +66,66 @@ export default function FechamentoDia() {
 
     return (
         <Container>
-            <h2 className="font-semibold text-lg tracking-tight mb-6">Fechamento do dia {selectedDate.toISOString().split("T")[0]}</h2>
-            <div className="flex flex-col gap-2 mb-8">
-                <span className="text-sm text-muted-foreground text-center">Selecione uma data</span>
+            <h2 className="font-semibold text-lg tracking-tight mb-6">Fechamento do dia</h2>
+            <div className="flex flex-col gap-6">
                 <div className="flex gap-4 items-center justify-center ">
                     <DatePicker selected={selectedDate} onChange={setSelectedDate} />
-                    <SubmitButton actionName="date-selected" showText={false} icon={<ArrowRight />} className="w-max" onClick={() => handleDateChange(selectedDate)} />
+                    <SubmitButton actionName="date-selected"
+                        showText={false} icon={
+                            formSubmission === "loading" ? <LoaderIcon /> : <ArrowRight />
+                        }
+                        className={
+                            cn(
+                                "w-max",
+                                formSubmission === "loading" && "animate-pulse",
+                            )
+                        }
+                        onClick={() => handleDateChange(selectedDate)} />
+                </div>
+                <div className="flex flex-col gap-4 items-center">
+
+                    {
+                        !resultados && <div className="text-center">
+                            Nenhuma consulta encontrada
+                        </div>
+                    }
+
+                    {
+                        resultados && (
+
+                            <div className="flex flex-col justify-center items-center border rounded-md py-4 px-6 md:px-16 md:max-w-md">
+                                <h3 className="font-semibold mb-4 text-center md:text-xl">Receita Líquida</h3>
+                                <div className="grid grid-cols-5 md:gap-4 items-center  text-muted-foreground mb-4">
+
+                                    <div className="flex flex-col col-span-2 bg-slate-50 rounded-md p-2">
+                                        <span className="text-xs leading-tight text-center mb-4">Receita Bruta</span>
+                                        <AmountReais valueClassName="text-md" valutaClassName="text-xs">
+                                            {resultados?.receitaBruta}
+                                        </AmountReais>
+                                    </div>
+                                    <span className="text-center">-</span>
+                                    <div className="flex flex-col col-span-2 bg-slate-50 rounded-md p-2">
+                                        <span className="text-xs leading-tight text-center mb-4">Resultado Entrega</span>
+                                        <AmountReais valueClassName="text-md" valutaClassName="text-xs">
+                                            {resultados?.resultadoEntrega}
+                                        </AmountReais>
+                                    </div>
+
+
+                                </div>
+                                <div className="flex justify-center items-start gap-4">
+                                    <span>R$</span>
+                                    <span className="text-6xl md:text-4xl">{resultados?.receitaLiquida}</span>
+                                </div>
+                            </div>
+
+                        )
+                    }
                 </div>
             </div>
-            <div className="flex flex-col gap-4i items-center">
-
-                {
-                    !resultados && <div className="text-center">Selecione uma data</div>
-                }
-
-                {
-                    resultados && (
-
-                        <div className="flex flex-col justify-center items-center border rounded-md py-4 px-8">
-                            <h3 className="font-semibold mb-4 md:mb-2 text-center md:text-xl">Receita Líquida</h3>
-                            <div className="grid grid-cols-5 items-center  text-muted-foreground mb-4">
-                                <div className="flex flex-col w-full col-span-2">
-                                    <span className="text-xs leading-none">Receita Bruta</span>
-                                    <AmountReais valueClassName="text-xs" valutaClassName="text-xs">{resultados?.receitaBruta}</AmountReais>
-
-                                </div>
-                                <span className="text-center">-</span>
-                                <div className="flex flex-col col-span-2">
-                                    <span className="text-xs leading-none">Resultado Entrega</span>
-                                    <AmountReais valueClassName="text-xs" valutaClassName="text-xs">{resultados?.resultadoEntrega}</AmountReais>
-
-                                </div>
 
 
-                            </div>
-                            <div className="flex justify-center items-start gap-4">
-                                <span>R$</span>
-                                <span className="text-6xl md:text-4xl">{resultados?.receitaLiquida}</span>
-                            </div>
-                        </div>
-
-                    )
-                }
-            </div>
-
-
-        </Container>
+        </Container >
     );
 }
 
@@ -130,7 +146,7 @@ const AmountReais = ({ children, valueClassName, valutaClassName }: AmountReaisP
                 )
             }>R$</span>
             <span className={cn(
-                "text-6xl md:text-4xl",
+                "text-6xl md:text-2xl",
                 valueClassName
             )}>{children}</span>
         </div>
