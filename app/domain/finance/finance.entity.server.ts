@@ -2,7 +2,7 @@ import prismaClient from "~/lib/prisma/client.server";
 import { PrismaEntityProps } from "~/lib/prisma/types.server";
 import { MogoOrderInbound } from "../mogo-orders-inbound/mogo-orders-inbound.entity.server";
 import { jsonParse } from "~/utils/json-helper";
-import { MogoBaseOrder } from "../mogo/types";
+import { MogoBaseOrder, MogoOrderItem } from "../mogo/types";
 import MogoOrdersInboundUtility from "../mogo-orders-inbound/mogo-orders-inbound.utility.server";
 import dayjs from "dayjs";
 
@@ -11,6 +11,7 @@ export interface ResultadoFinanceiro {
   receitaBruta: number;
   resultadoEntrega: number;
   receitaLiquida: number;
+  receitaPorProduto: Record<string, number>;
 }
 
 interface FinanceEntityProps {
@@ -36,11 +37,14 @@ export default class FinanceEntity {
     const resultadoEntrega = this.#resultadoEntrega();
     const receitaLiquida = receitaBruta - resultadoEntrega;
 
+    const receitaPorProduto = this.#receitaPorProduto();
+
     return {
       ordersAmount: this.#orders.length,
       receitaBruta,
       resultadoEntrega,
       receitaLiquida,
+      receitaPorProduto,
     };
   }
 
@@ -61,6 +65,31 @@ export default class FinanceEntity {
     return this.#orders
       .map((o: MogoBaseOrder) => o.TaxaEntrega)
       .reduce((a, b) => a + b, 0);
+  }
+
+  #receitaPorProduto() {
+    const productsSelled: {
+      [key: string]: number;
+    }[] = [];
+
+    this.#orders.forEach((o: MogoBaseOrder) => {
+      o.Itens.forEach((i: MogoOrderItem) => {
+        productsSelled.push({
+          [i.Descricao]: i.ValorUnitario * i.Quantidade,
+        });
+      });
+    });
+
+    console.log({ productsSelled });
+
+    return productsSelled;
+  }
+
+  #ticketMedioPorDiaTamanho() {
+    const productsSelled = this.#receitaPorProduto();
+
+    // const pizzaMedia = productsSelled.filter((p: { [key: string]: number }) => p" === true);
+    // const pizzaFamilia = productsSelled.filter((p) => p.PizzaFamilia === true);
   }
 
   #totCustoEntrega() {
