@@ -2,6 +2,13 @@ import { json } from "@remix-run/node";
 
 type LoaderOrActionReturnType = Record<string, any> | string | undefined;
 
+interface HttpResponseOptions {
+  throwIt?: boolean;
+  allowOrigin?: string;
+  allowMethods?: string;
+  referrerPolicy?: string;
+}
+
 export interface HttpResponse {
   status: number;
   message?: string;
@@ -11,7 +18,7 @@ export interface HttpResponse {
 
 export function notFound(
   loaderOrActionReturnData?: LoaderOrActionReturnType,
-  options = { throwIt: false }
+  options = { throwIt: false, allowOrigin: "none" }
 ): HttpResponse {
   const response = formatResponse(
     { status: 404, fallbackMessage: "Não encontrado" },
@@ -23,7 +30,7 @@ export function notFound(
 
 export function badRequest(
   loaderOrActionReturnData?: LoaderOrActionReturnType,
-  options = { throwIt: false }
+  options = { throwIt: false, allowOrigin: "none" }
 ): HttpResponse | void {
   const response = formatResponse(
     { status: 400, fallbackMessage: "Requisição inválida" },
@@ -35,7 +42,7 @@ export function badRequest(
 
 export function unauthorized(
   loaderOrActionReturnData?: LoaderOrActionReturnType,
-  options = { throwIt: false }
+  options = { throwIt: false, allowOrigin: "none" }
 ) {
   const response = formatResponse(
     { status: 401, fallbackMessage: "Não autorizado" },
@@ -47,7 +54,7 @@ export function unauthorized(
 
 export function forbidden(
   loaderOrActionReturnData?: LoaderOrActionReturnType,
-  options = { throwIt: false }
+  options = { throwIt: false, allowOrigin: "none" }
 ) {
   const response = formatResponse(
     { status: 403, fallbackMessage: "Requisição inválida" },
@@ -57,7 +64,10 @@ export function forbidden(
   return doResponse(response, options);
 }
 
-export function serverError(error: Error | any, options = { throwIt: false }) {
+export function serverError(
+  error: Error | any,
+  options = { throwIt: false, allowOrigin: "none" }
+) {
   if (error instanceof Error) {
     const response = formatResponse(
       { status: 500, fallbackMessage: "Erro interno do servidor" },
@@ -78,13 +88,16 @@ export function serverError(error: Error | any, options = { throwIt: false }) {
   return doResponse(response, options);
 }
 
-export function ok(loaderOrActionReturnData?: LoaderOrActionReturnType) {
+export function ok(
+  loaderOrActionReturnData?: LoaderOrActionReturnType,
+  options: HttpResponseOptions = { allowOrigin: "none", allowMethods: "GET" }
+) {
   const response = formatResponse(
     { status: 200, fallbackMessage: "Ok" },
     loaderOrActionReturnData
   );
 
-  return doResponse(response);
+  return doResponse(response, options);
 }
 
 export function created(loaderOrActionReturnData?: LoaderOrActionReturnType) {
@@ -105,12 +118,22 @@ export function noContent(loaderOrActionReturnData?: LoaderOrActionReturnType) {
   return doResponse(response);
 }
 
-function doResponse(response: HttpResponse, options = { throwIt: false }) {
+function doResponse(
+  response: HttpResponse,
+  options: HttpResponseOptions = { throwIt: false, allowOrigin: "none" }
+) {
   if (options.throwIt) {
     throw new Error(response.message);
   }
 
-  return json(response, { status: response.status });
+  return json(response, {
+    status: response.status,
+    headers: {
+      "Access-Control-Allow-Origin": options?.allowOrigin || "none",
+      "Referrer-Policy":
+        options?.referrerPolicy || "strict-origin-when-cross-origin",
+    },
+  });
 }
 
 function formatResponse(
