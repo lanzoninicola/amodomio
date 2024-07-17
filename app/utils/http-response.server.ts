@@ -4,9 +4,6 @@ type LoaderOrActionReturnType = Record<string, any> | string | undefined;
 
 interface HttpResponseOptions {
   throwIt?: boolean;
-  allowOrigin?: string;
-  allowMethods?: string;
-  referrerPolicy?: string;
 }
 
 export interface HttpResponse {
@@ -18,7 +15,7 @@ export interface HttpResponse {
 
 export function notFound(
   loaderOrActionReturnData?: LoaderOrActionReturnType,
-  options = { throwIt: false, allowOrigin: "none" }
+  options = { throwIt: false }
 ): HttpResponse {
   const response = formatResponse(
     { status: 404, fallbackMessage: "Não encontrado" },
@@ -30,7 +27,7 @@ export function notFound(
 
 export function badRequest(
   loaderOrActionReturnData?: LoaderOrActionReturnType,
-  options = { throwIt: false, allowOrigin: "none" }
+  options = { throwIt: false }
 ): HttpResponse | void {
   const response = formatResponse(
     { status: 400, fallbackMessage: "Requisição inválida" },
@@ -42,7 +39,7 @@ export function badRequest(
 
 export function unauthorized(
   loaderOrActionReturnData?: LoaderOrActionReturnType,
-  options = { throwIt: false, allowOrigin: "none" }
+  options = { throwIt: false }
 ) {
   const response = formatResponse(
     { status: 401, fallbackMessage: "Não autorizado" },
@@ -54,7 +51,7 @@ export function unauthorized(
 
 export function forbidden(
   loaderOrActionReturnData?: LoaderOrActionReturnType,
-  options = { throwIt: false, allowOrigin: "none" }
+  options = { throwIt: false }
 ) {
   const response = formatResponse(
     { status: 403, fallbackMessage: "Requisição inválida" },
@@ -64,10 +61,7 @@ export function forbidden(
   return doResponse(response, options);
 }
 
-export function serverError(
-  error: Error | any,
-  options = { throwIt: false, allowOrigin: "none" }
-) {
+export function serverError(error: Error | any, options = { throwIt: false }) {
   if (error instanceof Error) {
     const response = formatResponse(
       { status: 500, fallbackMessage: "Erro interno do servidor" },
@@ -88,16 +82,13 @@ export function serverError(
   return doResponse(response, options);
 }
 
-export function ok(
-  loaderOrActionReturnData?: LoaderOrActionReturnType,
-  options: HttpResponseOptions = { allowOrigin: "none", allowMethods: "GET" }
-) {
+export function ok(loaderOrActionReturnData?: LoaderOrActionReturnType) {
   const response = formatResponse(
     { status: 200, fallbackMessage: "Ok" },
     loaderOrActionReturnData
   );
 
-  return doResponse(response, options);
+  return doResponse(response);
 }
 
 export function created(loaderOrActionReturnData?: LoaderOrActionReturnType) {
@@ -120,7 +111,9 @@ export function noContent(loaderOrActionReturnData?: LoaderOrActionReturnType) {
 
 function doResponse(
   response: HttpResponse,
-  options: HttpResponseOptions = { throwIt: false, allowOrigin: "none" }
+  options: HttpResponseOptions = {
+    throwIt: false,
+  }
 ) {
   if (options.throwIt) {
     throw new Error(response.message);
@@ -128,11 +121,6 @@ function doResponse(
 
   return json(response, {
     status: response.status,
-    headers: {
-      "Access-Control-Allow-Origin": options?.allowOrigin || "none",
-      "Referrer-Policy":
-        options?.referrerPolicy || "strict-origin-when-cross-origin",
-    },
   });
 }
 

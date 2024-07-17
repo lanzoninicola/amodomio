@@ -7,6 +7,12 @@ import getSearchParam from "~/utils/get-search-param";
 import { badRequest, ok, serverError } from "~/utils/http-response.server";
 
 
+/**
+ * NOTE:
+ *
+ * to solve CORS issue I installed the "cors" package and used it in server.js
+ */
+
 // handle GET request
 export async function loader({ request, params }: LoaderArgs) {
 
@@ -25,54 +31,42 @@ export async function loader({ request, params }: LoaderArgs) {
 
     }
 
-    return ok({}, {
-        allowOrigin: "*",
-        allowMethods: "GET, POST, OPTIONS",
-        referrerPolicy: "no-referrer",
-    })
+    return ok()
 }
 
 
 // handle POST request
 export async function action({ request }: ActionArgs) {
 
-    // console.log(request)
 
-    // const body = await request.json();
-    // const action = body?.action
-    // const secretKey = body?.secret
+    const body = await request.json();
+    const action = body?.action
+    const secretKey = body?.secret
 
 
-    // if (!secretKey || secretKey !== process.env.REST_API_SECRET_KEY) {
-    //     return ok()
-    // }
+    if (!secretKey || secretKey !== process.env.REST_API_SECRET_KEY) {
+        return ok()
+    }
 
-    // if (action === "cardapio-pizza-taglio-upsert") {
+    if (action === "cardapio-pizza-taglio-upsert") {
 
-    //     const [err, record] = await prismaIt(settingPrismaEntity.updateOrCreate({
-    //         context: "cardapio-pizza-taglio",
-    //         value: body?.value,
-    //         type: "string",
-    //         name: "browser-extension-content",
-    //         createdAt: new Date().toISOString(),
-    //     }))
+        const [err, record] = await prismaIt(settingPrismaEntity.updateOrCreate({
+            context: "cardapio-pizza-taglio",
+            value: body?.value,
+            type: "string",
+            name: "browser-extension-content",
+            createdAt: new Date().toISOString(),
+        }))
 
-    //     if (err) {
-    //         return serverError('Erro ao salvar configuração')
-    //     }
+        if (err) {
+            return serverError('Erro ao salvar configuração')
+        }
 
-    //     return ok(record, {
-    //         allowOrigin: "*",
-    //         allowMethods: "GET, POST, OPTIONS",
-    //     })
+        return ok(record)
 
-    // }
+    }
 
 
 
-    return ok({}, {
-        allowOrigin: "*",
-        allowMethods: "GET, POST, OPTIONS",
-        referrerPolicy: "no-referrer",
-    })
+    return ok({})
 };
