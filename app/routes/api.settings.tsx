@@ -25,9 +25,20 @@ export async function loader({ request, params }: LoaderArgs) {
             return serverError(err)
         }
 
-        console.log({ options })
+        const sabores = options[0]?.value
 
-        return ok({ options })
+        // return ok({ sabores })
+        return json(
+            {
+                status: 200,
+                payload: sabores
+            },
+            {
+                headers: {
+                    'Content-Security-Policy': "connect-src 'self' https://*.whatsapp.net https://amodomio.com.br https://www.facebook.com blob: https://crashlogs.whatsapp.net/wa_clb_data https://crashlogs.whatsapp.net/wa_fls_upload_check wss://*.web.whatsapp.com wss://web.whatsapp.com wss://web-fallback.whatsapp.com https://www.whatsapp.com https://dyn.web.whatsapp.com https://graph.whatsapp.com/graphql/ https://graph.facebook.com/graphql ws://web.whatsapp.com wss://web.whatsapp.com:5222 data: https://*.tenor.co https://*.giphy.com https://maps.googleapis.com https://*.google-analytics.com",
+                },
+            }
+        );
 
     }
 
