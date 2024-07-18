@@ -5,6 +5,7 @@ const { installGlobals } = require("@remix-run/node");
 const compression = require("compression");
 const express = require("express");
 const morgan = require("morgan");
+const cors = require("cors");
 
 installGlobals();
 
@@ -28,6 +29,8 @@ app.use(
 app.use(express.static("public", { maxAge: "1h" }));
 
 app.use(morgan("tiny"));
+
+app.use(cors());
 
 app.all(
   "*",
