@@ -6,6 +6,7 @@ import { useFetcher } from "@remix-run/react"
 import { MenuItemWithAssociations } from "../../menu-item.prisma.entity.server"
 import { GripVertical } from "lucide-react"
 import { cn } from "~/lib/utils"
+import { Input } from "~/components/ui/input"
 
 interface MenuItemListProps {
     initialItems: MenuItemWithAssociations[]
@@ -21,6 +22,23 @@ export default function MenuItemList({ initialItems, action }: MenuItemListProps
     }
 
     const [items, setItems] = useState<any[]>(initialItems);
+
+    const [search, setSearch] = useState("")
+
+    const handleSearch = (event: React.ChangeEvent<HTMLInputElement>) => {
+
+        const value = event.target.value
+
+        setSearch(value)
+
+        if (!value) return setItems(initialItems)
+
+        const searchedItems = initialItems
+            .filter(item => item.name?.toLowerCase().includes(value.toLowerCase()) || item.ingredients?.toLowerCase().includes(value.toLowerCase()))
+
+        setItems(searchedItems)
+
+    }
 
     const [dragEnable, setDragEnabled] = useState(false)
 
@@ -57,10 +75,15 @@ export default function MenuItemList({ initialItems, action }: MenuItemListProps
 
     return (
         <div className="flex flex-col">
-            <div className="p-4 items-center mb-2">
-                <span className="text-sm cursor-pointer hover:underline text-muted-foreground"
-                    onClick={() => setDragEnabled(!dragEnable)}
-                >{dragEnable === true ? 'Desabilitar ordernamento' : 'Abilitar ordenamento'}</span>
+            <div className="grid grid-cols-8 items-center">
+                <div className="p-4 items-center mb-2 col-span-2">
+                    <span className="text-sm cursor-pointer hover:underline text-muted-foreground"
+                        onClick={() => setDragEnabled(!dragEnable)}
+                    >{dragEnable === true ? 'Desabilitar ordernamento' : 'Abilitar ordenamento'}</span>
+                </div>
+                <div className="items-center mb-2 col-span-6" >
+                    <Input name="search" className="w-full" placeholder="Pesquisar..." onChange={(e) => handleSearch(e)} value={search} />
+                </div>
             </div>
             <ul className="flex flex-col gap-y-4">
                 {items.map((item, index) => (

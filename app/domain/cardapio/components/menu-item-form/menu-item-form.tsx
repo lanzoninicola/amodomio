@@ -9,12 +9,13 @@ import { cn } from "~/lib/utils"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select"
 import { DeleteItemButton } from "~/components/primitives/table-list"
 import { Label } from "~/components/ui/label"
-import { useState } from "react"
+import { RefObject, useRef, useState } from "react"
 import { AdminCardapioOutletContext } from "~/routes/admin.gerenciamento.cardapio"
 import Fieldset from "~/components/ui/fieldset"
 import { Textarea } from "~/components/ui/textarea"
 import { MenuItemWithAssociations } from "../../menu-item.prisma.entity.server"
 import { mapPriceVariationsLabel } from "../../fn.utils"
+import useSaveShortcut from "~/hooks/use-save-shortcut.hook"
 
 
 export type MenuItemFormAction = "menu-item-create" | "menu-item-update"
@@ -27,9 +28,15 @@ interface MenuItemFormProps {
 }
 
 export default function MenuItemForm({ item, action, className, categories }: MenuItemFormProps) {
-
-
     const [currentBasePrice, setCurrentBasePrice] = useState(item?.basePriceAmount || 0)
+
+    const submitButtonRef = useRef<any>()
+    useSaveShortcut({ callback: submitForm })
+
+    function submitForm() {
+        if (!submitButtonRef.current) return
+        submitButtonRef.current.click()
+    }
 
 
     return (
@@ -85,7 +92,10 @@ export default function MenuItemForm({ item, action, className, categories }: Me
                         </Fieldset>
 
                         <Fieldset className="grid grid-cols-4 items-center" >
-                            <Label className="font-semibold text-sm col-span-1">Preço Base</Label>
+                            <div className="flex flex-col gap-0">
+                                <Label className="font-semibold text-sm col-span-1">Preço Base</Label>
+                                <span className="text-xs text-muted-foreground">(Tamanho Medio)</span>
+                            </div>
                             <Input type="text" name="basePriceAmount"
                                 onChange={(e) => {
                                     const value = e.target.value
@@ -153,7 +163,7 @@ export default function MenuItemForm({ item, action, className, categories }: Me
 
                 <div className="flex gap-4 justify-end">
 
-                    <SubmitButton actionName={action} labelClassName="text-xs" variant={"outline"} tabIndex={0} />
+                    <SubmitButton ref={submitButtonRef} actionName={action} labelClassName="text-xs" variant={"outline"} tabIndex={0} iconColor="black" />
                     {action === "menu-item-update" && (
                         <DeleteItemButton actionName="menu-item-delete" label="Deletar" />
                     )}

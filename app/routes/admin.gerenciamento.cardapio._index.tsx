@@ -1,11 +1,10 @@
 import { useActionData, useOutletContext } from "@remix-run/react";
 import MenuItemList from "~/domain/cardapio/components/menu-item-list/menu-item-list";
 import { AdminCardapioOutletContext } from "./admin.gerenciamento.cardapio";
-import { MenuItem, MenuItemPriceVariation, Prisma } from "@prisma/client";
+import { MenuItem } from "@prisma/client";
 import { LoaderArgs } from "@remix-run/node";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { badRequest, ok } from "~/utils/http-response.server";
-import { jsonParse } from "~/utils/json-helper";
 import { toast } from "~/components/ui/use-toast";
 
 import tryit from "~/utils/try-it";
@@ -38,6 +37,76 @@ export async function action({ request }: LoaderArgs) {
         }
 
         return ok("Ordenamento atualizado");
+
+    }
+
+    if (_action === "menu-item-visibility-change") {
+        const id = values?.id as string
+
+        const [errItem, item] = await prismaIt(menuItemPrismaEntity.findById(id));
+
+        if (errItem) {
+            return badRequest(errItem)
+        }
+
+        if (!item) {
+            return badRequest("Item não encontrado")
+        }
+
+        const [err, result] = await tryit(menuItemPrismaEntity.update(id, {
+            visible: !item.visible
+        }))
+
+        if (err) {
+            return badRequest(err)
+        }
+
+        const returnedMessage = !item.visible === true ? `Sabor "${item.name}" visivel no cardápio` : `Sabor "${item.name}" não visivel no cardápio`;
+
+        return ok(returnedMessage);
+    }
+
+    if (_action === "menu-item-card-price-upsert") {
+
+        const id = values?.id as string
+        const menuItemId = values?.menuItemId as string
+        const label = values?.label as string
+        const amount = values?.amount as string
+
+        const [errItem, itemVariationPrice] = await prismaIt(menuItemPriceVariationsEntity.findByIdAndVariation(id, label));
+
+        const priceVariationRecord = {
+            amount: parseFloat(amount),
+            label: label,
+            discountPercentage: 0,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            showOnCardapio: amount === "0" ? false : true,
+            MenuItem: {
+                connect: {
+                    id: menuItemId
+                }
+            },
+        }
+
+        if (!itemVariationPrice) {
+            const [err, item] = await prismaIt(menuItemPriceVariationsEntity.create(priceVariationRecord))
+
+            if (err) {
+                return badRequest(err)
+            }
+        } else {
+            const [err, item] = await prismaIt(menuItemPriceVariationsEntity.update(itemVariationPrice.id, {
+                ...priceVariationRecord,
+                createdAt: itemVariationPrice.createdAt,
+            }));
+
+            if (err) {
+                return badRequest(err)
+            }
+        }
+
+        return ok("Precos atualizados");
 
     }
 

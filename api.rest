@@ -1,0 +1,14 @@
+
+###
+GET  http://localhost:3000/api/settings?context=cardapio-pizza-taglio
+
+###
+POST  http://localhost:3000/api/settings
+Content-type: application/json
+
+
+{
+    "action": "cardapio-pizza-taglio-upsert",
+    "value": "cucu",
+    "secret": "fOD19KP7zZaloS3nMyux3qqI8ABihL3c"
+}
