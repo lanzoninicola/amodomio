@@ -7,8 +7,6 @@ const prismaDevDatasourceUrl = process.env?.PRISMA_DB_DEV_URL;
 const datasourceUrl =
   env === "development" ? prismaDevDatasourceUrl : prismaDatasourceUrl;
 
-// const prismaClient = new PrismaClient({ datasourceUrl });
-
 class AMMPrismaClient<
   T extends Prisma.PrismaClientOptions = Prisma.PrismaClientOptions
 > extends PrismaClient {

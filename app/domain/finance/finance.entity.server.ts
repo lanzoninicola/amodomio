@@ -11,7 +11,7 @@ export interface ResultadoFinanceiro {
   receitaBruta: number;
   resultadoEntrega: number;
   receitaLiquida: number;
-  receitaPorProduto: Record<string, number>;
+  // receitaPorProduto: Record<string, number>;
 }
 
 interface FinanceEntityProps {
@@ -44,7 +44,7 @@ export default class FinanceEntity {
       receitaBruta,
       resultadoEntrega,
       receitaLiquida,
-      receitaPorProduto,
+      // receitaPorProduto,
     };
   }
 
