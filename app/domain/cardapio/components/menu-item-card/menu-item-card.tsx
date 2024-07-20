@@ -8,6 +8,11 @@ import { Switch } from "~/components/ui/switch"
 import React, { useState } from "react"
 import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
+import { toast } from "~/components/ui/use-toast"
+import { MenuItemPriceVariationPrismaEntity } from "../../menu-item-price-variations.prisma.entity.server"
+import { MenuItemPriceVariation } from "@prisma/client"
+import MenuItemPriceVariationUtility from "../../menu-item-price-variations-utility"
+import randomReactKey from "~/utils/random-react-key"
 
 
 interface MenuItemCardProps {
@@ -30,12 +35,20 @@ export default function MenuItemCard({ item, dragAndDrop }: MenuItemCardProps) {
     const submitBtnRef = React.useRef<HTMLButtonElement>(null)
 
     function handleVisibility() {
-        console.log("handleVisibility")
+
         setVisible(!visible)
 
         if (submitBtnRef.current) {
             submitBtnRef.current.click()
         }
+    }
+
+    function copyItemId() {
+        navigator.clipboard.writeText(item.id)
+
+        toast({
+            title: "ID copiado",
+        })
     }
 
 
@@ -44,9 +57,12 @@ export default function MenuItemCard({ item, dragAndDrop }: MenuItemCardProps) {
         <div className="p-4 rounded-md border border-gray-200 bg-white w-full">
             <section className="grid grid-cols-12 items-center w-full">
                 <div className="flex items-center col-span-4 gap-2">
-                    <h4 className="text-lg font-bold tracking-tight">
-                        {item.name}
-                    </h4>
+                    <div className="flex flex-col gap-0">
+                        <h4 className="text-lg font-bold tracking-tight">
+                            {item.name}
+                        </h4>
+                        <span className="text-[10px] text-muted-foreground cursor-pointer" onClick={copyItemId}>{item.id}</span>
+                    </div>
                 </div>
                 <div className="grid grid-cols-5 col-span-4 gap-x-2">
                     <div className="flex flex-col justify-start items-center  gap-1 mr-2">
@@ -54,22 +70,7 @@ export default function MenuItemCard({ item, dragAndDrop }: MenuItemCardProps) {
                         <input type="text" name="price" defaultValue={item.basePriceAmount.toFixed(2)}
                             className="border-none outline-none w-full text-[0.75rem] text-center bg-muted rounded-sm" />
                     </div>
-                    {item && item.priceVariations.map(pv => {
-                        return (
-                            <Form method="post" key={pv.id} className="flex flex-col justify-center">
-                                <div key={pv.id} className="flex flex-col justify-center items-center  gap-1">
-                                    <span className="text-[9px] text-muted-foreground uppercase tracking-wider">{mapPriceVariationsLabel(pv.label)}</span>
-                                    <input type="text" name="price" defaultValue={pv.amount.toFixed(2)}
-                                        className="border-none outline-none w-full text-[0.75rem] text-center bg-muted rounded-sm" />
-                                    <input type="hidden" name="id" value={item?.id} />
-                                    <input type="hidden" name="priceVariation" value={pv.label} />
-                                    <Button size={"sm"} type="submit" name="_action" className="text-[9px] h-[20px] rounded-md font-semibold uppercase tracking-wide"
-                                        value={pv.id}>Salvar</Button>
-                                </div>
-                            </Form>
-                        )
-
-                    })}
+                    <PriceVariationsInCard item={item} />
                 </div>
 
                 <div className="mt-2 col-span-3">
@@ -78,7 +79,7 @@ export default function MenuItemCard({ item, dragAndDrop }: MenuItemCardProps) {
                         <span className="font-semibold text-sm">Públicar no cardápio</span>
                         <Switch defaultChecked={item?.visible || false} onCheckedChange={handleVisibility} />
                         <input type="hidden" name="id" value={item?.id} />
-                        <button ref={submitBtnRef} className="hidden" type="submit" value={"item-visibility-change"} name="_action" />
+                        <button ref={submitBtnRef} className="hidden" type="submit" value={"menu-item-visibility-change"} name="_action" />
 
                     </Form>
                 </div>
@@ -93,6 +94,47 @@ export default function MenuItemCard({ item, dragAndDrop }: MenuItemCardProps) {
         </div>
 
     )
+}
+
+function PriceVariationsInCard({ item }: { item: MenuItemWithAssociations }) {
+
+    let priceVariations = MenuItemPriceVariationUtility.getInitialPriceVariations().map((pv: MenuItemPriceVariation) => {
+        return {
+            ...pv,
+            menuItemId: item.id,
+            basePrice: item.basePriceAmount,
+            amount: item.priceVariations.find(p => p.label === pv.label)?.amount || 0,
+            discountPercentage: item.priceVariations.find(p => p.label === pv.label)?.discountPercentage || 0,
+            showOnCardapio: item.priceVariations.find(p => p.label === pv.label)?.showOnCardapio || false
+        }
+    })
+
+
+
+    return (
+        <>
+            {priceVariations.map(pv => {
+                return (
+                    <Form method="post" key={randomReactKey()} className="flex flex-col justify-center">
+                        <div key={pv.id} className="flex flex-col justify-center items-center  gap-1">
+                            <span className="text-[9px] text-muted-foreground uppercase tracking-wider">{mapPriceVariationsLabel(pv.label)}</span>
+                            <input type="text" name="amount" defaultValue={pv.amount.toFixed(2)}
+                                className="border-none outline-none w-full text-[0.75rem] text-center bg-muted rounded-sm" />
+                            <input type="hidden" name="id" value={pv.id} />
+                            <input type="hidden" name="menuItemId" value={item.id} />
+                            <input type="hidden" name="label" value={pv.label} />
+                            <Button size={"sm"} type="submit" name="_action"
+                                value="menu-item-card-price-upsert"
+                                className="text-[9px] h-[20px] rounded-md font-semibold uppercase tracking-wide"
+                            >Salvar</Button>
+                        </div>
+                    </Form>
+                )
+
+            })}
+        </>
+    )
+
 }
 
 
