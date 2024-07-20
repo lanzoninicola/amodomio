@@ -1,5 +1,5 @@
 import { Category, Prisma } from "@prisma/client";
-import { LoaderArgs } from "@remix-run/node";
+import { LoaderArgs, redirect } from "@remix-run/node";
 import { useLoaderData, useOutletContext } from "@remix-run/react";
 import MenuItemForm from "~/domain/cardapio/components/menu-item-form/menu-item-form";
 import { menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
@@ -47,8 +47,6 @@ export async function action({ request }: LoaderArgs) {
 
         const imageFile = values.imageFile as File
 
-        console.log({ imageFile: imageFile instanceof File })
-
         let imageBase64 = null
         if (imageFile && imageFile instanceof File) {
             const [errImage, imageBase64Converted] = await tryit(getBase64(imageFile));
@@ -94,7 +92,7 @@ export async function action({ request }: LoaderArgs) {
             return badRequest(err)
         }
 
-        return ok("Elemento deletado com successo")
+        return redirect("/admin/gerenciamento/cardapio")
     }
 
 

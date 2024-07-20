@@ -4,6 +4,8 @@ import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import prismaClient from "~/lib/prisma/client.server";
 import { SettingOptionModel } from "../setting/setting.option.model.server";
 import { jsonParse, jsonStringify } from "~/utils/json-helper";
+import MogoOrdersInboundUtility from "./mogo-orders-inbound.utility.server";
+import { format } from "node:path";
 
 export interface MogoOrderInbound {
   id: string;
@@ -107,6 +109,31 @@ class MogoOrdersInboundEntity {
         massaMedia: initialStockMassaMedia - totMassaMediaOut,
       },
     };
+  }
+
+  async findAll(): Promise<MogoOrderInbound[]> {
+    const [err, records] = await prismaIt(
+      this.client.mogoOrdersInbound.findMany()
+    );
+
+    if (err) return [];
+
+    return records;
+  }
+
+  async findByDate(date: string): Promise<MogoOrderInbound[]> {
+    const [err, records] = await prismaIt(
+      this.client.mogoOrdersInbound.findMany({
+        where: {
+          orderDateStr: {
+            equals: MogoOrdersInboundUtility.formatDate(date),
+          },
+        },
+      })
+    );
+    if (err) return [];
+
+    return records;
   }
 }
 

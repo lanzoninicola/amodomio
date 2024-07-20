@@ -2,6 +2,10 @@ import { json } from "@remix-run/node";
 
 type LoaderOrActionReturnType = Record<string, any> | string | undefined;
 
+interface HttpResponseOptions {
+  throwIt?: boolean;
+}
+
 export interface HttpResponse {
   status: number;
   message?: string;
@@ -105,12 +109,19 @@ export function noContent(loaderOrActionReturnData?: LoaderOrActionReturnType) {
   return doResponse(response);
 }
 
-function doResponse(response: HttpResponse, options = { throwIt: false }) {
+function doResponse(
+  response: HttpResponse,
+  options: HttpResponseOptions = {
+    throwIt: false,
+  }
+) {
   if (options.throwIt) {
     throw new Error(response.message);
   }
 
-  return json(response, { status: response.status });
+  return json(response, {
+    status: response.status,
+  });
 }
 
 function formatResponse(

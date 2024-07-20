@@ -11,6 +11,7 @@ generator client {
 datasource db {
   provider = "postgresql"
   /// the url is override when the Prisma Client object is created
+  /// this url is used only for the "migrate" commands
   url      = env("PRISMA_DB_DEV_URL")
   /// url      = env("PRISMA_DB_URL")
 }

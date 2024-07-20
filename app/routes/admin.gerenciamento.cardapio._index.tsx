@@ -1,16 +1,14 @@
 import { useActionData, useOutletContext } from "@remix-run/react";
 import MenuItemList from "~/domain/cardapio/components/menu-item-list/menu-item-list";
 import { AdminCardapioOutletContext } from "./admin.gerenciamento.cardapio";
-import { MenuItem, MenuItemPriceVariation, Prisma } from "@prisma/client";
+import { MenuItem } from "@prisma/client";
 import { LoaderArgs } from "@remix-run/node";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { badRequest, ok } from "~/utils/http-response.server";
-import { jsonParse } from "~/utils/json-helper";
 import { toast } from "~/components/ui/use-toast";
 
 import tryit from "~/utils/try-it";
 import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
-import { menuItemPriceVariationsEntity } from "~/domain/cardapio/menu-item-price-variations.prisma.entity.server";
 
 
 
@@ -39,6 +37,32 @@ export async function action({ request }: LoaderArgs) {
 
         return ok("Ordenamento atualizado");
 
+    }
+
+    if (_action === "item-visibility-change") {
+        const id = values?.id as string
+
+        const [errItem, item] = await prismaIt(menuItemPrismaEntity.findById(id));
+
+        if (errItem) {
+            return badRequest(errItem)
+        }
+
+        if (!item) {
+            return badRequest("Item não encontrado")
+        }
+
+        const [err, result] = await tryit(menuItemPrismaEntity.update(id, {
+            visible: !item.visible
+        }))
+
+        if (err) {
+            return badRequest(err)
+        }
+
+        const returnedMessage = !item.visible === true ? `Sabor "${item.name}" visivel no cardápio` : `Sabor "${item.name}" não visivel no cardápio`;
+
+        return ok(returnedMessage);
     }
 
 
