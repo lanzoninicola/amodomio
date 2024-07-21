@@ -73,7 +73,7 @@ export async function action({ request }: LoaderArgs) {
         const label = values?.label as string
         const amount = values?.amount as string
 
-        const [errItem, itemVariationPrice] = await prismaIt(menuItemPriceVariationsEntity.findByIdAndVariation(id, label));
+        const [errItem, itemVariationPrice] = await prismaIt(menuItemPriceVariationsEntity.findByItemIdAndVariation(menuItemId, label));
 
         const priceVariationRecord = {
             amount: parseFloat(amount),
@@ -121,6 +121,9 @@ export default function AdminCardapio() {
 
     const actionData = useActionData<typeof action>()
 
+
+
+
     if (actionData && actionData.status > 399) {
         toast({
             title: "Erro",
@@ -129,6 +132,8 @@ export default function AdminCardapio() {
     }
 
     if (actionData && actionData.status === 200) {
+
+        console.log(actionData, 'estou aqyu')
         toast({
             title: "Ok",
             description: actionData.message,

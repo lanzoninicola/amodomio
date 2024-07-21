@@ -159,7 +159,7 @@ model MenuItemPriceVariation {
   MenuItem           MenuItem? @relation(fields: [menuItemId], references: [id])
   menuItemId         String?   @map("menu_item_id")
   label              String
-  basePrice          Float     @default(0)
+  basePrice          Float     @default(0) @map("base_price")
   amount             Float
   discountPercentage Float     @map("discount_percentage")
   showOnCardapio     Boolean   @default(false) @map("show_on_cardapio")

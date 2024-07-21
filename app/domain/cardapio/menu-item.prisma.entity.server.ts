@@ -7,8 +7,9 @@ import {
 } from "@prisma/client";
 import prismaClient from "~/lib/prisma/client.server";
 import { PrismaEntityProps } from "~/lib/prisma/types.server";
-import { MenuItemPriceVariationPrismaEntity } from "./menu-item-price-variations.prisma.entity.server";
 import { menuItemTagPrismaEntity } from "./menu-item-tags.prisma.entity.server";
+import MenuItemPriceVariationUtility from "./menu-item-price-variations-utility";
+import { v4 as uuidv4 } from "uuid";
 
 export interface MenuItemWithAssociations extends MenuItem {
   priceVariations: MenuItemPriceVariation[];
@@ -70,9 +71,18 @@ export class MenuItemPrismaEntity {
   }
 
   async create(data: Prisma.MenuItemCreateInput) {
+    const newId = uuidv4();
+    data.id = newId;
+
+    const priceVariations =
+      MenuItemPriceVariationUtility.calculatePriceVariations(
+        data.basePriceAmount,
+        newId
+      );
+
     data.priceVariations = {
       createMany: {
-        data: MenuItemPriceVariationPrismaEntity.getInitialPriceVariations(),
+        data: priceVariations,
       },
     };
 

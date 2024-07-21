@@ -1,5 +1,5 @@
 import { Form, Link, useOutletContext } from "@remix-run/react"
-import { AlertCircle, ChevronRight } from "lucide-react"
+import { AlertCircle, ChevronRight, Loader } from "lucide-react"
 import { AdminCardapioOutletContext } from "~/routes/admin.gerenciamento.cardapio"
 import { OveredPoint } from "../menu-item-list/menu-item-list"
 import { MenuItemWithAssociations } from "../../menu-item.prisma.entity.server"
@@ -13,6 +13,8 @@ import { MenuItemPriceVariationPrismaEntity } from "../../menu-item-price-variat
 import { MenuItemPriceVariation } from "@prisma/client"
 import MenuItemPriceVariationUtility from "../../menu-item-price-variations-utility"
 import randomReactKey from "~/utils/random-react-key"
+import { cn } from "~/lib/utils"
+import useFormSubmissionnState from "~/hooks/useFormSubmissionState"
 
 
 interface MenuItemCardProps {
@@ -109,6 +111,8 @@ function PriceVariationsInCard({ item }: { item: MenuItemWithAssociations }) {
         }
     })
 
+    const formSubmission = useFormSubmissionnState()
+
 
 
     return (
@@ -116,7 +120,12 @@ function PriceVariationsInCard({ item }: { item: MenuItemWithAssociations }) {
             {priceVariations.map(pv => {
                 return (
                     <Form method="post" key={randomReactKey()} className="flex flex-col justify-center">
-                        <div key={pv.id} className="flex flex-col justify-center items-center  gap-1">
+                        <div key={pv.id} className={
+                            cn(
+                                "flex flex-col justify-center items-center  gap-1",
+                                pv.showOnCardapio && "bg-green-200"
+                            )
+                        }>
                             <span className="text-[9px] text-muted-foreground uppercase tracking-wider">{mapPriceVariationsLabel(pv.label)}</span>
                             <input type="text" name="amount" defaultValue={pv.amount.toFixed(2)}
                                 className="border-none outline-none w-full text-[0.75rem] text-center bg-muted rounded-sm" />
@@ -126,7 +135,11 @@ function PriceVariationsInCard({ item }: { item: MenuItemWithAssociations }) {
                             <Button size={"sm"} type="submit" name="_action"
                                 value="menu-item-card-price-upsert"
                                 className="text-[9px] h-[20px] rounded-md font-semibold uppercase tracking-wide"
-                            >Salvar</Button>
+                            >
+                                {
+                                    formSubmission === "loading" ? <Loader className="animate-spin" size={12} /> : "Salvar"
+                                }
+                            </Button>
                         </div>
                     </Form>
                 )

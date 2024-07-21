@@ -2,12 +2,13 @@ const getFirebaseConfig = () => {
   // Seems like the only key that is needed is the project_id
 
   if (!process.env.project_id) {
-    throw new Error("Missing information to connect to firebase: project_id");
+    // throw new Error("Missing information to connect to firebase: project_id");
+    console.error("Missing information to connect to firebase: project_id");
   }
 
   return {
     // type: process.env.type,
-    project_id: process.env.project_id,
+    project_id: "process.env.project_id",
     // private_key_id: process.env.private_key_id,
     // private_key: process.env.private_key,
     // client_email: process.env.client_email,

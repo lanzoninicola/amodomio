@@ -56,36 +56,10 @@ export class MenuItemPriceVariationPrismaEntity {
     });
   }
 
-  async findByIdAndVariation(id: string, variation: string) {
+  async findByItemIdAndVariation(menuItemId: string, variation: string) {
     return await this.client.menuItemPriceVariation.findFirst({
-      where: { menuItemId: id, label: variation.toLocaleLowerCase() },
+      where: { menuItemId: menuItemId, label: variation.toLocaleLowerCase() },
     });
-  }
-
-  static getPricesOptions() {
-    return [
-      { label: "fatia", value: "Fatía" },
-      { label: "individual", value: "Individual" },
-      { label: "media", value: "Média" },
-      { label: "familia", value: "Família" },
-    ];
-  }
-
-  static getInitialPriceVariations(): MenuItemWithAssociations["priceVariations"] {
-    const initialPriceVariations =
-      MenuItemPriceVariationPrismaEntity.getPricesOptions();
-
-    return initialPriceVariations.map((p) => ({
-      amount: 0,
-      label: p.label,
-      discountPercentage: 0,
-      createdAt: new Date(),
-      id: "",
-      menuItemId: "",
-      basePrice: 0,
-      showOnCardapio: false,
-      updatedAt: new Date(),
-    }));
   }
 }
 
