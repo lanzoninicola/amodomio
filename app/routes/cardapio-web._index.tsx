@@ -27,7 +27,15 @@ export const meta: V2_MetaFunction = () => {
 
 
 export async function loader({ request }: LoaderArgs) {
-    const [errItems, items] = await prismaIt(menuItemPrismaEntity.findAll({}))
+    const [errItems, items] = await prismaIt(menuItemPrismaEntity.findAll({
+        where: {
+            visible: true
+        },
+        option: {
+            sorted: true,
+            direction: "asc"
+        }
+    }))
 
     if (errItems) {
         return badRequest(errItems)
@@ -39,6 +47,7 @@ export async function loader({ request }: LoaderArgs) {
 
 }
 
+// TODO: page if a generic error occured
 
 export default function CardapioWebIndex() {
 
@@ -59,8 +68,6 @@ export default function CardapioWebIndex() {
 
 
 function CardapioItem({ item }: { item: MenuItemWithAssociations }) {
-
-
 
 
 
@@ -101,7 +108,16 @@ interface CardapioItemImageProps {
 function CardapioItemImage({ item }: CardapioItemImageProps) {
 
     // const imageUrl = item?.imageBase64 || `images/cardapio-web-app/${toLowerCase(item.name)}.jpg`
-    const imageUrl = `images/cardapio-web-app/margherita.jpg`
+    // const imageUrl = `images/cardapio-web-app/margherita.jpg`
+
+    function getImageFileName(str: string) {
+        if (str === undefined) return str;
+
+        if (str.length === 0) return str;
+
+        return str.toLocaleLowerCase().replace(/ /g, '_');
+    }
+
 
     const Overlay = () => {
         return (
@@ -119,7 +135,7 @@ function CardapioItemImage({ item }: CardapioItemImageProps) {
             <div
                 className="h-[300px] bg-cover bg-center mb-2"
                 style={{
-                    backgroundImage: `url(${imageUrl || "images/cardapio-web-app/item-placeholder.png"})`
+                    backgroundImage: `url('images/cardapio-web-app/${getImageFileName(item.name)}.jpg')`,
                 }}>
             </div>
             <Overlay />

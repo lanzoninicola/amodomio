@@ -22,7 +22,7 @@ interface MenuItemEntityFindAllProps {
   where?: Prisma.MenuItemWhereInput;
   option?: {
     sorted?: boolean;
-    orderBy?: "asc" | "desc";
+    direction?: "asc" | "desc";
   };
 }
 
@@ -32,7 +32,7 @@ export class MenuItemPrismaEntity {
     this.client = client;
   }
 
-  async findAll(params: MenuItemEntityFindAllProps) {
+  async findAll(params: MenuItemEntityFindAllProps = {}) {
     const records = await this.client.menuItem.findMany({
       where: params?.where,
       include: {
@@ -51,7 +51,7 @@ export class MenuItemPrismaEntity {
     }
 
     return records.sort((a, b) => {
-      if (params?.option && params?.option.orderBy === "asc") {
+      if (params?.option && params?.option.direction === "asc") {
         return a.sortOrderIndex - b.sortOrderIndex;
       }
 
