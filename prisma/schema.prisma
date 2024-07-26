@@ -142,7 +142,8 @@ model MenuItem {
   Category        Category                 @relation(fields: [categoryId], references: [id])
   basePriceAmount Float                    @map("base_price_amount")
   priceVariations MenuItemPriceVariation[]
-  imageBase64     String
+  imageFileName   String?                  @map("image_file_name")
+  imageBase64     String?                  @map("image_base64")
   visible         Boolean
   mogoId          String                   @map("mogo_id")
   createdAt       DateTime                 @map("created_at")
@@ -159,7 +160,7 @@ model MenuItemPriceVariation {
   MenuItem           MenuItem? @relation(fields: [menuItemId], references: [id])
   menuItemId         String?   @map("menu_item_id")
   label              String
-  basePrice          Float     @default(0)
+  basePrice          Float     @default(0) @map("base_price")
   amount             Float
   discountPercentage Float     @map("discount_percentage")
   showOnCardapio     Boolean   @default(false) @map("show_on_cardapio")

@@ -7,8 +7,9 @@ import {
 } from "@prisma/client";
 import prismaClient from "~/lib/prisma/client.server";
 import { PrismaEntityProps } from "~/lib/prisma/types.server";
-import { MenuItemPriceVariationPrismaEntity } from "./menu-item-price-variations.prisma.entity.server";
 import { menuItemTagPrismaEntity } from "./menu-item-tags.prisma.entity.server";
+import MenuItemPriceVariationUtility from "./menu-item-price-variations-utility";
+import { v4 as uuidv4 } from "uuid";
 
 export interface MenuItemWithAssociations extends MenuItem {
   priceVariations: MenuItemPriceVariation[];
@@ -21,7 +22,7 @@ interface MenuItemEntityFindAllProps {
   where?: Prisma.MenuItemWhereInput;
   option?: {
     sorted?: boolean;
-    orderBy?: "asc" | "desc";
+    direction?: "asc" | "desc";
   };
 }
 
@@ -31,7 +32,7 @@ export class MenuItemPrismaEntity {
     this.client = client;
   }
 
-  async findAll(params: MenuItemEntityFindAllProps) {
+  async findAll(params: MenuItemEntityFindAllProps = {}) {
     const records = await this.client.menuItem.findMany({
       where: params?.where,
       include: {
@@ -50,7 +51,7 @@ export class MenuItemPrismaEntity {
     }
 
     return records.sort((a, b) => {
-      if (params?.option && params?.option.orderBy === "asc") {
+      if (params?.option && params?.option.direction === "asc") {
         return a.sortOrderIndex - b.sortOrderIndex;
       }
 
@@ -70,9 +71,18 @@ export class MenuItemPrismaEntity {
   }
 
   async create(data: Prisma.MenuItemCreateInput) {
+    const newId = uuidv4();
+    data.id = newId;
+
+    const priceVariations =
+      MenuItemPriceVariationUtility.calculatePriceVariations(
+        data.basePriceAmount,
+        newId
+      );
+
     data.priceVariations = {
       createMany: {
-        data: MenuItemPriceVariationPrismaEntity.getInitialPriceVariations(),
+        data: priceVariations,
       },
     };
 

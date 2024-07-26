@@ -12,7 +12,6 @@ import { lastUrlSegment } from "~/utils/url";
 
 export interface AdminOutletContext {
     loggedUser: LoggedUser | null
-    cardapioItems: MenuItemWithAssociations[]
     operatorId: string
     setOperatorId: (operatorId: string) => void
 }
@@ -40,19 +39,13 @@ export const loader: LoaderFunction = async ({ request }: LoaderArgs) => {
 
     let user = await authenticator.isAuthenticated(request);
 
-    const [_, cardapioItems] = await prismaIt(menuItemPrismaEntity.findAll({
-        where: {
-            visible: true
-        }
-    }))
-
     if (!user) {
         return redirect("/login");
     }
 
     const urlSegment = lastUrlSegment(request.url)
 
-    return ok({ user, urlSegment, environment, prismaDbName, cardapioItems })
+    return ok({ user, urlSegment, environment, prismaDbName })
 }
 
 
@@ -63,7 +56,6 @@ export default function AdminOutlet() {
 
     const loggedUser = loaderData?.payload?.user;
     const urlSegment = loaderData?.payload?.urlSegment;
-    const cardapioItems = loaderData?.payload?.cardapioItems
     const env = loaderData?.payload?.environment
 
     return (
@@ -73,8 +65,6 @@ export default function AdminOutlet() {
             <div className="mt-12">
                 <Outlet context={{
                     loggedUser,
-                    cardapioItems,
-
                 }} />
             </div>
         </>
