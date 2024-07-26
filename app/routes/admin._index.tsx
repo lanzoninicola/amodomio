@@ -7,6 +7,7 @@ import { Input } from "~/components/ui/input";
 import { LoaderArgs, LoaderFunction } from "@remix-run/node";
 import { ok } from "~/utils/http-response.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
+import { mapPriceVariationsLabel } from "~/domain/cardapio/fn.utils";
 
 export const loader: LoaderFunction = async ({ request }: LoaderArgs) => {
     const [_, cardapioItems] = await prismaIt(menuItemPrismaEntity.findAll({
@@ -87,8 +88,21 @@ function CardapioItems() {
                     {
                         items.map(item => {
                             return (
-                                <div className="border rounded-lg p-4">
+                                <div className="border rounded-lg p-4" key={item.id}>
                                     <h2 className="text-xs uppercase font-semibold tracking-wide">{item.name}</h2>
+                                    <ul className="grid grid-cols-2 items-end mb-2">
+                                        {
+                                            item.priceVariations.map(pv => {
+                                                if (pv.amount <= 0) return
+
+                                                return (
+                                                    <li className="flex flex-col" key={pv.id}>
+                                                        <p className="text-xs">{mapPriceVariationsLabel(pv.label)}: <span className="font-semibold">{pv.amount.toFixed(2)}</span></p>
+                                                    </li>
+                                                )
+                                            })
+                                        }
+                                    </ul>
                                     <p className="text-xs text-muted-foreground">{item.ingredients}</p>
                                 </div>
                             )
