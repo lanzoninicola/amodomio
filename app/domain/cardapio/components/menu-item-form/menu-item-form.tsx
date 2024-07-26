@@ -9,7 +9,7 @@ import { cn } from "~/lib/utils"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select"
 import { DeleteItemButton } from "~/components/primitives/table-list"
 import { Label } from "~/components/ui/label"
-import { useRef, useState } from "react"
+import { ChangeEvent, useRef, useState } from "react"
 import Fieldset from "~/components/ui/fieldset"
 import { Textarea } from "~/components/ui/textarea"
 import { MenuItemWithAssociations } from "../../menu-item.prisma.entity.server"
@@ -27,6 +27,8 @@ interface MenuItemFormProps {
 
 export default function MenuItemForm({ item, action, className, categories }: MenuItemFormProps) {
     const [currentBasePrice, setCurrentBasePrice] = useState(item?.basePriceAmount || 0)
+
+
 
     const submitButtonRef = useRef<any>()
     useSaveShortcut({ callback: submitForm })
@@ -132,12 +134,25 @@ export default function MenuItemForm({ item, action, className, categories }: Me
 
                 <Separator className="mb-4" />
 
-                <Fieldset className="grid grid-cols-8 items-center">
-                    <Label htmlFor="imageFile" className="font-semibold text-sm col-span-2" >Imagem</Label>
-                    <Input id="imageFile" name="imageFile" type="file" className="col-span-6" />
-                </Fieldset>
+                <div className="grid grid-cols-8 items-center gap-x-4 w-full   ">
+
+                    <div className="col-span-3 flex gap-4 items-center">
+                        <Label htmlFor="imageFile" className="font-semibold text-sm " >Imagem</Label>
+                        <InputImageForm item={item} />
+                    </div>
+                    <div className="col-span-5">
+                        <div className="border p-4 rounded-lg ">
+                            <div className="flex flex-col justify-center gap-2">
+                                <div className="w-24 h-24 bg-muted rounded-lg bg-center bg-no-repeat bg-cover"
+                                    style={{ backgroundImage: `url(${item?.imageBase64 || ""})` }}></div>
+                                <span className="text-[10px] text-muted-foreground">{item?.imageFileName || ""}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
                 <section className="flex flex-col">
+
 
                     <Fieldset className="grid grid-cols-4 items-center">
                         <Label htmlFor="mogoId" className="font-semibold text-sm col-span-1">Mogo ID</Label>
@@ -150,6 +165,7 @@ export default function MenuItemForm({ item, action, className, categories }: Me
                                 action === "menu-item-update" && "border-none focus:px-2 p-0"
                             )} />
                     </Fieldset>
+
 
                 </section>
 
@@ -176,6 +192,52 @@ export default function MenuItemForm({ item, action, className, categories }: Me
 
 
         </div>
+
+    )
+}
+
+interface InputImageFormProps {
+    item?: MenuItemWithAssociations
+}
+
+export function InputImageForm({ item }: InputImageFormProps) {
+    const [imageBase64, setImageBase64] = useState<string>(item?.imageBase64 || "")
+
+
+    const [currentFile, setCurrentFile] = useState<File>()
+    const [currentFileName, setCurrentFileName] = useState<string>(item?.imageFileName || "")
+
+
+    const onChangeImageFile = (e: ChangeEvent<HTMLInputElement>) => {
+        if (!e.target.files) return
+        const file = e.target.files[0]
+        if (!file) return
+        const fileName = file.name
+
+
+        setCurrentFile(file)
+        setCurrentFileName(fileName)
+
+
+        const reader = new FileReader()
+        reader.onload = (event) => {
+            if (!event.target) return
+            const base64 = event.target.result
+            if (!base64) return
+            setImageBase64(base64.toString())
+        }
+        reader.readAsDataURL(file)
+    }
+
+
+
+    return (
+        <>
+            <Input id="imageFile" name="imageFileName" type="file" className="col-span-6"
+                onChange={onChangeImageFile}
+            />
+            <input type="hidden" name="imageBase64" defaultValue={imageBase64} />
+        </>
 
     )
 }

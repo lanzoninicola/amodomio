@@ -45,25 +45,16 @@ export async function action({ request }: LoaderArgs) {
 
         const category: Category = jsonParse(values.category as string)
 
-        const imageFile = values.imageFile as File
-
-        let imageBase64 = null
-        if (imageFile && imageFile instanceof File) {
-            const [errImage, imageBase64Converted] = await tryit(getBase64(imageFile));
-
-            if (errImage) {
-                return badRequest(errImage)
-            }
-
-            imageBase64 = imageBase64Converted
-        }
+        const imageFileName = values?.imageFileName as string
+        const imageBase64 = values?.imageBase64 as string
 
         const menuItem: Prisma.MenuItemCreateInput = {
             name: values.name as string,
             ingredients: values.ingredients as string,
             description: values?.description as string || "",
             visible: values?.visible === "on" ? true : false,
-            imageBase64: imageBase64 as string || "",
+            imageFileName: imageFileName,
+            imageBase64: imageBase64,
             basePriceAmount: values?.basePriceAmount ? parseFloat(values.basePriceAmount as string) : 0,
             mogoId: values?.mogoId as string || "",
             createdAt: new Date().toISOString(),
