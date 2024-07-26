@@ -57,42 +57,49 @@ export default function MenuItemCard({ item, dragAndDrop }: MenuItemCardProps) {
     return (
 
         <div className="p-4 rounded-md border border-gray-200 bg-white w-full">
-            <section className="grid grid-cols-12 items-center w-full">
-                <div className="flex items-center col-span-4 gap-2">
-                    <div className="flex flex-col gap-0">
-                        <h4 className="text-lg font-bold tracking-tight">
-                            {item.name}
-                        </h4>
-                        <span className="text-[10px] text-muted-foreground cursor-pointer" onClick={copyItemId}>{item.id}</span>
+            <div className="flex flex-col gap-2">
+                <section className="grid grid-cols-12 items-center w-full">
+
+                    <div className="w-16 h-16 bg-muted rounded-lg bg-center bg-no-repeat bg-cover col-span-1"
+                        style={{ backgroundImage: `url(${item?.imageBase64 || ""})` }}></div>
+                    <div className="flex items-center col-span-3 gap-2">
+                        <div className="flex flex-col gap-0">
+                            <h4 className="text-lg font-bold tracking-tight">
+                                {item.name}
+                            </h4>
+                            <span className="text-[10px] text-muted-foreground cursor-pointer" onClick={copyItemId}>{item.id}</span>
+                        </div>
                     </div>
-                </div>
-                <div className="grid grid-cols-5 col-span-4 gap-x-2">
-                    <div className="flex flex-col justify-start items-center  gap-1 mr-2">
-                        <span className="text-[9px] text-muted-foreground uppercase tracking-wider">Base</span>
-                        <input type="text" name="price" defaultValue={item.basePriceAmount.toFixed(2)}
-                            className="border-none outline-none w-full text-[0.75rem] text-center bg-muted rounded-sm" />
+                    <div className="grid grid-cols-5 col-span-4 gap-x-2">
+                        <div className="flex flex-col justify-start items-center  gap-1 mr-2">
+                            <span className="text-[9px] text-muted-foreground uppercase tracking-wider">Base</span>
+                            <input type="text" name="price" defaultValue={item.basePriceAmount.toFixed(2)}
+                                className="border-none outline-none w-full text-[0.75rem] text-center bg-muted rounded-sm" />
+                        </div>
+                        <PriceVariationsInCard item={item} />
                     </div>
-                    <PriceVariationsInCard item={item} />
-                </div>
 
-                <div className="mt-2 col-span-3">
-                    <Form method="post" className="flex justify-between md:justify-end gap-4 w-full items-center ">
+                    <div className="mt-2 col-span-3">
+                        <Form method="post" className="flex justify-between md:justify-end gap-4 w-full items-center ">
 
-                        <span className="font-semibold text-sm">Públicar no cardápio</span>
-                        <Switch defaultChecked={item?.visible || false} onCheckedChange={handleVisibility} />
-                        <input type="hidden" name="id" value={item?.id} />
-                        <button ref={submitBtnRef} className="hidden" type="submit" value={"menu-item-visibility-change"} name="_action" />
+                            <span className="font-semibold text-sm">Públicar no cardápio</span>
+                            <Switch defaultChecked={item?.visible || false} onCheckedChange={handleVisibility} />
+                            <input type="hidden" name="id" value={item?.id} />
+                            <button ref={submitBtnRef} className="hidden" type="submit" value={"menu-item-visibility-change"} name="_action" />
 
-                    </Form>
-                </div>
+                        </Form>
+                    </div>
 
-                <div className="col-span-1 flex justify-end">
-                    <Link to={`${item?.id}/main`} className="hover:bg-muted rounded-full p-1">
-                        <ChevronRight />
-                    </Link>
-                </div>
+                    <div className="col-span-1 flex justify-end">
+                        <Link to={`${item?.id}/main`} className="hover:bg-muted rounded-full p-1">
+                            <ChevronRight />
+                        </Link>
+                    </div>
 
-            </section>
+                </section>
+
+                {item.visible === true && !item.mogoId && <MissingInfoAlert message="Item publicado mas sem MOGO ID" />}
+            </div>
         </div>
 
     )
@@ -123,7 +130,6 @@ function PriceVariationsInCard({ item }: { item: MenuItemWithAssociations }) {
                         <div key={pv.id} className={
                             cn(
                                 "flex flex-col justify-center items-center  gap-1",
-                                pv.showOnCardapio && "bg-green-200"
                             )
                         }>
                             <span className="text-[9px] text-muted-foreground uppercase tracking-wider">{mapPriceVariationsLabel(pv.label)}</span>
@@ -134,7 +140,12 @@ function PriceVariationsInCard({ item }: { item: MenuItemWithAssociations }) {
                             <input type="hidden" name="label" value={pv.label} />
                             <Button size={"sm"} type="submit" name="_action"
                                 value="menu-item-card-price-upsert"
-                                className="text-[9px] h-[20px] rounded-md font-semibold uppercase tracking-wide"
+                                className={
+                                    cn(
+                                        "text-[9px] h-[20px] rounded-md font-semibold uppercase tracking-wide",
+                                        pv.showOnCardapio && "bg-green-500 text-black"
+                                    )
+                                }
                             >
                                 {
                                     formSubmission === "loading" ? <Loader className="animate-spin" size={12} /> : "Salvar"
@@ -152,20 +163,15 @@ function PriceVariationsInCard({ item }: { item: MenuItemWithAssociations }) {
 
 
 interface MissingInfoAlertProps {
-    item: MenuItemWithAssociations
+    message: string
 }
 
-function MissingInfoAlert({ item }: MissingInfoAlertProps) {
+function MissingInfoAlert({ message }: MissingInfoAlertProps) {
     return (
-        <div className=" bg-orange-100 rounded-md py-2 px-4 mt-4">
+        <div className=" bg-orange-100 rounded-md py-2 px-4 mt-4 w-max">
             <div className="flex gap-2 items-center">
                 <AlertCircle color="orange" size={16} />
-                <div className="flex flex-col gap-1">
-                    {(item?.name === undefined || item.name === "") && <span className="text-xs font-semibold text-orange-500">Nome não cadastrado</span>}
-                    {/* {(item?.prices === undefined || item.prices.length === 0) && <span className="text-xs font-semibold text-orange-500">Preço não cadastrado</span>} */}
-                    {(item?.ingredients === undefined || item.ingredients.length === 0) && <span className="text-xs font-semibold text-orange-500">Ingredientes não cadastrados</span>}
-                </div>
-
+                <span className="text-xs font-semibold text-orange-500">{message}</span>
             </div>
         </div>
     )

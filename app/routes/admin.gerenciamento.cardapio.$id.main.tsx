@@ -38,7 +38,7 @@ export async function action({ request }: LoaderArgs) {
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);
 
-    console.log({ action: _action, values })
+    // console.log({ action: _action, values })
 
 
     if (_action === "menu-item-update") {
