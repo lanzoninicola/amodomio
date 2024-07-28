@@ -134,23 +134,27 @@ model SubCategory {
 }
 
 model MenuItem {
-  id              String                   @id @default(uuid())
-  name            String
-  description     String
-  ingredients     String
-  categoryId      String                   @map("category_id")
-  Category        Category                 @relation(fields: [categoryId], references: [id])
-  basePriceAmount Float                    @map("base_price_amount")
-  priceVariations MenuItemPriceVariation[]
-  imageFileName   String?                  @map("image_file_name")
-  imageBase64     String?                  @map("image_base64")
-  visible         Boolean
-  mogoId          String                   @map("mogo_id")
-  createdAt       DateTime                 @map("created_at")
-  updatedAt       DateTime                 @default(now()) @updatedAt @map("updated_at")
-  tags            MenuItemTag[]
+  id                 String                   @id @default(uuid())
+  name               String
+  description        String
+  ingredients        String
+  categoryId         String                   @map("category_id")
+  Category           Category                 @relation(fields: [categoryId], references: [id])
+  basePriceAmount    Float                    @map("base_price_amount")
+  priceVariations    MenuItemPriceVariation[]
+  imageFileName      String?                  @map("image_file_name")
+  imageBase64        String?                  @map("image_base64")
+  imageFileNameThumb String?                  @map("image_file_name_thumb")
+  imageBase64Thumb   String?                  @map("image_base64_thumb")
+  imageFileNameIcon  String?                  @map("image_file_name_icon")
+  imageBase64Icon    String?                  @map("image_base64_icon")
+  visible            Boolean
+  mogoId             String                   @map("mogo_id")
+  createdAt          DateTime                 @map("created_at")
+  updatedAt          DateTime                 @default(now()) @updatedAt @map("updated_at")
+  tags               MenuItemTag[]
   /// this track the position inside the menu
-  sortOrderIndex  Int                      @default(0) @map("sort_order_index")
+  sortOrderIndex     Int                      @default(0) @map("sort_order_index")
 
   @@map("menu_items")
 }
