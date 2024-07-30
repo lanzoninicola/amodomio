@@ -1,7 +1,7 @@
 import { V2_MetaFunction } from "@remix-run/node";
 import { useLoaderData, useOutletContext } from "@remix-run/react";
 import { Share2, Heart } from "lucide-react";
-import { useState } from "react";
+import React, { useState, useRef, useCallback } from "react";
 import WhatsappExternalLink from "~/components/primitives/whatsapp/whatsapp-external-link";
 import WhatsAppIcon from "~/components/primitives/whatsapp/whatsapp-icon";
 import { Separator } from "~/components/ui/separator";
@@ -9,65 +9,61 @@ import { MenuItemWithAssociations } from "~/domain/cardapio/menu-item.prisma.ent
 import { cn } from "~/lib/utils";
 import { CardapioOutletContext, loader } from "./cardapio-web";
 
-
-
-
-
-// TODO: page if a generic error occured
-
 export default function CardapioWebIndex() {
+    const { items: allItems } = useOutletContext<CardapioOutletContext>();
+    const [items, setItems] = useState(allItems.slice(0, 10));
+    const [hasMore, setHasMore] = useState(true);
+    const observer = useRef<IntersectionObserver | null>(null);
 
-    const { items } = useOutletContext<CardapioOutletContext>()
+    const lastItemRef = useCallback(node => {
+        if (observer.current) observer.current.disconnect();
+        observer.current = new IntersectionObserver(entries => {
+            if (entries[0].isIntersecting && hasMore) {
+                setItems(prevItems => {
+                    const newItems = allItems.slice(prevItems.length, prevItems.length + 10);
+                    setHasMore(newItems.length > 0);
+                    return [...prevItems, ...newItems];
+                });
+            }
+        });
+        if (node) observer.current.observe(node);
+    }, [hasMore, allItems]);
 
     return (
         <ul className="flex flex-col mt-[60px] overflow-y-scroll snap-mandatory">
-            {
-                items.map((item) => (
-                    <CardapioItem key={item.id} item={item} />
-                ))
-            }
-
+            {items.map((item, index) => {
+                if (items.length === index + 1) {
+                    return <CardapioItem ref={lastItemRef} key={item.id} item={item} />;
+                } else {
+                    return <CardapioItem key={item.id} item={item} />;
+                }
+            })}
         </ul>
-    )
+    );
 }
 
-
-function CardapioItem({ item }: { item: MenuItemWithAssociations }) {
-
-
-
-    return (
-        <>
-            <li className="flex flex-col snap-start" id={item.id}>
-
-                <div className="relative mb-2">
-                    <CardapioItemImage item={item} />
-                    <div className="absolute bottom-0 inset-x-0 py-4 px-2">
-                        <CardapioItemPrice prices={item?.priceVariations} />
-                    </div>
-                </div>
-
-                <div className="flex flex-col px-4 mb-4">
-                    <h3 className="font-body-website text-sm font-semibold uppercase mb-2">{item.name}</h3>
-                    <p className="font-body-website leading-tight">{item.ingredients}</p>
-                </div>
-
-                <CardapioItemActionBar item={item} />
-            </li>
-            <Separator className="my-4" />
-
-        </>
-
-    )
-}
+const CardapioItem = React.forwardRef(({ item }: { item: MenuItemWithAssociations }, ref) => (
+    <li className="flex flex-col snap-start" id={item.id} ref={ref}>
+        <div className="relative mb-2">
+            <CardapioItemImage item={item} />
+            <div className="absolute bottom-0 inset-x-0 py-4 px-2">
+                <CardapioItemPrice prices={item?.priceVariations} />
+            </div>
+        </div>
+        <div className="flex flex-col px-4 mb-4">
+            <h3 className="font-body-website text-sm font-semibold uppercase mb-2">{item.name}</h3>
+            <p className="font-body-website leading-tight">{item.ingredients}</p>
+        </div>
+        <CardapioItemActionBar item={item} />
+        <Separator className="my-4" />
+    </li>
+));
 
 interface CardapioItemImageProps {
-    item: MenuItemWithAssociations
+    item: MenuItemWithAssociations;
 }
 
-function CardapioItemImage({ item }: CardapioItemImageProps) {
-
-    const imageUrl = item?.imageBase64 || `images/cardapio-web-app/placeholder.png`
+const CardapioItemImage = ({ item }: CardapioItemImageProps) => {
 
     const Overlay = () => {
         return (
@@ -78,24 +74,13 @@ function CardapioItemImage({ item }: CardapioItemImageProps) {
         )
     }
 
-    const SmokeOverlay = () => {
-        return (
-            <div
-                className="absolute inset-0 z-20 overflow-hidden rotate-0"
-                style={{ backgroundImage: `url(images/cardapio-web-app/smoke.gif)` }}>
-            </div>
-        )
-    }
-
     return (
-        <div className="relative">
-            <div
-                className="h-[300px] bg-center bg-no-repeat bg-cover mb-2"
-                style={{ backgroundImage: `url(${imageUrl || ""})` }}>
-            </div>
-            <Overlay />
-            {/* <SmokeOverlay /> */}
-        </div>
+        <img
+            src={item.imageBase64 || "/images/cardapio-web-app/placeholder.png"}
+            alt={item.name}
+            loading="lazy"
+            className="w-full max-h-[250px] object-cover object-center"
+        />
     )
 }
 
@@ -138,57 +123,38 @@ function CardapioItemPrice({ prices }: CardapioItemPriceProps) {
     )
 }
 
-
-
-interface CardapioItemActionBarProps {
-    item: MenuItemWithAssociations
-}
-
-function CardapioItemActionBar({ item }: CardapioItemActionBarProps) {
-
-    const [likeIt, setLikeIt] = useState(false)
+function CardapioItemActionBar({ item }: { item: MenuItemWithAssociations }) {
+    const [likeIt, setLikeIt] = useState(false);
 
     return (
         <div className="flex flex-col gap-2">
             <div className="grid grid-cols-8 font-body-website px-4 mb-1">
-
-                <div className="flex flex-col gap-1 cursor-pointer" onClick={() => {
-                    setLikeIt(true)
-                }}>
-                    <Heart className={
-                        cn(
+                <div className="flex flex-col gap-1 cursor-pointer" onClick={() => setLikeIt(true)}>
+                    <Heart
+                        className={cn(
                             likeIt ? "fill-red-500" : "fill-none",
                             likeIt ? "stroke-red-500" : "stroke-black"
-                        )
-                    } />
-                    {/* <span className={
-                    cn(
-                        "text-[12px] tracking-normal font-semibold",
-                        likeIt ? "text-red-500" : "text-black"
-                    )
-                }>Curtir</span> */}
+                        )}
+                    />
                 </div>
-
-                <WhatsappExternalLink phoneNumber=""
+                <WhatsappExternalLink
+                    phoneNumber=""
                     ariaLabel="Envia uma mensagem com WhatsApp"
                     message={"Essa é a melhor pizzaria da cidade. Experimente..."}
                     className="flex flex-col gap-1 cursor-pointer"
                 >
                     <Share2 />
-                    {/* <span className="text-[12px] tracking-normal font-semibold">Compartilhe</span> */}
                 </WhatsappExternalLink>
-                <WhatsappExternalLink phoneNumber="46991272525"
+                <WhatsappExternalLink
+                    phoneNumber="46991272525"
                     ariaLabel="Envia uma mensagem com WhatsApp"
                     message={"Olá, gostaria fazer um pedido"}
                     className="flex flex-col gap-1 items-end col-span-6 "
                 >
                     <WhatsAppIcon color="black" />
-                    {/* <span className="text-[10px] tracking-wide  font-body-website">Atendimento</span> */}
                 </WhatsappExternalLink>
             </div>
             <span className="text-sm font-semibold font-body-website tracking-tight px-4">400 Like</span>
         </div>
-
-    )
+    );
 }
-
