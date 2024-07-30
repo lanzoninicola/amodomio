@@ -104,46 +104,55 @@ function CardapioSearch({ items, setShowSearch }: {
     items: MenuItemWithAssociations[],
     setShowSearch: React.Dispatch<React.SetStateAction<boolean>>
 }) {
-    const [currentItems, setCurrentItems] = useState<any[]>(items);
+    const [currentItems, setCurrentItems] = useState<any[]>([]);
     const [search, setSearch] = useState("")
 
     const handleSearch = (event: React.ChangeEvent<HTMLInputElement>) => {
 
-        const value = event.target.value
+        const value = event.target.value.toLowerCase();
+        setSearch(value);
 
-        setSearch(value)
+        if (!value) {
+            setCurrentItems([]);
+            return;
+        }
 
-        if (!value) return setCurrentItems(items)
+        const searchedItems = items.filter(item =>
+            item.name.toLowerCase().includes(value) ||
+            item.ingredients.toLowerCase().includes(value) ||
+            item.description.toLowerCase().includes(value) ||
+            item.tags.filter(tag => tag.name.toLowerCase().includes(value)).length > 0
+        );
 
-        const searchedItems = items
-            .filter(item => item.name?.toLowerCase().includes(value.toLowerCase()) || item.ingredients?.toLowerCase().includes(value.toLowerCase()))
-
-        setCurrentItems(searchedItems)
-
-    }
+        setCurrentItems(searchedItems);
+    };
 
     return (
         <div className="flex flex-col">
-            <div className="bg-white flex flex-col py-2">
+            <div className="bg-white flex flex-col py-3">
                 <Input placeholder="Digitar 'abobrinha' ou 'vegetarianas'" className="font-body-website text-sm h-8" onChange={handleSearch} />
-                <ul className="flex flex-row gap-2 overflow-x-scroll pt-4">
-                    {currentItems.map((item) => (
-                        <li className="py-1 flex-1 min-w-[70px]" key={item.id}>
-                            <Link
-                                to={`/cardapio-web/#${item.id}`}
-                                className="flex flex-col gap-1 items-center w-full"
-                            >
-                                <div className="bg-center bg-cover bg-no-repeat w-8 h-8 rounded-lg "
-                                    style={{
-                                        backgroundImage: `url(${item.imageBase64 || "/images/cardapio-web-app/placeholder.png"})`,
-                                    }}></div>
-                                <span className="font-body-website text-[0.65rem] font-semibold leading-tight uppercase text-center">{item.name}</span>
+                <div className="max-h-[350px] overflow-y-auto pt-4">
+                    <ul className="flex flex-col gap-2">
+                        {currentItems.map((item) => (
+                            <li className="py-1 flex-1 min-w-[70px]" key={item.id}>
+                                <Link
+                                    to={`/cardapio-web/#${item.id}`}
+                                    className="grid grid-cols-8 items-center w-full"
+                                >
+                                    <div className="bg-center bg-cover bg-no-repeat w-8 h-8 rounded-lg col-span-1 "
+                                        style={{
+                                            backgroundImage: `url(${item.imageBase64 || "/images/cardapio-web-app/placeholder.png"})`,
+                                        }}></div>
+                                    <div className="flex flex-col col-span-7">
+                                        <span className="font-body-website text-[0.65rem] font-semibold leading-tight uppercase">{item.name}</span>
+                                        <span className="font-body-website text-[0.65rem] leading-tight">{item.ingredients}</span>
+                                    </div>
 
-
-                            </Link>
-                        </li>
-                    ))}
-                </ul>
+                                </Link>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
             </div>
             <div className="flex justify-end  items-center px-2 gap-1"
 
