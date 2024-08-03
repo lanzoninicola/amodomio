@@ -1,6 +1,6 @@
 import { V2_MetaFunction } from "@remix-run/node";
 import { useLoaderData, useOutletContext } from "@remix-run/react";
-import { Share2, Heart } from "lucide-react";
+import { Share2, Heart, LayoutList } from "lucide-react";
 import React, { useState, useRef, useCallback } from "react";
 import WhatsappExternalLink from "~/components/primitives/whatsapp/whatsapp-external-link";
 import WhatsAppIcon from "~/components/primitives/whatsapp/whatsapp-icon";
@@ -8,6 +8,7 @@ import { Separator } from "~/components/ui/separator";
 import { MenuItemWithAssociations } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { cn } from "~/lib/utils";
 import { CardapioOutletContext, loader } from "./cardapio-web";
+import { LayoutTemplate } from "lucide-react";
 
 export default function CardapioWebIndex() {
     const { items: allItems } = useOutletContext<CardapioOutletContext>();
@@ -15,7 +16,7 @@ export default function CardapioWebIndex() {
     const [hasMore, setHasMore] = useState(true);
     const observer = useRef<IntersectionObserver | null>(null);
 
-    const lastItemRef = useCallback(node => {
+    const lastItemRef = useCallback((node: HTMLLIElement) => {
         if (observer.current) observer.current.disconnect();
         observer.current = new IntersectionObserver(entries => {
             if (entries[0].isIntersecting && hasMore) {
@@ -30,19 +31,30 @@ export default function CardapioWebIndex() {
     }, [hasMore, allItems]);
 
     return (
-        <ul className="flex flex-col mt-[60px] overflow-y-scroll snap-mandatory">
-            {items.map((item, index) => {
-                if (items.length === index + 1) {
-                    return <CardapioItem ref={lastItemRef} key={item.id} item={item} />;
-                } else {
-                    return <CardapioItem key={item.id} item={item} />;
-                }
-            })}
-        </ul>
+        <section >
+            {/* <div className="flex gap-8 items-center w-full justify-center py-4">
+                <LayoutTemplate />
+                <LayoutList />
+
+            </div> */}
+            <ul className="flex flex-col overflow-y-scroll md:overflow-y-z  auto snap-mandatory">
+                {items.map((item, index) => {
+                    if (items.length === index + 1) {
+                        return <CardapioItem ref={lastItemRef} key={item.id} item={item} />;
+                    } else {
+                        return <CardapioItem key={item.id} item={item} />;
+                    }
+                })}
+            </ul>
+        </section>
     );
 }
 
-const CardapioItem = React.forwardRef(({ item }: { item: MenuItemWithAssociations }, ref) => (
+interface CardapioItemProps {
+    item: MenuItemWithAssociations;
+}
+
+const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) => (
     <li className="flex flex-col snap-start" id={item.id} ref={ref}>
         <div className="relative mb-2">
             <CardapioItemImage item={item} />
@@ -75,12 +87,15 @@ const CardapioItemImage = ({ item }: CardapioItemImageProps) => {
     }
 
     return (
-        <img
-            src={item.imageBase64 || "/images/cardapio-web-app/placeholder.png"}
-            alt={item.name}
-            loading="lazy"
-            className="w-full max-h-[250px] object-cover object-center"
-        />
+        <div className="relative">
+            <img
+                src={item.imageBase64 || "/images/cardapio-web-app/placeholder.png"}
+                alt={item.name}
+                loading="lazy"
+                className="w-full max-h-[250px] object-cover object-center"
+            />
+            <Overlay />
+        </div>
     )
 }
 

@@ -43,15 +43,15 @@ export class SettingOptionModel {
     return this.#value;
   }
 
-  public static async factory(optionName: string) {
+  public static async factory(optionName: string, contextName: string) {
+    const cacheKey = `${contextName}:${optionName}`;
     // Check if the option is in the cache
-    if (this.cache.has(optionName)) {
+    if (this.cache.has(cacheKey)) {
       return this.cache.get(optionName);
     }
 
-    // Fetch from the database if not in cache
     const [err, record] = await prismaIt(
-      settingPrismaEntity.findByOptionName(optionName)
+      settingPrismaEntity.findByContextAndName(contextName, optionName)
     );
 
     if (err) return null;
@@ -66,7 +66,7 @@ export class SettingOptionModel {
     );
 
     // Store the fetched option in the cache
-    this.cache.set(optionName, option);
+    this.cache.set(cacheKey, option);
 
     return option;
   }

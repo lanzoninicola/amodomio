@@ -1,15 +1,36 @@
 import { HamburgerMenuIcon } from "@radix-ui/react-icons";
 import { LoaderArgs, V2_MetaFunction } from "@remix-run/node";
 import { Link, Outlet, useLoaderData } from "@remix-run/react";
-import { ArrowRight, SearchIcon, XIcon } from "lucide-react";
-import { useState } from "react";
+import { ArrowRight, Instagram, MapPin, SearchIcon, XIcon } from "lucide-react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import ExternalLink from "~/components/primitives/external-link/external-link";
 import Logo from "~/components/primitives/logo/logo";
+import WhatsappExternalLink from "~/components/primitives/whatsapp/whatsapp-external-link";
+import WhatsAppIcon from "~/components/primitives/whatsapp/whatsapp-icon";
 import { Input } from "~/components/ui/input";
+import { Separator } from "~/components/ui/separator";
+import { toast } from "~/components/ui/use-toast";
 import { menuItemTagPrismaEntity } from "~/domain/cardapio/menu-item-tags.prisma.entity.server";
 import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
+import useLocalStorage from "~/hooks/use-local-storage";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { badRequest, ok } from "~/utils/http-response.server";
+
+
+/**
+ * TODO:
+ * - [] Add to menu Horario Atendimento
+ * - [] Add to menu link instagram
+ * - [] Add to menu link fazer pedido
+ * - [] Different layouts
+ * - [] Fechamento Horario Atendimento no botao de fazer pedido
+ * - [] Session feature
+ * - [] Like it feature
+ * - [] Share it feature
+ * - [] Notification feature
+ * - [] Let install it wpapp
+ * - [] Me sinto fortunado (choose a random menu item)
+ */
 
 export interface CardapioOutletContext {
     items: MenuItemWithAssociations[]
@@ -25,6 +46,8 @@ export const meta: V2_MetaFunction = () => {
 };
 
 export async function loader({ request }: LoaderArgs) {
+    const env = process.env?.NODE_ENV
+
     // @ts-ignore
     const [errItems, items] = await prismaIt(menuItemPrismaEntity.findAll({
         where: {
@@ -34,7 +57,7 @@ export async function loader({ request }: LoaderArgs) {
             sorted: true,
             direction: "asc"
         },
-        mock: true
+        mock: env === "development"
     }))
 
     if (errItems) {
@@ -52,11 +75,65 @@ export default function CardapioWeb() {
     const loaderData = useLoaderData<typeof loader>()
     const items = loaderData?.payload.items as MenuItemWithAssociations[] || []
 
+    // const [storedValue, setStoredValue] = useLocalStorage("sessionId", null)
+
+
+    if (loaderData?.status > 399) {
+        toast({
+            title: "Erro",
+            description: loaderData?.message,
+        })
+    }
+
+    // // synchronize initially
+    // useLayoutEffect(() => {
+    //     setStoredValue("sidebar")
+    // }, []);
+
+    // synchronize on change
+    // useEffect(() => {
+    //     window.localStorage.setItem("sidebar", isOpen);
+    // }, [isOpen]);
+
     return (
         <>
             <CardapioHeader items={items} />
-            {/* <Featured /> */}
-            <Outlet context={{ items }} />
+            <div className="md:m-auto md:max-w-2xl">
+                <section className="mt-16 p-4 mb-8 ">
+                    <div className="flex flex-col font-body-website">
+                        <h2 className="font-semibold text-lg">A Modo Mio | Pizzeria Italiana</h2>
+                        <h3 className="text-muted-foreground">Pizza Al Taglio & Delivery</h3>
+                    </div>
+
+                    <div className="text-xs text-muted-foreground mb-6 font-body-website">
+                        <p>Rua Arariboia 64 - Pato Branco</p>
+                    </div>
+                    <div className="grid grid-cols-3 gap-x-4">
+
+                        <Link to={"https://www.instagram.com/amodomiopb/"} aria-label="Instagram" className="flex items-center justify-center gap-1 rounded-lg bg-muted py-1">
+                            <Instagram />
+                            <span className="font-semibold text-xs">Instagram</span>
+                        </Link>
+                        <WhatsappExternalLink
+                            phoneNumber="46991272525"
+                            ariaLabel="Envia uma mensagem com WhatsApp"
+                            message={"Olá, gostaria fazer um pedido"}
+                            className="flex items-center justify-center gap-2 rounded-lg bg-muted py-1 "
+                        >
+                            <WhatsAppIcon color="black" />
+                            <span className="font-semibold text-xs">WhatsApp</span>
+                        </WhatsappExternalLink>
+                        <Link to={"https://maps.app.goo.gl/J85EdGuxNzhe4n8R7/"} aria-label="Maps" className="flex items-center justify-center gap-1 rounded-lg bg-muted py-1">
+                            <MapPin />
+                            <span className="font-semibold text-xs">Maps</span>
+                        </Link>
+                    </div>
+                </section>
+                <Separator />
+                {/* <Featured /> */}
+                <Outlet context={{ items }} />
+
+            </div>
             <CardapioFooter />
         </>
     )
@@ -66,15 +143,20 @@ function CardapioHeader({ items }: { items: MenuItemWithAssociations[] }) {
     const [showSearch, setShowSearch] = useState(false)
 
     return (
-        <header className="bg-white shadow fixed top-0 w-screen border-b-slate-100 px-4 py-3 z-50" >
+        <header className="bg-white shadow fixed top-0 w-screen  border-b-slate-100 px-4 py-3 z-50 md:max-w-2xl md:-translate-x-1/2 md:left-1/2" >
             <div className="flex flex-col">
                 <div className="grid grid-cols-3 items-center w-full">
-                    <HamburgerMenuIcon className="w-6 h-6" />
+                    <div className="flex gap-1 items-center" onClick={() => setShowSearch(!showSearch)}>
+                        <HamburgerMenuIcon className="w-6 h-6" />
+                        <span className="font-body-website text-[10px] font-semibold  uppercase">Menu</span>
+                    </div>
+
                     <Link to="/cardapio-web" className="flex justify-center">
                         <Logo color="black" className="w-[60px]" tagline={false} />
                     </Link>
-                    <div className="flex gap-2 justify-end" onClick={() => setShowSearch(!showSearch)}>
+                    <div className="flex justify-end items-center" onClick={() => setShowSearch(!showSearch)}>
                         <SearchIcon />
+                        <span className="font-body-website text-[10px] font-semibold  uppercase">Pesquisar</span>
                     </div>
                 </div>
                 {showSearch && <CardapioSearch items={items} setShowSearch={setShowSearch} />}
@@ -85,7 +167,7 @@ function CardapioHeader({ items }: { items: MenuItemWithAssociations[] }) {
 
 function CardapioFooter() {
     return (
-        <footer className="py-6 px-2 fixed bottom-0 w-screen">
+        <footer className="py-6 px-2 fixed bottom-0 w-screen md:max-w-2xl md:-translate-x-1/2 md:left-1/2 ">
             {/* <Separator className="my-4" /> */}
             <div className="px-2 w-full">
                 <ExternalLink to="https://app.mogomenu.com.br/amodomio"

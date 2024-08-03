@@ -14,8 +14,6 @@ import { mogoOrdersInboundEntity } from "~/domain/mogo-orders-inbound/mogo-order
 import mogoEntity from "~/domain/mogo/mogo.entity.server";
 import { MogoOrderWithDiffTime } from "~/domain/mogo/types";
 import OrdersDeliveryTimeLeftDialogSettings from "~/domain/order-delivery-time-left/components/order-delivery-time-left-dialog-settings/order-delivery-time-left-dialog-settings";
-import { settingEntity } from "~/domain/setting/setting.entity.server";
-import { Setting as SettingFirebase } from "~/domain/setting/setting.model.server";
 import { SettingOptionModel } from "~/domain/setting/setting.option.model.server";
 import { settingPrismaEntity } from "~/domain/setting/setting.prisma.entity.server";
 import useFormResponse from "~/hooks/useFormResponse";
@@ -55,27 +53,27 @@ export async function loader({ request }: LoaderArgs) {
     await Promise.all(trackOrdersPromise)
 
     // start: get settings
-    const [errSettings, settings] = await tryit(settingEntity.findSettingsByContext("order-timeline-segmentation-delivery-time"))
+    const minDeliveryTimeSettings = await SettingOptionModel.factory(
+        "minTime",
+        "delivery-time-range"
+    );
+    const maxDeliveryTimeSettings = await SettingOptionModel.factory(
+        "maxTime",
+        "delivery-time-range"
+    );
 
-    if (errSettings) {
-        return serverError(errSettings)
-    }
-
-    let minDeliveryTimeSettings: SettingFirebase | undefined
-    let maxDeliveryTimeSettings: SettingFirebase | undefined
-    let minCounterTimeSettings: SettingFirebase | undefined
-    let maxCounterTimeSettings: SettingFirebase | undefined
-
-    if (settings) {
-        minDeliveryTimeSettings = settings.find((o: SettingFirebase) => o.name === "minTimeDeliveryMinutes")
-        maxDeliveryTimeSettings = settings.find((o: SettingFirebase) => o.name === "maxTimeDeliveryMinutes")
-        minCounterTimeSettings = settings.find((o: SettingFirebase) => o.name === "minTimeCounterMinutes")
-        maxCounterTimeSettings = settings.find((o: SettingFirebase) => o.name === "maxTimeCounterMinutes")
-    }
+    const minPickUpTimeSettings = await SettingOptionModel.factory(
+        "minTime",
+        "pick-up-time-range"
+    );
+    const maxPickUpTimeSettings = await SettingOptionModel.factory(
+        "maxTime",
+        "pick-up-time-range"
+    );
 
 
-    const stockMassaFamiliaSetting = await SettingOptionModel.factory("massaFamilia")
-    const stockMassaMediaSetting = await SettingOptionModel.factory("massaMedia")
+    const stockMassaFamiliaSetting = await SettingOptionModel.factory("massaFamilia", "stockMassa")
+    const stockMassaMediaSetting = await SettingOptionModel.factory("massaMedia", "stockMassa")
     // end: get settings
 
     let ordersToRender = [...orders]
@@ -103,9 +101,9 @@ export async function loader({ request }: LoaderArgs) {
             minTime: minDeliveryTimeSettings?.value || 0,
             maxTime: maxDeliveryTimeSettings?.value || 0,
         },
-        counterTimeSettings: {
-            minTime: minCounterTimeSettings?.value || 0,
-            maxTime: maxCounterTimeSettings?.value || 0,
+        pickUpTimeSettings: {
+            minTime: minPickUpTimeSettings?.value || 0,
+            maxTime: maxPickUpTimeSettings?.value || 0,
         },
         stockMassaSettings: {
             massaFamilia: stockMassaFamiliaSetting?.value || 0,
@@ -116,6 +114,8 @@ export async function loader({ request }: LoaderArgs) {
 
 
 }
+
+
 
 export async function action({ request }: LoaderArgs) {
 
@@ -130,54 +130,64 @@ export async function action({ request }: LoaderArgs) {
         }
 
 
-
-
         return ok({ orders, lastRequestTime: nowUTC() })
 
     }
 
-    if (_action === "order-timeline-segmentation-settings-change") {
+    if (_action === "pick-up-time-settings-edit") {
+        const context = 'pick-up-time-range'
+        const minTime = String(Number(values.minTime || "0"))
+        const maxTime = String(Number(values.maxTime || "0"))
 
-        const context = values.context as string
-        const minTime = String(Number(values.minTimeDeliveryMinutes || 0))
-        const maxTime = String(Number(values.maxTimeDeliveryMinutes || 0))
 
-        const minTimeCounter = String(Number(values.minTimeCounterMinutes || 0))
-        const maxTimeCounter = String(Number(values.maxTimeCounterMinutes || 0))
 
-        if (!context) {
-            return serverError("O contexto não pode ser null")
-        }
 
-        const [errMinTime, valueMinTime] = await tryit(settingEntity.updateOrCreate({
+        const [errMinTime, valueMinTime] = await prismaIt(settingPrismaEntity.updateOrCreate({
             context,
-            name: "minTimeDeliveryMinutes",
+            name: "minTime",
             value: minTime,
             type: "number"
         }))
 
-        const [errMaxTime, valueMaxTime] = await tryit(settingEntity.updateOrCreate({
+
+
+        const [errMaxTime, valueMaxTime] = await prismaIt(settingPrismaEntity.updateOrCreate({
             context,
-            name: "maxTimeDeliveryMinutes",
+            name: "maxTime",
             value: maxTime,
             type: "number"
         }))
 
-        const [errCounterMinTime, valueCounterMinTime] = await tryit(settingEntity.updateOrCreate({
+
+        if (errMinTime || errMaxTime) {
+            return serverError("Erro a salvar a configuracao")
+        }
+
+        return ok("Configuração atualizada com successo")
+
+    }
+
+    if (_action === "delivery-time-settings-edit") {
+        const context = 'delivery-time-range'
+        const minTime = String(Number(values.minTime || "0"))
+        const maxTime = String(Number(values.maxTime || "0"))
+
+
+        const [errMinTime, valueMinTime] = await prismaIt(settingPrismaEntity.updateOrCreate({
             context,
-            name: "minTimeCounterMinutes",
-            value: minTimeCounter,
+            name: "minTime",
+            value: minTime,
             type: "number"
         }))
 
-        const [errCounterMaxTime, valueCounterMaxTime] = await tryit(settingEntity.updateOrCreate({
+        const [errMaxTime, valueMaxTime] = await prismaIt(settingPrismaEntity.updateOrCreate({
             context,
-            name: "maxTimeCounterMinutes",
-            value: maxTimeCounter,
+            name: "maxTime",
+            value: maxTime,
             type: "number"
         }))
 
-        if (errMinTime || errMaxTime || errCounterMaxTime || errCounterMinTime) {
+        if (errMinTime || errMaxTime) {
             return serverError("Erro a salvar a configuracao")
         }
 
@@ -410,7 +420,7 @@ function Header() {
 
     return (
         <div className="grid grid-cols-12 w-full items-center">
-            <Form method="post" className="col-span-1">
+            <Form method="post" className="col-span-4">
                 <div className="flex gap-2 items-center">
                     <Button type="submit" className="text-2xl"
                         name="_action"
@@ -425,10 +435,7 @@ function Header() {
                 </div>
 
             </Form>
-            <div className="col-span-3">
-                <FinanceData orders={orders} />
 
-            </div>
 
             <div className="grid grid-cols-4 col-span-6">
                 <div className="flex gap-4 items-center justify-center col-span-2">
@@ -463,7 +470,7 @@ function StockMassaStat() {
             <div className={
                 cn(
                     "flex flex-col gap-0 justify-center py-1 px-4 rounded-md text-white text-center",
-                    number === 0 && "bg-gray-400",
+                    (number <= 0) && "bg-gray-400",
                     (number <= 2 && number > 0) && "bg-red-500",
                     (number > 2 && number <= 4) && "bg-orange-500",
                     number > 4 && "bg-brand-blue"
@@ -483,43 +490,7 @@ function StockMassaStat() {
     )
 }
 
-interface FinanceDataProps {
-    orders: MogoOrderWithDiffTime[]
-}
 
-function FinanceData({ orders }: FinanceDataProps) {
-
-    // THE DATA SOURCE SHOULD BE THE TRACK TABLE
-
-
-    const totReceita = orders.map(o => o.SubTotal).reduce((a, b) => a + b, 0)
-
-    // deliverys
-    const totDeliveriesAmount = orders.filter(o => o.isDelivery === true).length
-    const totReceitaEntrega = orders.map(o => o.TaxaEntrega).reduce((a, b) => a + b, 0)
-
-    const totCustoEntrega = (totDeliveriesAmount * 10) - totReceitaEntrega
-
-    //
-    const subTotal_01 = totReceita - totCustoEntrega
-
-
-
-    return (
-        <div className="flex gap-2 border rounded-md p-2">
-            {/* <div className="flex flex-col gap-0 justify-center">
-                <span className="text-xs text-muted-foreground">Receita Bruta</span>
-                <span className="text-md font-mono font-semibold">{totReceita.toFixed(2)}</span>
-            </div> */}
-
-            <div className="flex flex-col gap-0">
-                <span className="text-xs text-muted-foreground">Receita Liquida</span>
-                <span className="text-md font-mono font-semibold">{subTotal_01.toFixed(2)}</span>
-            </div>
-
-        </div>
-    )
-}
 
 
 

@@ -155,6 +155,8 @@ model MenuItem {
   tags               MenuItemTag[]
   /// this track the position inside the menu
   sortOrderIndex     Int                      @default(0) @map("sort_order_index")
+  MenuItemLike       MenuItemLike[]
+  MenuItemCost       MenuItemCost[]
 
   @@map("menu_items")
 }
@@ -168,10 +170,34 @@ model MenuItemPriceVariation {
   amount             Float
   discountPercentage Float     @map("discount_percentage")
   showOnCardapio     Boolean   @default(false) @map("show_on_cardapio")
+  showOnCardapioAt   DateTime? @map("show_on_cardapio_at")
   createdAt          DateTime  @map("created_at")
   updatedAt          DateTime  @default(now()) @updatedAt @map("updated_at")
 
   @@map("menu_item_price_variations")
+}
+
+model MenuItemCost {
+  id          String    @id @default(uuid())
+  MenuItem    MenuItem? @relation(fields: [menuItemId], references: [id])
+  menuItemId  String?   @map("menu_item_id")
+  latestCost  Float     @map("latest_cost")
+  averageCost Float     @map("average_cost")
+
+  @@map("menu_item_cost")
+}
+
+model MenuItemLike {
+  id         String    @id @default(uuid())
+  MenuItem   MenuItem? @relation(fields: [menuItemId], references: [id])
+  menuItemId String?   @map("menu_item_id")
+  sessionId  String?   @map("session_id")
+  Session    Session?  @relation(fields: [sessionId], references: [id])
+  createdAt  DateTime  @map("created_at")
+  updatedAt  DateTime  @default(now()) @updatedAt @map("updated_at")
+  deletedAt  DateTime? @map("deleted_at")
+
+  @@map("menu_item_likes")
 }
 
 /// here we can manage: featured (recommended), vegetarian, kids, meat
@@ -224,4 +250,15 @@ model MogoOrdersInbound {
   updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at")
 
   @@map("mogo_orders_inbound")
+}
+
+model Session {
+  id           String         @id @default(uuid())
+  sessionId    String?        @map("session_id")
+  payload      String?
+  createdAt    DateTime       @map("created_at")
+  updatedAt    DateTime       @default(now()) @updatedAt @map("updated_at")
+  MenuItemLike MenuItemLike[]
+
+  @@map("sessions")
 }

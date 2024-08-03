@@ -68,6 +68,12 @@ class SettingPrismaEntity implements ISettingPrismaEntity {
     return await this.client.setting.findFirst({ where: { name } });
   }
 
+  async findByContextAndName(contextName: string, optionName: string) {
+    return await this.client.setting.findFirst({
+      where: { context: contextName, name: optionName },
+    });
+  }
+
   async findById(id: string) {
     return await this.client.setting.findUnique({ where: { id } });
   }
@@ -75,6 +81,8 @@ class SettingPrismaEntity implements ISettingPrismaEntity {
   async updateOrCreate(data: Prisma.SettingWhereInput) {
     const contextName = data?.context;
     const optionName = data?.name;
+
+    console.log({ contextName, optionName });
 
     if (!contextName || !optionName) return;
 
@@ -84,6 +92,8 @@ class SettingPrismaEntity implements ISettingPrismaEntity {
         name: optionName,
       },
     });
+
+    console.log({ record });
 
     if (record) {
       const nextData = {
