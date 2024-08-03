@@ -133,14 +133,14 @@ class MogoEntity {
     );
 
     let maxDeliveryTimeInMinutesSettings: Setting | undefined;
-    let maxCounterTimeInMinutesSettings: Setting | undefined;
+    let maxPickUpTimeInMinutesSettings: Setting | undefined;
 
     if (settings) {
       maxDeliveryTimeInMinutesSettings = settings.find(
         (o: Setting) => o.name === "maxTimeDeliveryMinutes"
       );
-      maxCounterTimeInMinutesSettings = settings.find(
-        (o: Setting) => o.name === "maxTimeCounterMinutes"
+      maxPickUpTimeInMinutesSettings = settings.find(
+        (o: Setting) => o.name === "maxTimePickUpMinutes"
       );
     }
     /** END get settings */
@@ -169,8 +169,8 @@ class MogoEntity {
         maxDeliveryTimeInMinutes: Number(
           maxDeliveryTimeInMinutesSettings?.value || 0
         ),
-        maxCounterTimeInMinutes: Number(
-          maxCounterTimeInMinutesSettings?.value || 0
+        maxPickUpTimeInMinutes: Number(
+          maxPickUpTimeInMinutesSettings?.value || 0
         ),
       });
 
@@ -226,7 +226,7 @@ class MogoEntity {
     order: MogoBaseOrder,
     settings: {
       maxDeliveryTimeInMinutes: number;
-      maxCounterTimeInMinutes: number;
+      maxPickUpTimeInMinutes: number;
     }
   ) {
     const dayjsOrderDateTime = this._createDayjsObject(
@@ -248,7 +248,7 @@ class MogoEntity {
     }
 
     return dayjsOrderDateTime.add(
-      Number(settings.maxCounterTimeInMinutes) || 0,
+      Number(settings.maxPickUpTimeInMinutes) || 0,
       "m"
     );
   }

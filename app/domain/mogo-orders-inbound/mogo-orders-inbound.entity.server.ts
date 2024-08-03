@@ -71,10 +71,12 @@ class MogoOrdersInboundEntity {
 
   async getUpdatedStockMassa() {
     const stockMassaFamiliaSetting = await SettingOptionModel.factory(
-      "massaFamilia"
+      "massaFamilia",
+      "stockMassa"
     );
     const stockMassaMediaSetting = await SettingOptionModel.factory(
-      "massaMedia"
+      "massaMedia",
+      "stockMassa"
     );
 
     const initialStockMassaFamilia = stockMassaFamiliaSetting?.value || 0;
