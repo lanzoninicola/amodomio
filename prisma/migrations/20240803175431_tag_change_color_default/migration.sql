@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "tags" ALTER COLUMN "colorHEX" SET DEFAULT '#000000';

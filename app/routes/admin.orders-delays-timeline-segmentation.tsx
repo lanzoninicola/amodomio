@@ -42,14 +42,14 @@ export async function loader({ request }: LoaderArgs) {
 
     let minDeliveryTimeSettings: Setting | undefined
     let maxDeliveryTimeSettings: Setting | undefined
-    let minCounterTimeSettings: Setting | undefined
-    let maxCounterTimeSettings: Setting | undefined
+    let minPickUpTimeSettings: Setting | undefined
+    let maxPickUpTimeSettings: Setting | undefined
 
     if (settings) {
         minDeliveryTimeSettings = settings.find((o: Setting) => o.name === "minTimeDeliveryMinutes")
         maxDeliveryTimeSettings = settings.find((o: Setting) => o.name === "maxTimeDeliveryMinutes")
-        minCounterTimeSettings = settings.find((o: Setting) => o.name === "minTimeCounterMinutes")
-        maxCounterTimeSettings = settings.find((o: Setting) => o.name === "maxTimeCounterMinutes")
+        minPickUpTimeSettings = settings.find((o: Setting) => o.name === "minTimePickUpMinutes")
+        maxPickUpTimeSettings = settings.find((o: Setting) => o.name === "maxTimePickUpMinutes")
     }
 
     return ok({
@@ -63,9 +63,9 @@ export async function loader({ request }: LoaderArgs) {
             minTime: minDeliveryTimeSettings?.value || 0,
             maxTime: maxDeliveryTimeSettings?.value || 0,
         },
-        counterTimeSettings: {
-            minTime: minCounterTimeSettings?.value || 0,
-            maxTime: maxCounterTimeSettings?.value || 0,
+        pickUpTimeSettings: {
+            minTime: minPickUpTimeSettings?.value || 0,
+            maxTime: maxPickUpTimeSettings?.value || 0,
         }
     })
 
@@ -96,8 +96,8 @@ export async function action({ request }: LoaderArgs) {
         const minTime = String(Number(values.minTimeDeliveryMinutes || 0))
         const maxTime = String(Number(values.maxTimeDeliveryMinutes || 0))
 
-        const minTimeCounter = String(Number(values.minTimeCounterMinutes || 0))
-        const maxTimeCounter = String(Number(values.maxTimeCounterMinutes || 0))
+        const minTimePickUp = String(Number(values.minTimePickUpMinutes || 0))
+        const maxTimePickUp = String(Number(values.maxTimePickUpMinutes || 0))
 
         if (!context) {
             return serverError("O contexto não pode ser null")
@@ -119,15 +119,15 @@ export async function action({ request }: LoaderArgs) {
 
         const [errCounterMinTime, valueCounterMinTime] = await tryit(settingEntity.updateOrCreate({
             context,
-            name: "minTimeCounterMinutes",
-            value: minTimeCounter,
+            name: "minTimePickUpMinutes",
+            value: minTimePickUp,
             type: "number"
         }))
 
         const [errCounterMaxTime, valueCounterMaxTime] = await tryit(settingEntity.updateOrCreate({
             context,
-            name: "maxTimeCounterMinutes",
-            value: maxTimeCounter,
+            name: "maxTimePickUpMinutes",
+            value: maxTimePickUp,
             type: "number"
         }))
 
@@ -306,7 +306,7 @@ export function OrdersTimelineSegmentationSettings({ showLabel = true }: OrdersT
 
     const loaderData = useLoaderData<typeof loader>()
     const deliveryTimeSettings = loaderData?.payload?.deliveryTimeSettings
-    const counterTimeSettings = loaderData?.payload?.counterTimeSettings
+    const pickUpTimeSettings = loaderData?.payload?.pickUpTimeSettings
     const locale = loaderData?.payload?.int.locale
     const timezone = loaderData?.payload?.int.timezone
 
@@ -337,14 +337,14 @@ export function OrdersTimelineSegmentationSettings({ showLabel = true }: OrdersT
                         <div className="flex flex-col gap-2">
                             <div className="flex gap-4 items-center justify-between">
                                 <span>Tempo minimo</span>
-                                <Input type="text" id="minTimeCounterMinutes" name="minTimeCounterMinutes" maxLength={2} className="w-[72px] bg-white"
-                                    defaultValue={counterTimeSettings?.minTime || 0}
+                                <Input type="text" id="minTimePickUpMinutes" name="minTimePickUpMinutes" maxLength={2} className="w-[72px] bg-white"
+                                    defaultValue={pickUpTimeSettings?.minTime || 0}
                                 />
                             </div>
                             <div className="flex gap-4 items-center justify-between">
                                 <span>Tempo maximo</span>
-                                <Input type="text" id="maxTimeCounterMinutes" name="maxTimeCounterMinutes" maxLength={2} className="w-[72px] bg-white"
-                                    defaultValue={counterTimeSettings?.maxTime || 0}
+                                <Input type="text" id="maxTimePickUpMinutes" name="maxTimePickUpMinutes" maxLength={2} className="w-[72px] bg-white"
+                                    defaultValue={pickUpTimeSettings?.maxTime || 0}
                                 />
                             </div>
                         </div>

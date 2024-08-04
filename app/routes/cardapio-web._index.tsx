@@ -1,113 +1,130 @@
-import { MenuItemPriceVariation } from "@prisma/client";
-import { LoaderArgs, V2_MetaFunction } from "@remix-run/node";
-import { Link, useLoaderData } from "@remix-run/react";
-import { Share2, Heart, MenuSquare } from "lucide-react";
-import { useState } from "react";
-import TypewriterComponent from "typewriter-effect";
-import ExternalLink from "~/components/primitives/external-link/external-link";
+import { ActionArgs, HeadersFunction } from "@remix-run/node";
+import { useActionData, useFetcher, useOutletContext } from "@remix-run/react";
+import { Share2, Heart } from "lucide-react";
+import React, { useState, useRef, useCallback } from "react";
 import WhatsappExternalLink from "~/components/primitives/whatsapp/whatsapp-external-link";
 import WhatsAppIcon from "~/components/primitives/whatsapp/whatsapp-icon";
 import { Separator } from "~/components/ui/separator";
-import { menuItemTagPrismaEntity } from "~/domain/cardapio/menu-item-tags.prisma.entity.server";
-import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
-import { categoryPrismaEntity } from "~/domain/category/category.entity.server";
-import { prismaIt } from "~/lib/prisma/prisma-it.server";
+import { MenuItemWithAssociations } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { cn } from "~/lib/utils";
+import { CardapioOutletContext } from "./cardapio-web";
+import { prismaIt } from "~/lib/prisma/prisma-it.server";
+import { menuItemLikePrismaEntity } from "~/domain/cardapio/menu-item-like.prisma.entity.server";
 import { badRequest, ok } from "~/utils/http-response.server";
-import toLowerCase from "~/utils/to-lower-case";
 
-export const meta: V2_MetaFunction = () => {
-    return [
-        {
-            name: "title",
-            content: "Cardápio Pizzaria A Modo Mio - Pato Branco",
+export const headers: HeadersFunction = () => ({
+    'Cache-Control': 's-maxage=1, stale-while-revalidate=59',
+});
+
+export async function action({ request }: ActionArgs) {
+    let formData = await request.formData();
+    const { _action, ...values } = Object.fromEntries(formData);
+
+
+    if (values?.action === "menu-item-like-it") {
+        const itemId = values?.itemId as string
+        let amount = 0
+
+        amount = isNaN(Number(values?.likesAmount)) ? 1 : Number(values?.likesAmount)
+
+        const [err, likeAmount] = await prismaIt(menuItemLikePrismaEntity.create({
+            createdAt: new Date().toISOString(),
+            amount,
+            MenuItem: {
+                connect: {
+                    id: itemId,
+                },
+            }
+        }));
+
+        if (err) {
+            return badRequest({
+                action: "menu-item-like-it",
+                likeAmount
+            })
         }
-    ];
-};
 
+        return ok({
+            action: "menu-item-like-it",
+            likeAmount
+        })
 
-export async function loader({ request }: LoaderArgs) {
-    const [errItems, items] = await prismaIt(menuItemPrismaEntity.findAll({}))
-
-    if (errItems) {
-        return badRequest(errItems)
     }
 
-    const [_, tags] = await prismaIt(menuItemTagPrismaEntity.findAllDistinct())
-
-    return ok({ items, tags })
-
+    return null
 }
-
 
 export default function CardapioWebIndex() {
+    const { items: allItems } = useOutletContext<CardapioOutletContext>();
+    const [items, setItems] = useState(allItems.slice(0, 10));
+    const [hasMore, setHasMore] = useState(true);
+    const observer = useRef<IntersectionObserver | null>(null);
 
-    const loaderData = useLoaderData<typeof loader>()
-    const items = loaderData?.payload.items as MenuItemWithAssociations[] || []
-
-    return (
-        <div className="flex flex-col mt-[60px]">
-            {
-                items.map((item) => (
-                    <CardapioItem key={item.id} item={item} />
-                ))
+    const lastItemRef = useCallback((node: HTMLLIElement) => {
+        if (observer.current) observer.current.disconnect();
+        observer.current = new IntersectionObserver(entries => {
+            if (entries[0].isIntersecting && hasMore) {
+                setItems(prevItems => {
+                    const newItems = allItems.slice(prevItems.length, prevItems.length + 10);
+                    setHasMore(newItems.length > 0);
+                    return [...prevItems, ...newItems];
+                });
             }
-
-        </div>
-    )
-}
-
-
-function CardapioItem({ item }: { item: MenuItemWithAssociations }) {
-
-
-
-
+        });
+        if (node) observer.current.observe(node);
+    }, [hasMore, allItems]);
 
     return (
-        <>
-            <div className="flex flex-col gap-2">
-                <div className="flex flex-col px-4">
-                    <div className="flex gap-2 items-center">
-                        <img src="images/cardapio-web-app/item-placeholder.png" alt={`Imagem do sabor ${item.name}`}
-                            className="w-[16px] h-[16px] rounded-full"
-                        />
+        <section >
+            {/* <div className="flex gap-8 items-center w-full justify-center py-4">
+                <LayoutTemplate />
+                <LayoutList />
 
-                        <h3 className="font-body-website font-semibold uppercase leading-tight">{item.name}</h3>
-
-                    </div>
-                    <p className="text-sm">{item.ingredients}</p>
-                </div>
-                <div className="relative mb-2">
-                    <CardapioItemImage item={item} />
-                    <div className="absolute bottom-0 inset-x-0 py-4 px-2">
-                        <CardapioItemPrice prices={item?.priceVariations} />
-                    </div>
-                </div>
-                <CardapioItemActionBar item={item} />
-
-            </div>
-            <Separator className="my-4" />
-
-        </>
-
-    )
+            </div> */}
+            <ul className="flex flex-col overflow-y-scroll md:overflow-y-z  auto snap-mandatory">
+                {items.map((item, index) => {
+                    if (items.length === index + 1) {
+                        return <CardapioItem ref={lastItemRef} key={item.id} item={item} />;
+                    } else {
+                        return <CardapioItem key={item.id} item={item} />;
+                    }
+                })}
+            </ul>
+        </section>
+    );
 }
+
+
+interface CardapioItemProps {
+    item: MenuItemWithAssociations;
+}
+
+const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) => (
+    <li className="flex flex-col snap-start" id={item.id} ref={ref}>
+        <div className="relative mb-2">
+            <CardapioItemImage item={item} />
+            <div className="absolute bottom-0 inset-x-0 py-4 px-2">
+                <CardapioItemPrice prices={item?.priceVariations} />
+            </div>
+        </div>
+        <div className="flex flex-col px-4 mb-4">
+            <h3 className="font-body-website text-sm font-semibold uppercase mb-2">{item.name}</h3>
+            <p className="font-body-website leading-tight">{item.ingredients}</p>
+        </div>
+        <CardapioItemActionBar item={item} />
+        <Separator className="my-4" />
+    </li>
+));
 
 interface CardapioItemImageProps {
-    item: MenuItemWithAssociations
+    item: MenuItemWithAssociations;
 }
 
-function CardapioItemImage({ item }: CardapioItemImageProps) {
-
-    // const imageUrl = item?.imageBase64 || `images/cardapio-web-app/${toLowerCase(item.name)}.jpg`
-    const imageUrl = `images/cardapio-web-app/margherita.jpg`
+const CardapioItemImage = ({ item }: CardapioItemImageProps) => {
 
     const Overlay = () => {
         return (
-            <div className="absolute inset-0" style={{
-                transform: "rotate(0deg)",
-                overflow: "hidden",
+            <div className="absolute inset-0 overflow-hidden rotate-0" style={{
                 background: "linear-gradient(180deg, #00000033 60%, #0000009e 75%)"
             }}>
             </div>
@@ -116,12 +133,12 @@ function CardapioItemImage({ item }: CardapioItemImageProps) {
 
     return (
         <div className="relative">
-            <div
-                className="h-[300px] bg-cover bg-center mb-2"
-                style={{
-                    backgroundImage: `url(${imageUrl || "images/cardapio-web-app/item-placeholder.png"})`
-                }}>
-            </div>
+            <img
+                src={item.imageBase64 || "/images/cardapio-web-app/placeholder.png"}
+                alt={item.name}
+                loading="lazy"
+                className="w-full max-h-[250px] object-cover object-center"
+            />
             <Overlay />
         </div>
     )
@@ -166,49 +183,93 @@ function CardapioItemPrice({ prices }: CardapioItemPriceProps) {
     )
 }
 
-
-
-interface CardapioItemActionBarProps {
-    item: MenuItemWithAssociations
-}
-
-function CardapioItemActionBar({ item }: CardapioItemActionBarProps) {
-
+function CardapioItemActionBar({ item }: { item: MenuItemWithAssociations }) {
     const [likeIt, setLikeIt] = useState(false)
+    const [likesAmount, setLikesAmount] = useState(item.likes?.amount || 0)
+
+    const fetcher = useFetcher();
+
+    const likingIt = () => {
+
+        setLikeIt(true)
+        setLikesAmount(likesAmount + 1)
+
+        fetcher.submit(
+            {
+                action: "menu-item-like-it",
+                itemId: item.id,
+                likesAmount: String(1),
+            },
+            { method: 'post' }
+        );
+    };
+
+    const shareIt = () => {
+        if (!navigator?.share) {
+            console.log("Navegador não suporta o compartilhamento")
+            return
+        }
+
+        navigator.share({
+            title: item.name,
+            text: item.ingredients,
+            url: window.location.href
+        }).then(() => {
+
+        }).catch((error) => {
+            console.log('Error sharing:', error);
+        })
+    }
+
+
+
 
     return (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-0">
             <div className="grid grid-cols-8 font-body-website px-4 mb-1">
-
-                <div className="flex flex-col gap-1 cursor-pointer" onClick={() => {
-                    setLikeIt(true)
-                }}>
-                    <Heart className={
-                        cn(
+                <div className="flex flex-col gap-1 cursor-pointer" onClick={likingIt}>
+                    <Heart
+                        className={cn(
                             likeIt ? "fill-red-500" : "fill-none",
-                            likeIt ? "stroke-red-500" : "stroke-black"
-                        )
-                    } />
-                    {/* <span className={
-                    cn(
-                        "text-[12px] tracking-normal font-semibold",
-                        likeIt ? "text-red-500" : "text-black"
-                    )
-                }>Curtir</span> */}
+                            likeIt ? "stroke-red-500" : "stroke-black",
+                            item.likes?.amount && item.likes?.amount > 0 ? "stroke-red-500" : "stroke-black"
+                        )}
+                    />
                 </div>
-
-                <WhatsappExternalLink phoneNumber=""
+                {/* <WhatsappExternalLink
+                    phoneNumber=""
                     ariaLabel="Envia uma mensagem com WhatsApp"
                     message={"Essa é a melhor pizzaria da cidade. Experimente..."}
                     className="flex flex-col gap-1 cursor-pointer"
                 >
                     <Share2 />
-                    {/* <span className="text-[12px] tracking-normal font-semibold">Compartilhe</span> */}
+                    </WhatsappExternalLink>
+
+                    */}
+                <div className="flex flex-col gap-1 cursor-pointer" onClick={shareIt}>
+                    <Share2 />
+                </div>
+
+                <WhatsappExternalLink
+                    phoneNumber="46991272525"
+                    ariaLabel="Envia uma mensagem com WhatsApp"
+                    message={"Olá, gostaria fazer um pedido"}
+                    className="flex flex-col gap-1 items-end col-span-6 "
+                >
+                    <WhatsAppIcon color="black" />
                 </WhatsappExternalLink>
             </div>
-            <span className="text-sm font-semibold font-body-website tracking-tight px-4">400 Like</span>
+            {likesAmount === 0 && (
+                <div className="flex items-center gap-1">
+                    <span className="text-sm font-body-website tracking-tight pl-4">Seja o primeiro! Curte com </span>
+                    <Heart size={14} />
+                </div>
+            )}
+
+            <span className="text-xs font-semibold font-body-website tracking-tight px-4 text-red-500">
+                {likesAmount > 0 && `${likesAmount} curtidas`}
+
+            </span>
         </div>
-
-    )
+    );
 }
-

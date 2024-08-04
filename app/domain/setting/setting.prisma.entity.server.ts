@@ -68,6 +68,12 @@ class SettingPrismaEntity implements ISettingPrismaEntity {
     return await this.client.setting.findFirst({ where: { name } });
   }
 
+  async findByContextAndName(contextName: string, optionName: string) {
+    return await this.client.setting.findFirst({
+      where: { context: contextName, name: optionName },
+    });
+  }
+
   async findById(id: string) {
     return await this.client.setting.findUnique({ where: { id } });
   }
@@ -84,6 +90,8 @@ class SettingPrismaEntity implements ISettingPrismaEntity {
         name: optionName,
       },
     });
+
+    console.log({ record });
 
     if (record) {
       const nextData = {
