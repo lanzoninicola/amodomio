@@ -12,8 +12,8 @@ class SessionEntity {
     return await this.client.session.create({ data });
   }
 
-  async findBySessionId(sessionId: string) {
-    return await this.client.session.findFirst({ where: { sessionId } });
+  async findById(sessionId: string) {
+    return await this.client.session.findFirst({ where: { id: sessionId } });
   }
 }
 

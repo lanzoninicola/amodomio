@@ -1,5 +1,5 @@
 import { HamburgerMenuIcon } from "@radix-ui/react-icons";
-import { LoaderArgs, V2_MetaFunction } from "@remix-run/node";
+import { HeadersFunction, LoaderArgs, V2_MetaFunction } from "@remix-run/node";
 import { Link, Outlet, useLoaderData } from "@remix-run/react";
 import { ArrowRight, Instagram, MapPin, SearchIcon, XIcon } from "lucide-react";
 import { useState } from "react";
@@ -12,6 +12,7 @@ import { Separator } from "~/components/ui/separator";
 import { toast } from "~/components/ui/use-toast";
 import { menuItemTagPrismaEntity } from "~/domain/cardapio/menu-item-tags.prisma.entity.server";
 import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
+import { tagPrismaEntity } from "~/domain/tags/tag.prisma.entity.server";
 import { WebsiteNavigationSidebar } from "~/domain/website-navigation/components/website-navigation-sidebar";
 import PUBLIC_WEBSITE_NAVIGATION_ITEMS from "~/domain/website-navigation/public/public-website.nav-links";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
@@ -31,6 +32,7 @@ import { badRequest, ok } from "~/utils/http-response.server";
  * - [] Notification feature
  * - [] Let install it wpapp
  * - [] Me sinto fortunado (choose a random menu item)
+ * - [] Cache https://vercel.com/docs/frameworks/remix
  */
 
 export interface CardapioOutletContext {
@@ -42,6 +44,8 @@ export const meta: V2_MetaFunction = () => {
         { title: "Cardápio A Modo Mio - Pizzaria Italiana em Pato Branco" },
     ];
 };
+
+
 
 export async function loader({ request }: LoaderArgs) {
     const env = process.env?.NODE_ENV
@@ -55,14 +59,17 @@ export async function loader({ request }: LoaderArgs) {
             sorted: true,
             direction: "asc"
         },
-        mock: env === "development"
+        // mock: env === "development"
     }))
+
 
     if (errItems) {
         return badRequest(errItems)
     }
 
-    const [_, tags] = await prismaIt(menuItemTagPrismaEntity.findAllDistinct())
+    const [_, tags] = await prismaIt(tagPrismaEntity.findAll({
+        public: true
+    }))
 
     return ok({ items, tags })
 
@@ -222,7 +229,7 @@ function CardapioSearch({ items, setShowSearch }: {
             item.name.toLowerCase().includes(value) ||
             item.ingredients.toLowerCase().includes(value) ||
             item.description.toLowerCase().includes(value) ||
-            item.tags.filter(tag => tag.name.toLowerCase().includes(value)).length > 0
+            (item.tags && item.tags.filter(tag => tag.name.toLowerCase().includes(value)).length > 0)
         );
 
 

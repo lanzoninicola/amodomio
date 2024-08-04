@@ -1,6 +1,8 @@
 import {
   Category,
   MenuItem,
+  MenuItemCost,
+  MenuItemLike,
   MenuItemPriceVariation,
   MenuItemTag,
   Prisma,
@@ -12,12 +14,19 @@ import { menuItemTagPrismaEntity } from "./menu-item-tags.prisma.entity.server";
 import MenuItemPriceVariationUtility from "./menu-item-price-variations-utility";
 import { v4 as uuidv4 } from "uuid";
 import items from "./db-mock/items";
+import NodeCache from "node-cache";
+import { menuItemLikePrismaEntity } from "./menu-item-like.prisma.entity.server";
 
 export interface MenuItemWithAssociations extends MenuItem {
   priceVariations: MenuItemPriceVariation[];
   categoryId: string;
   Category: Category;
-  tags: Tag[];
+  tags?: Tag[];
+  MenuItemCost: MenuItemCost[];
+  MenuItemLike: MenuItemLike[];
+  likes?: {
+    amount: number;
+  };
 }
 
 interface MenuItemEntityFindAllProps {
@@ -30,61 +39,98 @@ interface MenuItemEntityFindAllProps {
 }
 
 export class MenuItemPrismaEntity {
+  #menuItemInclude = {
+    priceVariations: true,
+    Category: true,
+    tags: true,
+    MenuItemCost: true,
+    MenuItemLike: true,
+  };
+
   client;
+  // Simple in-memory cache
+  private cache: NodeCache;
+
   constructor({ client }: PrismaEntityProps) {
     this.client = client;
+    this.cache = new NodeCache({ stdTTL: 100, checkperiod: 120 }); // TTL in seconds
   }
 
   async findAll(params: MenuItemEntityFindAllProps = {}) {
-    if (params?.mock === true) {
+    const cacheKey = `findAll:${JSON.stringify(params)}`;
+    let result = this.cache.get<MenuItemWithAssociations[]>(cacheKey);
+
+    if (result) {
+      if (typeof result === "string") {
+        result = JSON.parse(result);
+      }
+
+      // console.log("cache hit", cacheKey);
+
+      return result;
+    }
+
+    // console.log("cache miss", cacheKey);
+
+    if (params?.mock) {
       return items;
     }
 
     const recordsFounded = await this.client.menuItem.findMany({
       where: params?.where,
-      include: {
-        priceVariations: true,
-        Category: true,
-        tags: true,
-      },
+      include: this.#menuItemInclude,
     });
 
     const tags = await this.client.tag.findMany();
 
-    const records = recordsFounded.map((r) => {
-      return {
-        ...r,
-        tags: r?.tags?.map((tag) => tags.find((t) => t.id === tag.tagId)),
-      };
-    });
+    const records = await Promise.all(
+      recordsFounded.map(async (r) => {
+        const likesAmount = await menuItemLikePrismaEntity.countByMenuItemId(
+          r.id
+        );
+
+        return {
+          ...r,
+          tags:
+            r?.tags?.map((tag) => tags.find((t) => t.id === tag.tagId)) ||
+            ([] as Tag[]),
+          likes: {
+            amount: likesAmount,
+          },
+        };
+      })
+    );
+
+    let returnedRecords: MenuItemWithAssociations[] = [];
 
     if (records.length === 0) {
-      return [];
+      return returnedRecords;
     }
 
     if (!params?.option?.sorted) {
-      return records;
+      // @ts-ignore
+      returnedRecords = [...records];
     }
 
-    return records.sort((a, b) => {
+    // @ts-ignore
+    returnedRecords = records.sort((a, b) => {
       if (params?.option && params?.option.direction === "asc") {
         return a.sortOrderIndex - b.sortOrderIndex;
       }
 
       return b.sortOrderIndex - a.sortOrderIndex;
     });
+
+    // this.cache.set(cacheKey, JSON.stringify(returnedRecords));
+
+    // console.log("cache set", cacheKey);
+    return returnedRecords;
   }
 
   async findById(id: string) {
     const items = await this.client.menuItem.findUnique({
       where: { id },
-      include: {
-        priceVariations: true,
-        Category: true,
-        tags: true,
-        MenuItemCost: true,
-        MenuItemLike: true,
-      },
+      include: this.#menuItemInclude,
     });
 
     const tags = await this.client.tag.findMany();
@@ -184,6 +230,18 @@ export class MenuItemPrismaEntity {
     return await this.client.menuItemTag.delete({
       where: {
         id: tag.id,
+      },
+    });
+  }
+
+  async findByTagId(tagId: string) {
+    return await this.client.menuItem.findMany({
+      where: {
+        tags: {
+          some: {
+            tagId,
+          },
+        },
       },
     });
   }
