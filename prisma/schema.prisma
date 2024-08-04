@@ -156,6 +156,7 @@ model MenuItem {
   /// this track the position inside the menu
   sortOrderIndex     Int                      @default(0) @map("sort_order_index")
   MenuItemLike       MenuItemLike[]
+  MenuItemShare      MenuItemShare[]
   MenuItemCost       MenuItemCost[]
 
   @@map("menu_items")
@@ -199,6 +200,18 @@ model MenuItemLike {
   deletedAt  DateTime? @map("deleted_at")
 
   @@map("menu_item_likes")
+}
+
+model MenuItemShare {
+  id         String    @id @default(uuid())
+  MenuItem   MenuItem? @relation(fields: [menuItemId], references: [id])
+  menuItemId String?   @map("menu_item_id")
+  sessionId  String?   @map("session_id")
+  Session    Session?  @relation(fields: [sessionId], references: [id])
+  createdAt  DateTime  @map("created_at")
+  updatedAt  DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  @@map("menu_item_shares")
 }
 
 /// here we can manage: featured (recommended), vegetarian, kids, meat
@@ -267,12 +280,13 @@ model MogoOrdersInbound {
 }
 
 model Session {
-  id           String         @id @default(uuid())
-  userId       String?        @map("user_id")
-  payload      String?
-  createdAt    DateTime       @map("created_at")
-  updatedAt    DateTime       @default(now()) @updatedAt @map("updated_at")
-  MenuItemLike MenuItemLike[]
+  id            String          @id @default(uuid())
+  userId        String?         @map("user_id")
+  payload       String?
+  createdAt     DateTime        @map("created_at")
+  updatedAt     DateTime        @default(now()) @updatedAt @map("updated_at")
+  MenuItemLike  MenuItemLike[]
+  MenuItemShare MenuItemShare[]
 
   @@map("sessions")
 }

@@ -39,9 +39,16 @@ export interface CardapioOutletContext {
     items: MenuItemWithAssociations[]
 }
 
-export const meta: V2_MetaFunction = () => {
+export const meta: V2_MetaFunction = ({ data }) => {
     return [
         { title: "Cardápio A Modo Mio - Pizzaria Italiana em Pato Branco" },
+        { name: "description", content: "É a pizza! Italiana! Um sabor que você nunca experimentou! Descubra no nosso cardápio as melhores pizzas da cidade. Experimente e saboreie a verdadeira italianidade em Pato Branco." },
+        { name: "og:title", content: "Cardápio A Modo Mio - Pizzaria Italiana em Pato Branco" },
+        { name: "og:description", content: "É a pizza! Italiana! Um sabor que nunca experimentou! Descubra no nosso cardápio as melhores pizzas da cidade. Experimente e saboreie a verdadeira italianidade em Pato Branco." },
+        { name: "og:image", content: "https://www.amodomio.com.br/images/cardapio_og_image.jpg" },
+        { name: "og:url", content: "https://www.amodomio.com.br/cardapio" },
+        { name: "og:site_name", content: "Cardápio A Modo Mio - Pizzaria Italiana em Pato Branco" },
+        { name: "og:type", content: "website" },
     ];
 };
 

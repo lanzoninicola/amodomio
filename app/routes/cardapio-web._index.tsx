@@ -11,6 +11,7 @@ import { CardapioOutletContext } from "./cardapio-web";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { menuItemLikePrismaEntity } from "~/domain/cardapio/menu-item-like.prisma.entity.server";
 import { badRequest, ok } from "~/utils/http-response.server";
+import { menuItemSharePrismaEntity } from "~/domain/cardapio/menu-item-share.prisma.entity.server";
 
 export const headers: HeadersFunction = () => ({
     'Cache-Control': 's-maxage=1, stale-while-revalidate=59',
@@ -46,6 +47,32 @@ export async function action({ request }: ActionArgs) {
 
         return ok({
             action: "menu-item-like-it",
+            likeAmount
+        })
+
+    }
+
+    if (values?.action === "menu-item-share-it") {
+        const itemId = values?.itemId as string
+
+        const [err, likeAmount] = await prismaIt(menuItemSharePrismaEntity.create({
+            createdAt: new Date().toISOString(),
+            MenuItem: {
+                connect: {
+                    id: itemId,
+                },
+            }
+        }));
+
+        if (err) {
+            return badRequest({
+                action: "menu-item-share-it",
+                likeAmount
+            })
+        }
+
+        return ok({
+            action: "menu-item-share-it",
             likeAmount
         })
 
@@ -210,14 +237,22 @@ function CardapioItemActionBar({ item }: { item: MenuItemWithAssociations }) {
             return
         }
 
+        const text = `Essa ${item.name} é a melhor pizza da cidade. Experimente... ${window.location.href}/#${item.id}`
         navigator.share({
             title: item.name,
-            text: item.ingredients,
+            text,
             url: window.location.href
         }).then(() => {
 
+            fetcher.submit(
+                {
+                    action: "menu-item-share-it",
+                    itemId: item.id,
+                },
+                { method: 'post' }
+            );
+
         }).catch((error) => {
-            console.log('Error sharing:', error);
         })
     }
 
@@ -225,7 +260,7 @@ function CardapioItemActionBar({ item }: { item: MenuItemWithAssociations }) {
 
 
     return (
-        <div className="flex flex-col gap-0">
+        <div className="flex flex-col gap-1">
             <div className="grid grid-cols-8 font-body-website px-4 mb-1">
                 <div className="flex flex-col gap-1 cursor-pointer" onClick={likingIt}>
                     <Heart
