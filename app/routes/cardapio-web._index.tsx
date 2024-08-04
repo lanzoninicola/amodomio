@@ -202,10 +202,25 @@ function CardapioItemActionBar({ item }: { item: MenuItemWithAssociations }) {
             },
             { method: 'post' }
         );
-
-
-
     };
+
+    const shareIt = () => {
+        if (!navigator?.share) {
+            console.log("Navegador não suporta o compartilhamento")
+            return
+        }
+
+        navigator.share({
+            title: item.name,
+            text: item.ingredients,
+            url: window.location.href
+        }).then(() => {
+
+        }).catch((error) => {
+            console.log('Error sharing:', error);
+        })
+    }
+
 
 
 
@@ -221,14 +236,20 @@ function CardapioItemActionBar({ item }: { item: MenuItemWithAssociations }) {
                         )}
                     />
                 </div>
-                <WhatsappExternalLink
+                {/* <WhatsappExternalLink
                     phoneNumber=""
                     ariaLabel="Envia uma mensagem com WhatsApp"
                     message={"Essa é a melhor pizzaria da cidade. Experimente..."}
                     className="flex flex-col gap-1 cursor-pointer"
                 >
                     <Share2 />
-                </WhatsappExternalLink>
+                    </WhatsappExternalLink>
+
+                    */}
+                <div className="flex flex-col gap-1 cursor-pointer" onClick={shareIt}>
+                    <Share2 />
+                </div>
+
                 <WhatsappExternalLink
                     phoneNumber="46991272525"
                     ariaLabel="Envia uma mensagem com WhatsApp"
