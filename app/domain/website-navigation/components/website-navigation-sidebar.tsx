@@ -1,13 +1,32 @@
 import { Link, LinkProps } from "@remix-run/react"
-import React from "react"
+import React, { Children } from "react"
 import { Button } from "~/components/ui/button"
 import { ScrollArea } from "~/components/ui/scroll-area"
 import { Sheet, SheetContent, SheetTrigger } from "~/components/ui/sheet"
-import { ADMIN_WEBSITE_NAVIGATION_ITEMS } from "~/domain/website-navigation/public/public-website.nav-links"
 import { cn } from "~/lib/utils"
+import { WebsiteNavigationLinks } from "../website-navigation.type"
 
 
-export function WebsiteNavigation() {
+interface WebsiteNavigationSidebarProps {
+    buttonTrigger?: {
+        label: string
+        classNameLabel?: string
+        classNameButton?: string
+    },
+    homeLink: {
+        label: string
+        to: string
+    }
+    navigationLinks: Partial<WebsiteNavigationLinks>
+    children?: React.ReactNode
+}
+
+export function WebsiteNavigationSidebar({
+    buttonTrigger,
+    homeLink,
+    navigationLinks,
+    children
+}: WebsiteNavigationSidebarProps) {
     const [open, setOpen] = React.useState(false)
 
     return (
@@ -15,7 +34,12 @@ export function WebsiteNavigation() {
             <SheetTrigger asChild>
                 <Button
                     variant="ghost"
-                    className="mr-2 px-0 text-base hover:bg-transparent focus-visible:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 flex gap-2"
+                    className={
+                        cn(
+                            "mr-2 px-0 text-base hover:bg-transparent focus-visible:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 flex gap-2",
+                            buttonTrigger?.classNameButton
+                        )
+                    }
                 >
                     <svg
                         strokeWidth="1.5"
@@ -46,21 +70,28 @@ export function WebsiteNavigation() {
                             strokeLinejoin="round"
                         ></path>
                     </svg>
-                    <span className="hidden font-semibold md:block">Menu de Navegação</span>
+                    <span className={
+                        cn(
+                            "hidden font-semibold md:block",
+                            buttonTrigger?.classNameLabel
+                        )
+                    }>
+                        {buttonTrigger?.label ?? "Menu de Navegação"}
+                    </span>
                 </Button>
 
             </SheetTrigger>
             <SheetContent side="left" className="pr-0">
                 <MobileLink
-                    to="/admin"
+                    to={homeLink.to}
                     className="flex items-center"
                     onOpenChange={setOpen}
                 >
-                    <span className="font-bold">Iniçio</span>
+                    <span className="font-bold">{homeLink.label ?? "Iniçio"}</span>
                 </MobileLink>
-                <ScrollArea className="my-4 h-[calc(100vh-8rem)] pb-10 pl-6">
+                <ScrollArea className="my-4 h-[calc(100vh-12rem)] pl-6">
                     <div className="flex flex-col space-y-3">
-                        {ADMIN_WEBSITE_NAVIGATION_ITEMS.mainNav?.map(
+                        {navigationLinks?.mainNav && navigationLinks.mainNav?.map(
                             (item) =>
                                 item.href && (
                                     <MobileLink
@@ -74,9 +105,9 @@ export function WebsiteNavigation() {
                         )}
                     </div>
                     <div className="flex flex-col space-y-2">
-                        {ADMIN_WEBSITE_NAVIGATION_ITEMS.sidebarNav.map((item, index) => (
+                        {navigationLinks?.sidebarNav && navigationLinks.sidebarNav.map((item, index) => (
                             <div key={index} className="flex flex-col space-y-3 pt-6">
-                                <h4 className="font-medium font-semibold">{item.title}</h4>
+                                <h4 className="font-semibold">{item.title}</h4>
                                 {item?.items?.length &&
                                     item.items.map((item) => (
                                         <React.Fragment key={item.href}>
@@ -103,6 +134,7 @@ export function WebsiteNavigation() {
                         ))}
                     </div>
                 </ScrollArea>
+                {children}
             </SheetContent>
         </Sheet>
     )

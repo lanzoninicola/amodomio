@@ -1,28 +1,6 @@
-import { Icons } from "~/components/primitives/icons/icons";
+import { WebsiteNavigationLinks } from "../website-navigation.type";
 
-export interface NavItem {
-  title: string;
-  href?: string;
-  disabled?: boolean;
-  external?: boolean;
-  icon?: keyof typeof Icons;
-  label?: string;
-}
-
-export interface NavItemWithChildren extends NavItem {
-  items: NavItemWithChildren[];
-}
-
-export interface MainNavItem extends NavItem {}
-
-export interface SidebarNavItem extends NavItemWithChildren {}
-
-export interface WebsiteNavigation {
-  mainNav: MainNavItem[];
-  sidebarNav: SidebarNavItem[];
-}
-
-export const WEBSITE_NAVIGATION_ITEMS: WebsiteNavigation = {
+const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
   mainNav: [
     {
       title: "Administração",
@@ -181,3 +159,5 @@ export const WEBSITE_NAVIGATION_ITEMS: WebsiteNavigation = {
     },
   ],
 };
+
+export default ADMIN_WEBSITE_NAVIGATION_ITEMS;

@@ -12,6 +12,8 @@ import { Separator } from "~/components/ui/separator";
 import { toast } from "~/components/ui/use-toast";
 import { menuItemTagPrismaEntity } from "~/domain/cardapio/menu-item-tags.prisma.entity.server";
 import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
+import { WebsiteNavigationSidebar } from "~/domain/website-navigation/components/website-navigation-sidebar";
+import PUBLIC_WEBSITE_NAVIGATION_ITEMS from "~/domain/website-navigation/public/public-website.nav-links";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { badRequest, ok } from "~/utils/http-response.server";
 
@@ -142,10 +144,29 @@ function CardapioHeader({ items }: { items: MenuItemWithAssociations[] }) {
         <header className="bg-white shadow fixed top-0 w-screen  border-b-slate-100 px-4 py-3 z-50 md:max-w-2xl md:-translate-x-1/2 md:left-1/2" >
             <div className="flex flex-col">
                 <div className="grid grid-cols-3 items-center w-full">
-                    <div className="flex gap-1 items-center" onClick={() => setShowSearch(!showSearch)}>
+                    {/* <div className="flex gap-1 items-center" onClick={() => setShowSearch(!showSearch)}>
                         <HamburgerMenuIcon className="w-6 h-6" />
                         <span className="font-body-website text-[10px] font-semibold  uppercase">Menu</span>
-                    </div>
+                    </div> */}
+
+                    <WebsiteNavigationSidebar
+                        homeLink={{ label: "Cardápio", to: "cardapio" }}
+                        navigationLinks={PUBLIC_WEBSITE_NAVIGATION_ITEMS}
+                        buttonTrigger={{
+                            label: "Menu",
+                            classNameLabel: "block font-body-website text-[10px] font-semibold  uppercase",
+                            classNameButton: "justify-start w-full h-full",
+                        }}
+                    >
+                        <div className="flex flex-col justify-center mb-4">
+                            <p className="font-body-website font-semibold text-sm leading-relaxed">Hórarios de funcionamento</p>
+                            <div className="flex flex-col justify-center mb-4">
+                                <p className="text-muted-foreground font-body-website">Quarta - Domingo</p>
+                                <p className="text-muted-foreground font-body-website">18:00 - 22:00</p>
+                            </div>
+                        </div>
+
+                    </WebsiteNavigationSidebar>
 
                     <Link to="/cardapio-web" className="flex justify-center">
                         <Logo color="black" className="w-[60px]" tagline={false} />

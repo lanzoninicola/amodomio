@@ -3,6 +3,8 @@ import { Link } from "@remix-run/react";
 import { Globe, Shield } from "lucide-react";
 import { WebsiteNavigation } from "../mobile-nav/mobile-nav";
 import { cn } from "~/lib/utils";
+import { WebsiteNavigationSidebar } from "~/domain/website-navigation/components/website-navigation-sidebar";
+import ADMIN_WEBSITE_NAVIGATION_ITEMS from "~/domain/website-navigation/admin/admin-website.nav-links";
 
 
 interface AdminHeaderProps {
@@ -23,7 +25,14 @@ export function AdminHeader({ urlSegment }: AdminHeaderProps) {
             )
         }>
             <div className="container flex h-14 max-w-screen-2xl items-center">
-                <WebsiteNavigation />
+                <WebsiteNavigationSidebar
+                    homeLink={{ label: "Iniçio", to: "admin" }}
+                    navigationLinks={ADMIN_WEBSITE_NAVIGATION_ITEMS}
+                    buttonTrigger={{
+                        label: "Menu de navegação",
+                    }}
+
+                />
                 <div className="flex flex-1 items-center justify-between space-x-2 md:justify-end">
                     <div className="w-full flex-1 md:w-auto md:flex-none">
                         {/* <CommandMenu /> */}
