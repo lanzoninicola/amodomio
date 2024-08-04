@@ -12,8 +12,6 @@ interface AdminHeaderProps {
 
 export function AdminHeader({ urlSegment }: AdminHeaderProps) {
 
-    console.log(urlSegment)
-
 
     return (
         <header className={

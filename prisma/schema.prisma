@@ -205,13 +205,26 @@ model MenuItemTag {
   id         String    @id @default(uuid())
   MenuItem   MenuItem? @relation(fields: [menuItemId], references: [id])
   menuItemId String?   @map("menu_item_id")
-  name       String
-  public     Boolean   @default(false)
+  Tag        Tag?      @relation(fields: [tagId], references: [id])
+  tagId      String?   @map("tag_id")
   deletedAt  DateTime? @map("deleted_at")
   createdAt  DateTime  @map("created_at")
   updatedAt  DateTime  @default(now()) @updatedAt @map("updated_at")
 
   @@map("menu_item_tags")
+}
+
+model Tag {
+  id          String        @id @default(uuid())
+  name        String
+  public      Boolean       @default(false)
+  colorHEX    String        @default("#e0e0e0") @map("color_hex")
+  deletedAt   DateTime?     @map("deleted_at")
+  createdAt   DateTime      @map("created_at")
+  updatedAt   DateTime      @default(now()) @updatedAt @map("updated_at")
+  MenuItemTag MenuItemTag[]
+
+  @@map("tags")
 }
 
 model Setting {
@@ -254,7 +267,7 @@ model MogoOrdersInbound {
 
 model Session {
   id           String         @id @default(uuid())
-  sessionId    String?        @map("session_id")
+  userId       String?        @map("user_id")
   payload      String?
   createdAt    DateTime       @map("created_at")
   updatedAt    DateTime       @default(now()) @updatedAt @map("updated_at")

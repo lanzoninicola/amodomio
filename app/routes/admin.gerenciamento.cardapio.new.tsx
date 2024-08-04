@@ -28,8 +28,6 @@ export async function action({ request }: LoaderArgs) {
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);
 
-    console.log({ action: _action, values })
-
     if (_action === "menu-item-create") {
 
         const category = jsonParse(values.category as string)
@@ -56,7 +54,6 @@ export async function action({ request }: LoaderArgs) {
 
         const [err, result] = await prismaIt(menuItemPrismaEntity.create(menuItem))
 
-        console.log({ err })
 
         if (err) {
             return badRequest(err)

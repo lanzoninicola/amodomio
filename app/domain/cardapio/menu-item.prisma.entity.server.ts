@@ -4,6 +4,7 @@ import {
   MenuItemPriceVariation,
   MenuItemTag,
   Prisma,
+  Tag,
 } from "@prisma/client";
 import prismaClient from "~/lib/prisma/client.server";
 import { PrismaEntityProps } from "~/lib/prisma/types.server";
@@ -16,7 +17,7 @@ export interface MenuItemWithAssociations extends MenuItem {
   priceVariations: MenuItemPriceVariation[];
   categoryId: string;
   Category: Category;
-  tags: MenuItemTag[];
+  tags: Tag[];
 }
 
 interface MenuItemEntityFindAllProps {
@@ -39,13 +40,22 @@ export class MenuItemPrismaEntity {
       return items;
     }
 
-    const records = await this.client.menuItem.findMany({
+    const recordsFounded = await this.client.menuItem.findMany({
       where: params?.where,
       include: {
         priceVariations: true,
         Category: true,
         tags: true,
       },
+    });
+
+    const tags = await this.client.tag.findMany();
+
+    const records = recordsFounded.map((r) => {
+      return {
+        ...r,
+        tags: r?.tags?.map((tag) => tags.find((t) => t.id === tag.tagId)),
+      };
     });
 
     if (records.length === 0) {
@@ -66,14 +76,23 @@ export class MenuItemPrismaEntity {
   }
 
   async findById(id: string) {
-    return await this.client.menuItem.findUnique({
+    const items = await this.client.menuItem.findUnique({
       where: { id },
       include: {
         priceVariations: true,
         Category: true,
         tags: true,
+        MenuItemCost: true,
+        MenuItemLike: true,
       },
     });
+
+    const tags = await this.client.tag.findMany();
+
+    return {
+      ...items,
+      tags: items?.tags?.map((tag) => tags.find((t) => t.id === tag.tagId)),
+    };
   }
 
   async create(data: Prisma.MenuItemCreateInput) {
@@ -118,22 +137,31 @@ export class MenuItemPrismaEntity {
     return await this.client.menuItem.delete({ where: { id } });
   }
 
-  async addTag(itemId: string, tagName: string) {
+  async addTag(itemId: string, tag: Tag) {
     return await menuItemTagPrismaEntity.create({
-      name: tagName,
       createdAt: new Date().toISOString(),
       MenuItem: {
         connect: {
           id: itemId,
         },
       },
+      Tag: {
+        connectOrCreate: {
+          where: {
+            id: tag.id,
+          },
+          create: {
+            ...tag,
+          },
+        },
+      },
     });
   }
 
-  async hasTag(itemId: string, tagName: string) {
+  async hasTag(itemId: string, tagId: string) {
     const tag = await this.client.menuItemTag.findFirst({
       where: {
-        name: tagName,
+        tagId,
         menuItemId: itemId,
       },
     });
@@ -141,10 +169,10 @@ export class MenuItemPrismaEntity {
     return !!tag;
   }
 
-  async removeTag(itemId: string, tagName: string) {
+  async removeTag(itemId: string, tagId: string) {
     const tag = await this.client.menuItemTag.findFirst({
       where: {
-        name: tagName,
+        tagId,
         menuItemId: itemId,
       },
     });

@@ -82,8 +82,6 @@ class SettingPrismaEntity implements ISettingPrismaEntity {
     const contextName = data?.context;
     const optionName = data?.name;
 
-    console.log({ contextName, optionName });
-
     if (!contextName || !optionName) return;
 
     const record = await this.client.setting.findFirst({
