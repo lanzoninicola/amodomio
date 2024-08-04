@@ -1,14 +1,58 @@
-import { V2_MetaFunction } from "@remix-run/node";
-import { useLoaderData, useOutletContext } from "@remix-run/react";
-import { Share2, Heart, LayoutList } from "lucide-react";
+import { ActionArgs, HeadersFunction } from "@remix-run/node";
+import { useActionData, useFetcher, useOutletContext } from "@remix-run/react";
+import { Share2, Heart } from "lucide-react";
 import React, { useState, useRef, useCallback } from "react";
 import WhatsappExternalLink from "~/components/primitives/whatsapp/whatsapp-external-link";
 import WhatsAppIcon from "~/components/primitives/whatsapp/whatsapp-icon";
 import { Separator } from "~/components/ui/separator";
 import { MenuItemWithAssociations } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { cn } from "~/lib/utils";
-import { CardapioOutletContext, loader } from "./cardapio-web";
-import { LayoutTemplate } from "lucide-react";
+import { CardapioOutletContext } from "./cardapio-web";
+import { prismaIt } from "~/lib/prisma/prisma-it.server";
+import { menuItemLikePrismaEntity } from "~/domain/cardapio/menu-item-like.prisma.entity.server";
+import { badRequest, ok } from "~/utils/http-response.server";
+
+export const headers: HeadersFunction = () => ({
+    'Cache-Control': 's-maxage=1, stale-while-revalidate=59',
+});
+
+export async function action({ request }: ActionArgs) {
+    let formData = await request.formData();
+    const { _action, ...values } = Object.fromEntries(formData);
+
+
+    if (values?.action === "menu-item-like-it") {
+        const itemId = values?.itemId as string
+        let amount = 0
+
+        amount = isNaN(Number(values?.likesAmount)) ? 1 : Number(values?.likesAmount)
+
+        const [err, likeAmount] = await prismaIt(menuItemLikePrismaEntity.create({
+            createdAt: new Date().toISOString(),
+            amount,
+            MenuItem: {
+                connect: {
+                    id: itemId,
+                },
+            }
+        }));
+
+        if (err) {
+            return badRequest({
+                action: "menu-item-like-it",
+                likeAmount
+            })
+        }
+
+        return ok({
+            action: "menu-item-like-it",
+            likeAmount
+        })
+
+    }
+
+    return null
+}
 
 export default function CardapioWebIndex() {
     const { items: allItems } = useOutletContext<CardapioOutletContext>();
@@ -49,6 +93,7 @@ export default function CardapioWebIndex() {
         </section>
     );
 }
+
 
 interface CardapioItemProps {
     item: MenuItemWithAssociations;
@@ -139,16 +184,40 @@ function CardapioItemPrice({ prices }: CardapioItemPriceProps) {
 }
 
 function CardapioItemActionBar({ item }: { item: MenuItemWithAssociations }) {
-    const [likeIt, setLikeIt] = useState(false);
+    const [likeIt, setLikeIt] = useState(false)
+    const [likesAmount, setLikesAmount] = useState(item.likes?.amount || 0)
+
+    const fetcher = useFetcher();
+
+    const likingIt = () => {
+
+        setLikeIt(true)
+        setLikesAmount(likesAmount + 1)
+
+        fetcher.submit(
+            {
+                action: "menu-item-like-it",
+                itemId: item.id,
+                likesAmount: String(1),
+            },
+            { method: 'post' }
+        );
+
+
+
+    };
+
+
 
     return (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-0">
             <div className="grid grid-cols-8 font-body-website px-4 mb-1">
-                <div className="flex flex-col gap-1 cursor-pointer" onClick={() => setLikeIt(true)}>
+                <div className="flex flex-col gap-1 cursor-pointer" onClick={likingIt}>
                     <Heart
                         className={cn(
                             likeIt ? "fill-red-500" : "fill-none",
-                            likeIt ? "stroke-red-500" : "stroke-black"
+                            likeIt ? "stroke-red-500" : "stroke-black",
+                            item.likes?.amount && item.likes?.amount > 0 ? "stroke-red-500" : "stroke-black"
                         )}
                     />
                 </div>
@@ -169,7 +238,17 @@ function CardapioItemActionBar({ item }: { item: MenuItemWithAssociations }) {
                     <WhatsAppIcon color="black" />
                 </WhatsappExternalLink>
             </div>
-            <span className="text-sm font-semibold font-body-website tracking-tight px-4">400 Like</span>
+            {likesAmount === 0 && (
+                <div className="flex items-center gap-1">
+                    <span className="text-sm font-body-website tracking-tight pl-4">Seja o primeiro! Curte com </span>
+                    <Heart size={14} />
+                </div>
+            )}
+
+            <span className="text-xs font-semibold font-body-website tracking-tight px-4 text-red-500">
+                {likesAmount > 0 && `${likesAmount} curtidas`}
+
+            </span>
         </div>
     );
 }

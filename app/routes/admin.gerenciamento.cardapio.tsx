@@ -16,12 +16,11 @@ export const meta: V2_MetaFunction = () => {
             name: "robots",
             content: "noindex",
         },
-        {
-            name: "title",
-            content: "Cardápio - Gerençiamento",
-        }
+        { title: "Gerenciamento cardápio" },
     ];
 };
+
+
 
 
 export async function loader({ request }: LoaderArgs) {

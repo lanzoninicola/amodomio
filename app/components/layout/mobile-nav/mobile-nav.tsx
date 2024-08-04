@@ -3,7 +3,7 @@ import React from "react"
 import { Button } from "~/components/ui/button"
 import { ScrollArea } from "~/components/ui/scroll-area"
 import { Sheet, SheetContent, SheetTrigger } from "~/components/ui/sheet"
-import { WEBSITE_NAVIGATION_ITEMS } from "~/domain/website-navigation/website-navigation.constant"
+import { ADMIN_WEBSITE_NAVIGATION_ITEMS } from "~/domain/website-navigation/public/public-website.nav-links"
 import { cn } from "~/lib/utils"
 
 
@@ -60,7 +60,7 @@ export function WebsiteNavigation() {
                 </MobileLink>
                 <ScrollArea className="my-4 h-[calc(100vh-8rem)] pb-10 pl-6">
                     <div className="flex flex-col space-y-3">
-                        {WEBSITE_NAVIGATION_ITEMS.mainNav?.map(
+                        {ADMIN_WEBSITE_NAVIGATION_ITEMS.mainNav?.map(
                             (item) =>
                                 item.href && (
                                     <MobileLink
@@ -74,7 +74,7 @@ export function WebsiteNavigation() {
                         )}
                     </div>
                     <div className="flex flex-col space-y-2">
-                        {WEBSITE_NAVIGATION_ITEMS.sidebarNav.map((item, index) => (
+                        {ADMIN_WEBSITE_NAVIGATION_ITEMS.sidebarNav.map((item, index) => (
                             <div key={index} className="flex flex-col space-y-3 pt-6">
                                 <h4 className="font-medium font-semibold">{item.title}</h4>
                                 {item?.items?.length &&

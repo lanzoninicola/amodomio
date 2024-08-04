@@ -1,8 +1,8 @@
 import { HamburgerMenuIcon } from "@radix-ui/react-icons";
-import { LoaderArgs, V2_MetaFunction } from "@remix-run/node";
+import { HeadersFunction, LoaderArgs, V2_MetaFunction } from "@remix-run/node";
 import { Link, Outlet, useLoaderData } from "@remix-run/react";
 import { ArrowRight, Instagram, MapPin, SearchIcon, XIcon } from "lucide-react";
-import { useEffect, useLayoutEffect, useState } from "react";
+import { useState } from "react";
 import ExternalLink from "~/components/primitives/external-link/external-link";
 import Logo from "~/components/primitives/logo/logo";
 import WhatsappExternalLink from "~/components/primitives/whatsapp/whatsapp-external-link";
@@ -12,7 +12,9 @@ import { Separator } from "~/components/ui/separator";
 import { toast } from "~/components/ui/use-toast";
 import { menuItemTagPrismaEntity } from "~/domain/cardapio/menu-item-tags.prisma.entity.server";
 import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
-import useLocalStorage from "~/hooks/use-local-storage";
+import { tagPrismaEntity } from "~/domain/tags/tag.prisma.entity.server";
+import { WebsiteNavigationSidebar } from "~/domain/website-navigation/components/website-navigation-sidebar";
+import PUBLIC_WEBSITE_NAVIGATION_ITEMS from "~/domain/website-navigation/public/public-website.nav-links";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { badRequest, ok } from "~/utils/http-response.server";
 
@@ -30,6 +32,7 @@ import { badRequest, ok } from "~/utils/http-response.server";
  * - [] Notification feature
  * - [] Let install it wpapp
  * - [] Me sinto fortunado (choose a random menu item)
+ * - [] Cache https://vercel.com/docs/frameworks/remix
  */
 
 export interface CardapioOutletContext {
@@ -38,12 +41,11 @@ export interface CardapioOutletContext {
 
 export const meta: V2_MetaFunction = () => {
     return [
-        {
-            name: "title",
-            content: "Cardápio Pizzaria A Modo Mio - Pato Branco",
-        }
+        { title: "Cardápio A Modo Mio - Pizzaria Italiana em Pato Branco" },
     ];
 };
+
+
 
 export async function loader({ request }: LoaderArgs) {
     const env = process.env?.NODE_ENV
@@ -57,14 +59,17 @@ export async function loader({ request }: LoaderArgs) {
             sorted: true,
             direction: "asc"
         },
-        mock: env === "development"
+        // mock: env === "development"
     }))
+
 
     if (errItems) {
         return badRequest(errItems)
     }
 
-    const [_, tags] = await prismaIt(menuItemTagPrismaEntity.findAllDistinct())
+    const [_, tags] = await prismaIt(tagPrismaEntity.findAll({
+        public: true
+    }))
 
     return ok({ items, tags })
 
@@ -146,15 +151,34 @@ function CardapioHeader({ items }: { items: MenuItemWithAssociations[] }) {
         <header className="bg-white shadow fixed top-0 w-screen  border-b-slate-100 px-4 py-3 z-50 md:max-w-2xl md:-translate-x-1/2 md:left-1/2" >
             <div className="flex flex-col">
                 <div className="grid grid-cols-3 items-center w-full">
-                    <div className="flex gap-1 items-center" onClick={() => setShowSearch(!showSearch)}>
+                    {/* <div className="flex gap-1 items-center" onClick={() => setShowSearch(!showSearch)}>
                         <HamburgerMenuIcon className="w-6 h-6" />
                         <span className="font-body-website text-[10px] font-semibold  uppercase">Menu</span>
-                    </div>
+                    </div> */}
+
+                    <WebsiteNavigationSidebar
+                        homeLink={{ label: "Cardápio", to: "cardapio" }}
+                        navigationLinks={PUBLIC_WEBSITE_NAVIGATION_ITEMS}
+                        buttonTrigger={{
+                            label: "Menu",
+                            classNameLabel: "block font-body-website text-[10px] font-semibold  uppercase",
+                            classNameButton: "justify-start w-full h-full",
+                        }}
+                    >
+                        <div className="flex flex-col justify-center mb-4">
+                            <p className="font-body-website font-semibold text-sm leading-relaxed">Hórarios de funcionamento</p>
+                            <div className="flex flex-col justify-center mb-4">
+                                <p className="text-muted-foreground font-body-website">Quarta - Domingo</p>
+                                <p className="text-muted-foreground font-body-website">18:00 - 22:00</p>
+                            </div>
+                        </div>
+
+                    </WebsiteNavigationSidebar>
 
                     <Link to="/cardapio-web" className="flex justify-center">
                         <Logo color="black" className="w-[60px]" tagline={false} />
                     </Link>
-                    <div className="flex justify-end items-center" onClick={() => setShowSearch(!showSearch)}>
+                    <div className="flex justify-end items-center cursor-pointer" onClick={() => setShowSearch(!showSearch)}>
                         <SearchIcon />
                         <span className="font-body-website text-[10px] font-semibold  uppercase">Pesquisar</span>
                     </div>
@@ -186,7 +210,8 @@ function CardapioSearch({ items, setShowSearch }: {
     items: MenuItemWithAssociations[],
     setShowSearch: React.Dispatch<React.SetStateAction<boolean>>
 }) {
-    const [currentItems, setCurrentItems] = useState<any[]>([]);
+
+    const [currentItems, setCurrentItems] = useState<MenuItemWithAssociations[]>([]);
     const [search, setSearch] = useState("")
 
     const handleSearch = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -199,21 +224,30 @@ function CardapioSearch({ items, setShowSearch }: {
             return;
         }
 
-        const searchedItems = items.filter(item =>
+
+        const itemsFounded = items.filter(item =>
             item.name.toLowerCase().includes(value) ||
             item.ingredients.toLowerCase().includes(value) ||
             item.description.toLowerCase().includes(value) ||
-            item.tags.filter(tag => tag.name.toLowerCase().includes(value)).length > 0
+            (item.tags && item.tags.filter(tag => tag.name.toLowerCase().includes(value)).length > 0)
         );
 
-        setCurrentItems(searchedItems);
+
+
+        setCurrentItems(itemsFounded);
     };
 
     return (
         <div className="flex flex-col">
             <div className="bg-white flex flex-col py-3">
                 <Input placeholder="Digitar 'abobrinha' ou 'vegetarianas'" className="font-body-website text-sm h-8" onChange={handleSearch} />
-                <div className="max-h-[350px] overflow-y-auto pt-4">
+                {
+                    search && <p className="font-body-website text-xs text-muted-foreground mt-2">{currentItems.length} de {items.length} resultados para
+                        <span className="font-semibold"> {search}</span>
+                    </p>
+                }
+                <Separator className="my-4" />
+                <div className="max-h-[350px] overflow-y-auto">
                     <ul className="flex flex-col gap-2">
                         {currentItems.map((item) => (
                             <li className="py-1 flex-1 min-w-[70px]" key={item.id}>
