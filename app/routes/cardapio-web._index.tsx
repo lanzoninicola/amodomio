@@ -134,7 +134,7 @@ const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) =>
                 <CardapioItemPrice prices={item?.priceVariations} />
             </div>
         </div>
-        <div className="flex flex-col px-4 mb-4">
+        <div className="flex flex-col px-4 mb-2">
             <h3 className="font-body-website text-sm font-semibold uppercase mb-2">{item.name}</h3>
             <p className="font-body-website leading-tight">{item.ingredients}</p>
         </div>
@@ -237,11 +237,11 @@ function CardapioItemActionBar({ item }: { item: MenuItemWithAssociations }) {
             return
         }
 
-        const text = `Essa ${item.name} é a melhor pizza da cidade. Experimente... ${window.location.href}/#${item.id}`
+        const text = `Essa pizza ${item.name} é a melhor pizza da cidade. Experimente...`
         navigator.share({
             title: item.name,
             text,
-            url: window.location.href
+            url: `${window.location.href}/#${item.id}`
         }).then(() => {
 
             fetcher.submit(
@@ -260,36 +260,28 @@ function CardapioItemActionBar({ item }: { item: MenuItemWithAssociations }) {
 
 
     return (
-        <div className="flex flex-col gap-1">
-            <div className="grid grid-cols-8 font-body-website px-4 mb-1">
-                <div className="flex flex-col gap-1 cursor-pointer" onClick={likingIt}>
-                    <Heart
-                        className={cn(
-                            likeIt ? "fill-red-500" : "fill-none",
-                            likeIt ? "stroke-red-500" : "stroke-black",
-                            item.likes?.amount && item.likes?.amount > 0 ? "stroke-red-500" : "stroke-black"
-                        )}
-                    />
-                </div>
-                {/* <WhatsappExternalLink
-                    phoneNumber=""
-                    ariaLabel="Envia uma mensagem com WhatsApp"
-                    message={"Essa é a melhor pizzaria da cidade. Experimente..."}
-                    className="flex flex-col gap-1 cursor-pointer"
-                >
-                    <Share2 />
-                    </WhatsappExternalLink>
-
-                    */}
-                <div className="flex flex-col gap-1 cursor-pointer" onClick={shareIt}>
-                    <Share2 />
+        <div className="flex flex-col gap-0">
+            <div className="grid grid-cols-2 font-body-website px-4 mb-1">
+                <div className="flex items-center">
+                    <div className="flex flex-col gap-1 cursor-pointer p-2 active:bg-brand-blue/50" onClick={likingIt}>
+                        <Heart
+                            className={cn(
+                                likeIt ? "fill-red-500" : "fill-none",
+                                likeIt ? "stroke-red-500" : "stroke-black",
+                                item.likes?.amount && item.likes?.amount > 0 ? "stroke-red-500" : "stroke-black"
+                            )}
+                        />
+                    </div>
+                    <div className="flex flex-col gap-1 cursor-pointer p-2 active:bg-brand-blue/50 " onClick={shareIt}>
+                        <Share2 />
+                    </div>
                 </div>
 
                 <WhatsappExternalLink
                     phoneNumber="46991272525"
                     ariaLabel="Envia uma mensagem com WhatsApp"
                     message={"Olá, gostaria fazer um pedido"}
-                    className="flex flex-col gap-1 items-end col-span-6 "
+                    className="flex flex-col gap-1 items-end cursor-pointer p-2 active:bg-brand-blue/50"
                 >
                     <WhatsAppIcon color="black" />
                 </WhatsappExternalLink>
