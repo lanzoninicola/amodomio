@@ -1,16 +1,8 @@
+import GLOBAL_LINKS from "../global-links.constant";
 import { WebsiteNavigationLinks } from "../website-navigation.type";
 
 const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
-  mainNav: [
-    {
-      title: "Administração",
-      href: "/admin",
-    },
-    {
-      title: "Website",
-      href: "/",
-    },
-  ],
+  mainNav: [GLOBAL_LINKS.admin, GLOBAL_LINKS.website],
   sidebarNav: [
     {
       title: "Gerenciamento",

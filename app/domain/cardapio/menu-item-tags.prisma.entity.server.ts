@@ -12,7 +12,7 @@ export class MenuItemTagPrismaEntity {
     this.client = client;
   }
 
-  async findAll(params: MenuItemTagEntityFindAllProps) {
+  async findAll(params: MenuItemTagEntityFindAllProps = {}) {
     return await this.client.menuItemTag.findMany(params);
   }
 

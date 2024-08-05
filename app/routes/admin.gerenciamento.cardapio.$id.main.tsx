@@ -58,6 +58,7 @@ export async function action({ request }: LoaderArgs) {
             basePriceAmount: values?.basePriceAmount ? parseFloat(values.basePriceAmount as string) : 0,
             mogoId: values?.mogoId as string || "",
             createdAt: new Date().toISOString(),
+            notesPublic: values?.notesPublic as string || "",
             Category: {
                 connect: {
                     id: category.id
