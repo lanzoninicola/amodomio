@@ -39,7 +39,7 @@ interface MenuItemEntityFindAllProps {
 }
 
 export class MenuItemPrismaEntity {
-  #menuItemInclude = {
+  #menuItemQueryIncludes = {
     priceVariations: true,
     Category: true,
     tags: true,
@@ -78,7 +78,7 @@ export class MenuItemPrismaEntity {
 
     const recordsFounded = await this.client.menuItem.findMany({
       where: params?.where,
-      include: this.#menuItemInclude,
+      include: this.#menuItemQueryIncludes,
     });
 
     const tags = await this.client.tag.findMany();
@@ -130,7 +130,7 @@ export class MenuItemPrismaEntity {
   async findById(id: string) {
     const items = await this.client.menuItem.findUnique({
       where: { id },
-      include: this.#menuItemInclude,
+      include: this.#menuItemQueryIncludes,
     });
 
     const tags = await this.client.tag.findMany();

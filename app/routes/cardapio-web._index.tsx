@@ -12,6 +12,7 @@ import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { menuItemLikePrismaEntity } from "~/domain/cardapio/menu-item-like.prisma.entity.server";
 import { badRequest, ok } from "~/utils/http-response.server";
 import { menuItemSharePrismaEntity } from "~/domain/cardapio/menu-item-share.prisma.entity.server";
+import GLOBAL_LINKS from "~/domain/website-navigation/global-links.constant";
 
 export const headers: HeadersFunction = () => ({
     'Cache-Control': 's-maxage=1, stale-while-revalidate=59',
@@ -241,7 +242,7 @@ function CardapioItemActionBar({ item }: { item: MenuItemWithAssociations }) {
         navigator.share({
             title: item.name,
             text,
-            url: `${window.location.href}/#${item.id}`
+            url: `${GLOBAL_LINKS.cardapioPublic}/#${item.id}`
         }).then(() => {
 
             fetcher.submit(

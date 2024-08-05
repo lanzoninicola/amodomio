@@ -36,7 +36,7 @@ export async function loader({ request }: LoaderArgs) {
         return badRequest(errItems)
     }
 
-    const [_, tags] = await prismaIt(menuItemTagPrismaEntity.findAllDistinct())
+    const [_, tags] = await prismaIt(menuItemTagPrismaEntity.findAll())
 
     return ok({ categories, items, tags })
 

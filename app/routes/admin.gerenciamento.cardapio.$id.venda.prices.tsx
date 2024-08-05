@@ -1,11 +1,12 @@
 import { MenuItemPriceVariation } from "@prisma/client";
 import { LoaderArgs } from "@remix-run/node";
-import { useLoaderData, useOutletContext } from "@remix-run/react";
+import { useActionData, useLoaderData, useOutletContext } from "@remix-run/react";
 import { useState } from "react";
 import Fieldset from "~/components/ui/fieldset";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Separator } from "~/components/ui/separator";
+import { authenticator } from "~/domain/auth/google.server";
 import MenuItemPriceVariationForm, { MenuItemPriceVariationFormAction } from "~/domain/cardapio/components/menu-item-price-variation-form/menu-item-price-variation-form";
 import { defaultItemsPriceVariations, suggestPriceVariations } from "~/domain/cardapio/fn.utils";
 import { menuItemPriceVariationsEntity } from "~/domain/cardapio/menu-item-price-variations.prisma.entity.server";
@@ -13,11 +14,14 @@ import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapi
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { cn } from "~/lib/utils";
 import { badRequest, ok, serverError } from "~/utils/http-response.server";
+import { jsonParse } from "~/utils/json-helper";
+import parserFormDataEntryToNumber from "~/utils/parse-form-data-entry-to-number";
 import { urlAt } from "~/utils/url";
 
 
 export async function loader({ request, params }: LoaderArgs) {
     const itemId = urlAt(request.url, -3);
+    let user = await authenticator.isAuthenticated(request);
 
     if (!itemId) {
         return badRequest("Nenhum item encontrado");
@@ -35,6 +39,7 @@ export async function loader({ request, params }: LoaderArgs) {
 
     return ok({
         item,
+        loggedUser: user
     });
 }
 
@@ -48,14 +53,18 @@ export async function action({ request }: LoaderArgs) {
     if (_action === "menu-item-price-variation-update") {
 
         const amount = isNaN(Number(values?.amount)) ? 0 : Number(values?.amount)
+        const latestAmount = parserFormDataEntryToNumber(values?.latestAmount)
         const discountPercentage = isNaN(Number(values?.discountPercentage)) ? 0 : Number(values?.discountPercentage)
         const showOnCardapio = values?.showOnCardapio === "on" ? true : false
+        const updatedBy = jsonParse(values?.updatedBy)?.email || ""
 
         const nextPrice: Partial<MenuItemPriceVariation> = {
             id: values.id as string,
             amount,
             discountPercentage,
-            showOnCardapio
+            showOnCardapio,
+            latestAmount,
+            updatedBy
         }
 
         const [err, result] = await prismaIt(menuItemPriceVariationsEntity.update(values.id as string, nextPrice))
@@ -77,14 +86,20 @@ export default function SingleMenuItemVendaPrice() {
     let priceVariations = item.priceVariations || []
     let formAction: MenuItemPriceVariationFormAction = "menu-item-price-variation-update"
 
+    const loggedUser = loaderData.payload?.loggedUser
+
 
     if (priceVariations.length === 0) {
         priceVariations = defaultItemsPriceVariations() as MenuItemWithAssociations["priceVariations"]
         formAction = "menu-item-price-variation-create"
     }
 
-    const [currentBasePrice, setCurrentBasePrice] = useState(item?.basePriceAmount || 0)
 
+    const actionData = useActionData<typeof action>()
+    console.log({ actionData })
+
+
+    const [currentBasePrice, setCurrentBasePrice] = useState(item?.basePriceAmount || 0)
 
 
     return (
@@ -103,7 +118,7 @@ export default function SingleMenuItemVendaPrice() {
             <Separator className="my-8" />
             <div className="flex flex-col gap-4">
                 {priceVariations.map((pv: MenuItemPriceVariation) => <MenuItemPriceVariationForm
-                    key={pv.id} price={pv} action={formAction}
+                    key={pv.id} price={pv} action={formAction} loggedUser={loggedUser}
                     basePrice={currentBasePrice} />
                 )}
             </div>

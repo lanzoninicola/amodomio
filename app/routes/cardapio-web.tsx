@@ -14,6 +14,7 @@ import { menuItemTagPrismaEntity } from "~/domain/cardapio/menu-item-tags.prisma
 import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { tagPrismaEntity } from "~/domain/tags/tag.prisma.entity.server";
 import { WebsiteNavigationSidebar } from "~/domain/website-navigation/components/website-navigation-sidebar";
+import GLOBAL_LINKS from "~/domain/website-navigation/global-links.constant";
 import PUBLIC_WEBSITE_NAVIGATION_ITEMS from "~/domain/website-navigation/public/public-website.nav-links";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { badRequest, ok } from "~/utils/http-response.server";
@@ -201,7 +202,7 @@ function CardapioFooter() {
         <footer className="py-6 px-2 fixed bottom-0 w-screen md:max-w-2xl md:-translate-x-1/2 md:left-1/2 ">
             {/* <Separator className="my-4" /> */}
             <div className="px-2 w-full">
-                <ExternalLink to="https://app.mogomenu.com.br/amodomio"
+                <ExternalLink to={GLOBAL_LINKS.mogoCardapio.href}
                     ariaLabel="Cardápio digital pizzaria A Modo Mio"
                     className="flex justify-between font-body-website rounded-sm bg-green-400 py-2 px-4"
                 >
