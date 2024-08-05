@@ -1,19 +1,16 @@
 import { MenuItemPriceVariation } from "@prisma/client"
-import { Separator } from "@radix-ui/react-separator"
-import { Form, useActionData, useSubmit } from "@remix-run/react"
+import { Form } from "@remix-run/react"
 import SaveItemButton from "~/components/primitives/table-list/action-buttons/save-item-button/save-item-button"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import { cn } from "~/lib/utils"
-import { MenuItemFormAction } from "../menu-item-form/menu-item-form"
 import { useEffect, useState } from "react"
 import { mapPriceVariationsLabel, suggestPriceVariations } from "../../fn.utils"
 import { MenuItemPriceVariationLabel } from "../../menu-item-price-variations.prisma.entity.server"
 import { Switch } from "~/components/ui/switch"
-import Fieldset from "~/components/ui/fieldset"
 import { formatDate } from "date-fns"
 import { jsonStringify } from "~/utils/json-helper"
-import useFormSubmissionnState from "~/hooks/useFormSubmissionState"
+import { Separator } from "~/components/ui/separator"
 
 export type MenuItemPriceVariationFormAction = "menu-item-price-variation-update" | "menu-item-price-variation-create"
 
@@ -42,11 +39,9 @@ export default function MenuItemPriceVariationForm({ action, price, basePrice, l
     }, [basePrice])
 
     return (
-        <Form method="post" key={price.id} className="flex items-center gap-x-4 px-1
-            hover:border-l-2 hover:border-l-muted-foreground
-        ">
+        <Form method="post">
 
-            <div className="grid grid-cols-8 items-center w-full" >
+            <div className="grid grid-cols-8 items-center w-full p-2 hover:bg-muted" >
                 <input type="hidden" name="id" defaultValue={price.id} />
                 <input type="hidden" name="latestAmount" defaultValue={price.amount} />
                 <input type="hidden" name="updatedBy" defaultValue={jsonStringify(loggedUser)} />
@@ -102,10 +97,12 @@ export default function MenuItemPriceVariationForm({ action, price, basePrice, l
                             <Label className="text-xs text-muted-foreground tracking-tight font-semibold">Atualizações</Label>
 
                             <div className="flex flex-col gap-0">
-                                <span className="text-xs text-muted-foreground hover:underline hover:cursor-pointer"
+                                <span className="text-xs text-muted-foreground"
                                 >{`Data: ${formatDate(price.updatedAt, "dd/MM/yyyy HH:mm")}`}</span>
-                                <span className="text-xs text-muted-foreground hover:underline hover:cursor-pointer"
+                                <span className="text-xs text-muted-foreground"
                                 >{`Por: ${price.updatedBy || ""}`}</span>
+                                <span className="text-xs text-muted-foreground"
+                                >{`Ultimo preço: ${price.latestAmount || ""}`}</span>
                             </div>
                         </div>
 
@@ -120,6 +117,8 @@ export default function MenuItemPriceVariationForm({ action, price, basePrice, l
                     >{`Sugerido: ${suggestedPrice.toFixed(2) || "0"}`}</span>
                 </div>
             </div>
+
+            <Separator />
 
         </Form >
     )

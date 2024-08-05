@@ -1,6 +1,6 @@
 import { MenuItemPriceVariation } from "@prisma/client";
 import { LoaderArgs } from "@remix-run/node";
-import { useActionData, useLoaderData, useOutletContext } from "@remix-run/react";
+import { useActionData, useLoaderData, useNavigation, useOutletContext } from "@remix-run/react";
 import { useState } from "react";
 import Fieldset from "~/components/ui/fieldset";
 import { Input } from "~/components/ui/input";
@@ -76,11 +76,14 @@ export async function action({ request }: LoaderArgs) {
         return ok("Elemento atualizado com successo")
     }
 
-    return null
+    return ok("Elemento atualizado com successo")
 }
 
 
 export default function SingleMenuItemVendaPrice() {
+
+
+
     const loaderData = useLoaderData<typeof loader>()
     const item: MenuItemWithAssociations = loaderData.payload?.item
     let priceVariations = item.priceVariations || []
@@ -93,11 +96,6 @@ export default function SingleMenuItemVendaPrice() {
         priceVariations = defaultItemsPriceVariations() as MenuItemWithAssociations["priceVariations"]
         formAction = "menu-item-price-variation-create"
     }
-
-
-    const actionData = useActionData<typeof action>()
-    console.log({ actionData })
-
 
     const [currentBasePrice, setCurrentBasePrice] = useState(item?.basePriceAmount || 0)
 

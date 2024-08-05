@@ -175,6 +175,21 @@ export default function MenuItemForm({ item, action, className, categories }: Me
 
                 <Separator className="my-4" />
 
+                <Fieldset className="grid grid-cols-4 items-center">
+                    <Label htmlFor="notesPublic" className="font-semibold text-sm col-span-1">Observações publicas</Label>
+                    <Textarea id="notesPublic" name="notesPublic"
+                        placeholder="Adicione observações publicas..."
+                        defaultValue={item?.notesPublic || ""}
+                        className={cn(
+                            "text-xs md:text-sm col-span-3",
+                            action === "menu-item-create" && "border",
+                            action === "menu-item-update" && "border-none focus:px-2"
+                        )}
+                    />
+                </Fieldset>
+
+                <Separator className="my-4" />
+
                 <div className="flex gap-4 justify-end">
 
                     <SubmitButton ref={submitButtonRef} actionName={action} labelClassName="text-xs" variant={"outline"} tabIndex={0} iconColor="black" />
