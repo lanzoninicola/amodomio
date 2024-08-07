@@ -1,7 +1,7 @@
 import { ActionArgs, HeadersFunction } from "@remix-run/node";
-import { useActionData, useFetcher, useOutletContext } from "@remix-run/react";
+import { Await, useActionData, useFetcher, useLoaderData, useOutletContext } from "@remix-run/react";
 import { Share2, Heart } from "lucide-react";
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, Suspense } from "react";
 import WhatsappExternalLink from "~/components/primitives/whatsapp/whatsapp-external-link";
 import WhatsAppIcon from "~/components/primitives/whatsapp/whatsapp-icon";
 import { Separator } from "~/components/ui/separator";
@@ -13,6 +13,8 @@ import { menuItemLikePrismaEntity } from "~/domain/cardapio/menu-item-like.prism
 import { badRequest, ok } from "~/utils/http-response.server";
 import { menuItemSharePrismaEntity } from "~/domain/cardapio/menu-item-share.prisma.entity.server";
 import GLOBAL_LINKS from "~/domain/website-navigation/global-links.constant";
+import { loader } from "./cardapio-web";
+import useResolveDeferredData from "~/hooks/use-resolve-deferred-data";
 
 export const headers: HeadersFunction = () => ({
     'Cache-Control': 's-maxage=1, stale-while-revalidate=59',
@@ -83,24 +85,37 @@ export async function action({ request }: ActionArgs) {
 }
 
 export default function CardapioWebIndex() {
-    const { items: allItems } = useOutletContext<CardapioOutletContext>();
-    const [items, setItems] = useState(allItems.slice(0, 10));
-    const [hasMore, setHasMore] = useState(true);
-    const observer = useRef<IntersectionObserver | null>(null);
+    // const loaderData = useLoaderData<typeof loader>()
+    // // const allItems = loaderData?.data?.payload.items as Promise<MenuItemWithAssociations[]> || []
 
-    const lastItemRef = useCallback((node: HTMLLIElement) => {
-        if (observer.current) observer.current.disconnect();
-        observer.current = new IntersectionObserver(entries => {
-            if (entries[0].isIntersecting && hasMore) {
-                setItems(prevItems => {
-                    const newItems = allItems.slice(prevItems.length, prevItems.length + 10);
-                    setHasMore(newItems.length > 0);
-                    return [...prevItems, ...newItems];
-                });
-            }
-        });
-        if (node) observer.current.observe(node);
-    }, [hasMore, allItems]);
+    // const [deferred_data, deferred_loading, deferred_error] = useResolveDeferredData(loaderData?.data?.payload.items)
+
+    // console.log({ deferred_data, deferred_loading, deferred_error })
+
+    const loaderData = useLoaderData<typeof loader>()
+    const allItems = loaderData?.data?.payload.items as Promise<MenuItemWithAssociations[]>
+
+    console.log({ allItems })
+
+
+
+    // const [items, setItems] = useState(allItems.slice(0, 10));
+    // const [hasMore, setHasMore] = useState(true);
+    // const observer = useRef<IntersectionObserver | null>(null);
+
+    // const lastItemRef = useCallback((node: HTMLLIElement) => {
+    //     if (observer.current) observer.current.disconnect();
+    //     observer.current = new IntersectionObserver(entries => {
+    //         if (entries[0].isIntersecting && hasMore) {
+    //             setItems(prevItems => {
+    //                 const newItems = allItems.slice(prevItems.length, prevItems.length + 10);
+    //                 setHasMore(newItems.length > 0);
+    //                 return [...prevItems, ...newItems];
+    //             });
+    //         }
+    //     });
+    //     if (node) observer.current.observe(node);
+    // }, [hasMore, allItems]);
 
     return (
         <section >
@@ -109,7 +124,8 @@ export default function CardapioWebIndex() {
                 <LayoutList />
 
             </div> */}
-            <ul className="flex flex-col overflow-y-scroll md:overflow-y-z  auto snap-mandatory">
+
+            {/* <ul className="flex flex-col overflow-y-scroll md:overflow-y-z  auto snap-mandatory">
                 {items.map((item, index) => {
                     if (items.length === index + 1) {
                         return <CardapioItem ref={lastItemRef} key={item.id} item={item} />;
@@ -117,7 +133,20 @@ export default function CardapioWebIndex() {
                         return <CardapioItem key={item.id} item={item} />;
                     }
                 })}
-            </ul>
+            </ul> */}
+            <Suspense fallback={<div>Loading...</div>}>
+                <Await resolve={allItems}>
+                    {(items) => (
+                        <span className="font-lg">{JSON.stringify(items)}</span>
+                        // <ul className="flex flex-col overflow-y-scroll md:overflow-y-z  auto snap-mandatory">
+
+                        //     {Array.isArray(items) && items.map((item, index) => {
+                        //         return <CardapioItem key={item.id} item={item} />;
+                        //     })}
+                        // </ul>
+                    )}
+                </Await>
+            </Suspense>
         </section>
     );
 }
