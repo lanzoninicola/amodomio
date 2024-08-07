@@ -108,9 +108,6 @@ export const links: LinksFunction = () => [
 
 
 export async function loader({ request }: LoaderArgs) {
-
-  console.log("inside loader")
-
   const GTM_ID = process?.env.GOOGLE_TAG_MANAGER_ID
 
   return ok({ googleTagManagerId: GTM_ID })
