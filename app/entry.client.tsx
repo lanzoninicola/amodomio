@@ -26,5 +26,8 @@ startTransition(() => {
 import { hydrate } from 'react-dom'
 // import { RemixBrowser } from "remix";
 import { RemixBrowser } from '@remix-run/react'
+import { hydrateRoot } from 'react-dom/client';
 
-hydrate(<RemixBrowser />, document)
+// hydrate(<RemixBrowser />, document)
+
+hydrateRoot(document, <RemixBrowser />);
