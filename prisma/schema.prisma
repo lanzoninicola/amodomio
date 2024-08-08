@@ -134,33 +134,48 @@ model SubCategory {
 }
 
 model MenuItem {
-  id                 String                   @id @default(uuid())
-  name               String
-  description        String
-  ingredients        String
-  categoryId         String                   @map("category_id")
-  Category           Category                 @relation(fields: [categoryId], references: [id])
-  basePriceAmount    Float                    @map("base_price_amount")
-  priceVariations    MenuItemPriceVariation[]
-  imageFileName      String?                  @map("image_file_name")
-  imageBase64        String?                  @map("image_base64")
-  imageFileNameThumb String?                  @map("image_file_name_thumb")
-  imageBase64Thumb   String?                  @map("image_base64_thumb")
-  imageFileNameIcon  String?                  @map("image_file_name_icon")
-  imageBase64Icon    String?                  @map("image_base64_icon")
-  visible            Boolean
-  mogoId             String                   @map("mogo_id")
-  createdAt          DateTime                 @map("created_at")
-  updatedAt          DateTime                 @default(now()) @updatedAt @map("updated_at")
-  tags               MenuItemTag[]
+  id              String                   @id @default(uuid())
+  name            String
+  description     String
+  ingredients     String
+  categoryId      String                   @map("category_id")
+  Category        Category                 @relation(fields: [categoryId], references: [id])
+  basePriceAmount Float                    @map("base_price_amount")
+  priceVariations MenuItemPriceVariation[]
+  visible         Boolean
+  mogoId          String                   @map("mogo_id")
+  createdAt       DateTime                 @map("created_at")
+  updatedAt       DateTime                 @default(now()) @updatedAt @map("updated_at")
+  tags            MenuItemTag[]
   /// this track the position inside the menu
-  sortOrderIndex     Int                      @default(0) @map("sort_order_index")
-  notesPublic        String?                  @map("note_public")
-  MenuItemLike       MenuItemLike[]
-  MenuItemShare      MenuItemShare[]
-  MenuItemCost       MenuItemCost[]
+  sortOrderIndex  Int                      @default(0) @map("sort_order_index")
+  notesPublic     String?                  @map("note_public")
+  MenuItemLike    MenuItemLike[]
+  MenuItemShare   MenuItemShare[]
+  MenuItemCost    MenuItemCost[]
+  imageId         String?                  @map("image_id")
+  MenuItemImage   MenuItemImage?           @relation(fields: [imageId], references: [id])
 
   @@map("menu_items")
+}
+
+model MenuItemImage {
+  id               String     @id @default(uuid())
+  /// "url": "http://res.cloudinary.com/dy8gw8ahl/image/upload/v1723138046/rvife3elpmmjojlnwypm.jpg",
+  url              String?    @map("url")
+  /// "asset_folder": "cardapio"
+  assetFolder      String?    @map("asset_folder")
+  originalFileName String?    @map("original_file_name")
+  /// "display_name": "margherita"
+  displayName      String?    @map("display_name")
+  height           String?    @map("height")
+  width            String?    @map("width")
+  /// "thumbnail_url": "https://res.cloudinary.com/dy8gw8ahl/image/upload/c_limit,h_60,w_90/v1723138046/rvife3elpmmjojlnwypm.jpg"
+  thumbnailUrl     String?    @map("thumbnail_url")
+  format           String?    @map("format")
+  MenuItem         MenuItem[]
+
+  @@map("menu_items_image")
 }
 
 model MenuItemPriceVariation {

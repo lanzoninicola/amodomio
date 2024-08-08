@@ -106,16 +106,30 @@ export const links: LinksFunction = () => [
 
 ];
 
+interface EnvironmentVariables {
+
+  GTM_ID: string
+  CLOUDINARY_CLOUD_NAME: string
+}
+
 
 export async function loader({ request }: LoaderArgs) {
-  const GTM_ID = process?.env.GOOGLE_TAG_MANAGER_ID
 
-  return ok({ googleTagManagerId: GTM_ID })
+  const ENV: EnvironmentVariables = {
+    GTM_ID: process?.env.GOOGLE_TAG_MANAGER_ID ?? "",
+    CLOUDINARY_CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME ?? "",
+  }
+
+  return ok({
+    env: ENV
+  })
 }
 
 export default function App() {
   const loaderData = useLoaderData<typeof loader>()
-  const GTM_ID = loaderData?.payload?.googleTagManagerId
+  const ENV: EnvironmentVariables = loaderData?.payload?.env
+
+
 
   return (
     <html lang="pt-br" className="scroll-smooth">
@@ -124,16 +138,17 @@ export default function App() {
         <meta name="viewport" content="width=device-width,initial-scale=1" />
         <Meta />
         <Links />
-        {GTM_ID && <GoogleTagManagerScriptTag id={GTM_ID} />}
+        {ENV.GTM_ID !== "" && <GoogleTagManagerScriptTag id={ENV.GTM_ID} />}
       </head>
       <body>
-        {GTM_ID && <GoogleTagManagerNoScriptTag id={GTM_ID} />}
+        <script src="https://upload-widget.cloudinary.com/latest/global/all.js" type="text/javascript" />
         <Outlet />
         <Toaster />
         <ScrollRestoration />
         <Scripts />
         <LiveReload />
         <Analytics />
+        {ENV.GTM_ID !== "" && <GoogleTagManagerNoScriptTag id={ENV.GTM_ID} />}
       </body>
     </html>
   );

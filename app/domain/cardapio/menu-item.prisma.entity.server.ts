@@ -4,6 +4,7 @@ import {
   MenuItemCost,
   MenuItemLike,
   MenuItemPriceVariation,
+  MenuItemShare,
   MenuItemTag,
   Prisma,
   Tag,
@@ -16,17 +17,24 @@ import { v4 as uuidv4 } from "uuid";
 import items from "./db-mock/items";
 import NodeCache from "node-cache";
 import { menuItemLikePrismaEntity } from "./menu-item-like.prisma.entity.server";
+import cld from "~/lib/cloudinary";
+import { scale } from "@cloudinary/url-gen/actions/resize";
 
 export interface MenuItemWithAssociations extends MenuItem {
   priceVariations: MenuItemPriceVariation[];
   categoryId: string;
   Category: Category;
-  tags?: Tag[];
+  tags?: {
+    all: Tag["name"][];
+    public: Tag["name"][];
+  };
   MenuItemCost: MenuItemCost[];
   MenuItemLike: MenuItemLike[];
+  MenuItemShare: MenuItemShare[];
   likes?: {
     amount: number;
   };
+  shares?: number;
 }
 
 interface MenuItemEntityFindAllProps {
@@ -42,9 +50,23 @@ export class MenuItemPrismaEntity {
   #menuItemQueryIncludes = {
     priceVariations: true,
     Category: true,
-    tags: true,
+    tags: {
+      include: {
+        Tag: {
+          select: {
+            name: true,
+            public: true,
+          },
+        },
+      },
+    },
     MenuItemCost: true,
-    MenuItemLike: true,
+    MenuItemLike: {
+      where: {
+        deletedAt: null,
+      },
+    },
+    MenuItemShare: true,
   };
 
   client;
@@ -56,7 +78,13 @@ export class MenuItemPrismaEntity {
     this.cache = new NodeCache({ stdTTL: 100, checkperiod: 120 }); // TTL in seconds
   }
 
-  async findAll(params: MenuItemEntityFindAllProps = {}) {
+  async findAll(
+    params: MenuItemEntityFindAllProps = {},
+    options = {
+      imageTransform: false,
+      imageScaleWidth: 1280,
+    }
+  ) {
     const cacheKey = `findAll:${JSON.stringify(params)}`;
     let result = this.cache.get<MenuItemWithAssociations[]>(cacheKey);
 
@@ -81,25 +109,27 @@ export class MenuItemPrismaEntity {
       include: this.#menuItemQueryIncludes,
     });
 
-    const tags = await this.client.tag.findMany();
-
-    const records = await Promise.all(
-      recordsFounded.map(async (r) => {
-        const likesAmount = await menuItemLikePrismaEntity.countByMenuItemId(
-          r.id
-        );
-
-        return {
-          ...r,
-          tags:
-            r?.tags?.map((tag) => tags.find((t) => t.id === tag.tagId)) ||
-            ([] as Tag[]),
-          likes: {
-            amount: likesAmount,
-          },
-        };
-      })
-    );
+    const records = recordsFounded.map((r) => {
+      return {
+        ...r,
+        imageURL:
+          cld
+            .image("livhax0d1aiiszxqgpc6") // this is the public id
+            .format("auto")
+            .resize(scale().width(options.imageScaleWidth))
+            .toURL() || null,
+        tags: {
+          all: r.tags.map((t) => t.Tag?.name),
+          public: r.tags
+            .filter((t) => t.Tag?.public === true)
+            .map((t) => t.Tag?.name),
+        },
+        likes: {
+          amount: r.MenuItemLike.length,
+        },
+        shares: r.MenuItemShare.length,
+      };
+    });
 
     let returnedRecords: MenuItemWithAssociations[] = [];
 
@@ -127,17 +157,39 @@ export class MenuItemPrismaEntity {
     return returnedRecords;
   }
 
-  async findById(id: string) {
-    const items = await this.client.menuItem.findUnique({
+  async findById(
+    id: string,
+    options = {
+      imageScaleWidth: 1280,
+    }
+  ) {
+    const item = await this.client.menuItem.findFirst({
       where: { id },
       include: this.#menuItemQueryIncludes,
     });
 
-    const tags = await this.client.tag.findMany();
+    if (!item) {
+      return null;
+    }
 
     return {
-      ...items,
-      tags: items?.tags?.map((tag) => tags.find((t) => t.id === tag.tagId)),
+      ...item,
+      imageURL: cld
+        .image(item.imageURL || "")
+        .format("auto")
+        .quality("auto")
+        .resize(scale().width(options.imageScaleWidth))
+        .toURL(),
+      tags: {
+        all: item.tags.map((t) => t.Tag?.name),
+        public: item.tags
+          .filter((t) => t.Tag?.public === true)
+          .map((t) => t.Tag?.name),
+      },
+      likes: {
+        amount: item.MenuItemLike.length,
+      },
+      shares: item.MenuItemShare.length,
     };
   }
 

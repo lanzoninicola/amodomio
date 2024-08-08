@@ -14,6 +14,8 @@ import Fieldset from "~/components/ui/fieldset"
 import { Textarea } from "~/components/ui/textarea"
 import { MenuItemWithAssociations } from "../../menu-item.prisma.entity.server"
 import useSaveShortcut from "~/hooks/use-save-shortcut.hook"
+import CloudinaryUploadWidget, { CloudinaryImageInfo } from "~/components/cloudinary-upload-widget/cloudinary-upload-widget"
+import { Button } from "~/components/ui/button"
 
 
 export type MenuItemFormAction = "menu-item-create" | "menu-item-update"
@@ -37,7 +39,6 @@ export default function MenuItemForm({ item, action, className, categories }: Me
         if (!submitButtonRef.current) return
         submitButtonRef.current.click()
     }
-
 
     return (
 
@@ -134,21 +135,24 @@ export default function MenuItemForm({ item, action, className, categories }: Me
 
                 <Separator className="mb-4" />
 
-                <div className="grid grid-cols-8 items-center gap-x-4 w-full   ">
 
-                    <div className="col-span-3 flex gap-4 items-center">
-                        <Label htmlFor="imageFile" className="font-semibold text-sm " >Imagem</Label>
-                        <InputImageForm item={item} />
-                    </div>
-                    <div className="col-span-5">
-                        <div className="border p-4 rounded-lg ">
-                            <div className="flex flex-col justify-center gap-2">
-                                <div className="w-24 h-24 bg-muted rounded-lg bg-center bg-no-repeat bg-cover"
-                                    style={{ backgroundImage: `url(${item?.imageBase64 || ""})` }}></div>
-                                <span className="text-[10px] text-muted-foreground">{item?.imageFileName || ""}</span>
+                <div className="flex flex-col gap-2">
+                    <Label htmlFor="imageFile" className="font-semibold text-sm " >Imagem</Label>
+                    <div className="grid grid-cols-8 items-center gap-x-4 w-full   ">
+                        <div className="col-span-2 flex gap-4 items-center">
+                            <ImageUploader />
+                        </div>
+                        <div className="col-span-6">
+                            <div className="border p-4 rounded-lg ">
+                                {/* <div className="flex flex-col justify-center gap-2">
+                                    <div className="w-24 h-24 bg-muted rounded-lg bg-center bg-no-repeat bg-cover"
+                                        style={{ backgroundImage: `url(${item?.imageURL || ""})` }}></div>
+                                    <span className="text-[10px] text-muted-foreground">{item?.imageFileName || ""}</span>
+                                </div> */}
                             </div>
                         </div>
                     </div>
+
                 </div>
 
                 <section className="flex flex-col">
@@ -168,10 +172,6 @@ export default function MenuItemForm({ item, action, className, categories }: Me
 
 
                 </section>
-
-
-
-
 
                 <Separator className="my-4" />
 
@@ -197,63 +197,65 @@ export default function MenuItemForm({ item, action, className, categories }: Me
                         <DeleteItemButton actionName="menu-item-delete" label="Deletar" />
                     )}
                 </div>
-
-
-
             </Form>
-
-
-
-
-
         </div>
 
     )
 }
 
-interface InputImageFormProps {
-    item?: MenuItemWithAssociations
-}
-
-export function InputImageForm({ item }: InputImageFormProps) {
-    const [imageBase64, setImageBase64] = useState<string>(item?.imageBase64 || "")
 
 
-    const [currentFile, setCurrentFile] = useState<File>()
-    const [currentFileName, setCurrentFileName] = useState<string>(item?.imageFileName || "")
 
+export function ImageUploader() {
+    const [info, updateInfo] = useState<CloudinaryImageInfo | null>(null);
+    const [error, updateError] = useState();
 
-    const onChangeImageFile = (e: ChangeEvent<HTMLInputElement>) => {
-        if (!e.target.files) return
-        const file = e.target.files[0]
-        if (!file) return
-        const fileName = file.name
-
-
-        setCurrentFile(file)
-        setCurrentFileName(fileName)
-
-
-        const reader = new FileReader()
-        reader.onload = (event) => {
-            if (!event.target) return
-            const base64 = event.target.result
-            if (!base64) return
-            setImageBase64(base64.toString())
+    // @ts-ignore
+    function handleOnUpload(error, result, widget) {
+        if (error) {
+            updateError(error);
+            widget.close({
+                quiet: true,
+            });
+            return;
         }
-        reader.readAsDataURL(file)
+
+        console.log({ result })
+
+        const info = result?.info
+
+        updateInfo({
+            secureUrl: info.secure_url,
+            assetFolder: info.asset_folder,
+            originalFileName: info.original_filename,
+            displayName: info.display_name,
+            height: info.height,
+            width: info.width,
+            thumbnailUrl: info.thumbnail_url,
+            format: info.format,
+        });
     }
-
-
 
     return (
         <>
-            <Input id="imageFile" name="imageFileName" type="file" className="col-span-6"
-                onChange={onChangeImageFile}
-            />
-            <input type="hidden" name="imageBase64" defaultValue={imageBase64} />
-        </>
+            <input type="hidden" id="url" name="url" defaultValue={info?.secureUrl ?? ""} />
+            <input type="hidden" id="assetFolder" name="assetFolder" defaultValue={info?.assetFolder ?? ""} />
+            <input type="hidden" id="originalFileName" name="originalFileName" defaultValue={info?.originalFileName ?? ""} />
+            <input type="hidden" id="displayName" name="displayName" defaultValue={info?.displayName ?? ""} />
+            <input type="hidden" id="height" name="height" defaultValue={info?.height ?? ""} />
+            <input type="hidden" id="width" name="width" defaultValue={info?.width ?? ""} />
+            <input type="hidden" id="thumbnailUrl" name="thumbnailUrl" defaultValue={info?.thumbnailUrl ?? ""} />
 
+            <CloudinaryUploadWidget presetName="admin-cardapio" onUpload={handleOnUpload}>
+
+                {
+                    // @ts-ignore
+                    ({ open }) => {
+                        return <Button onClick={open}>Upload Image</Button>;
+                    }
+                }
+            </CloudinaryUploadWidget>
+        </>
     )
 }
 
