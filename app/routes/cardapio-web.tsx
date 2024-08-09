@@ -70,7 +70,7 @@ export async function loader({ request }: LoaderArgs) {
         // mock: env === "development"
     }, {
         imageTransform: true,
-        imageScaleWidth: 650
+        imageScaleWidth: 375
     }))
 
 

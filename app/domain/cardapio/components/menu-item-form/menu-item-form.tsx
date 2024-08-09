@@ -149,7 +149,7 @@ export default function MenuItemForm({ item, action, className, categories }: Me
                             <div className="border p-4 rounded-lg ">
                                 <div className="flex flex-col justify-center gap-2">
                                     <div className="w-24 h-24 bg-muted rounded-lg bg-center bg-no-repeat bg-cover"
-                                        style={{ backgroundImage: `url(${item?.MenuItemImage.thumbnailUrl || ""})` }}></div>
+                                        style={{ backgroundImage: `url(${item?.MenuItemImage?.thumbnailUrl || ""})` }}></div>
                                 </div>
                             </div>
                         </div>
