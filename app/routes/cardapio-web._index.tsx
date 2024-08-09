@@ -109,7 +109,7 @@ export default function CardapioWebIndex() {
                 <LayoutList />
 
             </div> */}
-            <ul className="flex flex-col overflow-y-scroll md:overflow-y-z  auto snap-mandatory">
+            <ul className="flex flex-col overflow-y-auto md:overflow-y-z  auto snap-mandatory">
                 {items.map((item, index) => {
                     if (items.length === index + 1) {
                         return <CardapioItem ref={lastItemRef} key={item.id} item={item} />;
@@ -162,7 +162,7 @@ const CardapioItemImage = ({ item }: CardapioItemImageProps) => {
     return (
         <div className="relative">
             <img
-                src={item.imageBase64 || "/images/cardapio-web-app/placeholder.png"}
+                src={item.imageTransformedURL || "/images/cardapio-web-app/placeholder.png"}
                 alt={item.name}
                 loading="lazy"
                 className="w-full max-h-[250px] object-cover object-center"

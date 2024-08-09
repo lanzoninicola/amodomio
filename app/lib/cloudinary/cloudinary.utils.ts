@@ -1,5 +1,5 @@
 import { scale } from "@cloudinary/url-gen/actions/resize";
-import cld from "./cloudinary.client";
+import cld from "./cloudinary-client";
 import { CloudinaryImageInfo } from "./cloudinary.types";
 
 export default class CloudinaryUtils {
