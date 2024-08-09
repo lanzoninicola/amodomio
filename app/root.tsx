@@ -1,4 +1,4 @@
-import type { LinkDescriptor, LinksFunction, V2_MetaFunction } from "@remix-run/node";
+import type { LinkDescriptor, LinksFunction, LoaderArgs, V2_MetaFunction } from "@remix-run/node";
 import {
   Links,
   LiveReload,
@@ -7,6 +7,7 @@ import {
   Scripts,
   ScrollRestoration,
   isRouteErrorResponse,
+  useLoaderData,
   useRouteError,
 } from "@remix-run/react";
 import { Toaster } from "./components/ui/toaster";
@@ -15,6 +16,7 @@ import { cssBundleHref } from "@remix-run/css-bundle";
 import GoogleTagManagerScriptTag from "./components/primitives/google-tag-manager/gtm-script";
 import GoogleTagManagerNoScriptTag from "./components/primitives/google-tag-manager/gtm-noscript";
 import { Analytics } from '@vercel/analytics/react';
+import { ok } from "./utils/http-response.server";
 
 export const meta: V2_MetaFunction = () => {
   return [
@@ -104,26 +106,49 @@ export const links: LinksFunction = () => [
 
 ];
 
-const GTM_ID = process.env.GOOGLE_TAG_MANAGER_ID
+interface EnvironmentVariables {
+
+  GTM_ID: string
+  CLOUDINARY_CLOUD_NAME: string
+}
+
+
+export async function loader({ request }: LoaderArgs) {
+
+  const ENV: EnvironmentVariables = {
+    GTM_ID: process?.env.GOOGLE_TAG_MANAGER_ID ?? "",
+    CLOUDINARY_CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME ?? "",
+  }
+
+  return ok({
+    env: ENV
+  })
+}
 
 export default function App() {
+  const loaderData = useLoaderData<typeof loader>()
+  const ENV: EnvironmentVariables = loaderData?.payload?.env
+
+
+
   return (
-    <html lang="en" className="scroll-smooth">
+    <html lang="pt-br" className="scroll-smooth">
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width,initial-scale=1" />
         <Meta />
         <Links />
-        <GoogleTagManagerScriptTag id={GTM_ID} />
+        {ENV.GTM_ID !== "" && <GoogleTagManagerScriptTag id={ENV.GTM_ID} />}
       </head>
       <body>
-        <GoogleTagManagerNoScriptTag id={GTM_ID} />
+        <script src="https://upload-widget.cloudinary.com/latest/global/all.js" type="text/javascript" />
         <Outlet />
         <Toaster />
         <ScrollRestoration />
         <Scripts />
         <LiveReload />
         <Analytics />
+        {ENV.GTM_ID !== "" && <GoogleTagManagerNoScriptTag id={ENV.GTM_ID} />}
       </body>
     </html>
   );

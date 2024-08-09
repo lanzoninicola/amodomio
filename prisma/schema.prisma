@@ -134,31 +134,49 @@ model SubCategory {
 }
 
 model MenuItem {
-  id                 String                   @id @default(uuid())
-  name               String
-  description        String
-  ingredients        String
-  categoryId         String                   @map("category_id")
-  Category           Category                 @relation(fields: [categoryId], references: [id])
-  basePriceAmount    Float                    @map("base_price_amount")
-  priceVariations    MenuItemPriceVariation[]
-  imageFileName      String?                  @map("image_file_name")
-  imageBase64        String?                  @map("image_base64")
-  imageFileNameThumb String?                  @map("image_file_name_thumb")
-  imageBase64Thumb   String?                  @map("image_base64_thumb")
-  imageFileNameIcon  String?                  @map("image_file_name_icon")
-  imageBase64Icon    String?                  @map("image_base64_icon")
-  visible            Boolean
-  mogoId             String                   @map("mogo_id")
-  createdAt          DateTime                 @map("created_at")
-  updatedAt          DateTime                 @default(now()) @updatedAt @map("updated_at")
-  tags               MenuItemTag[]
+  id              String                   @id @default(uuid())
+  name            String
+  description     String
+  ingredients     String
+  categoryId      String                   @map("category_id")
+  Category        Category                 @relation(fields: [categoryId], references: [id])
+  basePriceAmount Float                    @map("base_price_amount")
+  priceVariations MenuItemPriceVariation[]
+  visible         Boolean
+  mogoId          String                   @map("mogo_id")
+  createdAt       DateTime                 @map("created_at")
+  updatedAt       DateTime                 @default(now()) @updatedAt @map("updated_at")
+  tags            MenuItemTag[]
   /// this track the position inside the menu
-  sortOrderIndex     Int                      @default(0) @map("sort_order_index")
-  MenuItemLike       MenuItemLike[]
-  MenuItemCost       MenuItemCost[]
+  sortOrderIndex  Int                      @default(0) @map("sort_order_index")
+  notesPublic     String?                  @map("note_public")
+  MenuItemLike    MenuItemLike[]
+  MenuItemShare   MenuItemShare[]
+  MenuItemCost    MenuItemCost[]
+  imageId         String?                  @map("image_id")
+  MenuItemImage   MenuItemImage?           @relation(fields: [imageId], references: [id])
 
   @@map("menu_items")
+}
+
+model MenuItemImage {
+  id               String     @id @default(uuid())
+  /// "secure_url": "https://res.cloudinary.com/dy8gw8ahl/image/upload/v1723138046/rvife3elpmmjojlnwypm.jpg",
+  secureUrl        String?    @map("secure_url")
+  /// "asset_folder": "cardapio"
+  assetFolder      String?    @map("asset_folder")
+  originalFileName String?    @map("original_file_name")
+  /// "display_name": "margherita"
+  displayName      String?    @map("display_name")
+  height           Float?     @map("height")
+  width            Float?     @map("width")
+  /// "thumbnail_url": "https://res.cloudinary.com/dy8gw8ahl/image/upload/c_limit,h_60,w_90/v1723138046/rvife3elpmmjojlnwypm.jpg"
+  thumbnailUrl     String?    @map("thumbnail_url")
+  format           String?    @map("format")
+  publicId         String?    @map("public_id")
+  MenuItem         MenuItem[]
+
+  @@map("menu_items_image")
 }
 
 model MenuItemPriceVariation {
@@ -173,6 +191,8 @@ model MenuItemPriceVariation {
   showOnCardapioAt   DateTime? @map("show_on_cardapio_at")
   createdAt          DateTime  @map("created_at")
   updatedAt          DateTime  @default(now()) @updatedAt @map("updated_at")
+  updatedBy          String?   @map("updated_by")
+  latestAmount       Float     @default(0)
 
   @@map("menu_item_price_variations")
 }
@@ -199,6 +219,18 @@ model MenuItemLike {
   deletedAt  DateTime? @map("deleted_at")
 
   @@map("menu_item_likes")
+}
+
+model MenuItemShare {
+  id         String    @id @default(uuid())
+  MenuItem   MenuItem? @relation(fields: [menuItemId], references: [id])
+  menuItemId String?   @map("menu_item_id")
+  sessionId  String?   @map("session_id")
+  Session    Session?  @relation(fields: [sessionId], references: [id])
+  createdAt  DateTime  @map("created_at")
+  updatedAt  DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  @@map("menu_item_shares")
 }
 
 /// here we can manage: featured (recommended), vegetarian, kids, meat
@@ -267,12 +299,13 @@ model MogoOrdersInbound {
 }
 
 model Session {
-  id           String         @id @default(uuid())
-  userId       String?        @map("user_id")
-  payload      String?
-  createdAt    DateTime       @map("created_at")
-  updatedAt    DateTime       @default(now()) @updatedAt @map("updated_at")
-  MenuItemLike MenuItemLike[]
+  id            String          @id @default(uuid())
+  userId        String?         @map("user_id")
+  payload       String?
+  createdAt     DateTime        @map("created_at")
+  updatedAt     DateTime        @default(now()) @updatedAt @map("updated_at")
+  MenuItemLike  MenuItemLike[]
+  MenuItemShare MenuItemShare[]
 
   @@map("sessions")
 }

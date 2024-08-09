@@ -14,6 +14,7 @@ import { menuItemTagPrismaEntity } from "~/domain/cardapio/menu-item-tags.prisma
 import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { tagPrismaEntity } from "~/domain/tags/tag.prisma.entity.server";
 import { WebsiteNavigationSidebar } from "~/domain/website-navigation/components/website-navigation-sidebar";
+import GLOBAL_LINKS from "~/domain/website-navigation/global-links.constant";
 import PUBLIC_WEBSITE_NAVIGATION_ITEMS from "~/domain/website-navigation/public/public-website.nav-links";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { badRequest, ok } from "~/utils/http-response.server";
@@ -39,9 +40,16 @@ export interface CardapioOutletContext {
     items: MenuItemWithAssociations[]
 }
 
-export const meta: V2_MetaFunction = () => {
+export const meta: V2_MetaFunction = ({ data }) => {
     return [
         { title: "Cardápio A Modo Mio - Pizzaria Italiana em Pato Branco" },
+        { name: "description", content: "É a pizza! Italiana! Um sabor que você nunca experimentou! Descubra no nosso cardápio as melhores pizzas da cidade. Experimente e saboreie a verdadeira italianidade em Pato Branco." },
+        { name: "og:title", content: "Cardápio A Modo Mio - Pizzaria Italiana em Pato Branco" },
+        { name: "og:description", content: "É a pizza! Italiana! Um sabor que nunca experimentou! Descubra no nosso cardápio as melhores pizzas da cidade. Experimente e saboreie a verdadeira italianidade em Pato Branco." },
+        { name: "og:image", content: "https://www.amodomio.com.br/images/cardapio_og_image.jpg" },
+        { name: "og:url", content: "https://www.amodomio.com.br/cardapio" },
+        { name: "og:site_name", content: "Cardápio A Modo Mio - Pizzaria Italiana em Pato Branco" },
+        { name: "og:type", content: "website" },
     ];
 };
 
@@ -194,7 +202,7 @@ function CardapioFooter() {
         <footer className="py-6 px-2 fixed bottom-0 w-screen md:max-w-2xl md:-translate-x-1/2 md:left-1/2 ">
             {/* <Separator className="my-4" /> */}
             <div className="px-2 w-full">
-                <ExternalLink to="https://app.mogomenu.com.br/amodomio"
+                <ExternalLink to={GLOBAL_LINKS.mogoCardapio.href}
                     ariaLabel="Cardápio digital pizzaria A Modo Mio"
                     className="flex justify-between font-body-website rounded-sm bg-green-400 py-2 px-4"
                 >

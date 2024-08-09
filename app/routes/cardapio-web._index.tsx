@@ -11,6 +11,8 @@ import { CardapioOutletContext } from "./cardapio-web";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { menuItemLikePrismaEntity } from "~/domain/cardapio/menu-item-like.prisma.entity.server";
 import { badRequest, ok } from "~/utils/http-response.server";
+import { menuItemSharePrismaEntity } from "~/domain/cardapio/menu-item-share.prisma.entity.server";
+import GLOBAL_LINKS from "~/domain/website-navigation/global-links.constant";
 
 export const headers: HeadersFunction = () => ({
     'Cache-Control': 's-maxage=1, stale-while-revalidate=59',
@@ -46,6 +48,32 @@ export async function action({ request }: ActionArgs) {
 
         return ok({
             action: "menu-item-like-it",
+            likeAmount
+        })
+
+    }
+
+    if (values?.action === "menu-item-share-it") {
+        const itemId = values?.itemId as string
+
+        const [err, likeAmount] = await prismaIt(menuItemSharePrismaEntity.create({
+            createdAt: new Date().toISOString(),
+            MenuItem: {
+                connect: {
+                    id: itemId,
+                },
+            }
+        }));
+
+        if (err) {
+            return badRequest({
+                action: "menu-item-share-it",
+                likeAmount
+            })
+        }
+
+        return ok({
+            action: "menu-item-share-it",
             likeAmount
         })
 
@@ -107,7 +135,7 @@ const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) =>
                 <CardapioItemPrice prices={item?.priceVariations} />
             </div>
         </div>
-        <div className="flex flex-col px-4 mb-4">
+        <div className="flex flex-col px-4 mb-2">
             <h3 className="font-body-website text-sm font-semibold uppercase mb-2">{item.name}</h3>
             <p className="font-body-website leading-tight">{item.ingredients}</p>
         </div>
@@ -202,38 +230,59 @@ function CardapioItemActionBar({ item }: { item: MenuItemWithAssociations }) {
             },
             { method: 'post' }
         );
-
-
-
     };
+
+    const shareIt = () => {
+        if (!navigator?.share) {
+            console.log("Navegador não suporta o compartilhamento")
+            return
+        }
+
+        const text = `Essa pizza ${item.name} é a melhor pizza da cidade. Experimente...`
+        navigator.share({
+            title: item.name,
+            text,
+            url: `${GLOBAL_LINKS.cardapioPublic}/#${item.id}`
+        }).then(() => {
+
+            fetcher.submit(
+                {
+                    action: "menu-item-share-it",
+                    itemId: item.id,
+                },
+                { method: 'post' }
+            );
+
+        }).catch((error) => {
+        })
+    }
+
 
 
 
     return (
         <div className="flex flex-col gap-0">
-            <div className="grid grid-cols-8 font-body-website px-4 mb-1">
-                <div className="flex flex-col gap-1 cursor-pointer" onClick={likingIt}>
-                    <Heart
-                        className={cn(
-                            likeIt ? "fill-red-500" : "fill-none",
-                            likeIt ? "stroke-red-500" : "stroke-black",
-                            item.likes?.amount && item.likes?.amount > 0 ? "stroke-red-500" : "stroke-black"
-                        )}
-                    />
+            <div className="grid grid-cols-2 font-body-website px-4 mb-1">
+                <div className="flex items-center">
+                    <div className="flex flex-col gap-1 cursor-pointer p-2 active:bg-brand-blue/50" onClick={likingIt}>
+                        <Heart
+                            className={cn(
+                                likeIt ? "fill-red-500" : "fill-none",
+                                likeIt ? "stroke-red-500" : "stroke-black",
+                                item.likes?.amount && item.likes?.amount > 0 ? "stroke-red-500" : "stroke-black"
+                            )}
+                        />
+                    </div>
+                    <div className="flex flex-col gap-1 cursor-pointer p-2 active:bg-brand-blue/50 " onClick={shareIt}>
+                        <Share2 />
+                    </div>
                 </div>
-                <WhatsappExternalLink
-                    phoneNumber=""
-                    ariaLabel="Envia uma mensagem com WhatsApp"
-                    message={"Essa é a melhor pizzaria da cidade. Experimente..."}
-                    className="flex flex-col gap-1 cursor-pointer"
-                >
-                    <Share2 />
-                </WhatsappExternalLink>
+
                 <WhatsappExternalLink
                     phoneNumber="46991272525"
                     ariaLabel="Envia uma mensagem com WhatsApp"
                     message={"Olá, gostaria fazer um pedido"}
-                    className="flex flex-col gap-1 items-end col-span-6 "
+                    className="flex flex-col gap-1 items-end cursor-pointer p-2 active:bg-brand-blue/50"
                 >
                     <WhatsAppIcon color="black" />
                 </WhatsappExternalLink>

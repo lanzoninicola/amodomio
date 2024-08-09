@@ -60,8 +60,13 @@ export default function MenuItemCard({ item, dragAndDrop }: MenuItemCardProps) {
             <div className="flex flex-col gap-2">
                 <section className="grid grid-cols-12 items-center w-full">
 
-                    <div className="w-16 h-16 bg-muted rounded-lg bg-center bg-no-repeat bg-cover col-span-1"
-                        style={{ backgroundImage: `url(${item?.imageBase64 || ""})` }}></div>
+                    <div className="w-16 h-16 bg-muted rounded-lg bg-center bg-no-repeat bg-cover col-span-1">
+                        {item?.MenuItemImage?.thumbnailUrl ?
+                            <img src={item?.MenuItemImage?.thumbnailUrl} alt={`Imagem so sabor ${item?.name}`} className="w-full h-full object-cover rounded-lg" />
+                            :
+                            <div className="w-full h-full bg-muted rounded-lg" />
+                        }
+                    </div>
                     <div className="flex items-center col-span-3 gap-2">
                         <div className="flex flex-col gap-0">
                             <h4 className="text-lg font-bold tracking-tight">

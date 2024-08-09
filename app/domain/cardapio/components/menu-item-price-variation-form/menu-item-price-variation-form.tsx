@@ -1,16 +1,16 @@
 import { MenuItemPriceVariation } from "@prisma/client"
-import { Separator } from "@radix-ui/react-separator"
-import { Form, useSubmit } from "@remix-run/react"
+import { Form } from "@remix-run/react"
 import SaveItemButton from "~/components/primitives/table-list/action-buttons/save-item-button/save-item-button"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import { cn } from "~/lib/utils"
-import { MenuItemFormAction } from "../menu-item-form/menu-item-form"
 import { useEffect, useState } from "react"
 import { mapPriceVariationsLabel, suggestPriceVariations } from "../../fn.utils"
 import { MenuItemPriceVariationLabel } from "../../menu-item-price-variations.prisma.entity.server"
 import { Switch } from "~/components/ui/switch"
-import Fieldset from "~/components/ui/fieldset"
+import { formatDate } from "date-fns"
+import { jsonStringify } from "~/utils/json-helper"
+import { Separator } from "~/components/ui/separator"
 
 export type MenuItemPriceVariationFormAction = "menu-item-price-variation-update" | "menu-item-price-variation-create"
 
@@ -18,12 +18,12 @@ export type MenuItemPriceVariationFormAction = "menu-item-price-variation-update
 
 interface MenuItemPriceVariationFormProps {
     action: MenuItemPriceVariationFormAction,
-    price: Omit<MenuItemPriceVariation, "createdAt" | "updatedAt" | "menuItemId">
+    price: Omit<MenuItemPriceVariation, "createdAt" | "menuItemId">
     basePrice: number
+    loggedUser?: string
 }
 
-export default function MenuItemPriceVariationForm({ action, price, basePrice }: MenuItemPriceVariationFormProps) {
-
+export default function MenuItemPriceVariationForm({ action, price, basePrice, loggedUser }: MenuItemPriceVariationFormProps) {
     const [variationPriceAmount, setVariationPrice] = useState(price.amount)
     const [suggestedPrice, setSuggestedPrice] = useState(0)
 
@@ -39,20 +39,23 @@ export default function MenuItemPriceVariationForm({ action, price, basePrice }:
     }, [basePrice])
 
     return (
-        <Form method="post" key={price.id} className="flex items-center gap-x-4 px-1
-            hover:border-l-2 hover:border-l-muted-foreground
-        ">
+        <Form method="post">
 
-            <div className="grid grid-cols-8 items-center w-full" >
+            <div className="grid grid-cols-8 items-center w-full p-2 hover:bg-muted" >
                 <input type="hidden" name="id" defaultValue={price.id} />
+                <input type="hidden" name="latestAmount" defaultValue={price.amount} />
+                <input type="hidden" name="updatedBy" defaultValue={jsonStringify(loggedUser)} />
 
-                <Label className="tracking-tight text-xs font-semibold col-span-2">
-                    {`Tamanho ${mapPriceVariationsLabel(price.label)}`}
-                </Label>
 
-                <div className="flex flex-col gap-1 col-span-5">
-                    <div className="grid grid-cols-4 gap-x-4">
+                <div className="flex flex-col gap-1 col-span-2">
+                    <Label className="tracking-tight text-xs font-semibold ">
+                        {`Tamanho ${mapPriceVariationsLabel(price.label)}`}
+                    </Label>
 
+                </div>
+
+                <div className="flex flex-col gap-1 col-span-6">
+                    <div className="grid grid-cols-6 gap-x-4">
 
                         <div className="flex flex-col gap-0">
                             <Label className="text-xs text-muted-foreground tracking-tight font-semibold">Preço (R$)</Label>
@@ -85,11 +88,23 @@ export default function MenuItemPriceVariationForm({ action, price, basePrice }:
                             />
                         </div>
 
-                        <div className="flex flex-col gap-0">
-                            <Label htmlFor="showOnCardapio" className="text-xs text-muted-foreground tracking-tight font-semibold">Visualizar no cardápio</Label>
+                        <div className="flex flex-col gap-0 col-span-1 items-center">
+                            <Label htmlFor="showOnCardapio" className="text-xs text-muted-foreground tracking-tight font-semibold">Publicar</Label>
                             <Switch id="showOnCardapio" name="showOnCardapio" defaultChecked={price?.showOnCardapio || false} />
                         </div>
 
+                        <div className="flex flex-col gap-0 col-span-2">
+                            <Label className="text-xs text-muted-foreground tracking-tight font-semibold">Atualizações</Label>
+
+                            <div className="flex flex-col gap-0">
+                                <span className="text-xs text-muted-foreground"
+                                >{`Data: ${formatDate(price.updatedAt, "dd/MM/yyyy HH:mm")}`}</span>
+                                <span className="text-xs text-muted-foreground"
+                                >{`Por: ${price.updatedBy || ""}`}</span>
+                                <span className="text-xs text-muted-foreground"
+                                >{`Ultimo preço: ${price.latestAmount || ""}`}</span>
+                            </div>
+                        </div>
 
                         <SaveItemButton actionName={'menu-item-price-variation-update'}
                             className="mt-2" labelClassName="text-xs" variant={"outline"}
@@ -102,6 +117,8 @@ export default function MenuItemPriceVariationForm({ action, price, basePrice }:
                     >{`Sugerido: ${suggestedPrice.toFixed(2) || "0"}`}</span>
                 </div>
             </div>
+
+            <Separator />
 
         </Form >
     )
