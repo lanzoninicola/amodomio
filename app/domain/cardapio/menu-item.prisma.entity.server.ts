@@ -16,7 +16,8 @@ import MenuItemPriceVariationUtility from "./menu-item-price-variations-utility"
 import { v4 as uuidv4 } from "uuid";
 import items from "./db-mock/items";
 import NodeCache from "node-cache";
-import { CloudinaryUtils } from "~/lib/cloudinary";
+import { CloudinaryUtils, cld } from "~/lib/cloudinary";
+import { scale } from "@cloudinary/url-gen/actions/resize";
 
 export interface MenuItemWithAssociations extends MenuItem {
   priceVariations: MenuItemPriceVariation[];
@@ -112,7 +113,15 @@ export class MenuItemPrismaEntity {
     const records = recordsFounded.map((r) => {
       return {
         ...r,
-        imageURL: "",
+        // imageURL:
+        //   cld
+        //     .image(r.MenuItemImage?.publicId || undefined) // this is the public id
+        //     .format("auto")
+        //     .resize(scale().width(options.imageScaleWidth))
+        //     .toURL() || null,
+        // imageURL: CloudinaryUtils.scaleWidth(r.MenuItemImage?.publicId || "", {
+        //   width: options.imageScaleWidth,
+        // }),
         tags: {
           all: r.tags.map((t) => t.Tag?.name),
           public: r.tags

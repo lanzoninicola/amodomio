@@ -68,6 +68,9 @@ export async function loader({ request }: LoaderArgs) {
             direction: "asc"
         },
         // mock: env === "development"
+    }, {
+        imageTransform: true,
+        imageScaleWidth: 650
     }))
 
 
@@ -123,7 +126,7 @@ export default function CardapioWeb() {
                     </div>
                     <div className="grid grid-cols-3 gap-x-4">
 
-                        <Link to={"https://www.instagram.com/amodomiopb/"} aria-label="Instagram" className="flex items-center justify-center gap-1 rounded-lg bg-muted py-1">
+                        <Link to={GLOBAL_LINKS.instagram.href} aria-label={GLOBAL_LINKS.instagram.title} className="flex items-center justify-center gap-1 rounded-lg bg-muted py-1">
                             <Instagram />
                             <span className="font-semibold text-xs">Instagram</span>
                         </Link>
@@ -136,7 +139,7 @@ export default function CardapioWeb() {
                             <WhatsAppIcon color="black" />
                             <span className="font-semibold text-xs">WhatsApp</span>
                         </WhatsappExternalLink>
-                        <Link to={"https://maps.app.goo.gl/J85EdGuxNzhe4n8R7/"} aria-label="Maps" className="flex items-center justify-center gap-1 rounded-lg bg-muted py-1">
+                        <Link to={GLOBAL_LINKS.maps.href} aria-label={GLOBAL_LINKS.maps.title} className="flex items-center justify-center gap-1 rounded-lg bg-muted py-1">
                             <MapPin />
                             <span className="font-semibold text-xs">Maps</span>
                         </Link>
@@ -237,7 +240,7 @@ function CardapioSearch({ items, setShowSearch }: {
             item.name.toLowerCase().includes(value) ||
             item.ingredients.toLowerCase().includes(value) ||
             item.description.toLowerCase().includes(value) ||
-            (item.tags && item.tags.filter(tag => tag.name.toLowerCase().includes(value)).length > 0)
+            (item.tags?.public && item.tags?.public.filter(tag => tag.toLowerCase().includes(value)).length > 0)
         );
 
 
@@ -265,7 +268,7 @@ function CardapioSearch({ items, setShowSearch }: {
                                 >
                                     <div className="bg-center bg-cover bg-no-repeat w-8 h-8 rounded-lg col-span-1 "
                                         style={{
-                                            backgroundImage: `url(${item.imageBase64 || "/images/cardapio-web-app/placeholder.png"})`,
+                                            backgroundImage: `url(${item.MenuItemImage.secureUrl || "/images/cardapio-web-app/placeholder.png"})`,
                                         }}></div>
                                     <div className="flex flex-col col-span-7">
                                         <span className="font-body-website text-[0.65rem] font-semibold leading-tight uppercase">{item.name}</span>
