@@ -14,8 +14,9 @@ import Fieldset from "~/components/ui/fieldset"
 import { Textarea } from "~/components/ui/textarea"
 import { MenuItemWithAssociations } from "../../menu-item.prisma.entity.server"
 import useSaveShortcut from "~/hooks/use-save-shortcut.hook"
-import CloudinaryUploadWidget, { CloudinaryImageInfo } from "~/components/cloudinary-upload-widget/cloudinary-upload-widget"
 import { Button } from "~/components/ui/button"
+import { CloudinaryImageInfo, CloudinaryUploadWidget, CloudinaryUtils } from "~/lib/cloudinary"
+import { jsonStringify } from "~/utils/json-helper"
 
 
 export type MenuItemFormAction = "menu-item-create" | "menu-item-update"
@@ -29,6 +30,8 @@ interface MenuItemFormProps {
 
 export default function MenuItemForm({ item, action, className, categories }: MenuItemFormProps) {
     const [currentBasePrice, setCurrentBasePrice] = useState(item?.basePriceAmount || 0)
+
+    console.log({ item })
 
 
 
@@ -144,11 +147,10 @@ export default function MenuItemForm({ item, action, className, categories }: Me
                         </div>
                         <div className="col-span-6">
                             <div className="border p-4 rounded-lg ">
-                                {/* <div className="flex flex-col justify-center gap-2">
+                                <div className="flex flex-col justify-center gap-2">
                                     <div className="w-24 h-24 bg-muted rounded-lg bg-center bg-no-repeat bg-cover"
-                                        style={{ backgroundImage: `url(${item?.imageURL || ""})` }}></div>
-                                    <span className="text-[10px] text-muted-foreground">{item?.imageFileName || ""}</span>
-                                </div> */}
+                                        style={{ backgroundImage: `url(${item?.MenuItemImage.thumbnailUrl || ""})` }}></div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -220,8 +222,6 @@ export function ImageUploader() {
             return;
         }
 
-        console.log({ result })
-
         const info = result?.info
 
         updateInfo({
@@ -233,18 +233,14 @@ export function ImageUploader() {
             width: info.width,
             thumbnailUrl: info.thumbnail_url,
             format: info.format,
+            publicId: info.public_id
         });
+
     }
 
     return (
         <>
-            <input type="hidden" id="url" name="url" defaultValue={info?.secureUrl ?? ""} />
-            <input type="hidden" id="assetFolder" name="assetFolder" defaultValue={info?.assetFolder ?? ""} />
-            <input type="hidden" id="originalFileName" name="originalFileName" defaultValue={info?.originalFileName ?? ""} />
-            <input type="hidden" id="displayName" name="displayName" defaultValue={info?.displayName ?? ""} />
-            <input type="hidden" id="height" name="height" defaultValue={info?.height ?? ""} />
-            <input type="hidden" id="width" name="width" defaultValue={info?.width ?? ""} />
-            <input type="hidden" id="thumbnailUrl" name="thumbnailUrl" defaultValue={info?.thumbnailUrl ?? ""} />
+            <input type="hidden" id="imageInfo" name="imageInfo" defaultValue={jsonStringify(info ?? "")} />
 
             <CloudinaryUploadWidget presetName="admin-cardapio" onUpload={handleOnUpload}>
 

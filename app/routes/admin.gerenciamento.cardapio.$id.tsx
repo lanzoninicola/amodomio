@@ -24,39 +24,39 @@ const navigation = [
 
 
 
-export async function loader({ request }: LoaderArgs) {
-    const itemId = urlAt(request.url, -2)
+// export async function loader({ request }: LoaderArgs) {
+//     const itemId = urlAt(request.url, -2)
 
-    if (!itemId) {
-        return badRequest("Nenhum item encontrado");
-    }
+//     if (!itemId) {
+//         return badRequest("Nenhum item encontrado");
+//     }
 
-    const [err, item] = await prismaIt(menuItemPrismaEntity.findById(itemId));
+//     const [err, item] = await prismaIt(menuItemPrismaEntity.findById(itemId));
 
 
-    if (err) {
-        return serverError(err);
-    }
+//     if (err) {
+//         return badRequest(err);
+//     }
 
-    return ok({ item })
+//     return ok({ item })
 
-}
+// }
 
 
 export default function SingleCardapioItem() {
 
-    const loaderData = useLoaderData<typeof loader>()
-    const item = loaderData.payload?.item
+    // const loaderData = useLoaderData<typeof loader>()
+    // const item = loaderData.payload?.item
 
     const location = useLocation()
     const activeTab = lastUrlSegment(location.pathname)
 
-    if (loaderData.status > 399) {
-        toast({
-            title: "Erro",
-            description: loaderData.message,
-        })
-    }
+    // if (loaderData.status > 399) {
+    //     toast({
+    //         title: "Erro",
+    //         description: loaderData.message,
+    //     })
+    // }
 
 
     return (
@@ -68,7 +68,7 @@ export default function SingleCardapioItem() {
                     display: 'table'
                 }}>
                     <div className="flex justify-between">
-                        <h1 className="text-2xl font-semibold text-muted-foreground col-span-2">{item?.name}</h1>
+                        {/* <h1 className="text-2xl font-semibold text-muted-foreground col-span-2">{item?.name}</h1> */}
                         <div className="flex items-center col-span-6">
 
                             {

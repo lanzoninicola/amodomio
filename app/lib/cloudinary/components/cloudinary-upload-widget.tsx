@@ -1,16 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useEnv } from "~/hooks/use-env";
 
-export interface CloudinaryImageInfo {
-    secureUrl: string
-    assetFolder: string
-    originalFileName: string
-    displayName: string
-    height: number
-    width: number
-    thumbnailUrl: string
-    format: string
-}
+
 
 let cloudinary = null;
 

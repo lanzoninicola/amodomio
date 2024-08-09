@@ -161,18 +161,19 @@ model MenuItem {
 
 model MenuItemImage {
   id               String     @id @default(uuid())
-  /// "url": "http://res.cloudinary.com/dy8gw8ahl/image/upload/v1723138046/rvife3elpmmjojlnwypm.jpg",
-  url              String?    @map("url")
+  /// "secure_url": "https://res.cloudinary.com/dy8gw8ahl/image/upload/v1723138046/rvife3elpmmjojlnwypm.jpg",
+  secureUrl        String?    @map("secure_url")
   /// "asset_folder": "cardapio"
   assetFolder      String?    @map("asset_folder")
   originalFileName String?    @map("original_file_name")
   /// "display_name": "margherita"
   displayName      String?    @map("display_name")
-  height           String?    @map("height")
-  width            String?    @map("width")
+  height           Float?     @map("height")
+  width            Float?     @map("width")
   /// "thumbnail_url": "https://res.cloudinary.com/dy8gw8ahl/image/upload/c_limit,h_60,w_90/v1723138046/rvife3elpmmjojlnwypm.jpg"
   thumbnailUrl     String?    @map("thumbnail_url")
   format           String?    @map("format")
+  publicId         String?    @map("public_id")
   MenuItem         MenuItem[]
 
   @@map("menu_items_image")

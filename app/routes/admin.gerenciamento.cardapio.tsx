@@ -8,7 +8,7 @@ import { menuItemTagPrismaEntity } from "~/domain/cardapio/menu-item-tags.prisma
 import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { categoryPrismaEntity } from "~/domain/category/category.entity.server";
 import { Category } from "~/domain/category/category.model.server";
-import cld from "~/lib/cloudinary";
+import { prismaAll } from "~/lib/prisma/prisma-all.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { badRequest, ok } from "~/utils/http-response.server";
 import { lastUrlSegment } from "~/utils/url";
@@ -25,33 +25,26 @@ export const meta: V2_MetaFunction = () => {
 
 
 
-
 export async function loader({ request }: LoaderArgs) {
 
+    const [categories, items, tags] = await prismaAll([
+        categoryPrismaEntity.findAll(),
+        menuItemPrismaEntity.findAll({}, {
+            imageTransform: true,
+            imageScaleWidth: 64
+        }),
+        menuItemTagPrismaEntity.findAll()
+    ])
 
 
-    const [errCategories, categories] = await prismaIt(categoryPrismaEntity.findAll())
-
-    if (errCategories) {
-        return badRequest(errCategories)
+    if (categories[0] || items[0] || tags[0]) {
+        return badRequest({ message: "Ocorreu um erro" })
     }
-
-    const [errItems, items] = await prismaIt(menuItemPrismaEntity.findAll({}, {
-        imageTransform: true,
-        imageScaleWidth: 64
-    }))
-
-    if (errItems) {
-        return badRequest(errItems)
-    }
-
-
-    const [_, tags] = await prismaIt(menuItemTagPrismaEntity.findAll())
 
     return ok({
-        categories,
-        items,
-        tags
+        categories: categories[1] as Category[],
+        items: items[1] as MenuItemWithAssociations[],
+        tags: tags[1] as MenuItemTag[],
     })
 
 }

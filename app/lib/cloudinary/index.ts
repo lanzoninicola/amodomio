@@ -1,14 +1,11 @@
-import { Cloudinary } from "@cloudinary/url-gen";
+import cld from "./cloudinary.client";
+import CloudinaryUtils from "./cloudinary.utils";
+import CloudinaryUploadWidget from "./components/cloudinary-upload-widget";
+import { CloudinaryImageInfo } from "./cloudinary.types";
 
-const cloudName = process.env?.CLOUDINARY_CLOUD_NAME || "";
-
-const cld = new Cloudinary({
-  cloud: {
-    cloudName,
-  },
-  url: {
-    secure: true, // force https, set to false to force http
-  },
-});
-
-export default cld;
+export {
+  cld,
+  CloudinaryUtils,
+  type CloudinaryImageInfo,
+  CloudinaryUploadWidget,
+};

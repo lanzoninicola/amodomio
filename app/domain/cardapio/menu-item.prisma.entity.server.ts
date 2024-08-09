@@ -2,10 +2,10 @@ import {
   Category,
   MenuItem,
   MenuItemCost,
+  MenuItemImage,
   MenuItemLike,
   MenuItemPriceVariation,
   MenuItemShare,
-  MenuItemTag,
   Prisma,
   Tag,
 } from "@prisma/client";
@@ -16,9 +16,7 @@ import MenuItemPriceVariationUtility from "./menu-item-price-variations-utility"
 import { v4 as uuidv4 } from "uuid";
 import items from "./db-mock/items";
 import NodeCache from "node-cache";
-import { menuItemLikePrismaEntity } from "./menu-item-like.prisma.entity.server";
-import cld from "~/lib/cloudinary";
-import { scale } from "@cloudinary/url-gen/actions/resize";
+import { CloudinaryUtils } from "~/lib/cloudinary";
 
 export interface MenuItemWithAssociations extends MenuItem {
   priceVariations: MenuItemPriceVariation[];
@@ -31,6 +29,7 @@ export interface MenuItemWithAssociations extends MenuItem {
   MenuItemCost: MenuItemCost[];
   MenuItemLike: MenuItemLike[];
   MenuItemShare: MenuItemShare[];
+  MenuItemImage: MenuItemImage;
   likes?: {
     amount: number;
   };
@@ -67,6 +66,7 @@ export class MenuItemPrismaEntity {
       },
     },
     MenuItemShare: true,
+    MenuItemImage: true,
   };
 
   client;
@@ -112,12 +112,7 @@ export class MenuItemPrismaEntity {
     const records = recordsFounded.map((r) => {
       return {
         ...r,
-        imageURL:
-          cld
-            .image("livhax0d1aiiszxqgpc6") // this is the public id
-            .format("auto")
-            .resize(scale().width(options.imageScaleWidth))
-            .toURL() || null,
+        imageURL: "",
         tags: {
           all: r.tags.map((t) => t.Tag?.name),
           public: r.tags
@@ -154,6 +149,7 @@ export class MenuItemPrismaEntity {
     // this.cache.set(cacheKey, JSON.stringify(returnedRecords));
 
     // console.log("cache set", cacheKey);
+
     return returnedRecords;
   }
 
@@ -174,12 +170,9 @@ export class MenuItemPrismaEntity {
 
     return {
       ...item,
-      imageURL: cld
-        .image(item.imageURL || "")
-        .format("auto")
-        .quality("auto")
-        .resize(scale().width(options.imageScaleWidth))
-        .toURL(),
+      // imageURL: CloudinaryUtils.scaleWidth("livhax0d1aiiszxqgpc6", {
+      //   width: options.imageScaleWidth,
+      // }),
       tags: {
         all: item.tags.map((t) => t.Tag?.name),
         public: item.tags
