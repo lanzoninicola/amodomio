@@ -162,7 +162,7 @@ const CardapioItemImage = ({ item }: CardapioItemImageProps) => {
     return (
         <div className="relative">
             <img
-                src={item.imageBase64 || "/images/cardapio-web-app/placeholder.png"}
+                src={item.MenuItemImage.secureUrl || "/images/cardapio-web-app/placeholder.png"}
                 alt={item.name}
                 loading="lazy"
                 className="w-full max-h-[250px] object-cover object-center"

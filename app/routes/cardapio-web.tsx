@@ -248,6 +248,8 @@ function CardapioSearch({ items, setShowSearch }: {
         setCurrentItems(itemsFounded);
     };
 
+
+
     return (
         <div className="flex flex-col">
             <div className="bg-white flex flex-col py-3">
