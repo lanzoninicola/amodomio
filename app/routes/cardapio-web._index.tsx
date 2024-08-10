@@ -1,7 +1,7 @@
 import { ActionArgs, HeadersFunction } from "@remix-run/node";
-import { useActionData, useFetcher, useOutletContext } from "@remix-run/react";
+import { useActionData, useFetcher, useOutletContext, useSearchParams } from "@remix-run/react";
 import { Share2, Heart } from "lucide-react";
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import WhatsappExternalLink from "~/components/primitives/whatsapp/whatsapp-external-link";
 import WhatsAppIcon from "~/components/primitives/whatsapp/whatsapp-icon";
 import { Separator } from "~/components/ui/separator";
@@ -13,6 +13,7 @@ import { menuItemLikePrismaEntity } from "~/domain/cardapio/menu-item-like.prism
 import { badRequest, ok } from "~/utils/http-response.server";
 import { menuItemSharePrismaEntity } from "~/domain/cardapio/menu-item-share.prisma.entity.server";
 import GLOBAL_LINKS from "~/domain/website-navigation/global-links.constant";
+import ItalyFlag from "~/components/italy-flag/italy-flag";
 
 export const headers: HeadersFunction = () => ({
     'Cache-Control': 's-maxage=1, stale-while-revalidate=59',
@@ -83,9 +84,22 @@ export async function action({ request }: ActionArgs) {
 }
 
 export default function CardapioWebIndex() {
+    const [searchParams] = useSearchParams();
+    let currentFilterTag = searchParams.get("tag");
+
     const { items: allItems } = useOutletContext<CardapioOutletContext>();
-    const [items, setItems] = useState(allItems.slice(0, 10));
+
+    const [items, setItems] = useState<MenuItemWithAssociations[]>([]);
     const [hasMore, setHasMore] = useState(true);
+
+    useEffect(() => {
+        const itemsFiltered = currentFilterTag
+            ? allItems.filter(i => i.tags?.public.some(t => t === currentFilterTag))
+            : allItems;
+        setItems(itemsFiltered.slice(0, 10));
+        setHasMore(itemsFiltered.length > 10);
+    }, [currentFilterTag, allItems]);
+
     const observer = useRef<IntersectionObserver | null>(null);
 
     const lastItemRef = useCallback((node: HTMLLIElement) => {
@@ -93,23 +107,32 @@ export default function CardapioWebIndex() {
         observer.current = new IntersectionObserver(entries => {
             if (entries[0].isIntersecting && hasMore) {
                 setItems(prevItems => {
-                    const newItems = allItems.slice(prevItems.length, prevItems.length + 10);
+                    const itemsFiltered = currentFilterTag
+                        ? allItems.filter(i => i.tags?.public.some(t => t === currentFilterTag))
+                        : allItems;
+                    const newItems = itemsFiltered.slice(prevItems.length, prevItems.length + 10);
                     setHasMore(newItems.length > 0);
                     return [...prevItems, ...newItems];
                 });
             }
         });
         if (node) observer.current.observe(node);
-    }, [hasMore, allItems]);
+    }, [hasMore, allItems, currentFilterTag]);
+
+    if (items.length === 0) {
+        return (
+            <div className="flex h-full w-full items-center justify-center p-8">
+                <div className="flex flex-col gap-6 justify-center items-center">
+                    <img src="/images/empty-cardapio.webp" className="mx-auto w-[136px]" alt="Nenhum item encontrado" />
+                    <h1 className="font-body-website text-sm md:text-lg font-semibold text-muted-foreground">Nenhum item encontrado</h1>
+                </div>
+            </div>
+        );
+    }
 
     return (
-        <section >
-            {/* <div className="flex gap-8 items-center w-full justify-center py-4">
-                <LayoutTemplate />
-                <LayoutList />
-
-            </div> */}
-            <ul className="flex flex-col overflow-y-auto md:overflow-y-z  auto snap-mandatory">
+        <section>
+            <ul className="flex flex-col overflow-y-auto md:overflow-y-z auto snap-mandatory">
                 {items.map((item, index) => {
                     if (items.length === index + 1) {
                         return <CardapioItem ref={lastItemRef} key={item.id} item={item} />;
@@ -144,11 +167,16 @@ const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) =>
     </li>
 ));
 
+
+
+
 interface CardapioItemImageProps {
     item: MenuItemWithAssociations;
 }
 
 const CardapioItemImage = ({ item }: CardapioItemImageProps) => {
+
+    const italyProduct = item.tags?.public.some(t => t.toLocaleLowerCase() === "produtos-italianos")
 
     const Overlay = () => {
         return (
@@ -156,6 +184,15 @@ const CardapioItemImage = ({ item }: CardapioItemImageProps) => {
                 background: "linear-gradient(180deg, #00000033 60%, #0000009e 75%)"
             }}>
             </div>
+        )
+    }
+
+    const ItalyFlagOverlay = () => {
+        return (
+            <div className="absolute top-2 right-4 overflow-hidden rotate-0" >
+                <ItalyFlag width={24} />
+            </div>
+
         )
     }
 
@@ -168,6 +205,7 @@ const CardapioItemImage = ({ item }: CardapioItemImageProps) => {
                 className="w-full max-h-[250px] object-cover object-center"
             />
             <Overlay />
+            {italyProduct && <ItalyFlagOverlay />}
         </div>
     )
 }

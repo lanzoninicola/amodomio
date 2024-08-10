@@ -17,5 +17,5 @@ export function loader({ request, params }: LoaderArgs) {
     }
 
 
-    return null
+    return redirect('/cardapio')
 }
