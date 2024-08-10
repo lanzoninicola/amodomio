@@ -1,5 +1,5 @@
 import { MenuItemPriceVariation } from "@prisma/client";
-import { LoaderArgs } from "@remix-run/node";
+import { LoaderArgs, V2_MetaFunction } from "@remix-run/node";
 import { useActionData, useLoaderData, useNavigation, useOutletContext } from "@remix-run/react";
 import { useState } from "react";
 import Fieldset from "~/components/ui/fieldset";
@@ -18,6 +18,13 @@ import { jsonParse } from "~/utils/json-helper";
 import parserFormDataEntryToNumber from "~/utils/parse-form-data-entry-to-number";
 import { urlAt } from "~/utils/url";
 
+export const meta: V2_MetaFunction = ({ data }) => {
+    const item: MenuItemWithAssociations = data?.payload?.item
+
+    return [
+        { title: item?.name || "Nome não encontrado" },
+    ];
+};
 
 export async function loader({ request, params }: LoaderArgs) {
     const itemId = urlAt(request.url, -3);

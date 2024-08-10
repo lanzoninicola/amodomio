@@ -2,8 +2,10 @@ import {
   Category,
   MenuItem,
   MenuItemCost,
+  MenuItemImage,
   MenuItemLike,
   MenuItemPriceVariation,
+  MenuItemShare,
   MenuItemTag,
   Prisma,
   Tag,
@@ -15,18 +17,28 @@ import MenuItemPriceVariationUtility from "./menu-item-price-variations-utility"
 import { v4 as uuidv4 } from "uuid";
 import items from "./db-mock/items";
 import NodeCache from "node-cache";
-import { menuItemLikePrismaEntity } from "./menu-item-like.prisma.entity.server";
+import { CloudinaryUtils } from "~/lib/cloudinary";
+import { scale } from "@cloudinary/url-gen/actions/resize";
 
 export interface MenuItemWithAssociations extends MenuItem {
   priceVariations: MenuItemPriceVariation[];
   categoryId: string;
   Category: Category;
-  tags?: Tag[];
+  tags?: {
+    all: Tag["name"][];
+    public: Tag["name"][];
+    models: Tag[];
+  };
   MenuItemCost: MenuItemCost[];
   MenuItemLike: MenuItemLike[];
+  MenuItemTag: MenuItemTag[];
+  MenuItemShare: MenuItemShare[];
+  MenuItemImage: MenuItemImage;
   likes?: {
     amount: number;
   };
+  shares?: number;
+  imageTransformedURL: string;
 }
 
 interface MenuItemEntityFindAllProps {
@@ -42,9 +54,19 @@ export class MenuItemPrismaEntity {
   #menuItemQueryIncludes = {
     priceVariations: true,
     Category: true,
-    tags: true,
+    tags: {
+      include: {
+        Tag: true,
+      },
+    },
     MenuItemCost: true,
-    MenuItemLike: true,
+    MenuItemLike: {
+      where: {
+        deletedAt: null,
+      },
+    },
+    MenuItemShare: true,
+    MenuItemImage: true,
   };
 
   client;
@@ -56,7 +78,13 @@ export class MenuItemPrismaEntity {
     this.cache = new NodeCache({ stdTTL: 100, checkperiod: 120 }); // TTL in seconds
   }
 
-  async findAll(params: MenuItemEntityFindAllProps = {}) {
+  async findAll(
+    params: MenuItemEntityFindAllProps = {},
+    options = {
+      imageTransform: false,
+      imageScaleWidth: 1280,
+    }
+  ) {
     const cacheKey = `findAll:${JSON.stringify(params)}`;
     let result = this.cache.get<MenuItemWithAssociations[]>(cacheKey);
 
@@ -81,25 +109,28 @@ export class MenuItemPrismaEntity {
       include: this.#menuItemQueryIncludes,
     });
 
-    const tags = await this.client.tag.findMany();
-
-    const records = await Promise.all(
-      recordsFounded.map(async (r) => {
-        const likesAmount = await menuItemLikePrismaEntity.countByMenuItemId(
-          r.id
-        );
-
-        return {
-          ...r,
-          tags:
-            r?.tags?.map((tag) => tags.find((t) => t.id === tag.tagId)) ||
-            ([] as Tag[]),
-          likes: {
-            amount: likesAmount,
-          },
-        };
-      })
-    );
+    const records = recordsFounded.map((r) => {
+      return {
+        ...r,
+        imageTransformedURL: CloudinaryUtils.scaleWidth(
+          r.MenuItemImage?.publicId || "",
+          {
+            width: options.imageScaleWidth,
+          }
+        ),
+        tags: {
+          all: r.tags.map((t) => t.Tag?.name),
+          public: r.tags
+            .filter((t) => t.Tag?.public === true)
+            .map((t) => t.Tag?.name),
+          models: r.tags.map((t) => t.Tag),
+        },
+        likes: {
+          amount: r.MenuItemLike.length,
+        },
+        shares: r.MenuItemShare.length,
+      };
+    });
 
     let returnedRecords: MenuItemWithAssociations[] = [];
 
@@ -124,20 +155,47 @@ export class MenuItemPrismaEntity {
     // this.cache.set(cacheKey, JSON.stringify(returnedRecords));
 
     // console.log("cache set", cacheKey);
+
     return returnedRecords;
   }
 
-  async findById(id: string) {
-    const items = await this.client.menuItem.findUnique({
+  async findById(
+    id: string,
+    options = {
+      imageScaleWidth: 1280,
+    }
+  ) {
+    const item = await this.client.menuItem.findFirst({
       where: { id },
       include: this.#menuItemQueryIncludes,
     });
 
-    const tags = await this.client.tag.findMany();
+    if (!item) {
+      return null;
+    }
 
     return {
-      ...items,
-      tags: items?.tags?.map((tag) => tags.find((t) => t.id === tag.tagId)),
+      ...item,
+      // imageURL: CloudinaryUtils.scaleWidth("livhax0d1aiiszxqgpc6", {
+      //   width: options.imageScaleWidth,
+      // }),
+      imageTransformedURL: CloudinaryUtils.scaleWidth(
+        item.MenuItemImage?.publicId || "",
+        {
+          width: options.imageScaleWidth,
+        }
+      ),
+      tags: {
+        all: item.tags.map((t) => t.Tag?.name),
+        public: item.tags
+          .filter((t) => t.Tag?.public === true)
+          .map((t) => t.Tag?.name),
+        models: item.tags.map((t) => t.Tag),
+      },
+      likes: {
+        amount: item.MenuItemLike.length,
+      },
+      shares: item.MenuItemShare.length,
     };
   }
 

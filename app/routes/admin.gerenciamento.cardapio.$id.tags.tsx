@@ -1,5 +1,5 @@
 import { MenuItemTag, Tag } from "@prisma/client";
-import { LoaderArgs } from "@remix-run/node";
+import { LoaderArgs, V2_MetaFunction } from "@remix-run/node";
 import { Form, useActionData, useLoaderData, useOutletContext } from "@remix-run/react";
 import { useState } from "react";
 import { Badge } from "~/components/ui/badge";
@@ -16,7 +16,13 @@ import { tagPrismaEntity } from "~/domain/tags/tag.prisma.entity.server";
 import { jsonParse, jsonStringify } from "~/utils/json-helper";
 import BadgeTag from "~/domain/tags/components/badge-tag";
 
+export const meta: V2_MetaFunction = ({ data }) => {
+    const item: MenuItemWithAssociations = data?.payload?.item
 
+    return [
+        { title: item?.name || "Nome não encontrado" },
+    ];
+};
 
 export async function loader({ request }: LoaderArgs) {
     const itemId = urlAt(request.url, -2)
@@ -26,24 +32,22 @@ export async function loader({ request }: LoaderArgs) {
     }
 
 
-    const [errItem, item] = await prismaIt(menuItemPrismaEntity.findById(itemId));
-    const [errAllTags, allTags] = await prismaIt(tagPrismaEntity.findAll());
+    const itemQuery = prismaIt(menuItemPrismaEntity.findById(itemId));
+    const tagsQuery = prismaIt(tagPrismaEntity.findAll());
 
+    const results = await Promise.all([itemQuery, tagsQuery])
 
-    let err = errAllTags;
+    const [errItems, item] = results[0]
+    const [errTags, tags] = results[1]
 
-    if (err) {
-        return serverError(err);
+    if (errItems) {
+        return badRequest(errItems)
     }
 
-    if (!allTags) {
-        return badRequest("Nenhum tags encontrado");
-    }
 
     return ok({
         item,
-        allTags,
-        itemTags: item?.tags || []
+        allTags: tags
     });
 
 
@@ -103,7 +107,7 @@ export default function SingleMenuItemTags() {
     const loaderData = useLoaderData<typeof loader>()
     const item: MenuItemWithAssociations = loaderData.payload?.item
     const allTags: Tag[] = loaderData.payload?.allTags || []
-    const itemTags: MenuItemTag[] = loaderData.payload?.itemTags || []
+    const itemTags: Tag[] = item?.tags?.models || []
 
     const actionData = useActionData<typeof action>()
 
@@ -180,11 +184,14 @@ export default function SingleMenuItemTags() {
 
             <div className="flex flex-col">
                 <div className="flex flex-col gap-2 mb-4">
-                    <span className="text-xs font-semibold text-muted-foreground">{`Tags associados (${itemTags.length})`}</span>
+                    <span className="text-xs font-semibold text-muted-foreground">{`Tags associados (${item.tags?.all.length || 0})`}</span>
                 </div>
                 <ul className="flex gap-2">
                     {
-                        item.tags.map((t: Tag) => {
+                        itemTags.map((t: Tag) => {
+
+                            console.log({ t })
+
                             return (
                                 <li key={t.id} >
                                     <BadgeItemTag itemId={item.id} tag={t} />
@@ -200,7 +207,6 @@ export default function SingleMenuItemTags() {
 
 
 function BadgeItemTag({ itemId, tag }: { itemId: string, tag: Tag }) {
-
 
     return (
         <Form method="post">
