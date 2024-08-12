@@ -28,6 +28,7 @@ import { badRequest, ok } from "~/utils/http-response.server";
  * TODO:
  * - [x] Add to menu Horario Atendimento
  * - [x] Add to menu link instagram
+ * - [] Add customer comments, from a copia incolla operation
  * - [] Add to menu link fazer pedido
  * - [] Different layouts
  * - [] Fechamento Horario Atendimento no botao de fazer pedido
