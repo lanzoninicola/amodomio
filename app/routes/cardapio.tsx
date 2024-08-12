@@ -11,6 +11,7 @@ import WhatsAppIcon from "~/components/primitives/whatsapp/whatsapp-icon";
 import { Input } from "~/components/ui/input";
 import { Separator } from "~/components/ui/separator";
 import { toast } from "~/components/ui/use-toast";
+import FazerPedidoButton from "~/domain/cardapio/components/fazer-pedido-button/fazer-pedido-button";
 import { menuItemTagPrismaEntity } from "~/domain/cardapio/menu-item-tags.prisma.entity.server";
 import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import BadgeTag from "~/domain/tags/components/badge-tag";
@@ -207,12 +208,16 @@ function CardapioHeader({ items, tags }: CardapioHeaderProps) {
                             classNameButton: "justify-start w-full h-full",
                         }}
                     >
-                        <div className="flex flex-col justify-center mb-4">
+                        <div className="flex flex-col justify-center mb-2">
                             <p className="font-body-website font-semibold text-sm leading-relaxed">Hórarios de funcionamento</p>
                             <div className="flex flex-col justify-center mb-4">
                                 <p className="text-muted-foreground font-body-website">Quarta - Domingo</p>
                                 <p className="text-muted-foreground font-body-website">18:00 - 22:00</p>
                             </div>
+                        </div>
+
+                        <div className="pr-4 mb-4">
+                            <FazerPedidoButton />
                         </div>
 
                     </WebsiteNavigationSidebar>
@@ -246,17 +251,10 @@ function CardapioHeader({ items, tags }: CardapioHeaderProps) {
 
 function CardapioFooter() {
     return (
-        <footer className="py-4 px-2 fixed bottom-0 w-screen md:max-w-2xl md:-translate-x-1/2 md:left-1/2 bg-white ">
+        <footer className="py-4 px-4 fixed bottom-0 w-screen md:max-w-2xl md:-translate-x-1/2 md:left-1/2 bg-white ">
             {/* <Separator className="my-4" /> */}
-            <div className="px-2 w-full">
-                <ExternalLink to={GLOBAL_LINKS.mogoCardapio.href}
-                    ariaLabel="Cardápio digital pizzaria A Modo Mio"
-                    className="flex justify-between font-body-website rounded-sm bg-green-400 py-2 px-4"
-                >
-                    <span className="uppercase tracking-wide font-semibold">Fazer pedido</span>
-                    <ArrowRight />
-                </ExternalLink>
-            </div>
+
+            <FazerPedidoButton />
         </footer>
     )
 }
