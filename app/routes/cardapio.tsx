@@ -250,8 +250,6 @@ function FiltersTags({ tags }: { tags: Tag[] }) {
     const [searchParams, setSearchParams] = useSearchParams()
     const tagFilter = searchParams.get("tag")
 
-    console.log({ tagFilter })
-
     return (
 
         <div className="relative bg-white">
