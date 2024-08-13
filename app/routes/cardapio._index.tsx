@@ -1,6 +1,6 @@
 import { ActionArgs, HeadersFunction } from "@remix-run/node";
 import { useActionData, useFetcher, useOutletContext, useSearchParams } from "@remix-run/react";
-import { Share2, Heart } from "lucide-react";
+import { Share2, Heart, Settings } from "lucide-react";
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import WhatsappExternalLink from "~/components/primitives/whatsapp/whatsapp-external-link";
 import WhatsAppIcon from "~/components/primitives/whatsapp/whatsapp-icon";
@@ -14,6 +14,7 @@ import { badRequest, ok } from "~/utils/http-response.server";
 import { menuItemSharePrismaEntity } from "~/domain/cardapio/menu-item-share.prisma.entity.server";
 import GLOBAL_LINKS from "~/domain/website-navigation/global-links.constant";
 import ItalyFlag from "~/components/italy-flag/italy-flag";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "~/components/ui/dialog";
 
 export const headers: HeadersFunction = () => ({
     'Cache-Control': 's-maxage=1, stale-while-revalidate=59',
@@ -135,9 +136,9 @@ export default function CardapioWebIndex() {
             <ul className="flex flex-col overflow-y-auto md:overflow-y-z auto snap-mandatory">
                 {items.map((item, index) => {
                     if (items.length === index + 1) {
-                        return <CardapioItem ref={lastItemRef} key={item.id} item={item} />;
+                        return <CardapioItemWithDialog ref={lastItemRef} key={item.id} item={item} />;
                     } else {
-                        return <CardapioItem key={item.id} item={item} />;
+                        return <CardapioItemWithDialog key={item.id} item={item} />;
                     }
                 })}
             </ul>
@@ -159,22 +160,43 @@ const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) =>
             </div>
         </div>
         <div className="flex flex-col px-4 mb-2">
-            <h3 className="font-body-website text-sm font-semibold uppercase mb-2">{item.name}</h3>
-            <p className="font-body-website leading-tight">{item.ingredients}</p>
+            <h3 className="font-body-website text-sm font-semibold uppercase mb-2 text-left">{item.name}</h3>
+            <p className="font-body-website leading-tight text-left">{item.ingredients}</p>
         </div>
         <CardapioItemActionBar item={item} />
         <Separator className="my-4" />
     </li>
 ));
 
+const CardapioItemWithDialog = React.forwardRef(({ item }: CardapioItemProps, ref: any) => (
+    <Dialog>
+        <DialogTrigger asChild>
+            <button>
+                <CardapioItem item={item} ref={ref} />
+            </button>
+        </DialogTrigger>
+        <DialogContent>
+            <CardapioItemImage item={item} withOverlay={false} />
+
+            <div className="flex flex-col px-4 mb-2">
+                <h3 className="font-body-website text-sm font-semibold uppercase mb-2">{item.name}</h3>
+                <p className="font-body-website leading-tight">{item.ingredients}</p>
+            </div>
+
+            <CardapioItemPrice prices={item?.priceVariations} cnTextColor="text-black" />
+        </DialogContent>
+    </Dialog>
+))
+
 
 
 
 interface CardapioItemImageProps {
     item: MenuItemWithAssociations;
+    withOverlay?: boolean;
 }
 
-const CardapioItemImage = ({ item }: CardapioItemImageProps) => {
+const CardapioItemImage = ({ item, withOverlay = true }: CardapioItemImageProps) => {
 
     const italyProduct = item.tags?.public.some(t => t.toLocaleLowerCase() === "produtos-italianos")
 
@@ -204,7 +226,7 @@ const CardapioItemImage = ({ item }: CardapioItemImageProps) => {
                 loading="lazy"
                 className="w-full max-h-[250px] object-cover object-center"
             />
-            <Overlay />
+            {withOverlay && <Overlay />}
             {italyProduct && <ItalyFlagOverlay />}
         </div>
     )
@@ -212,9 +234,10 @@ const CardapioItemImage = ({ item }: CardapioItemImageProps) => {
 
 interface CardapioItemPriceProps {
     prices: MenuItemWithAssociations["priceVariations"]
+    cnTextColor?: string
 }
 
-function CardapioItemPrice({ prices }: CardapioItemPriceProps) {
+function CardapioItemPrice({ prices, cnTextColor }: CardapioItemPriceProps) {
 
     const visiblePrices = prices.filter(p => p.showOnCardapio === true) || []
     const colsNumber = prices.length
@@ -231,7 +254,13 @@ function CardapioItemPrice({ prices }: CardapioItemPriceProps) {
 
                     return (
 
-                        <div key={p.id} className="flex flex-col items-center text-white ">
+                        <div key={p.id} className={
+                            cn(
+                                "flex flex-col items-center text-white",
+                                cnTextColor
+                            )
+
+                        }>
                             <span className="font-body-website uppercase text-[14px]">{p?.label}</span>
                             <Separator orientation="horizontal" className="my-1" />
                             <div className="flex items-start gap-[2px] font-body-website font-semibold">
