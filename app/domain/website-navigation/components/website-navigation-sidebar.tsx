@@ -5,6 +5,8 @@ import { ScrollArea } from "~/components/ui/scroll-area"
 import { Sheet, SheetContent, SheetTrigger } from "~/components/ui/sheet"
 import { cn } from "~/lib/utils"
 import { WebsiteNavigationLinks } from "../website-navigation.type"
+import { HamburgerMenuIcon } from "@radix-ui/react-icons"
+import { AlignLeft, AlignLeftIcon } from "lucide-react"
 
 
 interface WebsiteNavigationSidebarProps {
@@ -12,6 +14,7 @@ interface WebsiteNavigationSidebarProps {
         label: string
         classNameLabel?: string
         classNameButton?: string
+        colorIcon?: "black" | "white"
     },
     homeLink: {
         label: string
@@ -41,7 +44,7 @@ export function WebsiteNavigationSidebar({
                         )
                     }
                 >
-                    <svg
+                    {/* <svg
                         strokeWidth="1.5"
                         viewBox="0 0 24 24"
                         fill="none"
@@ -69,7 +72,8 @@ export function WebsiteNavigationSidebar({
                             strokeLinecap="round"
                             strokeLinejoin="round"
                         ></path>
-                    </svg>
+                    </svg> */}
+                    <AlignLeftIcon className="h-5 w-5" color={buttonTrigger?.colorIcon} />
                     <span className={
                         cn(
                             "hidden font-semibold md:block",

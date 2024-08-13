@@ -8,16 +8,31 @@ import { cn } from "~/lib/utils"
 
 interface BadgeTagProps {
     tag: Tag
+    tagColor?: boolean
     actionName?: string
+    classNameContainer?: string
     classNameLabel?: string
 }
 
-export default function BadgeTag({ tag, actionName, classNameLabel }: BadgeTagProps) {
+export default function BadgeTag({ tag, tagColor = true, actionName, classNameContainer, classNameLabel }: BadgeTagProps) {
     const [isHovered, setIsHovered] = useState(false)
 
 
+    let props = {}
+
+    if (tagColor) {
+        props = {
+            ...props,
+            style: {
+                backgroundColor: tag.colorHEX
+            }
+        }
+    }
+
+
+
     return (
-        <Badge style={{ backgroundColor: tag.colorHEX || "black" }}>
+        <Badge className={cn("cursor-pointer", classNameContainer)} {...props}>
             <div className="flex gap-3"
                 onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
                 <span className={
