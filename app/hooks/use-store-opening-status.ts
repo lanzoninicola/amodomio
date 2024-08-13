@@ -5,7 +5,7 @@ import { useState, useEffect } from "react";
 const useStoreOpeningStatus = () => {
   const ENV = useEnv();
 
-  const [isStoreOpen, setIsStoreOpen] = useState<boolean | null>(false);
+  const [isStoreOpen, setIsStoreOpen] = useState<boolean>(false);
 
   useEffect(() => {
     const storeOpenDays = ENV.STORE_OPENING_CONFIG.OPENING_DAYS || [];
