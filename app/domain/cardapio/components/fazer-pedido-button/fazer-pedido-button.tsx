@@ -2,10 +2,19 @@ import { ArrowRight } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
 import ExternalLink from '~/components/primitives/external-link/external-link';
 import GLOBAL_LINKS from '~/domain/website-navigation/global-links.constant';
+import useStoreOpeningStatus from '~/hooks/use-store-opening-status';
+import { cn } from '~/lib/utils';
 
-const labels = ["ESTAMOS FECHADOS", "HORÁRIO DE ATENDIMENTO", "18:00 - 22:00"];
+const labels = ["🚨 ESTAMOS FECHADOS 🚨", "HORÁRIO DE ATENDIMENTO 18:00 - 22:00"];
 
-export default function FazerPedidoButton({ isStoreOpen }: { isStoreOpen: boolean }) {
+interface FazerPedidoButtonProps {
+    cnLabel?: string;
+}
+
+export default function FazerPedidoButton({ cnLabel }: FazerPedidoButtonProps) {
+
+    const isStoreOpen = useStoreOpeningStatus()
+
     const [currentLabelIndex, setCurrentLabelIndex] = useState(0);
 
     useEffect(() => {
@@ -24,40 +33,53 @@ export default function FazerPedidoButton({ isStoreOpen }: { isStoreOpen: boolea
     }, [isStoreOpen]);
 
     return (
-        <div className="w-full">
-            <ExternalLink
-                to={GLOBAL_LINKS.mogoCardapio.href}
-                ariaLabel="Cardápio digital pizzaria A Modo Mio"
-                className={`flex items-center justify-between font-body-website rounded-sm ${isStoreOpen ? 'bg-green-500' : 'bg-red-500'
-                    } py-2 px-4`}
-            >
-                {isStoreOpen ? (
-                    <>
-                        <span className="uppercase tracking-wide font-semibold text-white">
+        <div className={
+            cn(
+                "w-full font-body-website rounded-sm ",
+                isStoreOpen ? 'bg-green-500' : 'bg-green-200',
+            )
+        }>
+
+            {isStoreOpen ? (
+                <ExternalLink
+                    to={GLOBAL_LINKS.mogoCardapio.href}
+                    ariaLabel="Cardápio digital pizzaria A Modo Mio"
+                >
+                    <div className='flex items-center justify-between px-4 py-2'>
+                        <span className={
+                            cn(
+                                "uppercase tracking-wide font-semibold text-black px-4",
+                                cnLabel
+                            )
+                        }>
                             Fazer pedido
                         </span>
-                        <ArrowRight color="white" />
-                    </>
-                ) : (
-                    <div className="relative h-6 overflow-hidden">
-                        <div
-                            className="transition-transform duration-1000 ease-in-out"
-
-                        >
-                            {labels.map((label, index) => (
-                                <div
-                                    key={index}
-                                    className="h-6 text-left tracking-wide font-semibold text-white"
-                                    style={{ transform: `translateY(-${currentLabelIndex * 100}%)` }}
-                                >
-                                    {label}
-                                </div>
-                            ))}
-                        </div>
+                        <ArrowRight color="black" />
                     </div>
-                )}
+                </ExternalLink>
+            ) : (
+                <div className="relative h-10 w-full">
+                    <div
+                        className="h-10 absolute top-0 left-0 right-0 transition-transform duration-500 ease-in-out overflow-hidden"
 
-            </ExternalLink>
+                    >
+                        {labels.map((label, index) => (
+                            <div
+                                key={index}
+                                className={cn(
+                                    "h-10 w-full text-md font-semibold text-black grid place-items-center",
+                                    index === currentLabelIndex && "animate-slide-in-up",
+                                    cnLabel
+                                )}
+                                style={{ transform: `translateY(-${currentLabelIndex * 100}%)` }}
+                            >
+                                {label}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
         </div>
     );
 }

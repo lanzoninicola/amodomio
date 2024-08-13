@@ -91,6 +91,15 @@ module.exports = {
           from: { transform: "rotate(0deg)" },
           to: { transform: "rotate(360deg)" },
         },
+        "slide-in-up": {
+          "0%": {
+            visibility: "visible",
+            transform: "translate3d(0, 100%, 0)",
+          },
+          "100%": {
+            transform: "translate3d(0, 0, 0)",
+          },
+        },
         move: {
           "0%": {
             opacity: "0.1",
@@ -113,6 +122,7 @@ module.exports = {
         "accordion-up": "accordion-up 0.2s ease-out",
         "rotate-360": "rotate-360 1s linear infinite",
         "rotate-360-slow": "rotate-360 15s linear infinite",
+        "slide-in-up": "slide-in-up 0.4s ease-in-out",
         move: "move 8s ease-in-out infinite",
         "move-slow": "move 9.2s ease-in-out infinite",
         "move-slower": "move 11.2s ease-in-out infinite",

@@ -110,6 +110,11 @@ interface EnvironmentVariables {
 
   GTM_ID: string
   CLOUDINARY_CLOUD_NAME: string
+  STORE_OPENING_CONFIG: {
+    OPENING_DAYS: number[]
+    OPENING_HOUR: number
+    CLOSING_HOUR: number
+  }
 }
 
 
@@ -118,6 +123,11 @@ export async function loader({ request }: LoaderArgs) {
   const ENV: EnvironmentVariables = {
     GTM_ID: process?.env.GOOGLE_TAG_MANAGER_ID ?? "",
     CLOUDINARY_CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME ?? "",
+    STORE_OPENING_CONFIG: {
+      OPENING_DAYS: process.env.STORE_OPEN_DAYWEEK ? process.env.STORE_OPEN_DAYWEEK.split(",").map(Number) : [],
+      OPENING_HOUR: process.env?.STORE_OPEN_HH_START ? parseInt(process.env.STORE_OPEN_HH_START) : 1800,
+      CLOSING_HOUR: process.env?.STORE_OPEN_HH_END ? parseInt(process.env.STORE_OPEN_HH_END) : 1800,
+    }
   }
 
   return ok({

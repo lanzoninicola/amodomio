@@ -217,7 +217,7 @@ function CardapioHeader({ items, tags }: CardapioHeaderProps) {
                         </div>
 
                         <div className="pr-4 mb-4">
-                            <FazerPedidoButton />
+                            <FazerPedidoButton isStoreOpen={false} cnLabel="text-xs" />
                         </div>
 
                     </WebsiteNavigationSidebar>
@@ -254,7 +254,7 @@ function CardapioFooter() {
         <footer className="py-4 px-4 fixed bottom-0 w-screen md:max-w-2xl md:-translate-x-1/2 md:left-1/2 bg-white ">
             {/* <Separator className="my-4" /> */}
 
-            <FazerPedidoButton />
+            <FazerPedidoButton isStoreOpen={false} />
         </footer>
     )
 }
