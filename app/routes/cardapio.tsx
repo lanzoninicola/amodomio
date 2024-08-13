@@ -1,13 +1,15 @@
 import { MenuItemTag, Tag } from "@prisma/client";
 import { HamburgerMenuIcon } from "@radix-ui/react-icons";
 import { HeadersFunction, LoaderArgs, V2_MetaFunction } from "@remix-run/node";
-import { Link, Outlet, useLoaderData } from "@remix-run/react";
-import { ArrowRight, Instagram, MapPin, SearchIcon, XIcon } from "lucide-react";
+import { Link, Outlet, useLoaderData, useSearchParams } from "@remix-run/react";
+import { ArrowRight, Filter, Instagram, MapPin, SearchIcon, XIcon } from "lucide-react";
 import { useState } from "react";
+import Badge from "~/components/primitives/badge/badge";
 import ExternalLink from "~/components/primitives/external-link/external-link";
 import Logo from "~/components/primitives/logo/logo";
 import WhatsappExternalLink from "~/components/primitives/whatsapp/whatsapp-external-link";
 import WhatsAppIcon from "~/components/primitives/whatsapp/whatsapp-icon";
+import TextSlideInUp from "~/components/text-slide-in-up/text-slide-in-up";
 import { Input } from "~/components/ui/input";
 import { Separator } from "~/components/ui/separator";
 import { toast } from "~/components/ui/use-toast";
@@ -19,8 +21,10 @@ import { tagPrismaEntity } from "~/domain/tags/tag.prisma.entity.server";
 import { WebsiteNavigationSidebar } from "~/domain/website-navigation/components/website-navigation-sidebar";
 import GLOBAL_LINKS from "~/domain/website-navigation/global-links.constant";
 import PUBLIC_WEBSITE_NAVIGATION_ITEMS from "~/domain/website-navigation/public/public-website.nav-links";
+import useStoreOpeningStatus from "~/hooks/use-store-opening-status";
 import { prismaAll } from "~/lib/prisma/prisma-all.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
+import { cn } from "~/lib/utils";
 import getSearchParam from "~/utils/get-search-param";
 import { badRequest, ok } from "~/utils/http-response.server";
 
@@ -143,7 +147,7 @@ export default function CardapioWeb() {
             <CardapioHeader items={items} tags={tags} />
 
             <div className="md:m-auto md:max-w-2xl">
-                <section className="mt-24 p-4 mb-8 ">
+                <section className="mt-28 p-4 mb-8 ">
                     <div className="flex flex-col font-body-website">
                         <h2 className="font-semibold text-lg">A Modo Mio | Pizzeria Italiana</h2>
                         <h3 className="text-muted-foreground">Pizza Al Taglio & Delivery</h3>
@@ -178,6 +182,7 @@ export default function CardapioWeb() {
                 <Outlet context={{ items }} />
 
             </div>
+
             <CardapioFooter />
         </>
     )
@@ -191,8 +196,8 @@ function CardapioHeader({ items, tags }: CardapioHeaderProps) {
     const [showSearch, setShowSearch] = useState(false)
 
     return (
-        <header className="bg-white shadow fixed top-0 w-screen  border-b-slate-100 px-4 pt-2 py-1 z-50 md:max-w-2xl md:-translate-x-1/2 md:left-1/2" >
-            <div className="flex flex-col">
+        <header className=" shadow fixed top-0 w-screen z-50 md:max-w-2xl md:-translate-x-1/2 md:left-1/2" >
+            <div className="flex flex-col bg-brand-blue px-4 pt-2 py-1">
                 <div className="grid grid-cols-3 items-center w-full">
                     {/* <div className="flex gap-1 items-center" onClick={() => setShowSearch(!showSearch)}>
                         <HamburgerMenuIcon className="w-6 h-6" />
@@ -204,8 +209,9 @@ function CardapioHeader({ items, tags }: CardapioHeaderProps) {
                         navigationLinks={PUBLIC_WEBSITE_NAVIGATION_ITEMS}
                         buttonTrigger={{
                             label: "Menu",
-                            classNameLabel: "block font-body-website text-[10px] font-semibold  uppercase",
+                            classNameLabel: "block font-body-website text-[10px] font-semibold  uppercase text-white",
                             classNameButton: "justify-start w-full h-full",
+                            colorIcon: "white",
                         }}
                     >
                         <div className="flex flex-col justify-center mb-2">
@@ -217,45 +223,98 @@ function CardapioHeader({ items, tags }: CardapioHeaderProps) {
                         </div>
 
                         <div className="pr-4 mb-4">
-                            <FazerPedidoButton isStoreOpen={false} cnLabel="text-xs" />
+                            <FazerPedidoButton cnLabel="text-xs" />
                         </div>
 
                     </WebsiteNavigationSidebar>
 
                     <Link to="/cardapio-web" className="flex justify-center">
-                        <Logo color="black" className="w-[60px]" tagline={false} />
+                        <Logo color="white" className="w-[60px]" tagline={false} />
                     </Link>
                     <div className="flex justify-end items-center cursor-pointer" onClick={() => setShowSearch(!showSearch)}>
-                        <SearchIcon />
-                        <span className="font-body-website text-[10px] font-semibold  uppercase">Pesquisar</span>
+                        <SearchIcon color="white" />
+                        <span className="font-body-website text-[10px] font-semibold  uppercase text-white">Pesquisar</span>
                     </div>
                 </div>
                 {showSearch && <CardapioSearch items={items} setShowSearch={setShowSearch} />}
             </div>
 
 
-            <ul className="overflow-x-auto py-3" style={{
-                display: "-webkit-inline-box"
-            }}>
-                {tags.map((tag) => (
-                    <li key={tag.id} className="ml-2">
-                        <Link to={`?tag=${tag.name}`} className="text-xs font-body-website font-semibold uppercase text-muted-foreground">
-                            <BadgeTag tag={tag} classNameLabel="text-[10px]" />
-                        </Link>
-                    </li>
-                ))}
-            </ul>
+            <FiltersTags tags={tags} />
         </header>
     )
 }
 
-function CardapioFooter() {
-    return (
-        <footer className="py-4 px-4 fixed bottom-0 w-screen md:max-w-2xl md:-translate-x-1/2 md:left-1/2 bg-white ">
-            {/* <Separator className="my-4" /> */}
+function FiltersTags({ tags }: { tags: Tag[] }) {
 
-            <FazerPedidoButton isStoreOpen={false} />
-        </footer>
+    const [searchParams, setSearchParams] = useSearchParams()
+    const tagFilter = searchParams.get("tag")
+
+    return (
+
+        <div className="relative bg-white">
+            <ul className="overflow-x-auto py-3 px-2" style={{
+                display: "-webkit-inline-box"
+            }}>
+                <Link to={`/cardapio`} className="text-xs font-body-website font-semibold uppercase text-muted-foreground">
+                    <Badge className="bg-none border border-brand-blue text-brand-blue font-semibold">Todos</Badge>
+                </Link>
+                {tags.map((tag) => (
+                    <li key={tag.id} className="ml-2">
+                        <Link to={`?tag=${tag.name}`} className="text-xs font-body-website font-semibold uppercase text-muted-foreground">
+                            <BadgeTag tag={tag} classNameLabel="text-[10px] text-brand-blue" tagColor={false} classNameContainer="bg-none border border-brand-blue" />
+                        </Link>
+                    </li>
+                ))}
+
+
+            </ul>
+            {
+                tagFilter && (
+                    <div className="absolute top-12 left-0 right-0 flex gap-2 items-center px-2 bg-blue-300 py-[0.15rem]">
+                        <div className="flex items-center justify-between w-full">
+                            <div className="flex gap-1 items-center">
+                                <Filter size={12} />
+                                <p className="font-body-website text-[12px]">Você está visualizando os sabores de"<span className="font-semibold">{tagFilter}</span>"</p>
+                            </div>
+                            <Link to={`/cardapio`} className="font-body-website text-[12px] underline font-semibold self-end">
+                                Voltar
+                            </Link>
+                        </div>
+                    </div>
+                )
+            }
+        </div>
+
+
+    )
+}
+
+
+
+function CardapioFooter() {
+
+    const labels = ["🚨 ESTAMOS FECHADOS 🚨", "HORÁRIO DE ATENDIMENTO", "QUA-DOM 18:00-22:00"];
+    const storeOpeningStatus = useStoreOpeningStatus()
+
+    return (
+        <div className={
+            cn(
+                "fixed bottom-0 w-screen md:max-w-2xl md:-translate-x-1/2 md:left-1/2 ",
+            )
+        }>
+            <div className="w-full py-1 px-4 bg-brand-blue">
+                <TextSlideInUp items={labels} cnText="text-xs text-white" slideCondition={storeOpeningStatus} cnHeight="h-4" />
+            </div>
+            {storeOpeningStatus &&
+                <footer >
+                    <div className="h-full w-full py-2 px-4 bg-white">
+                        <FazerPedidoButton />
+                    </div>
+                </footer>
+            }
+        </div>
+
     )
 }
 

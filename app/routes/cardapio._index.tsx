@@ -136,9 +136,9 @@ export default function CardapioWebIndex() {
             <ul className="flex flex-col overflow-y-auto md:overflow-y-z auto snap-mandatory">
                 {items.map((item, index) => {
                     if (items.length === index + 1) {
-                        return <CardapioItemWithDialog ref={lastItemRef} key={item.id} item={item} />;
+                        return <CardapioItem ref={lastItemRef} key={item.id} item={item} />;
                     } else {
-                        return <CardapioItemWithDialog key={item.id} item={item} />;
+                        return <CardapioItem key={item.id} item={item} />;
                     }
                 })}
             </ul>
@@ -154,7 +154,9 @@ interface CardapioItemProps {
 const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) => (
     <li className="flex flex-col snap-start" id={item.id} ref={ref}>
         <div className="relative mb-2">
-            <CardapioItemImage item={item} />
+            <CardaioItemDialog item={item}>
+                <CardapioItemImage item={item} />
+            </CardaioItemDialog>
             <div className="absolute bottom-0 inset-x-0 py-4 px-2">
                 <CardapioItemPrice prices={item?.priceVariations} />
             </div>
@@ -168,25 +170,32 @@ const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) =>
     </li>
 ));
 
-const CardapioItemWithDialog = React.forwardRef(({ item }: CardapioItemProps, ref: any) => (
-    <Dialog>
-        <DialogTrigger asChild>
-            <button>
-                <CardapioItem item={item} ref={ref} />
-            </button>
-        </DialogTrigger>
-        <DialogContent>
-            <CardapioItemImage item={item} withOverlay={false} />
+interface CardapioItemDialogProps {
+    children?: React.ReactNode;
+    item: MenuItemWithAssociations;
+}
 
-            <div className="flex flex-col px-4 mb-2">
-                <h3 className="font-body-website text-sm font-semibold uppercase mb-2">{item.name}</h3>
-                <p className="font-body-website leading-tight">{item.ingredients}</p>
-            </div>
+function CardaioItemDialog({ item, children }: CardapioItemDialogProps) {
+    return (
+        <Dialog >
+            <DialogTrigger asChild className="w-full">
+                <button>
+                    {children}
+                </button>
+            </DialogTrigger>
+            <DialogContent className="py-12">
 
-            <CardapioItemPrice prices={item?.priceVariations} cnTextColor="text-black" />
-        </DialogContent>
-    </Dialog>
-))
+                <CardapioItemImage item={item} withOverlay={false} />
+                <div className="flex flex-col px-2 mb-2">
+                    <h3 className="font-body-website text-sm font-semibold uppercase mb-2">{item.name}</h3>
+                    <p className="font-body-website leading-tight">{item.ingredients}</p>
+                </div>
+
+                <CardapioItemPrice prices={item?.priceVariations} cnTextColor="text-black" />
+            </DialogContent>
+        </Dialog>
+    )
+}
 
 
 
