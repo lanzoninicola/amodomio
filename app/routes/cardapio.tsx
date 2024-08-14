@@ -1,9 +1,12 @@
 import { MenuItemTag, Tag } from "@prisma/client";
 import { HamburgerMenuIcon } from "@radix-ui/react-icons";
 import { HeadersFunction, LoaderArgs, V2_MetaFunction } from "@remix-run/node";
-import { Link, Outlet, useLoaderData, useSearchParams } from "@remix-run/react";
+import { Link, Outlet, useLoaderData, useLocation, useSearchParams } from "@remix-run/react";
+import { LayoutList } from "lucide-react";
+import { LayoutTemplate } from "lucide-react";
 import { ArrowRight, Filter, Instagram, MapPin, SearchIcon, XIcon } from "lucide-react";
 import { useState } from "react";
+import ItalyFlag from "~/components/italy-flag/italy-flag";
 import Badge from "~/components/primitives/badge/badge";
 import ExternalLink from "~/components/primitives/external-link/external-link";
 import Logo from "~/components/primitives/logo/logo";
@@ -122,6 +125,8 @@ export default function CardapioWeb() {
     const items = loaderData?.payload.items as MenuItemWithAssociations[] || []
     const tags = loaderData?.payload.tags as Tag[] || []
 
+    const location = useLocation();
+
     // const [storedValue, setStoredValue] = useLocalStorage("sessionId", null)
 
 
@@ -147,7 +152,7 @@ export default function CardapioWeb() {
             <CardapioHeader items={items} tags={tags} />
 
             <div className="md:m-auto md:max-w-2xl">
-                <section className="mt-28 p-4 mb-8 ">
+                <section className="mt-28 p-4 mb-4 ">
                     <div className="flex flex-col font-body-website">
                         <h2 className="font-semibold text-lg">A Modo Mio | Pizzeria Italiana</h2>
                         <h3 className="text-muted-foreground">Pizza Al Taglio & Delivery</h3>
@@ -177,7 +182,35 @@ export default function CardapioWeb() {
                         </Link>
                     </div>
                 </section>
-                <Separator />
+
+                <div className="rounded-lg bg-muted m-4 p-2">
+                    <div className="flex items-center justify-center">
+                        <ItalyFlag width={24} />
+                    </div>
+                    <p className="font-body-website text-sm">Todas os nossas pizzas são preparadas com <span className="font-semibold">farinha e molho de tomate importados da Itália</span></p>
+                </div>
+
+                <div className="flex gap-4 justify-center mb-2">
+                    <Link to={"/cardapio"} className={
+                        cn(
+                            "p-2",
+                            location.pathname === "/cardapio" && "border-b-brand-blue border-b-2",
+
+                        )
+                    } >
+                        <LayoutTemplate />
+                    </Link>
+                    <Link to={"/cardapio/list"} className={
+                        cn(
+                            "p-2",
+                            location.pathname === "/cardapio/list" && "border-b-brand-blue border-b-2",
+
+                        )
+                    } >
+                        <LayoutList />
+                    </Link>
+                </div>
+
                 {/* <Featured /> */}
                 <Outlet context={{ items }} />
 
@@ -194,6 +227,7 @@ interface CardapioHeaderProps {
 
 function CardapioHeader({ items, tags }: CardapioHeaderProps) {
     const [showSearch, setShowSearch] = useState(false)
+    const storeOpeningStatus = useStoreOpeningStatus()
 
     return (
         <header className=" shadow fixed top-0 w-screen z-50 md:max-w-2xl md:-translate-x-1/2 md:left-1/2" >
@@ -222,9 +256,13 @@ function CardapioHeader({ items, tags }: CardapioHeaderProps) {
                             </div>
                         </div>
 
-                        <div className="pr-4 mb-4">
-                            <FazerPedidoButton cnLabel="text-xs" />
-                        </div>
+                        {
+                            storeOpeningStatus && (
+                                <div className="pr-4 mb-4">
+                                    <FazerPedidoButton cnLabel="text-xs" />
+                                </div>
+                            )
+                        }
 
                     </WebsiteNavigationSidebar>
 
@@ -257,12 +295,31 @@ function FiltersTags({ tags }: { tags: Tag[] }) {
                 display: "-webkit-inline-box"
             }}>
                 <Link to={`/cardapio`} className="text-xs font-body-website font-semibold uppercase text-muted-foreground">
-                    <Badge className="bg-none border border-brand-blue text-brand-blue font-semibold">Todos</Badge>
+                    <Badge className={
+                        cn(
+                            "bg-none border border-brand-blue text-brand-blue font-semibold",
+                            tagFilter === null && "bg-brand-blue text-white scale-110"
+                        )
+                    }>Todos</Badge>
                 </Link>
                 {tags.map((tag) => (
                     <li key={tag.id} className="ml-2">
                         <Link to={`?tag=${tag.name}`} className="text-xs font-body-website font-semibold uppercase text-muted-foreground">
-                            <BadgeTag tag={tag} classNameLabel="text-[10px] text-brand-blue" tagColor={false} classNameContainer="bg-none border border-brand-blue" />
+                            <BadgeTag tag={tag}
+                                classNameLabel={
+                                    cn(
+                                        "text-[10px] text-brand-blue",
+                                        tagFilter === tag.name && "text-white"
+                                    )
+                                } tagColor={false}
+                                classNameContainer={
+                                    cn(
+                                        "bg-none border border-brand-blue",
+                                        tagFilter === tag.name && "bg-brand-blue",
+                                        tagFilter === tag.name && " scale-110"
+
+                                    )
+                                } />
                         </Link>
                     </li>
                 ))}
@@ -304,7 +361,7 @@ function CardapioFooter() {
             )
         }>
             <div className="w-full py-1 px-4 bg-brand-blue">
-                <TextSlideInUp items={labels} cnText="text-xs text-white" slideCondition={storeOpeningStatus} cnHeight="h-4" />
+                <TextSlideInUp items={labels} cnText="text-sm text-white font-body-website" slideCondition={storeOpeningStatus} cnHeight="h-6" />
             </div>
             {storeOpeningStatus &&
                 <footer >

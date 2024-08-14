@@ -15,6 +15,9 @@ import { menuItemSharePrismaEntity } from "~/domain/cardapio/menu-item-share.pri
 import GLOBAL_LINKS from "~/domain/website-navigation/global-links.constant";
 import ItalyFlag from "~/components/italy-flag/italy-flag";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "~/components/ui/dialog";
+import CardapioItemDialog from "~/domain/cardapio/components/cardapio-item-dialog/cardapio-item-dialog";
+import ItalyIngredientsStatement from "~/domain/cardapio/components/italy-ingredient-statement/italy-ingredient-statement";
+import CardapioItemActionBar from "~/domain/cardapio/components/cardapio-item-action-bar/cardapio-item-action-bar";
 
 export const headers: HeadersFunction = () => ({
     'Cache-Control': 's-maxage=1, stale-while-revalidate=59',
@@ -151,51 +154,50 @@ interface CardapioItemProps {
     item: MenuItemWithAssociations;
 }
 
-const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) => (
-    <li className="flex flex-col snap-start" id={item.id} ref={ref}>
-        <div className="relative mb-2">
-            <CardaioItemDialog item={item}>
-                <CardapioItemImage item={item} />
-            </CardaioItemDialog>
-            <div className="absolute bottom-0 inset-x-0 py-4 px-2">
-                <CardapioItemPrice prices={item?.priceVariations} />
-            </div>
-        </div>
-        <div className="flex flex-col px-4 mb-2">
-            <h3 className="font-body-website text-sm font-semibold uppercase mb-2 text-left">{item.name}</h3>
-            <p className="font-body-website leading-tight text-left">{item.ingredients}</p>
-        </div>
-        <CardapioItemActionBar item={item} />
-        <Separator className="my-4" />
-    </li>
-));
+const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) => {
 
-interface CardapioItemDialogProps {
-    children?: React.ReactNode;
-    item: MenuItemWithAssociations;
-}
+    const italyProduct = item.tags?.public.some(t => t.toLocaleLowerCase() === "produtos-italianos")
 
-function CardaioItemDialog({ item, children }: CardapioItemDialogProps) {
+
+
     return (
-        <Dialog >
-            <DialogTrigger asChild className="w-full">
-                <button>
-                    {children}
-                </button>
-            </DialogTrigger>
-            <DialogContent className="py-12">
 
-                <CardapioItemImage item={item} withOverlay={false} />
-                <div className="flex flex-col px-2 mb-2">
-                    <h3 className="font-body-website text-sm font-semibold uppercase mb-2">{item.name}</h3>
-                    <p className="font-body-website leading-tight">{item.ingredients}</p>
+        <li className="flex flex-col snap-start" id={item.id} ref={ref}>
+            <div className="relative mb-2">
+                <CardapioItemDialog item={item} triggerComponent={
+                    <CardapioItemImage item={item} />
+                }>
+
+                    <CardapioItemImage item={item} withOverlay={false} />
+                    <div className="flex flex-col px-2 mb-2">
+                        <h3 className="font-body-website text-sm font-semibold uppercase mb-2">{item.name}</h3>
+                        {
+                            italyProduct && <ItalyIngredientsStatement />
+                        }
+                        <p className="font-body-website leading-tight">{item.ingredients}</p>
+                    </div>
+
+                    <CardapioItemPrice prices={item?.priceVariations} cnTextColor="text-black" />
+                </CardapioItemDialog>
+                <div className="absolute bottom-0 inset-x-0 py-4 px-2">
+                    <CardapioItemPrice prices={item?.priceVariations} />
                 </div>
-
-                <CardapioItemPrice prices={item?.priceVariations} cnTextColor="text-black" />
-            </DialogContent>
-        </Dialog>
+            </div>
+            <div className="flex flex-col px-4 mb-2">
+                <h3 className="font-body-website text-sm font-semibold uppercase mb-2 text-left">{item.name}</h3>
+                {
+                    italyProduct && <ItalyIngredientsStatement />
+                }
+                <p className="font-body-website leading-tight text-left">{item.ingredients}</p>
+            </div>
+            <CardapioItemActionBar item={item} />
+            <Separator className="my-4" />
+        </li>
     )
-}
+
+
+});
+
 
 
 
@@ -287,93 +289,4 @@ function CardapioItemPrice({ prices, cnTextColor }: CardapioItemPriceProps) {
     )
 }
 
-function CardapioItemActionBar({ item }: { item: MenuItemWithAssociations }) {
-    const [likeIt, setLikeIt] = useState(false)
-    const [likesAmount, setLikesAmount] = useState(item.likes?.amount || 0)
 
-    const fetcher = useFetcher();
-
-    const likingIt = () => {
-
-        setLikeIt(true)
-        setLikesAmount(likesAmount + 1)
-
-        fetcher.submit(
-            {
-                action: "menu-item-like-it",
-                itemId: item.id,
-                likesAmount: String(1),
-            },
-            { method: 'post' }
-        );
-    };
-
-    const shareIt = () => {
-        if (!navigator?.share) {
-            console.log("Navegador não suporta o compartilhamento")
-            return
-        }
-
-        const text = `Essa pizza ${item.name} é a melhor pizza da cidade. Experimente...`
-        navigator.share({
-            title: item.name,
-            text,
-            url: `${GLOBAL_LINKS.cardapioPublic}/#${item.id}`
-        }).then(() => {
-
-            fetcher.submit(
-                {
-                    action: "menu-item-share-it",
-                    itemId: item.id,
-                },
-                { method: 'post' }
-            );
-
-        }).catch((error) => {
-        })
-    }
-
-
-
-
-    return (
-        <div className="flex flex-col gap-0">
-            <div className="grid grid-cols-2 font-body-website px-4 mb-1">
-                <div className="flex items-center">
-                    <div className="flex flex-col gap-1 cursor-pointer p-2 active:bg-brand-blue/50" onClick={likingIt}>
-                        <Heart
-                            className={cn(
-                                likeIt ? "fill-red-500" : "fill-none",
-                                likeIt ? "stroke-red-500" : "stroke-black",
-                                item.likes?.amount && item.likes?.amount > 0 ? "stroke-red-500" : "stroke-black"
-                            )}
-                        />
-                    </div>
-                    <div className="flex flex-col gap-1 cursor-pointer p-2 active:bg-brand-blue/50 " onClick={shareIt}>
-                        <Share2 />
-                    </div>
-                </div>
-
-                <WhatsappExternalLink
-                    phoneNumber="46991272525"
-                    ariaLabel="Envia uma mensagem com WhatsApp"
-                    message={"Olá, gostaria fazer um pedido"}
-                    className="flex flex-col gap-1 items-end cursor-pointer p-2 active:bg-brand-blue/50"
-                >
-                    <WhatsAppIcon color="black" />
-                </WhatsappExternalLink>
-            </div>
-            {likesAmount === 0 && (
-                <div className="flex items-center gap-1">
-                    <span className="text-sm font-body-website tracking-tight pl-4">Seja o primeiro! Curte com </span>
-                    <Heart size={14} />
-                </div>
-            )}
-
-            <span className="text-xs font-semibold font-body-website tracking-tight px-4 text-red-500">
-                {likesAmount > 0 && `${likesAmount} curtidas`}
-
-            </span>
-        </div>
-    );
-}
