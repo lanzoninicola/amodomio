@@ -12,8 +12,6 @@ const useStoreOpeningStatus = () => {
     const storeOpenHour = ENV.STORE_OPENING_CONFIG.OPENING_HOUR || 1800;
     const storeCloseHour = ENV.STORE_OPENING_CONFIG.CLOSING_HOUR || 2200;
 
-    console.log({ storeOpenDays });
-
     if (storeOpenDays) {
       // Get the current day of the week (0 = Sunday, 6 = Saturday)
       const now = new Date();
