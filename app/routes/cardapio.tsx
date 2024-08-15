@@ -38,11 +38,13 @@ import { badRequest, ok } from "~/utils/http-response.server";
  * - [x] Add to menu link instagram
  * - [] Add customer comments, from a copia incolla operation
  * - [] Add to menu link fazer pedido
- * - [] Different layouts
+ * - [] Add to menu "como funciona"
+ * - [] Like it bounded to product sells
+ * - [x] Different layouts
  * - [] Fechamento Horario Atendimento no botao de fazer pedido
  * - [] Session feature
- * - [] Like it feature
- * - [] Share it feature
+ * - [x] Like it feature
+ * - [x] Share it feature
  * - [] Notification feature
  * - [] Let install it wpapp
  * - [] Me sinto fortunado (choose a random menu item)
@@ -183,11 +185,14 @@ export default function CardapioWeb() {
                     </div>
                 </section>
 
-                <div className="rounded-lg bg-muted m-4 p-2">
-                    <div className="flex items-center justify-center">
+                <div className="grid grid-cols-10 rounded-lg bg-muted m-4 p-2">
+                    <div className="flex items-center justify-center col-span-1">
                         <ItalyFlag width={24} />
                     </div>
-                    <p className="font-body-website text-sm">Todas os nossas pizzas são preparadas com <span className="font-semibold">farinha e molho de tomate importados da Itália</span></p>
+                    <p className="font-body-website text-sm col-span-8 text-center">Todas os nossas pizzas são preparadas com <span className="font-semibold">farinha e molho de tomate importados da Itália</span></p>
+                    <div className="flex items-center justify-center col-span-1">
+                        <ItalyFlag width={24} />
+                    </div>
                 </div>
 
                 <div className="flex gap-4 justify-center mb-2">
@@ -227,7 +232,6 @@ interface CardapioHeaderProps {
 
 function CardapioHeader({ items, tags }: CardapioHeaderProps) {
     const [showSearch, setShowSearch] = useState(false)
-    const storeOpeningStatus = useStoreOpeningStatus()
 
     return (
         <header className=" shadow fixed top-0 w-screen z-50 md:max-w-2xl md:-translate-x-1/2 md:left-1/2" >
@@ -248,21 +252,18 @@ function CardapioHeader({ items, tags }: CardapioHeaderProps) {
                             colorIcon: "white",
                         }}
                     >
-                        <div className="flex flex-col justify-center mb-2">
-                            <p className="font-body-website font-semibold text-sm leading-relaxed">Hórarios de funcionamento</p>
+                        <div className="flex flex-col justify-center mb-2 font-body-website">
+                            <p className=" font-semibold text-sm leading-relaxed">Hórarios de funcionamento</p>
                             <div className="flex flex-col justify-center mb-4">
                                 <p className="text-muted-foreground font-body-website">Quarta - Domingo</p>
                                 <p className="text-muted-foreground font-body-website">18:00 - 22:00</p>
                             </div>
                         </div>
 
-                        {
-                            storeOpeningStatus && (
-                                <div className="pr-4 mb-4">
-                                    <FazerPedidoButton cnLabel="text-xs" />
-                                </div>
-                            )
-                        }
+
+                        <div className="pr-4 mb-4">
+                            <FazerPedidoButton cnLabel="text-xs" />
+                        </div>
 
                     </WebsiteNavigationSidebar>
 
@@ -351,8 +352,8 @@ function FiltersTags({ tags }: { tags: Tag[] }) {
 
 function CardapioFooter() {
 
-    const labels = ["🚨 ESTAMOS FECHADOS 🚨", "HORÁRIO DE ATENDIMENTO", "QUA-DOM 18:00-22:00"];
-    const storeOpeningStatus = useStoreOpeningStatus()
+    const labels = ["cyuc", "HORÁRIO DE ATENDIMENTO", "QUA-DOM 18:00-22:00"];
+
 
     return (
         <div className={
@@ -360,16 +361,11 @@ function CardapioFooter() {
                 "fixed bottom-0 w-screen md:max-w-2xl md:-translate-x-1/2 md:left-1/2 ",
             )
         }>
-            <div className="w-full py-1 px-4 bg-brand-blue">
-                <TextSlideInUp items={labels} cnText="text-sm text-white font-body-website" slideCondition={storeOpeningStatus} cnHeight="h-6" />
-            </div>
-            {storeOpeningStatus &&
-                <footer >
-                    <div className="h-full w-full py-2 px-4 bg-white">
-                        <FazerPedidoButton />
-                    </div>
-                </footer>
-            }
+            <footer >
+                <div className="h-full w-full py-2 px-4 bg-white">
+                    <FazerPedidoButton />
+                </div>
+            </footer>
         </div>
 
     )
