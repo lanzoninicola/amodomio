@@ -169,15 +169,17 @@ const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) =>
                 }>
 
                     <CardapioItemImage item={item} withOverlay={false} />
-                    <div className="flex flex-col px-2 mb-2">
-                        <h3 className="font-body-website text-sm font-semibold uppercase mb-2">{item.name}</h3>
-                        {
-                            italyProduct && <ItalyIngredientsStatement />
-                        }
-                        <p className="font-body-website leading-tight">{item.ingredients}</p>
-                    </div>
+                    <div className="p-4">
+                        <div className="flex flex-col mb-2">
+                            <h3 className="font-body-website text-sm font-semibold uppercase mb-2">{item.name}</h3>
+                            {
+                                italyProduct && <ItalyIngredientsStatement />
+                            }
+                            <p className="font-body-website leading-tight">{item.ingredients}</p>
+                        </div>
 
-                    <CardapioItemPrice prices={item?.priceVariations} cnTextColor="text-black" />
+                        <CardapioItemPrice prices={item?.priceVariations} cnTextColor="text-black" />
+                    </div>
                 </CardapioItemDialog>
                 <div className="absolute bottom-0 inset-x-0 py-4 px-2">
                     <CardapioItemPrice prices={item?.priceVariations} />

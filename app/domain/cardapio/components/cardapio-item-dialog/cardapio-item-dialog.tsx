@@ -1,5 +1,6 @@
-import { Dialog, DialogContent, DialogTrigger } from "~/components/ui/dialog";
+import { Dialog, DialogContent, DialogTrigger, DialogClose } from "~/components/ui/dialog";
 import { MenuItemWithAssociations } from "../../menu-item.prisma.entity.server";
+import { Button } from "~/components/ui/button";
 
 
 interface CardapioItemDialogProps {
@@ -17,9 +18,14 @@ export default function CardapioItemDialog({ item, children, triggerComponent }:
                     {triggerComponent}
                 </button>
             </DialogTrigger>
-            <DialogContent className="py-12">
+            <DialogContent className="p-0">
 
                 {children}
+                <DialogClose asChild>
+                    <Button type="button" variant="secondary">
+                        <span className="font-body-website tracking-wide text-xs font-semibold uppercase">Fechar</span>
+                    </Button>
+                </DialogClose>
             </DialogContent>
         </Dialog>
     )
