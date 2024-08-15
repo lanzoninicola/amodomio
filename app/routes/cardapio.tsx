@@ -405,8 +405,8 @@ function CardapioSearch({ items, setShowSearch }: {
 
 
     return (
-        <div className="flex flex-col">
-            <div className="bg-white flex flex-col py-3">
+        <div className="bg-white flex flex-col py-2 px-4 rounded-sm shadow-lg">
+            <div className=" flex flex-col py-3">
                 <Input placeholder="Digitar 'abobrinha' ou 'vegetarianas'" className="font-body-website text-sm h-8" onChange={handleSearch} />
                 {
                     search && <p className="font-body-website text-xs text-muted-foreground mt-2">{currentItems.length} de {items.length} resultados para
