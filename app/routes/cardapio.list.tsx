@@ -1,7 +1,7 @@
 import { useOutletContext, useSearchParams } from "@remix-run/react";
 import { CardapioOutletContext } from "./cardapio-web";
 import CardapioItemDialog from "~/domain/cardapio/components/cardapio-item-dialog/cardapio-item-dialog";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { MenuItemWithAssociations } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { cn } from "~/lib/utils";
 import CardapioItemActionBar from "~/domain/cardapio/components/cardapio-item-action-bar/cardapio-item-action-bar";
@@ -16,6 +16,7 @@ export default function CardapioList() {
     const { items: allItems } = useOutletContext<CardapioOutletContext>();
 
     const [items, setItems] = useState<MenuItemWithAssociations[]>([]);
+    const [hasMore, setHasMore] = useState(true);
 
     useEffect(() => {
         const itemsFiltered = currentFilterTag
@@ -24,12 +25,42 @@ export default function CardapioList() {
         setItems(itemsFiltered.slice(0, 10));
     }, [currentFilterTag, allItems]);
 
+    const observer = useRef<IntersectionObserver | null>(null);
+
+    const lastItemRef = useCallback((node: HTMLLIElement) => {
+        if (observer.current) observer.current.disconnect();
+        observer.current = new IntersectionObserver(entries => {
+            if (entries[0].isIntersecting && hasMore) {
+                setItems(prevItems => {
+                    const itemsFiltered = currentFilterTag
+                        ? allItems.filter(i => i.tags?.public.some(t => t === currentFilterTag))
+                        : allItems;
+                    const newItems = itemsFiltered.slice(prevItems.length, prevItems.length + 10);
+                    setHasMore(newItems.length > 0);
+                    return [...prevItems, ...newItems];
+                });
+            }
+        });
+        if (node) observer.current.observe(node);
+    }, [hasMore, allItems, currentFilterTag]);
+
+    if (items.length === 0) {
+        return (
+            <div className="flex h-full w-full items-center justify-center p-8">
+                <div className="flex flex-col gap-6 justify-center items-center">
+                    <img src="/images/empty-cardapio.webp" className="mx-auto w-[136px]" alt="Nenhum item encontrado" />
+                    <h1 className="font-body-website text-sm md:text-lg font-semibold text-muted-foreground">Nenhum item encontrado</h1>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <section>
             <ul className="flex flex-col overflow-y-auto md:overflow-y-z auto snap-mandatory">
                 {items.map((item, index) => {
                     if (items.length === index + 1) {
-                        return <CardapioItem key={item.id} item={item} />
+                        return <CardapioItem ref={lastItemRef} key={item.id} item={item} />
                     } else {
                         return <CardapioItem key={item.id} item={item} />
                     }
