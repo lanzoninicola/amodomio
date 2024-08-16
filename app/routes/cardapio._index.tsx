@@ -18,6 +18,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import CardapioItemDialog from "~/domain/cardapio/components/cardapio-item-dialog/cardapio-item-dialog";
 import ItalyIngredientsStatement from "~/domain/cardapio/components/italy-ingredient-statement/italy-ingredient-statement";
 import CardapioItemActionBar from "~/domain/cardapio/components/cardapio-item-action-bar/cardapio-item-action-bar";
+import CardapioItemImage from "~/domain/cardapio/components/cardapio-item-image/cardapio-item-image";
+import CardapioItemPrice from "~/domain/cardapio/components/cardapio-item-price/cardapio-item-price";
 
 export const headers: HeadersFunction = () => ({
     'Cache-Control': 's-maxage=1, stale-while-revalidate=59',
@@ -166,21 +168,7 @@ const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) =>
             <div className="relative mb-2">
                 <CardapioItemDialog item={item} triggerComponent={
                     <CardapioItemImage item={item} />
-                }>
-
-                    <CardapioItemImage item={item} withOverlay={false} />
-                    <div className="p-4">
-                        <div className="flex flex-col mb-2">
-                            <h3 className="font-body-website text-sm font-semibold uppercase mb-2">{item.name}</h3>
-                            {
-                                italyProduct && <ItalyIngredientsStatement />
-                            }
-                            <p className="font-body-website leading-tight">{item.ingredients}</p>
-                        </div>
-
-                        <CardapioItemPrice prices={item?.priceVariations} cnTextColor="text-black" />
-                    </div>
-                </CardapioItemDialog>
+                } />
                 <div className="absolute bottom-0 inset-x-0 py-4 px-2">
                     <CardapioItemPrice prices={item?.priceVariations} />
                 </div>
@@ -204,91 +192,8 @@ const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) =>
 
 
 
-interface CardapioItemImageProps {
-    item: MenuItemWithAssociations;
-    withOverlay?: boolean;
-}
-
-const CardapioItemImage = ({ item, withOverlay = true }: CardapioItemImageProps) => {
-
-    const italyProduct = item.tags?.public.some(t => t.toLocaleLowerCase() === "produtos-italianos")
-
-    const Overlay = () => {
-        return (
-            <div className="absolute inset-0 overflow-hidden rotate-0" style={{
-                background: "linear-gradient(180deg, #00000033 60%, #0000009e 75%)"
-            }}>
-            </div>
-        )
-    }
-
-    const ItalyFlagOverlay = () => {
-        return (
-            <div className="absolute top-2 right-4 overflow-hidden rotate-0" >
-                <ItalyFlag width={24} />
-            </div>
-
-        )
-    }
-
-    return (
-        <div className="relative">
-            <img
-                src={item.imageTransformedURL || "/images/cardapio-web-app/placeholder.png"}
-                alt={item.name}
-                loading="lazy"
-                className="w-full max-h-[250px] object-cover object-center"
-            />
-            {withOverlay && <Overlay />}
-            {italyProduct && <ItalyFlagOverlay />}
-        </div>
-    )
-}
-
-interface CardapioItemPriceProps {
-    prices: MenuItemWithAssociations["priceVariations"]
-    cnTextColor?: string
-}
-
-function CardapioItemPrice({ prices, cnTextColor }: CardapioItemPriceProps) {
-
-    const visiblePrices = prices.filter(p => p.showOnCardapio === true) || []
-    const colsNumber = prices.length
-
-    return (
-        <div className={
-            cn(
-                "grid gap-x-2",
-                isNaN(colsNumber) ? "grid-cols-3" : `grid-cols-${colsNumber}`
-            )
-        }>
-            {
-                visiblePrices.map(p => {
-
-                    return (
-
-                        <div key={p.id} className={
-                            cn(
-                                "flex flex-col items-center text-white",
-                                cnTextColor
-                            )
-
-                        }>
-                            <span className="font-body-website uppercase text-[14px]">{p?.label}</span>
-                            <Separator orientation="horizontal" className="my-1" />
-                            <div className="flex items-start gap-[2px] font-body-website font-semibold">
-                                <span className="text-[13px]">R$</span>
-                                <span className="text-[15px]">{p?.amount}</span>
-                            </div>
-                        </div>
-                    )
 
 
-                })
-            }
 
-        </div>
-    )
-}
 
 

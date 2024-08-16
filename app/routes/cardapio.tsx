@@ -5,7 +5,8 @@ import { Link, Outlet, useLoaderData, useLocation, useSearchParams } from "@remi
 import { LayoutList } from "lucide-react";
 import { LayoutTemplate } from "lucide-react";
 import { ArrowRight, Filter, Instagram, MapPin, SearchIcon, XIcon } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+
 import ItalyFlag from "~/components/italy-flag/italy-flag";
 import Badge from "~/components/primitives/badge/badge";
 import ExternalLink from "~/components/primitives/external-link/external-link";
@@ -13,9 +14,11 @@ import Logo from "~/components/primitives/logo/logo";
 import WhatsappExternalLink from "~/components/primitives/whatsapp/whatsapp-external-link";
 import WhatsAppIcon from "~/components/primitives/whatsapp/whatsapp-icon";
 import TextSlideInUp from "~/components/text-slide-in-up/text-slide-in-up";
+import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Separator } from "~/components/ui/separator";
 import { toast } from "~/components/ui/use-toast";
+import CardapioItemDialog from "~/domain/cardapio/components/cardapio-item-dialog/cardapio-item-dialog";
 import FazerPedidoButton from "~/domain/cardapio/components/fazer-pedido-button/fazer-pedido-button";
 import { menuItemTagPrismaEntity } from "~/domain/cardapio/menu-item-tags.prisma.entity.server";
 import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
@@ -234,7 +237,7 @@ function CardapioHeader({ items, tags }: CardapioHeaderProps) {
     const [showSearch, setShowSearch] = useState(false)
 
     return (
-        <header className=" shadow fixed top-0 w-screen z-50 md:max-w-2xl md:-translate-x-1/2 md:left-1/2" >
+        <header className="fixed top-0 w-screen z-50 md:max-w-2xl md:-translate-x-1/2 md:left-1/2" >
             <div className="flex flex-col bg-brand-blue px-4 pt-2 py-1">
                 <div className="grid grid-cols-3 items-center w-full">
                     {/* <div className="flex gap-1 items-center" onClick={() => setShowSearch(!showSearch)}>
@@ -275,7 +278,13 @@ function CardapioHeader({ items, tags }: CardapioHeaderProps) {
                         <span className="font-body-website text-[10px] font-semibold  uppercase text-white">Pesquisar</span>
                     </div>
                 </div>
-                {showSearch && <CardapioSearch items={items} setShowSearch={setShowSearch} />}
+                {showSearch && (
+                    <div className="fixed inset-0 z-50">
+                        <div className="flex items-end justify-center p-6 h-screen backdrop-blur-sm bg-black/50">
+                            <CardapioSearch items={items} setShowSearch={setShowSearch} />
+                        </div>
+                    </div>
+                )}
             </div>
 
 
@@ -292,48 +301,50 @@ function FiltersTags({ tags }: { tags: Tag[] }) {
     return (
 
         <div className="relative bg-white">
-            <ul className="overflow-x-auto py-3 px-2" style={{
-                display: "-webkit-inline-box"
-            }}>
-                <Link to={`/cardapio`} className="text-xs font-body-website font-semibold uppercase text-muted-foreground">
-                    <Badge className={
-                        cn(
-                            "bg-none border border-brand-blue text-brand-blue font-semibold",
-                            tagFilter === null && "bg-brand-blue text-white scale-110"
-                        )
-                    }>Todos</Badge>
-                </Link>
-                {tags.map((tag) => (
-                    <li key={tag.id} className="ml-2">
-                        <Link to={`?tag=${tag.name}`} className="text-xs font-body-website font-semibold uppercase text-muted-foreground">
-                            <BadgeTag tag={tag}
-                                classNameLabel={
-                                    cn(
-                                        "text-[10px] text-brand-blue",
-                                        tagFilter === tag.name && "text-white"
-                                    )
-                                } tagColor={false}
-                                classNameContainer={
-                                    cn(
-                                        "bg-none border border-brand-blue",
-                                        tagFilter === tag.name && "bg-brand-blue",
-                                        tagFilter === tag.name && " scale-110"
+            <div className="w-full overflow-x-auto" >
+                <ul className="py-3 px-2" style={{
+                    display: "-webkit-inline-box"
+                }}>
+                    <Link to={`/cardapio`} className="text-xs font-body-website font-semibold uppercase text-muted-foreground">
+                        <Badge className={
+                            cn(
+                                "bg-none border border-brand-blue text-brand-blue font-semibold",
+                                tagFilter === null && "bg-brand-blue text-white scale-110"
+                            )
+                        }>Todos</Badge>
+                    </Link>
+                    {tags.map((tag) => (
+                        <li key={tag.id} className="ml-2">
+                            <Link to={`?tag=${tag.name}`} className="text-xs font-body-website font-semibold uppercase text-muted-foreground">
+                                <BadgeTag tag={tag}
+                                    classNameLabel={
+                                        cn(
+                                            "text-[10px] text-brand-blue",
+                                            tagFilter === tag.name && "text-white"
+                                        )
+                                    } tagColor={false}
+                                    classNameContainer={
+                                        cn(
+                                            "bg-none border border-brand-blue",
+                                            tagFilter === tag.name && "bg-brand-blue",
+                                            tagFilter === tag.name && " scale-110"
 
-                                    )
-                                } />
-                        </Link>
-                    </li>
-                ))}
+                                        )
+                                    } />
+                            </Link>
+                        </li>
+                    ))}
 
 
-            </ul>
+                </ul>
+            </div>
             {
                 tagFilter && (
                     <div className="absolute top-12 left-0 right-0 flex gap-2 items-center px-2 bg-blue-300 py-[0.15rem]">
                         <div className="flex items-center justify-between w-full">
                             <div className="flex gap-1 items-center">
                                 <Filter size={12} />
-                                <p className="font-body-website text-[12px]">Você está visualizando os sabores de"<span className="font-semibold">{tagFilter}</span>"</p>
+                                <p className="font-body-website text-[12px]">Você está visualizando os sabores <span className="font-semibold">"{tagFilter}"</span></p>
                             </div>
                             <Link to={`/cardapio`} className="font-body-website text-[12px] underline font-semibold self-end">
                                 Voltar
@@ -363,7 +374,7 @@ function CardapioFooter() {
         }>
             <footer >
                 <div className="h-full w-full py-2 px-4 bg-white">
-                    <FazerPedidoButton />
+                    <FazerPedidoButton variant="primary" />
                 </div>
             </footer>
         </div>
@@ -378,6 +389,13 @@ function CardapioSearch({ items, setShowSearch }: {
 
     const [currentItems, setCurrentItems] = useState<MenuItemWithAssociations[]>([]);
     const [search, setSearch] = useState("")
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        if (inputRef.current) {
+            inputRef.current.focus();
+        }
+    }, []);
 
     const handleSearch = (event: React.ChangeEvent<HTMLInputElement>) => {
 
@@ -405,47 +423,57 @@ function CardapioSearch({ items, setShowSearch }: {
 
 
     return (
-        <div className="bg-white flex flex-col py-2 px-4 rounded-sm shadow-lg">
+        <div className="bg-white flex flex-col py-2 px-4 rounded-sm shadow-lg w-[350px] md:w-[450px]">
             <div className=" flex flex-col py-3">
-                <Input placeholder="Digitar 'abobrinha' ou 'vegetarianas'" className="font-body-website text-sm h-8" onChange={handleSearch} />
-                {
-                    search && <p className="font-body-website text-xs text-muted-foreground mt-2">{currentItems.length} de {items.length} resultados para
-                        <span className="font-semibold"> {search}</span>
-                    </p>
-                }
-                <Separator className="my-4" />
+
                 <div className="max-h-[350px] overflow-y-auto">
                     <ul className="flex flex-col gap-2">
                         {currentItems.map((item) => (
-                            <li className="py-1 flex-1 min-w-[70px]" key={item.id}>
-                                <Link
-                                    to={`/cardapio-web/#${item.id}`}
-                                    className="grid grid-cols-8 items-center w-full"
-                                >
-                                    <div className="bg-center bg-cover bg-no-repeat w-8 h-8 rounded-lg col-span-1 "
+                            <CardapioItemDialog key={item.id} item={item} triggerComponent={
+                                <li className="grid grid-cols-8 py-1" >
+
+                                    <div className="self-start bg-center bg-cover bg-no-repeat w-8 h-8 rounded-lg col-span-1 "
                                         style={{
                                             backgroundImage: `url(${item.MenuItemImage?.thumbnailUrl || "/images/cardapio-web-app/placeholder.png"})`,
                                         }}></div>
                                     <div className="flex flex-col col-span-7">
-                                        <span className="font-body-website text-[0.65rem] font-semibold leading-tight uppercase">{item.name}</span>
-                                        <span className="font-body-website text-[0.65rem] leading-tight">{item.ingredients}</span>
+                                        <span className="font-body-website text-[0.85rem] font-semibold leading-tight uppercase text-left">{item.name}</span>
+                                        <span className="font-body-website text-[0.85rem] leading-tight text-left">{item.ingredients}</span>
                                     </div>
 
-                                </Link>
-                            </li>
+                                </li>
+                            } />
+
                         ))}
                     </ul>
                 </div>
-            </div>
-            <div className="flex justify-end  items-center px-2 gap-1"
 
-                onClick={() => setShowSearch(false)}
-            >
-                <XIcon className="w-[11px] h-[11px]" />
-                <p className="text-[9px] tracking-widest font-semibold uppercase" style={{
-                    lineHeight: "normal",
-                }}>Fechar</p>
+                <Separator className="my-4" />
+
+                {
+                    search && <p className="font-body-website text-xs text-muted-foreground mb-2">{currentItems.length} de {items.length} resultados para
+                        <span className="font-semibold"> {search}</span>
+                    </p>
+                }
+
+                <Input
+                    ref={inputRef}
+                    placeholder="Digitar 'abobrinha' ou 'vegetarianas'" className="font-body-website text-sm h-8" onChange={handleSearch}
+
+                />
+
+
             </div>
+
+            <Button type="button" variant="secondary" onClick={() => setShowSearch(false)}>
+                <div className="flex gap-2 items-center font-body-website tracking-wide text-xs font-semibold uppercase">
+                    <XIcon className="w-[12px] h-[12px]" />
+                    <span className="text-[12px] tracking-widest font-semibold uppercase" style={{
+                        lineHeight: "normal",
+                    }}>Fechar</span></div>
+            </Button>
+
+
         </div>
     )
 
