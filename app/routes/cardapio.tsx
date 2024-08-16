@@ -246,7 +246,7 @@ function CardapioHeader({ items, tags }: CardapioHeaderProps) {
                     </div> */}
 
                     <WebsiteNavigationSidebar
-                        homeLink={{ label: "Cardápio", to: "cardapio" }}
+                        homeLink={{ label: GLOBAL_LINKS.cardapioPublic.title, to: GLOBAL_LINKS.cardapioPublic.href }}
                         navigationLinks={PUBLIC_WEBSITE_NAVIGATION_ITEMS}
                         buttonTrigger={{
                             label: "Menu",
@@ -270,7 +270,7 @@ function CardapioHeader({ items, tags }: CardapioHeaderProps) {
 
                     </WebsiteNavigationSidebar>
 
-                    <Link to="/cardapio-web" className="flex justify-center">
+                    <Link to={GLOBAL_LINKS.cardapioPublic.href} className="flex justify-center">
                         <Logo color="white" className="w-[60px]" tagline={false} />
                     </Link>
                     <div className="flex justify-end items-center cursor-pointer" onClick={() => setShowSearch(!showSearch)}>
