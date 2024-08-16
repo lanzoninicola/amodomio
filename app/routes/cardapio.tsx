@@ -301,48 +301,50 @@ function FiltersTags({ tags }: { tags: Tag[] }) {
     return (
 
         <div className="relative bg-white">
-            <ul className="overflow-x-auto py-3 px-2" style={{
-                display: "-webkit-inline-box"
-            }}>
-                <Link to={`/cardapio`} className="text-xs font-body-website font-semibold uppercase text-muted-foreground">
-                    <Badge className={
-                        cn(
-                            "bg-none border border-brand-blue text-brand-blue font-semibold",
-                            tagFilter === null && "bg-brand-blue text-white scale-110"
-                        )
-                    }>Todos</Badge>
-                </Link>
-                {tags.map((tag) => (
-                    <li key={tag.id} className="ml-2">
-                        <Link to={`?tag=${tag.name}`} className="text-xs font-body-website font-semibold uppercase text-muted-foreground">
-                            <BadgeTag tag={tag}
-                                classNameLabel={
-                                    cn(
-                                        "text-[10px] text-brand-blue",
-                                        tagFilter === tag.name && "text-white"
-                                    )
-                                } tagColor={false}
-                                classNameContainer={
-                                    cn(
-                                        "bg-none border border-brand-blue",
-                                        tagFilter === tag.name && "bg-brand-blue",
-                                        tagFilter === tag.name && " scale-110"
+            <div className="w-full overflow-x-auto" >
+                <ul className="py-3 px-2" style={{
+                    display: "-webkit-inline-box"
+                }}>
+                    <Link to={`/cardapio`} className="text-xs font-body-website font-semibold uppercase text-muted-foreground">
+                        <Badge className={
+                            cn(
+                                "bg-none border border-brand-blue text-brand-blue font-semibold",
+                                tagFilter === null && "bg-brand-blue text-white scale-110"
+                            )
+                        }>Todos</Badge>
+                    </Link>
+                    {tags.map((tag) => (
+                        <li key={tag.id} className="ml-2">
+                            <Link to={`?tag=${tag.name}`} className="text-xs font-body-website font-semibold uppercase text-muted-foreground">
+                                <BadgeTag tag={tag}
+                                    classNameLabel={
+                                        cn(
+                                            "text-[10px] text-brand-blue",
+                                            tagFilter === tag.name && "text-white"
+                                        )
+                                    } tagColor={false}
+                                    classNameContainer={
+                                        cn(
+                                            "bg-none border border-brand-blue",
+                                            tagFilter === tag.name && "bg-brand-blue",
+                                            tagFilter === tag.name && " scale-110"
 
-                                    )
-                                } />
-                        </Link>
-                    </li>
-                ))}
+                                        )
+                                    } />
+                            </Link>
+                        </li>
+                    ))}
 
 
-            </ul>
+                </ul>
+            </div>
             {
                 tagFilter && (
                     <div className="absolute top-12 left-0 right-0 flex gap-2 items-center px-2 bg-blue-300 py-[0.15rem]">
                         <div className="flex items-center justify-between w-full">
                             <div className="flex gap-1 items-center">
                                 <Filter size={12} />
-                                <p className="font-body-website text-[12px]">Você está visualizando os sabores de"<span className="font-semibold">{tagFilter}</span>"</p>
+                                <p className="font-body-website text-[12px]">Você está visualizando os sabores <span className="font-semibold">"{tagFilter}"</span></p>
                             </div>
                             <Link to={`/cardapio`} className="font-body-website text-[12px] underline font-semibold self-end">
                                 Voltar
@@ -372,7 +374,7 @@ function CardapioFooter() {
         }>
             <footer >
                 <div className="h-full w-full py-2 px-4 bg-white">
-                    <FazerPedidoButton />
+                    <FazerPedidoButton variant="primary" />
                 </div>
             </footer>
         </div>
