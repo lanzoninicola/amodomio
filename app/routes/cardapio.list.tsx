@@ -95,7 +95,7 @@ const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) =>
                     <h3 className="font-body-website text-sm font-semibold uppercase">{item.name}</h3>
                     {italyProduct && <ItalyIngredientsStatement />}
                     <p className="font-body-website leading-tight text-sm mb-2">{item.ingredients}</p>
-                    <CardapioItemPrice prices={item?.priceVariations} cnTextColor="text-black" />
+                    <CardapioItemPrice prices={item?.priceVariations} cnLabel="text-black" />
                 </div>
             </div>
             <CardapioItemActionBar item={item} />
@@ -107,10 +107,10 @@ const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) =>
 
 interface CardapioItemPriceProps {
     prices: MenuItemWithAssociations["priceVariations"]
-    cnTextColor?: string
+    cnLabel?: string
 }
 
-function CardapioItemPrice({ prices, cnTextColor }: CardapioItemPriceProps) {
+function CardapioItemPrice({ prices, cnLabel }: CardapioItemPriceProps) {
 
     const visiblePrices = prices.filter(p => p.showOnCardapio === true) || []
     const lastIndex = visiblePrices.length - 1
@@ -132,7 +132,7 @@ function CardapioItemPrice({ prices, cnTextColor }: CardapioItemPriceProps) {
                             cn(
                                 "flex items-center gap-2",
                                 lastIndex === idx && "order-last",
-                                cnTextColor
+                                cnLabel
                             )
 
                         }>
