@@ -15,6 +15,7 @@ import {
 } from "../setting/setting.entity.server";
 import { Setting } from "../setting/setting.model.server";
 import { dayjs, utc } from "~/lib/dayjs";
+import { settingPrismaEntity } from "../setting/setting.prisma.entity.server";
 
 interface MogoEntityProps {
   httpClient: MogoHttpClientInterface;
@@ -305,7 +306,7 @@ const mogoHttpClient = mock ? new MogoHttpClientMock() : new MogoHttpClient();
 
 const mogoEntity = new MogoEntity({
   httpClient: mogoHttpClient,
-  settings: settingEntity,
+  settings: settingPrismaEntity,
   serverTimezoneOffset: Number(process.env?.SERVER_TIMEZONE_OFFSET || 0),
 });
 
