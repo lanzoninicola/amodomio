@@ -1,6 +1,6 @@
 import { MenuItemTag, Tag } from "@prisma/client";
 import { HamburgerMenuIcon } from "@radix-ui/react-icons";
-import { HeadersFunction, LoaderArgs, V2_MetaFunction } from "@remix-run/node";
+import { HeadersFunction, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { Link, Outlet, useLoaderData } from "@remix-run/react";
 import { ArrowRight, Instagram, MapPin, SearchIcon, XIcon } from "lucide-react";
 import { useState } from "react";
@@ -44,7 +44,7 @@ export interface CardapioOutletContext {
     items: MenuItemWithAssociations[]
 }
 
-export const meta: V2_MetaFunction = ({ data }) => {
+export const meta: MetaFunction = ({ data }) => {
     return [
         { title: "Cardápio A Modo Mio - Pizzaria Italiana em Pato Branco" },
         { name: "description", content: "É a pizza! Italiana! Um sabor que você nunca experimentou! Descubra no nosso cardápio as melhores pizzas da cidade. Experimente e saboreie a verdadeira italianidade em Pato Branco." },
@@ -59,7 +59,7 @@ export const meta: V2_MetaFunction = ({ data }) => {
 
 
 
-export async function loader({ request }: LoaderArgs) {
+export async function loader({ request }: LoaderFunctionArgs) {
     const env = process.env?.NODE_ENV
 
     // const tagParam = getSearchParam({ request, paramName: 'tag' })

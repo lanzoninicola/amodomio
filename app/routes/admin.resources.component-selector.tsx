@@ -1,4 +1,4 @@
-import type { LoaderArgs } from '@remix-run/node';
+import type { LoaderFunctionArgs } from '@remix-run/node';
 import { json } from '@remix-run/node';
 import { Form, Link, useFetcher, useSearchParams } from '@remix-run/react';
 import { FieldPath } from 'firebase/firestore';
@@ -15,7 +15,7 @@ import type { Product } from '~/domain/product/product.model.server';
 import { jsonStringify } from '~/utils/json-helper';
 import toLowerCase from '~/utils/to-lower-case';
 
-export async function loader({ request }: LoaderArgs) {
+export async function loader({ request }: LoaderFunctionArgs) {
 
     const products = await productEntity.findAll([
         {

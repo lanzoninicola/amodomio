@@ -1,4 +1,4 @@
-import { V2_MetaFunction } from "@remix-run/node";
+import { MetaFunction } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
 import { Instagram } from "lucide-react";
 import Container from "~/components/layout/container/container";
@@ -6,7 +6,7 @@ import ExternalLink from "~/components/primitives/external-link/external-link";
 import { cn } from "~/lib/utils";
 import { ok } from "~/utils/http-response.server";
 
-export const meta: V2_MetaFunction = () => {
+export const meta: MetaFunction = () => {
     return [
         { title: "Vaga Auxiliar Cozinha" },
         {

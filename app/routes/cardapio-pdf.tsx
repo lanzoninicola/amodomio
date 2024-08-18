@@ -1,5 +1,5 @@
 
-import { V2_MetaFunction } from "@remix-run/node";
+import { MetaFunction } from "@remix-run/node";
 import { ArrowDown, ArrowLeft, ArrowRight, Heart, MenuSquare, Share2, ShoppingCart } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, Outlet } from "react-router-dom";
@@ -14,7 +14,7 @@ import { cn } from "~/lib/utils";
 import useBoundaryPosition from "~/utils/use-boundary-position";
 
 
-export const meta: V2_MetaFunction = () => {
+export const meta: MetaFunction = () => {
     return [
         { title: "Cardapio" },
         {

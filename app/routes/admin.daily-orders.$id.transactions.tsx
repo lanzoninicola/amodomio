@@ -4,13 +4,13 @@ import { DOTInboundChannel, DOTOperator, DOTPaymentMethod, DOTProduct, DailyOrde
 import { DailyOrderSingleOutletContext } from "./admin.daily-orders.$id"
 import TransactionForm from "~/domain/daily-orders/components/transaction-form"
 import randomReactKey from "~/utils/random-react-key"
-import { LoaderArgs, redirect } from "@remix-run/node"
+import { LoaderFunctionArgs, redirect } from "@remix-run/node"
 import { dailyOrderEntity } from "~/domain/daily-orders/daily-order.entity.server"
 import dotOperators from "~/domain/daily-orders/dot-operators"
 import { serverError, ok } from "~/utils/http-response.server"
 import tryit from "~/utils/try-it"
 
-export async function action({ request }: LoaderArgs) {
+export async function action({ request }: LoaderFunctionArgs) {
 
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);

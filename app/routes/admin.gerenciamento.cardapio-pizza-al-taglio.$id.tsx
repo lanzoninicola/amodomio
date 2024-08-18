@@ -1,4 +1,4 @@
-import { ActionArgs, LoaderArgs, redirect } from "@remix-run/node"
+import { ActionFunctionArgs, LoaderFunctionArgs, redirect } from "@remix-run/node"
 import { useActionData, useLoaderData } from "@remix-run/react"
 import { AlertCircle } from "lucide-react"
 import { Alert, AlertTitle, AlertDescription } from "~/components/ui/alert"
@@ -13,7 +13,7 @@ import tryit from "~/utils/try-it"
 
 
 
-export async function loader({ request, params }: LoaderArgs) {
+export async function loader({ request, params }: LoaderFunctionArgs) {
 
     const cardapioId = params.id
 
@@ -36,7 +36,7 @@ export async function loader({ request, params }: LoaderArgs) {
     })
 }
 
-export async function action({ request }: ActionArgs) {
+export async function action({ request }: ActionFunctionArgs) {
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);
 

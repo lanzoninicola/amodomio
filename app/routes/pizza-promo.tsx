@@ -1,10 +1,10 @@
-import { V2_MetaFunction } from "@remix-run/node";
+import { MetaFunction } from "@remix-run/node";
 import { Outlet } from "@remix-run/react";
 import Container from "~/components/layout/container/container";
 import Logo from "~/components/primitives/logo/logo";
 
 
-export const meta: V2_MetaFunction = () => {
+export const meta: MetaFunction = () => {
     return [
         { title: "Promo 'Fotos cardápio'" },
         {

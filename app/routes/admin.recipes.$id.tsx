@@ -1,5 +1,5 @@
 import { Category, Recipe, RecipeType } from "@prisma/client";
-import { redirect, type ActionArgs, type LoaderArgs } from "@remix-run/node";
+import { redirect, type ActionFunctionArgs, type LoaderFunctionArgs } from "@remix-run/node";
 import { Form, Link, Outlet, useActionData, useLoaderData, useLocation } from "@remix-run/react";
 import { Save } from "lucide-react";
 import { useState } from "react";
@@ -27,7 +27,7 @@ export interface RecipeOutletContext {
 }
 
 
-export async function loader({ request, params }: LoaderArgs) {
+export async function loader({ request, params }: LoaderFunctionArgs) {
     const recipeId = params?.id
 
     if (!recipeId) {
@@ -54,7 +54,7 @@ export async function loader({ request, params }: LoaderArgs) {
 
 }
 
-export async function action({ request }: ActionArgs) {
+export async function action({ request }: ActionFunctionArgs) {
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);
 

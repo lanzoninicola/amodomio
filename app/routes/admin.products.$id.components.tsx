@@ -1,6 +1,6 @@
 import { Form, Link, useActionData, useOutletContext } from "@remix-run/react";
 import { Input } from "~/components/ui/input";
-import { type ActionArgs } from "@remix-run/node";
+import { type ActionFunctionArgs } from "@remix-run/node";
 import errorMessage from "~/utils/error-message";
 import { badRequest, ok } from "~/utils/http-response.server";
 import tryit from "~/utils/try-it";
@@ -20,7 +20,7 @@ import SaveItemButton from "~/components/primitives/table-list/action-buttons/sa
 
 
 
-export async function action({ request }: ActionArgs) {
+export async function action({ request }: ActionFunctionArgs) {
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);
 

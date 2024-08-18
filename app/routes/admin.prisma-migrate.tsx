@@ -1,5 +1,5 @@
 import { RecipeType } from "@prisma/client"
-import { ActionArgs } from "@remix-run/node"
+import { ActionFunctionArgs } from "@remix-run/node"
 import { Form, useActionData, useLoaderData } from "@remix-run/react"
 import Container from "~/components/layout/container/container"
 import InputItem from "~/components/primitives/form/input-item/input-item"
@@ -22,7 +22,7 @@ export async function loader() {
 
 }
 
-export async function action({ request }: ActionArgs) {
+export async function action({ request }: ActionFunctionArgs) {
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);
 

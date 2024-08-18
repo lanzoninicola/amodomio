@@ -1,7 +1,7 @@
 import { scale } from "@cloudinary/url-gen/actions/resize";
 import { MenuItemTag } from "@prisma/client";
-import { LoaderArgs } from "@remix-run/node";
-import { Link, Outlet, V2_MetaFunction, useLoaderData } from "@remix-run/react";
+import { LoaderFunctionArgs } from "@remix-run/node";
+import { Link, Outlet, MetaFunction, useLoaderData } from "@remix-run/react";
 import Container from "~/components/layout/container/container";
 import { toast } from "~/components/ui/use-toast";
 import { menuItemTagPrismaEntity } from "~/domain/cardapio/menu-item-tags.prisma.entity.server";
@@ -13,7 +13,7 @@ import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { badRequest, ok } from "~/utils/http-response.server";
 import { lastUrlSegment } from "~/utils/url";
 
-export const meta: V2_MetaFunction = () => {
+export const meta: MetaFunction = () => {
     return [
         {
             name: "robots",
@@ -25,7 +25,7 @@ export const meta: V2_MetaFunction = () => {
 
 
 
-export async function loader({ request }: LoaderArgs) {
+export async function loader({ request }: LoaderFunctionArgs) {
 
     const [categories, items, tags] = await prismaAll([
         categoryPrismaEntity.findAll(),

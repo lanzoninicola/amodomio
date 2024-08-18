@@ -1,4 +1,4 @@
-import { LoaderFunction, LoaderArgs, redirect } from "@remix-run/node";
+import { LoaderFunction, LoaderFunctionArgs, redirect } from "@remix-run/node";
 import { Form, useLoaderData } from "@remix-run/react";
 import { AlertError } from "~/components/layout/alerts/alerts";
 import { Button } from "~/components/ui/button";
@@ -6,7 +6,7 @@ import { authenticator } from "~/domain/auth/google.server";
 import getSearchParam from "~/utils/get-search-param";
 import { unauthorized } from "~/utils/http-response.server";
 
-export let loader = ({ request }: LoaderArgs) => {
+export let loader = ({ request }: LoaderFunctionArgs) => {
 
   const authParam = getSearchParam({ request, paramName: 'auth' })
 

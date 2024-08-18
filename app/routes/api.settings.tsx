@@ -1,5 +1,5 @@
-import { LoaderArgs, json } from "@remix-run/node";
-import type { ActionArgs } from "@remix-run/node"; // or cloudflare/deno
+import { LoaderFunctionArgs, json } from "@remix-run/node";
+import type { ActionFunctionArgs } from "@remix-run/node"; // or cloudflare/deno
 import { settingEntity } from "~/domain/setting/setting.entity.server";
 import { settingPrismaEntity } from "~/domain/setting/setting.prisma.entity.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
@@ -14,7 +14,7 @@ import { badRequest, ok, serverError } from "~/utils/http-response.server";
  */
 
 // handle GET request
-export async function loader({ request, params }: LoaderArgs) {
+export async function loader({ request, params }: LoaderFunctionArgs) {
 
     const context = getSearchParam({ request, paramName: "context" })
 
@@ -47,7 +47,7 @@ export async function loader({ request, params }: LoaderArgs) {
 
 
 // handle POST request
-export async function action({ request }: ActionArgs) {
+export async function action({ request }: ActionFunctionArgs) {
 
 
     const body = await request.json();

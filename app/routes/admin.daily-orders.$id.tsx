@@ -1,4 +1,4 @@
-import { LoaderArgs, redirect } from "@remix-run/node";
+import { LoaderFunctionArgs, redirect } from "@remix-run/node";
 import { Form, Link, Outlet, useLoaderData } from "@remix-run/react";
 import { dailyOrderEntity } from "~/domain/daily-orders/daily-order.entity.server";
 import { DOTInboundChannel, DOTOperator, DOTPaymentMethod, DOTPizzaSize, DOTProduct, DailyOrder, DailyOrderTransaction } from "~/domain/daily-orders/daily-order.model.server";
@@ -17,7 +17,7 @@ import TransactionForm from "~/domain/daily-orders/components/transaction-form";
 import { cn } from "~/lib/utils";
 
 
-export async function loader({ request, params }: LoaderArgs) {
+export async function loader({ request, params }: LoaderFunctionArgs) {
     if (!params?.id) {
         return redirect(`/admin/daily-orders`)
     }
@@ -32,7 +32,7 @@ export async function loader({ request, params }: LoaderArgs) {
 }
 
 
-export async function action({ request }: LoaderArgs) {
+export async function action({ request }: LoaderFunctionArgs) {
 
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);

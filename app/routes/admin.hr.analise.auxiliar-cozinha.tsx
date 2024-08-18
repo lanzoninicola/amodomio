@@ -9,7 +9,7 @@ import { cn } from "~/lib/utils"
 import { Separator } from "~/components/ui/separator"
 import React from "react"
 import Badge from "~/components/primitives/badge/badge"
-import { V2_MetaFunction } from "@remix-run/node"
+import { MetaFunction } from "@remix-run/node"
 
 
 

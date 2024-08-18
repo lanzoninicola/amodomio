@@ -1,4 +1,4 @@
-import { LoaderArgs, redirect } from "@remix-run/node";
+import { LoaderFunctionArgs, redirect } from "@remix-run/node";
 import Container from "~/components/layout/container/container";
 import DoughForm from "~/domain/dough/components/dough-form/dough-form";
 import { doughEntity } from "~/domain/dough/dough.entity.server";
@@ -12,7 +12,7 @@ export async function loader() {
     return null
 }
 
-export async function action({ request }: LoaderArgs) {
+export async function action({ request }: LoaderFunctionArgs) {
 
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);

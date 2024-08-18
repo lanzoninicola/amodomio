@@ -1,7 +1,6 @@
-import type { LinkDescriptor, LinksFunction, LoaderArgs, V2_MetaFunction } from "@remix-run/node";
+import type { LinkDescriptor, LinksFunction, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import {
   Links,
-  LiveReload,
   Meta,
   Outlet,
   Scripts,
@@ -11,14 +10,13 @@ import {
   useRouteError,
 } from "@remix-run/react";
 import { Toaster } from "./components/ui/toaster";
-import stylesheet from "~/tailwind.css";
-import { cssBundleHref } from "@remix-run/css-bundle";
+import stylesheet from "~/tailwind.css?url";
 import GoogleTagManagerScriptTag from "./components/primitives/google-tag-manager/gtm-script";
 import GoogleTagManagerNoScriptTag from "./components/primitives/google-tag-manager/gtm-noscript";
 import { Analytics } from '@vercel/analytics/react';
 import { ok } from "./utils/http-response.server";
 
-export const meta: V2_MetaFunction = () => {
+export const meta: MetaFunction = () => {
   return [
     { title: "A Modio Mio - La vera pizza italiana di Pato Branco" },
     {
@@ -55,7 +53,6 @@ const linkFontVariant = (font: string) => {
 
 // @ts-ignore
 export const links: LinksFunction = () => [
-  ...(cssBundleHref ? [{ rel: "stylesheet", href: cssBundleHref }] : []),
   { rel: "stylesheet", href: stylesheet },
   { rel: "preconnect", href: "https://api.fonts.coollabs.io" },
   {
@@ -118,7 +115,7 @@ interface EnvironmentVariables {
 }
 
 
-export async function loader({ request }: LoaderArgs) {
+export async function loader({ request }: LoaderFunctionArgs) {
 
   const ENV: EnvironmentVariables = {
     GTM_ID: process?.env.GOOGLE_TAG_MANAGER_ID ?? "",
@@ -156,7 +153,6 @@ export default function App() {
         <Toaster />
         <ScrollRestoration />
         <Scripts />
-        <LiveReload />
         <Analytics />
         {ENV.GTM_ID !== "" && <GoogleTagManagerNoScriptTag id={ENV.GTM_ID} />}
       </body>

@@ -1,5 +1,5 @@
 import { Category, Product } from "@prisma/client";
-import { redirect, type ActionArgs, type LoaderArgs } from "@remix-run/node";
+import { redirect, type ActionFunctionArgs, type LoaderFunctionArgs } from "@remix-run/node";
 import { Form, Link, Outlet, useLoaderData, useLocation } from "@remix-run/react";
 import { useState } from "react";
 import InputItem from "~/components/primitives/form/input-item/input-item";
@@ -21,7 +21,7 @@ export interface ProductOutletContext {
 }
 
 
-export async function loader({ request }: LoaderArgs) {
+export async function loader({ request }: LoaderFunctionArgs) {
     const productId = urlAt(request.url, -1)
 
     if (!productId) {
@@ -48,7 +48,7 @@ export async function loader({ request }: LoaderArgs) {
 
 }
 
-export async function action({ request }: ActionArgs) {
+export async function action({ request }: ActionFunctionArgs) {
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);
 

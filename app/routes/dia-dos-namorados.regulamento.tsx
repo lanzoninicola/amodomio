@@ -1,13 +1,13 @@
 
 
 
-import { V2_MetaFunction } from "@remix-run/node";
+import { MetaFunction } from "@remix-run/node";
 import { Link } from "@remix-run/react";
 import { ArrowUpRight } from "lucide-react";
 import Container from "~/components/layout/container/container";
 import { Separator } from "~/components/ui/separator";
 
-export const meta: V2_MetaFunction = () => {
+export const meta: MetaFunction = () => {
     return [
         { title: "Dia dos Namorados - Informações e regulamento" },
         {
