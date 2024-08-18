@@ -1,7 +1,7 @@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
-import { RecipeEntity } from "../../recipe.entity";
 import { RecipeType } from "@prisma/client";
 import { cn } from "~/lib/utils";
+import { RecipeUtilsEntity } from "../../recipe-utils.entity";
 
 
 interface SelectRecipeTypeProps {
@@ -23,7 +23,7 @@ export default function SelectRecipeType({ defaultValue, className }: SelectReci
             </SelectTrigger>
             <SelectContent >
                 {
-                    RecipeEntity.getTypes().map(t => (
+                    RecipeUtilsEntity.getTypes().map(t => (
                         <SelectItem key={t.key} value={t.key}>{t.value}</SelectItem>
                     ))
                 }

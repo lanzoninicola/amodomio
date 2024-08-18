@@ -13,7 +13,7 @@ import { toast } from "~/components/ui/use-toast";
 import { categoryPrismaEntity } from "~/domain/category/category.entity.server";
 import RecipeForm from "~/domain/recipe/components/recipe-form/recipe-form";
 import SelectRecipeType from "~/domain/recipe/components/select-recipe-type/select-recipe-type";
-import { recipeEntity } from "~/domain/recipe/recipe.entity";
+import { recipeEntity } from "~/domain/recipe/recipe.entity.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { cn } from "~/lib/utils";
 import type { HttpResponse } from "~/utils/http-response.server";

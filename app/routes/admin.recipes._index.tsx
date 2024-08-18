@@ -9,7 +9,7 @@ import { EditItemButton, DeleteItemButton } from "~/components/primitives/table-
 import { Input } from "~/components/ui/input"
 import { toast } from "~/components/ui/use-toast"
 import RecipeBadge from "~/domain/recipe/components/recipe-badge/recipe-badge"
-import { recipeEntity } from "~/domain/recipe/recipe.entity"
+import { recipeEntity } from "~/domain/recipe/recipe.entity.server"
 import { cn } from "~/lib/utils"
 
 import { ok, serverError } from "~/utils/http-response.server"
