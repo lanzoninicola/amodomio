@@ -1,5 +1,5 @@
 
-import { ActionArgs, LoaderArgs } from "@remix-run/node";
+import { ActionFunctionArgs, ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
 import { categoryEntity } from "~/domain/category/category.entity.server";
 import { Category, CategoryType } from "~/domain/category/category.model.server";
@@ -8,7 +8,7 @@ import { badRequest, ok } from "~/utils/http-response.server";
 import tryit from "~/utils/try-it";
 
 
-export async function loader({ request, params }: LoaderArgs) {
+export async function loader({ request, params }: LoaderFunctionArgs) {
 
     const categoryId = params.id
 
@@ -28,7 +28,7 @@ export async function loader({ request, params }: LoaderArgs) {
     })
 }
 
-export async function action({ request }: ActionArgs) {
+export async function action({ request }: ActionFunctionArgs) {
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);
 

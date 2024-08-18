@@ -1,11 +1,11 @@
 import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { badRequest, ok } from "~/utils/http-response.server";
-import { LoaderArgs } from "@remix-run/node";
+import { LoaderFunctionArgs } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { Separator } from "~/components/ui/separator";
 
-export async function loader({ request }: LoaderArgs) {
+export async function loader({ request }: LoaderFunctionArgs) {
     const env = process.env?.NODE_ENV
 
     // @ts-ignore

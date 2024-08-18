@@ -1,4 +1,4 @@
-import { redirect, type ActionArgs } from "@remix-run/node";
+import { redirect, type ActionFunctionArgs } from "@remix-run/node";
 import { Form } from "@remix-run/react";
 import SubmitButton from "~/components/primitives/submit-button/submit-button";
 import { Card, CardHeader, CardTitle, CardContent } from "~/components/ui/card";
@@ -10,7 +10,7 @@ import { now } from "~/lib/dayjs";
 import { serverError } from "~/utils/http-response.server";
 import tryit from "~/utils/try-it";
 
-export async function action({ request }: ActionArgs) {
+export async function action({ request }: ActionFunctionArgs) {
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);
 

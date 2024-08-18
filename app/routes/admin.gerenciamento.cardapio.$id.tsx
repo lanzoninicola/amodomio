@@ -1,4 +1,4 @@
-import { LoaderArgs, V2_MetaFunction } from "@remix-run/node";
+import { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { Outlet, useLoaderData, useLocation, useParams, useSearchParams } from "@remix-run/react";
 import { Separator } from "~/components/ui/separator";
 import { toast } from "~/components/ui/use-toast";
@@ -8,7 +8,7 @@ import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { badRequest, ok, serverError } from "~/utils/http-response.server";
 import { lastUrlSegment, urlAt } from "~/utils/url";
 
-export const meta: V2_MetaFunction = ({ data }) => {
+export const meta: MetaFunction = ({ data }) => {
     const item: MenuItemWithAssociations = data?.payload?.item
 
     return [
@@ -24,7 +24,7 @@ const navigation = [
 
 
 
-// export async function loader({ request }: LoaderArgs) {
+// export async function loader({ request }: LoaderFunctionArgs) {
 //     const itemId = urlAt(request.url, -2)
 
 //     if (!itemId) {

@@ -1,5 +1,5 @@
 import { Label } from "@radix-ui/react-label"
-import { LoaderArgs } from "@remix-run/node"
+import { LoaderFunctionArgs } from "@remix-run/node"
 import { Form, useLoaderData } from "@remix-run/react"
 import { Moon, Sun } from "lucide-react"
 import { useState } from "react"
@@ -14,7 +14,7 @@ import { toast } from "~/components/ui/use-toast"
 import { cn } from "~/lib/utils"
 import { badRequest, ok } from "~/utils/http-response.server"
 
-export async function loader({ request }: LoaderArgs) {
+export async function loader({ request }: LoaderFunctionArgs) {
     const pixKey = process.env?.PIX_KEY
     const pixId = process.env?.PIX_ID
 

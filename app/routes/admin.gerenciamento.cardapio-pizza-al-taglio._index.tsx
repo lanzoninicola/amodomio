@@ -1,4 +1,4 @@
-import { ActionArgs, LoaderArgs } from "@remix-run/node"
+import { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node"
 import { Link, Outlet, useActionData, useLoaderData, useLocation } from "@remix-run/react"
 import { AlertCircle } from "lucide-react"
 import { useState } from "react"
@@ -14,7 +14,7 @@ import { ok, serverError } from "~/utils/http-response.server"
 import tryit from "~/utils/try-it"
 import { lastUrlSegment } from "~/utils/url"
 
-export async function loader({ request }: LoaderArgs) {
+export async function loader({ request }: LoaderFunctionArgs) {
 
     const [err, records] = await tryit(cardapioPizzaAlTaglioEntity.findAll())
 
@@ -29,7 +29,7 @@ export async function loader({ request }: LoaderArgs) {
     })
 }
 
-export async function action({ request }: ActionArgs) {
+export async function action({ request }: ActionFunctionArgs) {
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);
 

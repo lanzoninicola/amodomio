@@ -1,20 +1,13 @@
-import { ActionArgs, HeadersFunction } from "@remix-run/node";
-import { useActionData, useFetcher, useOutletContext, useSearchParams } from "@remix-run/react";
-import { Share2, Heart, Settings } from "lucide-react";
+import { HeadersFunction, LoaderFunctionArgs } from "@remix-run/node";
+import { useOutletContext, useSearchParams } from "@remix-run/react";
 import React, { useState, useRef, useCallback, useEffect } from "react";
-import WhatsappExternalLink from "~/components/primitives/whatsapp/whatsapp-external-link";
-import WhatsAppIcon from "~/components/primitives/whatsapp/whatsapp-icon";
 import { Separator } from "~/components/ui/separator";
 import { MenuItemWithAssociations } from "~/domain/cardapio/menu-item.prisma.entity.server";
-import { cn } from "~/lib/utils";
 import { CardapioOutletContext } from "./cardapio";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { menuItemLikePrismaEntity } from "~/domain/cardapio/menu-item-like.prisma.entity.server";
 import { badRequest, ok } from "~/utils/http-response.server";
 import { menuItemSharePrismaEntity } from "~/domain/cardapio/menu-item-share.prisma.entity.server";
-import GLOBAL_LINKS from "~/domain/website-navigation/global-links.constant";
-import ItalyFlag from "~/components/italy-flag/italy-flag";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "~/components/ui/dialog";
 import CardapioItemDialog from "~/domain/cardapio/components/cardapio-item-dialog/cardapio-item-dialog";
 import ItalyIngredientsStatement from "~/domain/cardapio/components/italy-ingredient-statement/italy-ingredient-statement";
 import CardapioItemActionBar from "~/domain/cardapio/components/cardapio-item-action-bar/cardapio-item-action-bar";
@@ -25,7 +18,7 @@ export const headers: HeadersFunction = () => ({
     'Cache-Control': 's-maxage=1, stale-while-revalidate=59',
 });
 
-export async function action({ request }: ActionArgs) {
+export async function action({ request }: LoaderFunctionArgs) {
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);
 

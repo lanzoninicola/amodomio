@@ -1,5 +1,5 @@
 import { Setting } from "@prisma/client";
-import { LoaderArgs } from "@remix-run/node";
+import { LoaderFunctionArgs } from "@remix-run/node";
 import { Form, Link, useLoaderData, useNavigation, useSearchParams } from "@remix-run/react";
 import dayjs from "dayjs";
 import { RefreshCw } from "lucide-react";
@@ -38,7 +38,7 @@ export interface StockMassaResponse {
 
 }
 
-export async function loader({ request }: LoaderArgs) {
+export async function loader({ request }: LoaderFunctionArgs) {
 
     const filterSearchParams = getSearchParam({ request, paramName: "filter" })
 
@@ -117,7 +117,7 @@ export async function loader({ request }: LoaderArgs) {
 
 
 
-export async function action({ request }: LoaderArgs) {
+export async function action({ request }: LoaderFunctionArgs) {
 
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);

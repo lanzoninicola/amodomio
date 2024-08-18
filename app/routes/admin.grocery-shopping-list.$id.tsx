@@ -1,4 +1,4 @@
-import { LoaderArgs, redirect } from "@remix-run/node";
+import { LoaderFunctionArgs, redirect } from "@remix-run/node";
 import { Form, Link, Outlet, useActionData, useLoaderData } from "@remix-run/react";
 import { ChevronRight, Globe, PlusSquareIcon, SaveIcon } from "lucide-react";
 import { PlusIcon } from "lucide-react";
@@ -14,7 +14,7 @@ import { jsonParse } from "~/utils/json-helper";
 import tryit from "~/utils/try-it";
 
 
-export async function loader({ request, params }: LoaderArgs) {
+export async function loader({ request, params }: LoaderFunctionArgs) {
 
     const listId = params?.id
 
@@ -35,7 +35,7 @@ export async function loader({ request, params }: LoaderArgs) {
 }
 
 
-export async function action({ request }: LoaderArgs) {
+export async function action({ request }: LoaderFunctionArgs) {
 
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);

@@ -12,8 +12,8 @@ export default function ItalyFlag({ width, className }: ItalyFlagProps) {
     const defaultWidth = 1500
     const defaultHeight = 1000
 
-    const widthSvg = width ?? defaultWidth
-    const heightSvg = widthSvg * 1.5 ?? defaultHeight
+    const widthSvg = width || defaultWidth
+    const heightSvg = widthSvg * 1.5 || defaultHeight
 
 
 

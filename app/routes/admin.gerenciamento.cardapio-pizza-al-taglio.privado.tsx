@@ -1,4 +1,4 @@
-import { LoaderArgs } from "@remix-run/node"
+import { LoaderFunctionArgs } from "@remix-run/node"
 import { Link, useLoaderData } from "@remix-run/react"
 import { toast } from "~/components/ui/use-toast"
 import { cardapioPizzaAlTaglioEntity } from "~/domain/cardapio-pizza-al-taglio/cardapio-pizza-al-taglio.entity.server"
@@ -11,7 +11,7 @@ import { AlertCircle } from "lucide-react"
 import dayjs from "dayjs"
 import { useState } from "react"
 
-export async function loader({ request }: LoaderArgs) {
+export async function loader({ request }: LoaderFunctionArgs) {
 
     const [err, records] = await tryit(cardapioPizzaAlTaglioEntity.findAll())
 

@@ -1,4 +1,4 @@
-import { LoaderArgs } from "@remix-run/node";
+import { LoaderFunctionArgs } from "@remix-run/node";
 import { Form, useLoaderData, useNavigation } from "@remix-run/react";
 import dayjs from "dayjs";
 import { ArrowBigDownDash, ArrowBigUpDash, HelpCircle, PersonStanding, Settings, Truck } from "lucide-react";
@@ -24,7 +24,7 @@ import { ok, serverError } from "~/utils/http-response.server";
 import tryit from "~/utils/try-it";
 
 
-export async function loader({ request }: LoaderArgs) {
+export async function loader({ request }: LoaderFunctionArgs) {
 
     const [err, orders] = await tryit(mogoEntity.getOrdersOpenedWithDiffTime())
 
@@ -72,7 +72,7 @@ export async function loader({ request }: LoaderArgs) {
 
 }
 
-export async function action({ request }: LoaderArgs) {
+export async function action({ request }: LoaderFunctionArgs) {
 
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);

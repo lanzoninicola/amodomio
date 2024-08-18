@@ -1,4 +1,4 @@
-import { LoaderFunction, type LinksFunction, V2_MetaFunction, LoaderArgs, redirect } from "@remix-run/node";
+import { LoaderFunction, type LinksFunction, MetaFunction, LoaderFunctionArgs, redirect } from "@remix-run/node";
 import { Outlet, useLoaderData } from "@remix-run/react";
 import { X } from "lucide-react";
 import { useState } from "react";
@@ -19,7 +19,7 @@ export interface AdminOutletContext {
     setOperatorId: (operatorId: string) => void
 }
 
-export const meta: V2_MetaFunction = () => [
+export const meta: MetaFunction = () => [
     { name: "robots", content: "noindex" },
 ];
 
@@ -36,7 +36,7 @@ export const links: LinksFunction = () => [
     },
 ];
 
-export const loader: LoaderFunction = async ({ request }: LoaderArgs) => {
+export const loader: LoaderFunction = async ({ request }: LoaderFunctionArgs) => {
     const environment = process.env.NODE_ENV
     const prismaDbName = prismaClient.dbName
 

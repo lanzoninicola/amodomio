@@ -1,4 +1,4 @@
-import { ActionArgs, LoaderArgs, redirect } from "@remix-run/node";
+import { ActionFunctionArgs, LoaderFunctionArgs, redirect } from "@remix-run/node";
 import { useLoaderData, useActionData, Link, useNavigate, Form } from "@remix-run/react";
 import { useState } from "react";
 import SubmitButton from "~/components/primitives/submit-button/submit-button";
@@ -15,7 +15,7 @@ import { serverError, ok } from "~/utils/http-response.server";
 import { jsonParse, jsonStringify } from "~/utils/json-helper";
 import tryit from "~/utils/try-it";
 
-export async function loader({ request, params }: LoaderArgs) {
+export async function loader({ request, params }: LoaderFunctionArgs) {
     if (params?.id) {
         redirect("/admin/grocery-shopping-list")
     }
@@ -51,7 +51,7 @@ export async function loader({ request, params }: LoaderArgs) {
 
 }
 
-export async function action({ request }: ActionArgs) {
+export async function action({ request }: ActionFunctionArgs) {
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);
 

@@ -1,4 +1,4 @@
-import { type LoaderArgs } from "@remix-run/node"
+import { type LoaderFunctionArgs } from "@remix-run/node"
 import { useLoaderData } from "@remix-run/react"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select"
 import { categoryEntity } from "~/domain/category/category.entity.server"

@@ -1,4 +1,4 @@
-import { redirect, type ActionArgs } from "@remix-run/node";
+import { redirect, type ActionFunctionArgs } from "@remix-run/node";
 import { Form, useActionData, useLoaderData } from "@remix-run/react";
 import { useState } from "react";
 import Container from "~/components/layout/container/container";
@@ -21,7 +21,7 @@ import { jsonStringify } from "~/utils/json-helper";
 import tryit from "~/utils/try-it";
 
 
-export async function loader({ request, params }: ActionArgs) {
+export async function loader({ request, params }: ActionFunctionArgs) {
     const products = await productPrismaEntity.findAll()
     const categories = await categoryEntity.findAll()
     const types = ProductEntity.findAllProductTypes()
@@ -37,7 +37,7 @@ export async function loader({ request, params }: ActionArgs) {
     })
 }
 
-export async function action({ request, params }: ActionArgs) {
+export async function action({ request, params }: ActionFunctionArgs) {
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);
 

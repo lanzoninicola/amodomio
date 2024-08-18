@@ -1,4 +1,4 @@
-import { LoaderArgs, LoaderFunction, redirect } from "@remix-run/node";
+import { LoaderFunctionArgs, LoaderFunction, redirect } from "@remix-run/node";
 import { Link } from "@remix-run/react";
 import { ok } from "assert";
 import { promoPizzaPhotoEntity } from "~/domain/promo-pizza-photos/promo-pizza-photos.entity.server";
