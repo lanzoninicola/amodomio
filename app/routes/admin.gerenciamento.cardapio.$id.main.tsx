@@ -1,6 +1,6 @@
 import { Category, Prisma } from "@prisma/client";
 import { LoaderFunctionArgs, MetaFunction, redirect } from "@remix-run/node";
-import { useLoaderData } from "@remix-run/react";
+import { useActionData, useLoaderData } from "@remix-run/react";
 import MenuItemForm from "~/domain/cardapio/components/menu-item-form/menu-item-form";
 import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { categoryPrismaEntity } from "~/domain/category/category.entity.server";
@@ -44,17 +44,15 @@ export async function action({ request }: LoaderFunctionArgs) {
 
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);
-
     // console.log({ action: _action, values })
-
 
     if (_action === "menu-item-update") {
 
         const category: Category = jsonParse(values.category as string)
-        const imageInfo: CloudinaryImageInfo = jsonParse(values.imageInfo as string)
+        const imageInfo: MenuItemWithAssociations["MenuItemImage"] = jsonParse(values.imageInfo as string)
 
 
-        const menuItem: Prisma.MenuItemCreateInput = {
+        let menuItem: Prisma.MenuItemCreateInput = {
             name: values.name as string,
             ingredients: values.ingredients as string,
             description: values?.description as string || "",
@@ -68,8 +66,29 @@ export async function action({ request }: LoaderFunctionArgs) {
                     id: category.id
                 }
             },
-            MenuItemImage: {
-                create: imageInfo,
+
+
+        }
+
+        if (!imageInfo?.id) {
+            menuItem = {
+                ...menuItem,
+                MenuItemImage: {
+                    create: {
+                        ...imageInfo
+                    }
+                }
+            }
+        }
+
+        if (imageInfo?.id) {
+            menuItem = {
+                ...menuItem,
+                MenuItemImage: {
+                    connect: {
+                        id: imageInfo?.id
+                    }
+                }
             }
         }
 
