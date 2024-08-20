@@ -1,9 +1,8 @@
 import { HeadersFunction, LoaderFunctionArgs } from "@remix-run/node";
-import { useOutletContext, useSearchParams } from "@remix-run/react";
-import React, { useState, useRef, useCallback, useEffect } from "react";
+import { Await, Link, defer, useLoaderData, useSearchParams } from "@remix-run/react";
+import React, { useState, useRef, useCallback, useEffect, Suspense } from "react";
 import { Separator } from "~/components/ui/separator";
-import { MenuItemWithAssociations } from "~/domain/cardapio/menu-item.prisma.entity.server";
-import { CardapioOutletContext } from "./cardapio";
+import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { menuItemLikePrismaEntity } from "~/domain/cardapio/menu-item-like.prisma.entity.server";
 import { badRequest, ok } from "~/utils/http-response.server";
@@ -13,10 +12,58 @@ import ItalyIngredientsStatement from "~/domain/cardapio/components/italy-ingred
 import CardapioItemActionBar from "~/domain/cardapio/components/cardapio-item-action-bar/cardapio-item-action-bar";
 import CardapioItemImage from "~/domain/cardapio/components/cardapio-item-image/cardapio-item-image";
 import CardapioItemPrice from "~/domain/cardapio/components/cardapio-item-price/cardapio-item-price";
+import { tagPrismaEntity } from "~/domain/tags/tag.prisma.entity.server";
+import { jsonParse } from "~/utils/json-helper";
+import { Tag } from "@prisma/client";
+import Badge from "~/components/primitives/badge/badge";
+import BadgeTag from "~/domain/tags/components/badge-tag";
+import { cn } from "~/lib/utils";
+import { Filter } from "lucide-react";
 
 export const headers: HeadersFunction = () => ({
     'Cache-Control': 's-maxage=1, stale-while-revalidate=59',
 });
+
+export async function loader({ request }: LoaderFunctionArgs) {
+    const env = process.env?.NODE_ENV
+    // const tagParam = getSearchParam({ request, paramName: 'tag' })
+
+    //@ts-ignore
+    const items = menuItemPrismaEntity.findAll({
+        where: {
+            visible: true,
+            // tags: {
+            //     some: {
+            //         Tag: {
+            //             name: tagParam || undefined
+            //         }
+            //     }
+            // }
+        },
+        option: {
+            sorted: true,
+            direction: "asc"
+        },
+        // mock: env === "development"
+    }, {
+        imageTransform: true,
+        imageScaleWidth: 375
+    })
+
+
+
+
+    const tags = tagPrismaEntity.findAll({
+        public: true
+    })
+
+    return defer({
+        items,
+        tags
+    })
+
+
+}
 
 export async function action({ request }: LoaderFunctionArgs) {
     let formData = await request.formData();
@@ -83,10 +130,40 @@ export async function action({ request }: LoaderFunctionArgs) {
 }
 
 export default function CardapioWebIndex() {
+    const { items, tags } = useLoaderData<typeof loader>()
+
+
+
+    return (
+        <section>
+            <div className="flex flex-col">
+                <Suspense fallback={<div> Loading... </div>}>
+
+                    <Await resolve={tags}>
+                        {(tags) => {
+                            // @ts-ignore
+                            return <FiltersTags tags={tags ?? []} />
+                        }}
+                    </Await>
+                    <Await resolve={items}>
+
+                        {(items) => {
+                            // @ts-ignore
+                            return <CardapioItemList allItems={items ?? []} />
+                        }}
+                    </Await>
+
+                </Suspense>
+            </div>
+        </section >
+
+
+    );
+}
+
+const CardapioItemList = ({ allItems }: { allItems: MenuItemWithAssociations[] }) => {
     const [searchParams] = useSearchParams();
     let currentFilterTag = searchParams.get("tag");
-
-    const { items: allItems } = useOutletContext<CardapioOutletContext>();
 
     const [items, setItems] = useState<MenuItemWithAssociations[]>([]);
     const [hasMore, setHasMore] = useState(true);
@@ -130,7 +207,7 @@ export default function CardapioWebIndex() {
     }
 
     return (
-        <section>
+        <div className="flex flex-col mt-4">
             <ul className="flex flex-col overflow-y-auto md:overflow-y-z auto snap-mandatory">
                 {items.map((item, index) => {
                     if (items.length === index + 1) {
@@ -140,7 +217,8 @@ export default function CardapioWebIndex() {
                     }
                 })}
             </ul>
-        </section>
+        </div>
+
     );
 }
 
@@ -181,6 +259,77 @@ const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) =>
 
 });
 
+
+function FiltersTags({ tags }: { tags: Tag[] }) {
+
+    const [searchParams, setSearchParams] = useSearchParams()
+    const tagFilter = searchParams.get("tag")
+
+    return (
+
+        <div className="bg-white sticky top-12 z-10">
+            <div className="flex items-center">
+                <p className="text-xs font-body-website font-semibold min-w-[70px] pl-2">Filtrar por:</p>
+                <div className="w-full overflow-x-auto pr-2" >
+
+                    <ul className="py-3 px-2" style={{
+                        display: "-webkit-inline-box"
+                    }}>
+                        <Link to={`/cardapio`} className="text-xs font-body-website font-semibold uppercase text-muted-foreground">
+                            <Badge className={
+                                cn(
+                                    "bg-none border border-brand-blue text-brand-blue font-semibold",
+                                    tagFilter === null && "bg-brand-blue text-white scale-110"
+                                )
+                            }>Todos</Badge>
+                        </Link>
+                        {tags.map((tag) => (
+                            <li key={tag.id} className="ml-2">
+                                <Link to={`?tag=${tag.name}`} className="text-xs font-body-website font-semibold uppercase text-muted-foreground">
+                                    <BadgeTag tag={tag}
+                                        classNameLabel={
+                                            cn(
+                                                "text-[10px] text-brand-blue",
+                                                tagFilter === tag.name && "text-white"
+                                            )
+                                        } tagColor={false}
+                                        classNameContainer={
+                                            cn(
+                                                "bg-none border border-brand-blue",
+                                                tagFilter === tag.name && "bg-brand-blue",
+                                                tagFilter === tag.name && " scale-110"
+
+                                            )
+                                        } />
+                                </Link>
+                            </li>
+                        ))}
+
+
+                    </ul>
+                </div>
+            </div>
+
+            {
+                tagFilter && (
+                    <div className="absolute top-12 left-0 right-0 flex gap-2 items-center px-2 bg-blue-300 py-[0.15rem]">
+                        <div className="flex items-center justify-between w-full">
+                            <div className="flex gap-1 items-center">
+                                <Filter size={12} />
+                                <p className="font-body-website text-[12px]">Você está visualizando os sabores <span className="font-semibold">"{tagFilter}"</span></p>
+                            </div>
+                            <Link to={`/cardapio`} className="font-body-website text-[12px] underline font-semibold self-end">
+                                Voltar
+                            </Link>
+                        </div>
+                    </div>
+                )
+            }
+        </div>
+
+
+    )
+}
 
 
 

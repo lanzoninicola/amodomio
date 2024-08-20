@@ -1,44 +1,35 @@
-import { MenuItemTag, Tag } from "@prisma/client";
-import { HamburgerMenuIcon } from "@radix-ui/react-icons";
-import { HeadersFunction, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
-import { Link, Outlet, useLoaderData, useLocation, useSearchParams } from "@remix-run/react";
+import { Tag } from "@prisma/client";
+import { MetaFunction } from "@remix-run/node";
+import { Link, Outlet, useLocation, useSearchParams } from "@remix-run/react";
 import { LayoutList } from "lucide-react";
 import { LayoutTemplate } from "lucide-react";
-import { ArrowRight, Filter, Instagram, MapPin, SearchIcon, XIcon } from "lucide-react";
+import { Filter, Instagram, MapPin, SearchIcon, XIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import ItalyFlag from "~/components/italy-flag/italy-flag";
 import Badge from "~/components/primitives/badge/badge";
-import ExternalLink from "~/components/primitives/external-link/external-link";
 import Logo from "~/components/primitives/logo/logo";
 import WhatsappExternalLink from "~/components/primitives/whatsapp/whatsapp-external-link";
 import WhatsAppIcon from "~/components/primitives/whatsapp/whatsapp-icon";
-import TextSlideInUp from "~/components/text-slide-in-up/text-slide-in-up";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Separator } from "~/components/ui/separator";
-import { toast } from "~/components/ui/use-toast";
 import CardapioItemDialog from "~/domain/cardapio/components/cardapio-item-dialog/cardapio-item-dialog";
 import FazerPedidoButton from "~/domain/cardapio/components/fazer-pedido-button/fazer-pedido-button";
-import { menuItemTagPrismaEntity } from "~/domain/cardapio/menu-item-tags.prisma.entity.server";
-import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
+import { MenuItemWithAssociations } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import BadgeTag from "~/domain/tags/components/badge-tag";
-import { tagPrismaEntity } from "~/domain/tags/tag.prisma.entity.server";
 import { WebsiteNavigationSidebar } from "~/domain/website-navigation/components/website-navigation-sidebar";
 import GLOBAL_LINKS from "~/domain/website-navigation/global-links.constant";
 import PUBLIC_WEBSITE_NAVIGATION_ITEMS from "~/domain/website-navigation/public/public-website.nav-links";
-import useStoreOpeningStatus from "~/hooks/use-store-opening-status";
-import { prismaAll } from "~/lib/prisma/prisma-all.server";
-import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { cn } from "~/lib/utils";
-import getSearchParam from "~/utils/get-search-param";
-import { badRequest, ok } from "~/utils/http-response.server";
 
 
 /**
  * TODO:
  * - [x] Add to menu Horario Atendimento
  * - [x] Add to menu link instagram
+ * - [] Add anotações pizza (batas fritas, batata ao forno)
+ * - [] Funnel venda, ao press fazer pedido, lembrar outras coisa, pizza doces o bebidas
  * - [] Add customer comments, from a copia incolla operation
  * - [] Add to menu link fazer pedido
  * - [] Add to menu "como funciona"
@@ -73,74 +64,15 @@ export const meta: MetaFunction = ({ data }) => {
 
 
 
-export async function loader({ request }: LoaderFunctionArgs) {
-    const env = process.env?.NODE_ENV
 
-    // const tagParam = getSearchParam({ request, paramName: 'tag' })
-
-    //@ts-ignore
-    const itemsQuery = prismaIt(menuItemPrismaEntity.findAll({
-        where: {
-            visible: true,
-            // tags: {
-            //     some: {
-            //         Tag: {
-            //             name: tagParam || undefined
-            //         }
-            //     }
-            // }
-        },
-        option: {
-            sorted: true,
-            direction: "asc"
-        },
-        // mock: env === "development"
-    }, {
-        imageTransform: true,
-        imageScaleWidth: 375
-    }))
-
-
-
-
-    const tagsQuery = prismaIt(tagPrismaEntity.findAll({
-        public: true
-    }))
-
-    const results = await Promise.all([itemsQuery, tagsQuery])
-
-    const [errItems, items] = results[0]
-    const [errTags, tags] = results[1]
-
-    if (errItems) {
-        return badRequest(errItems)
-    }
-
-
-    return ok({
-        items, tags
-    })
-
-
-}
 
 
 export default function CardapioWeb() {
-    const loaderData = useLoaderData<typeof loader>()
-    const items = loaderData?.payload.items as MenuItemWithAssociations[] || []
-    const tags = loaderData?.payload.tags as Tag[] || []
-
     const location = useLocation();
 
     // const [storedValue, setStoredValue] = useLocalStorage("sessionId", null)
 
 
-    if (loaderData?.status && loaderData?.status > 399) {
-        toast({
-            title: "Erro",
-            description: loaderData?.message,
-        })
-    }
 
     // // synchronize initially
     // useLayoutEffect(() => {
@@ -154,10 +86,10 @@ export default function CardapioWeb() {
 
     return (
         <>
-            <CardapioHeader items={items} tags={tags} />
+            <CardapioHeader />
 
             <div className="md:m-auto md:max-w-2xl">
-                <section className="mt-28 p-4 mb-4 ">
+                <section className="mt-16 p-4 mb-4 ">
                     <div className="flex flex-col font-body-website">
                         <h2 className="font-semibold text-lg">A Modo Mio | Pizzeria Italiana</h2>
                         <h3 className="text-muted-foreground">Pizza Al Taglio & Delivery</h3>
@@ -220,7 +152,11 @@ export default function CardapioWeb() {
                 </div>
 
                 {/* <Featured /> */}
-                <Outlet context={{ items }} />
+
+                <Outlet />
+
+
+
 
             </div>
 
@@ -229,11 +165,9 @@ export default function CardapioWeb() {
     )
 }
 
-interface CardapioHeaderProps {
-    items: MenuItemWithAssociations[], tags: Tag[]
-}
 
-function CardapioHeader({ items, tags }: CardapioHeaderProps) {
+
+function CardapioHeader() {
     const [showSearch, setShowSearch] = useState(false)
 
     return (
@@ -278,86 +212,13 @@ function CardapioHeader({ items, tags }: CardapioHeaderProps) {
                         <span className="font-body-website text-[10px] font-semibold  uppercase text-white">Pesquisar</span>
                     </div>
                 </div>
-                {showSearch && (
-                    <div className="fixed inset-0 z-50">
-                        <div className="flex items-end justify-center p-6 h-screen backdrop-blur-sm bg-black/50">
-                            <CardapioSearch items={items} setShowSearch={setShowSearch} />
-                        </div>
-                    </div>
-                )}
+
             </div>
-
-
-            <FiltersTags tags={tags} />
         </header>
     )
 }
 
-function FiltersTags({ tags }: { tags: Tag[] }) {
 
-    const [searchParams, setSearchParams] = useSearchParams()
-    const tagFilter = searchParams.get("tag")
-
-    return (
-
-        <div className="relative bg-white">
-            <div className="w-full overflow-x-auto" >
-                <ul className="py-3 px-2" style={{
-                    display: "-webkit-inline-box"
-                }}>
-                    <Link to={`/cardapio`} className="text-xs font-body-website font-semibold uppercase text-muted-foreground">
-                        <Badge className={
-                            cn(
-                                "bg-none border border-brand-blue text-brand-blue font-semibold",
-                                tagFilter === null && "bg-brand-blue text-white scale-110"
-                            )
-                        }>Todos</Badge>
-                    </Link>
-                    {tags.map((tag) => (
-                        <li key={tag.id} className="ml-2">
-                            <Link to={`?tag=${tag.name}`} className="text-xs font-body-website font-semibold uppercase text-muted-foreground">
-                                <BadgeTag tag={tag}
-                                    classNameLabel={
-                                        cn(
-                                            "text-[10px] text-brand-blue",
-                                            tagFilter === tag.name && "text-white"
-                                        )
-                                    } tagColor={false}
-                                    classNameContainer={
-                                        cn(
-                                            "bg-none border border-brand-blue",
-                                            tagFilter === tag.name && "bg-brand-blue",
-                                            tagFilter === tag.name && " scale-110"
-
-                                        )
-                                    } />
-                            </Link>
-                        </li>
-                    ))}
-
-
-                </ul>
-            </div>
-            {
-                tagFilter && (
-                    <div className="absolute top-12 left-0 right-0 flex gap-2 items-center px-2 bg-blue-300 py-[0.15rem]">
-                        <div className="flex items-center justify-between w-full">
-                            <div className="flex gap-1 items-center">
-                                <Filter size={12} />
-                                <p className="font-body-website text-[12px]">Você está visualizando os sabores <span className="font-semibold">"{tagFilter}"</span></p>
-                            </div>
-                            <Link to={`/cardapio`} className="font-body-website text-[12px] underline font-semibold self-end">
-                                Voltar
-                            </Link>
-                        </div>
-                    </div>
-                )
-            }
-        </div>
-
-
-    )
-}
 
 
 
