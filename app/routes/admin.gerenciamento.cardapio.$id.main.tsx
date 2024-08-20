@@ -1,14 +1,21 @@
 import { Category, Prisma } from "@prisma/client";
-import { LoaderFunctionArgs, redirect } from "@remix-run/node";
+import { LoaderFunctionArgs, MetaFunction, redirect } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
 import MenuItemForm from "~/domain/cardapio/components/menu-item-form/menu-item-form";
-import { menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
+import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { categoryPrismaEntity } from "~/domain/category/category.entity.server";
 import { CloudinaryImageInfo } from "~/lib/cloudinary";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { badRequest, ok, serverError } from "~/utils/http-response.server";
 import { jsonParse } from "~/utils/json-helper";
 
+export const meta: MetaFunction<typeof loader> = ({ data }) => {
+    const item: MenuItemWithAssociations = data?.payload?.item
+
+    return [
+        { title: item?.name || "Nome não encontrado" },
+    ];
+};
 
 export async function loader({ params }: LoaderFunctionArgs) {
     const itemId = params.id;
@@ -103,6 +110,7 @@ export default function SingleMenuItemMain() {
         <MenuItemForm action="menu-item-update" item={item} categories={categories} />
 
     )
+
 }
 
 

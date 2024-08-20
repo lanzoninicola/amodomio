@@ -8,21 +8,11 @@ import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { badRequest, ok, serverError } from "~/utils/http-response.server";
 import { lastUrlSegment, urlAt } from "~/utils/url";
 
-export const meta: MetaFunction = ({ data }) => {
-    const item: MenuItemWithAssociations = data?.payload?.item
-
-    return [
-        { title: item?.name || "Nome não encontrado" },
-    ];
-};
-
 const navigation = [
     { name: 'Principal', href: 'main' },
     { name: 'Venda', href: 'venda/prices' },
     { name: 'Tags', href: 'tags' },
 ]
-
-
 
 // export async function loader({ request }: LoaderFunctionArgs) {
 //     const itemId = urlAt(request.url, -2)

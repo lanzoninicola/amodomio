@@ -1,6 +1,7 @@
 import { Cloudinary } from "@cloudinary/url-gen";
 
-const cloudName = process.env?.CLOUDINARY_CLOUD_NAME || "";
+const env = import.meta.env;
+const cloudName = env?.CLOUDINARY_CLOUD_NAME || "";
 
 const cld = new Cloudinary({
   cloud: {
