@@ -48,10 +48,20 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export default function CardapioSearch() {
     const { items, tags } = useLoaderData<typeof loader>()
+    const [currentItems, setCurrentItems] = useState<MenuItemWithAssociations[]>([]);
 
     return (
-        <section className="mt-16 p-4">
-            <div className="flex flex-col">
+        <section className="mt-14 p-4">
+
+            <div className="flex flex-col gap-4 mb-6">
+                <Suspense fallback={<Loading />}>
+                    <Await resolve={items}>
+                        {(items) => {
+                            // @ts-ignore
+                            return <SearchItemsInput items={items} currentItems={currentItems} setCurrentItems={setCurrentItems} />
+                        }}
+                    </Await>
+                </Suspense>
                 <Suspense fallback={<Loading />}>
 
                     <div className="flex flex-col gap-2">
@@ -63,6 +73,8 @@ export default function CardapioSearch() {
                             }}
                         </Await>
                     </div>
+                </Suspense>
+                {/* <Suspense fallback={<Loading />}>
                     <Await resolve={items}>
 
                         {(items) => {
@@ -71,8 +83,15 @@ export default function CardapioSearch() {
                         }}
                     </Await>
 
-                </Suspense>
+                </Suspense> */}
+                <SearchItems items={currentItems} />
             </div>
+            <Link to={GLOBAL_LINKS.cardapioPublic.href}>
+                <Button className="w-full flex gap-2 justify-center" variant={"secondary"}>
+                    <span className="text-[12px] tracking-widest font-semibold uppercase" style={{
+                        lineHeight: "normal",
+                    }}>Voltar</span></Button>
+            </Link>
         </section >
 
 
@@ -90,7 +109,7 @@ function SearchFiltersTags({ tags }: {
             {tags.map(tag => {
 
                 return (
-                    <div className="bg-blue-200 p-2 rounded-md flex items-center">
+                    <div key={tag.id} className="bg-blue-200 p-2 rounded-md flex items-center">
                         <span className="font-body-website text-sm">{capitalize(tag.name)}</span>
                     </div>
                 )
@@ -99,13 +118,12 @@ function SearchFiltersTags({ tags }: {
     )
 }
 
-function SearchItems({ items }: {
+function SearchItemsInput({ items, currentItems, setCurrentItems }: {
     items: MenuItemWithAssociations[],
+    currentItems: MenuItemWithAssociations[],
+    setCurrentItems: React.Dispatch<React.SetStateAction<MenuItemWithAssociations[]>>
 }) {
 
-
-
-    const [currentItems, setCurrentItems] = useState<MenuItemWithAssociations[]>([]);
     const [search, setSearch] = useState("")
     const inputRef = useRef<HTMLInputElement>(null);
 
@@ -140,16 +158,43 @@ function SearchItems({ items }: {
         setCurrentItems(itemsFounded);
     };
 
+    return (
+        <div className="flex flex-col gap-2">
+            <Input
+                ref={inputRef}
+                placeholder="Digitar 'abobrinha' ou 'vegetarianas'" className="font-body-website text-sm h-8" onChange={handleSearch}
 
+            />
+            {
+                search && <p className="font-body-website text-xs text-muted-foreground mb-2">{currentItems.length} de {items.length} resultados para
+                    <span className="font-semibold"> {search}</span>
+                </p>
+            }
+            <div className="bg-slate-200 rounded-md p-2 mb-2">
+                <div className="flex items-center gap-2">
+                    <AlertTriangle />
+                    <p className="text-xs font-body-website">Dica: você pode buscar por ingrediente, nome da pizza ou por etiqueta (ex. vegetariana, carne)</p>
+                </div>
+            </div>
+        </div>
+
+
+    )
+
+}
+
+function SearchItems({ items }: {
+    items: MenuItemWithAssociations[],
+}) {
 
     return (
-        <div className="flex flex-col md:w-[450px] my-4">
+        <div className="flex flex-col md:w-[450px]">
             <div className=" flex flex-col py-3">
 
                 <div className="max-h-[400px] overflow-y-auto">
                     <span className="text-xs font-body-website mb-4">Resultados:</span>
                     <ul className="flex flex-col gap-2">
-                        {currentItems.map((item) => (
+                        {items.map((item) => (
                             <FadeIn key={item.id}>
                                 <CardapioItemDialog item={item} triggerComponent={
 
@@ -172,39 +217,6 @@ function SearchItems({ items }: {
                     </ul>
                 </div>
             </div>
-
-            <div className="fixed bottom-4 w-full pr-8  ">
-                <div className="flex flex-col gap-2">
-                    <div className="flex flex-col gap-2">
-                        {
-                            search && <p className="font-body-website text-xs text-muted-foreground mb-2">{currentItems.length} de {items.length} resultados para
-                                <span className="font-semibold"> {search}</span>
-                            </p>
-                        }
-
-                        <div className="bg-brand-blue rounded-md p-2 mb-2">
-                            <div className="flex items-center gap-2">
-                                <AlertTriangle color="white" />
-                                <p className="text-xs font-body-website text-white">Dica: você pode buscar por ingrediente, nome da pizza ou por etiqueta (ex. vegetariana, carne)</p>
-                            </div>
-                        </div>
-
-                        <Input
-                            ref={inputRef}
-                            placeholder="Digitar 'abobrinha' ou 'vegetarianas'" className="font-body-website text-sm h-8" onChange={handleSearch}
-
-                        />
-                    </div>
-
-                    <Link to={GLOBAL_LINKS.cardapioPublic.href}>
-                        <Button className="w-full flex gap-2 justify-center" variant={"secondary"}>
-                            <span className="text-[12px] tracking-widest font-semibold uppercase" style={{
-                                lineHeight: "normal",
-                            }}>Voltar</span></Button>
-                    </Link>
-                </div>
-            </div>
-
 
         </div>
     )
