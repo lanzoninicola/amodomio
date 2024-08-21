@@ -1,5 +1,5 @@
 import { HeadersFunction, LoaderFunctionArgs } from "@remix-run/node";
-import { Await, Link, defer, useLoaderData, useSearchParams } from "@remix-run/react";
+import { Await, Link, defer, useLoaderData, useLocation, useSearchParams } from "@remix-run/react";
 import React, { useState, useRef, useCallback, useEffect, Suspense } from "react";
 import { Separator } from "~/components/ui/separator";
 import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
@@ -19,6 +19,10 @@ import Badge from "~/components/primitives/badge/badge";
 import BadgeTag from "~/domain/tags/components/badge-tag";
 import { cn } from "~/lib/utils";
 import { Filter } from "lucide-react";
+import { LayoutTemplate } from "lucide-react";
+import { LayoutList } from "lucide-react";
+import Loading from "~/components/loading/loading";
+import FiltersTags from "~/domain/cardapio/components/filter-tags/filter-tags";
 
 export const headers: HeadersFunction = () => ({
     'Cache-Control': 's-maxage=1, stale-while-revalidate=59',
@@ -130,14 +134,34 @@ export async function action({ request }: LoaderFunctionArgs) {
 }
 
 export default function CardapioWebIndex() {
+    const location = useLocation()
     const { items, tags } = useLoaderData<typeof loader>()
-
-
 
     return (
         <section>
+            <div className="flex gap-4 justify-center mb-2">
+                <Link to={"/cardapio"} className={
+                    cn(
+                        "p-2",
+                        location.pathname === "/cardapio" && "border-b-brand-blue border-b-2",
+
+                    )
+                } >
+                    <LayoutTemplate />
+                </Link>
+                <Link to={"/cardapio/list"} className={
+                    cn(
+                        "p-2",
+                        location.pathname === "/cardapio/list" && "border-b-brand-blue border-b-2",
+
+                    )
+                } >
+                    <LayoutList />
+                </Link>
+            </div>
             <div className="flex flex-col">
-                <Suspense fallback={<div> Loading... </div>}>
+                {/* <Loading /> */}
+                <Suspense fallback={<Loading />}>
 
                     <Await resolve={tags}>
                         {(tags) => {
@@ -145,6 +169,8 @@ export default function CardapioWebIndex() {
                             return <FiltersTags tags={tags ?? []} />
                         }}
                     </Await>
+                </Suspense>
+                <Suspense fallback={<Loading />}>
                     <Await resolve={items}>
 
                         {(items) => {
@@ -195,16 +221,16 @@ const CardapioItemList = ({ allItems }: { allItems: MenuItemWithAssociations[] }
         if (node) observer.current.observe(node);
     }, [hasMore, allItems, currentFilterTag]);
 
-    if (items.length === 0) {
-        return (
-            <div className="flex h-full w-full items-center justify-center p-8">
-                <div className="flex flex-col gap-6 justify-center items-center">
-                    <img src="/images/empty-cardapio.webp" className="mx-auto w-[136px]" alt="Nenhum item encontrado" />
-                    <h1 className="font-body-website text-sm md:text-lg font-semibold text-muted-foreground">Nenhum item encontrado</h1>
-                </div>
-            </div>
-        );
-    }
+    // if (items.length === 0) {
+    //     return (
+    //         <div className="flex h-full w-full items-center justify-center p-8">
+    //             <div className="flex flex-col gap-6 justify-center items-center">
+    //                 <img src="/images/empty-cardapio.webp" className="mx-auto w-[136px]" alt="Nenhum item encontrado" />
+    //                 <h1 className="font-body-website text-sm md:text-lg font-semibold text-muted-foreground">Nenhum item encontrado</h1>
+    //             </div>
+    //         </div>
+    //     );
+    // }
 
     return (
         <div className="flex flex-col mt-4">
@@ -260,76 +286,6 @@ const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) =>
 });
 
 
-function FiltersTags({ tags }: { tags: Tag[] }) {
-
-    const [searchParams, setSearchParams] = useSearchParams()
-    const tagFilter = searchParams.get("tag")
-
-    return (
-
-        <div className="bg-white sticky top-12 z-10">
-            <div className="flex items-center">
-                <p className="text-xs font-body-website font-semibold min-w-[70px] pl-2">Filtrar por:</p>
-                <div className="w-full overflow-x-auto pr-2" >
-
-                    <ul className="py-3 px-2" style={{
-                        display: "-webkit-inline-box"
-                    }}>
-                        <Link to={`/cardapio`} className="text-xs font-body-website font-semibold uppercase text-muted-foreground">
-                            <Badge className={
-                                cn(
-                                    "bg-none border border-brand-blue text-brand-blue font-semibold",
-                                    tagFilter === null && "bg-brand-blue text-white scale-110"
-                                )
-                            }>Todos</Badge>
-                        </Link>
-                        {tags.map((tag) => (
-                            <li key={tag.id} className="ml-2">
-                                <Link to={`?tag=${tag.name}`} className="text-xs font-body-website font-semibold uppercase text-muted-foreground">
-                                    <BadgeTag tag={tag}
-                                        classNameLabel={
-                                            cn(
-                                                "text-[10px] text-brand-blue",
-                                                tagFilter === tag.name && "text-white"
-                                            )
-                                        } tagColor={false}
-                                        classNameContainer={
-                                            cn(
-                                                "bg-none border border-brand-blue",
-                                                tagFilter === tag.name && "bg-brand-blue",
-                                                tagFilter === tag.name && " scale-110"
-
-                                            )
-                                        } />
-                                </Link>
-                            </li>
-                        ))}
-
-
-                    </ul>
-                </div>
-            </div>
-
-            {
-                tagFilter && (
-                    <div className="absolute top-12 left-0 right-0 flex gap-2 items-center px-2 bg-blue-300 py-[0.15rem]">
-                        <div className="flex items-center justify-between w-full">
-                            <div className="flex gap-1 items-center">
-                                <Filter size={12} />
-                                <p className="font-body-website text-[12px]">Você está visualizando os sabores <span className="font-semibold">"{tagFilter}"</span></p>
-                            </div>
-                            <Link to={`/cardapio`} className="font-body-website text-[12px] underline font-semibold self-end">
-                                Voltar
-                            </Link>
-                        </div>
-                    </div>
-                )
-            }
-        </div>
-
-
-    )
-}
 
 
 

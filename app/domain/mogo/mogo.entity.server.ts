@@ -306,7 +306,7 @@ const mogoHttpClient = mock ? new MogoHttpClientMock() : new MogoHttpClient();
 
 const mogoEntity = new MogoEntity({
   httpClient: mogoHttpClient,
-  settings: settingPrismaEntity,
+  settings: settingEntity,
   serverTimezoneOffset: Number(process.env?.SERVER_TIMEZONE_OFFSET || 0),
 });
 
