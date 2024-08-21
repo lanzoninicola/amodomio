@@ -1,19 +1,116 @@
-import { useOutletContext, useSearchParams } from "@remix-run/react";
-import { CardapioOutletContext } from "./cardapio-web";
-import CardapioItemDialog from "~/domain/cardapio/components/cardapio-item-dialog/cardapio-item-dialog";
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import { MenuItemWithAssociations } from "~/domain/cardapio/menu-item.prisma.entity.server";
+import { Await, Link, defer, useLoaderData, useLocation, useSearchParams } from "@remix-run/react";
+import React, { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { cn } from "~/lib/utils";
 import CardapioItemActionBar from "~/domain/cardapio/components/cardapio-item-action-bar/cardapio-item-action-bar";
 import ItalyIngredientsStatement from "~/domain/cardapio/components/italy-ingredient-statement/italy-ingredient-statement";
+import { LayoutTemplate, LayoutList } from "lucide-react";
+import Loading from "~/components/loading/loading";
+import { LoaderFunctionArgs } from "@remix-run/node";
+import { tagPrismaEntity } from "~/domain/tags/tag.prisma.entity.server";
+import { Badge } from "~/components/ui/badge";
+import BadgeTag from "~/domain/tags/components/badge-tag";
+import FiltersTags from "~/domain/cardapio/components/filter-tags/filter-tags";
+
+export async function loader({ request }: LoaderFunctionArgs) {
+    const env = process.env?.NODE_ENV
+    // const tagParam = getSearchParam({ request, paramName: 'tag' })
+
+    //@ts-ignore
+    const items = menuItemPrismaEntity.findAll({
+        where: {
+            visible: true,
+            // tags: {
+            //     some: {
+            //         Tag: {
+            //             name: tagParam || undefined
+            //         }
+            //     }
+            // }
+        },
+        option: {
+            sorted: true,
+            direction: "asc"
+        },
+        // mock: env === "development"
+    }, {
+        imageTransform: true,
+        imageScaleWidth: 375
+    })
 
 
+
+
+    const tags = tagPrismaEntity.findAll({
+        public: true
+    })
+
+    return defer({
+        items,
+        tags
+    })
+
+
+}
 
 export default function CardapioList() {
+    const { items, tags } = useLoaderData<typeof loader>()
+    const location = useLocation()
+
+    return (
+        <section>
+            <div className="flex gap-4 justify-center mb-2">
+                <Link to={"/cardapio"} className={
+                    cn(
+                        "p-2",
+                        location.pathname === "/cardapio" && "border-b-brand-blue border-b-2",
+
+                    )
+                } >
+                    <LayoutTemplate />
+                </Link>
+                <Link to={"/cardapio/list"} className={
+                    cn(
+                        "p-2",
+                        location.pathname === "/cardapio/list" && "border-b-brand-blue border-b-2",
+
+                    )
+                } >
+                    <LayoutList />
+                </Link>
+            </div>
+            <div className="flex flex-col">
+                {/* <Loading /> */}
+                <Suspense fallback={<Loading />}>
+
+                    <Await resolve={tags}>
+                        {(tags) => {
+                            // @ts-ignore
+                            return <FiltersTags tags={tags ?? []} />
+                        }}
+                    </Await>
+                </Suspense>
+                <Suspense fallback={<Loading />}>
+                    <Await resolve={items}>
+
+                        {(items) => {
+                            // @ts-ignore
+                            return <CardapioItemList allItems={items ?? []} />
+                        }}
+                    </Await>
+
+                </Suspense>
+            </div>
+        </section >
+
+
+    );
+}
+
+const CardapioItemList = ({ allItems }: { allItems: MenuItemWithAssociations[] }) => {
     const [searchParams] = useSearchParams();
     let currentFilterTag = searchParams.get("tag");
 
-    const { items: allItems } = useOutletContext<CardapioOutletContext>();
 
     const [items, setItems] = useState<MenuItemWithAssociations[]>([]);
     const [hasMore, setHasMore] = useState(true);
@@ -44,20 +141,11 @@ export default function CardapioList() {
         if (node) observer.current.observe(node);
     }, [hasMore, allItems, currentFilterTag]);
 
-    if (items.length === 0) {
-        return (
-            <div className="flex h-full w-full items-center justify-center p-8">
-                <div className="flex flex-col gap-6 justify-center items-center">
-                    <img src="/images/empty-cardapio.webp" className="mx-auto w-[136px]" alt="Nenhum item encontrado" />
-                    <h1 className="font-body-website text-sm md:text-lg font-semibold text-muted-foreground">Nenhum item encontrado</h1>
-                </div>
-            </div>
-        );
-    }
+
 
     return (
         <section>
-            <ul className="flex flex-col overflow-y-auto md:overflow-y-z auto snap-mandatory">
+            <ul className="flex flex-col overflow-y-auto md:overflow-y-z auto snap-mandatory mt-4">
                 {items.map((item, index) => {
                     if (items.length === index + 1) {
                         return <CardapioItem ref={lastItemRef} key={item.id} item={item} />
@@ -68,6 +156,7 @@ export default function CardapioList() {
             </ul>
         </section>
     )
+
 }
 
 interface CardapioItemProps {
@@ -151,3 +240,4 @@ function CardapioItemPrice({ prices, cnLabel }: CardapioItemPriceProps) {
         </div>
     )
 }
+

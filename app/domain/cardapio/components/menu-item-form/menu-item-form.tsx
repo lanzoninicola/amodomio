@@ -31,10 +31,6 @@ interface MenuItemFormProps {
 export default function MenuItemForm({ item, action, className, categories }: MenuItemFormProps) {
     const [currentBasePrice, setCurrentBasePrice] = useState(item?.basePriceAmount || 0)
 
-    console.log({ item })
-
-
-
     const submitButtonRef = useRef<any>()
     useSaveShortcut({ callback: submitForm })
 
@@ -143,7 +139,7 @@ export default function MenuItemForm({ item, action, className, categories }: Me
                     <Label htmlFor="imageFile" className="font-semibold text-sm " >Imagem</Label>
                     <div className="grid grid-cols-8 items-center gap-x-4 w-full   ">
                         <div className="col-span-2 flex gap-4 items-center">
-                            <ImageUploader />
+                            <ImageUploader imageInfo={item?.MenuItemImage} />
                         </div>
                         <div className="col-span-6">
                             <div className="border p-4 rounded-lg ">
@@ -205,11 +201,13 @@ export default function MenuItemForm({ item, action, className, categories }: Me
     )
 }
 
+interface ImageUploaderProps {
+    imageInfo: MenuItemWithAssociations["MenuItemImage"] | undefined
+}
 
 
-
-export function ImageUploader() {
-    const [info, updateInfo] = useState<CloudinaryImageInfo | null>(null);
+export function ImageUploader({ imageInfo }: ImageUploaderProps) {
+    const [info, updateInfo] = useState<MenuItemWithAssociations["MenuItemImage"] | undefined>(imageInfo);
     const [error, updateError] = useState();
 
     // @ts-ignore
@@ -225,6 +223,7 @@ export function ImageUploader() {
         const info = result?.info
 
         updateInfo({
+            id: info?.id ?? null,
             secureUrl: info.secure_url,
             assetFolder: info.asset_folder,
             originalFileName: info.original_filename,
@@ -240,7 +239,7 @@ export function ImageUploader() {
 
     return (
         <>
-            <input type="hidden" id="imageInfo" name="imageInfo" defaultValue={jsonStringify(info ?? "")} />
+            <input type="hidden" id="imageInfo" name="imageInfo" defaultValue={jsonStringify(info ?? imageInfo)} />
 
             <CloudinaryUploadWidget presetName="admin-cardapio" onUpload={handleOnUpload}>
 

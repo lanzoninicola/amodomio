@@ -1,44 +1,33 @@
-import { MenuItemTag, Tag } from "@prisma/client";
-import { HamburgerMenuIcon } from "@radix-ui/react-icons";
-import { HeadersFunction, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
-import { Link, Outlet, useLoaderData, useLocation, useSearchParams } from "@remix-run/react";
-import { LayoutList } from "lucide-react";
-import { LayoutTemplate } from "lucide-react";
-import { ArrowRight, Filter, Instagram, MapPin, SearchIcon, XIcon } from "lucide-react";
+import { Tag } from "@prisma/client";
+import { MetaFunction } from "@remix-run/node";
+import { Link, Outlet, useLocation, useSearchParams } from "@remix-run/react";
+import { Filter, Instagram, MapPin, SearchIcon, XIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import ItalyFlag from "~/components/italy-flag/italy-flag";
 import Badge from "~/components/primitives/badge/badge";
-import ExternalLink from "~/components/primitives/external-link/external-link";
 import Logo from "~/components/primitives/logo/logo";
 import WhatsappExternalLink from "~/components/primitives/whatsapp/whatsapp-external-link";
 import WhatsAppIcon from "~/components/primitives/whatsapp/whatsapp-icon";
-import TextSlideInUp from "~/components/text-slide-in-up/text-slide-in-up";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Separator } from "~/components/ui/separator";
-import { toast } from "~/components/ui/use-toast";
 import CardapioItemDialog from "~/domain/cardapio/components/cardapio-item-dialog/cardapio-item-dialog";
 import FazerPedidoButton from "~/domain/cardapio/components/fazer-pedido-button/fazer-pedido-button";
-import { menuItemTagPrismaEntity } from "~/domain/cardapio/menu-item-tags.prisma.entity.server";
-import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
+import { MenuItemWithAssociations } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import BadgeTag from "~/domain/tags/components/badge-tag";
-import { tagPrismaEntity } from "~/domain/tags/tag.prisma.entity.server";
 import { WebsiteNavigationSidebar } from "~/domain/website-navigation/components/website-navigation-sidebar";
 import GLOBAL_LINKS from "~/domain/website-navigation/global-links.constant";
 import PUBLIC_WEBSITE_NAVIGATION_ITEMS from "~/domain/website-navigation/public/public-website.nav-links";
-import useStoreOpeningStatus from "~/hooks/use-store-opening-status";
-import { prismaAll } from "~/lib/prisma/prisma-all.server";
-import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { cn } from "~/lib/utils";
-import getSearchParam from "~/utils/get-search-param";
-import { badRequest, ok } from "~/utils/http-response.server";
 
 
 /**
  * TODO:
  * - [x] Add to menu Horario Atendimento
  * - [x] Add to menu link instagram
+ * - [] Add anotações pizza (batas fritas, batata ao forno)
+ * - [] Funnel venda, ao press fazer pedido, lembrar outras coisa, pizza doces o bebidas
  * - [] Add customer comments, from a copia incolla operation
  * - [] Add to menu link fazer pedido
  * - [] Add to menu "como funciona"
@@ -73,74 +62,15 @@ export const meta: MetaFunction = ({ data }) => {
 
 
 
-export async function loader({ request }: LoaderFunctionArgs) {
-    const env = process.env?.NODE_ENV
 
-    // const tagParam = getSearchParam({ request, paramName: 'tag' })
-
-    //@ts-ignore
-    const itemsQuery = prismaIt(menuItemPrismaEntity.findAll({
-        where: {
-            visible: true,
-            // tags: {
-            //     some: {
-            //         Tag: {
-            //             name: tagParam || undefined
-            //         }
-            //     }
-            // }
-        },
-        option: {
-            sorted: true,
-            direction: "asc"
-        },
-        // mock: env === "development"
-    }, {
-        imageTransform: true,
-        imageScaleWidth: 375
-    }))
-
-
-
-
-    const tagsQuery = prismaIt(tagPrismaEntity.findAll({
-        public: true
-    }))
-
-    const results = await Promise.all([itemsQuery, tagsQuery])
-
-    const [errItems, items] = results[0]
-    const [errTags, tags] = results[1]
-
-    if (errItems) {
-        return badRequest(errItems)
-    }
-
-
-    return ok({
-        items, tags
-    })
-
-
-}
 
 
 export default function CardapioWeb() {
-    const loaderData = useLoaderData<typeof loader>()
-    const items = loaderData?.payload.items as MenuItemWithAssociations[] || []
-    const tags = loaderData?.payload.tags as Tag[] || []
-
     const location = useLocation();
 
     // const [storedValue, setStoredValue] = useLocalStorage("sessionId", null)
 
 
-    if (loaderData?.status && loaderData?.status > 399) {
-        toast({
-            title: "Erro",
-            description: loaderData?.message,
-        })
-    }
 
     // // synchronize initially
     // useLayoutEffect(() => {
@@ -152,88 +82,34 @@ export default function CardapioWeb() {
     //     window.localStorage.setItem("sidebar", isOpen);
     // }, [isOpen]);
 
+
+
+
+    const pathname = location?.pathname
+    const currentPage = pathname === "/cardapio/buscar" ? "busca" : "other"
+
+
     return (
         <>
-            <CardapioHeader items={items} tags={tags} />
-
+            <CardapioHeader />
             <div className="md:m-auto md:max-w-2xl">
-                <section className="mt-28 p-4 mb-4 ">
-                    <div className="flex flex-col font-body-website">
-                        <h2 className="font-semibold text-lg">A Modo Mio | Pizzeria Italiana</h2>
-                        <h3 className="text-muted-foreground">Pizza Al Taglio & Delivery</h3>
-                    </div>
-
-                    <div className="text-xs text-muted-foreground mb-6 font-body-website">
-                        <p>Rua Arariboia 64 - Pato Branco</p>
-                    </div>
-                    <div className="grid grid-cols-3 gap-x-4">
-
-                        <Link to={GLOBAL_LINKS.instagram.href} aria-label={GLOBAL_LINKS.instagram.title} className="flex items-center justify-center gap-1 rounded-lg bg-muted py-1">
-                            <Instagram />
-                            <span className="font-semibold text-xs">Instagram</span>
-                        </Link>
-                        <WhatsappExternalLink
-                            phoneNumber="46991272525"
-                            ariaLabel="Envia uma mensagem com WhatsApp"
-                            message={"Olá, gostaria fazer um pedido"}
-                            className="flex items-center justify-center gap-2 rounded-lg bg-muted py-1 "
-                        >
-                            <WhatsAppIcon color="black" />
-                            <span className="font-semibold text-xs">WhatsApp</span>
-                        </WhatsappExternalLink>
-                        <Link to={GLOBAL_LINKS.maps.href} aria-label={GLOBAL_LINKS.maps.title} className="flex items-center justify-center gap-1 rounded-lg bg-muted py-1">
-                            <MapPin />
-                            <span className="font-semibold text-xs">Maps</span>
-                        </Link>
-                    </div>
-                </section>
-
-                <div className="grid grid-cols-10 rounded-lg bg-muted m-4 p-2">
-                    <div className="flex items-center justify-center col-span-1">
-                        <ItalyFlag width={24} />
-                    </div>
-                    <p className="font-body-website text-sm col-span-8 text-center">Todas os nossas pizzas são preparadas com <span className="font-semibold">farinha e molho de tomate importados da Itália</span></p>
-                    <div className="flex items-center justify-center col-span-1">
-                        <ItalyFlag width={24} />
-                    </div>
-                </div>
-
-                <div className="flex gap-4 justify-center mb-2">
-                    <Link to={"/cardapio"} className={
-                        cn(
-                            "p-2",
-                            location.pathname === "/cardapio" && "border-b-brand-blue border-b-2",
-
-                        )
-                    } >
-                        <LayoutTemplate />
-                    </Link>
-                    <Link to={"/cardapio/list"} className={
-                        cn(
-                            "p-2",
-                            location.pathname === "/cardapio/list" && "border-b-brand-blue border-b-2",
-
-                        )
-                    } >
-                        <LayoutList />
-                    </Link>
-                </div>
+                {currentPage !== "busca" && <CompanyInfo />}
 
                 {/* <Featured /> */}
-                <Outlet context={{ items }} />
 
+                <Outlet />
             </div>
 
-            <CardapioFooter />
+            {currentPage !== "busca" && <CardapioFooter />}
         </>
     )
 }
 
-interface CardapioHeaderProps {
-    items: MenuItemWithAssociations[], tags: Tag[]
-}
 
-function CardapioHeader({ items, tags }: CardapioHeaderProps) {
+
+
+
+function CardapioHeader() {
     const [showSearch, setShowSearch] = useState(false)
 
     return (
@@ -273,92 +149,67 @@ function CardapioHeader({ items, tags }: CardapioHeaderProps) {
                     <Link to={GLOBAL_LINKS.cardapioPublic.href} className="flex justify-center">
                         <Logo color="white" className="w-[60px]" tagline={false} />
                     </Link>
-                    <div className="flex justify-end items-center cursor-pointer" onClick={() => setShowSearch(!showSearch)}>
-                        <SearchIcon color="white" />
-                        <span className="font-body-website text-[10px] font-semibold  uppercase text-white">Pesquisar</span>
-                    </div>
-                </div>
-                {showSearch && (
-                    <div className="fixed inset-0 z-50">
-                        <div className="flex items-end justify-center p-6 h-screen backdrop-blur-sm bg-black/50">
-                            <CardapioSearch items={items} setShowSearch={setShowSearch} />
+                    <Link to={'buscar'} className="flex justify-end">
+                        <div className="flex justify-end items-center cursor-pointer" onClick={() => setShowSearch(!showSearch)}>
+                            <SearchIcon color="white" />
+                            <span className="font-body-website text-[10px] font-semibold  uppercase text-white">Pesquisar</span>
                         </div>
-                    </div>
-                )}
+                    </Link>
+                </div>
+
             </div>
-
-
-            <FiltersTags tags={tags} />
         </header>
     )
 }
 
-function FiltersTags({ tags }: { tags: Tag[] }) {
 
-    const [searchParams, setSearchParams] = useSearchParams()
-    const tagFilter = searchParams.get("tag")
-
+function CompanyInfo() {
     return (
+        <>
+            <section className="mt-16 p-4 mb-4 ">
+                <div className="flex flex-col font-body-website">
+                    <h2 className="font-semibold text-lg">A Modo Mio | Pizzeria Italiana</h2>
+                    <h3 className="text-muted-foreground">Pizza Al Taglio & Delivery</h3>
+                </div>
 
-        <div className="relative bg-white">
-            <div className="w-full overflow-x-auto" >
-                <ul className="py-3 px-2" style={{
-                    display: "-webkit-inline-box"
-                }}>
-                    <Link to={`/cardapio`} className="text-xs font-body-website font-semibold uppercase text-muted-foreground">
-                        <Badge className={
-                            cn(
-                                "bg-none border border-brand-blue text-brand-blue font-semibold",
-                                tagFilter === null && "bg-brand-blue text-white scale-110"
-                            )
-                        }>Todos</Badge>
+                <div className="text-xs text-muted-foreground mb-6 font-body-website">
+                    <p>Rua Arariboia 64 - Pato Branco</p>
+                </div>
+                <div className="grid grid-cols-3 gap-x-4">
+
+                    <Link to={GLOBAL_LINKS.instagram.href} aria-label={GLOBAL_LINKS.instagram.title} className="flex items-center justify-center gap-1 rounded-lg bg-muted py-1">
+                        <Instagram />
+                        <span className="font-semibold text-xs">Instagram</span>
                     </Link>
-                    {tags.map((tag) => (
-                        <li key={tag.id} className="ml-2">
-                            <Link to={`?tag=${tag.name}`} className="text-xs font-body-website font-semibold uppercase text-muted-foreground">
-                                <BadgeTag tag={tag}
-                                    classNameLabel={
-                                        cn(
-                                            "text-[10px] text-brand-blue",
-                                            tagFilter === tag.name && "text-white"
-                                        )
-                                    } tagColor={false}
-                                    classNameContainer={
-                                        cn(
-                                            "bg-none border border-brand-blue",
-                                            tagFilter === tag.name && "bg-brand-blue",
-                                            tagFilter === tag.name && " scale-110"
+                    <WhatsappExternalLink
+                        phoneNumber="46991272525"
+                        ariaLabel="Envia uma mensagem com WhatsApp"
+                        message={"Olá, gostaria fazer um pedido"}
+                        className="flex items-center justify-center gap-2 rounded-lg bg-muted py-1 "
+                    >
+                        <WhatsAppIcon color="black" />
+                        <span className="font-semibold text-xs">WhatsApp</span>
+                    </WhatsappExternalLink>
+                    <Link to={GLOBAL_LINKS.maps.href} aria-label={GLOBAL_LINKS.maps.title} className="flex items-center justify-center gap-1 rounded-lg bg-muted py-1">
+                        <MapPin />
+                        <span className="font-semibold text-xs">Maps</span>
+                    </Link>
+                </div>
+            </section>
 
-                                        )
-                                    } />
-                            </Link>
-                        </li>
-                    ))}
-
-
-                </ul>
+            <div className="grid grid-cols-10 rounded-lg bg-muted m-4 p-2">
+                <div className="flex items-center justify-center col-span-1">
+                    <ItalyFlag width={24} />
+                </div>
+                <p className="font-body-website text-sm col-span-8 text-center">Todas os nossas pizzas são preparadas com <span className="font-semibold">farinha e molho de tomate importados da Itália</span></p>
+                <div className="flex items-center justify-center col-span-1">
+                    <ItalyFlag width={24} />
+                </div>
             </div>
-            {
-                tagFilter && (
-                    <div className="absolute top-12 left-0 right-0 flex gap-2 items-center px-2 bg-blue-300 py-[0.15rem]">
-                        <div className="flex items-center justify-between w-full">
-                            <div className="flex gap-1 items-center">
-                                <Filter size={12} />
-                                <p className="font-body-website text-[12px]">Você está visualizando os sabores <span className="font-semibold">"{tagFilter}"</span></p>
-                            </div>
-                            <Link to={`/cardapio`} className="font-body-website text-[12px] underline font-semibold self-end">
-                                Voltar
-                            </Link>
-                        </div>
-                    </div>
-                )
-            }
-        </div>
-
+        </>
 
     )
 }
-
 
 
 function CardapioFooter() {
@@ -382,100 +233,4 @@ function CardapioFooter() {
     )
 }
 
-function CardapioSearch({ items, setShowSearch }: {
-    items: MenuItemWithAssociations[],
-    setShowSearch: React.Dispatch<React.SetStateAction<boolean>>
-}) {
 
-    const [currentItems, setCurrentItems] = useState<MenuItemWithAssociations[]>([]);
-    const [search, setSearch] = useState("")
-    const inputRef = useRef<HTMLInputElement>(null);
-
-    useEffect(() => {
-        if (inputRef.current) {
-            inputRef.current.focus();
-        }
-    }, []);
-
-    const handleSearch = (event: React.ChangeEvent<HTMLInputElement>) => {
-
-        const value = event.target.value.toLowerCase();
-        setSearch(value);
-
-        if (!value) {
-            setCurrentItems([]);
-            return;
-        }
-
-
-        const itemsFounded = items.filter(item =>
-            item.name.toLowerCase().includes(value) ||
-            item.ingredients.toLowerCase().includes(value) ||
-            item.description.toLowerCase().includes(value) ||
-            (item.tags?.public && item.tags?.public.filter(tag => tag.toLowerCase().includes(value)).length > 0)
-        );
-
-
-
-        setCurrentItems(itemsFounded);
-    };
-
-
-
-    return (
-        <div className="bg-white flex flex-col py-2 px-4 rounded-sm shadow-lg w-[350px] md:w-[450px]">
-            <div className=" flex flex-col py-3">
-
-                <div className="max-h-[350px] overflow-y-auto">
-                    <ul className="flex flex-col gap-2">
-                        {currentItems.map((item) => (
-                            <CardapioItemDialog key={item.id} item={item} triggerComponent={
-                                <li className="grid grid-cols-8 py-1" >
-
-                                    <div className="self-start bg-center bg-cover bg-no-repeat w-8 h-8 rounded-lg col-span-1 "
-                                        style={{
-                                            backgroundImage: `url(${item.MenuItemImage?.thumbnailUrl || "/images/cardapio-web-app/placeholder.png"})`,
-                                        }}></div>
-                                    <div className="flex flex-col col-span-7">
-                                        <span className="font-body-website text-[0.85rem] font-semibold leading-tight uppercase text-left">{item.name}</span>
-                                        <span className="font-body-website text-[0.85rem] leading-tight text-left">{item.ingredients}</span>
-                                    </div>
-
-                                </li>
-                            } />
-
-                        ))}
-                    </ul>
-                </div>
-
-                <Separator className="my-4" />
-
-                {
-                    search && <p className="font-body-website text-xs text-muted-foreground mb-2">{currentItems.length} de {items.length} resultados para
-                        <span className="font-semibold"> {search}</span>
-                    </p>
-                }
-
-                <Input
-                    ref={inputRef}
-                    placeholder="Digitar 'abobrinha' ou 'vegetarianas'" className="font-body-website text-sm h-8" onChange={handleSearch}
-
-                />
-
-
-            </div>
-
-            <Button type="button" variant="secondary" onClick={() => setShowSearch(false)}>
-                <div className="flex gap-2 items-center font-body-website tracking-wide text-xs font-semibold uppercase">
-                    <XIcon className="w-[12px] h-[12px]" />
-                    <span className="text-[12px] tracking-widest font-semibold uppercase" style={{
-                        lineHeight: "normal",
-                    }}>Fechar</span></div>
-            </Button>
-
-
-        </div>
-    )
-
-
-}

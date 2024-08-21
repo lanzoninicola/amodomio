@@ -15,6 +15,7 @@ import {
 } from "../setting/setting.entity.server";
 import { Setting } from "../setting/setting.model.server";
 import { dayjs, utc } from "~/lib/dayjs";
+import { settingPrismaEntity } from "../setting/setting.prisma.entity.server";
 
 interface MogoEntityProps {
   httpClient: MogoHttpClientInterface;
