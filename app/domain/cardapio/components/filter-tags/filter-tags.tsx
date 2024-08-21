@@ -23,7 +23,7 @@ export default function FiltersTags({ tags }: { tags: Tag[] }) {
                         <Link to={`/cardapio`} className="text-xs font-body-website font-semibold uppercase text-muted-foreground">
                             <Badge className={
                                 cn(
-                                    "bg-none border border-brand-blue text-brand-blue font-semibold",
+                                    "border border-brand-blue text-brand-blue font-semibold bg-white scale-100 py-1 text-[10px]",
                                     tagFilter === null && "bg-brand-blue text-white scale-110"
                                 )
                             }>Todos</Badge>

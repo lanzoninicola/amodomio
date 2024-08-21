@@ -261,7 +261,7 @@ const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) =>
 
     return (
 
-        <li className="flex flex-col snap-start" id={item.id} ref={ref}>
+        <li className="flex flex-col snap-start mb-4" id={item.id} ref={ref}>
             <div className="relative mb-2">
                 <CardapioItemDialog item={item} triggerComponent={
                     <CardapioItemImage item={item} />
@@ -278,7 +278,7 @@ const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) =>
                 <p className="font-body-website leading-tight text-left">{item.ingredients}</p>
             </div>
             <CardapioItemActionBar item={item} />
-            <Separator className="my-4" />
+            {/* <Separator className="my-4" /> */}
         </li>
     )
 

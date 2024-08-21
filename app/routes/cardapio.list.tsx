@@ -145,7 +145,7 @@ const CardapioItemList = ({ allItems }: { allItems: MenuItemWithAssociations[] }
 
     return (
         <section>
-            <ul className="flex flex-col overflow-y-auto md:overflow-y-z auto snap-mandatory">
+            <ul className="flex flex-col overflow-y-auto md:overflow-y-z auto snap-mandatory mt-4">
                 {items.map((item, index) => {
                     if (items.length === index + 1) {
                         return <CardapioItem ref={lastItemRef} key={item.id} item={item} />

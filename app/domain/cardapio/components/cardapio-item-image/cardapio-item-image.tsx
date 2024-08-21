@@ -1,12 +1,14 @@
 import ItalyFlag from "~/components/italy-flag/italy-flag";
 import { MenuItemWithAssociations } from "../../menu-item.prisma.entity.server";
+import { cn } from "~/lib/utils";
 
 interface CardapioItemImageProps {
     item: MenuItemWithAssociations;
     withOverlay?: boolean;
+    cnImage?: string;
 }
 
-const CardapioItemImage = ({ item, withOverlay = true }: CardapioItemImageProps) => {
+const CardapioItemImage = ({ item, withOverlay = true, cnImage }: CardapioItemImageProps) => {
 
     const italyProduct = item.tags?.public.some(t => t.toLocaleLowerCase() === "produtos-italianos")
 
@@ -34,7 +36,12 @@ const CardapioItemImage = ({ item, withOverlay = true }: CardapioItemImageProps)
                 src={item.imageTransformedURL || "/images/cardapio-web-app/placeholder.png"}
                 alt={item.name}
                 loading="lazy"
-                className="w-full max-h-[250px] object-cover object-center rounded-t-lg"
+                className={
+                    cn(
+                        "w-full max-h-[250px] object-cover object-center",
+                        cnImage
+                    )
+                }
             />
             {withOverlay && <Overlay />}
             {italyProduct && <ItalyFlagOverlay />}
