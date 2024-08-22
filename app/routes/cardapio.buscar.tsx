@@ -48,7 +48,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export default function CardapioSearch() {
     const { items, tags } = useLoaderData<typeof loader>()
+    const [searchedTerm, setSearchedTerm] = useState("")
     const [currentItems, setCurrentItems] = useState<MenuItemWithAssociations[]>([]);
+
+    console.log({ currentItems })
 
     return (
         <section className="mt-14 p-4">
@@ -58,7 +61,12 @@ export default function CardapioSearch() {
                     <Await resolve={items}>
                         {(items) => {
                             // @ts-ignore
-                            return <SearchItemsInput items={items} currentItems={currentItems} setCurrentItems={setCurrentItems} />
+                            return <SearchItemsInput items={items}
+                                currentItems={currentItems}
+                                setCurrentItems={setCurrentItems}
+                                searchedTerm={searchedTerm}
+                                setSearchedTerm={setSearchedTerm}
+                            />
                         }}
                     </Await>
                 </Suspense>
@@ -69,7 +77,7 @@ export default function CardapioSearch() {
                         <Await resolve={tags}>
                             {(tags) => {
                                 // @ts-ignore
-                                return <SearchFiltersTags tags={tags ?? []} />
+                                return <SearchFiltersTags tags={tags ?? []} setSearchedTerm={setSearchedTerm} />
                             }}
                         </Await>
                     </div>
@@ -79,12 +87,12 @@ export default function CardapioSearch() {
 
                         {(items) => {
                             // @ts-ignore
-                            return <SearchItems items={items ?? []} />
+                            return <FoundedItems items={items ?? []} />
                         }}
                     </Await>
 
                 </Suspense> */}
-                <SearchItems items={currentItems} />
+                <FoundedItems items={currentItems} />
             </div>
             <Link to={GLOBAL_LINKS.cardapioPublic.href}>
                 <Button className="w-full flex gap-2 justify-center" variant={"secondary"}>
@@ -100,8 +108,9 @@ export default function CardapioSearch() {
 }
 
 
-function SearchFiltersTags({ tags }: {
-    tags: Tag[]
+function SearchFiltersTags({ tags, setSearchedTerm }: {
+    tags: Tag[],
+    setSearchedTerm: React.Dispatch<React.SetStateAction<string>>
 }) {
 
     return (
@@ -109,7 +118,7 @@ function SearchFiltersTags({ tags }: {
             {tags.map(tag => {
 
                 return (
-                    <div key={tag.id} className="bg-blue-200 p-2 rounded-md flex items-center">
+                    <div key={tag.id} className="bg-blue-200 p-2 rounded-md flex items-center cursor-pointer" onClick={() => setSearchedTerm(tag.name)}>
                         <span className="font-body-website text-sm">{capitalize(tag.name)}</span>
                     </div>
                 )
@@ -118,13 +127,16 @@ function SearchFiltersTags({ tags }: {
     )
 }
 
-function SearchItemsInput({ items, currentItems, setCurrentItems }: {
+function SearchItemsInput({ items, currentItems, setCurrentItems, searchedTerm, setSearchedTerm }: {
     items: MenuItemWithAssociations[],
     currentItems: MenuItemWithAssociations[],
     setCurrentItems: React.Dispatch<React.SetStateAction<MenuItemWithAssociations[]>>
+    searchedTerm: string
+    setSearchedTerm: React.Dispatch<React.SetStateAction<string>>,
+
 }) {
 
-    const [search, setSearch] = useState("")
+
     const inputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
@@ -134,16 +146,16 @@ function SearchItemsInput({ items, currentItems, setCurrentItems }: {
     }, []);
 
     const handleSearch = (event: React.ChangeEvent<HTMLInputElement>) => {
-
         const value = event.target.value.toLowerCase();
-        setSearch(value);
 
+        search(value);
+    };
+
+    const search = (value: string) => {
         if (!value) {
             setCurrentItems([]);
             return;
         }
-
-
         const normalizeString = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
         const itemsFounded = items.filter(item =>
@@ -153,21 +165,25 @@ function SearchItemsInput({ items, currentItems, setCurrentItems }: {
             (item.tags?.public && item.tags?.public.filter(tag => normalizeString(tag).includes(normalizeString(value))).length > 0)
         );
 
-
-
+        setSearchedTerm(value);
         setCurrentItems(itemsFounded);
-    };
+    }
+
+    useEffect(() => {
+        search(searchedTerm);
+    }, [searchedTerm])
 
     return (
         <div className="flex flex-col gap-2">
             <Input
                 ref={inputRef}
                 placeholder="Digitar 'abobrinha' ou 'vegetarianas'" className="font-body-website text-sm h-8" onChange={handleSearch}
+                defaultValue={searchedTerm}
 
             />
             {
-                search && <p className="font-body-website text-xs text-muted-foreground mb-2">{currentItems.length} de {items.length} resultados para
-                    <span className="font-semibold"> {search}</span>
+                searchedTerm && <p className="font-body-website text-xs text-muted-foreground mb-2">{currentItems.length} de {items.length} resultados para
+                    <span className="font-semibold"> {searchedTerm}</span>
                 </p>
             }
             <div className="bg-slate-200 rounded-md p-2 mb-2">
@@ -183,7 +199,7 @@ function SearchItemsInput({ items, currentItems, setCurrentItems }: {
 
 }
 
-function SearchItems({ items }: {
+function FoundedItems({ items }: {
     items: MenuItemWithAssociations[],
 }) {
 
