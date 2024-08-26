@@ -1,10 +1,10 @@
-import { V2_MetaFunction } from "@remix-run/node";
+import { MetaFunction } from "@remix-run/node";
 import { Outlet, useOutletContext } from "@remix-run/react";
 import Container from "~/components/layout/container/container";
 import { AdminOutletContext } from "./admin";
 
 
-export const meta: V2_MetaFunction = () => [
+export const meta: MetaFunction = () => [
     { name: "robots", content: "noindex" },
 ];
 

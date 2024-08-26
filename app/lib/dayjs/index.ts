@@ -1,4 +1,4 @@
-import dayjs, { Dayjs } from "dayjs";
+import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
 import localizedFormat from "dayjs/plugin/localizedFormat";
@@ -62,7 +62,6 @@ export const formatDateOnyTime = (date: Date | string) => {
 
 export {
   dayjs,
-  Dayjs,
   utc,
   timezone,
   localizedFormat,

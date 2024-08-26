@@ -1,4 +1,4 @@
-import { LoaderArgs } from "@remix-run/node"
+import { LoaderFunctionArgs } from "@remix-run/node"
 import { useLoaderData, useNavigation, Form } from "@remix-run/react"
 
 import { useState } from "react"
@@ -16,7 +16,7 @@ import tryit from "~/utils/try-it"
 
 
 
-export async function loader({ request }: LoaderArgs) {
+export async function loader({ request }: LoaderFunctionArgs) {
 
     // const productTypeParam = getSearchParam({ request, paramName: "type" })
 

@@ -1,4 +1,4 @@
-import { V2_MetaFunction } from "@remix-run/node";
+import { MetaFunction } from "@remix-run/node";
 import { Outlet, useLoaderData } from "@remix-run/react";
 import { ChevronRight, ChevronRightIcon, ChevronRightSquare, HelpCircle, Settings } from "lucide-react";
 import Container from "~/components/layout/container/container";
@@ -7,7 +7,7 @@ import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "~/components/ui/dialog";
 import { loader } from "./admin.gerenciamento.cardapio._index";
 
-export const meta: V2_MetaFunction = () => {
+export const meta: MetaFunction = () => {
     return [
         { title: "Cardápio Pizza Al Taglio" },
         {

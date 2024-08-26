@@ -1,5 +1,5 @@
 import { Setting } from "@prisma/client";
-import type { LoaderArgs, V2_MetaFunction } from "@remix-run/node";
+import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { Form, useActionData, useLoaderData } from "@remix-run/react";
 import { AlertCircle } from "lucide-react";
 import Container from "~/components/layout/container/container";
@@ -14,7 +14,7 @@ import { cn } from "~/lib/utils";
 import { badRequest, ok } from "~/utils/http-response.server";
 import tryit from "~/utils/try-it";
 
-export const meta: V2_MetaFunction = () => {
+export const meta: MetaFunction = () => {
     return [
         {
             name: "robots",
@@ -27,7 +27,7 @@ export const meta: V2_MetaFunction = () => {
     ];
 };
 
-export async function loader({ request }: LoaderArgs) {
+export async function loader({ request }: LoaderFunctionArgs) {
 
     const [err, settings] = await tryit(settingPrismaEntity.findAll())
 
@@ -41,7 +41,7 @@ export async function loader({ request }: LoaderArgs) {
 }
 
 
-export async function action({ request }: LoaderArgs) {
+export async function action({ request }: LoaderFunctionArgs) {
 
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);

@@ -1,4 +1,4 @@
-import { LoaderArgs, redirect } from "@remix-run/node";
+import { LoaderFunctionArgs, redirect } from "@remix-run/node";
 import { Form, Link, Outlet, useLoaderData, useOutletContext } from "@remix-run/react";
 import { PlusCircleIcon } from "lucide-react";
 import Container from "~/components/layout/container/container";
@@ -15,7 +15,7 @@ import { LoggedUser } from "~/domain/auth/types.server";
 import tryit from "~/utils/try-it";
 import { DeleteItemButton } from "~/components/primitives/table-list";
 
-export async function loader({ request }: LoaderArgs) {
+export async function loader({ request }: LoaderFunctionArgs) {
 
     const user = await authenticator.isAuthenticated(request)
 
@@ -29,7 +29,7 @@ export async function loader({ request }: LoaderArgs) {
 
 }
 
-export async function action({ request }: LoaderArgs) {
+export async function action({ request }: LoaderFunctionArgs) {
 
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);

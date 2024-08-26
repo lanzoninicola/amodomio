@@ -4,12 +4,12 @@ import { AdminOutletContext } from "./admin";
 import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { useState } from "react";
 import { Input } from "~/components/ui/input";
-import { LoaderArgs, LoaderFunction } from "@remix-run/node";
+import { LoaderFunctionArgs, LoaderFunction } from "@remix-run/node";
 import { ok } from "~/utils/http-response.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { mapPriceVariationsLabel } from "~/domain/cardapio/fn.utils";
 
-export const loader: LoaderFunction = async ({ request }: LoaderArgs) => {
+export const loader: LoaderFunction = async ({ request }: LoaderFunctionArgs) => {
     const [_, cardapioItems] = await prismaIt(menuItemPrismaEntity.findAll({
         where: {
             visible: true

@@ -1,5 +1,5 @@
 import { MenuItemTag, Tag } from "@prisma/client";
-import { LoaderArgs, V2_MetaFunction } from "@remix-run/node";
+import { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { Form, useActionData, useLoaderData, useOutletContext } from "@remix-run/react";
 import { useState } from "react";
 import { Badge } from "~/components/ui/badge";
@@ -16,7 +16,7 @@ import { tagPrismaEntity } from "~/domain/tags/tag.prisma.entity.server";
 import { jsonParse, jsonStringify } from "~/utils/json-helper";
 import BadgeTag from "~/domain/tags/components/badge-tag";
 
-export const meta: V2_MetaFunction = ({ data }) => {
+export const meta: MetaFunction = ({ data }) => {
     const item: MenuItemWithAssociations = data?.payload?.item
 
     return [
@@ -24,7 +24,7 @@ export const meta: V2_MetaFunction = ({ data }) => {
     ];
 };
 
-export async function loader({ request }: LoaderArgs) {
+export async function loader({ request }: LoaderFunctionArgs) {
     const itemId = urlAt(request.url, -2)
 
     if (!itemId) {
@@ -53,7 +53,7 @@ export async function loader({ request }: LoaderArgs) {
 
 }
 
-export async function action({ request }: LoaderArgs) {
+export async function action({ request }: LoaderFunctionArgs) {
 
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);

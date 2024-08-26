@@ -1,31 +1,75 @@
-import { ActionArgs, HeadersFunction } from "@remix-run/node";
-import { useActionData, useFetcher, useOutletContext, useSearchParams } from "@remix-run/react";
-import { Share2, Heart, Settings } from "lucide-react";
-import React, { useState, useRef, useCallback, useEffect } from "react";
-import WhatsappExternalLink from "~/components/primitives/whatsapp/whatsapp-external-link";
-import WhatsAppIcon from "~/components/primitives/whatsapp/whatsapp-icon";
+import { HeadersFunction, LoaderFunctionArgs } from "@remix-run/node";
+import { Await, Link, defer, useLoaderData, useLocation, useSearchParams } from "@remix-run/react";
+import React, { useState, useRef, useCallback, useEffect, Suspense } from "react";
 import { Separator } from "~/components/ui/separator";
-import { MenuItemWithAssociations } from "~/domain/cardapio/menu-item.prisma.entity.server";
-import { cn } from "~/lib/utils";
-import { CardapioOutletContext } from "./cardapio";
+import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { menuItemLikePrismaEntity } from "~/domain/cardapio/menu-item-like.prisma.entity.server";
 import { badRequest, ok } from "~/utils/http-response.server";
 import { menuItemSharePrismaEntity } from "~/domain/cardapio/menu-item-share.prisma.entity.server";
-import GLOBAL_LINKS from "~/domain/website-navigation/global-links.constant";
-import ItalyFlag from "~/components/italy-flag/italy-flag";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "~/components/ui/dialog";
 import CardapioItemDialog from "~/domain/cardapio/components/cardapio-item-dialog/cardapio-item-dialog";
 import ItalyIngredientsStatement from "~/domain/cardapio/components/italy-ingredient-statement/italy-ingredient-statement";
 import CardapioItemActionBar from "~/domain/cardapio/components/cardapio-item-action-bar/cardapio-item-action-bar";
 import CardapioItemImage from "~/domain/cardapio/components/cardapio-item-image/cardapio-item-image";
 import CardapioItemPrice from "~/domain/cardapio/components/cardapio-item-price/cardapio-item-price";
+import { tagPrismaEntity } from "~/domain/tags/tag.prisma.entity.server";
+import { jsonParse } from "~/utils/json-helper";
+import { Tag } from "@prisma/client";
+import Badge from "~/components/primitives/badge/badge";
+import BadgeTag from "~/domain/tags/components/badge-tag";
+import { cn } from "~/lib/utils";
+import { Filter } from "lucide-react";
+import { LayoutTemplate } from "lucide-react";
+import { LayoutList } from "lucide-react";
+import Loading from "~/components/loading/loading";
+import FiltersTags from "~/domain/cardapio/components/filter-tags/filter-tags";
 
 export const headers: HeadersFunction = () => ({
     'Cache-Control': 's-maxage=1, stale-while-revalidate=59',
 });
 
-export async function action({ request }: ActionArgs) {
+export async function loader({ request }: LoaderFunctionArgs) {
+    const env = process.env?.NODE_ENV
+    // const tagParam = getSearchParam({ request, paramName: 'tag' })
+
+    //@ts-ignore
+    const items = menuItemPrismaEntity.findAll({
+        where: {
+            visible: true,
+            // tags: {
+            //     some: {
+            //         Tag: {
+            //             name: tagParam || undefined
+            //         }
+            //     }
+            // }
+        },
+        option: {
+            sorted: true,
+            direction: "asc"
+        },
+        // mock: env === "development"
+    }, {
+        imageTransform: true,
+        imageScaleWidth: 375
+    })
+
+
+
+
+    const tags = tagPrismaEntity.findAll({
+        public: true
+    })
+
+    return defer({
+        items,
+        tags
+    })
+
+
+}
+
+export async function action({ request }: LoaderFunctionArgs) {
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);
 
@@ -90,10 +134,62 @@ export async function action({ request }: ActionArgs) {
 }
 
 export default function CardapioWebIndex() {
+    const location = useLocation()
+    const { items, tags } = useLoaderData<typeof loader>()
+
+    return (
+        <section>
+            <div className="flex gap-4 justify-center mb-2">
+                <Link to={"/cardapio"} className={
+                    cn(
+                        "p-2",
+                        location.pathname === "/cardapio" && "border-b-brand-blue border-b-2",
+
+                    )
+                } >
+                    <LayoutTemplate />
+                </Link>
+                <Link to={"/cardapio/list"} className={
+                    cn(
+                        "p-2",
+                        location.pathname === "/cardapio/list" && "border-b-brand-blue border-b-2",
+
+                    )
+                } >
+                    <LayoutList />
+                </Link>
+            </div>
+            <div className="flex flex-col">
+                {/* <Loading /> */}
+                <Suspense fallback={<Loading />}>
+
+                    <Await resolve={tags}>
+                        {(tags) => {
+                            // @ts-ignore
+                            return <FiltersTags tags={tags ?? []} />
+                        }}
+                    </Await>
+                </Suspense>
+                <Suspense fallback={<Loading />}>
+                    <Await resolve={items}>
+
+                        {(items) => {
+                            // @ts-ignore
+                            return <CardapioItemList allItems={items ?? []} />
+                        }}
+                    </Await>
+
+                </Suspense>
+            </div>
+        </section >
+
+
+    );
+}
+
+const CardapioItemList = ({ allItems }: { allItems: MenuItemWithAssociations[] }) => {
     const [searchParams] = useSearchParams();
     let currentFilterTag = searchParams.get("tag");
-
-    const { items: allItems } = useOutletContext<CardapioOutletContext>();
 
     const [items, setItems] = useState<MenuItemWithAssociations[]>([]);
     const [hasMore, setHasMore] = useState(true);
@@ -125,19 +221,19 @@ export default function CardapioWebIndex() {
         if (node) observer.current.observe(node);
     }, [hasMore, allItems, currentFilterTag]);
 
-    if (items.length === 0) {
-        return (
-            <div className="flex h-full w-full items-center justify-center p-8">
-                <div className="flex flex-col gap-6 justify-center items-center">
-                    <img src="/images/empty-cardapio.webp" className="mx-auto w-[136px]" alt="Nenhum item encontrado" />
-                    <h1 className="font-body-website text-sm md:text-lg font-semibold text-muted-foreground">Nenhum item encontrado</h1>
-                </div>
-            </div>
-        );
-    }
+    // if (items.length === 0) {
+    //     return (
+    //         <div className="flex h-full w-full items-center justify-center p-8">
+    //             <div className="flex flex-col gap-6 justify-center items-center">
+    //                 <img src="/images/empty-cardapio.webp" className="mx-auto w-[136px]" alt="Nenhum item encontrado" />
+    //                 <h1 className="font-body-website text-sm md:text-lg font-semibold text-muted-foreground">Nenhum item encontrado</h1>
+    //             </div>
+    //         </div>
+    //     );
+    // }
 
     return (
-        <section>
+        <div className="flex flex-col mt-4">
             <ul className="flex flex-col overflow-y-auto md:overflow-y-z auto snap-mandatory">
                 {items.map((item, index) => {
                     if (items.length === index + 1) {
@@ -147,7 +243,8 @@ export default function CardapioWebIndex() {
                     }
                 })}
             </ul>
-        </section>
+        </div>
+
     );
 }
 
@@ -164,7 +261,7 @@ const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) =>
 
     return (
 
-        <li className="flex flex-col snap-start" id={item.id} ref={ref}>
+        <li className="flex flex-col snap-start mb-4" id={item.id} ref={ref}>
             <div className="relative mb-2">
                 <CardapioItemDialog item={item} triggerComponent={
                     <CardapioItemImage item={item} />
@@ -181,12 +278,13 @@ const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) =>
                 <p className="font-body-website leading-tight text-left">{item.ingredients}</p>
             </div>
             <CardapioItemActionBar item={item} />
-            <Separator className="my-4" />
+            {/* <Separator className="my-4" /> */}
         </li>
     )
 
 
 });
+
 
 
 

@@ -1,5 +1,5 @@
 import { MenuItemPriceVariation } from "@prisma/client";
-import { LoaderArgs, V2_MetaFunction } from "@remix-run/node";
+import { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { useActionData, useLoaderData, useNavigation, useOutletContext } from "@remix-run/react";
 import { useState } from "react";
 import Fieldset from "~/components/ui/fieldset";
@@ -18,7 +18,7 @@ import { jsonParse } from "~/utils/json-helper";
 import parserFormDataEntryToNumber from "~/utils/parse-form-data-entry-to-number";
 import { urlAt } from "~/utils/url";
 
-export const meta: V2_MetaFunction = ({ data }) => {
+export const meta: MetaFunction = ({ data }) => {
     const item: MenuItemWithAssociations = data?.payload?.item
 
     return [
@@ -26,7 +26,7 @@ export const meta: V2_MetaFunction = ({ data }) => {
     ];
 };
 
-export async function loader({ request, params }: LoaderArgs) {
+export async function loader({ request, params }: LoaderFunctionArgs) {
     const itemId = urlAt(request.url, -3);
     let user = await authenticator.isAuthenticated(request);
 
@@ -50,7 +50,7 @@ export async function loader({ request, params }: LoaderArgs) {
     });
 }
 
-export async function action({ request }: LoaderArgs) {
+export async function action({ request }: ActionFunctionArgs) {
 
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);

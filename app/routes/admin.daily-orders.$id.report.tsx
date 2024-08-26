@@ -2,7 +2,7 @@ import { Form, useLoaderData, useOutletContext } from "@remix-run/react";
 import { DailyOrderQuickStat, DailyOrderSingleOutletContext } from "./admin.daily-orders.$id";
 import { DailyOrder, DailyOrderFinance } from "~/domain/daily-orders/daily-order.model.server";
 import { Separator } from "~/components/ui/separator";
-import { LoaderArgs, redirect } from "@remix-run/node";
+import { LoaderFunctionArgs, redirect } from "@remix-run/node";
 import { Input } from "~/components/ui/input";
 import { useEffect, useState } from "react";
 import { Textarea } from "~/components/ui/textarea";
@@ -11,7 +11,7 @@ import tryit from "~/utils/try-it";
 import { dailyOrderEntity } from "~/domain/daily-orders/daily-order.entity.server";
 import { ok, serverError } from "~/utils/http-response.server";
 
-export async function loader({ request, params }: LoaderArgs) {
+export async function loader({ request, params }: LoaderFunctionArgs) {
     if (!params?.id) {
         return redirect(`/admin/daily-orders`)
     }
@@ -24,7 +24,7 @@ export async function loader({ request, params }: LoaderArgs) {
 
 }
 
-export async function action({ request }: LoaderArgs) {
+export async function action({ request }: LoaderFunctionArgs) {
 
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);

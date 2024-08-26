@@ -1,4 +1,4 @@
-import { ActionArgs, HeadersFunction } from "@remix-run/node";
+import { ActionFunctionArgs, HeadersFunction } from "@remix-run/node";
 import { useActionData, useFetcher, useOutletContext, useSearchParams } from "@remix-run/react";
 import { Share2, Heart } from "lucide-react";
 import React, { useState, useRef, useCallback, useEffect } from "react";
@@ -19,7 +19,7 @@ export const headers: HeadersFunction = () => ({
     'Cache-Control': 's-maxage=1, stale-while-revalidate=59',
 });
 
-export async function action({ request }: ActionArgs) {
+export async function action({ request }: ActionFunctionArgs) {
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);
 

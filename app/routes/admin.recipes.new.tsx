@@ -1,11 +1,11 @@
 import { RecipeType } from "@prisma/client";
-import { ActionArgs, redirect } from "@remix-run/node";
+import { ActionFunctionArgs, redirect } from "@remix-run/node";
 import RecipeForm from "~/domain/recipe/components/recipe-form/recipe-form";
-import { recipeEntity } from "~/domain/recipe/recipe.entity";
+import { recipeEntity } from "~/domain/recipe/recipe.entity.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { serverError, ok } from "~/utils/http-response.server";
 
-export async function action({ request, params }: ActionArgs) {
+export async function action({ request, params }: ActionFunctionArgs) {
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);
 

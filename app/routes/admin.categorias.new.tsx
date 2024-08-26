@@ -1,4 +1,4 @@
-import { LoaderArgs } from "@remix-run/node";
+import { LoaderFunctionArgs } from "@remix-run/node";
 import { categoryEntity } from "~/domain/category/category.entity.server";
 import { Category, CategoryType } from "~/domain/category/category.model.server";
 import CategoryForm from "~/domain/category/components/category-form/category-form";
@@ -15,7 +15,7 @@ export async function loader() {
 }
 
 
-export async function action({ request }: LoaderArgs) {
+export async function action({ request }: LoaderFunctionArgs) {
 
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);

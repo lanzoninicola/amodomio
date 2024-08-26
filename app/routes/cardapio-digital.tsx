@@ -1,5 +1,5 @@
-import type { ActionArgs, LinksFunction, LoaderArgs } from "@remix-run/node";
-import { redirect, type V2_MetaFunction } from "@remix-run/node";
+import type { ActionFunctionArgs, LinksFunction, LoaderFunctionArgs } from "@remix-run/node";
+import { redirect, type MetaFunction } from "@remix-run/node";
 import { useLoaderData, useNavigate, useSearchParams } from "@remix-run/react";
 
 import { ok } from "~/utils/http-response.server";
@@ -14,7 +14,7 @@ import Container from "~/components/layout/container/container";
 import EasterEgg from "~/components/primitives/easter-egg/ester-egg";
 import { ItalianFlagSmall, LogoTransparent } from "~/components/primitives/logo/logo-transparent";
 
-export const meta: V2_MetaFunction = () => {
+export const meta: MetaFunction = () => {
   return [
     { title: "Cardápio A Modio Mio" },
     {
@@ -36,7 +36,7 @@ export const links: LinksFunction = () => [
   },
 ];
 
-export async function loader({ request }: LoaderArgs) {
+export async function loader({ request }: LoaderFunctionArgs) {
   // const menuItems = await menuEntity.findAll() as MenuItem[]
   // const categories = await categoryEntity.findAll()
 
@@ -51,7 +51,7 @@ export async function loader({ request }: LoaderArgs) {
   })
 }
 
-export async function action({ request }: ActionArgs) {
+export async function action({ request }: ActionFunctionArgs) {
   return null
 }
 
