@@ -52,7 +52,7 @@ export default function CardapioSearch() {
     const [currentItems, setCurrentItems] = useState<MenuItemWithAssociations[]>([]);
 
     return (
-        <section className="mt-14 p-4">
+        <section className="mt-20 p-4">
 
             <div className="flex flex-col gap-4 mb-6">
                 <Suspense fallback={<Loading />}>
