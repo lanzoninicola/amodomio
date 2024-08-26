@@ -130,7 +130,7 @@ function CardapioHeader() {
                         homeLink={{ label: GLOBAL_LINKS.cardapioPublic.title, to: GLOBAL_LINKS.cardapioPublic.href }}
                         navigationLinks={PUBLIC_WEBSITE_NAVIGATION_ITEMS}
                         buttonTrigger={{
-                            label: "Menu",
+                            label: "",
                             classNameLabel: "block font-body-website text-[10px] font-semibold  uppercase text-brand-blue",
                             classNameButton: "justify-start w-full h-full",
                             colorIcon: brandColors.brand.blue,
@@ -157,7 +157,7 @@ function CardapioHeader() {
                     <Link to={'buscar'} className="flex justify-end">
                         <div className="flex justify-end items-center cursor-pointer" onClick={() => setShowSearch(!showSearch)}>
                             <SearchIcon color={brandColors.brand.blue} />
-                            <span className="font-body-website text-[10px] font-semibold  uppercase text-brand-blue">Pesquisar</span>
+                            {/* <span className="font-body-website text-[10px] font-semibold  uppercase text-brand-blue">Pesquisar</span> */}
                         </div>
                     </Link>
                 </div>
@@ -176,44 +176,46 @@ function CompanyInfo() {
 
     return (
         <>
-            <section className="mt-16 p-4 mb-4 ">
+            <section className="mt-16 px-4">
                 <div className="flex flex-col font-body-website">
                     <h2 className="font-semibold text-lg">A Modo Mio | Pizzeria Italiana</h2>
                     <h3 className="text-muted-foreground">Pizza Al Taglio & Delivery</h3>
                 </div>
 
-                <div className="text-xs text-muted-foreground mb-6 font-body-website">
+                <div className="text-xs text-muted-foreground mb-2 font-body-website">
                     <p>Rua Arariboia 64 - Pato Branco</p>
                 </div>
-                <div className="grid grid-cols-3 gap-x-4">
+                <div className="grid grid-cols-8 gap-x-4">
 
-                    <Link to={GLOBAL_LINKS.instagram.href} aria-label={GLOBAL_LINKS.instagram.title} className="flex items-center justify-center gap-1 rounded-lg bg-muted py-1">
-                        <Instagram />
-                        <span className="font-semibold text-xs">Instagram</span>
+                    <Link to={GLOBAL_LINKS.instagram.href} aria-label={GLOBAL_LINKS.instagram.title}
+                        className="flex items-center justify-center gap-1 rounded-lg py-1">
+                        <Instagram size={28} />
+                        {/* <span className="font-semibold tracking-wide text-[12px]">Instagram</span> */}
                     </Link>
                     <WhatsappExternalLink
                         phoneNumber="46991272525"
                         ariaLabel="Envia uma mensagem com WhatsApp"
                         message={"Olá, gostaria fazer um pedido"}
-                        className="flex items-center justify-center gap-2 rounded-lg bg-muted py-1 "
+                        className="flex items-center justify-center gap-2 rounded-lg py-1 "
                     >
-                        <WhatsAppIcon color="black" />
-                        <span className="font-semibold text-xs">WhatsApp</span>
+                        <WhatsAppIcon color="black" height={28} width={28} />
+                        {/* <span className="font-semibold tracking-wide text-[12px]">WhatsApp</span> */}
                     </WhatsappExternalLink>
-                    <Link to={GLOBAL_LINKS.maps.href} aria-label={GLOBAL_LINKS.maps.title} className="flex items-center justify-center gap-1 rounded-lg bg-muted py-1">
-                        <MapPin />
-                        <span className="font-semibold text-xs">Maps</span>
+                    <Link to={GLOBAL_LINKS.maps.href} aria-label={GLOBAL_LINKS.maps.title}
+                        className="flex items-center justify-center gap-1 rounded-lg py-1">
+                        <MapPin size={28} />
+                        {/* <span className="font-semibold tracking-wide text-[12px]">Maps</span> */}
                     </Link>
                 </div>
             </section>
 
-            <section className="my-6">
-                <div className="flex gap-2 rounded-lg m-4 p-2" style={{ backgroundColor: brandColors.muted.yellow }}>
+            <section className="mb-6">
+                <div className="flex gap-3 rounded-lg m-4 p-2 px-3" style={{ backgroundColor: brandColors.muted.yellow }}>
                     <div className="flex items-start">
                         {/* @ts-ignore */}
-                        <ItalyFlag width={24} height={24} />
+                        <ItalyFlag className="w-8 h-8" />
                     </div>
-                    <p className="font-body-website text-sm max-w-prose">Todas os nossas pizzas são preparadas com <span className="font-semibold">farinha e molho de tomate importados da Itália</span></p>
+                    <p className="font-body-website text-[12px] uppercase leading-tight max-w-prose">Todas os nossas pizzas são preparadas com <span className="font-semibold">farinha e molho de tomate importados da Itália</span></p>
 
                 </div>
             </section>

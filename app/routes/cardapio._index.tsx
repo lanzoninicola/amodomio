@@ -1,7 +1,6 @@
 import { HeadersFunction, LoaderFunctionArgs } from "@remix-run/node";
-import { Await, Link, defer, useLoaderData, useLocation, useSearchParams } from "@remix-run/react";
+import { Await, defer, useLoaderData, useSearchParams } from "@remix-run/react";
 import React, { useState, useRef, useCallback, useEffect, Suspense } from "react";
-import { Separator } from "~/components/ui/separator";
 import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { menuItemLikePrismaEntity } from "~/domain/cardapio/menu-item-like.prisma.entity.server";
@@ -13,16 +12,9 @@ import CardapioItemActionBar from "~/domain/cardapio/components/cardapio-item-ac
 import CardapioItemImage from "~/domain/cardapio/components/cardapio-item-image/cardapio-item-image";
 import CardapioItemPrice from "~/domain/cardapio/components/cardapio-item-price/cardapio-item-price";
 import { tagPrismaEntity } from "~/domain/tags/tag.prisma.entity.server";
-import { jsonParse } from "~/utils/json-helper";
-import { Tag } from "@prisma/client";
-import Badge from "~/components/primitives/badge/badge";
-import BadgeTag from "~/domain/tags/components/badge-tag";
-import { cn } from "~/lib/utils";
-import { Filter } from "lucide-react";
-import { LayoutTemplate } from "lucide-react";
-import { LayoutList } from "lucide-react";
 import Loading from "~/components/loading/loading";
 import FiltersTags from "~/domain/cardapio/components/filter-tags/filter-tags";
+import CardapioTabs from "~/domain/cardapio/components/cardapio-tabs/cardapio-tabs";
 
 export const headers: HeadersFunction = () => ({
     'Cache-Control': 's-maxage=1, stale-while-revalidate=59',
@@ -134,31 +126,11 @@ export async function action({ request }: LoaderFunctionArgs) {
 }
 
 export default function CardapioWebIndex() {
-    const location = useLocation()
     const { items, tags } = useLoaderData<typeof loader>()
 
     return (
         <section>
-            <div className="flex gap-4 justify-center mb-2">
-                <Link to={"/cardapio"} className={
-                    cn(
-                        "p-2",
-                        location.pathname === "/cardapio" && "border-b-brand-blue border-b-2",
-
-                    )
-                } >
-                    <LayoutTemplate />
-                </Link>
-                <Link to={"/cardapio/list"} className={
-                    cn(
-                        "p-2",
-                        location.pathname === "/cardapio/list" && "border-b-brand-blue border-b-2",
-
-                    )
-                } >
-                    <LayoutList />
-                </Link>
-            </div>
+            <CardapioTabs />
             <div className="flex flex-col">
                 {/* <Loading /> */}
                 <Suspense fallback={<Loading />}>

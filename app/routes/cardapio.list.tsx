@@ -11,6 +11,7 @@ import { tagPrismaEntity } from "~/domain/tags/tag.prisma.entity.server";
 import { Badge } from "~/components/ui/badge";
 import BadgeTag from "~/domain/tags/components/badge-tag";
 import FiltersTags from "~/domain/cardapio/components/filter-tags/filter-tags";
+import CardapioTabs from "~/domain/cardapio/components/cardapio-tabs/cardapio-tabs";
 
 export async function loader({ request }: LoaderFunctionArgs) {
     const env = process.env?.NODE_ENV
@@ -55,30 +56,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export default function CardapioList() {
     const { items, tags } = useLoaderData<typeof loader>()
-    const location = useLocation()
 
     return (
         <section>
-            <div className="flex gap-4 justify-center mb-2">
-                <Link to={"/cardapio"} className={
-                    cn(
-                        "p-2",
-                        location.pathname === "/cardapio" && "border-b-brand-blue border-b-2",
-
-                    )
-                } >
-                    <LayoutTemplate />
-                </Link>
-                <Link to={"/cardapio/list"} className={
-                    cn(
-                        "p-2",
-                        location.pathname === "/cardapio/list" && "border-b-brand-blue border-b-2",
-
-                    )
-                } >
-                    <LayoutList />
-                </Link>
-            </div>
+            <CardapioTabs />
             <div className="flex flex-col">
                 {/* <Loading /> */}
                 <Suspense fallback={<Loading />}>
