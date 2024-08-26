@@ -14,7 +14,7 @@ interface WebsiteNavigationSidebarProps {
         label: string
         classNameLabel?: string
         classNameButton?: string
-        colorIcon?: "black" | "white"
+        colorIcon?: string
     },
     homeLink: {
         label: string

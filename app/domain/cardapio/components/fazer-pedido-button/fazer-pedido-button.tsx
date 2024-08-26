@@ -1,8 +1,8 @@
 import { ArrowRight } from 'lucide-react';
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import ExternalLink from '~/components/primitives/external-link/external-link';
-import TextSlideInUp from '~/components/text-slide-in-up/text-slide-in-up';
 import GLOBAL_LINKS from '~/domain/website-navigation/global-links.constant';
+import useBrandColors from '~/hooks/use-brand-colors';
 import { cn } from '~/lib/utils';
 
 
@@ -13,19 +13,31 @@ interface FazerPedidoButtonProps {
 }
 
 export default function FazerPedidoButton({ cnLabel, variant = "primary" }: FazerPedidoButtonProps) {
+    const brandColors = useBrandColors()
+
+    let style = {}
+
+    if (variant === 'accent') {
+        style = {
+            ...style,
+            backgroundColor: brandColors.accent.green,
+            color: 'white'
+        }
+    }
 
 
 
     return (
         <div className={
             cn(
-                "w-full font-body-website rounded-sm",
+                "w-full font-body-website rounded-sm shadow-md",
                 variant === 'primary' && 'bg-brand-blue text-white',
                 variant === 'secondary' && 'bg-white text-brand-blue',
-                variant === 'accent' && 'bg-brand-blue/50 text-black'
-
             )
-        }>
+        }
+            style={style}
+
+        >
 
             <ExternalLink
                 to={GLOBAL_LINKS.mogoCardapio.href}
@@ -66,7 +78,7 @@ const BouncingArrow = ({ variant }: BouncingArrow) => {
 
     return (
         <ArrowRight
-            color={variant === 'primary' ? 'white' : '#3d5f76'}
+            color={variant === 'primary' || variant === 'accent' ? 'white' : '#3d5f76'}
             className={isBouncing ? 'animate-bounce' : ''}
         />
     );

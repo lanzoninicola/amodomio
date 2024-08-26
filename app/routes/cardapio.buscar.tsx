@@ -51,8 +51,6 @@ export default function CardapioSearch() {
     const [searchedTerm, setSearchedTerm] = useState("")
     const [currentItems, setCurrentItems] = useState<MenuItemWithAssociations[]>([]);
 
-    console.log({ currentItems })
-
     return (
         <section className="mt-14 p-4">
 

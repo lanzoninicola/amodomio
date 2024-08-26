@@ -19,6 +19,7 @@ import BadgeTag from "~/domain/tags/components/badge-tag";
 import { WebsiteNavigationSidebar } from "~/domain/website-navigation/components/website-navigation-sidebar";
 import GLOBAL_LINKS from "~/domain/website-navigation/global-links.constant";
 import PUBLIC_WEBSITE_NAVIGATION_ITEMS from "~/domain/website-navigation/public/public-website.nav-links";
+import useBrandColors from "~/hooks/use-brand-colors";
 import { cn } from "~/lib/utils";
 
 
@@ -112,9 +113,13 @@ export default function CardapioWeb() {
 function CardapioHeader() {
     const [showSearch, setShowSearch] = useState(false)
 
+    const brandColors = useBrandColors()
+
+
+
     return (
         <header className="fixed top-0 w-screen z-50 md:max-w-2xl md:-translate-x-1/2 md:left-1/2" >
-            <div className="flex flex-col bg-brand-blue px-4 pt-2 py-1">
+            <div className="flex flex-col bg-white px-4 pt-2 py-1">
                 <div className="grid grid-cols-3 items-center w-full">
                     {/* <div className="flex gap-1 items-center" onClick={() => setShowSearch(!showSearch)}>
                         <HamburgerMenuIcon className="w-6 h-6" />
@@ -126,9 +131,9 @@ function CardapioHeader() {
                         navigationLinks={PUBLIC_WEBSITE_NAVIGATION_ITEMS}
                         buttonTrigger={{
                             label: "Menu",
-                            classNameLabel: "block font-body-website text-[10px] font-semibold  uppercase text-white",
+                            classNameLabel: "block font-body-website text-[10px] font-semibold  uppercase text-brand-blue",
                             classNameButton: "justify-start w-full h-full",
-                            colorIcon: "white",
+                            colorIcon: brandColors.brand.blue,
                         }}
                     >
                         <div className="flex flex-col justify-center mb-2 font-body-website">
@@ -147,23 +152,28 @@ function CardapioHeader() {
                     </WebsiteNavigationSidebar>
 
                     <Link to={GLOBAL_LINKS.cardapioPublic.href} className="flex justify-center">
-                        <Logo color="white" className="w-[60px]" tagline={false} />
+                        <Logo color={brandColors.brand.blue} className="w-[60px] h-[30px]" tagline={false} />
                     </Link>
                     <Link to={'buscar'} className="flex justify-end">
                         <div className="flex justify-end items-center cursor-pointer" onClick={() => setShowSearch(!showSearch)}>
-                            <SearchIcon color="white" />
-                            <span className="font-body-website text-[10px] font-semibold  uppercase text-white">Pesquisar</span>
+                            <SearchIcon color={brandColors.brand.blue} />
+                            <span className="font-body-website text-[10px] font-semibold  uppercase text-brand-blue">Pesquisar</span>
                         </div>
                     </Link>
                 </div>
 
             </div>
+
+            <Separator className={cn("border-brand-blue")} />
         </header>
     )
 }
 
 
 function CompanyInfo() {
+
+    const brandColors = useBrandColors()
+
     return (
         <>
             <section className="mt-16 p-4 mb-4 ">
@@ -197,15 +207,16 @@ function CompanyInfo() {
                 </div>
             </section>
 
-            <div className="grid grid-cols-10 rounded-lg bg-muted m-4 p-2">
-                <div className="flex items-center justify-center col-span-1">
-                    <ItalyFlag width={24} />
+            <section className="my-6">
+                <div className="flex gap-2 rounded-lg m-4 p-2" style={{ backgroundColor: brandColors.muted.yellow }}>
+                    <div className="flex items-start">
+                        {/* @ts-ignore */}
+                        <ItalyFlag width={24} height={24} />
+                    </div>
+                    <p className="font-body-website text-sm max-w-prose">Todas os nossas pizzas são preparadas com <span className="font-semibold">farinha e molho de tomate importados da Itália</span></p>
+
                 </div>
-                <p className="font-body-website text-sm col-span-8 text-center">Todas os nossas pizzas são preparadas com <span className="font-semibold">farinha e molho de tomate importados da Itália</span></p>
-                <div className="flex items-center justify-center col-span-1">
-                    <ItalyFlag width={24} />
-                </div>
-            </div>
+            </section>
         </>
 
     )
@@ -225,7 +236,7 @@ function CardapioFooter() {
         }>
             <footer >
                 <div className="h-full w-full py-2 px-4 bg-white">
-                    <FazerPedidoButton variant="primary" />
+                    <FazerPedidoButton variant="accent" />
                 </div>
             </footer>
         </div>

@@ -42,7 +42,8 @@ export default function FiltersTags({ tags }: { tags: Tag[] }) {
                                             cn(
                                                 "bg-none border border-brand-blue",
                                                 tagFilter === tag.name && "bg-brand-blue",
-                                                tagFilter === tag.name && " scale-110"
+                                                tagFilter === tag.name && " scale-110",
+                                                "active:bg-brand-blue active:text-white"
 
                                             )
                                         } />
