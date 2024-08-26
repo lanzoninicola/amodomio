@@ -5,7 +5,7 @@ import { Badge } from "~/components/ui/badge"
 import BadgeTag from "~/domain/tags/components/badge-tag"
 import { cn } from "~/lib/utils"
 
-export default function FiltersTags({ tags }: { tags: Tag[] }) {
+export default function FiltersTags({ tags, showBanner = false }: { tags: Tag[], showBanner?: boolean }) {
 
     const [searchParams, setSearchParams] = useSearchParams()
     const tagFilter = searchParams.get("tag")
@@ -57,7 +57,7 @@ export default function FiltersTags({ tags }: { tags: Tag[] }) {
             </div>
 
             {
-                tagFilter && (
+                showBanner && tagFilter && (
                     <div className="absolute top-12 left-0 right-0 flex gap-2 items-center px-2 bg-blue-300 py-[0.15rem]">
                         <div className="flex items-center justify-between w-full">
                             <div className="flex gap-1 items-center">
