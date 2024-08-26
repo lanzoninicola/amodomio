@@ -12,7 +12,7 @@ export default function FiltersTags({ tags, showBanner = false }: { tags: Tag[],
 
     return (
 
-        <div className="bg-white sticky top-12 z-10">
+        <div className="bg-white sticky top-20 z-10">
             <div className="flex items-center">
                 <p className="text-xs font-body-website font-semibold min-w-[70px] pl-2">Filtrar por:</p>
                 <div className="w-full overflow-x-auto pr-2" >

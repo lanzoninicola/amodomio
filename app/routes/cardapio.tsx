@@ -2,7 +2,7 @@ import { Tag } from "@prisma/client";
 import { MetaFunction } from "@remix-run/node";
 import { Link, Outlet, useLocation, useSearchParams } from "@remix-run/react";
 import { Filter, Instagram, MapPin, SearchIcon, XIcon } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 
 import ItalyFlag from "~/components/italy-flag/italy-flag";
 import Badge from "~/components/primitives/badge/badge";
@@ -163,20 +163,52 @@ function CardapioHeader() {
                 </div>
 
             </div>
+            <ScrollingBanner
+                style={{
+                    backgroundColor: brandColors.muted.yellow,
+                }}>
+                <div className="flex items-center my-2 gap-2">
+                    {/* @ts-ignore */}
+                    <ItalyFlag className="w-4 h-4" />
+                    <p className="font-body-website text-[12px] uppercase leading-tight">Todas os nossas pizzas são preparadas com farinha e molho de tomate importados da Itália</p>
+                </div>
 
-            <Separator className={cn("border-brand-blue")} />
+            </ScrollingBanner>
+
         </header>
     )
 }
 
 
+const ScrollingBanner = ({ children, cnContainer, style }: { children?: ReactNode, cnContainer?: string, style?: React.CSSProperties }) => {
+    return (
+        <div className={
+            cn(
+                "overflow-hidden whitespace-nowrap",
+                cnContainer
+            )
+
+        }
+            style={style}
+        >
+            <div
+                className="inline-block text-center px-10 text-lg font-semibold text-black animate-scrollingText whitespace-nowrap"
+            >
+                {children}
+            </div>
+        </div>
+    );
+};
+
+
+
+
 function CompanyInfo() {
 
-    const brandColors = useBrandColors()
 
     return (
         <>
-            <section className="mt-16 px-4">
+            <section className="mt-24 px-4 mb-4">
                 <div className="flex flex-col font-body-website">
                     <h2 className="font-semibold text-lg">A Modo Mio | Pizzeria Italiana</h2>
                     <h3 className="text-muted-foreground">Pizza Al Taglio & Delivery</h3>
@@ -206,17 +238,6 @@ function CompanyInfo() {
                         <MapPin size={28} />
                         {/* <span className="font-semibold tracking-wide text-[12px]">Maps</span> */}
                     </Link>
-                </div>
-            </section>
-
-            <section className="mb-6">
-                <div className="flex gap-3 rounded-lg m-4 p-2 px-3" style={{ backgroundColor: brandColors.muted.yellow }}>
-                    <div className="flex items-start">
-                        {/* @ts-ignore */}
-                        <ItalyFlag className="w-8 h-8" />
-                    </div>
-                    <p className="font-body-website text-[12px] uppercase leading-tight max-w-prose">Todas os nossas pizzas são preparadas com <span className="font-semibold">farinha e molho de tomate importados da Itália</span></p>
-
                 </div>
             </section>
         </>

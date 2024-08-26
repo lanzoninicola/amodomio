@@ -116,6 +116,14 @@ module.exports = {
             transform: "translateX(-1000px)",
           },
         },
+        scrollingText: {
+          "0%": {
+            transform: "translateX(100%)",
+          },
+          "100%": {
+            transform: "translateX(-100%)",
+          },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -132,6 +140,7 @@ module.exports = {
         pulseFast: "pulse .5s ease-in-out infinite",
         pulse: "pulse 1s ease-in-out infinite",
         pulseSlow: "pulse 2s ease-in-out infinite",
+        scrollingText: "scrollingText 18s linear infinite",
       },
       backgroundImage: {
         hero: "url('/images/hero-image.jpg')",
