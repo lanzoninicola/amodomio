@@ -1,7 +1,6 @@
 import { HeadersFunction, LoaderFunctionArgs } from "@remix-run/node";
-import { Await, Link, defer, useLoaderData, useLocation, useSearchParams } from "@remix-run/react";
+import { Await, defer, useLoaderData, useSearchParams } from "@remix-run/react";
 import React, { useState, useRef, useCallback, useEffect, Suspense } from "react";
-import { Separator } from "~/components/ui/separator";
 import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { menuItemLikePrismaEntity } from "~/domain/cardapio/menu-item-like.prisma.entity.server";
@@ -13,16 +12,9 @@ import CardapioItemActionBar from "~/domain/cardapio/components/cardapio-item-ac
 import CardapioItemImage from "~/domain/cardapio/components/cardapio-item-image/cardapio-item-image";
 import CardapioItemPrice from "~/domain/cardapio/components/cardapio-item-price/cardapio-item-price";
 import { tagPrismaEntity } from "~/domain/tags/tag.prisma.entity.server";
-import { jsonParse } from "~/utils/json-helper";
-import { Tag } from "@prisma/client";
-import Badge from "~/components/primitives/badge/badge";
-import BadgeTag from "~/domain/tags/components/badge-tag";
-import { cn } from "~/lib/utils";
-import { Filter } from "lucide-react";
-import { LayoutTemplate } from "lucide-react";
-import { LayoutList } from "lucide-react";
 import Loading from "~/components/loading/loading";
 import FiltersTags from "~/domain/cardapio/components/filter-tags/filter-tags";
+import CardapioTabs from "~/domain/cardapio/components/cardapio-tabs/cardapio-tabs";
 
 export const headers: HeadersFunction = () => ({
     'Cache-Control': 's-maxage=1, stale-while-revalidate=59',
@@ -134,31 +126,11 @@ export async function action({ request }: LoaderFunctionArgs) {
 }
 
 export default function CardapioWebIndex() {
-    const location = useLocation()
     const { items, tags } = useLoaderData<typeof loader>()
 
     return (
         <section>
-            <div className="flex gap-4 justify-center mb-2">
-                <Link to={"/cardapio"} className={
-                    cn(
-                        "p-2",
-                        location.pathname === "/cardapio" && "border-b-brand-blue border-b-2",
-
-                    )
-                } >
-                    <LayoutTemplate />
-                </Link>
-                <Link to={"/cardapio/list"} className={
-                    cn(
-                        "p-2",
-                        location.pathname === "/cardapio/list" && "border-b-brand-blue border-b-2",
-
-                    )
-                } >
-                    <LayoutList />
-                </Link>
-            </div>
+            <CardapioTabs />
             <div className="flex flex-col">
                 {/* <Loading /> */}
                 <Suspense fallback={<Loading />}>
@@ -193,13 +165,35 @@ const CardapioItemList = ({ allItems }: { allItems: MenuItemWithAssociations[] }
 
     const [items, setItems] = useState<MenuItemWithAssociations[]>([]);
     const [hasMore, setHasMore] = useState(true);
+    const [isLoading, setIsLoading] = useState(false); // State to handle loading
+    const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null); // Reference to store the timeout
 
     useEffect(() => {
-        const itemsFiltered = currentFilterTag
-            ? allItems.filter(i => i.tags?.public.some(t => t === currentFilterTag))
-            : allItems;
-        setItems(itemsFiltered.slice(0, 10));
-        setHasMore(itemsFiltered.length > 10);
+        // Clear previous timeout if it exists
+        if (loadingTimeoutRef.current) {
+            clearTimeout(loadingTimeoutRef.current);
+        }
+
+        // Set loading to true initially
+        setIsLoading(true);
+
+        // Start a 300ms delay before setting the items
+        loadingTimeoutRef.current = setTimeout(() => {
+            const itemsFiltered = currentFilterTag
+                ? allItems.filter(i => i.tags?.public.some(t => t === currentFilterTag))
+                : allItems;
+
+            setItems(itemsFiltered.slice(0, 10));
+            setHasMore(itemsFiltered.length > 10);
+            setIsLoading(false); // Stop loading after data is set
+        }, 300);
+
+        // Cleanup timeout on unmount or filter change
+        return () => {
+            if (loadingTimeoutRef.current) {
+                clearTimeout(loadingTimeoutRef.current);
+            }
+        };
     }, [currentFilterTag, allItems]);
 
     const observer = useRef<IntersectionObserver | null>(null);
@@ -221,19 +215,16 @@ const CardapioItemList = ({ allItems }: { allItems: MenuItemWithAssociations[] }
         if (node) observer.current.observe(node);
     }, [hasMore, allItems, currentFilterTag]);
 
-    // if (items.length === 0) {
-    //     return (
-    //         <div className="flex h-full w-full items-center justify-center p-8">
-    //             <div className="flex flex-col gap-6 justify-center items-center">
-    //                 <img src="/images/empty-cardapio.webp" className="mx-auto w-[136px]" alt="Nenhum item encontrado" />
-    //                 <h1 className="font-body-website text-sm md:text-lg font-semibold text-muted-foreground">Nenhum item encontrado</h1>
-    //             </div>
-    //         </div>
-    //     );
-    // }
+    if (isLoading) {
+        return (
+            <div className="my-8">
+                <Loading />
+            </div>
+        )
+    }
 
     return (
-        <div className="flex flex-col mt-4">
+        <div className="flex flex-col mt-2">
             <ul className="flex flex-col overflow-y-auto md:overflow-y-z auto snap-mandatory">
                 {items.map((item, index) => {
                     if (items.length === index + 1) {
@@ -244,9 +235,8 @@ const CardapioItemList = ({ allItems }: { allItems: MenuItemWithAssociations[] }
                 })}
             </ul>
         </div>
-
     );
-}
+};
 
 
 interface CardapioItemProps {

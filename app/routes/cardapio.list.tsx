@@ -11,6 +11,7 @@ import { tagPrismaEntity } from "~/domain/tags/tag.prisma.entity.server";
 import { Badge } from "~/components/ui/badge";
 import BadgeTag from "~/domain/tags/components/badge-tag";
 import FiltersTags from "~/domain/cardapio/components/filter-tags/filter-tags";
+import CardapioTabs from "~/domain/cardapio/components/cardapio-tabs/cardapio-tabs";
 
 export async function loader({ request }: LoaderFunctionArgs) {
     const env = process.env?.NODE_ENV
@@ -55,30 +56,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export default function CardapioList() {
     const { items, tags } = useLoaderData<typeof loader>()
-    const location = useLocation()
 
     return (
         <section>
-            <div className="flex gap-4 justify-center mb-2">
-                <Link to={"/cardapio"} className={
-                    cn(
-                        "p-2",
-                        location.pathname === "/cardapio" && "border-b-brand-blue border-b-2",
-
-                    )
-                } >
-                    <LayoutTemplate />
-                </Link>
-                <Link to={"/cardapio/list"} className={
-                    cn(
-                        "p-2",
-                        location.pathname === "/cardapio/list" && "border-b-brand-blue border-b-2",
-
-                    )
-                } >
-                    <LayoutList />
-                </Link>
-            </div>
+            <CardapioTabs />
             <div className="flex flex-col">
                 {/* <Loading /> */}
                 <Suspense fallback={<Loading />}>
@@ -109,54 +90,89 @@ export default function CardapioList() {
 
 const CardapioItemList = ({ allItems }: { allItems: MenuItemWithAssociations[] }) => {
     const [searchParams] = useSearchParams();
-    let currentFilterTag = searchParams.get("tag");
-
+    const currentFilterTag = searchParams.get("tag");
 
     const [items, setItems] = useState<MenuItemWithAssociations[]>([]);
     const [hasMore, setHasMore] = useState(true);
+    const [isLoading, setIsLoading] = useState(false);
+    const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     useEffect(() => {
-        const itemsFiltered = currentFilterTag
-            ? allItems.filter(i => i.tags?.public.some(t => t === currentFilterTag))
-            : allItems;
-        setItems(itemsFiltered.slice(0, 10));
+        // Clear previous timeout if it exists
+        if (loadingTimeoutRef.current) {
+            clearTimeout(loadingTimeoutRef.current);
+        }
+
+        // Set loading to true and simulate a 300ms delay
+        setIsLoading(true);
+
+        loadingTimeoutRef.current = setTimeout(() => {
+            const itemsFiltered = currentFilterTag
+                ? allItems.filter(i => i.tags?.public.some(t => t === currentFilterTag))
+                : allItems;
+
+            setItems(itemsFiltered.slice(0, 10));
+            setHasMore(itemsFiltered.length > 10);
+            setIsLoading(false); // Stop loading after data is set
+        }, 300);
+
+        // Cleanup timeout on unmount or filter change
+        return () => {
+            if (loadingTimeoutRef.current) {
+                clearTimeout(loadingTimeoutRef.current);
+            }
+        };
     }, [currentFilterTag, allItems]);
 
     const observer = useRef<IntersectionObserver | null>(null);
 
-    const lastItemRef = useCallback((node: HTMLLIElement) => {
-        if (observer.current) observer.current.disconnect();
-        observer.current = new IntersectionObserver(entries => {
-            if (entries[0].isIntersecting && hasMore) {
-                setItems(prevItems => {
-                    const itemsFiltered = currentFilterTag
-                        ? allItems.filter(i => i.tags?.public.some(t => t === currentFilterTag))
-                        : allItems;
-                    const newItems = itemsFiltered.slice(prevItems.length, prevItems.length + 10);
-                    setHasMore(newItems.length > 0);
-                    return [...prevItems, ...newItems];
-                });
-            }
-        });
-        if (node) observer.current.observe(node);
-    }, [hasMore, allItems, currentFilterTag]);
+    const lastItemRef = useCallback(
+        (node: HTMLLIElement) => {
+            if (observer.current) observer.current.disconnect();
 
+            observer.current = new IntersectionObserver((entries) => {
+                if (entries[0].isIntersecting && hasMore) {
+                    setItems((prevItems) => {
+                        const itemsFiltered = currentFilterTag
+                            ? allItems.filter(i => i.tags?.public.some(t => t === currentFilterTag))
+                            : allItems;
 
+                        const newItems = itemsFiltered.slice(prevItems.length, prevItems.length + 10);
+                        setHasMore(newItems.length > 0);
+                        return [...prevItems, ...newItems];
+                    });
+                }
+            });
+
+            if (node) observer.current.observe(node);
+        },
+        [hasMore, allItems, currentFilterTag]
+    );
+
+    if (isLoading) {
+        return (
+            <div className="my-8">
+                <Loading />
+            </div>
+        )
+    }
 
     return (
         <section>
-            <ul className="flex flex-col overflow-y-auto md:overflow-y-z auto snap-mandatory mt-4">
+            <ul className="flex flex-col overflow-y-auto md:overflow-y-auto snap-mandatory mt-4">
                 {items.map((item, index) => {
-                    if (items.length === index + 1) {
-                        return <CardapioItem ref={lastItemRef} key={item.id} item={item} />
-                    } else {
-                        return <CardapioItem key={item.id} item={item} />
-                    }
+                    const isLastItem = items.length === index + 1;
+                    return (
+                        <CardapioItem
+                            ref={isLastItem ? lastItemRef : null}
+                            key={item.id}
+                            item={item}
+                        />
+                    );
                 })}
             </ul>
         </section>
-    )
-
+    );
 }
 
 interface CardapioItemProps {

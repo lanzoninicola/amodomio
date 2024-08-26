@@ -19,6 +19,7 @@ import BadgeTag from "~/domain/tags/components/badge-tag";
 import { WebsiteNavigationSidebar } from "~/domain/website-navigation/components/website-navigation-sidebar";
 import GLOBAL_LINKS from "~/domain/website-navigation/global-links.constant";
 import PUBLIC_WEBSITE_NAVIGATION_ITEMS from "~/domain/website-navigation/public/public-website.nav-links";
+import useBrandColors from "~/hooks/use-brand-colors";
 import { cn } from "~/lib/utils";
 
 
@@ -112,9 +113,13 @@ export default function CardapioWeb() {
 function CardapioHeader() {
     const [showSearch, setShowSearch] = useState(false)
 
+    const brandColors = useBrandColors()
+
+
+
     return (
         <header className="fixed top-0 w-screen z-50 md:max-w-2xl md:-translate-x-1/2 md:left-1/2" >
-            <div className="flex flex-col bg-brand-blue px-4 pt-2 py-1">
+            <div className="flex flex-col bg-white px-4 pt-2 py-1">
                 <div className="grid grid-cols-3 items-center w-full">
                     {/* <div className="flex gap-1 items-center" onClick={() => setShowSearch(!showSearch)}>
                         <HamburgerMenuIcon className="w-6 h-6" />
@@ -125,10 +130,10 @@ function CardapioHeader() {
                         homeLink={{ label: GLOBAL_LINKS.cardapioPublic.title, to: GLOBAL_LINKS.cardapioPublic.href }}
                         navigationLinks={PUBLIC_WEBSITE_NAVIGATION_ITEMS}
                         buttonTrigger={{
-                            label: "Menu",
-                            classNameLabel: "block font-body-website text-[10px] font-semibold  uppercase text-white",
+                            label: "",
+                            classNameLabel: "block font-body-website text-[10px] font-semibold  uppercase text-brand-blue",
                             classNameButton: "justify-start w-full h-full",
-                            colorIcon: "white",
+                            colorIcon: brandColors.brand.blue,
                         }}
                     >
                         <div className="flex flex-col justify-center mb-2 font-body-website">
@@ -147,65 +152,73 @@ function CardapioHeader() {
                     </WebsiteNavigationSidebar>
 
                     <Link to={GLOBAL_LINKS.cardapioPublic.href} className="flex justify-center">
-                        <Logo color="white" className="w-[60px]" tagline={false} />
+                        <Logo color={brandColors.brand.blue} className="w-[60px] h-[30px]" tagline={false} />
                     </Link>
                     <Link to={'buscar'} className="flex justify-end">
                         <div className="flex justify-end items-center cursor-pointer" onClick={() => setShowSearch(!showSearch)}>
-                            <SearchIcon color="white" />
-                            <span className="font-body-website text-[10px] font-semibold  uppercase text-white">Pesquisar</span>
+                            <SearchIcon color={brandColors.brand.blue} />
+                            {/* <span className="font-body-website text-[10px] font-semibold  uppercase text-brand-blue">Pesquisar</span> */}
                         </div>
                     </Link>
                 </div>
 
             </div>
+
+            <Separator className={cn("border-brand-blue")} />
         </header>
     )
 }
 
 
 function CompanyInfo() {
+
+    const brandColors = useBrandColors()
+
     return (
         <>
-            <section className="mt-16 p-4 mb-4 ">
+            <section className="mt-16 px-4">
                 <div className="flex flex-col font-body-website">
                     <h2 className="font-semibold text-lg">A Modo Mio | Pizzeria Italiana</h2>
                     <h3 className="text-muted-foreground">Pizza Al Taglio & Delivery</h3>
                 </div>
 
-                <div className="text-xs text-muted-foreground mb-6 font-body-website">
+                <div className="text-xs text-muted-foreground mb-2 font-body-website">
                     <p>Rua Arariboia 64 - Pato Branco</p>
                 </div>
-                <div className="grid grid-cols-3 gap-x-4">
+                <div className="grid grid-cols-8 gap-x-4">
 
-                    <Link to={GLOBAL_LINKS.instagram.href} aria-label={GLOBAL_LINKS.instagram.title} className="flex items-center justify-center gap-1 rounded-lg bg-muted py-1">
-                        <Instagram />
-                        <span className="font-semibold text-xs">Instagram</span>
+                    <Link to={GLOBAL_LINKS.instagram.href} aria-label={GLOBAL_LINKS.instagram.title}
+                        className="flex items-center justify-center gap-1 rounded-lg py-1">
+                        <Instagram size={28} />
+                        {/* <span className="font-semibold tracking-wide text-[12px]">Instagram</span> */}
                     </Link>
                     <WhatsappExternalLink
                         phoneNumber="46991272525"
                         ariaLabel="Envia uma mensagem com WhatsApp"
                         message={"Olá, gostaria fazer um pedido"}
-                        className="flex items-center justify-center gap-2 rounded-lg bg-muted py-1 "
+                        className="flex items-center justify-center gap-2 rounded-lg py-1 "
                     >
-                        <WhatsAppIcon color="black" />
-                        <span className="font-semibold text-xs">WhatsApp</span>
+                        <WhatsAppIcon color="black" height={28} width={28} />
+                        {/* <span className="font-semibold tracking-wide text-[12px]">WhatsApp</span> */}
                     </WhatsappExternalLink>
-                    <Link to={GLOBAL_LINKS.maps.href} aria-label={GLOBAL_LINKS.maps.title} className="flex items-center justify-center gap-1 rounded-lg bg-muted py-1">
-                        <MapPin />
-                        <span className="font-semibold text-xs">Maps</span>
+                    <Link to={GLOBAL_LINKS.maps.href} aria-label={GLOBAL_LINKS.maps.title}
+                        className="flex items-center justify-center gap-1 rounded-lg py-1">
+                        <MapPin size={28} />
+                        {/* <span className="font-semibold tracking-wide text-[12px]">Maps</span> */}
                     </Link>
                 </div>
             </section>
 
-            <div className="grid grid-cols-10 rounded-lg bg-muted m-4 p-2">
-                <div className="flex items-center justify-center col-span-1">
-                    <ItalyFlag width={24} />
+            <section className="mb-6">
+                <div className="flex gap-3 rounded-lg m-4 p-2 px-3" style={{ backgroundColor: brandColors.muted.yellow }}>
+                    <div className="flex items-start">
+                        {/* @ts-ignore */}
+                        <ItalyFlag className="w-8 h-8" />
+                    </div>
+                    <p className="font-body-website text-[12px] uppercase leading-tight max-w-prose">Todas os nossas pizzas são preparadas com <span className="font-semibold">farinha e molho de tomate importados da Itália</span></p>
+
                 </div>
-                <p className="font-body-website text-sm col-span-8 text-center">Todas os nossas pizzas são preparadas com <span className="font-semibold">farinha e molho de tomate importados da Itália</span></p>
-                <div className="flex items-center justify-center col-span-1">
-                    <ItalyFlag width={24} />
-                </div>
-            </div>
+            </section>
         </>
 
     )
@@ -225,7 +238,7 @@ function CardapioFooter() {
         }>
             <footer >
                 <div className="h-full w-full py-2 px-4 bg-white">
-                    <FazerPedidoButton variant="primary" />
+                    <FazerPedidoButton variant="accent" />
                 </div>
             </footer>
         </div>
