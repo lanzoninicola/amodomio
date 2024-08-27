@@ -27,6 +27,8 @@ import { hydrate } from 'react-dom'
 // import { RemixBrowser } from "remix";
 import { RemixBrowser } from '@remix-run/react'
 import { hydrateRoot } from 'react-dom/client';
+import { helix } from 'ldrs'
+helix.register()
 
 // hydrate(<RemixBrowser />, document)
 

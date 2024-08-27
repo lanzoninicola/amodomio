@@ -1,4 +1,4 @@
-import { ActionFunction, LoaderArgs, LoaderFunction, redirect } from "@remix-run/node";
+import { ActionFunction, LoaderFunctionArgs, LoaderFunction, redirect } from "@remix-run/node";
 import { Form, Link, Outlet, useActionData, useLoaderData } from "@remix-run/react";
 import { useState } from "react";
 import InputItem from "~/components/primitives/form/input-item/input-item";
@@ -14,7 +14,7 @@ import { PromoPizzaPhotoPizzaIncluded } from "~/domain/promo-pizza-photos/promo-
 import { ok, serverError } from "~/utils/http-response.server";
 import tryit from "~/utils/try-it";
 
-export const loader: LoaderFunction = async ({ request, params }: LoaderArgs) => {
+export const loader: LoaderFunction = async ({ request, params }: LoaderFunctionArgs) => {
     const recordId = params?.id
 
     if (!recordId) {

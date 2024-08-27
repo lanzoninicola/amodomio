@@ -1,5 +1,5 @@
-import type { LoaderArgs } from "@remix-run/node";
-import { redirect, type V2_MetaFunction } from "@remix-run/node";
+import type { LoaderFunctionArgs } from "@remix-run/node";
+import { redirect, type MetaFunction } from "@remix-run/node";
 import { Form, Link, Outlet, useLoaderData, useSearchParams } from "@remix-run/react";
 import { Edit, Trash } from "lucide-react";
 import Container from "~/components/layout/container/container";
@@ -17,7 +17,7 @@ import type { Category } from "~/domain/category/category.model.server";
 import { cn } from "~/lib/utils";
 import { ok } from "~/utils/http-response.server";
 
-export const meta: V2_MetaFunction = () => {
+export const meta: MetaFunction = () => {
     return [
         {
             name: "robots",
@@ -36,7 +36,7 @@ export async function loader() {
     return ok({ categories })
 }
 
-export async function action({ request }: LoaderArgs) {
+export async function action({ request }: LoaderFunctionArgs) {
 
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);

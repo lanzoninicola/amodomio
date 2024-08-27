@@ -1,7 +1,6 @@
-import type { LinkDescriptor, LinksFunction, LoaderArgs, V2_MetaFunction } from "@remix-run/node";
+import type { LinkDescriptor, LinksFunction, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import {
   Links,
-  LiveReload,
   Meta,
   Outlet,
   Scripts,
@@ -11,14 +10,13 @@ import {
   useRouteError,
 } from "@remix-run/react";
 import { Toaster } from "./components/ui/toaster";
-import stylesheet from "~/tailwind.css";
-import { cssBundleHref } from "@remix-run/css-bundle";
+import stylesheet from "~/tailwind.css?url";
 import GoogleTagManagerScriptTag from "./components/primitives/google-tag-manager/gtm-script";
 import GoogleTagManagerNoScriptTag from "./components/primitives/google-tag-manager/gtm-noscript";
 import { Analytics } from '@vercel/analytics/react';
 import { ok } from "./utils/http-response.server";
 
-export const meta: V2_MetaFunction = () => {
+export const meta: MetaFunction = () => {
   return [
     { title: "A Modio Mio - La vera pizza italiana di Pato Branco" },
     {
@@ -55,7 +53,6 @@ const linkFontVariant = (font: string) => {
 
 // @ts-ignore
 export const links: LinksFunction = () => [
-  ...(cssBundleHref ? [{ rel: "stylesheet", href: cssBundleHref }] : []),
   { rel: "stylesheet", href: stylesheet },
   { rel: "preconnect", href: "https://api.fonts.coollabs.io" },
   {
@@ -110,14 +107,26 @@ interface EnvironmentVariables {
 
   GTM_ID: string
   CLOUDINARY_CLOUD_NAME: string
+  STORE_OPENING_CONFIG: {
+    OPENING_DAYS: number[]
+    OPENING_HOUR: number
+    CLOSING_HOUR: number
+  }
 }
 
 
-export async function loader({ request }: LoaderArgs) {
+export async function loader({ request }: LoaderFunctionArgs) {
+
+  const env = import.meta.env
 
   const ENV: EnvironmentVariables = {
-    GTM_ID: process?.env.GOOGLE_TAG_MANAGER_ID ?? "",
-    CLOUDINARY_CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME ?? "",
+    GTM_ID: env.VITE_GOOGLE_TAG_MANAGER_ID ?? "",
+    CLOUDINARY_CLOUD_NAME: env.VITE_CLOUDINARY_CLOUD_NAME ?? "",
+    STORE_OPENING_CONFIG: {
+      OPENING_DAYS: env.VITE_STORE_OPEN_DAYWEEK ? env.VITE_STORE_OPEN_DAYWEEK.split(",").map(Number) : [],
+      OPENING_HOUR: env?.STORE_OPEN_HH_START ? parseInt(env.VITE_STORE_OPEN_HH_START) : 1800,
+      CLOSING_HOUR: env?.STORE_OPEN_HH_END ? parseInt(env.VITE_STORE_OPEN_HH_END) : 1800,
+    }
   }
 
   return ok({
@@ -141,12 +150,12 @@ export default function App() {
         {ENV.GTM_ID !== "" && <GoogleTagManagerScriptTag id={ENV.GTM_ID} />}
       </head>
       <body>
-        <script src="https://upload-widget.cloudinary.com/latest/global/all.js" type="text/javascript" />
+
         <Outlet />
         <Toaster />
         <ScrollRestoration />
         <Scripts />
-        <LiveReload />
+        <script src="https://upload-widget.cloudinary.com/latest/global/all.js" type="text/javascript" />
         <Analytics />
         {ENV.GTM_ID !== "" && <GoogleTagManagerNoScriptTag id={ENV.GTM_ID} />}
       </body>

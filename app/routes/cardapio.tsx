@@ -1,259 +1,270 @@
+import { Tag } from "@prisma/client";
+import { MetaFunction } from "@remix-run/node";
+import { Link, Outlet, useLocation, useSearchParams } from "@remix-run/react";
+import { Filter, Instagram, MapPin, SearchIcon, XIcon } from "lucide-react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 
-import { V2_MetaFunction } from "@remix-run/node";
-import { ArrowDown, ArrowLeft, ArrowRight, Heart, MenuSquare, Share2, ShoppingCart } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import { Link, Outlet } from "react-router-dom";
-import TypewriterComponent from "typewriter-effect";
-import FadeIn from "~/components/primitives/fade-in/fade-in";
-import WhatsAppButton from "~/components/primitives/whatsapp/whatsapp";
+import ItalyFlag from "~/components/italy-flag/italy-flag";
+import Badge from "~/components/primitives/badge/badge";
+import Logo from "~/components/primitives/logo/logo";
 import WhatsappExternalLink from "~/components/primitives/whatsapp/whatsapp-external-link";
 import WhatsAppIcon from "~/components/primitives/whatsapp/whatsapp-icon";
 import { Button } from "~/components/ui/button";
-import { Carousel, CarouselContent, CarouselItem, type CarouselApi, CarouselPrevious, CarouselNext } from "~/components/ui/carousel";
+import { Input } from "~/components/ui/input";
+import { Separator } from "~/components/ui/separator";
+import CardapioItemDialog from "~/domain/cardapio/components/cardapio-item-dialog/cardapio-item-dialog";
+import FazerPedidoButton from "~/domain/cardapio/components/fazer-pedido-button/fazer-pedido-button";
+import { MenuItemWithAssociations } from "~/domain/cardapio/menu-item.prisma.entity.server";
+import BadgeTag from "~/domain/tags/components/badge-tag";
+import { WebsiteNavigationSidebar } from "~/domain/website-navigation/components/website-navigation-sidebar";
+import GLOBAL_LINKS from "~/domain/website-navigation/global-links.constant";
+import PUBLIC_WEBSITE_NAVIGATION_ITEMS from "~/domain/website-navigation/public/public-website.nav-links";
+import useBrandColors from "~/hooks/use-brand-colors";
 import { cn } from "~/lib/utils";
-import useBoundaryPosition from "~/utils/use-boundary-position";
 
 
-export const meta: V2_MetaFunction = () => {
+/**
+ * TODO:
+ * - [x] Add to menu Horario Atendimento
+ * - [x] Add to menu link instagram
+ * - [] Add anotações pizza (batas fritas, batata ao forno)
+ * - [] Funnel venda, ao press fazer pedido, lembrar outras coisa, pizza doces o bebidas
+ * - [] Add customer comments, from a copia incolla operation
+ * - [] Add to menu link fazer pedido
+ * - [] Add to menu "como funciona"
+ * - [] Like it bounded to product sells
+ * - [x] Different layouts
+ * - [] Fechamento Horario Atendimento no botao de fazer pedido
+ * - [] Session feature
+ * - [x] Like it feature
+ * - [x] Share it feature
+ * - [] Notification feature
+ * - [] Let install it wpapp
+ * - [] Me sinto fortunado (choose a random menu item)
+ * - [] Cache https://vercel.com/docs/frameworks/remix
+ */
+
+export interface CardapioOutletContext {
+    items: MenuItemWithAssociations[]
+}
+
+export const meta: MetaFunction = ({ data }) => {
     return [
-        { title: "Cardapio" },
-        {
-            name: "description",
-            content: "Cardápio da Pizzaria A Modo Mio",
-        },
-        {
-            name: "keywords",
-            content: "cardápio a modo mio, cardápio pizzas",
-        }
+        { title: "Cardápio A Modo Mio - Pizzaria Italiana em Pato Branco" },
+        { name: "description", content: "É a pizza! Italiana! Um sabor que você nunca experimentou! Descubra no nosso cardápio as melhores pizzas da cidade. Experimente e saboreie a verdadeira italianidade em Pato Branco." },
+        { name: "og:title", content: "Cardápio A Modo Mio - Pizzaria Italiana em Pato Branco" },
+        { name: "og:description", content: "É a pizza! Italiana! Um sabor que nunca experimentou! Descubra no nosso cardápio as melhores pizzas da cidade. Experimente e saboreie a verdadeira italianidade em Pato Branco." },
+        { name: "og:image", content: "https://www.amodomio.com.br/images/cardapio_og_image.jpg" },
+        { name: "og:url", content: "https://www.amodomio.com.br/cardapio" },
+        { name: "og:site_name", content: "Cardápio A Modo Mio - Pizzaria Italiana em Pato Branco" },
+        { name: "og:type", content: "website" },
     ];
 };
 
-const numberOfPages = 10
-const cardapioArray = Array.from({ length: numberOfPages }, (_, index) => {
-
-    const prefix = "/images/cardapio-new/cardapio_web_pagina_"
-
-    return index <= 8 ? `${prefix}0${index + 1}.png` : `${prefix}${index + 1}.png`
-});
 
 
 
-export default function CardapioPage() {
-    const { boundary, elementRef } = useBoundaryPosition();
-    const topPosition = boundary === null ? `${0}px` : `${boundary.bottom - 70}px`;
-
-    const [currentSlide, setCurrentSlide] = useState(0)
-    const [countSlides, setCountSlides] = useState(0)
 
 
-    return (
-        <div className="relative bg-[#1B1B1B] min-h-screen md:bg-white md:max-w-[1024px] md:m-auto h-screen">
+export default function CardapioWeb() {
+    const location = useLocation();
 
-            {
-                currentSlide === 1 && (
-
-                    <>
-                        {/* <div className="absolute top-4 w-full grid place-items-center animate-pulse z-10 md:hidden">
-                            <div className="flex gap-2 items-center bg-yellow-300 px-3 py-1 rounded-lg">
-                                <ArrowLeft size={16} />
-                                <span className="text-xs tracking-wide font-semibold uppercase">arrastar para esquerda</span>
-                            </div>
-                        </div> */}
-
-                        <div className="absolute top-1/2 right-4 transform -translate-y-1/2 z-10 md:hidden ">
+    // const [storedValue, setStoredValue] = useLocalStorage("sessionId", null)
 
 
-                            <div className="flex gap-2 items-center bg-green-400 px-3 py-1 rounded-lg">
-                                <span className="text-xs tracking-wide font-semibold uppercase">continuar a ler</span>
-                                <ArrowRight size={16} />
-                            </div>
-                        </div>
 
-                    </>
+    // // synchronize initially
+    // useLayoutEffect(() => {
+    //     setStoredValue("sidebar")
+    // }, []);
+
+    // synchronize on change
+    // useEffect(() => {
+    //     window.localStorage.setItem("sidebar", isOpen);
+    // }, [isOpen]);
 
 
-                )
 
-            }
-            <BottomActionBar currentSlide={currentSlide} bottomPosition={"0rem"} showBarOnPageNumber={5} />
-            <div className="absolute top-3 w-full flex gap-2 justify-center z-10 md:hidden">
-                {cardapioArray.map((item, index) => (
 
-                    <div key={index} className={cn(
-                        "w-[20px] h-[10px] rounded-lg border-green-400 border-2",
-                        currentSlide === index + 1 && "bg-green-400"
-                    )}></div>
-                    // <img src={item}
-                    //     loading="lazy"
-                    //     decoding="async"
-                    //     data-nimg="intrinsic"
-                    //     alt={`cardapio pagína ${index + 1}`}
-                    //     className={
-                    //         cn(
-                    //             "w-[16px] h-[24px] rounded-sm ",
-                    //             currentSlide === index + 1 && "border-2 border-yellow-500"
-                    //         )
-                    //     }
-                    // />
-                ))}
-            </div>
-            <div className="flex flex-col md:mt-24" >
-                <h1 className="hidden md:block font-semibold font-title tracking-tight text-4xl mb-6">Cardápio</h1>
-                <div ref={elementRef}>
-                    <CardapioCarousel setCountSlides={setCountSlides} setCurrentSlide={setCurrentSlide} />
-                </div>
-            </div>
-            <Outlet />
-        </div>
-    )
-}
-
-interface CardapioCarouselProps {
-    setCurrentSlide: (slide: number) => void
-    setCountSlides: (slides: number) => void
-}
-
-function CardapioCarousel({
-    setCurrentSlide,
-    setCountSlides,
-    ...props
-}: CardapioCarouselProps) {
-    const [api, setApi] = useState<CarouselApi>()
-
-    useEffect(() => {
-        if (!api) {
-            return
-        }
-
-        setCountSlides(api.scrollSnapList().length)
-        setCurrentSlide(api.selectedScrollSnap() + 1)
-
-        api.on("select", () => {
-            setCurrentSlide(api.selectedScrollSnap() + 1)
-        })
-    }, [api])
+    const pathname = location?.pathname
+    const currentPage = pathname === "/cardapio/buscar" ? "busca" : "other"
 
 
     return (
         <>
-            <div className="hidden md:block">
-                <div className="flex justify-center w-full mb-4">
-                    <span className="text-center text-md font-semibold">Use as setas para navegar</span>
-                </div>
+            <CardapioHeader />
+            <div className="md:m-auto md:max-w-2xl">
+                {currentPage !== "busca" && <CompanyInfo />}
+
+                {/* <Featured /> */}
+
+                <Outlet />
             </div>
-            <Carousel className="md:w-1/3 md:m-auto" setApi={setApi} opts={{ loop: true }}>
-                <CarouselContent>
-                    {cardapioArray.map((item, index) => (
 
-                        <CarouselItem key={index} className="h-screen">
-                            <img src={item}
-                                loading="lazy"
-                                decoding="async"
-                                data-nimg="intrinsic"
-                                alt={`cardapio pagína ${index + 1}`}
-                                className="w-full"
-                            />
-                        </CarouselItem>
-                    ))}
-
-                </CarouselContent>
-                <div className="hidden md:block">
-                    <CarouselPrevious />
-                    <CarouselNext />
-                </div>
-            </Carousel>
+            {currentPage !== "busca" && <CardapioFooter />}
         </>
     )
 }
 
 
-interface BottomActionBarProps {
-    currentSlide: number
-    showBarOnPageNumber: number
-    topPosition?: string
-    bottomPosition?: string
-}
 
-function BottomActionBar({ currentSlide, showBarOnPageNumber, topPosition, bottomPosition }: BottomActionBarProps) {
 
-    if (currentSlide < showBarOnPageNumber) {
-        return null
-    }
 
-    let style = {}
+function CardapioHeader() {
+    const [showSearch, setShowSearch] = useState(false)
 
-    if (topPosition) {
-        style = {
-            top: topPosition
-        }
-    }
+    const brandColors = useBrandColors()
 
-    if (bottomPosition) {
-        style = {
-            bottom: bottomPosition
-        }
-    }
+
+
     return (
+        <header className="fixed top-0 w-screen z-50 md:max-w-2xl md:-translate-x-1/2 md:left-1/2" >
+            <div className="flex flex-col bg-white px-4 pt-2 py-1">
+                <div className="grid grid-cols-3 items-center w-full">
+                    {/* <div className="flex gap-1 items-center" onClick={() => setShowSearch(!showSearch)}>
+                        <HamburgerMenuIcon className="w-6 h-6" />
+                        <span className="font-body-website text-[10px] font-semibold  uppercase">Menu</span>
+                    </div> */}
 
-        <div className="fixed z-10 w-full" style={style}>
+                    <WebsiteNavigationSidebar
+                        homeLink={{ label: GLOBAL_LINKS.cardapioPublic.title, to: GLOBAL_LINKS.cardapioPublic.href }}
+                        navigationLinks={PUBLIC_WEBSITE_NAVIGATION_ITEMS}
+                        buttonTrigger={{
+                            label: "",
+                            classNameLabel: "block font-body-website text-[10px] font-semibold  uppercase text-brand-blue",
+                            classNameButton: "justify-start w-full h-full",
+                            colorIcon: brandColors.brand.blue,
+                        }}
+                    >
+                        <div className="flex flex-col justify-center mb-2 font-body-website">
+                            <p className=" font-semibold text-sm leading-relaxed">Hórarios de funcionamento</p>
+                            <div className="flex flex-col justify-center mb-4">
+                                <p className="text-muted-foreground font-body-website">Quarta - Domingo</p>
+                                <p className="text-muted-foreground font-body-website">18:00 - 22:00</p>
+                            </div>
+                        </div>
 
-            <FadeIn>
-                {/* <div className="flex flex-row justify-between items-center w-full px-4 gap-4">
-                    <WhatsAppButton />
 
-                    <Link to="finalizar" aria-label="Botão para fazer o pedido" className="w-full">
-                        <div className="flex flex-row items-center justify-center gap-2 rounded-lg bg-slate-300 h-[48px] shadow-2xl hover:bg-brand-green/50">
-                            <ShoppingCart className="md:text-2xl" size={16} />
-                            <span className="uppercase font-semibold tracking-wide text-center my-auto md:text-2xl"
-                                aria-label="Fazer o pedido"
-                            >Fazer Pedido</span>
+                        <div className="pr-4 mb-4">
+                            <FazerPedidoButton cnLabel="text-xs" />
+                        </div>
+
+                    </WebsiteNavigationSidebar>
+
+                    <Link to={GLOBAL_LINKS.cardapioPublic.href} className="flex justify-center">
+                        <Logo color={brandColors.brand.blue} className="w-[60px] h-[30px]" tagline={false} />
+                    </Link>
+                    <Link to={'buscar'} className="flex justify-end">
+                        <div className="flex justify-end items-center cursor-pointer" onClick={() => setShowSearch(!showSearch)}>
+                            <SearchIcon color={brandColors.brand.blue} />
+                            {/* <span className="font-body-website text-[10px] font-semibold  uppercase text-brand-blue">Pesquisar</span> */}
                         </div>
                     </Link>
-                </div> */}
-                <ActionBar />
-            </FadeIn>
+                </div>
 
-        </div>
+            </div>
+            <ScrollingBanner
+                style={{
+                    backgroundColor: brandColors.muted.yellow,
+                }}>
+                <div className="flex items-center my-2 gap-2">
+                    {/* @ts-ignore */}
+                    <ItalyFlag className="w-4 h-4" />
+                    <p className="font-body-website text-[12px] uppercase leading-tight">Todas as nossas pizzas são preparadas com farinha e molho de tomate importados da Itália</p>
+                </div>
 
+            </ScrollingBanner>
+
+        </header>
     )
 }
 
 
+const ScrollingBanner = ({ children, cnContainer, style }: { children?: ReactNode, cnContainer?: string, style?: React.CSSProperties }) => {
+    return (
+        <div className={
+            cn(
+                "overflow-hidden whitespace-nowrap",
+                cnContainer
+            )
+
+        }
+            style={style}
+        >
+            <div
+                className="inline-block text-center px-10 text-lg font-semibold text-black animate-scrollingText whitespace-nowrap"
+            >
+                {children}
+            </div>
+        </div>
+    );
+};
 
 
-function ActionBar() {
 
-    const [likeIt, setLikeIt] = useState(false)
 
+function CompanyInfo() {
 
 
     return (
-        <div className="grid grid-cols-3 font-body-website bg-slate-300 py-1 px-4">
+        <>
+            <section className="mt-24 px-4 mb-4">
+                <div className="flex flex-col font-body-website">
+                    <h2 className="font-semibold text-lg">A Modo Mio | Pizzeria Italiana</h2>
+                    <h3 className="text-muted-foreground">Pizza Al Taglio & Delivery</h3>
+                </div>
 
+                <div className="text-xs text-muted-foreground mb-2 font-body-website">
+                    <p>Rua Arariboia 64 - Pato Branco</p>
+                </div>
+                <div className="grid grid-cols-8 gap-x-4">
 
-            <WhatsappExternalLink phoneNumber="46991272525"
-                ariaLabel="Envia uma mensagem com WhatsApp"
-                message={"Olá, gostaria fazer um pedido"}
-                className="flex flex-col justify-center items-center"
-            >
-                <WhatsAppIcon color="black" />
-                <span className="text-xs tracking-normal font-semibold">Atendimento</span>
-            </WhatsappExternalLink>
+                    <Link to={GLOBAL_LINKS.instagram.href} aria-label={GLOBAL_LINKS.instagram.title}
+                        className="flex items-center justify-center gap-1 rounded-lg py-1">
+                        <Instagram size={28} />
+                        {/* <span className="font-semibold tracking-wide text-[12px]">Instagram</span> */}
+                    </Link>
+                    <WhatsappExternalLink
+                        phoneNumber="46991272525"
+                        ariaLabel="Envia uma mensagem com WhatsApp"
+                        message={"Olá, gostaria fazer um pedido"}
+                        className="flex items-center justify-center gap-2 rounded-lg py-1 "
+                    >
+                        <WhatsAppIcon color="black" height={28} width={28} />
+                        {/* <span className="font-semibold tracking-wide text-[12px]">WhatsApp</span> */}
+                    </WhatsappExternalLink>
+                    <Link to={GLOBAL_LINKS.maps.href} aria-label={GLOBAL_LINKS.maps.title}
+                        className="flex items-center justify-center gap-1 rounded-lg py-1">
+                        <MapPin size={28} />
+                        {/* <span className="font-semibold tracking-wide text-[12px]">Maps</span> */}
+                    </Link>
+                </div>
+            </section>
+        </>
 
-            <Link to={"/pdf/cardapio/amodomio-cardapio.pdf"} className="flex flex-col justify-center items-center" download>
-                <ArrowDown />
-                <span className="text-xs tracking-normal font-semibold">
-                    Baixar PDF
-                </span>
-            </Link>
-
-            <Link to={'finalizar'} className="flex flex-col justify-center items-center bg-green-500 rounded-lg p-1 shadow-md">
-                <ShoppingCart />
-                <span className="text-xs tracking-normal font-semibold">
-                    Fazer Pedido
-                </span>
-            </Link>
-
-        </div>
     )
 }
+
+
+function CardapioFooter() {
+
+    const labels = ["cyuc", "HORÁRIO DE ATENDIMENTO", "QUA-DOM 18:00-22:00"];
+
+
+    return (
+        <div className={
+            cn(
+                "fixed bottom-0 w-screen md:max-w-2xl md:-translate-x-1/2 md:left-1/2 ",
+            )
+        }>
+            <footer >
+                <div className="h-full w-full py-2 px-4 bg-white">
+                    <FazerPedidoButton variant="accent" />
+                </div>
+            </footer>
+        </div>
+
+    )
+}
+
+

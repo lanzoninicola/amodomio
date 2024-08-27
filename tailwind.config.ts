@@ -91,6 +91,15 @@ module.exports = {
           from: { transform: "rotate(0deg)" },
           to: { transform: "rotate(360deg)" },
         },
+        "slide-in-up": {
+          "0%": {
+            visibility: "visible",
+            transform: "translate3d(0, 100%, 0)",
+          },
+          "100%": {
+            transform: "translate3d(0, 0, 0)",
+          },
+        },
         move: {
           "0%": {
             opacity: "0.1",
@@ -107,12 +116,21 @@ module.exports = {
             transform: "translateX(-1000px)",
           },
         },
+        scrollingText: {
+          "0%": {
+            transform: "translateX(100%)",
+          },
+          "100%": {
+            transform: "translateX(-100%)",
+          },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
         "rotate-360": "rotate-360 1s linear infinite",
         "rotate-360-slow": "rotate-360 15s linear infinite",
+        "slide-in-up": "slide-in-up 0.4s ease-in-out",
         move: "move 8s ease-in-out infinite",
         "move-slow": "move 9.2s ease-in-out infinite",
         "move-slower": "move 11.2s ease-in-out infinite",
@@ -122,6 +140,7 @@ module.exports = {
         pulseFast: "pulse .5s ease-in-out infinite",
         pulse: "pulse 1s ease-in-out infinite",
         pulseSlow: "pulse 2s ease-in-out infinite",
+        scrollingText: "scrollingText 18s linear infinite",
       },
       backgroundImage: {
         hero: "url('/images/hero-image.jpg')",

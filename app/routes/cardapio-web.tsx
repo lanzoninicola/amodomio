@@ -1,5 +1,6 @@
+import { MenuItemTag, Tag } from "@prisma/client";
 import { HamburgerMenuIcon } from "@radix-ui/react-icons";
-import { HeadersFunction, LoaderArgs, V2_MetaFunction } from "@remix-run/node";
+import { HeadersFunction, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { Link, Outlet, useLoaderData } from "@remix-run/react";
 import { ArrowRight, Instagram, MapPin, SearchIcon, XIcon } from "lucide-react";
 import { useState } from "react";
@@ -12,18 +13,21 @@ import { Separator } from "~/components/ui/separator";
 import { toast } from "~/components/ui/use-toast";
 import { menuItemTagPrismaEntity } from "~/domain/cardapio/menu-item-tags.prisma.entity.server";
 import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
+import BadgeTag from "~/domain/tags/components/badge-tag";
 import { tagPrismaEntity } from "~/domain/tags/tag.prisma.entity.server";
 import { WebsiteNavigationSidebar } from "~/domain/website-navigation/components/website-navigation-sidebar";
 import GLOBAL_LINKS from "~/domain/website-navigation/global-links.constant";
 import PUBLIC_WEBSITE_NAVIGATION_ITEMS from "~/domain/website-navigation/public/public-website.nav-links";
+import { prismaAll } from "~/lib/prisma/prisma-all.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
+import getSearchParam from "~/utils/get-search-param";
 import { badRequest, ok } from "~/utils/http-response.server";
 
 
 /**
  * TODO:
- * - [] Add to menu Horario Atendimento
- * - [] Add to menu link instagram
+ * - [x] Add to menu Horario Atendimento
+ * - [x] Add to menu link instagram
  * - [] Add to menu link fazer pedido
  * - [] Different layouts
  * - [] Fechamento Horario Atendimento no botao de fazer pedido
@@ -40,7 +44,7 @@ export interface CardapioOutletContext {
     items: MenuItemWithAssociations[]
 }
 
-export const meta: V2_MetaFunction = ({ data }) => {
+export const meta: MetaFunction = ({ data }) => {
     return [
         { title: "Cardápio A Modo Mio - Pizzaria Italiana em Pato Branco" },
         { name: "description", content: "É a pizza! Italiana! Um sabor que você nunca experimentou! Descubra no nosso cardápio as melhores pizzas da cidade. Experimente e saboreie a verdadeira italianidade em Pato Branco." },
@@ -55,13 +59,22 @@ export const meta: V2_MetaFunction = ({ data }) => {
 
 
 
-export async function loader({ request }: LoaderArgs) {
+export async function loader({ request }: LoaderFunctionArgs) {
     const env = process.env?.NODE_ENV
 
-    // @ts-ignore
-    const [errItems, items] = await prismaIt(menuItemPrismaEntity.findAll({
+    // const tagParam = getSearchParam({ request, paramName: 'tag' })
+
+    //@ts-ignore
+    const itemsQuery = prismaIt(menuItemPrismaEntity.findAll({
         where: {
-            visible: true
+            visible: true,
+            // tags: {
+            //     some: {
+            //         Tag: {
+            //             name: tagParam || undefined
+            //         }
+            //     }
+            // }
         },
         option: {
             sorted: true,
@@ -74,15 +87,26 @@ export async function loader({ request }: LoaderArgs) {
     }))
 
 
+
+
+    const tagsQuery = prismaIt(tagPrismaEntity.findAll({
+        public: true
+    }))
+
+    const results = await Promise.all([itemsQuery, tagsQuery])
+
+    const [errItems, items] = results[0]
+    const [errTags, tags] = results[1]
+
     if (errItems) {
         return badRequest(errItems)
     }
 
-    const [_, tags] = await prismaIt(tagPrismaEntity.findAll({
-        public: true
-    }))
 
-    return ok({ items, tags })
+    return ok({
+        items, tags
+    })
+
 
 }
 
@@ -90,6 +114,7 @@ export async function loader({ request }: LoaderArgs) {
 export default function CardapioWeb() {
     const loaderData = useLoaderData<typeof loader>()
     const items = loaderData?.payload.items as MenuItemWithAssociations[] || []
+    const tags = loaderData?.payload.tags as Tag[] || []
 
     // const [storedValue, setStoredValue] = useLocalStorage("sessionId", null)
 
@@ -113,9 +138,10 @@ export default function CardapioWeb() {
 
     return (
         <>
-            <CardapioHeader items={items} />
+            <CardapioHeader items={items} tags={tags} />
+
             <div className="md:m-auto md:max-w-2xl">
-                <section className="mt-16 p-4 mb-8 ">
+                <section className="mt-24 p-4 mb-8 ">
                     <div className="flex flex-col font-body-website">
                         <h2 className="font-semibold text-lg">A Modo Mio | Pizzeria Italiana</h2>
                         <h3 className="text-muted-foreground">Pizza Al Taglio & Delivery</h3>
@@ -155,11 +181,15 @@ export default function CardapioWeb() {
     )
 }
 
-function CardapioHeader({ items }: { items: MenuItemWithAssociations[] }) {
+interface CardapioHeaderProps {
+    items: MenuItemWithAssociations[], tags: Tag[]
+}
+
+function CardapioHeader({ items, tags }: CardapioHeaderProps) {
     const [showSearch, setShowSearch] = useState(false)
 
     return (
-        <header className="bg-white shadow fixed top-0 w-screen  border-b-slate-100 px-4 py-3 z-50 md:max-w-2xl md:-translate-x-1/2 md:left-1/2" >
+        <header className="bg-white shadow fixed top-0 w-screen  border-b-slate-100 px-4 pt-2 py-1 z-50 md:max-w-2xl md:-translate-x-1/2 md:left-1/2" >
             <div className="flex flex-col">
                 <div className="grid grid-cols-3 items-center w-full">
                     {/* <div className="flex gap-1 items-center" onClick={() => setShowSearch(!showSearch)}>
@@ -196,6 +226,19 @@ function CardapioHeader({ items }: { items: MenuItemWithAssociations[] }) {
                 </div>
                 {showSearch && <CardapioSearch items={items} setShowSearch={setShowSearch} />}
             </div>
+
+
+            <ul className="overflow-x-auto py-3" style={{
+                display: "-webkit-inline-box"
+            }}>
+                {tags.map((tag) => (
+                    <li key={tag.id} className="ml-2">
+                        <Link to={`?tag=${tag.name}`} className="text-xs font-body-website font-semibold uppercase text-muted-foreground">
+                            <BadgeTag tag={tag} classNameLabel="text-[10px]" />
+                        </Link>
+                    </li>
+                ))}
+            </ul>
         </header>
     )
 }

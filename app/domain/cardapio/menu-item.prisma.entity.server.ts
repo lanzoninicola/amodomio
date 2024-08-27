@@ -6,6 +6,7 @@ import {
   MenuItemLike,
   MenuItemPriceVariation,
   MenuItemShare,
+  MenuItemTag,
   Prisma,
   Tag,
 } from "@prisma/client";
@@ -26,9 +27,11 @@ export interface MenuItemWithAssociations extends MenuItem {
   tags?: {
     all: Tag["name"][];
     public: Tag["name"][];
+    models: Tag[];
   };
   MenuItemCost: MenuItemCost[];
   MenuItemLike: MenuItemLike[];
+  MenuItemTag: MenuItemTag[];
   MenuItemShare: MenuItemShare[];
   MenuItemImage: MenuItemImage;
   likes?: {
@@ -53,12 +56,7 @@ export class MenuItemPrismaEntity {
     Category: true,
     tags: {
       include: {
-        Tag: {
-          select: {
-            name: true,
-            public: true,
-          },
-        },
+        Tag: true,
       },
     },
     MenuItemCost: true,
@@ -125,6 +123,7 @@ export class MenuItemPrismaEntity {
           public: r.tags
             .filter((t) => t.Tag?.public === true)
             .map((t) => t.Tag?.name),
+          models: r.tags.map((t) => t.Tag),
         },
         likes: {
           amount: r.MenuItemLike.length,
@@ -180,11 +179,18 @@ export class MenuItemPrismaEntity {
       // imageURL: CloudinaryUtils.scaleWidth("livhax0d1aiiszxqgpc6", {
       //   width: options.imageScaleWidth,
       // }),
+      imageTransformedURL: CloudinaryUtils.scaleWidth(
+        item.MenuItemImage?.publicId || "",
+        {
+          width: options.imageScaleWidth,
+        }
+      ),
       tags: {
         all: item.tags.map((t) => t.Tag?.name),
         public: item.tags
           .filter((t) => t.Tag?.public === true)
           .map((t) => t.Tag?.name),
+        models: item.tags.map((t) => t.Tag),
       },
       likes: {
         amount: item.MenuItemLike.length,

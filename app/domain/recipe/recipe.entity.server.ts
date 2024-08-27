@@ -31,22 +31,6 @@ export class RecipeEntity {
   async delete(id: string) {
     return await this.client.recipe.delete({ where: { id } });
   }
-
-  static getTypes(): {
-    key: RecipeType;
-    value: string;
-  }[] {
-    return [
-      {
-        key: "pizzaTopping",
-        value: "Sabor Pizza",
-      },
-      {
-        key: "semiFinished",
-        value: "Produzido",
-      },
-    ];
-  }
 }
 
 export const recipeEntity = new RecipeEntity({

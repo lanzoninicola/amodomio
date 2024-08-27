@@ -1,5 +1,5 @@
 
-import { ActionArgs, redirect } from "@remix-run/node";
+import { ActionFunctionArgs, redirect } from "@remix-run/node";
 import { Form, useActionData } from "@remix-run/react";
 import SubmitButton from "~/components/primitives/submit-button/submit-button";
 import Fieldset from "~/components/ui/fieldset";
@@ -14,7 +14,7 @@ import { serverError } from "~/utils/http-response.server";
 import tryit from "~/utils/try-it";
 
 
-export async function action({ request }: ActionArgs) {
+export async function action({ request }: ActionFunctionArgs) {
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);
 

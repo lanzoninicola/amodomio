@@ -1,5 +1,5 @@
 import { Category, Recipe, RecipeType } from "@prisma/client";
-import { redirect, type ActionArgs, type LoaderArgs } from "@remix-run/node";
+import { redirect, type ActionFunctionArgs, type LoaderFunctionArgs } from "@remix-run/node";
 import { Form, Link, Outlet, useActionData, useLoaderData, useLocation } from "@remix-run/react";
 import { Save } from "lucide-react";
 import { useState } from "react";
@@ -13,7 +13,7 @@ import { toast } from "~/components/ui/use-toast";
 import { categoryPrismaEntity } from "~/domain/category/category.entity.server";
 import RecipeForm from "~/domain/recipe/components/recipe-form/recipe-form";
 import SelectRecipeType from "~/domain/recipe/components/select-recipe-type/select-recipe-type";
-import { recipeEntity } from "~/domain/recipe/recipe.entity";
+import { recipeEntity } from "~/domain/recipe/recipe.entity.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { cn } from "~/lib/utils";
 import type { HttpResponse } from "~/utils/http-response.server";
@@ -27,7 +27,7 @@ export interface RecipeOutletContext {
 }
 
 
-export async function loader({ request, params }: LoaderArgs) {
+export async function loader({ request, params }: LoaderFunctionArgs) {
     const recipeId = params?.id
 
     if (!recipeId) {
@@ -54,7 +54,7 @@ export async function loader({ request, params }: LoaderArgs) {
 
 }
 
-export async function action({ request }: ActionArgs) {
+export async function action({ request }: ActionFunctionArgs) {
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);
 

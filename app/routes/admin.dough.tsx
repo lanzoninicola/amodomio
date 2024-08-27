@@ -1,9 +1,9 @@
-import { LoaderArgs, V2_MetaFunction } from "@remix-run/node";
+import { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { Link, Outlet } from "@remix-run/react";
 
 import Container from "~/components/layout/container/container";
 
-export const meta: V2_MetaFunction = () => {
+export const meta: MetaFunction = () => {
     return [
         {
             name: "robots",
@@ -20,7 +20,7 @@ export async function loader() {
     return null
 }
 
-export async function action({ request }: LoaderArgs) {
+export async function action({ request }: LoaderFunctionArgs) {
 
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);

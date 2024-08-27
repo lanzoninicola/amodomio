@@ -1,4 +1,4 @@
-import { LoaderArgs, redirect } from "@remix-run/node";
+import { LoaderFunctionArgs, redirect } from "@remix-run/node";
 import { Form, useOutletContext } from "@remix-run/react";
 import { useState } from "react";
 import SubmitButton from "~/components/primitives/submit-button/submit-button";
@@ -15,7 +15,7 @@ import dotOperators from "~/domain/daily-orders/dot-operators";
 import { AlertError } from "~/components/layout/alerts/alerts";
 
 
-export async function action({ request }: LoaderArgs) {
+export async function action({ request }: LoaderFunctionArgs) {
 
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);

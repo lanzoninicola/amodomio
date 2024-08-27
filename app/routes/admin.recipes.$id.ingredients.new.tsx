@@ -1,5 +1,5 @@
 import { Ingredient } from "@prisma/client";
-import { ActionArgs, LoaderArgs } from "@remix-run/node";
+import { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { Form, useLoaderData, useNavigate } from "@remix-run/react";
 import { AlertCircle } from "lucide-react";
 import { PlusSquare, RefreshCcw, RotateCcw } from "lucide-react";
@@ -20,7 +20,7 @@ import { cn } from "~/lib/utils";
 import { HttpResponse, badRequest, ok } from "~/utils/http-response.server";
 import randomReactKey from "~/utils/random-react-key";
 
-export async function loader({ params }: LoaderArgs) {
+export async function loader({ params }: LoaderFunctionArgs) {
     const units = umEntity.units()
 
     const recipeId = params?.id
@@ -38,7 +38,7 @@ export async function loader({ params }: LoaderArgs) {
     })
 }
 
-export async function action({ request, params }: ActionArgs) {
+export async function action({ request, params }: ActionFunctionArgs) {
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);
 

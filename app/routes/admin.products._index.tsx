@@ -1,5 +1,5 @@
 import { Separator } from "@radix-ui/react-separator"
-import type { ActionArgs, LoaderArgs } from "@remix-run/node"
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node"
 import { useLoaderData, useNavigation, Form, Link, useActionData } from "@remix-run/react"
 import { useState } from "react"
 import Container from "~/components/layout/container/container"
@@ -14,7 +14,7 @@ import { ok, serverError } from "~/utils/http-response.server"
 import tryit from "~/utils/try-it"
 
 
-export async function loader({ request }: LoaderArgs) {
+export async function loader({ request }: LoaderFunctionArgs) {
 
     const [err, products] = await tryit(productPrismaEntity.findAll())
 
@@ -26,7 +26,7 @@ export async function loader({ request }: LoaderArgs) {
 
 }
 
-export async function action({ request }: ActionArgs) {
+export async function action({ request }: ActionFunctionArgs) {
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);
 

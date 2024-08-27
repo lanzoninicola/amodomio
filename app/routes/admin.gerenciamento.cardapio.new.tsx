@@ -1,5 +1,5 @@
 import { Category, Prisma } from "@prisma/client";
-import { LoaderArgs, redirect } from "@remix-run/node";
+import { LoaderFunctionArgs, redirect } from "@remix-run/node";
 import { useActionData, useLoaderData } from "@remix-run/react";
 import { toast } from "~/components/ui/use-toast";
 import MenuItemForm from "~/domain/cardapio/components/menu-item-form/menu-item-form";
@@ -10,7 +10,7 @@ import { badRequest, ok, serverError } from "~/utils/http-response.server";
 import { jsonParse } from "~/utils/json-helper";
 
 
-export async function loader({ params }: LoaderArgs) {
+export async function loader({ params }: LoaderFunctionArgs) {
     const [err, categories] = await prismaIt(categoryPrismaEntity.findAll());
 
     if (err) {
@@ -23,7 +23,7 @@ export async function loader({ params }: LoaderArgs) {
 }
 
 
-export async function action({ request }: LoaderArgs) {
+export async function action({ request }: LoaderFunctionArgs) {
 
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);

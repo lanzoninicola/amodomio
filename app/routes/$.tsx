@@ -1,8 +1,8 @@
-import { LoaderArgs, redirect } from "@remix-run/node";
+import { LoaderFunctionArgs, redirect } from "@remix-run/node";
 import { lastUrlSegment, urlAt } from "~/utils/url";
 
 
-export function loader({ request, params }: LoaderArgs) {
+export function loader({ request, params }: LoaderFunctionArgs) {
 
     const url = request.url
     const last = lastUrlSegment(request.url)
@@ -17,5 +17,5 @@ export function loader({ request, params }: LoaderArgs) {
     }
 
 
-    return null
+    return redirect('/cardapio')
 }

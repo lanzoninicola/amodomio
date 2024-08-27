@@ -32,8 +32,8 @@ const GLOBAL_LINKS = {
     href: "https://maps.app.goo.gl/J85EdGuxNzhe4n8R7",
   },
   cardapioPublic: {
-    title: "Cardapio",
-    href: "/cardapio-web",
+    title: "Cardápio",
+    href: "/cardapio",
   },
 };
 

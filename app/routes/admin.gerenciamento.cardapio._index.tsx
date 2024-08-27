@@ -2,7 +2,7 @@ import { useActionData, useOutletContext } from "@remix-run/react";
 import MenuItemList from "~/domain/cardapio/components/menu-item-list/menu-item-list";
 import { AdminCardapioOutletContext } from "./admin.gerenciamento.cardapio";
 import { MenuItem } from "@prisma/client";
-import { LoaderArgs } from "@remix-run/node";
+import { LoaderFunctionArgs } from "@remix-run/node";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { badRequest, ok } from "~/utils/http-response.server";
 import { toast } from "~/components/ui/use-toast";
@@ -15,7 +15,7 @@ import { menuItemPriceVariationsEntity } from "~/domain/cardapio/menu-item-price
 
 export type MenuItemActionSearchParam = "menu-item-create" | "menu-item-edit" | "menu-item-delete" | "menu-items-sortorder" | null
 
-export async function action({ request }: LoaderArgs) {
+export async function action({ request }: LoaderFunctionArgs) {
 
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);
