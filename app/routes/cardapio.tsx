@@ -170,7 +170,7 @@ function CardapioHeader() {
                 <div className="flex items-center my-2 gap-2">
                     {/* @ts-ignore */}
                     <ItalyFlag className="w-4 h-4" />
-                    <p className="font-body-website text-[12px] uppercase leading-tight">Todas os nossas pizzas são preparadas com farinha e molho de tomate importados da Itália</p>
+                    <p className="font-body-website text-[12px] uppercase leading-tight">Todas as nossas pizzas são preparadas com farinha e molho de tomate importados da Itália</p>
                 </div>
 
             </ScrollingBanner>
