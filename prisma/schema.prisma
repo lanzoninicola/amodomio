@@ -309,3 +309,41 @@ model Session {
 
   @@map("sessions")
 }
+
+model ImportProfile {
+  id          String       @id @default(uuid())
+  name        String
+  description String?
+  table       String
+  domainClass String?      @map("domain_class")
+  createdAt   DateTime     @map("created_at")
+  updatedAt   DateTime     @default(now()) @updatedAt @map("updated_at")
+  ImportData  ImportData[]
+
+  @@map("import_profiles")
+}
+
+model ImportData {
+  id               String             @id @default(uuid())
+  ImportProfile    ImportProfile?     @relation(fields: [importProfileId], references: [id])
+  importProfileId  String?            @map("import_profile_id")
+  ImportDataRecord ImportDataRecord[]
+  description      String?
+  transformed      Boolean            @default(false)
+  loaded           Boolean            @default(false)
+  createdAt        DateTime           @map("created_at")
+  updatedAt        DateTime           @default(now()) @updatedAt @map("updated_at")
+
+  @@map("import_data")
+}
+
+model ImportDataRecord {
+  id           String     @id @default(uuid())
+  importDataId String     @map("import_data_id")
+  import       ImportData @relation(fields: [importDataId], references: [id])
+  data         Json // Armazena os dados de cada linha do arquivo como JSON
+  createdAt    DateTime   @map("created_at")
+  updatedAt    DateTime   @default(now()) @updatedAt @map("updated_at")
+
+  @@map("import_data_records")
+}
