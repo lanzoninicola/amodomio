@@ -8,6 +8,8 @@ export default function BankStatementImporter() {
         message: "Aguardando arquivo",
     });
 
+    const [parseErrorTagsRendered, setParseErrorTagsRendered] = useState<string[]>([]);
+
     // Função para limpar o conteúdo do arquivo OFX
     const preprocessOFX = (ofxData: string) => {
         // Remove os cabeçalhos e substitui tags malformadas
@@ -30,7 +32,7 @@ export default function BankStatementImporter() {
         const endIndex = cleanedData.lastIndexOf('</OFX>') + 6; // Tamanho da tag de fechamento
 
         if (startIndex === -1 || endIndex === -1) {
-            throw new Error('OFX inválido ou malformado');
+            throw new Error('O arquivo não contém um bloco OFX');
         }
 
         cleanedData = cleanedData.substring(startIndex, endIndex);
@@ -51,10 +53,19 @@ export default function BankStatementImporter() {
             const parser = new DOMParser();
             const xmlDoc = parser.parseFromString(cleanedFileText, "text/xml");
 
-            const parseError = xmlDoc.getElementsByTagName('parsererror')[0]?.textContent;
+            const parseErrorTags = xmlDoc.getElementsByTagName('parsererror')
+            const parseErrorTagsArray = Array.prototype.slice.call(parseErrorTags)
 
-            if (parseError) {
-                throw new Error(parseError);
+            if (parseErrorTags.length > 0) {
+                setParseErrorTagsRendered(parseErrorTagsArray.map((tag: any) => tag?.outerHTML));
+            }
+
+            const parseErrorErrors = parseErrorTagsArray
+                .map((tag: any) => tag?.textContent)
+                .join(', ');
+
+            if (parseErrorErrors) {
+                throw new Error(parseErrorErrors);
             }
 
             // Extrai as transações
@@ -98,6 +109,18 @@ export default function BankStatementImporter() {
                 className="mb-4"
             />
 
+            <div className="flex flex-col mb-4">
+                {parseErrorTagsRendered.length > 0 && (
+                    <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative font-mono text-xs" role="alert">
+                        <strong className="font-bold">Atenção!</strong>
+                        <ul>
+                            {parseErrorTagsRendered.map((tag, index) => (
+                                <li key={index}>{tag}</li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
+            </div>
             <div className="flex gap-4 items-center">
                 <span className="font-semibold text-sm">Status:</span>
                 <span className={
