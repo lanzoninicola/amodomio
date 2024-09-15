@@ -1,3 +1,4 @@
+import dayjs from 'dayjs';
 import React, { useState } from 'react';
 import { cn } from '~/lib/utils';
 
@@ -56,8 +57,8 @@ export default function BankStatementImporter() {
             const parser = new DOMParser();
             const xmlDoc = parser.parseFromString(cleanedFileText, "text/xml");
 
-            const parseErrorTags = xmlDoc.getElementsByTagName('parsererror')
-            const parseErrorTagsArray = Array.prototype.slice.call(parseErrorTags)
+            const parseErrorTags = xmlDoc.getElementsByTagName('parsererror');
+            const parseErrorTagsArray = Array.prototype.slice.call(parseErrorTags);
 
             if (parseErrorTags.length > 0) {
                 setParseErrorTagsRendered(parseErrorTagsArray.map((tag: any) => tag?.outerHTML));
@@ -81,9 +82,15 @@ export default function BankStatementImporter() {
                 const trnAmt = stmtTrans[i].getElementsByTagName('TRNAMT')[0]?.textContent;
                 const memo = stmtTrans[i].getElementsByTagName('MEMO')[0]?.textContent || '';
 
+                // Manipula a data com dayjs
+                let formattedDate = '';
+                if (dtPosted) {
+                    formattedDate = dayjs(dtPosted.substring(0, 8), 'YYYYMMDD').format('DD/MM/YYYY');
+                }
+
                 extractedTransactions.push({
                     TRNTYPE: trnType,
-                    DTPOSTED: dtPosted,
+                    DTPOSTED: formattedDate,  // Usa a data formatada
                     TRNAMT: trnAmt,
                     MEMO: memo,
                 });
@@ -95,7 +102,7 @@ export default function BankStatementImporter() {
             setNotification({
                 status: "error",
                 message: `${error?.message}`,
-            })
+            });
 
             setTransactions([]);
         }
