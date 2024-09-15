@@ -1,9 +1,10 @@
 import dayjs from 'dayjs';
 import React, { useState } from 'react';
+import { OfxParser, OfxTransaction } from '~/domain/ofx/ofx-parser';
 import { cn } from '~/lib/utils';
 
 export default function BankStatementImporter() {
-    const [transactions, setTransactions] = useState<any[]>([]);
+    const [transactions, setTransactions] = useState<OfxTransaction[]>([]);
     const [notification, setNotification] = useState<any>({
         status: "idle",
         message: "Aguardando arquivo",
@@ -11,36 +12,7 @@ export default function BankStatementImporter() {
 
     const [parseErrorTagsRendered, setParseErrorTagsRendered] = useState<string[]>([]);
 
-    // Função para limpar o conteúdo do arquivo OFX
-    const preprocessOFX = (ofxData: string) => {
-        // Remove os cabeçalhos e substitui tags malformadas
-        let cleanedData = ofxData
-            .replace(/OFXHEADER:.*[\r\n]/g, '')
-            .replace(/DATA:OFXSGML[\r\n]/g, '')
-            .replace(/VERSION:.*[\r\n]/g, '')
-            .replace(/SECURITY:.*[\r\n]/g, '')
-            .replace(/ENCODING:.*[\r\n]/g, '')
-            .replace(/CHARSET:.*[\r\n]/g, '')
-            .replace(/COMPRESSION:.*[\r\n]/g, '')
-            .replace(/OLDFILEUID:.*[\r\n]/g, '')
-            .replace(/NEWFILEUID:.*[\r\n]/g, '')
-            .replace(/<\?OFX[\r\n]/g, '<OFX>') // Corrige a tag de abertura
-            .replace(/>\s+</g, '><') // Remove espaços extras entre tags
-            .replace(/<(\w+?)>([^<]+)(<\/\w+?>)?/g, '<$1>$2</$1>') // Corrige tags malformadas
-            // Substitui entidades XML malformadas
-            .replace(/&(?!amp;|lt;|gt;|quot;|apos;)/g, '&amp;'); // Substitui & inválidos por &amp;
 
-        // Garante que o conteúdo tenha um único bloco OFX
-        const startIndex = cleanedData.indexOf('<OFX>');
-        const endIndex = cleanedData.lastIndexOf('</OFX>') + 6; // Tamanho da tag de fechamento
-
-        if (startIndex === -1 || endIndex === -1) {
-            throw new Error('O arquivo não contém um bloco OFX');
-        }
-
-        cleanedData = cleanedData.substring(startIndex, endIndex);
-        return cleanedData;
-    };
 
 
     const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -49,63 +21,30 @@ export default function BankStatementImporter() {
 
         const fileText = await file.text();
 
-        try {
-            // Preprocessa o arquivo OFX para torná-lo XML válido
-            const cleanedFileText = preprocessOFX(fileText);
+        const [err, result] = OfxParser.getTransactions(fileText);
 
-            // Usa DOMParser para extrair os dados
-            const parser = new DOMParser();
-            const xmlDoc = parser.parseFromString(cleanedFileText, "text/xml");
-
-            const parseErrorTags = xmlDoc.getElementsByTagName('parsererror');
-            const parseErrorTagsArray = Array.prototype.slice.call(parseErrorTags);
-
-            if (parseErrorTags.length > 0) {
-                setParseErrorTagsRendered(parseErrorTagsArray.map((tag: any) => tag?.outerHTML));
-            }
-
-            const parseErrorErrors = parseErrorTagsArray
-                .map((tag: any) => tag?.textContent)
-                .join(', ');
-
-            if (parseErrorErrors) {
-                throw new Error(parseErrorErrors);
-            }
-
-            // Extrai as transações
-            const stmtTrans = xmlDoc.getElementsByTagName('STMTTRN');
-            const extractedTransactions: any[] = [];
-
-            for (let i = 0; i < stmtTrans.length; i++) {
-                const trnType = stmtTrans[i].getElementsByTagName('TRNTYPE')[0]?.textContent;
-                const dtPosted = stmtTrans[i].getElementsByTagName('DTPOSTED')[0]?.textContent;
-                const trnAmt = stmtTrans[i].getElementsByTagName('TRNAMT')[0]?.textContent;
-                const memo = stmtTrans[i].getElementsByTagName('MEMO')[0]?.textContent || '';
-
-                // Manipula a data com dayjs
-                let formattedDate = '';
-                if (dtPosted) {
-                    formattedDate = dayjs(dtPosted.substring(0, 8), 'YYYYMMDD').format('DD/MM/YYYY');
-                }
-
-                extractedTransactions.push({
-                    TRNTYPE: trnType,
-                    DTPOSTED: formattedDate,  // Usa a data formatada
-                    TRNAMT: trnAmt,
-                    MEMO: memo,
-                });
-            }
-
-            setTransactions(extractedTransactions);
-        } catch (error: any) {
-            console.error('Erro ao processar o arquivo OFX:', error?.message);
+        if (err) {
             setNotification({
                 status: "error",
-                message: `${error?.message}`,
+                message: err.message,
             });
-
-            setTransactions([]);
+            return;
         }
+
+        if (!result) {
+            setNotification({
+                status: "error",
+                message: "Nenhum arquivo encontrado.",
+            });
+            return;
+        }
+
+
+        setTransactions(result);
+        setNotification({
+            status: "success",
+            message: "Arquivo lido.",
+        });
     };
 
     return (
@@ -156,10 +95,10 @@ export default function BankStatementImporter() {
                     <tbody>
                         {transactions.map((transaction, index) => (
                             <tr key={index}>
-                                <td className="border p-2">{transaction.TRNTYPE}</td>
-                                <td className="border p-2">{transaction.DTPOSTED}</td>
-                                <td className="border p-2">{transaction.TRNAMT}</td>
-                                <td className="border p-2">{transaction.MEMO}</td>
+                                <td className="border p-2">{transaction.type}</td>
+                                <td className="border p-2">{transaction.date}</td>
+                                <td className="border p-2">{transaction.amount}</td>
+                                <td className="border p-2">{transaction.description}</td>
                             </tr>
                         ))}
                     </tbody>
