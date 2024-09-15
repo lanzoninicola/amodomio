@@ -25,7 +25,9 @@ export default function BankStatementImporter() {
             .replace(/NEWFILEUID:.*[\r\n]/g, '')
             .replace(/<\?OFX[\r\n]/g, '<OFX>') // Corrige a tag de abertura
             .replace(/>\s+</g, '><') // Remove espaços extras entre tags
-            .replace(/<(\w+?)>([^<]+)(<\/\w+?>)?/g, '<$1>$2</$1>'); // Corrige tags malformadas
+            .replace(/<(\w+?)>([^<]+)(<\/\w+?>)?/g, '<$1>$2</$1>') // Corrige tags malformadas
+            // Substitui entidades XML malformadas
+            .replace(/&(?!amp;|lt;|gt;|quot;|apos;)/g, '&amp;'); // Substitui & inválidos por &amp;
 
         // Garante que o conteúdo tenha um único bloco OFX
         const startIndex = cleanedData.indexOf('<OFX>');
@@ -38,6 +40,7 @@ export default function BankStatementImporter() {
         cleanedData = cleanedData.substring(startIndex, endIndex);
         return cleanedData;
     };
+
 
     const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
