@@ -1,57 +1,29 @@
 import dayjs from "dayjs";
 
-export interface OfxTransaction {
+export interface OfxRawTransaction {
   type: string;
   date: string;
   amount: string;
   description: string;
 }
 
+export interface OfxTransaction {
+  hash: string;
+  date: Date;
+  amount: number;
+  createdAt: string;
+  type: string;
+  description: string;
+  descriptionHash: string;
+}
+
 export class OfxParser {
-  // Função para limpar o conteúdo do arquivo OFX
-  static preprocess(ofxData: string) {
-    // Remove os cabeçalhos e substitui tags malformadas
-    let cleanedData = ofxData
-      .replace(/OFXHEADER:.*[\r\n]/g, "")
-      .replace(/DATA:OFXSGML[\r\n]/g, "")
-      .replace(/VERSION:.*[\r\n]/g, "")
-      .replace(/SECURITY:.*[\r\n]/g, "")
-      .replace(/ENCODING:.*[\r\n]/g, "")
-      .replace(/CHARSET:.*[\r\n]/g, "")
-      .replace(/COMPRESSION:.*[\r\n]/g, "")
-      .replace(/OLDFILEUID:.*[\r\n]/g, "")
-      .replace(/NEWFILEUID:.*[\r\n]/g, "")
-      .replace(/<\?OFX[\r\n]/g, "<OFX>") // Corrige a tag de abertura
-      .replace(/>\s+</g, "><") // Remove espaços extras entre tags
-      .replace(/<(\w+?)>([^<]+)(<\/\w+?>)?/g, "<$1>$2</$1>") // Corrige tags malformadas
-      // Substitui entidades XML malformadas
-      .replace(/&(?!amp;|lt;|gt;|quot;|apos;)/g, "&amp;"); // Substitui & inválidos por &amp;
-
-    // Garante que o conteúdo tenha um único bloco OFX
-    const startIndex = cleanedData.indexOf("<OFX>");
-    const endIndex = cleanedData.lastIndexOf("</OFX>") + 6; // Tamanho da tag de fechamento
-
-    if (startIndex === -1 || endIndex === -1) {
-      throw new Error("O arquivo não contém um bloco OFX");
-    }
-
-    cleanedData = cleanedData.substring(startIndex, endIndex);
-    return cleanedData;
-  }
-
-  // Manipula a data com dayjs
-  static parseDate(dtPosted: string | null) {
-    if (!dtPosted) return "";
-
-    return dayjs(dtPosted.substring(0, 8), "YYYYMMDD").format("DD/MM/YYYY");
-  }
-
   static getTransactions(fileText: string): [
     {
       message: string | null;
       html: string | null;
     } | null,
-    OfxTransaction[] | null
+    OfxRawTransaction[] | null
   ] {
     try {
       // Preprocessa o arquivo OFX para torná-lo XML válido
@@ -105,8 +77,45 @@ export class OfxParser {
       ];
     }
   }
+  // Função para limpar o conteúdo do arquivo OFX
+  private static preprocess(ofxData: string) {
+    // Remove os cabeçalhos e substitui tags malformadas
+    let cleanedData = ofxData
+      .replace(/OFXHEADER:.*[\r\n]/g, "")
+      .replace(/DATA:OFXSGML[\r\n]/g, "")
+      .replace(/VERSION:.*[\r\n]/g, "")
+      .replace(/SECURITY:.*[\r\n]/g, "")
+      .replace(/ENCODING:.*[\r\n]/g, "")
+      .replace(/CHARSET:.*[\r\n]/g, "")
+      .replace(/COMPRESSION:.*[\r\n]/g, "")
+      .replace(/OLDFILEUID:.*[\r\n]/g, "")
+      .replace(/NEWFILEUID:.*[\r\n]/g, "")
+      .replace(/<\?OFX[\r\n]/g, "<OFX>") // Corrige a tag de abertura
+      .replace(/>\s+</g, "><") // Remove espaços extras entre tags
+      .replace(/<(\w+?)>([^<]+)(<\/\w+?>)?/g, "<$1>$2</$1>") // Corrige tags malformadas
+      // Substitui entidades XML malformadas
+      .replace(/&(?!amp;|lt;|gt;|quot;|apos;)/g, "&amp;"); // Substitui & inválidos por &amp;
 
-  static parseTransaction(stmtTran: Element) {
+    // Garante que o conteúdo tenha um único bloco OFX
+    const startIndex = cleanedData.indexOf("<OFX>");
+    const endIndex = cleanedData.lastIndexOf("</OFX>") + 6; // Tamanho da tag de fechamento
+
+    if (startIndex === -1 || endIndex === -1) {
+      throw new Error("O arquivo não contém um bloco OFX");
+    }
+
+    cleanedData = cleanedData.substring(startIndex, endIndex);
+    return cleanedData;
+  }
+
+  // Manipula a data com dayjs
+  private static parseDate(dtPosted: string | null) {
+    if (!dtPosted) return "";
+
+    return dayjs(dtPosted.substring(0, 8), "YYYYMMDD").format("DD/MM/YYYY");
+  }
+
+  private static parseTransaction(stmtTran: Element) {
     const trnType = stmtTran.getElementsByTagName("TRNTYPE")[0]?.textContent;
     const dtPosted = stmtTran.getElementsByTagName("DTPOSTED")[0]?.textContent;
     const trnAmt = stmtTran.getElementsByTagName("TRNAMT")[0]?.textContent;

@@ -347,3 +347,53 @@ model ImportDataRecord {
 
   @@map("import_data_records")
 }
+
+model ImportBankTransaction {
+  id          String   @id @default(uuid())
+  type        String
+  date        DateTime
+  amount      Float
+  description String
+  createdAt   DateTime @map("created_at")
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("import_banks_transactions")
+}
+
+model BankTransaction {
+  id                 String   @id @default(uuid())
+  type               String
+  date               DateTime
+  amount             Float
+  description        String
+  hashRecord         String
+  /// esse é o ID que será chave para vincular a uma conta contabil
+  hashTransactionRef String   @map("hash_transaction_ref")
+  createdAt          DateTime @map("created_at")
+  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("banks_transactions")
+}
+
+model HashTransactionRefFinanceAccount {
+  id                 String          @id @default(uuid())
+  hashTransactionRef String          @map("hash_transaction_ref")
+  financeAccountId   String?         @map("finance_account_id")
+  financeAccount     FinanceAccount? @relation(fields: [financeAccountId], references: [id])
+
+  createdAt DateTime @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("hash_transaction_refs_finance_accounts")
+}
+
+model FinanceAccount {
+  id   String @id @default(uuid())
+  name String
+
+  createdAt                        DateTime                           @map("created_at")
+  updatedAt                        DateTime                           @default(now()) @updatedAt @map("updated_at")
+  HashTransactionRefFinanceAccount HashTransactionRefFinanceAccount[]
+
+  @@map("finance_accounts")
+}
