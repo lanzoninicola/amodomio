@@ -349,13 +349,19 @@ model ImportDataRecord {
 }
 
 model ImportBankTransaction {
-  id          String   @id @default(uuid())
-  type        String
-  date        DateTime
-  amount      Float
-  description String
-  createdAt   DateTime @map("created_at")
-  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
+  id                 String   @id @default(uuid())
+  type               String
+  date               DateTime
+  amount             Float
+  description        String
+  hashRecord         String
+  /// esse é o ID que será chave para vincular a uma conta contabil
+  hashTransactionRef String   @map("hash_transaction_ref")
+  month              Int
+  year               Int
+
+  createdAt DateTime @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
 
   @@map("import_banks_transactions")
 }
@@ -369,6 +375,8 @@ model BankTransaction {
   hashRecord         String
   /// esse é o ID que será chave para vincular a uma conta contabil
   hashTransactionRef String   @map("hash_transaction_ref")
+  month              Int
+  year               Int
   createdAt          DateTime @map("created_at")
   updatedAt          DateTime @default(now()) @updatedAt @map("updated_at")
 
@@ -388,8 +396,9 @@ model HashTransactionRefFinanceAccount {
 }
 
 model FinanceAccount {
-  id   String @id @default(uuid())
-  name String
+  id    String @id @default(uuid())
+  name  String
+  group String
 
   createdAt                        DateTime                           @map("created_at")
   updatedAt                        DateTime                           @default(now()) @updatedAt @map("updated_at")

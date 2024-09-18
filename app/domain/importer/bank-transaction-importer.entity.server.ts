@@ -5,7 +5,10 @@ import { Prisma } from "@prisma/client";
 import dayjs from "dayjs";
 
 export interface ReturnedCreateOfxRecord {
-  inserted: Prisma.ImportBankTransactionCreateInput;
+  inserted: {
+    records: Prisma.ImportBankTransactionCreateInput[];
+    count: number;
+  };
   duplicated: {
     records: Prisma.ImportBankTransactionCreateInput[];
     count: number;
@@ -36,7 +39,10 @@ class BankTransactionImporterEntity {
     }
 
     return {
-      inserted: dbRecord,
+      inserted: {
+        records: [dbRecord],
+        count: 1,
+      },
       duplicated: {
         records: isDuplicate ? [dbRecord] : [],
         count: isDuplicate ? 1 : 0,
@@ -45,6 +51,25 @@ class BankTransactionImporterEntity {
   }
 
   async importMany(transactions: OfxRawTransaction[]) {
+    // const record = await this.client.importBankTransaction.findFirst();
+
+    // if (record) {
+    //   // return {
+    //   //   inserted: {
+    //   //     records: [],
+    //   //     count: 0,
+    //   //   },
+    //   //   duplicated: {
+    //   //     records: [],
+    //   //     count: 0,
+    //   //   },
+    //   // };
+
+    //   throw new Error(
+    //     "Não pode importar novos registros, parece que alguns registros foram importados mas não processados"
+    //   );
+    // }
+
     const dbRecords: Prisma.ImportBankTransactionCreateInput[] = [];
     const duplicatedRecords: OfxTransaction[] = [];
 
@@ -79,7 +104,10 @@ class BankTransactionImporterEntity {
 
     // Return duplicates if requested, otherwise return inserted records
     return {
-      inserted: dbRecords,
+      inserted: {
+        records: dbRecords,
+        count: dbRecords.length,
+      },
       duplicated: {
         records: duplicatedRecords,
         count: duplicatedRecords.length,
