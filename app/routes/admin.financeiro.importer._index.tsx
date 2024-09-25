@@ -19,13 +19,13 @@ export async function action({ request }: LoaderFunctionArgs) {
     const { _action, ...values } = Object.fromEntries(formData);
 
     if (_action === "import-bank-statement") {
-        const records = jsonParse(values.data as string)
+        const recordsShouldBeImported = jsonParse(values.data as string)
 
-        if (!records) {
+        if (!recordsShouldBeImported) {
             return badRequest("Nenhum registro encontrado")
         }
 
-        const [err, result] = await prismaIt(bankTransactionImporterEntity.importMany(records))
+        const [err, result] = await prismaIt(bankTransactionImporterEntity.importMany(recordsShouldBeImported))
 
         if (err) {
             return badRequest(err)

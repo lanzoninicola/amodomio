@@ -6,11 +6,11 @@ import dayjs from "dayjs";
 
 export interface ReturnedCreateOfxRecord {
   inserted: {
-    records: Prisma.ImportBankTransactionCreateInput[];
+    records: Prisma.BankTransactionCreateInput[];
     count: number;
   };
   duplicated: {
-    records: Prisma.ImportBankTransactionCreateInput[];
+    records: Prisma.BankTransactionCreateInput[];
     count: number;
   };
 }
@@ -31,7 +31,7 @@ class BankTransactionImporterEntity {
     let dbRecord = parsedTransaction;
 
     if (!isDuplicate) {
-      await this.client.importBankTransaction.create({
+      await this.client.bankTransaction.create({
         data: {
           ...parsedTransaction,
         },

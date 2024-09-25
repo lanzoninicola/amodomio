@@ -1,9 +1,10 @@
-import { ImportData } from "@prisma/client"
+import { ImportSession } from "@prisma/client"
 import { LoaderFunctionArgs } from "@remix-run/node"
 import { Link, useLoaderData } from "@remix-run/react"
 import dayjs from "dayjs"
 import { ChevronRight } from "lucide-react"
 import { Button } from "~/components/ui/button"
+import { Separator } from "~/components/ui/separator"
 import prismaClient from "~/lib/prisma/client.server"
 import { ok } from "~/utils/http-response.server"
 import tryit from "~/utils/try-it"
@@ -18,12 +19,12 @@ type ImportsResponse = {
             createdAt: Date;
             updatedAt: Date;
         } | null;
-    } & ImportData)[] | undefined
+    } & ImportSession)[] | undefined
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {
 
-    const [err, imports] = await tryit(prismaClient.importData.findMany({
+    const [err, imports] = await tryit(prismaClient.importSession.findMany({
         orderBy: { createdAt: "desc" },
         include: {
             ImportProfile: true
@@ -43,8 +44,9 @@ export default function ImporterList() {
     return (
         <div className="flex flex-col gap-8">
             <Link to="new" className="btn btn-primary">
-                <Button>Nova importaçao</Button>
+                <Button className="font-semibold uppercase tracking-wider text-xs">Nova importaçao</Button>
             </Link>
+            <Separator className="my-4" />
             <ImportList imports={imports} />
         </div>
     )

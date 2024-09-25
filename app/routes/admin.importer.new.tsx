@@ -9,6 +9,7 @@ import { Label } from "~/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { Textarea } from "~/components/ui/textarea";
 import { toast } from "~/components/ui/use-toast";
+import { bankTransactionImporterEntity } from "~/domain/importer/bank-transaction-importer.entity.server";
 import prismaClient from "~/lib/prisma/client.server";
 import { cn } from "~/lib/utils";
 import { badRequest, ok } from "~/utils/http-response.server";
@@ -27,32 +28,31 @@ export async function action({ request }: LoaderFunctionArgs) {
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);
 
+    const records = jsonParse(values.data as string)
+    const importProfileId = values.importProfileId as string
+
+    if (!importProfileId) {
+        return badRequest("Selecione o tipo de importação")
+    }
+
+    if (!records) {
+        return badRequest("Nenhum registro encontrado")
+    }
+
+    const importProfile = await prismaClient.importProfile.findFirst({ where: { id: importProfileId } })
+
+    if (!importProfile) {
+        return badRequest("Nenhum tipo de importação encontrado")
+    }
+
     if (_action === "import") {
-        const records = jsonParse(values.data as string)
-        const importProfileId = values.importProfileId as string
-
-        if (!importProfileId) {
-            return badRequest("Selecione o tipo de importação")
-        }
-
-        if (!records) {
-            return badRequest("Nenhum registro encontrado")
-        }
-
-        const importProfile = await prismaClient.importProfile.findFirst({ where: { id: importProfileId } })
-
-        if (!importProfile) {
-            return badRequest("Nenhum tipo de importação encontrado")
-        }
-
-
         const [err, result] = await tryit(
-            prismaClient.importData.create({
+            prismaClient.importSession.create({
                 data: {
                     importProfileId: importProfileId,
                     description: values.description as string,
                     createdAt: new Date().toISOString(),
-                    ImportDataRecord: { create: records }
+                    ImportSessionRecord: { create: records }
                 },
             })
         )
@@ -67,13 +67,38 @@ export async function action({ request }: LoaderFunctionArgs) {
         })
     }
 
+    if (_action === "import-bank-statement") {
+        const recordsShouldBeImported = jsonParse(values.data as string)
+
+        if (!recordsShouldBeImported) {
+            return badRequest("Nenhum registro encontrado")
+        }
+
+        const [err, result] = await tryit(
+            prismaClient.importSession.create({
+                data: {
+                    importProfileId: importProfileId,
+                    description: values.description as string,
+                    createdAt: new Date().toISOString(),
+                    ImportSessionBankTransaction: { create: recordsShouldBeImported }
+                },
+            })
+        )
+
+        if (err) {
+            return badRequest(err)
+        }
+
+        return ok({ result })
+    }
+
     return null
 }
 
 export default function Importer() {
     const loaderData = useLoaderData<typeof loader>()
     const importProfiles: ImportProfile[] = loaderData.payload?.importProfiles || []
-    const [importProfileId, setImportProfileId] = useState(""); // Seleção do tipo de importação
+    const [importProfileId, setImportProfileId] = useState<ImportProfile["id"] | null>(null); // Seleção do tipo de importação
     const [fileData, setFileData] = useState<any>(null); // Armazenar o JSON do arquivo na memória
 
     const [description, setDescription] = useState("");
@@ -102,12 +127,15 @@ export default function Importer() {
         // Função para ler o arquivo como JSON
         reader.onload = (e) => {
             try {
+
+                const fileReaderResult = e.target?.result as string
+
                 setNotification({
                     status: "success",
-                    message: "Arquivo lido.",
+                    message: `Arquivo lido. ${fileReaderResult.length} registros encontrados.`,
                 });
 
-                const fileContent = jsonParse(e.target?.result as string);
+                const fileContent = jsonParse(fileReaderResult);
                 setFileData(fileContent); // Armazena o JSON no estado
             } catch (error) {
                 setNotification({
@@ -207,13 +235,12 @@ export default function Importer() {
                 </div>
                 <div className="flex flex-col gap-4">
 
-                    <Input type="file" accept=".json" onChange={handleFileUpload} />
+                    <Input type="file" accept=".json, .ofx" onChange={handleFileUpload} />
                     {fileData &&
                         <span>Numero de itens: {Object.keys(fileData).length}</span>
                     }
                     <Button onClick={submitData}
 
-                        disabled={!importProfileId || !fileData}
                     >Importar</Button>
                 </div>
             </div>

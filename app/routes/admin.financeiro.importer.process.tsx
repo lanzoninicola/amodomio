@@ -1,5 +1,5 @@
 import { LoaderFunctionArgs } from '@remix-run/node';
-import { useFetcher, useLoaderData } from '@remix-run/react';
+import { Form, useFetcher, useLoaderData } from '@remix-run/react';
 import dayjs from 'dayjs';
 import { useState } from 'react';
 import { Button } from '~/components/ui/button';
@@ -33,7 +33,7 @@ export default function BankStatementProcessPage() {
         key: "process-bank-statement",
     });
 
-    const submispanata = () => {
+    const submitData = () => {
         // setNotification({
         //     status: "submitting",
         //     message: "Transações importadas.",
@@ -48,7 +48,7 @@ export default function BankStatementProcessPage() {
 
     return (
         <div className='flex flex-col gap-4'>
-            <Button onClick={submispanata}
+            <Button onClick={submitData}
                 disabled={transactions.length === 0}
             >Indicizar</Button>
             <NotificationImporterRenderer status={notification.status} message={notification.message} />
@@ -64,13 +64,13 @@ export default function BankStatementProcessPage() {
                 </div>
 
                 {transactions.map((transaction: OfxRawTransaction, index: number) => (
-                    <div className='grid grid-cols-5  gap-1'>
+                    <Form className='grid grid-cols-5  gap-1'>
                         <span className="border p-2 text-xs">{transaction.type}</span>
                         <span className="border p-2 text-xs">{dayjs(transaction.date).format("DD/MM/YYYY")}</span>
                         <span className="border p-2 text-xs">{transaction.amount}</span>
                         <span className="border p-2 text-xs">{transaction.description}</span>
                         <div className="border p-2 text-xs">
-                            <Select name="sub-categories" required>
+                            <Select required>
                                 <SelectTrigger>
                                     <SelectValue placeholder="Selecionar..." />
                                 </SelectTrigger>
@@ -81,7 +81,7 @@ export default function BankStatementProcessPage() {
                                 </SelectContent>
                             </Select>
                         </div>
-                    </div>
+                    </Form>
                 ))}
             </div>
         </div>
