@@ -19,6 +19,12 @@ import { badRequest, ok } from "~/utils/http-response.server";
 import { jsonParse, jsonStringify } from "~/utils/json-helper";
 import tryit from "~/utils/try-it";
 
+interface ImporterNotification {
+    status: "error" | "success" | "idle"
+    message: string | undefined | null
+
+}
+
 export async function loader({ request }: LoaderFunctionArgs) {
 
     const [err, importProfiles] = await tryit(prismaClient.importProfile.findMany())
@@ -55,7 +61,14 @@ export async function action({ request }: LoaderFunctionArgs) {
                     importProfileId: importProfileId,
                     description: values.description as string,
                     createdAt: new Date().toISOString(),
-                    ImportSessionRecord: { create: records }
+                    ImportSessionRecord: {
+                        create: records.map((r: any) => {
+                            return {
+                                ...r,
+                                createdAt: new Date().toISOString()
+                            }
+                        })
+                    }
                 },
             })
         )
@@ -72,18 +85,21 @@ export async function action({ request }: LoaderFunctionArgs) {
 
     if (_action === "import-bank-statement") {
 
-        console.log({ records })
-
         const [err, result] = await tryit(
             prismaClient.importSession.create({
                 data: {
                     importProfileId: importProfileId,
                     description: values.description as string,
                     createdAt: new Date().toISOString(),
-                    ImportSessionRecordBankTransaction: { create: records }
+                    ImportSessionRecordBankTransaction: {
+                        create: records.map((r: any) => bankTransactionImporterEntity.parseOfxRawRecord(r, values.bankName as string))
+
+                    }
                 },
             })
         )
+
+        console.log({ err, result })
 
         if (err) {
             return badRequest(err)
@@ -99,9 +115,6 @@ export default function Importer() {
     const loaderData = useLoaderData<typeof loader>()
     const importProfiles: ImportProfile[] = loaderData.payload?.importProfiles || []
     const [importProfileId, setImportProfileId] = useState<ImportProfile["id"] | null>(null); // Seleção do tipo de importação
-    const [jsonContent, setJsonContent] = useState<any>(null); // Armazenar o JSON do arquivo na memória
-    const [ofxContent, setOfxContent] = useState<OfxRawTransaction[]>([]);
-
     const [description, setDescription] = useState("");
 
     const [submissionStatus, setSubmissionStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
@@ -110,134 +123,13 @@ export default function Importer() {
         message: "Aguardando arquivo",
     });
 
-    const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-        setSubmissionStatus("idle");
-        const file = event.target.files?.[0];
-
-        if (!file) {
-            setNotification({
-                status: "error",
-                message: "Nenhum arquivo selecionado.",
-            });
-            return
-        }
-
-        setNotification("Arquivo selecionado.");
-
-        const importProfile = importProfiles.find((profile) => profile.id === importProfileId);
-
-        if (!importProfile) {
-            setNotification({
-                status: "error",
-                message: "Nenhum tipo de importação selecionado.",
-            });
-            return;
-        }
-
-        if (importProfile.ofx === true) {
-            handleOfxFileUpload(file);
-        } else {
-            handleJsonFileUpload(file);
-        }
-    }
-
-    const handleJsonFileUpload = (file: File) => {
-        const reader = new FileReader();
-        // Função para ler o arquivo como JSON
-        reader.onload = (e) => {
-            try {
-                const fileReaderResult = e.target?.result as string
-
-                setNotification({
-                    status: "success",
-                    message: `Arquivo lido. ${fileReaderResult.length} registros encontrados.`,
-                });
-
-                const fileContentParsed = jsonParse(fileReaderResult);
-                setJsonContent(fileContentParsed);
-            } catch (error) {
-                setNotification({
-                    status: "error",
-                    message: "Erro ao processar o arquivo.",
-                });
-            }
-        };
-
-        reader.readAsText(file); // Lê o arquivo como texto
-    };
-
-    const handleOfxFileUpload = async (file: File) => {
-        const fileText = await file.text();
-
-        const [err, result] = OfxParser.getTransactions(fileText);
-
-        if (err) {
-            setNotification({
-                status: "error",
-                message: err.message,
-            });
-            return;
-        }
-
-        if (!result) {
-            setNotification({
-                status: "error",
-                message: "Nenhum arquivo encontrado.",
-            });
-            return;
-        }
-
-        setOfxContent(result);
-        setNotification({
-            status: "success",
-            message: `Arquivo lido. ${result.length} transações encontradas.`,
-        });
-
-    };
-
-    const fetcher = useFetcher({
-        key: "importer",
-    });
-
-    const submitData = () => {
-        const importProfile = importProfiles.find(importProfile => importProfile.id === importProfileId)
-        if (importProfile?.ofx === true) {
-            submitOfx()
-        } else {
-            submitJson()
-        }
-    }
-
-    const submitJson = () => {
-
-        setSubmissionStatus("loading");
-
-        let records = [] as any[]
-        if (jsonContent) {
-            records = Object.values(jsonContent)
-        }
-        fetcher.submit({
-            data: jsonStringify(records) as string,
-            importProfileId: importProfileId,
-            description: description,
-            _action: "import",
-        }, { method: "post" });
-    }
-
-    const submitOfx = () => {
-        setSubmissionStatus("loading");
-
-        fetcher.submit({
-            data: jsonStringify(ofxContent) as string,
-            importProfileId: importProfileId,
-            description: description,
-            _action: "import-bank-statement",
-        }, { method: "post" });
-    }
+    const importProfile = importProfiles.find((importProfile) => importProfileId === importProfile.id)
 
     const actionData = useActionData<typeof action>()
     const status = actionData?.status
     const message = actionData?.message
+
+    console.log({ actionData })
 
     if (status && status === 200) {
         setSubmissionStatus("success");
@@ -301,26 +193,227 @@ export default function Importer() {
                         )
                     }>{notification.message}</span>
                 </div>
-                <div className="flex flex-col gap-4">
 
-                    <Input type="file" accept=".json, .ofx" onChange={handleFileUpload} />
-                    {jsonContent &&
-                        <span>Numero de itens: {Object.keys(jsonContent).length}</span>
-                    }
-                    <Button onClick={submitData}
-                        className={
-                            cn(
-                                "w-full",
-                                submissionStatus === "loading" && "cursor-wait"
-                            )
-                        }
-                        disabled={submissionStatus === "loading"}
-                    >{
-                            submissionStatus === "loading" ? "Importando..." : "Importar"
-                        }</Button>
-                </div>
+                {
+                    importProfile?.ofx === true ?
+                        <OfxImporter
+                            importProfileId={importProfileId}
+                            description={description}
+                            setNotification={setNotification} submisionStatus={submissionStatus} setSubmissionStatus={setSubmissionStatus} />
+                        : <JsonImporter
+                            importProfileId={importProfileId}
+                            description={description}
+                            setNotification={setNotification} submisionStatus={submissionStatus} setSubmissionStatus={setSubmissionStatus} />
+                }
+
             </div>
         </div>
     )
 }
 
+
+
+interface ImporterChildrenProps {
+    importProfileId: ImportProfile["id"] | null
+    description: string
+    setNotification: (notification: ImporterNotification) => void
+    submisionStatus: "idle" | "loading" | "success" | "error"
+    setSubmissionStatus: (status: "idle" | "loading" | "success" | "error") => void
+}
+
+function JsonImporter({ importProfileId, description, setNotification, submisionStatus, setSubmissionStatus }: ImporterChildrenProps) {
+    const [fileContent, setFileContent] = useState<any>(null); // Armazenar o JSON do arquivo na memória
+
+    const fetcher = useFetcher({
+        key: "json-importer",
+    });
+
+    const submit = () => {
+        setSubmissionStatus("loading");
+
+        let records = [] as any[]
+
+        if (fileContent) {
+            records = Object.values(fileContent)
+        }
+
+        fetcher.submit({
+            data: jsonStringify(records) as string,
+            importProfileId: importProfileId,
+            description: description,
+            _action: "import",
+        }, { method: "post" });
+    }
+
+
+
+    const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+        setSubmissionStatus("idle");
+        const file = event.target.files?.[0];
+
+        if (!file) {
+            setNotification({
+                status: "error",
+                message: "Nenhum arquivo selecionado.",
+            });
+            return
+        }
+
+        setNotification({
+            status: "success",
+            message: "Aguardando arquivo",
+        });
+
+        const reader = new FileReader();
+        // Função para ler o arquivo como JSON
+        reader.onload = (e) => {
+            try {
+                const fileReaderResult = e.target?.result as string
+
+                setNotification({
+                    status: "success",
+                    message: `Arquivo lido. ${fileReaderResult.length} registros encontrados.`,
+                });
+
+                const fileContentParsed = jsonParse(fileReaderResult);
+                setFileContent(fileContentParsed);
+            } catch (error) {
+                setNotification({
+                    status: "error",
+                    message: "Erro ao processar o arquivo.",
+                });
+            }
+        };
+
+        reader.readAsText(file); // Lê o arquivo como texto
+    };
+
+
+    return (
+        <FormImporter
+            type="json"
+            handleFileUpload={handleFileUpload} submit={submit} submissionStatus={submisionStatus} />
+    )
+
+}
+
+function OfxImporter({ importProfileId, description, setNotification, submisionStatus, setSubmissionStatus }: ImporterChildrenProps) {
+    const [fileContent, setFileContent] = useState<OfxRawTransaction[]>([]);
+    const [bankName, setBankName] = useState("SICREDI");
+
+    const fetcher = useFetcher({
+        key: "ofx-importer",
+    });
+
+    const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        setSubmissionStatus("idle");
+        const file = event.target.files?.[0];
+
+        if (!file) {
+            setNotification({
+                status: "error",
+                message: "Nenhum arquivo selecionado.",
+            });
+            return
+        }
+
+        const fileText = await file.text();
+
+        const [err, result] = OfxParser.getTransactions(fileText);
+
+        if (err) {
+            setNotification({
+                status: "error",
+                message: err.message,
+            });
+            return;
+        }
+
+        if (!result) {
+            setNotification({
+                status: "error",
+                message: "Nenhum arquivo encontrado.",
+            });
+            return;
+        }
+
+        setFileContent(result);
+        setNotification({
+            status: "success",
+            message: `Arquivo lido. ${result.length} transações encontradas.`,
+        });
+
+    };
+
+    const submit = () => {
+        setSubmissionStatus("loading");
+
+        fetcher.submit({
+            data: jsonStringify(fileContent) as string,
+            importProfileId: importProfileId,
+            description: description,
+            bankName: bankName,
+            _action: "import-bank-statement",
+        }, { method: "post" });
+    }
+
+    return (
+        <div className="flex flex-col gap-4">
+            <div className="grid grid-cols-8 items-center">
+                <Label htmlFor="bankName" className="col-span-1 font-semibold">Banco</Label>
+                <Select required onValueChange={setBankName} defaultValue={bankName} >
+                    <SelectTrigger className="col-span-4" >
+                        <SelectValue placeholder="Selecionar..." />
+                    </SelectTrigger>
+                    <SelectContent id="bankName" >
+                        <SelectGroup >
+                            <SelectItem key={'SICREDI'} value={'SICREDI'} >
+                                SICREDI
+                            </SelectItem>
+                            <SelectItem key={'PAGBANK'} value={'PAGBANK'} >
+                                PAGBANK
+                            </SelectItem>
+                            <SelectItem key={'BRADESCO'} value={'BRADESCO'} >
+                                BRADESCO
+                            </SelectItem>
+                        </SelectGroup>
+                    </SelectContent>
+                </Select>
+            </div>
+            <FormImporter
+                type="ofx"
+                handleFileUpload={handleFileUpload} submit={submit} submissionStatus={submisionStatus} />
+        </div>
+
+    )
+}
+
+interface FormImporterProps {
+    type: 'json' | 'ofx'
+    submissionStatus: "idle" | "loading" | "success" | "error";
+    handleFileUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
+    submit: () => void;
+}
+
+function FormImporter({ type = 'json', handleFileUpload, submit, submissionStatus }: FormImporterProps) {
+    return (
+        <div className="flex flex-col gap-4">
+
+            <Input type="file" accept={
+                type === "json" ? ".json" : ".ofx"
+            } onChange={handleFileUpload} />
+
+            <Button onClick={submit}
+                className={
+                    cn(
+                        "w-full",
+                        submissionStatus === "loading" && "cursor-wait"
+                    )
+                }
+                disabled={submissionStatus === "loading"}
+            >{
+                    submissionStatus === "loading" ? "Importando..." : "Importar"
+                }</Button>
+        </div>
+    )
+}

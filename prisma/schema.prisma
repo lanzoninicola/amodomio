@@ -358,6 +358,7 @@ model ImportSessionRecordBankTransaction {
   date            DateTime
   amount          Float
   description     String
+  bankName        String        @map("bank_name")
   createdAt       DateTime      @map("created_at")
   updatedAt       DateTime      @default(now()) @updatedAt @map("updated_at")
 
@@ -370,6 +371,7 @@ model BankTransaction {
   date               DateTime
   amount             Float
   description        String
+  bankName           String   @map("bank_name")
   hashRecord         String   @map("hash_record")
   /// esse é o ID que será chave para vincular a uma conta contabil
   hashTransactionRef String   @map("hash_transaction_ref")
