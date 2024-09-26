@@ -325,16 +325,16 @@ model ImportProfile {
 }
 
 model ImportSession {
-  id                           String                         @id @default(uuid())
-  ImportProfile                ImportProfile?                 @relation(fields: [importProfileId], references: [id])
-  importProfileId              String?                        @map("import_profile_id")
-  description                  String?
-  transformed                  Boolean                        @default(false)
-  loaded                       Boolean                        @default(false)
-  createdAt                    DateTime                       @map("created_at")
-  updatedAt                    DateTime                       @default(now()) @updatedAt @map("updated_at")
-  ImportSessionRecord          ImportSessionRecord[]
-  ImportSessionBankTransaction ImportSessionBankTransaction[]
+  id                                 String                               @id @default(uuid())
+  ImportProfile                      ImportProfile?                       @relation(fields: [importProfileId], references: [id])
+  importProfileId                    String?                              @map("import_profile_id")
+  description                        String?
+  transformed                        Boolean                              @default(false)
+  loaded                             Boolean                              @default(false)
+  createdAt                          DateTime                             @map("created_at")
+  updatedAt                          DateTime                             @default(now()) @updatedAt @map("updated_at")
+  ImportSessionRecord                ImportSessionRecord[]
+  ImportSessionRecordBankTransaction ImportSessionRecordBankTransaction[]
 
   @@map("import_sessions")
 }
@@ -350,7 +350,7 @@ model ImportSessionRecord {
   @@map("import_sessions_records")
 }
 
-model ImportSessionBankTransaction {
+model ImportSessionRecordBankTransaction {
   id              String        @id @default(uuid())
   importSessionId String        @map("import_session_id")
   importSession   ImportSession @relation(fields: [importSessionId], references: [id])
@@ -361,7 +361,7 @@ model ImportSessionBankTransaction {
   createdAt       DateTime      @map("created_at")
   updatedAt       DateTime      @default(now()) @updatedAt @map("updated_at")
 
-  @@map("import_sessions_banks_transactions")
+  @@map("import_sessions_records_banks_transactions")
 }
 
 model BankTransaction {

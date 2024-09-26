@@ -1,7 +1,9 @@
 import { ImportProfile } from "@prisma/client";
 import { LoaderFunctionArgs } from "@remix-run/node";
 import { Form, useActionData, useFetcher, useLoaderData } from "@remix-run/react";
+import { set } from "date-fns";
 import { useState } from "react";
+import { a } from "vitest/dist/suite-BWgaIsVn.js";
 import Container from "~/components/layout/container/container";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -10,6 +12,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { Textarea } from "~/components/ui/textarea";
 import { toast } from "~/components/ui/use-toast";
 import { bankTransactionImporterEntity } from "~/domain/importer/bank-transaction-importer.entity.server";
+import { OfxParser, OfxRawTransaction } from "~/domain/importer/ofx-parser";
 import prismaClient from "~/lib/prisma/client.server";
 import { cn } from "~/lib/utils";
 import { badRequest, ok } from "~/utils/http-response.server";
@@ -42,7 +45,7 @@ export async function action({ request }: LoaderFunctionArgs) {
     const importProfile = await prismaClient.importProfile.findFirst({ where: { id: importProfileId } })
 
     if (!importProfile) {
-        return badRequest("Nenhum tipo de importação encontrado")
+        return badRequest("Nenhum tipo de importação selecionado")
     }
 
     if (_action === "import") {
@@ -68,11 +71,8 @@ export async function action({ request }: LoaderFunctionArgs) {
     }
 
     if (_action === "import-bank-statement") {
-        const recordsShouldBeImported = jsonParse(values.data as string)
 
-        if (!recordsShouldBeImported) {
-            return badRequest("Nenhum registro encontrado")
-        }
+        console.log({ records })
 
         const [err, result] = await tryit(
             prismaClient.importSession.create({
@@ -80,7 +80,7 @@ export async function action({ request }: LoaderFunctionArgs) {
                     importProfileId: importProfileId,
                     description: values.description as string,
                     createdAt: new Date().toISOString(),
-                    ImportSessionBankTransaction: { create: recordsShouldBeImported }
+                    ImportSessionRecordBankTransaction: { create: records }
                 },
             })
         )
@@ -99,19 +99,20 @@ export default function Importer() {
     const loaderData = useLoaderData<typeof loader>()
     const importProfiles: ImportProfile[] = loaderData.payload?.importProfiles || []
     const [importProfileId, setImportProfileId] = useState<ImportProfile["id"] | null>(null); // Seleção do tipo de importação
-    const [fileData, setFileData] = useState<any>(null); // Armazenar o JSON do arquivo na memória
+    const [jsonContent, setJsonContent] = useState<any>(null); // Armazenar o JSON do arquivo na memória
+    const [ofxContent, setOfxContent] = useState<OfxRawTransaction[]>([]);
 
     const [description, setDescription] = useState("");
 
+    const [submissionStatus, setSubmissionStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
     const [notification, setNotification] = useState<any>({
         status: "idle",
         message: "Aguardando arquivo",
     });
 
     const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+        setSubmissionStatus("idle");
         const file = event.target.files?.[0];
-        console.log({ file })
-
 
         if (!file) {
             setNotification({
@@ -121,13 +122,30 @@ export default function Importer() {
             return
         }
 
-
         setNotification("Arquivo selecionado.");
+
+        const importProfile = importProfiles.find((profile) => profile.id === importProfileId);
+
+        if (!importProfile) {
+            setNotification({
+                status: "error",
+                message: "Nenhum tipo de importação selecionado.",
+            });
+            return;
+        }
+
+        if (importProfile.ofx === true) {
+            handleOfxFileUpload(file);
+        } else {
+            handleJsonFileUpload(file);
+        }
+    }
+
+    const handleJsonFileUpload = (file: File) => {
         const reader = new FileReader();
         // Função para ler o arquivo como JSON
         reader.onload = (e) => {
             try {
-
                 const fileReaderResult = e.target?.result as string
 
                 setNotification({
@@ -135,17 +153,45 @@ export default function Importer() {
                     message: `Arquivo lido. ${fileReaderResult.length} registros encontrados.`,
                 });
 
-                const fileContent = jsonParse(fileReaderResult);
-                setFileData(fileContent); // Armazena o JSON no estado
+                const fileContentParsed = jsonParse(fileReaderResult);
+                setJsonContent(fileContentParsed);
             } catch (error) {
                 setNotification({
                     status: "error",
-                    message: "Erro ao processar o arquivo JSON.",
+                    message: "Erro ao processar o arquivo.",
                 });
             }
         };
 
         reader.readAsText(file); // Lê o arquivo como texto
+    };
+
+    const handleOfxFileUpload = async (file: File) => {
+        const fileText = await file.text();
+
+        const [err, result] = OfxParser.getTransactions(fileText);
+
+        if (err) {
+            setNotification({
+                status: "error",
+                message: err.message,
+            });
+            return;
+        }
+
+        if (!result) {
+            setNotification({
+                status: "error",
+                message: "Nenhum arquivo encontrado.",
+            });
+            return;
+        }
+
+        setOfxContent(result);
+        setNotification({
+            status: "success",
+            message: `Arquivo lido. ${result.length} transações encontradas.`,
+        });
 
     };
 
@@ -154,13 +200,22 @@ export default function Importer() {
     });
 
     const submitData = () => {
+        const importProfile = importProfiles.find(importProfile => importProfile.id === importProfileId)
+        if (importProfile?.ofx === true) {
+            submitOfx()
+        } else {
+            submitJson()
+        }
+    }
+
+    const submitJson = () => {
+
+        setSubmissionStatus("loading");
 
         let records = [] as any[]
-
-        if (fileData) {
-            records = Object.values(fileData)
+        if (jsonContent) {
+            records = Object.values(jsonContent)
         }
-
         fetcher.submit({
             data: jsonStringify(records) as string,
             importProfileId: importProfileId,
@@ -169,11 +224,23 @@ export default function Importer() {
         }, { method: "post" });
     }
 
+    const submitOfx = () => {
+        setSubmissionStatus("loading");
+
+        fetcher.submit({
+            data: jsonStringify(ofxContent) as string,
+            importProfileId: importProfileId,
+            description: description,
+            _action: "import-bank-statement",
+        }, { method: "post" });
+    }
+
     const actionData = useActionData<typeof action>()
     const status = actionData?.status
     const message = actionData?.message
 
     if (status && status === 200) {
+        setSubmissionStatus("success");
         toast({
             title: "OK",
             description: message,
@@ -181,6 +248,7 @@ export default function Importer() {
     }
 
     if (status && status !== 200) {
+        setSubmissionStatus("success");
         toast({
             title: "Erro",
             description: message,
@@ -236,14 +304,23 @@ export default function Importer() {
                 <div className="flex flex-col gap-4">
 
                     <Input type="file" accept=".json, .ofx" onChange={handleFileUpload} />
-                    {fileData &&
-                        <span>Numero de itens: {Object.keys(fileData).length}</span>
+                    {jsonContent &&
+                        <span>Numero de itens: {Object.keys(jsonContent).length}</span>
                     }
                     <Button onClick={submitData}
-
-                    >Importar</Button>
+                        className={
+                            cn(
+                                "w-full",
+                                submissionStatus === "loading" && "cursor-wait"
+                            )
+                        }
+                        disabled={submissionStatus === "loading"}
+                    >{
+                            submissionStatus === "loading" ? "Importando..." : "Importar"
+                        }</Button>
                 </div>
             </div>
         </div>
     )
 }
+
