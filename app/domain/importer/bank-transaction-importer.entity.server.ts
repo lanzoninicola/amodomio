@@ -23,6 +23,35 @@ class BankTransactionImporterEntity {
     this.client = client;
   }
 
+  async findAllSessions() {
+    return await this.client.importSession.findMany({
+      where: {
+        ImportProfile: {
+          ofx: {
+            equals: true,
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+      include: {
+        ImportSessionRecordBankTransaction: true,
+        ImportProfile: true,
+      },
+    });
+  }
+
+  async findBySessionId(sessionId: string) {
+    return await this.client.importSession.findFirst({
+      where: {
+        id: sessionId,
+      },
+      include: {
+        ImportSessionRecordBankTransaction: true,
+        ImportProfile: true,
+      },
+    });
+  }
+
   parseOfxRawRecord(
     rawRecord: any,
     bankName: string

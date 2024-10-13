@@ -1,166 +1,90 @@
-import React, { useState } from 'react';
-import { Dialog, DialogContent, DialogTrigger } from '~/components/ui/dialog';
-import { Input } from '~/components/ui/input';
-import { OfxParser, OfxRawTransaction } from '~/domain/importer/ofx-parser';
-import { NotificationImporterRenderer, IImporterNotification } from '~/domain/importer/components/notification-importer-rendered';
-import { Button } from '~/components/ui/button';
-import { Link, redirect, useActionData, useFetcher } from '@remix-run/react';
-import { jsonParse, jsonStringify } from '~/utils/json-helper';
+import { Suspense } from 'react';
+import { OfxRawTransaction } from '~/domain/importer/ofx-parser';
+import { Await, Link, defer, useLoaderData } from '@remix-run/react';
 import { LoaderFunctionArgs } from '@remix-run/node';
-import { HttpResponse, badRequest, ok } from '~/utils/http-response.server';
-import { prismaIt } from '~/lib/prisma/prisma-it.server';
 import { bankTransactionImporterEntity } from '~/domain/importer/bank-transaction-importer.entity.server';
-import { toast } from '~/components/ui/use-toast';
+import { ImportSession } from '@prisma/client';
+import dayjs from 'dayjs';
+import { Button } from '~/components/ui/button';
 
 
+
+export async function loader({ request }: LoaderFunctionArgs) {
+
+    const importSessions = bankTransactionImporterEntity.findAllSessions();
+
+    return defer({ importSessions })
+}
 
 export async function action({ request }: LoaderFunctionArgs) {
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);
-
-    if (_action === "import-bank-statement") {
-        const recordsShouldBeImported = jsonParse(values.data as string)
-
-        if (!recordsShouldBeImported) {
-            return badRequest("Nenhum registro encontrado")
-        }
-
-        const [err, result] = await prismaIt(bankTransactionImporterEntity.importMany(recordsShouldBeImported))
-
-        if (err) {
-            return badRequest(err)
-        }
-
-        return redirect("process")
-    }
-
     return null
 }
 
 export default function BankStatementIndexPage() {
-    const [transactions, setTransactions] = useState<OfxRawTransaction[]>([]);
-
-    const [notification, setNotification] = useState<IImporterNotification>({
-        status: "idle",
-        message: "Aguardando arquivo",
-    });
-    const [parseErrorTagsRendered, setParseErrorTagsRendered] = useState<string[]>([]);
-
-
-    const fetcher = useFetcher({
-        key: "import-bank-statement",
-    });
-
-    const actionData = fetcher.data as any
-
-    if (actionData && actionData.status > 399) {
-        toast({
-            title: "Erro",
-            description: actionData.message,
-            variant: "destructive",
-        })
-    }
-
-
-
-    const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        if (!file) return;
-
-        const fileText = await file.text();
-
-        const [err, result] = OfxParser.getTransactions(fileText);
-
-        if (err) {
-            setNotification({
-                status: "error",
-                message: err.message,
-            });
-            return;
-        }
-
-        if (!result) {
-            setNotification({
-                status: "error",
-                message: "Nenhum arquivo encontrado.",
-            });
-            return;
-        }
-
-        setTransactions(result);
-        setNotification({
-            status: "success",
-            message: `Arquivo lido. ${result.length} transações encontradas.`,
-        });
-
-    };
-
-
-
-    const submitData = () => {
-        setNotification({
-            status: "submitting",
-            message: "Importando transações.",
-        })
-        fetcher.submit({
-            data: jsonStringify(transactions) as string,
-            _action: "import-bank-statement",
-        }, { method: "post" })
-    }
-
+    const { importSessions } = useLoaderData<typeof loader>();
 
 
     return (
-        <div className="flex flex-col gap-4">
-            <h3 className="text-4xl text-muted-foreground mb-6 text-center">
-                Importar arquivo OFX
-            </h3>
-            <div className="flex flex-col mx-48 ">
 
-                <Input
-                    type="file"
-                    accept=".ofx"
-                    onChange={handleFileUpload}
-                    className='mb-4'
-                />
-                <Button onClick={submitData}
-                    className='mb-4'
-                    disabled={transactions.length === 0 || notification.status === "submitting"}
-                >Importar</Button>
-                <div className="flex flex-col">
-                    {parseErrorTagsRendered.length > 0 && (
-                        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative font-mono text-xs" role="alert">
-                            <strong className="font-bold">Atenção!</strong>
-                            <ul>
-                                {parseErrorTagsRendered.map((tag, index) => (
-                                    <li key={index}>{tag}</li>
-                                ))}
-                            </ul>
+        <Suspense fallback={<span>Carregando...</span>}>
+
+            <Await resolve={importSessions}>
+                {(is) => {
+
+                    // @ts-ignore
+                    return <ImportSessionsList importSessions={is ?? []} />
+                }}
+            </Await>
+        </Suspense>
+    )
+}
+
+
+function ImportSessionsList({ importSessions }: { importSessions: ImportSession[] }) {
+
+    console.log({ importSessions })
+
+    if (importSessions.length === 0) {
+        return <p className="text-sm text-muted-foreground">Nenhuma sessão encontrada.</p>;
+    }
+
+    return (
+        <ul className='flex flex-col gap-4'>
+
+            {importSessions.map((importSession, index) => {
+                return (
+                    <li key={index}>
+                        <div className='rounded-lg border grid grid-cols-3 items-center gap-4 p-4'>
+                            <div className='flex flex-col'>
+                                {/* @ts-ignore */}
+                                <span className='font-semibold text-sm'>{importSession.ImportProfile.name}</span>
+                                <span className='text-xs text-muted-foreground'>{importSession.id}</span>
+                            </div>
+                            <div className='flex flex-col'>
+                                {/* @ts-ignore */}
+                                <p className='text-sm'>Registros importados: <span className='font-semibold text-sm'>{importSession.ImportSessionRecordBankTransaction.length}</span></p>
+                                <p className='text-sm'>Em data: <span className='font-semibold text-sm'>{dayjs(importSession.createdAt).format("DD/MM/YYYY HH:mm")}</span></p>
+                            </div>
+                            <div className='flex justify-end'>
+
+                                <Link to={importSession.id}>
+                                    <Button>
+                                        <span className='text-xs font-semibold uppercase tracking-wider'>Visualizar</span>
+                                    </Button>
+                                </Link>
+                            </div>
+
+
                         </div>
-                    )}
-                </div>
-                <div className='flex justify-between items-center mb-36'>
-                    <NotificationImporterRenderer status={notification.status} message={notification.message} />
-                    <div className="flex flex-col gap-4">
+                    </li>
+                )
+            })}
 
-                        <Dialog >
-                            <DialogTrigger asChild className="w-full">
-                                <span className='text-sm underline cursor-pointer'>
-                                    Mostrar transações
-                                </span>
-                            </DialogTrigger>
-                            <DialogContent>
-                                <TransactionsList transactions={transactions} />
-                            </DialogContent>
-                        </Dialog>
-                    </div>
-                </div>
-            </div >
+        </ul>
+    )
 
-
-
-        </div>
-    );
 }
 
 function TransactionsList({ transactions }: { transactions: OfxRawTransaction[] }) {

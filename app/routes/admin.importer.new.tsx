@@ -99,8 +99,6 @@ export async function action({ request }: LoaderFunctionArgs) {
             })
         )
 
-        console.log({ err, result })
-
         if (err) {
             return badRequest(err)
         }
