@@ -41,6 +41,12 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
           items: [],
           disabled: false,
         },
+        {
+          title: "Importador",
+          href: "/admin/financeiro/importer",
+          items: [],
+          disabled: false,
+        },
       ],
     },
     {

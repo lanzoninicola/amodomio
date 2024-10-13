@@ -1,37 +1,19 @@
 import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { badRequest, ok } from "~/utils/http-response.server";
 import { LoaderFunctionArgs } from "@remix-run/node";
-import { useLoaderData } from "@remix-run/react";
+import { useLoaderData, useOutletContext } from "@remix-run/react";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { Separator } from "~/components/ui/separator";
+import { GerenciamentoCardapioOutletContext } from "./admin.gerenciamento.cardapio";
 
-export async function loader({ request }: LoaderFunctionArgs) {
-    const env = process.env?.NODE_ENV
-
-    // @ts-ignore
-    const [errItems, items] = await prismaIt(menuItemPrismaEntity.findAll({
-        where: {
-            visible: true
-        },
-        option: {
-            sorted: true,
-            direction: "asc"
-        },
-        mock: env === "development"
-    }))
-
-    if (errItems) {
-        return badRequest(errItems)
-    }
-
-    return ok({ items })
-
-}
 
 export default function GerenciamentoCardapioExport() {
 
-    const loaderData = useLoaderData<typeof loader>()
-    const items = loaderData?.payload.items as MenuItemWithAssociations[] || []
+
+    const outletContext = useOutletContext<GerenciamentoCardapioOutletContext>()
+
+    const allItems = outletContext?.items || []
+    const items = allItems.filter(i => i.visible === true)
 
     const sortedArray = items.sort((a, b) => a.name.localeCompare(b.name));
     const half = Math.ceil(sortedArray.length / 2);
@@ -53,13 +35,16 @@ export default function GerenciamentoCardapioExport() {
                 <div key={index} className="py-2">
                     {isFirstOfLetter &&
                         <>
-                            <div className="text-2xl font-bold">{firstLetter}</div>
-                            <Separator className="mb-2 bg-black" />
+                            <div className="flex items-center gap-x-2 border-b border-b-black mb-4" >
+                                <span className="text-md">{`#`}</span>
+                                <span className="text-2xl font-semibold">{firstLetter}</span>
+                            </div>
+
                         </>
                     }
 
-                    <div className="ml-2 font-semibold text-[.85rem] uppercase mb-[0.05rem]">{item.name}</div>
-                    <div className="ml-2 text-lg leading-tight">{item.ingredients}</div>
+                    <div className="ml-2 font-semibold text-[1.15rem] uppercase font-mono leading-none">{item.name}</div>
+                    <div className="ml-2 text-lg leading-tight font-mono tracking-tight">{item.ingredients}</div>
                 </div>
             );
         });

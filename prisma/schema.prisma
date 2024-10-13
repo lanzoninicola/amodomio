@@ -309,3 +309,101 @@ model Session {
 
   @@map("sessions")
 }
+
+model ImportProfile {
+  id            String          @id @default(uuid())
+  name          String
+  description   String?
+  table         String
+  domainClass   String?         @map("domain_class")
+  ofx           Boolean         @default(false)
+  createdAt     DateTime        @map("created_at")
+  updatedAt     DateTime        @default(now()) @updatedAt @map("updated_at")
+  ImportSession ImportSession[]
+
+  @@map("import_profiles")
+}
+
+model ImportSession {
+  id                                 String                               @id @default(uuid())
+  ImportProfile                      ImportProfile?                       @relation(fields: [importProfileId], references: [id])
+  importProfileId                    String?                              @map("import_profile_id")
+  description                        String?
+  transformed                        Boolean                              @default(false)
+  loaded                             Boolean                              @default(false)
+  createdAt                          DateTime                             @map("created_at")
+  updatedAt                          DateTime                             @default(now()) @updatedAt @map("updated_at")
+  ImportSessionRecord                ImportSessionRecord[]
+  ImportSessionRecordBankTransaction ImportSessionRecordBankTransaction[]
+
+  @@map("import_sessions")
+}
+
+model ImportSessionRecord {
+  id              String        @id @default(uuid())
+  importSessionId String        @map("import_session_id")
+  importSession   ImportSession @relation(fields: [importSessionId], references: [id])
+  data            Json // Armazena os dados de cada linha do arquivo como JSON
+  createdAt       DateTime      @map("created_at")
+  updatedAt       DateTime      @default(now()) @updatedAt @map("updated_at")
+
+  @@map("import_sessions_records")
+}
+
+model ImportSessionRecordBankTransaction {
+  id              String        @id @default(uuid())
+  importSessionId String        @map("import_session_id")
+  importSession   ImportSession @relation(fields: [importSessionId], references: [id])
+  type            String
+  date            DateTime
+  amount          Float
+  description     String
+  bankName        String        @map("bank_name")
+  createdAt       DateTime      @map("created_at")
+  updatedAt       DateTime      @default(now()) @updatedAt @map("updated_at")
+
+  @@map("import_sessions_records_banks_transactions")
+}
+
+model BankTransaction {
+  id                 String   @id @default(uuid())
+  type               String
+  date               DateTime
+  amount             Float
+  description        String
+  bankName           String   @map("bank_name")
+  hashRecord         String   @map("hash_record")
+  /// esse é o ID que será chave para vincular a uma conta contabil
+  hashTransactionRef String   @map("hash_transaction_ref")
+  day                Int
+  month              Int
+  year               Int
+  createdAt          DateTime @map("created_at")
+  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("banks_transactions")
+}
+
+model HashTransactionRefFinanceAccount {
+  id                 String          @id @default(uuid())
+  hashTransactionRef String          @map("hash_transaction_ref")
+  financeAccountId   String?         @map("finance_account_id")
+  financeAccount     FinanceAccount? @relation(fields: [financeAccountId], references: [id])
+
+  createdAt DateTime @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("hash_transaction_refs_finance_accounts")
+}
+
+model FinanceAccount {
+  id    String @id @default(uuid())
+  name  String
+  group String
+
+  createdAt                        DateTime                           @map("created_at")
+  updatedAt                        DateTime                           @default(now()) @updatedAt @map("updated_at")
+  HashTransactionRefFinanceAccount HashTransactionRefFinanceAccount[]
+
+  @@map("finance_accounts")
+}

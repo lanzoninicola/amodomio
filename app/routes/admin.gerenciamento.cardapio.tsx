@@ -1,7 +1,7 @@
 import { scale } from "@cloudinary/url-gen/actions/resize";
 import { MenuItemTag } from "@prisma/client";
 import { LoaderFunctionArgs } from "@remix-run/node";
-import { Link, Outlet, MetaFunction, useLoaderData } from "@remix-run/react";
+import { Link, Outlet, MetaFunction, useLoaderData, useResolvedPath, useParams, useLocation } from "@remix-run/react";
 import Container from "~/components/layout/container/container";
 import { toast } from "~/components/ui/use-toast";
 import { menuItemTagPrismaEntity } from "~/domain/cardapio/menu-item-tags.prisma.entity.server";
@@ -10,8 +10,15 @@ import { categoryPrismaEntity } from "~/domain/category/category.entity.server";
 import { Category } from "~/domain/category/category.model.server";
 import { prismaAll } from "~/lib/prisma/prisma-all.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
+import { cn } from "~/lib/utils";
 import { badRequest, ok } from "~/utils/http-response.server";
 import { lastUrlSegment } from "~/utils/url";
+
+export interface GerenciamentoCardapioOutletContext {
+    categories: Category[],
+    items: MenuItemWithAssociations[],
+    tags: MenuItemTag[],
+}
 
 export const meta: MetaFunction = () => {
     return [
@@ -24,14 +31,20 @@ export const meta: MetaFunction = () => {
 };
 
 
-
 export async function loader({ request }: LoaderFunctionArgs) {
 
     const [categories, items, tags] = await prismaAll([
         categoryPrismaEntity.findAll(),
-        menuItemPrismaEntity.findAll({}, {
+        menuItemPrismaEntity.findAll({
+            option: {
+                sorted: true,
+                direction: "asc"
+            }
+        }, {
             imageTransform: true,
-            imageScaleWidth: 64
+            imageScaleWidth: 64,
+
+
         }),
         menuItemTagPrismaEntity.findAll()
     ])
@@ -69,9 +82,19 @@ export default function AdminCardapioOutlet() {
         })
     }
 
+    const location = useLocation()
+    console.log({ location })
+
+    const isExportPage = location?.pathname === "/admin/gerenciamento/cardapio/export-wall"
+
     return (
         <Container className="mb-24">
-            <div className="w-full p-6 bg-muted mb-8 rounded-lg" >
+            <div className={
+                cn(
+                    "w-full p-6 bg-muted mb-8 rounded-lg",
+                    isExportPage && "hidden",
+                )
+            } >
                 <div className="flex justify-between mb-4 items-start">
                     <div className="flex flex-col gap-4">
                         <h1 className="font-bold text-xl">Cardapio</h1>
@@ -79,6 +102,11 @@ export default function AdminCardapioOutlet() {
                             <Link to="new" className="py-2 px-4 rounded-md bg-black">
                                 <span className=" text-white font-semibold">
                                     Novo item
+                                </span>
+                            </Link>
+                            <Link to="/admin/gerenciamento/cardapio/export-wall" className="py-2 px-4 rounded-md border border-black">
+                                <span className="font-semibold">
+                                    Imprimir para a parede
                                 </span>
                             </Link>
                         </div>
