@@ -41,7 +41,6 @@ export async function action({ request }: LoaderFunctionArgs) {
             ingredients: values.ingredients as string,
             description: values?.description as string || "",
             visible: values?.visible === "on" ? true : false,
-            imageBase64: values.imageBase64 as string || "",
             basePriceAmount: values?.basePriceAmount ? parseFloat(values.basePriceAmount as string) : 0,
             mogoId: values?.mogoId as string || "",
             createdAt: new Date().toISOString(),
