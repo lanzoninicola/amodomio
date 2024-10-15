@@ -118,7 +118,7 @@ function CardapioHeader() {
 
 
     return (
-        <header className="fixed top-0 w-full z-50 md:max-w-2xl md:-translate-x-1/2 md:left-1/2" >
+        <header className="fixed top-0 w-full z-50 md:max-w-2xl md:-translate-x-1/2 md:left-1/2 h-[80px]" >
             <div className="flex flex-col bg-white px-4 pt-2 py-1">
                 <div className="grid grid-cols-3 items-center w-full">
                     {/* <div className="flex gap-1 items-center" onClick={() => setShowSearch(!showSearch)}>
