@@ -149,8 +149,8 @@ function CardapioHeader() {
                     </WebsiteNavigationSidebar>
 
                     <Link to={GLOBAL_LINKS.cardapioPublic.href} className="flex justify-center">
-                        <div className="bg-black px-4 -py-3">
-                            <Logo color={"white"} className="w-[90px] h-[30px]" tagline={false} onlyText />
+                        <div className="px-4 -py-3">
+                            <Logo color="black" className="w-[90px] h-[30px]" tagline={false} />
                         </div>
                     </Link>
                     <Link to={'buscar'} className="flex justify-end">
