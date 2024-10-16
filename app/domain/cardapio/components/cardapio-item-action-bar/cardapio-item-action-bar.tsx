@@ -57,10 +57,10 @@ export default function CardapioItemActionBar({ item }: { item: MenuItemWithAsso
 
 
     return (
-        <div className="flex flex-col gap-0">
-            <div className="grid grid-cols-2 font-body-website px-4 mb-1">
+        <div className="flex flex-col gap-0 my-2">
+            <div className="grid grid-cols-2 font-body-website">
                 <div className="flex items-center">
-                    <div className="flex flex-col gap-1 cursor-pointer p-2 active:bg-brand-blue/50" onClick={likingIt}>
+                    <div className="flex flex-col gap-1 cursor-pointer p-2 active:bg-black/50" onClick={likingIt}>
                         <Heart
                             className={cn(
                                 likeIt ? "fill-red-500" : "fill-none",
@@ -69,7 +69,7 @@ export default function CardapioItemActionBar({ item }: { item: MenuItemWithAsso
                             )}
                         />
                     </div>
-                    <div className="flex flex-col gap-1 cursor-pointer p-2 active:bg-brand-blue/50 " onClick={shareIt}>
+                    <div className="flex flex-col gap-1 cursor-pointer p-2 active:bg-black/50 " onClick={shareIt}>
                         <Share2 />
                     </div>
                 </div>
@@ -78,19 +78,19 @@ export default function CardapioItemActionBar({ item }: { item: MenuItemWithAsso
                     phoneNumber="46991272525"
                     ariaLabel="Envia uma mensagem com WhatsApp"
                     message={"Olá, gostaria fazer um pedido"}
-                    className="flex flex-col gap-1 items-end cursor-pointer p-2 active:bg-brand-blue/50"
+                    className="flex flex-col gap-1 items-end cursor-pointer p-2 active:bg-black/50"
                 >
                     <WhatsAppIcon color="black" />
                 </WhatsappExternalLink>
             </div>
             {likesAmount === 0 && (
                 <div className="flex items-center gap-1">
-                    <span className="text-sm font-body-website tracking-tight pl-4">Seja o primeiro! Curte com </span>
+                    <span className="text-sm font-body-website tracking-widest font-semibold uppercase">Seja o primeiro! Curte com </span>
                     <Heart size={14} />
                 </div>
             )}
 
-            <span className="text-xs font-semibold font-body-website tracking-tight px-4 text-red-500">
+            <span className="text-sm font-body-website tracking-widest font-semibold uppercase pl-1 text-red-500">
                 {likesAmount > 0 && `${likesAmount} curtidas`}
 
             </span>

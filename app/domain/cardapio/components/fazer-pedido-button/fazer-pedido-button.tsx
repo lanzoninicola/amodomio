@@ -31,8 +31,8 @@ export default function FazerPedidoButton({ cnLabel, variant = "primary" }: Faze
         <div className={
             cn(
                 "w-full font-body-website rounded-sm shadow-md",
-                variant === 'primary' && 'bg-brand-blue text-white',
-                variant === 'secondary' && 'bg-white text-brand-blue',
+                variant === 'primary' && 'bg-black text-white',
+                variant === 'secondary' && 'bg-white text-black',
             )
         }
             style={style}

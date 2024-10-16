@@ -113,13 +113,9 @@ export default function CardapioWeb() {
 function CardapioHeader() {
     const [showSearch, setShowSearch] = useState(false)
 
-    const brandColors = useBrandColors()
-
-
-
     return (
-        <header className="fixed top-0 w-screen z-50 md:max-w-2xl md:-translate-x-1/2 md:left-1/2" >
-            <div className="flex flex-col bg-white px-4 pt-2 py-1">
+        <header className="fixed top-0 w-full z-50 md:max-w-2xl md:-translate-x-1/2 md:left-1/2 " >
+            <div className="flex flex-col bg-white px-4 pt-2 py-3 h-[50px]">
                 <div className="grid grid-cols-3 items-center w-full">
                     {/* <div className="flex gap-1 items-center" onClick={() => setShowSearch(!showSearch)}>
                         <HamburgerMenuIcon className="w-6 h-6" />
@@ -131,32 +127,35 @@ function CardapioHeader() {
                         navigationLinks={PUBLIC_WEBSITE_NAVIGATION_ITEMS}
                         buttonTrigger={{
                             label: "",
-                            classNameLabel: "block font-body-website text-[10px] font-semibold  uppercase text-brand-blue",
+                            classNameLabel: "block font-body-website text-[10px] font-semibold uppercase",
                             classNameButton: "justify-start w-full h-full",
-                            colorIcon: brandColors.brand.blue,
                         }}
+                        cnLink="font-body-website text-xl uppercase tracking-widest"
+
                     >
                         <div className="flex flex-col justify-center mb-2 font-body-website">
-                            <p className=" font-semibold text-sm leading-relaxed">Hórarios de funcionamento</p>
+                            <p className=" font-semibold text-xl leading-relaxed uppercase tracking-wide">Hórarios de funcionamento</p>
                             <div className="flex flex-col justify-center mb-4">
-                                <p className="text-muted-foreground font-body-website">Quarta - Domingo</p>
-                                <p className="text-muted-foreground font-body-website">18:00 - 22:00</p>
+                                <p className="text-muted-foreground font-body-website text-xl">Quarta - Domingo</p>
+                                <p className="text-muted-foreground font-body-website text-xl">18:00 - 22:00</p>
                             </div>
                         </div>
 
 
                         <div className="pr-4 mb-4">
-                            <FazerPedidoButton cnLabel="text-xs" />
+                            <FazerPedidoButton cnLabel="text-2xl tracking-wider" />
                         </div>
 
                     </WebsiteNavigationSidebar>
 
                     <Link to={GLOBAL_LINKS.cardapioPublic.href} className="flex justify-center">
-                        <Logo color={brandColors.brand.blue} className="w-[60px] h-[30px]" tagline={false} />
+                        <div className="bg-black px-4 -py-3">
+                            <Logo color={"white"} className="w-[90px] h-[30px]" tagline={false} onlyText />
+                        </div>
                     </Link>
                     <Link to={'buscar'} className="flex justify-end">
                         <div className="flex justify-end items-center cursor-pointer" onClick={() => setShowSearch(!showSearch)}>
-                            <SearchIcon color={brandColors.brand.blue} />
+                            <SearchIcon color={"black"} />
                             {/* <span className="font-body-website text-[10px] font-semibold  uppercase text-brand-blue">Pesquisar</span> */}
                         </div>
                     </Link>
@@ -165,12 +164,14 @@ function CardapioHeader() {
             </div>
             <ScrollingBanner
                 style={{
-                    backgroundColor: brandColors.muted.yellow,
+                    backgroundColor: "white",
+                    borderBlock: "1px solid #1B1B1B",
+                    height: "30px",
                 }}>
-                <div className="flex items-center my-2 gap-2">
+                <div className="flex items-center gap-2">
                     {/* @ts-ignore */}
                     <ItalyFlag className="w-4 h-4" />
-                    <p className="font-body-website text-[12px] uppercase leading-tight">Todas as nossas pizzas são preparadas com farinha e molho de tomate importados da Itália</p>
+                    <p className="font-body-website text-[15px] uppercase tracking-wider">Todas as nossas pizzas são preparadas com farinha e molho de tomate importados da Itália</p>
                 </div>
 
             </ScrollingBanner>
@@ -207,40 +208,43 @@ function CompanyInfo() {
 
 
     return (
-        <>
-            <section className="mt-24 px-4 mb-4">
-                <div className="flex flex-col font-body-website">
-                    <h2 className="font-semibold text-lg">A Modo Mio | Pizzeria Italiana</h2>
-                    <h3 className="text-muted-foreground">Pizza Al Taglio & Delivery</h3>
-                </div>
-
-                <div className="text-xs text-muted-foreground mb-2 font-body-website">
-                    <p>Rua Arariboia 64 - Pato Branco</p>
-                </div>
-                <div className="grid grid-cols-8 gap-x-4">
+        <section>
+            <div className="mt-20 bg-banner bg-center bg-cover bg-no-repeat min-h-[150px] mb-4 flex items-end  justify-end py-2">
+                <div className="flex justify-end gap-4 px-4">
 
                     <Link to={GLOBAL_LINKS.instagram.href} aria-label={GLOBAL_LINKS.instagram.title}
-                        className="flex items-center justify-center gap-1 rounded-lg py-1">
-                        <Instagram size={28} />
+                        className="flex items-center justify-center gap-1 rounded-full backdrop-blur-lg bg-black/30 w-[48px] h-[48px]">
+                        <Instagram size={24} color="white" />
                         {/* <span className="font-semibold tracking-wide text-[12px]">Instagram</span> */}
                     </Link>
                     <WhatsappExternalLink
                         phoneNumber="46991272525"
                         ariaLabel="Envia uma mensagem com WhatsApp"
                         message={"Olá, gostaria fazer um pedido"}
-                        className="flex items-center justify-center gap-2 rounded-lg py-1 "
+                        className="flex items-center justify-center gap-2  rounded-full backdrop-blur-lg bg-black/30 w-[48px] h-[48px]"
                     >
-                        <WhatsAppIcon color="black" height={28} width={28} />
+                        <WhatsAppIcon color="white" height={24} width={24} />
                         {/* <span className="font-semibold tracking-wide text-[12px]">WhatsApp</span> */}
                     </WhatsappExternalLink>
                     <Link to={GLOBAL_LINKS.maps.href} aria-label={GLOBAL_LINKS.maps.title}
-                        className="flex items-center justify-center gap-1 rounded-lg py-1">
-                        <MapPin size={28} />
+                        className="flex items-center justify-center gap-1 rounded-full backdrop-blur-lg bg-black/30 w-[48px] h-[48px]">
+                        <MapPin size={24} color="white" />
                         {/* <span className="font-semibold tracking-wide text-[12px]">Maps</span> */}
                     </Link>
                 </div>
-            </section>
-        </>
+            </div>
+
+            <div className="flex flex-col font-body-website items-center">
+                <h2 className="font-semibold text-2xl tracking-wide uppercase">A Modo Mio | Pizzeria Italiana</h2>
+                <h3 className="text-muted-foreground text-xl uppercase">Pizza Al Taglio & Delivery</h3>
+            </div>
+
+            <div className="text-lg text-muted-foreground mb-2 font-body-website">
+                <p className="text-center">Rua Arariboia 64 - Pato Branco</p>
+            </div>
+
+
+        </section>
 
     )
 }
@@ -259,7 +263,7 @@ function CardapioFooter() {
         }>
             <footer >
                 <div className="h-full w-full py-2 px-4 bg-white">
-                    <FazerPedidoButton variant="accent" />
+                    <FazerPedidoButton variant="accent" cnLabel="text-2xl tracking-wider" />
                 </div>
             </footer>
         </div>

@@ -6,15 +6,13 @@ import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { menuItemLikePrismaEntity } from "~/domain/cardapio/menu-item-like.prisma.entity.server";
 import { badRequest, ok } from "~/utils/http-response.server";
 import { menuItemSharePrismaEntity } from "~/domain/cardapio/menu-item-share.prisma.entity.server";
-import CardapioItemDialog from "~/domain/cardapio/components/cardapio-item-dialog/cardapio-item-dialog";
 import ItalyIngredientsStatement from "~/domain/cardapio/components/italy-ingredient-statement/italy-ingredient-statement";
 import CardapioItemActionBar from "~/domain/cardapio/components/cardapio-item-action-bar/cardapio-item-action-bar";
-import CardapioItemImage from "~/domain/cardapio/components/cardapio-item-image/cardapio-item-image";
-import CardapioItemPrice from "~/domain/cardapio/components/cardapio-item-price/cardapio-item-price";
 import { tagPrismaEntity } from "~/domain/tags/tag.prisma.entity.server";
 import Loading from "~/components/loading/loading";
 import FiltersTags from "~/domain/cardapio/components/filter-tags/filter-tags";
-import CardapioTabs from "~/domain/cardapio/components/cardapio-tabs/cardapio-tabs";
+import { cn } from "~/lib/utils";
+import capitalize from "~/utils/capitalize";
 
 export const headers: HeadersFunction = () => ({
     'Cache-Control': 's-maxage=1, stale-while-revalidate=59',
@@ -130,7 +128,7 @@ export default function CardapioWebIndex() {
 
     return (
         <section>
-            <CardapioTabs />
+
             <div className="flex flex-col">
                 {/* <Loading /> */}
                 <Suspense fallback={<Loading />}>
@@ -159,14 +157,17 @@ export default function CardapioWebIndex() {
     );
 }
 
+
+
+
 const CardapioItemList = ({ allItems }: { allItems: MenuItemWithAssociations[] }) => {
     const [searchParams] = useSearchParams();
-    let currentFilterTag = searchParams.get("tag");
+    const currentFilterTag = searchParams.get("tag");
 
     const [items, setItems] = useState<MenuItemWithAssociations[]>([]);
     const [hasMore, setHasMore] = useState(true);
-    const [isLoading, setIsLoading] = useState(false); // State to handle loading
-    const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null); // Reference to store the timeout
+    const [isLoading, setIsLoading] = useState(false);
+    const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     useEffect(() => {
         // Clear previous timeout if it exists
@@ -174,10 +175,9 @@ const CardapioItemList = ({ allItems }: { allItems: MenuItemWithAssociations[] }
             clearTimeout(loadingTimeoutRef.current);
         }
 
-        // Set loading to true initially
+        // Set loading to true and simulate a 300ms delay
         setIsLoading(true);
 
-        // Start a 300ms delay before setting the items
         loadingTimeoutRef.current = setTimeout(() => {
             const itemsFiltered = currentFilterTag
                 ? allItems.filter(i => i.tags?.public.some(t => t === currentFilterTag))
@@ -198,22 +198,28 @@ const CardapioItemList = ({ allItems }: { allItems: MenuItemWithAssociations[] }
 
     const observer = useRef<IntersectionObserver | null>(null);
 
-    const lastItemRef = useCallback((node: HTMLLIElement) => {
-        if (observer.current) observer.current.disconnect();
-        observer.current = new IntersectionObserver(entries => {
-            if (entries[0].isIntersecting && hasMore) {
-                setItems(prevItems => {
-                    const itemsFiltered = currentFilterTag
-                        ? allItems.filter(i => i.tags?.public.some(t => t === currentFilterTag))
-                        : allItems;
-                    const newItems = itemsFiltered.slice(prevItems.length, prevItems.length + 10);
-                    setHasMore(newItems.length > 0);
-                    return [...prevItems, ...newItems];
-                });
-            }
-        });
-        if (node) observer.current.observe(node);
-    }, [hasMore, allItems, currentFilterTag]);
+    const lastItemRef = useCallback(
+        (node: HTMLLIElement) => {
+            if (observer.current) observer.current.disconnect();
+
+            observer.current = new IntersectionObserver((entries) => {
+                if (entries[0].isIntersecting && hasMore) {
+                    setItems((prevItems) => {
+                        const itemsFiltered = currentFilterTag
+                            ? allItems.filter(i => i.tags?.public.some(t => t === currentFilterTag))
+                            : allItems;
+
+                        const newItems = itemsFiltered.slice(prevItems.length, prevItems.length + 10);
+                        setHasMore(newItems.length > 0);
+                        return [...prevItems, ...newItems];
+                    });
+                }
+            });
+
+            if (node) observer.current.observe(node);
+        },
+        [hasMore, allItems, currentFilterTag]
+    );
 
     if (isLoading) {
         return (
@@ -224,56 +230,115 @@ const CardapioItemList = ({ allItems }: { allItems: MenuItemWithAssociations[] }
     }
 
     return (
-        <div className="flex flex-col mt-2">
-            <ul className="flex flex-col overflow-y-auto md:overflow-y-z auto snap-mandatory">
+        <section>
+            <ul className="flex flex-col overflow-y-auto md:overflow-y-auto snap-mandatory mt-4">
                 {items.map((item, index) => {
-                    if (items.length === index + 1) {
-                        return <CardapioItem ref={lastItemRef} key={item.id} item={item} />;
-                    } else {
-                        return <CardapioItem key={item.id} item={item} />;
-                    }
+                    const isLastItem = items.length === index + 1;
+                    return (
+                        <CardapioItem
+                            ref={isLastItem ? lastItemRef : null}
+                            key={item.id}
+                            item={item}
+                        />
+                    );
                 })}
             </ul>
-        </div>
+        </section>
     );
-};
-
+}
 
 interface CardapioItemProps {
     item: MenuItemWithAssociations;
 }
 
 const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) => {
-
     const italyProduct = item.tags?.public.some(t => t.toLocaleLowerCase() === "produtos-italianos")
 
-
-
     return (
+        <li className="snap-start border-b py-2" id={item.id} ref={ref}>
+            {/* <CardapioItemDialog item={item} triggerComponent={
+            <CardapioItemImage item={item} />
+        }> */}
 
-        <li className="flex flex-col snap-start mb-4" id={item.id} ref={ref}>
-            <div className="relative mb-2">
-                <CardapioItemDialog item={item} triggerComponent={
-                    <CardapioItemImage item={item} />
-                } />
-                <div className="absolute bottom-0 inset-x-0 py-4 px-2">
-                    <CardapioItemPrice prices={item?.priceVariations} />
+
+            <div className="grid grid-cols-8 min-h-[120px] mx-4 gap-x-4">
+                <div className={
+                    cn(
+                        "flex flex-col mb-2",
+                        item.imageTransformedURL && " col-span-5",
+                        !item.imageTransformedURL && " col-span-8"
+                    )
+                }>
+                    <h3 className="font-body-website text-xl tracking-wider font-semibold uppercase mb-1">{item.name}</h3>
+                    {italyProduct && <ItalyIngredientsStatement />}
+                    <p className="leading-tighter text-[15px] mb-2">{capitalize(item.ingredients)}</p>
+                    <CardapioItemPrice prices={item?.priceVariations} cnLabel="text-black" />
+                    <CardapioItemActionBar item={item} />
                 </div>
-            </div>
-            <div className="flex flex-col px-4 mb-2">
-                <h3 className="font-body-website text-sm font-semibold uppercase mb-2 text-left">{item.name}</h3>
                 {
-                    italyProduct && <ItalyIngredientsStatement />
+                    item.imageTransformedURL &&
+                    (<div className="bg-center bg-cover bg-no-repeat col-span-3 rounded-lg h-[112px]"
+                        style={{
+                            backgroundImage: `url(${item.imageTransformedURL})`,
+                        }}>
+
+                    </div>)
                 }
-                <p className="font-body-website leading-tight text-left">{item.ingredients}</p>
+
             </div>
-            <CardapioItemActionBar item={item} />
-            {/* <Separator className="my-4" /> */}
+
+
+            {/* </CardapioItemDialog> */}
         </li>
     )
+})
+
+interface CardapioItemPriceProps {
+    prices: MenuItemWithAssociations["priceVariations"]
+    cnLabel?: string
+}
+
+function CardapioItemPrice({ prices, cnLabel }: CardapioItemPriceProps) {
+
+    const visiblePrices = prices.filter(p => p.showOnCardapio === true) || []
+    const lastIndex = visiblePrices.length - 1
+    const colsNumber = visiblePrices.length
+
+    return (
+        <div className={
+            cn(
+                "grid gap-x-2",
+                isNaN(colsNumber) ? "grid-cols-3" : `grid-cols-${colsNumber}`
+            )
+        }>
+            {
+                visiblePrices.map((p, idx) => {
+
+                    return (
+
+                        <div key={p.id} className={
+                            cn(
+                                "flex items-center gap-2",
+                                lastIndex === idx && "order-last",
+                                cnLabel
+                            )
+
+                        }>
+                            <span className="uppercase text-[12px]  text-muted-foreground">{p?.label}</span>
+                            <div className="flex items-center gap-[2px] text-muted-foreground">
+                                <span className="text-[14px]">R$</span>
+                                <span className="text-[14px]">{p?.amount}</span>
+                            </div>
+                        </div>
+                    )
 
 
-});
+                })
+            }
+
+        </div>
+    )
+}
 
 
 

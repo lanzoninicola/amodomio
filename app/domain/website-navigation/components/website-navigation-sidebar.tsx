@@ -20,6 +20,7 @@ interface WebsiteNavigationSidebarProps {
         label: string
         to: string
     }
+    cnLink?: string
     navigationLinks: Partial<WebsiteNavigationLinks>
     children?: React.ReactNode
 }
@@ -28,7 +29,8 @@ export function WebsiteNavigationSidebar({
     buttonTrigger,
     homeLink,
     navigationLinks,
-    children
+    children,
+    cnLink
 }: WebsiteNavigationSidebarProps) {
     const [open, setOpen] = React.useState(false)
 
@@ -102,6 +104,7 @@ export function WebsiteNavigationSidebar({
                                         key={item.href}
                                         to={item.href}
                                         onOpenChange={setOpen}
+                                        className={cn(cnLink)}
                                     >
                                         {item.title}
                                     </MobileLink>

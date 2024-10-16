@@ -64,7 +64,7 @@ export const links: LinksFunction = () => [
   //   rel: "stylesheet",
   // },
   {
-    href: "https://fonts.googleapis.com/css2?family=Antonio:wght@400;700&family=Inter&family=Montagu+Slab:opsz,wght@16..144,400;16..144,600;16..144,700&display=swap",
+    href: "https://fonts.googleapis.com/css2?family=Inter&family=Montagu+Slab:opsz,wght@16..144,400;16..144,600;16..144,700&display=swap",
     rel: "stylesheet",
   },
   // {

@@ -83,7 +83,7 @@ export default function AdminCardapioOutlet() {
     }
 
     const location = useLocation()
-    console.log({ location })
+    // console.log({ location })
 
     const isExportPage = location?.pathname === "/admin/gerenciamento/cardapio/export-wall"
 

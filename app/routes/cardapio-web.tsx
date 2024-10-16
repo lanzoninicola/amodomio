@@ -207,10 +207,10 @@ function CardapioHeader({ items, tags }: CardapioHeaderProps) {
                         }}
                     >
                         <div className="flex flex-col justify-center mb-4">
-                            <p className="font-body-website font-semibold text-sm leading-relaxed">Hórarios de funcionamento</p>
+                            <p className="font-body-website font-semibold text-lg leading-relaxed">Hórarios de funcionamento</p>
                             <div className="flex flex-col justify-center mb-4">
-                                <p className="text-muted-foreground font-body-website">Quarta - Domingo</p>
-                                <p className="text-muted-foreground font-body-website">18:00 - 22:00</p>
+                                <p className="text-muted-foreground font-body-website text-lg ">Quarta - Domingo</p>
+                                <p className="text-muted-foreground font-body-website text-lg ">18:00 - 22:00</p>
                             </div>
                         </div>
 
