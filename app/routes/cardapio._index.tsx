@@ -231,7 +231,7 @@ const CardapioItemList = ({ allItems }: { allItems: MenuItemWithAssociations[] }
 
     return (
         <section>
-            <ul className="flex flex-col overflow-y-auto md:overflow-y-auto snap-mandatory mt-4">
+            <ul className="flex flex-col overflow-y-auto md:overflow-y-auto snap-mandatory mt-4 md:grid md:grid-cols-2 md:gap-x-4">
                 {items.map((item, index) => {
                     const isLastItem = items.length === index + 1;
                     return (
