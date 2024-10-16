@@ -32,19 +32,17 @@ export default function BadgeTag({ tag, tagColor = true, actionName, classNameCo
 
 
     return (
-        <Badge className={cn("cursor-pointer", classNameContainer)} {...props}>
-            <div className="flex gap-3"
-                onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
-                <span className={
-                    cn(
-                        tag.colorHEX || "text-white",
-                        classNameLabel
-                    )
-                }>{tag.name}</span>
-                {isHovered && <button type="submit" name="_action" value={actionName}>
-                    <X size={12} />
-                </button>}
-            </div>
-        </Badge>
+        <div className={cn("cursor-pointer, flex, gap-3", classNameContainer)} {...props}
+            onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
+            <span className={
+                cn(
+                    tag.colorHEX || "text-white",
+                    classNameLabel
+                )
+            }>{tag.name}</span>
+            {/* {isHovered && <button type="submit" name="_action" value={actionName}>
+                <X size={12} />
+            </button>} */}
+        </div>
     )
 }

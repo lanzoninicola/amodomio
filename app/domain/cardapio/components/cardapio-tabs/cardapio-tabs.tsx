@@ -18,7 +18,7 @@ export default function CardapioTabs() {
             } >
                 <div className="flex flex-col justify-center items-center gap-1">
                     <LayoutTemplate />
-                    {location.pathname === "/cardapio" && <div className="rounded-lg w-3 h-1 bg-brand-blue"></div>}
+                    {location.pathname === "/cardapio" && <div className="rounded-lg w-3 h-1 bg-black"></div>}
                 </div>
             </Link>
             <Link to={"/cardapio/list"} className={
@@ -30,7 +30,7 @@ export default function CardapioTabs() {
             } >
                 <div className="flex flex-col justify-center items-center gap-1">
                     <LayoutList />
-                    {location.pathname === "/cardapio/list" && <div className="rounded-lg w-3 h-1 bg-brand-blue"></div>}
+                    {location.pathname === "/cardapio/list" && <div className="rounded-lg w-3 h-1 bg-black"></div>}
                 </div>
             </Link>
         </div>
