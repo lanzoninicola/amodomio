@@ -63,7 +63,7 @@ interface WebsiteCardHeaderProps {
 function WebsiteCardHeader({ children }: WebsiteCardHeaderProps) {
     return (
 
-        <header>
+        <header className="h-[90px]">
             <div className="grid grid-cols-4 items-center font-body-website p-4">
                 <Logo color="black" className="w-[45px]" tagline={false} />
                 <div className="flex flex-col col-span-2 ">
