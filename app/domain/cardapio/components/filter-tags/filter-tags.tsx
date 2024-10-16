@@ -1,6 +1,6 @@
 import { Tag } from "@prisma/client"
 import { Link, useSearchParams } from "@remix-run/react"
-import { Filter } from "lucide-react"
+import { Filter, FilterIcon } from "lucide-react"
 import { Badge } from "~/components/ui/badge"
 import BadgeTag from "~/domain/tags/components/badge-tag"
 import { cn } from "~/lib/utils"
@@ -14,39 +14,32 @@ export default function FiltersTags({ tags, showBanner = false }: { tags: Tag[],
 
         <div className="bg-white sticky top-20 z-10">
             <div className="flex items-center">
-                <p className="text-xs font-body-website font-semibold min-w-[70px] pl-2">Filtrar por:</p>
+                {/* <p className="font-body-website font-semibold min-w-[70px] pl-2">Filtrar por:</p> */}
+                <FilterIcon className="w-4 h-4 mx-2" />
                 <div className="w-full overflow-x-auto pr-2" >
 
-                    <ul className="py-3 px-2" style={{
+                    <ul className="pt-4 pb-6 px-2" style={{
                         display: "-webkit-inline-box"
                     }}>
-                        <Link to={`/cardapio`} className="text-xs font-body-website font-semibold uppercase text-muted-foreground">
-                            <Badge className={
+                        <Link to={`/cardapio`} className="font-lg tracking-wider font-body-website font-semibold uppercase text-muted-foreground">
+                            <span className={
                                 cn(
-                                    "border border-brand-blue text-brand-blue font-semibold bg-white scale-100 py-1 text-[10px]",
-                                    tagFilter === null && "bg-brand-blue text-white scale-110"
+                                    "text-muted-foreground py-2",
+                                    tagFilter === null && "text-black border border-b-black border-b-2 border-t-0 border-r-0 border-l-0"
                                 )
-                            }>Todos</Badge>
+                            }>Todos</span>
                         </Link>
                         {tags.map((tag) => (
-                            <li key={tag.id} className="ml-2">
-                                <Link to={`?tag=${tag.name}`} className="text-xs font-body-website font-semibold uppercase text-muted-foreground">
+                            <li key={tag.id} className="ml-3">
+                                <Link to={`?tag=${tag.name}`} className="font-lg tracking-wider font-body-website font-semibold uppercase text-muted-foreground">
                                     <BadgeTag tag={tag}
                                         classNameLabel={
                                             cn(
-                                                "text-[10px] text-brand-blue",
-                                                tagFilter === tag.name && "text-white"
+                                                "text-muted-foreground py-2",
+                                                tagFilter === tag.name && "text-black border border-b-black border-b-2 border-t-0 border-r-0 border-l-0"
                                             )
                                         } tagColor={false}
-                                        classNameContainer={
-                                            cn(
-                                                "bg-none border border-brand-blue",
-                                                tagFilter === tag.name && "bg-brand-blue",
-                                                tagFilter === tag.name && " scale-110",
-                                                "active:bg-brand-blue active:text-white"
-
-                                            )
-                                        } />
+                                    />
                                 </Link>
                             </li>
                         ))}

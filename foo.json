@@ -1,0 +1,152 @@
+{
+    "0": {
+        "Qtde": "5",
+        "Produto": "Aguá Mineral Com Gás 500ml",
+        "Valor Médio": "3,00",
+        "Valor Total": "15,00",
+        "SubGrupo": "AGUAS",
+        "Grupo": "BEBIDAS",
+        "IdProd": "57",
+        "Combo": ""
+    },
+    "1": {
+        "Qtde": "1",
+        "Produto": "Aguá Mineral Sem Gas 500ml",
+        "Valor Médio": "3,00",
+        "Valor Total": "3,00",
+        "SubGrupo": "AGUAS",
+        "Grupo": "BEBIDAS",
+        "IdProd": "56",
+        "Combo": ""
+    },
+    "2": {
+        "Qtde": "1",
+        "Produto": "Agua para produção de massa de pizza",
+        "Valor Médio": "99,90",
+        "Valor Total": "99,90",
+        "SubGrupo": "",
+        "Grupo": "",
+        "IdProd": "71",
+        "Combo": ""
+    },
+    "3": {
+        "Qtde": "1",
+        "Produto": "Agua Saborizada 500 ml",
+        "Valor Médio": "3,50",
+        "Valor Total": "3,50",
+        "SubGrupo": "AGUAS",
+        "Grupo": "BEBIDAS",
+        "IdProd": "144",
+        "Combo": ""
+    },
+    "4": {
+        "Qtde": "3",
+        "Produto": "Cerveja Original Garrafa 600 ml",
+        "Valor Médio": "13,50",
+        "Valor Total": "40,50",
+        "SubGrupo": "CERVEJAS",
+        "Grupo": "BEBIDAS",
+        "IdProd": "139",
+        "Combo": ""
+    },
+    "5": {
+        "Qtde": "2",
+        "Produto": "Coca Cola 1 LT",
+        "Valor Médio": "8,50",
+        "Valor Total": "17,00",
+        "SubGrupo": "COCA COLA",
+        "Grupo": "BEBIDAS",
+        "IdProd": "59",
+        "Combo": ""
+    },
+    "6": {
+        "Qtde": "18",
+        "Produto": "Coca Cola 2L",
+        "Valor Médio": "11,89",
+        "Valor Total": "214,00",
+        "SubGrupo": "COCA COLA",
+        "Grupo": "BEBIDAS",
+        "IdProd": "1",
+        "Combo": ""
+    },
+    "7": {
+        "Qtde": "14",
+        "Produto": "Coca Cola 600 ml",
+        "Valor Médio": "6,50",
+        "Valor Total": "91,00",
+        "SubGrupo": "COCA COLA",
+        "Grupo": "BEBIDAS",
+        "IdProd": "186",
+        "Combo": ""
+    },
+    "8": {
+        "Qtde": "4",
+        "Produto": "Coca Cola Lata 350 ml",
+        "Valor Médio": "5,50",
+        "Valor Total": "22,00",
+        "SubGrupo": "COCA COLA",
+        "Grupo": "BEBIDAS",
+        "IdProd": "58",
+        "Combo": ""
+    },
+    "9": {
+        "Qtde": "8",
+        "Produto": "Coca Cola Zero Lata 350 ml",
+        "Valor Médio": "5,50",
+        "Valor Total": "44,00",
+        "SubGrupo": "COCA COLA",
+        "Grupo": "BEBIDAS",
+        "IdProd": "149",
+        "Combo": ""
+    },
+    "10": {
+        "Qtde": "1",
+        "Produto": "Coca Zero 1 lt",
+        "Valor Médio": "8,50",
+        "Valor Total": "8,50",
+        "SubGrupo": "COCA COLA",
+        "Grupo": "BEBIDAS",
+        "IdProd": "205",
+        "Combo": ""
+    },
+    "11": {
+        "Qtde": "19",
+        "Produto": "Coca Zero 600 ml",
+        "Valor Médio": "6,50",
+        "Valor Total": "123,50",
+        "SubGrupo": "COCA COLA",
+        "Grupo": "BEBIDAS",
+        "IdProd": "206",
+        "Combo": ""
+    },
+    "12": {
+        "Qtde": "1",
+        "Produto": "Energético Furioso",
+        "Valor Médio": "6,99",
+        "Valor Total": "6,99",
+        "SubGrupo": "ENERGETICOS",
+        "Grupo": "BEBIDAS",
+        "IdProd": "147",
+        "Combo": ""
+    },
+    "13": {
+        "Qtde": "1",
+        "Produto": "Fanta Laranja 2 LT",
+        "Valor Médio": "12,00",
+        "Valor Total": "12,00",
+        "SubGrupo": "REFRIGERANTE",
+        "Grupo": "BEBIDAS",
+        "IdProd": "62",
+        "Combo": ""
+    },
+    "14": {
+        "Qtde": "1",
+        "Produto": "Guaraná 2l",
+        "Valor Médio": "12,00",
+        "Valor Total": "12,00",
+        "SubGrupo": "REFRIGERANTE",
+        "Grupo": "BEBIDAS",
+        "IdProd": "61",
+        "Combo": ""
+    }
+}

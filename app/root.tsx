@@ -64,7 +64,7 @@ export const links: LinksFunction = () => [
   //   rel: "stylesheet",
   // },
   {
-    href: "https://fonts.googleapis.com/css2?family=Antonio:wght@400;700&family=Inter&family=Montagu+Slab:opsz,wght@16..144,400;16..144,600;16..144,700&display=swap",
+    href: "https://fonts.googleapis.com/css2?family=Inter&family=Montagu+Slab:opsz,wght@16..144,400;16..144,600;16..144,700&display=swap",
     rel: "stylesheet",
   },
   // {
@@ -144,7 +144,7 @@ export default function App() {
     <html lang="pt-br" className="scroll-smooth">
       <head>
         <meta charSet="utf-8" />
-        <meta name="viewport" content="width=device-width,initial-scale=1" />
+        <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
         <Meta />
         <Links />
         {ENV.GTM_ID !== "" && <GoogleTagManagerScriptTag id={ENV.GTM_ID} />}

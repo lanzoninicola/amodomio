@@ -6,7 +6,7 @@ const ItalyIngredientsStatement = () => {
             <div className="flex self-start ">
                 <ItalyFlag width={24} />
             </div>
-            <p className="font-body-website leading-tight text-muted-foreground text-xs">Este sabor contém ingredientes adicionais importados da Itália.</p>
+            <p className="font-body-website leading-tight text-muted-foreground ">Este sabor contém ingredientes adicionais importados da Itália.</p>
         </div>
     )
 }

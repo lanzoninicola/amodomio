@@ -1,5 +1,5 @@
 import { ChevronsUpDown, PlusCircle } from "lucide-react"
-import { useState } from "react"
+import React from "react"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "~/components/ui/accordion"
 import { Button } from "~/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "~/components/ui/collapsible"
@@ -12,7 +12,7 @@ interface FolderProps {
 }
 
 export default function Folder({ title, children, onClick }: FolderProps) {
-    const [isOpen, setIsOpen] = useState(false)
+    const [isOpen, setIsOpen] = React.useState(false)
 
     let buttonProps = {}
     if (isOpen === false && onClick) {
