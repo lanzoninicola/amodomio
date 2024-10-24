@@ -8,6 +8,7 @@ import Logo from "~/components/primitives/logo/logo";
 import WhatsappExternalLink from "~/components/primitives/whatsapp/whatsapp-external-link";
 import WhatsAppIcon from "~/components/primitives/whatsapp/whatsapp-icon";
 import { Separator } from "~/components/ui/separator";
+import FazerPedidoButton from "~/domain/cardapio/components/fazer-pedido-button/fazer-pedido-button";
 import { cn } from "~/lib/utils";
 
 // https://smart-pizza-marketing.framer.ai/
@@ -23,7 +24,7 @@ export default function HomePage() {
                     <header>
                         <WebsiteCardHeader />
                         <div className="p-4 ">
-                            <p className="font-body-website leading-tight max-w-prose">A verdadeira pizza italiana<br /> em Pato Branco feita <br /> das mãos de um italiano.</p>
+                            <p className="font-body-website leading-tight max-w-prose text-3xl ">A autentica pizza italiana<br /> em Pato Branco feita <br /> das mãos de um italiano.</p>
                         </div>
                     </header>
                     <div className="bg-hero bg-center bg-cover bg-no-repeat"></div>
@@ -41,7 +42,7 @@ export default function HomePage() {
                         </WebsiteCardHeader>
 
                         <div className="p-4 ">
-                            <p className="font-body-website leading-tight text-lg max-w-prose">A verdadeira pizza italiana<br /> em Pato Branco feita <br /> das mãos de um italiano.</p>
+                            <p className="font-body-website leading-tight max-w-prose text-3xl ">A autentica pizza italiana<br /> em Pato Branco feita <br /> das mãos de um italiano.</p>
                         </div>
 
                         <WebsiteCardFooter />
@@ -63,25 +64,21 @@ interface WebsiteCardHeaderProps {
 function WebsiteCardHeader({ children }: WebsiteCardHeaderProps) {
     return (
 
-        <header>
-            <div className="grid grid-cols-4 items-center font-body-website p-4">
-                <Logo color="black" className="w-[45px]" tagline={false} />
-                <div className="flex flex-col col-span-2 ">
-                    <h1 className="text-sm font-bold leading-none tracking-tight">A Modo Mio</h1>
-                    <h2 className="text-xs tracking-tight">La vera pizza italiana</h2>
-
+        <>
+            <div className="flex justify-between items-center font-body-website p-4">
+                <div className="-py-3 col-span-2">
+                    <Logo color="black" className="w-[90px] h-[30px] md:w-[150px] md:h-[50px]" tagline={false} />
                 </div>
-
                 <ExternalLink
                     to="https://www.instagram.com/amodomiopb"
                     ariaLabel="Instagram"
                     className="flex justify-self-end"
                 >
-                    <Instagram className="justify-self-end" />
+                    <Instagram className="justify-self-end " />
                 </ExternalLink>
             </div>
             {children}
-        </header>
+        </>
     )
 }
 
@@ -91,12 +88,13 @@ function WebsiteCardFooter() {
             <WebsiteActionBar />
             <Separator className="my-4" />
             <div className="px-4 w-full">
-                <ExternalLink to="https://app.mogomenu.com.br/amodomio"
+                {/* <ExternalLink to="https://app.mogomenu.com.br/amodomio"
                     ariaLabel="Cardápio digital pizzaria A Modo Mio"
                     className="grid place-items-center font-body-website text-lg rounded-xl bg-brand-green py-1"
                 >
                     <span className="uppercase tracking-wide font-semibold">Fazer pedido</span>
-                </ExternalLink>
+                </ExternalLink> */}
+                <FazerPedidoButton cnLabel="text-2xl tracking-wider" variant="accent" />
             </div>
         </footer>
     )

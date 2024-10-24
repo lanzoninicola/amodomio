@@ -93,7 +93,7 @@ export default function CardapioWeb() {
     return (
         <>
             <CardapioHeader />
-            <div className="md:m-auto md:max-w-2xl">
+            <div className="md:m-auto md:max-w-6xl">
                 {currentPage !== "busca" && <CompanyInfo />}
 
                 {/* <Featured /> */}
@@ -114,8 +114,8 @@ function CardapioHeader() {
     const [showSearch, setShowSearch] = useState(false)
 
     return (
-        <header className="fixed top-0 w-full z-50 md:max-w-2xl md:-translate-x-1/2 md:left-1/2 " >
-            <div className="flex flex-col bg-white px-4 pt-2 py-3 h-[50px]">
+        <header className="fixed top-0 w-full z-50 md:max-w-6xl md:-translate-x-1/2 md:left-1/2 " >
+            <div className="flex flex-col bg-white px-4 pt-2 py-3 h-[50px] md:h-[70px]">
                 <div className="grid grid-cols-3 items-center w-full">
                     {/* <div className="flex gap-1 items-center" onClick={() => setShowSearch(!showSearch)}>
                         <HamburgerMenuIcon className="w-6 h-6" />
@@ -150,7 +150,7 @@ function CardapioHeader() {
 
                     <Link to={GLOBAL_LINKS.cardapioPublic.href} className="flex justify-center">
                         <div className="px-4 -py-3">
-                            <Logo color="black" className="w-[90px] h-[30px]" tagline={false} />
+                            <Logo color="black" className="w-[90px] h-[30px] md:w-[150px] md:h-[50px]" tagline={false} />
                         </div>
                     </Link>
                     <Link to={'buscar'} className="flex justify-end">
@@ -163,15 +163,14 @@ function CardapioHeader() {
 
             </div>
             <ScrollingBanner
-                style={{
-                    backgroundColor: "white",
-                    borderBlock: "1px solid #1B1B1B",
-                    height: "30px",
-                }}>
-                <div className="flex items-center gap-2">
+                cnContainer="h-[30px] md:h-[40px] bg-white border-b border-t border-solid border-black flex"
+            >
+                <div className="flex items-center gap-2 justify-center">
                     {/* @ts-ignore */}
-                    <ItalyFlag className="w-4 h-4" />
-                    <p className="font-body-website text-[15px] uppercase tracking-wider">Todas as nossas pizzas são preparadas com farinha e molho de tomate importados da Itália</p>
+                    <ItalyFlag className="w-4 h-4 md:w-6 md:h-6" />
+                    <p className="font-body-website text-[15px] uppercase tracking-wider md:text-lg">
+                        Todas as nossas pizzas são preparadas com farinha e molho de tomate importados da Itália
+                    </p>
                 </div>
 
             </ScrollingBanner>
@@ -193,7 +192,7 @@ const ScrollingBanner = ({ children, cnContainer, style }: { children?: ReactNod
             style={style}
         >
             <div
-                className="inline-block text-center px-10 text-lg font-semibold text-black animate-scrollingText whitespace-nowrap"
+                className="text-center px-10 text-lg font-semibold text-black animate-scrollingText whitespace-nowrap flex"
             >
                 {children}
             </div>
@@ -209,7 +208,7 @@ function CompanyInfo() {
 
     return (
         <section>
-            <div className="mt-20 bg-banner bg-center bg-cover bg-no-repeat min-h-[150px] mb-4 flex items-end  justify-end py-2">
+            <div className="mt-20 md:mt-28 bg-banner md:bg-banner-md bg-center bg-cover bg-no-repeat min-h-[150px] mb-4 flex items-end justify-end py-2">
                 <div className="flex justify-end gap-4 px-4">
 
                     <Link to={GLOBAL_LINKS.instagram.href} aria-label={GLOBAL_LINKS.instagram.title}
@@ -258,7 +257,7 @@ function CardapioFooter() {
     return (
         <div className={
             cn(
-                "fixed bottom-0 w-screen md:max-w-2xl md:-translate-x-1/2 md:left-1/2 ",
+                "fixed bottom-0 w-screen md:max-w-6xl md:-translate-x-1/2 md:left-1/2 ",
             )
         }>
             <footer >

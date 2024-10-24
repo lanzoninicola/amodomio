@@ -71,7 +71,7 @@ export default function CardapioSearch() {
                 <Suspense fallback={<Loading />}>
 
                     <div className="flex flex-col gap-2">
-                        <span className="font-semibold font-body-website">Explorar por</span>
+                        <span className="font-semibold font-body-website text-md md:text-lg">Explorar por</span>
                         <Await resolve={tags}>
                             {(tags) => {
                                 // @ts-ignore
@@ -117,7 +117,7 @@ function SearchFiltersTags({ tags, setSearchedTerm }: {
 
                 return (
                     <div key={tag.id} className="bg-black p-2 rounded-md flex items-center cursor-pointer" onClick={() => setSearchedTerm(tag.name)}>
-                        <span className="font-body-website text-md tracking-wider font-semibold uppercase text-white">{capitalize(tag.name)}</span>
+                        <span className="font-body-website text-md lg:text-lg text-white uppercase tracking-wide font-semibold">{capitalize(tag.name)}</span>
                     </div>
                 )
             })}
@@ -172,10 +172,10 @@ function SearchItemsInput({ items, currentItems, setCurrentItems, searchedTerm, 
     }, [searchedTerm])
 
     return (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2 md:mt-12">
             <Input
                 ref={inputRef}
-                placeholder="Digitar 'abobrinha' ou 'vegetarianas'" className="font-body-website text-lg tracking-wider h-8" onChange={handleSearch}
+                placeholder="Digitar 'abobrinha' ou 'vegetarianas'" className="font-body-website text-sm h-8" onChange={handleSearch}
                 defaultValue={searchedTerm}
 
             />
@@ -187,7 +187,7 @@ function SearchItemsInput({ items, currentItems, setCurrentItems, searchedTerm, 
             <div className="bg-slate-200 rounded-md p-2 mb-2">
                 <div className="flex items-center gap-2">
                     <AlertTriangle />
-                    <p className="text-sm font-body-website">Dica: você pode buscar por ingrediente, nome da pizza ou por etiqueta (ex. vegetariana, carne)</p>
+                    <p className="text-xs font-body-website">Dica: você pode buscar por ingrediente, nome da pizza ou por etiqueta (ex. vegetariana, carne)</p>
                 </div>
             </div>
         </div>
@@ -202,36 +202,34 @@ function FoundedItems({ items }: {
 }) {
 
     return (
-        <div className="flex flex-col md:w-[450px]">
-            <div className=" flex flex-col py-3">
+        <div className="max-h-[400px] overflow-y-auto">
 
                 <div className="max-h-[400px] overflow-y-auto">
-                    <span className="text-sm font-body-website mb-4">Resultados:</span>
+                    <span className="text-xs font-body-website mb-4">Resultados:</span>
                     <ul className="flex flex-col gap-2">
                         {items.map((item) => (
                             <FadeIn key={item.id}>
                                 <CardapioItemDialog item={item} triggerComponent={
 
-                                    <li className="grid grid-cols-8 py-1" >
+                                <li className="grid grid-cols-8 py-1" >
 
                                         <div className="self-start bg-center bg-cover bg-no-repeat w-8 h-8 rounded-lg col-span-1 "
                                             style={{
                                                 backgroundImage: `url(${item.MenuItemImage?.thumbnailUrl || "/images/cardapio-web-app/placeholder.png"})`,
                                             }}></div>
                                         <div className="flex flex-col col-span-7">
-                                            <span className="font-body-website  font-semibold leading-tight uppercase text-left">{item.name}</span>
-                                            <span className="font-body-website leading-tight text-left tracking-wide">{item.ingredients}</span>
+                                            <span className="font-body-website text-[0.85rem] font-semibold leading-tight uppercase text-left">{item.name}</span>
+                                            <span className="font-body-website text-[0.85rem] leading-tight text-left">{item.ingredients}</span>
                                         </div>
 
-                                    </li>
-                                } />
-                            </FadeIn>
+                                </li>
+                            } />
+                        </FadeIn>
 
-                        ))}
-                    </ul>
-                </div>
+                    ))}
+                </ul>
             </div>
-
         </div>
+
     )
 }

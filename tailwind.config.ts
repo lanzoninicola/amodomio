@@ -145,6 +145,7 @@ module.exports = {
       backgroundImage: {
         hero: "url('/images/hero-image.jpg')",
         banner: "url('/images/cardapio-web-app/banner.jpg')",
+        "banner-md": "url('/images/cardapio-web-app/banner-md.jpg')",
       },
     },
   },

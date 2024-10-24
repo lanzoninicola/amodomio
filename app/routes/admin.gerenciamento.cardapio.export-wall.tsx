@@ -33,18 +33,18 @@ export default function GerenciamentoCardapioExport() {
 
             return (
                 <div key={index} className="py-2">
-                    {isFirstOfLetter &&
-                        <>
-                            <div className="flex items-center gap-x-2 border-b border-b-black mb-4" >
-                                <span className="text-md">{`#`}</span>
-                                <span className="text-2xl font-semibold">{firstLetter}</span>
-                            </div>
-
-                        </>
-                    }
-
-                    <div className="ml-2 font-semibold text-[1.15rem] uppercase font-mono leading-none">{item.name}</div>
-                    <div className="ml-2 text-lg leading-tight font-mono tracking-tight">{item.ingredients}</div>
+                    {isFirstOfLetter && (
+                        <div className="flex items-center gap-x-2 bg-orange-200 mb-3 py-1 px-4">
+                            <span className="text-md">{`#`}</span>
+                            <span className="text-2xl font-semibold">{firstLetter}</span>
+                        </div>
+                    )}
+                    <div className="ml-2 font-semibold text-xl uppercase font-mono leading-none bg-red-50 py-2 px-1 mb-1">
+                        {item.name}
+                    </div>
+                    <div className="ml-2 text-xl leading-tight font-mono tracking-tight">
+                        {item.ingredients}
+                    </div>
                 </div>
             );
         });

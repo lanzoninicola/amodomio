@@ -85,7 +85,7 @@ export default function AdminCardapioOutlet() {
     const location = useLocation()
     // console.log({ location })
 
-    const isExportPage = location?.pathname === "/admin/gerenciamento/cardapio/export-wall"
+    const isExportPage = location?.pathname === "/admin/gerenciamento/cardapio/export-wall" || location?.pathname === "/admin/gerenciamento/cardapio/export-wall-two"
 
     return (
         <Container className="mb-24">
