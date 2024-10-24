@@ -81,7 +81,10 @@ export default function MenuItemList({ initialItems, action }: MenuItemListProps
                         onClick={() => setDragEnabled(!dragEnable)}
                     >{dragEnable === true ? 'Desabilitar ordernamento' : 'Abilitar ordenamento'}</span>
                 </div>
-                <div className="items-center mb-2 col-span-6" >
+                <div className="items-center mb-2 col-span-2">
+                    <span>Sabores publicados {items.filter(item => item?.visible).length}</span>
+                </div>
+                <div className="items-center mb-2 col-span-4" >
                     <Input name="search" className="w-full" placeholder="Pesquisar..." onChange={(e) => handleSearch(e)} value={search} />
                 </div>
             </div>

@@ -175,7 +175,7 @@ function SearchItemsInput({ items, currentItems, setCurrentItems, searchedTerm, 
         <div className="flex flex-col gap-2 md:mt-12">
             <Input
                 ref={inputRef}
-                placeholder="Digitar 'abobrinha' ou 'vegetarianas'" className="font-body-website text-md md:text-2xl h-8 md:h-14" onChange={handleSearch}
+                placeholder="Digitar 'abobrinha' ou 'vegetarianas'" className="font-body-website text-sm h-8" onChange={handleSearch}
                 defaultValue={searchedTerm}
 
             />
@@ -187,7 +187,7 @@ function SearchItemsInput({ items, currentItems, setCurrentItems, searchedTerm, 
             <div className="bg-slate-200 rounded-md p-2 mb-2">
                 <div className="flex items-center gap-2">
                     <AlertTriangle />
-                    <p className="text-md md:text-xl font-body-website">Dica: você pode buscar por ingrediente, nome da pizza ou por etiqueta (ex. vegetariana, carne)</p>
+                    <p className="text-xs font-body-website">Dica: você pode buscar por ingrediente, nome da pizza ou por etiqueta (ex. vegetariana, carne)</p>
                 </div>
             </div>
         </div>
@@ -204,23 +204,23 @@ function FoundedItems({ items }: {
     return (
         <div className="max-h-[400px] overflow-y-auto">
 
-            <div className="flex flex-col py-3 ">
-                <span className="md:text-xl font-body-website mb-4">Resultados:</span>
-                <ul className="flex flex-col gap-2 md:grid md:grid-cols-2">
-                    {items.map((item) => (
-                        <FadeIn key={item.id}>
-                            <CardapioItemDialog item={item} triggerComponent={
+                <div className="max-h-[400px] overflow-y-auto">
+                    <span className="text-xs font-body-website mb-4">Resultados:</span>
+                    <ul className="flex flex-col gap-2">
+                        {items.map((item) => (
+                            <FadeIn key={item.id}>
+                                <CardapioItemDialog item={item} triggerComponent={
 
                                 <li className="grid grid-cols-8 py-1" >
 
-                                    <div className="self-start bg-center bg-cover bg-no-repeat w-8 h-8 md:w-12 md:h-12 rounded-lg col-span-1 "
-                                        style={{
-                                            backgroundImage: `url(${item.MenuItemImage?.thumbnailUrl || "/images/cardapio-web-app/placeholder.png"})`,
-                                        }}></div>
-                                    <div className="flex flex-col col-span-7">
-                                        <span className="font-body-website md:text-lg tracking-wide font-semibold leading-tight uppercase text-left">{item.name}</span>
-                                        <span className="text-sm leading-normal text-left">{item.ingredients}</span>
-                                    </div>
+                                        <div className="self-start bg-center bg-cover bg-no-repeat w-8 h-8 rounded-lg col-span-1 "
+                                            style={{
+                                                backgroundImage: `url(${item.MenuItemImage?.thumbnailUrl || "/images/cardapio-web-app/placeholder.png"})`,
+                                            }}></div>
+                                        <div className="flex flex-col col-span-7">
+                                            <span className="font-body-website text-[0.85rem] font-semibold leading-tight uppercase text-left">{item.name}</span>
+                                            <span className="font-body-website text-[0.85rem] leading-tight text-left">{item.ingredients}</span>
+                                        </div>
 
                                 </li>
                             } />
