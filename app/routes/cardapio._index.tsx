@@ -272,7 +272,7 @@ const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) =>
                     <h3 className="font-body-website text-xl tracking-wider font-semibold uppercase mb-1">{item.name}</h3>
                     {italyProduct && <ItalyIngredientsStatement />}
                     <p className="leading-tighter text-[15px] mb-2">{capitalize(item.ingredients)}</p>
-                    <CardapioItemPrice prices={item?.priceVariations} cnLabel="text-black" />
+                    <CardapioItemPrice prices={item?.priceVariations} cnLabel="text-black" showValuta={false} />
                     <CardapioItemActionBar item={item} />
                 </div>
                 {
@@ -295,10 +295,11 @@ const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) =>
 
 interface CardapioItemPriceProps {
     prices: MenuItemWithAssociations["priceVariations"]
+    showValuta?: boolean
     cnLabel?: string
 }
 
-function CardapioItemPrice({ prices, cnLabel }: CardapioItemPriceProps) {
+function CardapioItemPrice({ prices, cnLabel, showValuta = true }: CardapioItemPriceProps) {
 
     const visiblePrices = prices.filter(p => p.showOnCardapio === true) || []
     const lastIndex = visiblePrices.length - 1
@@ -326,8 +327,8 @@ function CardapioItemPrice({ prices, cnLabel }: CardapioItemPriceProps) {
                         }>
                             <span className="uppercase text-[12px]  text-muted-foreground">{p?.label}</span>
                             <div className="flex items-center gap-[2px] text-muted-foreground">
-                                <span className="text-[14px]">R$</span>
-                                <span className="text-[14px]">{p?.amount}</span>
+                                {showValuta && <span className="text-[12px]">R$</span>}
+                                <span className="text-[13px]">{p?.amount}</span>
                             </div>
                         </div>
                     )
