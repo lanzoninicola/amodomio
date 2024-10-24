@@ -17,7 +17,7 @@ export default function Loading({ showText, text }: LoadingProps) {
                 showText && (
                     <h1 className={
                         cn(
-                            "text-xl font-body-website text-brand-blue font-semibold",
+                            "text-xl font-body-website text-black font-semibold",
                             "absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2",
                         )
                     }>{text || "Carregando..."}</h1>

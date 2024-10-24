@@ -15,7 +15,7 @@ export default function HelixLoaderIcon({ className }: HelixLoaderIconProps) {
             <l-helix
                 size="45"
                 speed="2.5"
-                color="#3d5f76"
+                color="#111111"
             ></l-helix>
         </div>
     )

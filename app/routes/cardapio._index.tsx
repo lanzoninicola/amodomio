@@ -271,7 +271,7 @@ const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) =>
                 }>
                     <h3 className="font-body-website text-xl tracking-wider font-semibold uppercase mb-1">{item.name}</h3>
                     {italyProduct && <ItalyIngredientsStatement />}
-                    <p className="leading-tighter text-[15px] mb-2">{capitalize(item.ingredients)}</p>
+                    <p className="leading-snug text-[15px] my-2">{capitalize(item.ingredients)}</p>
                     <CardapioItemPrice prices={item?.priceVariations} cnLabel="text-black" showValuta={false} />
                     <CardapioItemActionBar item={item} />
                 </div>
