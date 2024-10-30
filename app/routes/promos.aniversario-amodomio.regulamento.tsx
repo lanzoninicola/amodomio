@@ -1,6 +1,13 @@
+import { MetaFunction } from "@remix-run/react";
 import Container from "~/components/layout/container/container";
 import { Separator } from "~/components/ui/separator";
 
+export const meta: MetaFunction = ({ data }) => {
+    return [
+        { title: "Regulamento do Sorteio Aniversário A Modo Mio - Participe e Concorra a Prêmios!" },
+        { name: "description", content: "Confira o regulamento completo do sorteio Aniversário A Modo Mio e descubra como participar para concorrer a um conjunto de pizza Tramontina e uma pizza média sabor Margherita di Napoli com Coca-Cola. Participe e celebre com a gente!" },
+    ];
+};
 
 export default function Regulamento() {
     return (
