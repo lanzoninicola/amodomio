@@ -83,7 +83,7 @@ export default function SingleMenuItemCosts() {
     return (
         <div className="flex flex-col gap-4">
             <Form method="post">
-                <div className="grid grid-cols-8">
+                {/* <div className="grid grid-cols-8">
                     <span className="text-xs uppercase tracking-wider col-span-1 font-semibold text-muted-foreground ">Ultímo custo</span>
                     <Input type="text"
                         name="ingredientsCost"
@@ -94,7 +94,7 @@ export default function SingleMenuItemCosts() {
                             )
                         }
                     />
-                </div>
+                </div> */}
             </Form>
 
         </div>
