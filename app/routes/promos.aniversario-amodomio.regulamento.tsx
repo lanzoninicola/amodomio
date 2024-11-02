@@ -62,6 +62,8 @@ export default function Regulamento() {
                 <p className="mb-2"><strong>Pessoas impedidas de participar:</strong> Todos que fizerem um pedido, conforme regulamento, podem participar.</p>
                 <p className="mb-2"><strong>Se o vencedor não reivindicar o prêmio:</strong> Nova extração será realizada.</p>
                 <p className="mb-2"><strong>Custos adicionais:</strong> Não haverá cobranças adicionais.</p>
+                <p className="mb-2"><strong>Divulgacao:</strong> Os resultados do sorteio serão divulgados nas redes sociais oficiais.</p>
+                <p className="mb-2"><strong>Retiro do prêmio:</strong> O vencedor deverá retirar o prêmio na nossa pizzaria.</p>
             </section>
 
         </Container>

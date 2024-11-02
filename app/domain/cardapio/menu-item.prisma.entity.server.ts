@@ -1,7 +1,7 @@
 import {
   Category,
   MenuItem,
-  MenuItemCost,
+  MenuItemCostVariation,
   MenuItemImage,
   MenuItemLike,
   MenuItemPriceVariation,
@@ -22,6 +22,7 @@ import { scale } from "@cloudinary/url-gen/actions/resize";
 
 export interface MenuItemWithAssociations extends MenuItem {
   priceVariations: MenuItemPriceVariation[];
+  costVariations: MenuItemCostVariation[];
   categoryId: string;
   Category: Category;
   tags?: {
@@ -29,7 +30,6 @@ export interface MenuItemWithAssociations extends MenuItem {
     public: Tag["name"][];
     models: Tag[];
   };
-  MenuItemCost: MenuItemCost[];
   MenuItemLike: MenuItemLike[];
   MenuItemTag: MenuItemTag[];
   MenuItemShare: MenuItemShare[];
@@ -59,7 +59,6 @@ export class MenuItemPrismaEntity {
         Tag: true,
       },
     },
-    MenuItemCost: true,
     MenuItemLike: {
       where: {
         deletedAt: null,
