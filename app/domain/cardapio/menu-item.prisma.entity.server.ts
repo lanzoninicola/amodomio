@@ -53,6 +53,11 @@ interface MenuItemEntityFindAllProps {
 export class MenuItemPrismaEntity {
   #menuItemQueryIncludes = {
     priceVariations: true,
+    costVariations: {
+      include: {
+        menuItemSizeVariations: true,
+      },
+    },
     Category: true,
     tags: {
       include: {

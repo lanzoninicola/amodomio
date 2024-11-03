@@ -1,5 +1,5 @@
 import { scale } from "@cloudinary/url-gen/actions/resize";
-import { MenuItemTag } from "@prisma/client";
+import { MenuItemSizeVariation, MenuItemTag } from "@prisma/client";
 import { LoaderFunctionArgs } from "@remix-run/node";
 import { Link, Outlet, MetaFunction, useLoaderData, useResolvedPath, useParams, useLocation } from "@remix-run/react";
 import Container from "~/components/layout/container/container";
@@ -8,6 +8,7 @@ import { menuItemTagPrismaEntity } from "~/domain/cardapio/menu-item-tags.prisma
 import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { categoryPrismaEntity } from "~/domain/category/category.entity.server";
 import { Category } from "~/domain/category/category.model.server";
+import prismaClient from "~/lib/prisma/client.server";
 import { prismaAll } from "~/lib/prisma/prisma-all.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { cn } from "~/lib/utils";
@@ -18,6 +19,7 @@ export interface GerenciamentoCardapioOutletContext {
     categories: Category[],
     items: MenuItemWithAssociations[],
     tags: MenuItemTag[],
+    sizeVariations: MenuItemSizeVariation[]
 }
 
 export const meta: MetaFunction = () => {
@@ -33,7 +35,7 @@ export const meta: MetaFunction = () => {
 
 export async function loader({ request }: LoaderFunctionArgs) {
 
-    const [categories, items, tags] = await prismaAll([
+    const [categories, items, tags, sizeVariations] = await prismaAll([
         categoryPrismaEntity.findAll(),
         menuItemPrismaEntity.findAll({
             option: {
@@ -43,14 +45,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
         }, {
             imageTransform: true,
             imageScaleWidth: 64,
-
-
         }),
-        menuItemTagPrismaEntity.findAll()
+        menuItemTagPrismaEntity.findAll(),
+        prismaClient.menuItemSizeVariation.findMany()
     ])
 
 
-    if (categories[0] || items[0] || tags[0]) {
+    if (categories[0] || items[0] || tags[0] || sizeVariations[0]) {
         return badRequest({ message: "Ocorreu um erro" })
     }
 
@@ -58,6 +59,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         categories: categories[1] as Category[],
         items: items[1] as MenuItemWithAssociations[],
         tags: tags[1] as MenuItemTag[],
+        sizeVariations: sizeVariations[1] as MenuItemSizeVariation[]
     })
 
 }
@@ -74,6 +76,7 @@ export default function AdminCardapioOutlet() {
     const items = loaderData?.payload.items as MenuItemWithAssociations[] || []
     const categories = loaderData?.payload.categories as Category[] || []
     const tags = loaderData?.payload.tags as MenuItemTag[] || []
+    const sizeVariations = loaderData?.payload.sizeVariations || []
 
     if (loaderData?.status > 399) {
         toast({
@@ -104,9 +107,14 @@ export default function AdminCardapioOutlet() {
                                     Novo item
                                 </span>
                             </Link>
-                            <Link to="/admin/gerenciamento/cardapio/export-wall" className="py-2 px-4 rounded-md border border-black">
+                            <Link to="/admin/gerenciamento/cardapio/export-wall" className="py-2 px-4 rounded-md border border-black hover:bg-black/10">
                                 <span className="font-semibold">
                                     Imprimir para a parede
+                                </span>
+                            </Link>
+                            <Link to="/admin/gerenciamento/cardapio/add-costs" className="py-2 px-4 rounded-md border border-black hover:bg-black/10">
+                                <span className="font-semibold">
+                                    Cadastrar custos
                                 </span>
                             </Link>
                         </div>
@@ -123,7 +131,8 @@ export default function AdminCardapioOutlet() {
             <Outlet context={{
                 items: items.sort((a, b) => a.sortOrderIndex - b.sortOrderIndex),
                 categories,
-                tags
+                tags,
+                sizeVariations
             }} />
         </Container>
 

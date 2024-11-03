@@ -143,6 +143,25 @@ export default function AdminCardapio() {
     return (
 
         <div className="flex flex-col gap-4 ">
+            <div className="grid grid-cols-8  gap-4">
+                <div className="flex flex-col gap-2 justify-center items-center mb-2 col-span-2 border rounded-md p-4">
+                    <span className="uppercase font-semibold text-xs tracking-wide">Publicados</span>
+                    <span className="text-3xl text-muted-foreground">{items.filter(item => item?.visible).length}</span>
+                </div>
+                <div className="flex flex-col gap-2 justify-center items-center mb-2 col-span-2 border rounded-md p-4">
+                    <span className="uppercase font-semibold text-xs tracking-wide">Invisiveis</span>
+                    <span className="text-3xl text-muted-foreground">{items.filter(item => item?.visible === false).length}</span>
+                </div>
+
+                <div className="flex flex-col gap-2 justify-center items-center mb-2 col-span-2 border rounded-md p-4">
+                    <span className="uppercase font-semibold text-xs tracking-wide">Sem Imagem</span>
+                    <span className="text-3xl text-muted-foreground">{items.filter(item => item?.imageId === null).length}</span>
+                </div>
+                <div className="flex flex-col gap-2 justify-center items-center mb-2 col-span-2 border rounded-md p-4">
+                    <span className="uppercase font-semibold text-xs tracking-wide">Futuro lançamento</span>
+                    <span className="text-3xl text-muted-foreground">{items.filter(item => item?.tags?.all?.includes("futuro-lançamento")).length}</span>
+                </div>
+            </div>
             {/* <MenuItemListStat items={items} /> */}
             <MenuItemList initialItems={items} />
         </div>
