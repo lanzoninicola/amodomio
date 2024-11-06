@@ -205,19 +205,20 @@ model MenuItemCostVariation {
   menuItemId              String?               @map("menu_item_id")
   menuItemSizeVariations  MenuItemSizeVariation @relation(fields: [menuItemSizeVariationId], references: [id])
   menuItemSizeVariationId String                @map("menu_item_size_variation_id")
-  ingredientPrice         Float                 @default(0) @map("ingredient_price")
+  ingredientsCostAmount   Float                 @default(0) @map("ingredients_cost_amount")
   createdAt               DateTime              @map("created_at")
   updatedAt               DateTime              @default(now()) @updatedAt @map("updated_at")
   updatedBy               String?               @map("updated_by")
-  latestAmount            Float                 @default(0)
 
   @@map("menu_item_cost_variations")
 }
 
 model MenuItemSizeVariation {
   id                     String                   @id @default(uuid())
-  label                  String
+  name                   String?
   costBase               Float                    @default(0) @map("cost_base")
+  slug                   String?                  @map("slug")
+  costScalingFactor      Float                    @default(1) @map("cost_scaling_factor") // Multiplier/divisor to scale the base recipe cost
   createdAt              DateTime                 @map("created_at")
   updatedAt              DateTime                 @default(now()) @updatedAt @map("updated_at")
   MenuItemPriceVariation MenuItemPriceVariation[]

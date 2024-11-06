@@ -97,22 +97,17 @@ export default function SingleMenuItemCosts() {
 
 
     return (
-        <div className="flex flex-col gap-4">
+        <div></div>
+        // <div className="flex flex-col gap-4">
+        //     ingredientPrice
+        //             <Form method="post" key={cost.id}>
+        //                 <input type="hidden" name="id" value={cost.id} />
+        //                 <MenuItemSizeVariationsSelector variations={sizeVariations} />
+        //                 <Input type="string" name="ingredientsPrice" placeholder="Valor dos Ingredientes" defaultValue={cost.ingredientsCostAmount} className="w-full" />
+        //             </Form>
+        //         ))
+        //     }
 
-            {
-                costVariations.map((cost) => (
-                    <Form method="post" key={cost.id}>
-                        <input type="hidden" name="id" value={cost.id} />
-
-                        <MenuItemSizeVariationsSelector variations={sizeVariations} />
-
-                        <Input type="string" name="crustPrice" placeholder="Valor da Massa" defaultValue={cost.crustPrice} className="w-full" />
-
-                        <Input type="string" name="ingredientsPrice" placeholder="Valor dos Ingredientes" defaultValue={cost.ingredientPrice} className="w-full" />
-                    </Form>
-                ))
-            }
-
-        </div>
+        // </div>
     )
 }

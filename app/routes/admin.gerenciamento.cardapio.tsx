@@ -112,9 +112,9 @@ export default function AdminCardapioOutlet() {
                                     Imprimir para a parede
                                 </span>
                             </Link>
-                            <Link to="/admin/gerenciamento/cardapio/add-costs" className="py-2 px-4 rounded-md border border-black hover:bg-black/10">
+                            <Link to="/admin/gerenciamento/cardapio-items-costs" className="py-2 px-4 rounded-md border border-black hover:bg-black/10">
                                 <span className="font-semibold">
-                                    Cadastrar custos
+                                    Gerenciamento custos
                                 </span>
                             </Link>
                         </div>
