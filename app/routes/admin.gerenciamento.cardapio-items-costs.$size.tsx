@@ -55,9 +55,6 @@ export async function action({ request }: ActionFunctionArgs) {
 
         const size = values.sizeSlug as MenuItemPizzaSizeVariationSlug
 
-
-        console.log({ size, values })
-
         const [err, data] = await tryit(menuItemCostPrismaEntity.upsertMenuItemCost(
             values.sizeId as string,
             values.menuItemId as string,
@@ -136,6 +133,9 @@ export default function EditItemsCostsSize() {
 
                                 <Await resolve={loaderDeferredData?.menuItemsCosts}>
                                     {(menuItemsCosts) => {
+
+                                        console.log({ menuItemsCosts })
+
                                         return (
                                             <section >
                                                 <div className="grid grid-cols-8 gap-2 items-center px-4">
@@ -154,15 +154,23 @@ export default function EditItemsCostsSize() {
                                                         {
                                                             items.map((item, index) => {
 
-                                                                let recipeCost = 0
-                                                                let suggestedRecipeCost = 0
+
+                                                                let costs = {
+                                                                    recipeCost: 0,
+                                                                    suggestedRecipeCost: 0
+                                                                }
 
                                                                 if (menuItemsCosts) {
-                                                                    recipeCost = menuItemsCosts.find((menuItemCost) =>
-                                                                        menuItemCost.menuItemId === item.id)?.recipeCostAmount || 0
+                                                                    const itemCostRecord = menuItemsCosts.find((menuItemCost) =>
+                                                                        menuItemCost.menuItemId === item.id)
 
-                                                                    suggestedRecipeCost = menuItemsCosts.find((menuItemCost) =>
-                                                                        menuItemCost.menuItemId === item.id)?.suggestedRecipeCost || 0
+
+                                                                    if (itemCostRecord) {
+                                                                        costs = {
+                                                                            recipeCost: itemCostRecord.recipeCostAmount || 0,
+                                                                            suggestedRecipeCost: itemCostRecord.suggestedRecipeCost || 0
+                                                                        }
+                                                                    }
                                                                 }
 
 
@@ -173,8 +181,8 @@ export default function EditItemsCostsSize() {
                                                                             sizeBaseCost={pizzaSizeConfig?.costBase || 0}
                                                                             // @ts-ignore
                                                                             sizeConfig={pizzaSizeConfig}
-                                                                            recipeCost={recipeCost}
-                                                                            suggestedRecipeCost={suggestedRecipeCost}
+                                                                            recipeCost={costs.recipeCost}
+                                                                            suggestedRecipeCost={costs.suggestedRecipeCost}
                                                                         />
                                                                         <Separator className="my-1" />
                                                                     </li>
@@ -220,8 +228,6 @@ function CostMenuItemForm({ item, sizeBaseCost, sizeConfig, recipeCost, suggeste
     if (!sizeConfig) {
         return null
     }
-
-
 
     const [recipeCostAmount, setRecipeCostAmount] = useState(recipeCost)
 

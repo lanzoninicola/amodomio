@@ -71,18 +71,16 @@ class MenuItemCostPrismaEntity {
       }),
     ]);
 
-    // Create a map of sizeCosts by ID for quick lookup
-    const sizeCostsMap = new Map(sizeCosts.map((sz) => [sz.id, sz]));
+    // Create a map of refCosts by ID for quick lookup of suggestedRecipeCost
+    const refCostsMap = new Map(
+      refCosts.map((ref) => [ref.menuItemId, ref.recipeCostAmount])
+    );
 
-    // Map over refCosts and add data from sizeCosts if it exists, or add a flag
-    const result = refCosts.map((refItem) => {
-      const sizeItem = sizeCostsMap.get(refItem.id);
+    // Map over sizeCosts, using refCosts only for suggestedRecipeCost
+    const result = sizeCosts.map((sizeItem) => {
       return {
-        ...refItem,
-        ...sizeItem, // Includes data from sizeCosts if available
-        recipeCostAmount: sizeItem?.recipeCostAmount,
-        suggestedRecipeCost: refItem.recipeCostAmount,
-        fromReferenceOnly: !sizeItem, // Indicates if this item is only from refSize
+        ...sizeItem, // Include all properties from sizeCosts
+        suggestedRecipeCost: refCostsMap.get(sizeItem.menuItemId) ?? null, // Use refCosts for suggestedRecipeCost
       };
     });
 
