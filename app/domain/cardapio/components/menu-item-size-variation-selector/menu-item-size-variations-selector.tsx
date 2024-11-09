@@ -1,14 +1,14 @@
-import { MenuItemSizeVariation } from "@prisma/client";
+import { menuItemSize } from "@prisma/client";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 
 
-interface MenuItemSizeVariationsSelectorProps {
-    variations: MenuItemSizeVariation[]
+interface menuItemSizeSelectorProps {
+    variations: menuItemSize[]
 }
 
-export default function MenuItemSizeVariationsSelector({ variations }: MenuItemSizeVariationsSelectorProps) {
+export default function menuItemSizeSelector({ variations }: menuItemSizeSelectorProps) {
     return (
-        <Select name="menuItemSizeVariations" required>
+        <Select name="menuItemSize" required>
             <SelectTrigger>
                 <SelectValue placeholder="Selecionar..." />
             </SelectTrigger>

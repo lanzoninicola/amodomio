@@ -55,7 +55,7 @@ export class MenuItemPrismaEntity {
     priceVariations: true,
     costVariations: {
       include: {
-        menuItemSizeVariations: true,
+        MenuItemSize: true,
       },
     },
     Category: true,

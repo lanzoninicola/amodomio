@@ -6,12 +6,13 @@ import { Globe, X } from "lucide-react"
 import { Suspense, useState } from "react"
 import { MenuItemWithAssociations } from "~/domain/cardapio/menu-item.prisma.entity.server"
 import Tooltip from "~/components/primitives/tooltip/tooltip"
-import { MenuItemSizeVariation } from "@prisma/client"
+import { MenuItemSize } from "@prisma/client"
 import { MenuItemPizzaSizeVariationSlug, menuItemCostPrismaEntity } from "~/domain/cardapio/menu-item-cost.entity.server"
-import { ok } from "~/utils/http-response.server"
+import { ok, serverError } from "~/utils/http-response.server"
 import { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node"
 import { GerenciamentoCardapioCostsOutletContext } from "./admin.gerenciamento.cardapio-items-costs"
 import Loading from "~/components/loading/loading"
+import tryit from "~/utils/try-it"
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
 
@@ -22,12 +23,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         return null
     }
 
-    const pizzaSizeConfig = menuItemCostPrismaEntity.findSizeConfig(sizeSlug as MenuItemPizzaSizeVariationSlug)
+    const pizzaSizeConfig = menuItemCostPrismaEntity.findSizeConfigBySlug(sizeSlug as MenuItemPizzaSizeVariationSlug)
     const menuItemsCosts = menuItemCostPrismaEntity.findItemsCostBySize(sizeSlug as MenuItemPizzaSizeVariationSlug)
 
     return defer({
         pizzaSizeConfig,
-        menuItemsCosts
+        menuItemsCosts,
     })
 }
 
@@ -38,15 +39,49 @@ export async function action({ request }: ActionFunctionArgs) {
 
     if (_action === "menu-item-size-variation-config-edit") {
 
-        console.log({ values })
+        const [err, data] = await tryit(menuItemCostPrismaEntity.updateSizeConfig(values.id as string, {
+            costBase: Number(values.costBase),
+            costScalingFactor: Number(values.costScalingFactor),
+        }))
 
+        if (err) {
+            return serverError(err)
+        }
 
         return ok()
     }
 
     if (_action === "menu-item-edit-cost") {
 
-        console.log({ values })
+        const size = values.sizeSlug as MenuItemPizzaSizeVariationSlug
+
+
+        console.log({ size, values })
+
+        const [err, data] = await tryit(menuItemCostPrismaEntity.upsertMenuItemCost(
+            values.sizeId as string,
+            values.menuItemId as string,
+            {
+                recipeCostAmount: Number(values.recipeCostAmount),
+                updatedAt: new Date(),
+                updatedBy: "admin",
+                createdAt: new Date(),
+                MenuItem: {
+                    connect: {
+                        id: values.menuItemId as string
+                    }
+                },
+                MenuItemSize: {
+                    connect: {
+                        id: values.sizeId as string
+                    }
+                }
+            }
+        ))
+
+        if (err) {
+            return serverError(err)
+        }
 
         return ok()
     }
@@ -73,11 +108,11 @@ export default function EditItemsCostsSize() {
                         <section className="flex flex-col">
                             <Form method="post" className="flex flex-col gap-4 mb-12">
 
-                                <input type="hidden" name="id" value={pizzaSizeConfig?.id} readOnly={true} className="hidden" />
+                                <input type="hidden" name="id" defaultValue={pizzaSizeConfig?.id} readOnly={true} />
 
                                 <div className="grid grid-cols-8 items-center gap-x-6">
                                     <span className="text-xs font-semibold uppercase tracking-wide col-span-2">Custo Massa (R$)</span>
-                                    <Input type="string" name="baseCost" className="col-span-3"
+                                    <Input type="string" name="costBase" className="col-span-3"
                                         defaultValue={String(pizzaSizeConfig?.costBase || 0)}
                                     />
 
@@ -101,13 +136,13 @@ export default function EditItemsCostsSize() {
 
                                 <Await resolve={loaderDeferredData?.menuItemsCosts}>
                                     {(menuItemsCosts) => {
-
                                         return (
                                             <section >
                                                 <div className="grid grid-cols-8 gap-2 items-center px-4">
                                                     <span className="text-xs font-semibold uppercase tracking-wide ">Publicado</span>
                                                     <span className="text-xs font-semibold uppercase tracking-wide col-span-2 ">Sabor</span>
-                                                    <span className="text-xs font-semibold uppercase tracking-wide">Custo Insumos</span>
+                                                    <span className="text-xs font-semibold uppercase tracking-wide">Custo Receita</span>
+                                                    <span className="text-xs font-semibold uppercase tracking-wide text-center">Custo Receita Sugerida</span>
                                                     <span className="text-xs font-semibold uppercase tracking-wide">Custo Total</span>
                                                 </div>
 
@@ -118,13 +153,29 @@ export default function EditItemsCostsSize() {
                                                     <ul className="flex flex-col gap-0">
                                                         {
                                                             items.map((item, index) => {
+
+                                                                let recipeCost = 0
+                                                                let suggestedRecipeCost = 0
+
+                                                                if (menuItemsCosts) {
+                                                                    recipeCost = menuItemsCosts.find((menuItemCost) =>
+                                                                        menuItemCost.menuItemId === item.id)?.recipeCostAmount || 0
+
+                                                                    suggestedRecipeCost = menuItemsCosts.find((menuItemCost) =>
+                                                                        menuItemCost.menuItemId === item.id)?.suggestedRecipeCost || 0
+                                                                }
+
+
                                                                 return (
                                                                     <li key={index} >
 
                                                                         <CostMenuItemForm item={item}
-                                                                            variationBaseCost={pizzaSizeConfig?.costBase || 0}
+                                                                            sizeBaseCost={pizzaSizeConfig?.costBase || 0}
                                                                             // @ts-ignore
-                                                                            sizeVariation={pizzaSizeConfig} />
+                                                                            sizeConfig={pizzaSizeConfig}
+                                                                            recipeCost={recipeCost}
+                                                                            suggestedRecipeCost={suggestedRecipeCost}
+                                                                        />
                                                                         <Separator className="my-1" />
                                                                     </li>
                                                                 )
@@ -157,26 +208,27 @@ export default function EditItemsCostsSize() {
 
 interface CostMenuItemFormProps {
     item: MenuItemWithAssociations
-    variationBaseCost: number
-    sizeVariation: MenuItemSizeVariation
+    sizeBaseCost: number
+    sizeConfig: MenuItemSize
+    recipeCost: number
+    suggestedRecipeCost: number
 }
 
 
-function CostMenuItemForm({ item, variationBaseCost, sizeVariation }: CostMenuItemFormProps) {
+function CostMenuItemForm({ item, sizeBaseCost, sizeConfig, recipeCost, suggestedRecipeCost }: CostMenuItemFormProps) {
 
-    if (!sizeVariation) {
+    if (!sizeConfig) {
         return null
     }
 
-
-
-    const [ingredientPrice, setIngredientPrice] = useState(0)
+    const [recipeCostAmount, setRecipeCostAmount] = useState(recipeCost)
 
     return (
         <Form method="post">
             <div className="grid grid-cols-8 items-center">
                 <input type="hidden" name="menuItemId" value={item.id} />
-                <input type="hidden" name="sizeVariationId" value={sizeVariation.id} />
+                <input type="hidden" name="sizeId" value={sizeConfig.id} />
+                <input type="hidden" name="sizeSlug" value={sizeConfig.slug} />
 
                 <span className="text-xs text-muted-foreground">{item.visible ?
                     <Tooltip content="Item publicado" >
@@ -188,8 +240,12 @@ function CostMenuItemForm({ item, variationBaseCost, sizeVariation }: CostMenuIt
                 }</span>
                 <Link to={`/admin/gerenciamento/cardapio/${item.id}/main`} className="text-sm col-span-2">{item.name}</Link>
 
-                <Input type="string" name="ingredientPrice" onChange={(e) => setIngredientPrice(Number(e.target.value))} />
-                <span className="font-semibold text-center text-sm">{Number(variationBaseCost + ingredientPrice).toFixed(2)}</span>
+                <Input type="string" name="recipeCostAmount"
+                    onChange={(e) => setRecipeCostAmount(Number(e.target.value))}
+                    defaultValue={recipeCostAmount}
+                />
+                <span className="text-muted-foreground text-center text-xs">{Number(suggestedRecipeCost).toFixed(2)}</span>
+                <span className="font-semibold text-center text-sm">{Number(sizeBaseCost + recipeCostAmount).toFixed(2)}</span>
 
                 <SubmitButton actionName="menu-item-edit-cost" onlyIcon variant={"outline"} tabIndex={0} iconColor="black" />
             </div>

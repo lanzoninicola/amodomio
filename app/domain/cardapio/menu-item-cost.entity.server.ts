@@ -14,29 +14,118 @@ class MenuItemCostPrismaEntity {
     this.client = client;
   }
 
-  async updateSizeVariationConfig(
-    data: Prisma.MenuItemSizeVariationUpdateInput
-  ) {}
-
-  async findSizeConfig(size: MenuItemPizzaSizeVariationSlug) {
-    return await this.client.menuItemSizeVariation.findFirst({
+  async findSizeConfigBySlug(slug: MenuItemPizzaSizeVariationSlug) {
+    return await this.client.menuItemSize.findFirst({
       where: {
-        slug: size,
+        slug: slug,
       },
     });
   }
 
-  async findItemsCostBySize(size: MenuItemPizzaSizeVariationSlug) {
-    // const sizeConfig = await this.findSizeConfig(size);
-
-    return await this.client.menuItemCostVariation.findMany({
+  async updateSizeConfig(
+    id: string,
+    {
+      costScalingFactor,
+      costBase,
+    }: {
+      costScalingFactor: number;
+      costBase: number;
+    }
+  ) {
+    const sizeConfig = await this.client.menuItemSize.findFirst({
       where: {
-        menuItemSizeVariations: {
-          is: {
-            slug: size,
-          },
-        },
+        id,
       },
+    });
+
+    if (!sizeConfig) {
+      return;
+    }
+
+    const nextSizeConfig = {
+      ...sizeConfig,
+      costScalingFactor,
+      costBase,
+    } as Prisma.MenuItemSizeUpdateInput;
+
+    console.log({ nextSizeConfig });
+
+    return await this.client.menuItemSize.update({
+      where: {
+        id,
+      },
+      data: nextSizeConfig,
+    });
+  }
+
+  async findItemsCostBySize(
+    size: MenuItemPizzaSizeVariationSlug,
+    refSize: MenuItemPizzaSizeVariationSlug = "pizza-medium"
+  ) {
+    const [refCosts, sizeCosts] = await Promise.all([
+      this.client.menuItemCostVariation.findMany({
+        where: { MenuItemSize: { is: { slug: refSize } } },
+      }),
+      this.client.menuItemCostVariation.findMany({
+        where: { MenuItemSize: { is: { slug: size } } },
+      }),
+    ]);
+
+    // Create a map of sizeCosts by ID for quick lookup
+    const sizeCostsMap = new Map(sizeCosts.map((sz) => [sz.id, sz]));
+
+    // Map over refCosts and add data from sizeCosts if it exists, or add a flag
+    const result = refCosts.map((refItem) => {
+      const sizeItem = sizeCostsMap.get(refItem.id);
+      return {
+        ...refItem,
+        ...sizeItem, // Includes data from sizeCosts if available
+        recipeCostAmount: sizeItem?.recipeCostAmount,
+        suggestedRecipeCost: refItem.recipeCostAmount,
+        fromReferenceOnly: !sizeItem, // Indicates if this item is only from refSize
+      };
+    });
+
+    return result;
+  }
+
+  async updateMenuItemCost(
+    id: string,
+    data: Prisma.MenuItemCostVariationUpdateInput
+  ) {
+    return await this.client.menuItemCostVariation.update({
+      where: {
+        id,
+      },
+      data,
+    });
+  }
+
+  async upsertMenuItemCost(
+    sizeId: string,
+    menuItemId: string,
+    data: Prisma.MenuItemCostVariationCreateInput
+  ) {
+    const record = await this.client.menuItemCostVariation.findFirst({
+      where: {
+        menuItemId: menuItemId,
+        menuItemSizeId: sizeId,
+      },
+    });
+
+    console.log({ record });
+
+    if (record) {
+      return await this.client.menuItemCostVariation.update({
+        where: {
+          id: record.id,
+        },
+        data,
+      });
+    }
+
+    return await this.client.menuItemCostVariation.create({
+      data,
     });
   }
 }

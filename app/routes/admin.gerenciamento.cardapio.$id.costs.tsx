@@ -1,9 +1,9 @@
-import { MenuItemPriceVariation, MenuItemSizeVariation } from "@prisma/client";
+import { MenuItemPriceVariation, menuItemSize } from "@prisma/client";
 import { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { Form, MetaFunction, useLoaderData } from "@remix-run/react";
 import { Input } from "~/components/ui/input";
 import { authenticator } from "~/domain/auth/google.server";
-import MenuItemSizeVariationsSelector from "~/domain/cardapio/components/menu-item-size-variation-selector/menu-item-size-variations-selector";
+import menuItemSizeSelector from "~/domain/cardapio/components/menu-item-size-variation-selector/menu-item-size-variations-selector";
 import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import prismaClient from "~/lib/prisma/client.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
@@ -41,7 +41,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         return badRequest("Nenhum item encontrado");
     }
 
-    const [errSizeVariations, sizeVariations] = await tryit(prismaClient.menuItemSizeVariation.findMany())
+    const [errSizeVariations, sizeVariations] = await tryit(prismaClient.menuItemSize.findMany())
 
     return ok({
         item,
@@ -81,7 +81,7 @@ export default function SingleMenuItemCosts() {
 
     const loaderData = useLoaderData<typeof loader>()
     const item: MenuItemWithAssociations = loaderData.payload?.item
-    const sizeVariations: MenuItemSizeVariation[] = loaderData.payload?.sizeVariations || []
+    const sizeVariations: menuItemSize[] = loaderData.payload?.sizeVariations || []
 
     const costVariations = item.costVariations || []
 
@@ -102,8 +102,8 @@ export default function SingleMenuItemCosts() {
         //     ingredientPrice
         //             <Form method="post" key={cost.id}>
         //                 <input type="hidden" name="id" value={cost.id} />
-        //                 <MenuItemSizeVariationsSelector variations={sizeVariations} />
-        //                 <Input type="string" name="ingredientsPrice" placeholder="Valor dos Ingredientes" defaultValue={cost.ingredientsCostAmount} className="w-full" />
+        //                 <menuItemSizeSelector variations={sizeVariations} />
+        //                 <Input type="string" name="ingredientsPrice" placeholder="Valor dos Ingredientes" defaultValue={cost.recipeCostAmount} className="w-full" />
         //             </Form>
         //         ))
         //     }

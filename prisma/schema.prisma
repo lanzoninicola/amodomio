@@ -180,51 +180,51 @@ model MenuItemImage {
 }
 
 model MenuItemPriceVariation {
-  id                      String                 @id @default(uuid())
-  MenuItem                MenuItem?              @relation(fields: [menuItemId], references: [id])
-  menuItemId              String?                @map("menu_item_id")
-  menuItemSizeVariations  MenuItemSizeVariation? @relation(fields: [menuItemSizeVariationId], references: [id])
-  menuItemSizeVariationId String?                @map("menu_item_size_variation_id")
-  label                   String
-  basePrice               Float                  @default(0) @map("base_price")
-  amount                  Float
-  discountPercentage      Float                  @map("discount_percentage")
-  showOnCardapio          Boolean                @default(false) @map("show_on_cardapio")
-  showOnCardapioAt        DateTime?              @map("show_on_cardapio_at")
-  createdAt               DateTime               @map("created_at")
-  updatedAt               DateTime               @default(now()) @updatedAt @map("updated_at")
-  updatedBy               String?                @map("updated_by")
-  latestAmount            Float                  @default(0)
+  id                 String        @id @default(uuid())
+  MenuItem           MenuItem?     @relation(fields: [menuItemId], references: [id])
+  menuItemId         String?       @map("menu_item_id")
+  MenuItemSize       MenuItemSize? @relation(fields: [menuItemSizeId], references: [id])
+  menuItemSizeId     String?       @map("menu_item_size__id")
+  label              String
+  basePrice          Float         @default(0) @map("base_price")
+  amount             Float
+  discountPercentage Float         @map("discount_percentage")
+  showOnCardapio     Boolean       @default(false) @map("show_on_cardapio")
+  showOnCardapioAt   DateTime?     @map("show_on_cardapio_at")
+  createdAt          DateTime      @map("created_at")
+  updatedAt          DateTime      @default(now()) @updatedAt @map("updated_at")
+  updatedBy          String?       @map("updated_by")
+  latestAmount       Float         @default(0)
 
   @@map("menu_item_price_variations")
 }
 
 model MenuItemCostVariation {
-  id                      String                @id @default(uuid())
-  MenuItem                MenuItem?             @relation(fields: [menuItemId], references: [id])
-  menuItemId              String?               @map("menu_item_id")
-  menuItemSizeVariations  MenuItemSizeVariation @relation(fields: [menuItemSizeVariationId], references: [id])
-  menuItemSizeVariationId String                @map("menu_item_size_variation_id")
-  ingredientsCostAmount   Float                 @default(0) @map("ingredients_cost_amount")
-  createdAt               DateTime              @map("created_at")
-  updatedAt               DateTime              @default(now()) @updatedAt @map("updated_at")
-  updatedBy               String?               @map("updated_by")
+  id               String       @id @default(uuid())
+  MenuItem         MenuItem     @relation(fields: [menuItemId], references: [id])
+  menuItemId       String       @map("menu_item_id")
+  MenuItemSize     MenuItemSize @relation(fields: [menuItemSizeId], references: [id])
+  menuItemSizeId   String       @map("menu_item_size_id")
+  recipeCostAmount Float        @default(0) @map("recipe_cost_amount")
+  createdAt        DateTime     @map("created_at")
+  updatedAt        DateTime     @default(now()) @updatedAt @map("updated_at")
+  updatedBy        String?      @map("updated_by")
 
   @@map("menu_item_cost_variations")
 }
 
-model MenuItemSizeVariation {
+model MenuItemSize {
   id                     String                   @id @default(uuid())
-  name                   String?
+  name                   String
   costBase               Float                    @default(0) @map("cost_base")
-  slug                   String?                  @map("slug")
+  slug                   String                   @unique @map("slug")
   costScalingFactor      Float                    @default(1) @map("cost_scaling_factor") // Multiplier/divisor to scale the base recipe cost
   createdAt              DateTime                 @map("created_at")
   updatedAt              DateTime                 @default(now()) @updatedAt @map("updated_at")
   MenuItemPriceVariation MenuItemPriceVariation[]
   MenuItemCostVariation  MenuItemCostVariation[]
 
-  @@map("menu_item_size_variations")
+  @@map("menu_item_sizes")
 }
 
 model MenuItemLike {

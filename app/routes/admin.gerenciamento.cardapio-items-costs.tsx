@@ -2,7 +2,7 @@ import { Outlet, useLoaderData, useLocation, useOutletContext } from "@remix-run
 import { GerenciamentoCardapioOutletContext } from "./admin.gerenciamento.cardapio"
 import { Separator } from "~/components/ui/separator"
 import { MenuItemWithAssociations } from "~/domain/cardapio/menu-item.prisma.entity.server"
-import { MenuItemSizeVariation } from "@prisma/client"
+import { MenuItemSize } from "@prisma/client"
 import { ok } from "~/utils/http-response.server"
 import { LoaderFunctionArgs } from "@remix-run/node"
 import MenuItemNavLink from "~/domain/cardapio/components/menu-item-nav-link/menu-item-nav-link"
@@ -23,11 +23,11 @@ export interface GerenciamentoCardapioCostsOutletContext {
     categories: Category[],
     items: MenuItemWithAssociations[],
     tags: MenuItemTag[],
-    sizeVariations: MenuItemSizeVariation[]
+    itemSizes: MenuItemSize[]
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {
-    const [categories, items, tags, sizeVariations] = await prismaAll([
+    const [categories, items, tags, itemSizes] = await prismaAll([
         categoryPrismaEntity.findAll(),
         menuItemPrismaEntity.findAll({
             option: {
@@ -39,11 +39,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
             imageScaleWidth: 64,
         }),
         menuItemTagPrismaEntity.findAll(),
-        prismaClient.menuItemSizeVariation.findMany()
+        prismaClient.menuItemSize.findMany()
     ])
 
-
-    if (categories[0] || items[0] || tags[0] || sizeVariations[0]) {
+    if (categories[0] || items[0] || tags[0] || itemSizes[0]) {
         return badRequest({ message: "Ocorreu um erro" })
     }
 
@@ -51,7 +50,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         categories: categories[1] as Category[],
         items: items[1] as MenuItemWithAssociations[],
         tags: tags[1] as MenuItemTag[],
-        sizeVariations: sizeVariations[1] as MenuItemSizeVariation[]
+        itemSizes: itemSizes[1] as MenuItemSize[]
     })
 }
 
@@ -60,7 +59,7 @@ export default function GerenciamentoCardapioItemsCosts() {
     const items = loaderData?.payload.items as MenuItemWithAssociations[] || []
     const categories = loaderData?.payload.categories as Category[] || []
     const tags = loaderData?.payload.tags as MenuItemTag[] || []
-    const sizeVariations = loaderData?.payload.sizeVariations || []
+    const itemSizes = loaderData?.payload.itemSizes || []
 
     const location = useLocation()
     const activeTab = lastUrlSegment(location.pathname)
@@ -76,7 +75,7 @@ export default function GerenciamentoCardapioItemsCosts() {
                         <ul className="flex items-center ">
                             <span className="text-sm font-semibold tracking-wide mr-2">Tamanhos:</span>
                             {
-                                sizeVariations.map((sv: MenuItemSizeVariation) => (
+                                itemSizes.map((sv: MenuItemSize) => (
                                     <li key={sv.id}>
                                         <MenuItemNavLink to={sv.slug} isActive={activeTab === sv.slug}>
                                             {sv.name}
@@ -94,7 +93,7 @@ export default function GerenciamentoCardapioItemsCosts() {
                 items: items.sort((a, b) => a.sortOrderIndex - b.sortOrderIndex),
                 categories,
                 tags,
-                sizeVariations
+                itemSizes
             }} />
         </Container>
 

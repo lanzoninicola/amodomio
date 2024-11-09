@@ -1,5 +1,5 @@
 import { scale } from "@cloudinary/url-gen/actions/resize";
-import { MenuItemSizeVariation, MenuItemTag } from "@prisma/client";
+import { menuItemSize, MenuItemTag } from "@prisma/client";
 import { LoaderFunctionArgs } from "@remix-run/node";
 import { Link, Outlet, MetaFunction, useLoaderData, useResolvedPath, useParams, useLocation } from "@remix-run/react";
 import Container from "~/components/layout/container/container";
@@ -19,7 +19,7 @@ export interface GerenciamentoCardapioOutletContext {
     categories: Category[],
     items: MenuItemWithAssociations[],
     tags: MenuItemTag[],
-    sizeVariations: MenuItemSizeVariation[]
+    sizeVariations: menuItemSize[]
 }
 
 export const meta: MetaFunction = () => {
@@ -47,7 +47,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
             imageScaleWidth: 64,
         }),
         menuItemTagPrismaEntity.findAll(),
-        prismaClient.menuItemSizeVariation.findMany()
+        prismaClient.menuItemSize.findMany()
     ])
 
 
@@ -59,7 +59,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         categories: categories[1] as Category[],
         items: items[1] as MenuItemWithAssociations[],
         tags: tags[1] as MenuItemTag[],
-        sizeVariations: sizeVariations[1] as MenuItemSizeVariation[]
+        sizeVariations: sizeVariations[1] as menuItemSize[]
     })
 
 }
