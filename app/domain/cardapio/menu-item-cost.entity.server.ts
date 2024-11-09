@@ -113,8 +113,6 @@ class MenuItemCostPrismaEntity {
       },
     });
 
-    console.log({ record });
-
     if (record) {
       return await this.client.menuItemCostVariation.update({
         where: {

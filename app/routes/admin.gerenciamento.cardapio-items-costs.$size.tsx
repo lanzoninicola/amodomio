@@ -221,6 +221,8 @@ function CostMenuItemForm({ item, sizeBaseCost, sizeConfig, recipeCost, suggeste
         return null
     }
 
+
+
     const [recipeCostAmount, setRecipeCostAmount] = useState(recipeCost)
 
     return (
@@ -242,9 +244,12 @@ function CostMenuItemForm({ item, sizeBaseCost, sizeConfig, recipeCost, suggeste
 
                 <Input type="string" name="recipeCostAmount"
                     onChange={(e) => setRecipeCostAmount(Number(e.target.value))}
-                    defaultValue={recipeCostAmount}
+                    value={recipeCostAmount}
                 />
-                <span className="text-muted-foreground text-center text-xs">{Number(suggestedRecipeCost).toFixed(2)}</span>
+                <span className="text-muted-foreground text-center text-xs hover:underline hover:cursor-pointer"
+                    onClick={() => setRecipeCostAmount(suggestedRecipeCost)}
+                >
+                    {Number(suggestedRecipeCost).toFixed(2)}</span>
                 <span className="font-semibold text-center text-sm">{Number(sizeBaseCost + recipeCostAmount).toFixed(2)}</span>
 
                 <SubmitButton actionName="menu-item-edit-cost" onlyIcon variant={"outline"} tabIndex={0} iconColor="black" />
