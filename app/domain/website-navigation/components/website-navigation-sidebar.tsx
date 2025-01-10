@@ -41,7 +41,7 @@ export function WebsiteNavigationSidebar({
                     variant="ghost"
                     className={
                         cn(
-                            "mr-2 text-base focus-visible:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 flex gap-2 bg-brand-green px-2 py-1 rounded-md hover:bg-green-600/50 hover:text-white",
+                            "mr-2 text-base focus-visible:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 flex gap-2 bg-black text-white px-2 py-1 rounded-md hover:bg-black/20 hover:text-black",
                             buttonTrigger?.classNameButton
                         )
                     }
