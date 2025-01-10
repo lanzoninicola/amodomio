@@ -1,4 +1,4 @@
-import { Await, Form, Link, defer, useLoaderData, useOutletContext } from "@remix-run/react"
+import { Await, Form, Link, defer, useActionData, useLoaderData, useOutletContext } from "@remix-run/react"
 import { Input } from "~/components/ui/input"
 import SubmitButton from "~/components/primitives/submit-button/submit-button"
 import { Separator } from "~/components/ui/separator"
@@ -10,9 +10,15 @@ import { MenuItemSize } from "@prisma/client"
 import { MenuItemPizzaSizeVariationSlug, menuItemCostPrismaEntity } from "~/domain/cardapio/menu-item-cost.entity.server"
 import { ok, serverError } from "~/utils/http-response.server"
 import { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node"
-import { GerenciamentoCardapioCostsOutletContext } from "./admin.gerenciamento.cardapio-items-costs"
+
 import Loading from "~/components/loading/loading"
 import tryit from "~/utils/try-it"
+import { toast } from "~/components/ui/use-toast"
+import { Label } from "~/components/ui/label"
+import { cn } from "~/lib/utils"
+import { isValid } from "date-fns"
+import FinanceInput from "~/components/finance-input/finance-input"
+import { GerenciamentoCardapioCostsOutletContext } from "./admin.gerenciamento.cardapio-finance.cost-management"
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
 
@@ -39,21 +45,37 @@ export async function action({ request }: ActionFunctionArgs) {
 
     if (_action === "menu-item-size-variation-config-edit") {
 
+        const costBase = Number(values.costBase)
+        const costScalingFactor = Number(values.costScalingFactor)
+
+        if (isNaN(costBase)) {
+            return serverError(`Valor de custo base: ${values.costBase} inválido, use o formato 0.00 com ponto`)
+        }
+
+        if (isNaN(costScalingFactor)) {
+            return serverError(`Valor de fator de escalonamento: ${values.costScalingFactor} inválido, use o formato 0.00 com ponto`)
+        }
+
         const [err, data] = await tryit(menuItemCostPrismaEntity.updateSizeConfig(values.id as string, {
-            costBase: Number(values.costBase),
-            costScalingFactor: Number(values.costScalingFactor),
+            costBase,
+            costScalingFactor,
         }))
 
         if (err) {
             return serverError(err)
         }
 
-        return ok()
+        return ok({
+            status: 200,
+            message: "Configuração atualizada com sucesso"
+        })
     }
 
     if (_action === "menu-item-edit-cost") {
 
-        const size = values.sizeSlug as MenuItemPizzaSizeVariationSlug
+        if (isNaN(Number(values.recipeCostAmount))) {
+            return serverError(`Valor de custo: ${values.recipeCostAmount} inválido, use o formato 0.00 com ponto`)
+        }
 
         const [err, data] = await tryit(menuItemCostPrismaEntity.upsertMenuItemCost(
             values.sizeId as string,
@@ -80,7 +102,10 @@ export async function action({ request }: ActionFunctionArgs) {
             return serverError(err)
         }
 
-        return ok()
+        return ok({
+            status: 200,
+            message: "Custo atualizado com sucesso"
+        })
     }
 
     return null
@@ -93,6 +118,22 @@ export default function EditItemsCostsSize() {
     const outletContext = useOutletContext<GerenciamentoCardapioCostsOutletContext>()
     const items = outletContext?.items || []
 
+    const actionData = useActionData<typeof action>()
+
+    if (actionData && actionData.status !== 200) {
+        toast({
+            title: "Erro",
+            description: actionData.message,
+        })
+    }
+
+    if (actionData && actionData.status === 200) {
+        toast({
+            title: "OK",
+            description: actionData.message
+        })
+    }
+
 
     return (
 
@@ -103,12 +144,12 @@ export default function EditItemsCostsSize() {
                     // @ts-ignore
                     return (
                         <section className="flex flex-col">
-                            <Form method="post" className="flex flex-col gap-4 mb-12">
+                            <Form method="post" className="flex flex-col gap-4 mb-12 border rounded-md p-4">
 
                                 <input type="hidden" name="id" defaultValue={pizzaSizeConfig?.id} readOnly={true} />
 
                                 <div className="grid grid-cols-8 items-center gap-x-6">
-                                    <span className="text-xs font-semibold uppercase tracking-wide col-span-2">Custo Massa (R$)</span>
+                                    <span className="text-xs font-semibold uppercase tracking-wide col-span-2">Custo Base do tamanho (R$)</span>
                                     <Input type="string" name="costBase" className="col-span-3"
                                         defaultValue={String(pizzaSizeConfig?.costBase || 0)}
                                     />
@@ -181,8 +222,8 @@ export default function EditItemsCostsSize() {
                                                                             sizeBaseCost={pizzaSizeConfig?.costBase || 0}
                                                                             // @ts-ignore
                                                                             sizeConfig={pizzaSizeConfig}
-                                                                            recipeCost={costs.recipeCost}
-                                                                            suggestedRecipeCost={costs.suggestedRecipeCost}
+                                                                            recipeCost={String(costs.recipeCost)}
+                                                                            suggestedRecipeCost={String(costs.suggestedRecipeCost)}
                                                                         />
                                                                         <Separator className="my-1" />
                                                                     </li>
@@ -218,8 +259,8 @@ interface CostMenuItemFormProps {
     item: MenuItemWithAssociations
     sizeBaseCost: number
     sizeConfig: MenuItemSize
-    recipeCost: number
-    suggestedRecipeCost: number
+    recipeCost: string
+    suggestedRecipeCost: string
 }
 
 
@@ -230,6 +271,8 @@ function CostMenuItemForm({ item, sizeBaseCost, sizeConfig, recipeCost, suggeste
     }
 
     const [recipeCostAmount, setRecipeCostAmount] = useState(recipeCost)
+
+    const [recipeCostAmountErrorInput, setRecipeCostAmountErrorInput] = useState("")
 
     return (
         <Form method="post">
@@ -248,18 +291,27 @@ function CostMenuItemForm({ item, sizeBaseCost, sizeConfig, recipeCost, suggeste
                 }</span>
                 <Link to={`/admin/gerenciamento/cardapio/${item.id}/main`} className="text-sm col-span-2">{item.name}</Link>
 
-                <Input type="string" name="recipeCostAmount"
-                    onChange={(e) => setRecipeCostAmount(Number(e.target.value))}
-                    value={recipeCostAmount}
+                <FinanceInput inputValue={recipeCostAmount} name="recipeCostAmount"
+                    onChange={(value) => {
+                        setRecipeCostAmount(value)
+                    }}
                 />
+
                 <span className="text-muted-foreground text-center text-xs hover:underline hover:cursor-pointer"
                     onClick={() => setRecipeCostAmount(suggestedRecipeCost)}
                 >
                     {Number(suggestedRecipeCost).toFixed(2)}</span>
-                <span className="font-semibold text-center text-sm">{Number(sizeBaseCost + recipeCostAmount).toFixed(2)}</span>
+                <span className="font-semibold text-center text-sm">{Number(Number(sizeBaseCost) + Number(recipeCostAmount)).toFixed(2)}</span>
 
                 <SubmitButton actionName="menu-item-edit-cost" onlyIcon variant={"outline"} tabIndex={0} iconColor="black" />
             </div>
         </Form>
     )
 }
+
+
+
+
+
+
+

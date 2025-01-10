@@ -66,29 +66,27 @@ export default function GerenciamentoCardapioItemsCosts() {
 
     return (
         <Container>
-            <div className="h-full w-full rounded-[inherit]" >
-                <div style={{
-                    minWidth: '100%',
-                    display: 'table'
-                }}>
-                    <div className="flex justify-between">
-                        <ul className="flex items-center ">
-                            <span className="text-sm font-semibold tracking-wide mr-2">Tamanhos:</span>
-                            {
-                                itemSizes.map((sv: MenuItemSize) => (
-                                    <li key={sv.id}>
-                                        <MenuItemNavLink to={sv.slug} isActive={activeTab === sv.slug}>
-                                            {sv.name}
-                                        </MenuItemNavLink>
-                                    </li>
-                                ))
-                            }
+            <div className="flex justify-between">
+                <div className="flex justify-between">
+                    <ul className="flex items-center ">
+                        <span className="text-sm font-semibold tracking-wide mr-2">Tamanhos:</span>
+                        {
+                            itemSizes.map((sv: MenuItemSize) => (
+                                <li key={sv.id}>
+                                    <MenuItemNavLink to={sv.slug} isActive={activeTab === sv.slug}>
+                                        {sv.name}
+                                    </MenuItemNavLink>
+                                </li>
+                            ))
+                        }
 
-                        </ul>
-                    </div>
+                    </ul>
                 </div>
-                <Separator className="my-4" />
-            </div >
+                <div>
+                    cucu
+                </div>
+            </div>
+            <Separator className="my-4" />
             <Outlet context={{
                 items: items.sort((a, b) => a.sortOrderIndex - b.sortOrderIndex),
                 categories,

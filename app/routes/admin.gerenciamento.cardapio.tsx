@@ -1,5 +1,5 @@
 import { scale } from "@cloudinary/url-gen/actions/resize";
-import { menuItemSize, MenuItemTag } from "@prisma/client";
+import { MenuItemTag } from "@prisma/client";
 import { LoaderFunctionArgs } from "@remix-run/node";
 import { Link, Outlet, MetaFunction, useLoaderData, useResolvedPath, useParams, useLocation } from "@remix-run/react";
 import Container from "~/components/layout/container/container";
@@ -8,6 +8,7 @@ import { menuItemTagPrismaEntity } from "~/domain/cardapio/menu-item-tags.prisma
 import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { categoryPrismaEntity } from "~/domain/category/category.entity.server";
 import { Category } from "~/domain/category/category.model.server";
+import { PizzaSizeVariation } from "~/domain/pizza/pizza.entity.server";
 import prismaClient from "~/lib/prisma/client.server";
 import { prismaAll } from "~/lib/prisma/prisma-all.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
@@ -19,7 +20,7 @@ export interface GerenciamentoCardapioOutletContext {
     categories: Category[],
     items: MenuItemWithAssociations[],
     tags: MenuItemTag[],
-    sizeVariations: menuItemSize[]
+    sizeVariations: PizzaSizeVariation[]
 }
 
 export const meta: MetaFunction = () => {
@@ -59,7 +60,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         categories: categories[1] as Category[],
         items: items[1] as MenuItemWithAssociations[],
         tags: tags[1] as MenuItemTag[],
-        sizeVariations: sizeVariations[1] as menuItemSize[]
+        sizeVariations: sizeVariations[1] as PizzaSizeVariation[]
     })
 
 }
@@ -101,7 +102,7 @@ export default function AdminCardapioOutlet() {
                 <div className="flex justify-between mb-4 items-start">
                     <div className="flex flex-col gap-4">
                         <h1 className="font-bold text-xl">Cardapio</h1>
-                        <div className="flex gap-4 justify-between md:justify-start">
+                        <div className="grid grid-cols-6 gap-2 text-sm">
                             <Link to="new" className="py-2 px-4 rounded-md bg-black">
                                 <span className=" text-white font-semibold">
                                     Novo item
@@ -112,9 +113,14 @@ export default function AdminCardapioOutlet() {
                                     Imprimir para a parede
                                 </span>
                             </Link>
-                            <Link to="/admin/gerenciamento/cardapio-items-costs" className="py-2 px-4 rounded-md border border-black hover:bg-black/10">
+                            <Link to="/admin/gerenciamento/cardapio-finance/cost-management" className="py-2 px-4 rounded-md border border-black hover:bg-black/10">
                                 <span className="font-semibold">
-                                    Gerenciamento custos
+                                    Gestão custos
+                                </span>
+                            </Link>
+                            <Link to="/admin/gerenciamento/cardapio-finance/sales-management" className="py-2 px-4 rounded-md border border-black hover:bg-black/10">
+                                <span className="font-semibold">
+                                    Gestão preços de venda
                                 </span>
                             </Link>
                         </div>
