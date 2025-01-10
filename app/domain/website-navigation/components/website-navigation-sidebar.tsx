@@ -41,7 +41,7 @@ export function WebsiteNavigationSidebar({
                     variant="ghost"
                     className={
                         cn(
-                            "mr-2 px-0 text-base hover:bg-transparent focus-visible:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 flex gap-2",
+                            "mr-2 text-base focus-visible:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 flex gap-2 bg-black text-white px-2 py-1 rounded-md hover:bg-black/20 hover:text-black",
                             buttonTrigger?.classNameButton
                         )
                     }
@@ -78,7 +78,7 @@ export function WebsiteNavigationSidebar({
                     <AlignLeftIcon className="h-5 w-5" color={buttonTrigger?.colorIcon} />
                     <span className={
                         cn(
-                            "hidden font-semibold md:block",
+                            "hidden font-semibold md:block ",
                             buttonTrigger?.classNameLabel
                         )
                     }>
@@ -87,7 +87,7 @@ export function WebsiteNavigationSidebar({
                 </Button>
 
             </SheetTrigger>
-            <SheetContent side="left" className="pr-0">
+            <SheetContent side="left" className="pr-0 ">
                 <MobileLink
                     to={homeLink.to}
                     className="flex items-center"
@@ -95,7 +95,7 @@ export function WebsiteNavigationSidebar({
                 >
                     <span className="font-bold">{homeLink.label ?? "Iniçio"}</span>
                 </MobileLink>
-                <ScrollArea className="my-4 h-[calc(100vh-30rem)] pl-6">
+                <ScrollArea className="my-4 h-[calc(100vh-10rem)] pl-6">
                     <div className="flex flex-col space-y-3">
                         {navigationLinks?.mainNav && navigationLinks.mainNav?.map(
                             (item) =>
