@@ -1,50 +1,59 @@
-import { useLoaderData, useOutletContext } from "@remix-run/react";
+import { Await, defer, useLoaderData } from "@remix-run/react";
 import Container from "~/components/layout/container/container";
-import { AdminOutletContext } from "./admin";
 import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { Input } from "~/components/ui/input";
-import { LoaderFunctionArgs, LoaderFunction } from "@remix-run/node";
-import { ok } from "~/utils/http-response.server";
-import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { mapPriceVariationsLabel } from "~/domain/cardapio/fn.utils";
+import CopyButton from "~/components/primitives/copy-button/copy-button";
+import Loading from "~/components/loading/loading";
 
-export const loader: LoaderFunction = async ({ request }: LoaderFunctionArgs) => {
-    const [_, cardapioItems] = await prismaIt(menuItemPrismaEntity.findAll({
+export const loader = async () => {
+
+    const cardapioItems = menuItemPrismaEntity.findAll({
         where: {
             visible: true
         }
-    }))
+    })
 
-    return ok({ cardapioItems })
+    return defer({
+        cardapioItems
+    })
 }
 
 
 export default function AdminIndex() {
+    const { cardapioItems } = useLoaderData<typeof loader>()
 
     return (
         <Container>
-            <div className="flex flex-col gap-4 items-center mb-8">
+            <div className="flex flex-col gap-4 items-center mb-4">
                 <h1 className="text-center text-xl font-bold leading-tight tracking-tighter md:text-xl lg:leading-[1.1]">
                     Bem vindo ao painel de administração! 👋🏻
                 </h1>
-                <h2 className="max-w-[450px] text-center text-md text-muted-foreground sm:text-sm">
-                    Para começar, selecione uma das opções no menu de navegação acima a esquerda. 👆🏻 👈🏻
-                </h2>
             </div>
-            <CardapioItems />
+
+
+            <Suspense fallback={<Loading />}>
+                <Await resolve={cardapioItems}>
+                    {(cardapioItems) => {
+                        // @ts-ignore
+                        return <CardapioItems cardapioItems={cardapioItems} />
+                    }}
+                </Await>
+            </Suspense>
         </Container>
     )
 }
 
 
-function CardapioItems() {
+function CardapioItems({
+    cardapioItems }: {
+        cardapioItems: MenuItemWithAssociations[]
+    }
+) {
     // const outletContext = useOutletContext<AdminOutletContext>()
     // const initialItems = outletContext?.cardapioItems
-
-    const loaderData = useLoaderData<typeof loader>()
-    const initialItems: MenuItemWithAssociations[] = loaderData.payload?.cardapioItems || []
-    const [items, setItems] = useState<MenuItemWithAssociations[]>(initialItems || [])
+    const [items, setItems] = useState<MenuItemWithAssociations[]>(cardapioItems || [])
 
     const [search, setSearch] = useState("")
 
@@ -54,9 +63,9 @@ function CardapioItems() {
 
         setSearch(value)
 
-        if (!value) return setItems(initialItems)
+        if (!value) return setItems(cardapioItems)
 
-        const searchedItems = initialItems
+        const searchedItems = cardapioItems
             .filter(item => {
 
                 const tags = item?.tags?.public || []
@@ -90,13 +99,23 @@ function CardapioItems() {
                 </div>
             </div>
 
-            <div className="h-[250px] overflow-y-auto p-2 md:p-6">
+            <div className="h-[350px] overflow-y-auto p-2 md:p-6">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4">
                     {
                         items.map(item => {
                             return (
                                 <div className="border rounded-lg p-4" key={item.id}>
-                                    <h2 className="text-xs uppercase font-semibold tracking-wide">{item.name}</h2>
+                                    <div className="flex justify-between items-center mb-2">
+                                        <h2 className="text-xs uppercase font-semibold tracking-wide">{item.name}</h2>
+                                        <CopyButton
+                                            // label="Copiar elenco para imprimir"
+                                            classNameLabel="text-sm md:text-xs "
+                                            classNameButton="border-none text-sm md:text-xs p-1 mr-0 h-max hover:bg-black/20 hover:text-white"
+                                            textToCopy={`*${item.name}*: ${item.ingredients}`}
+                                            variant="outline"
+                                        />
+                                    </div>
+
                                     <ul className="grid grid-cols-2 items-end mb-2">
                                         {
                                             item.priceVariations.map(pv => {
