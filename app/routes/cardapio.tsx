@@ -128,7 +128,7 @@ function CardapioHeader() {
                         buttonTrigger={{
                             label: "",
                             classNameLabel: "block font-body-website text-[10px] font-semibold uppercase",
-                            classNameButton: "justify-start w-full h-full",
+                            classNameButton: "justify-start w-full h-full text-black bg-transparent hover:bg-transparent hover:text-black px-0",
                         }}
                         cnLink="font-body-website text-xl uppercase tracking-widest"
 
