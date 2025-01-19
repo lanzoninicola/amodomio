@@ -17,6 +17,7 @@ import { jsonParse, jsonStringify } from "~/utils/json-helper";
 import BadgeTag from "~/domain/tags/components/badge-tag";
 
 export const meta: MetaFunction = ({ data }) => {
+    // @ts-ignore
     const item: MenuItemWithAssociations = data?.payload?.item
 
     return [
