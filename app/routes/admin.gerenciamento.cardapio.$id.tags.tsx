@@ -1,5 +1,5 @@
 import { MenuItemTag, Tag } from "@prisma/client";
-import { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
+import { LoaderFunctionArgs, MetaArgs, MetaFunction } from "@remix-run/node";
 import { Form, useActionData, useLoaderData, useOutletContext } from "@remix-run/react";
 import { useState } from "react";
 import { Badge } from "~/components/ui/badge";
@@ -17,6 +17,7 @@ import { jsonParse, jsonStringify } from "~/utils/json-helper";
 import BadgeTag from "~/domain/tags/components/badge-tag";
 
 export const meta: MetaFunction = ({ data }) => {
+    // @ts-ignore
     const item: MenuItemWithAssociations = data?.payload?.item
 
     return [
@@ -67,13 +68,31 @@ export async function action({ request }: LoaderFunctionArgs) {
             return badRequest("Item não encontrado")
         }
 
-        const alreadyExists = await menuItemPrismaEntity.hasTag(itemId, tag.id)
+        if (tag?.id) {
+            const alreadyExists = await menuItemPrismaEntity.hasTag(itemId, tag.id)
 
-        if (alreadyExists === true) {
-            return ok("Tag já existe")
+            if (alreadyExists === true) {
+                return ok("Tag já existe")
+            }
+
         }
 
-        const [err, _] = await prismaIt(menuItemPrismaEntity.addTag(itemId, tag))
+        const tagName = values?.tagName as string
+
+        if (!tagName) {
+            return badRequest("Tag nao informada")
+        }
+
+        const newTag: Omit<Tag, "id"> = {
+            name: tagName,
+            public: tag?.public || false,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            deletedAt: null,
+            colorHEX: tag?.colorHEX || "#FFFFFF",
+        }
+
+        const [err, _] = await prismaIt(menuItemPrismaEntity.addTag(itemId, newTag))
 
         if (err) {
             return badRequest(err)
@@ -189,8 +208,6 @@ export default function SingleMenuItemTags() {
                 <ul className="flex gap-2">
                     {
                         itemTags.map((t: Tag) => {
-
-                            console.log({ t })
 
                             return (
                                 <li key={t.id} >

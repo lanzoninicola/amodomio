@@ -245,7 +245,7 @@ export class MenuItemPrismaEntity {
     return await this.client.menuItem.delete({ where: { id } });
   }
 
-  async addTag(itemId: string, tag: Tag) {
+  async addTag(itemId: string, tag: Omit<Tag, "id">) {
     return await menuItemTagPrismaEntity.create({
       createdAt: new Date().toISOString(),
       MenuItem: {
@@ -256,7 +256,8 @@ export class MenuItemPrismaEntity {
       Tag: {
         connectOrCreate: {
           where: {
-            id: tag.id,
+            id: "",
+            name: tag.name,
           },
           create: {
             ...tag,
