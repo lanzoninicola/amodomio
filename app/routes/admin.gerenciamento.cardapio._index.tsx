@@ -1,4 +1,4 @@
-import { useActionData, useOutletContext } from "@remix-run/react";
+import { Form, Link, useActionData, useOutletContext } from "@remix-run/react";
 import MenuItemList from "~/domain/cardapio/components/menu-item-list/menu-item-list";
 import { AdminCardapioOutletContext } from "./admin.gerenciamento.cardapio";
 import { MenuItem } from "@prisma/client";
@@ -10,6 +10,15 @@ import { toast } from "~/components/ui/use-toast";
 import tryit from "~/utils/try-it";
 import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { menuItemPriceVariationsEntity } from "~/domain/cardapio/menu-item-price-variations.prisma.entity.server";
+import randomReactKey from "~/utils/random-react-key";
+import { Category } from "~/domain/category/category.model.server";
+import MenuItemCard from "~/domain/cardapio/components/menu-item-card/menu-item-card";
+import { Menu } from "lucide-react";
+import { Separator } from "~/components/ui/separator";
+import BadgeTag from "~/domain/tags/components/badge-tag";
+import capitalize from "~/utils/capitalize";
+import { Switch } from "~/components/ui/switch";
+import React from "react";
 
 
 
@@ -117,7 +126,7 @@ export async function action({ request }: LoaderFunctionArgs) {
 
 export default function AdminCardapio() {
     const outletContext: AdminCardapioOutletContext = useOutletContext()
-    const items = outletContext.items as MenuItemWithAssociations[]
+    const items = outletContext?.items || [] as { category: Category["name"], menuItems: MenuItemWithAssociations[] }[]
 
     const actionData = useActionData<typeof action>()
 
@@ -133,7 +142,7 @@ export default function AdminCardapio() {
 
     if (actionData && actionData.status === 200) {
 
-        console.log(actionData, 'estou aqyu')
+
         toast({
             title: "Ok",
             description: actionData.message,
@@ -163,14 +172,79 @@ export default function AdminCardapio() {
                 </div>
             </div>
             {/* <MenuItemListStat items={items} /> */}
-            <MenuItemList initialItems={items} />
+            {/* <MenuItemList initialItems={items} /> */}
+
+            <div className="grid grid-cols-2 gap-4">
+                <div>
+                    {items.slice(0, Math.ceil(items.length / 2)).map((item) => (
+                        <MenuItemListSliced key={item.category} item={item} />
+                    ))}
+                </div>
+                <div>
+                    {items.slice(Math.ceil(items.length / 2)).map((item) => (
+                        <MenuItemListSliced key={item.category} item={item} />
+                    ))}
+                </div>
+            </div>
+
+
         </div>
 
     )
 }
 
 
+function MenuItemListSliced({ item }: { item: { category: Category["name"], menuItems: MenuItemWithAssociations[] } }) {
+    const [visible, setVisible] = React.useState(false)
+    const submitBtnRef = React.useRef<HTMLButtonElement>(null)
 
+    function handleVisibility() {
+
+        setVisible(!visible)
+
+        if (submitBtnRef.current) {
+            submitBtnRef.current.click()
+        }
+    }
+
+    return (
+        <div key={item.category} className="flex flex-col mb-6">
+            <h3 className="uppercase font-semibold text-3xl tracking-tight">{item.category}</h3>
+            <Separator className="my-2" />
+            <ul>
+                {item.menuItems.map((menuItem) => (
+                    <li key={menuItem.id} className="flex flex-col mb-2">
+                        <Link to={`${menuItem?.id}/main`} className="flex flex-col p-1 hover:bg-muted">
+                            <div className="grid grid-cols-6">
+                                <span className="font-semibold uppercase mb-0 tracking-wider col-span-4">{menuItem.name}</span>
+                                <Form method="post" className="flex justify-between md:justify-end gap-2 w-full items-center col-span-2">
+
+                                    <span className="font-semibold text-sm">Públicar</span>
+                                    <Switch defaultChecked={menuItem?.visible || false} onCheckedChange={handleVisibility} />
+                                    <input type="hidden" name="id" value={menuItem?.id} />
+                                    <button ref={submitBtnRef} className="hidden" type="submit" value={"menu-item-visibility-change"} name="_action" />
+
+                                </Form>
+                            </div>
+
+                            <div className="flex gap-2">
+                                {menuItem.tags?.models.map((tag) => (
+                                    <BadgeTag key={tag?.id} tag={tag} allowRemove={false}
+                                        classNameLabel="text-xs uppercase tracking-wider"
+                                        classNameContainer="py-0 px-1.5"
+                                    />
+                                ))}
+                            </div>
+                            <span>{capitalize(menuItem.ingredients)}</span>
+
+                        </Link>
+
+                    </li>
+                ))}
+            </ul>
+        </div>
+    )
+}
 
 
 

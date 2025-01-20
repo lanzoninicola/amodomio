@@ -38,7 +38,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
     const [categories, items, tags, sizeVariations] = await prismaAll([
         categoryPrismaEntity.findAll(),
-        menuItemPrismaEntity.findAll({
+        menuItemPrismaEntity.findAllGroupedByCategory({
             option: {
                 sorted: true,
                 direction: "asc"
@@ -58,9 +58,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
     return ok({
         categories: categories[1] as Category[],
-        items: items[1] as MenuItemWithAssociations[],
+        items: items[1] as { category: Category["name"], menuItems: MenuItemWithAssociations[] }[],
         tags: tags[1] as MenuItemTag[],
         sizeVariations: sizeVariations[1] as PizzaSizeVariation[]
+
     })
 
 }
@@ -68,16 +69,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export interface AdminCardapioOutletContext {
     categories: Category[]
-    items: MenuItemWithAssociations[]
+    items?: { category: Category["name"], menuItems: MenuItemWithAssociations[] }[]
     tags: MenuItemTag[]
 }
 
 export default function AdminCardapioOutlet() {
     const loaderData = useLoaderData<typeof loader>()
-    const items = loaderData?.payload.items as MenuItemWithAssociations[] || []
+    const items = loaderData?.payload.items as { category: Category["name"], menuItems: MenuItemWithAssociations[] }[] || []
     const categories = loaderData?.payload.categories as Category[] || []
     const tags = loaderData?.payload.tags as MenuItemTag[] || []
     const sizeVariations = loaderData?.payload.sizeVariations || []
+
+
 
     if (loaderData?.status > 399) {
         toast({
@@ -135,10 +138,11 @@ export default function AdminCardapioOutlet() {
             </div>
 
             <Outlet context={{
-                items: items.sort((a, b) => a.sortOrderIndex - b.sortOrderIndex),
+                items,
                 categories,
                 tags,
-                sizeVariations
+                sizeVariations,
+
             }} />
         </Container>
 

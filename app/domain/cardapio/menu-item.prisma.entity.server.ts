@@ -163,6 +163,39 @@ export class MenuItemPrismaEntity {
     return returnedRecords;
   }
 
+  async findAllGroupedByCategory(
+    params: MenuItemEntityFindAllProps = {},
+    options = {
+      imageTransform: false,
+      imageScaleWidth: 1280,
+    }
+  ) {
+    // Use the existing findAll function to fetch records
+    const allMenuItems = (await this.findAll(params, options)) || [];
+
+    // Group records by category in memory
+    const groupedByCategory = allMenuItems.reduce((acc, menuItem) => {
+      const categoryName = menuItem.Category?.name || "Sem categoria";
+
+      if (!acc[categoryName]) {
+        acc[categoryName] = [];
+      }
+
+      // @ts-ignore
+      acc[categoryName].push(menuItem);
+
+      return acc;
+    }, {} as Record<string, MenuItemWithAssociations[]>);
+
+    // Convert to an ordered array of categories
+    return Object.keys(groupedByCategory)
+      .sort() // Sort categories alphabetically; customize as needed
+      .map((categoryName) => ({
+        category: categoryName,
+        menuItems: groupedByCategory[categoryName],
+      }));
+  }
+
   async findById(
     id: string,
     options = {
