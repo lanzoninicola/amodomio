@@ -4,13 +4,15 @@ import { MenuItemWithAssociations } from "../../menu-item.prisma.entity.server"
 
 interface CardapioItemPriceProps {
     prices: MenuItemWithAssociations["priceVariations"]
+    showValuta?: boolean
     cnLabel?: string
 }
 
-export default function CardapioItemPrice({ prices, cnLabel }: CardapioItemPriceProps) {
+export default function CardapioItemPrice({ prices, cnLabel, showValuta = true }: CardapioItemPriceProps) {
 
     const visiblePrices = prices.filter(p => p.showOnCardapio === true) || []
-    const colsNumber = prices.length
+    const lastIndex = visiblePrices.length - 1
+    const colsNumber = visiblePrices.length
 
     return (
         <div className={
@@ -20,22 +22,22 @@ export default function CardapioItemPrice({ prices, cnLabel }: CardapioItemPrice
             )
         }>
             {
-                visiblePrices.map(p => {
+                visiblePrices.map((p, idx) => {
 
                     return (
 
                         <div key={p.id} className={
                             cn(
-                                "flex flex-col items-center text-white",
+                                "flex items-center gap-2",
+                                lastIndex === idx && "order-last",
                                 cnLabel
                             )
 
                         }>
-                            <span className="font-body-website uppercase text-[14px]">{p?.label}</span>
-                            <Separator orientation="horizontal" className="my-1" />
-                            <div className="flex items-start gap-[2px] font-body-website font-semibold">
-                                <span className="text-[13px]">R$</span>
-                                <span className="text-[15px]">{p?.amount}</span>
+                            <span className="uppercase text-[12px]  text-muted-foreground">{p?.label}</span>
+                            <div className="flex items-center gap-[2px] text-muted-foreground">
+                                {showValuta && <span className="text-[12px]">R$</span>}
+                                <span className="text-[13px]">{p?.amount}</span>
                             </div>
                         </div>
                     )
