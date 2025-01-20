@@ -15,6 +15,9 @@ import { cn } from "~/lib/utils";
 import capitalize from "~/utils/capitalize";
 import { Award } from "lucide-react";
 import AwardBadge from "~/components/award-badge/award-badge";
+import { Separator } from "~/components/ui/separator";
+import CardapioItemDialog from "~/domain/cardapio/components/cardapio-item-dialog/cardapio-item-dialog";
+import CardapioItemPrice from "~/domain/cardapio/components/cardapio-item-price/cardapio-item-price";
 
 export const headers: HeadersFunction = () => ({
     'Cache-Control': 's-maxage=1, stale-while-revalidate=59',
@@ -129,31 +132,51 @@ export default function CardapioWebIndex() {
     const { items, tags } = useLoaderData<typeof loader>()
 
     return (
-        <section>
 
-            <div className="flex flex-col">
-                {/* <Loading /> */}
-                <Suspense fallback={<Loading />}>
+        <section className="flex flex-col">
 
-                    <Await resolve={tags}>
-                        {(tags) => {
-                            // @ts-ignore
-                            return <FiltersTags tags={tags ?? []} />
-                        }}
-                    </Await>
-                </Suspense>
-                <Suspense fallback={<Loading />}>
-                    <Await resolve={items}>
+            <Separator className="my-4" />
 
-                        {(items) => {
-                            // @ts-ignore
-                            return <CardapioItemList allItems={items ?? []} />
-                        }}
-                    </Await>
+            <Suspense fallback={<Loading />}>
+                <Await resolve={items}>
 
-                </Suspense>
-            </div>
-        </section >
+                    {(items) => {
+
+                        return (
+                            <section className="flex flex-col gap-4 mx-2 md:grid md:grid-cols-2">
+
+                                <CardapioItemListDestaque items={items} title="em destaque" tagFilter="em-destaque" />
+                                <CardapioItemListDestaque items={items} title="mais vendido" tagFilter="mais-vendido" />
+
+                            </section>
+                        )
+                    }}
+                </Await>
+            </Suspense>
+
+            <Separator className="my-4" />
+
+            {/* <Loading /> */}
+            <Suspense fallback={<Loading />}>
+
+                <Await resolve={tags}>
+                    {(tags) => {
+                        // @ts-ignore
+                        return <FiltersTags tags={tags ?? []} />
+                    }}
+                </Await>
+            </Suspense>
+            <Suspense fallback={<Loading />}>
+                <Await resolve={items}>
+
+                    {(items) => {
+                        // @ts-ignore
+                        return <CardapioItemList allItems={items ?? []} />
+                    }}
+                </Await>
+
+            </Suspense>
+        </section>
 
 
     );
@@ -232,20 +255,23 @@ const CardapioItemList = ({ allItems }: { allItems: MenuItemWithAssociations[] }
     }
 
     return (
-        <section>
-            <ul className="flex flex-col overflow-y-auto md:overflow-y-auto snap-mandatory mt-4 md:grid md:grid-cols-2 md:gap-x-4">
-                {items.map((item, index) => {
-                    const isLastItem = items.length === index + 1;
-                    return (
-                        <CardapioItem
-                            ref={isLastItem ? lastItemRef : null}
-                            key={item.id}
-                            item={item}
-                        />
-                    );
-                })}
-            </ul>
-        </section>
+        <div className="flex flex-col gap-4">
+
+            <section>
+                <ul className="flex flex-col overflow-y-auto md:overflow-y-auto snap-mandatory mt-4 md:grid md:grid-cols-2 md:gap-x-4">
+                    {items.map((item, index) => {
+                        const isLastItem = items.length === index + 1;
+                        return (
+                            <CardapioItem
+                                ref={isLastItem ? lastItemRef : null}
+                                key={item.id}
+                                item={item}
+                            />
+                        );
+                    })}
+                </ul>
+            </section>
+        </div>
     );
 }
 
@@ -287,13 +313,7 @@ const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) =>
                     <CardapioItemActionBar item={item} />
                 </div>
                 {
-                    item.imageTransformedURL &&
-                    (<div className="bg-center bg-cover bg-no-repeat col-span-3 rounded-lg h-[112px]"
-                        style={{
-                            backgroundImage: `url(${item.imageTransformedURL})`,
-                        }}>
-
-                    </div>)
+                    item.imageTransformedURL && <CardapioItemImage imageURL={item.imageTransformedURL} cnClassName="col-span-3" />
                 }
 
             </div>
@@ -304,59 +324,76 @@ const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) =>
     )
 })
 
-interface CardapioItemPriceProps {
-    prices: MenuItemWithAssociations["priceVariations"]
-    showValuta?: boolean
-    cnLabel?: string
+
+
+interface CardapioItemImageProps {
+    imageURL?: string
+    cnClassName?: string
 }
 
-function CardapioItemPrice({ prices, cnLabel, showValuta = true }: CardapioItemPriceProps) {
-
-    const visiblePrices = prices.filter(p => p.showOnCardapio === true) || []
-    const lastIndex = visiblePrices.length - 1
-    const colsNumber = visiblePrices.length
+function CardapioItemImage({ imageURL, cnClassName }: CardapioItemImageProps) {
 
     return (
         <div className={
             cn(
-                "grid gap-x-2",
-                isNaN(colsNumber) ? "grid-cols-3" : `grid-cols-${colsNumber}`
+                "bg-center bg-cover bg-no-repeat rounded-lg h-[112px]",
+                cnClassName
             )
-        }>
-            {
-                visiblePrices.map((p, idx) => {
-
-                    return (
-
-                        <div key={p.id} className={
-                            cn(
-                                "flex items-center gap-2",
-                                lastIndex === idx && "order-last",
-                                cnLabel
-                            )
-
-                        }>
-                            <span className="uppercase text-[12px]  text-muted-foreground">{p?.label}</span>
-                            <div className="flex items-center gap-[2px] text-muted-foreground">
-                                {showValuta && <span className="text-[12px]">R$</span>}
-                                <span className="text-[13px]">{p?.amount}</span>
-                            </div>
-                        </div>
-                    )
-
-
-                })
-            }
+        }
+            style={{
+                backgroundImage: `url(${imageURL})`,
+            }}>
 
         </div>
     )
 }
 
+interface CardapioItemListDestaqueProps {
+    title: string
+    items: MenuItemWithAssociations
+    tagFilter?: string
+}
+
+
+function CardapioItemListDestaque({ title, items, tagFilter }: CardapioItemListDestaqueProps) {
+
+    return (
+        <div className="rounded-md p-2">
+            <h3 className="font-semibold text-2xl uppercase mb-4 font-body-website tracking-wider">{title}</h3>
+            <ul className="grid grid-cols-2 gap-2">
+                {
+                    // @ts-ignore
+                    items.filter(i => i.tags?.all.some(t => t === tagFilter)).slice(0, 4).map(i => (
+                        <li key={i.id}>
+
+                            <CardapioItemDialog item={i} triggerComponent={
+                                <div className="grid place-items-center rounded-md bg-slate-50 h-[112px]">
+
+                                    <div className="flex flex-col gap-2  items-center justify-center">
+                                        <div className="rounded-full h-[60px] w-[60px]">
+                                            {
+                                                // @ts-ignore
+                                                i.imageTransformedURL ?
+                                                    <CardapioItemImage imageURL={i.imageTransformedURL} cnClassName="h-[60px] rounded-full" />
+                                                    :
+                                                    <div className="h-[60px] w-[60px] bg-slate-200 rounded-full"></div>
+                                            }
+                                        </div>
+                                        <span className="font-body-website font-semibold tracking-wide uppercase text-center">{i.name}</span>
+                                    </div>
+                                </div>
+                            } />
 
 
 
 
 
+                        </li>
+                    ))}
+            </ul>
+        </div>
+    )
+}
 
 
 
