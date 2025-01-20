@@ -1,5 +1,5 @@
 import { MenuItemTag, Tag } from "@prisma/client";
-import { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
+import { LoaderFunctionArgs, MetaArgs, MetaFunction } from "@remix-run/node";
 import { Form, useActionData, useLoaderData, useOutletContext } from "@remix-run/react";
 import { useState } from "react";
 import { Badge } from "~/components/ui/badge";
@@ -15,8 +15,11 @@ import { Tags, X } from "lucide-react";
 import { tagPrismaEntity } from "~/domain/tags/tag.prisma.entity.server";
 import { jsonParse, jsonStringify } from "~/utils/json-helper";
 import BadgeTag from "~/domain/tags/components/badge-tag";
+import prismaClient from "~/lib/prisma/client.server";
+import tryit from "~/utils/try-it";
 
 export const meta: MetaFunction = ({ data }) => {
+    // @ts-ignore
     const item: MenuItemWithAssociations = data?.payload?.item
 
     return [
@@ -58,46 +61,126 @@ export async function action({ request }: LoaderFunctionArgs) {
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);
 
-    if (_action === "menu-item-tag-add") {
+    console.log({ _action, values })
 
-        const tag = jsonParse(values?.tag as string) as Tag
+    if (_action === "tag-create") {
+
+        const tagName = values?.tagName as string
         const itemId = values?.itemId as string
 
         if (!itemId) {
             return badRequest("Item não encontrado")
         }
 
-        const alreadyExists = await menuItemPrismaEntity.hasTag(itemId, tag.id)
+        const tagFound = await prismaClient.tag.findFirst({
+            where: {
+                name: tagName
+            }
+        })
 
-        if (alreadyExists === true) {
-            return ok("Tag já existe")
+        if (tagFound) {
+            return ok("Tag ja cadastrada")
         }
 
-        const [err, _] = await prismaIt(menuItemPrismaEntity.addTag(itemId, tag))
+        const nextTag: Omit<Tag, "id"> = {
+            name: tagName,
+            public: false,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            deletedAt: null,
+            colorHEX: "#FFFFFF",
+        }
+
+        const [err, _] = await tryit(prismaClient.tag.create({
+            data: nextTag
+        }))
 
         if (err) {
             return badRequest(err)
         }
 
         return ok({
-            message: "Tag adicionada",
-            action: "menu-item-tag-add"
+            message: "Tag cadastrada",
+            action: "tag-create"
         })
+
     }
 
-    if (_action === "menu-item-tag-remove") {
+    if (_action === "tag-remove") {
 
-        const itemId = values?.itemId as string
-        const name = values?.tagName as string
+        const tagId = values?.tagId as string
 
-        const [err, result] = await prismaIt(menuItemPrismaEntity.removeTag(itemId, name))
+        const tagFound = await prismaClient.tag.findFirst({
+            where: {
+                id: tagId
+            }
+        })
+
+        if (!tagFound) {
+            return badRequest("Tag nao encontrada")
+        }
+
+
+        const [err, _] = await tryit(tagPrismaEntity.delete(tagId))
 
         if (err) {
             return badRequest(err)
         }
 
-        return ok("Tag removida")
+        return ok(`Tag ${tagFound.name} removido`)
     }
+
+    if (_action === "menu-item-tag-association") {
+
+        const tagSelected = jsonParse(values?.tag as string) as Tag
+        const itemId = values?.itemId as string
+
+        if (!itemId) {
+            return badRequest("Item não encontrado")
+        }
+
+        if (!tagSelected?.id) {
+            return badRequest("Tag não informado")
+        }
+
+        const [err, _] = await prismaIt(menuItemPrismaEntity.associateTag(itemId, tagSelected))
+
+        if (err) {
+            return badRequest(err)
+        }
+
+        return ok({
+            message: "Tag associado ao item",
+            action: "menu-item-tag-association"
+        })
+    }
+
+    if (_action === "menu-item-tag-dissociate") {
+
+        const itemId = values?.itemId as string
+        const tagId = values?.tagId as string
+
+        const tagFound = await prismaClient.tag.findFirst({
+            where: {
+                id: tagId
+            }
+        })
+
+        if (!tagFound) {
+            return badRequest("Tag nao encontrada")
+        }
+
+
+        const [err, result] = await prismaIt(menuItemPrismaEntity.removeTag(itemId, tagFound?.id))
+
+        if (err) {
+            return badRequest(err)
+        }
+
+        return ok(`Tag ${tagFound.name} removido`)
+    }
+
+
 
     return null
 }
@@ -111,14 +194,14 @@ export default function SingleMenuItemTags() {
 
     const actionData = useActionData<typeof action>()
 
-    if (actionData && actionData?.action === "menu-item-tag-add" && actionData?.status > 399) {
+    if (actionData && actionData?.status > 399) {
         toast({
             title: "Erro",
             description: actionData?.message,
         })
     }
 
-    if (actionData && actionData?.action === "menu-item-tag-add" && actionData?.status === 200) {
+    if (actionData && actionData?.status === 200) {
         toast({
             title: "OK",
             description: actionData?.message
@@ -141,7 +224,7 @@ export default function SingleMenuItemTags() {
                         className="mb-2"
                         placeholder="Criar tag"
                     />
-                    <SubmitButton actionName={"menu-item-tag-add"} labelClassName="text-xs" variant={"outline"} tabIndex={0} iconColor="black" />
+                    <SubmitButton actionName={"tag-create"} labelClassName="text-xs" variant={"outline"} tabIndex={0} iconColor="black" />
                 </Form>
 
 
@@ -162,15 +245,15 @@ export default function SingleMenuItemTags() {
                                 }
                             }></Input>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-wrap">
                         {
                             currentTags.map((t: Tag) => {
                                 return (
                                     <Form method="post" key={t.id}>
                                         <input type="hidden" name="itemId" value={item.id} />
                                         <input type="hidden" name="tag" value={jsonStringify(t)} />
-                                        <button type="submit" name="_action" value="menu-item-tag-add" className="hover:underline">
-                                            <Badge className="w-fit">{t.name}</Badge>
+                                        <button type="submit" name="_action" value="menu-item-tag-association" className="hover:underline">
+                                            <BadgeTag tag={t} actionName="tag-remove" classNameLabel="text-sm" />
                                         </button>
                                     </Form>
                                 )
@@ -186,11 +269,9 @@ export default function SingleMenuItemTags() {
                 <div className="flex flex-col gap-2 mb-4">
                     <span className="text-xs font-semibold text-muted-foreground">{`Tags associados (${item.tags?.all.length || 0})`}</span>
                 </div>
-                <ul className="flex gap-2">
+                <ul className="flex gap-2 flex-wrap">
                     {
                         itemTags.map((t: Tag) => {
-
-                            console.log({ t })
 
                             return (
                                 <li key={t.id} >
@@ -212,7 +293,7 @@ function BadgeItemTag({ itemId, tag }: { itemId: string, tag: Tag }) {
         <Form method="post">
             <input type="hidden" name="itemId" value={itemId} />
             <input type="hidden" name="tagId" value={tag.id} />
-            <BadgeTag tag={tag} actionName="menu-item-tag-remove" />
+            <BadgeTag tag={tag} actionName="menu-item-tag-dissociate" />
         </Form>
     )
 }
