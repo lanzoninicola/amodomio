@@ -50,10 +50,13 @@ export default function CardapioItemDialog({ item, children, triggerComponent }:
                         <CardapioItemPrice prices={item?.priceVariations} cnLabel="text-black items-start" showValuta={false} />
                     </div>
                     {children}
-                    <DialogClose asChild className="w-full">
-                        <Button type="button" variant="secondary">
-                            <span className=" tracking-wide font-semibold uppercase">Fechar</span>
-                        </Button>
+                    <DialogClose asChild>
+                        <div className="w-full px-4 py-6">
+                            <Button type="button" variant="secondary" className="w-full" >
+                                <span className=" tracking-wide font-semibold uppercase">Fechar</span>
+                            </Button>
+                        </div>
+
                     </DialogClose>
                 </div>
             </DialogContent>
