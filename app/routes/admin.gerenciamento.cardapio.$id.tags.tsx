@@ -61,7 +61,7 @@ export async function action({ request }: LoaderFunctionArgs) {
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);
 
-    // console.log({ _action, values })
+    console.log({ _action, values })
 
     if (_action === "tag-create") {
 
@@ -250,6 +250,7 @@ export default function SingleMenuItemTags() {
                             currentTags.map((t: Tag) => {
                                 return (
                                     <Form method="post" key={t.id}>
+                                        <input type="hidden" name="itemId" value={item.id} />
                                         <input type="hidden" name="tagId" value={t.id} />
                                         <button type="submit" name="_action" value="menu-item-tag-association" className="hover:underline">
                                             <BadgeTag tag={t} actionName="tag-remove" classNameLabel="text-sm" />
