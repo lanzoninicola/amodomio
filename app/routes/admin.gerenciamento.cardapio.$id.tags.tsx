@@ -251,7 +251,7 @@ export default function SingleMenuItemTags() {
                                 return (
                                     <Form method="post" key={t.id}>
                                         <input type="hidden" name="itemId" value={item.id} />
-                                        <input type="hidden" name="tagId" value={t.id} />
+                                        <input type="hidden" name="tag" value={jsonStringify(t)} />
                                         <button type="submit" name="_action" value="menu-item-tag-association" className="hover:underline">
                                             <BadgeTag tag={t} actionName="tag-remove" classNameLabel="text-sm" />
                                         </button>
