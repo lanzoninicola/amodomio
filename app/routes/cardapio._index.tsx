@@ -13,6 +13,8 @@ import Loading from "~/components/loading/loading";
 import FiltersTags from "~/domain/cardapio/components/filter-tags/filter-tags";
 import { cn } from "~/lib/utils";
 import capitalize from "~/utils/capitalize";
+import { Award } from "lucide-react";
+import AwardBadge from "~/components/award-badge/award-badge";
 
 export const headers: HeadersFunction = () => ({
     'Cache-Control': 's-maxage=1, stale-while-revalidate=59',
@@ -253,6 +255,8 @@ interface CardapioItemProps {
 
 const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) => {
     const italyProduct = item.tags?.public.some(t => t.toLocaleLowerCase() === "produtos-italianos")
+    const bestMonthlySeller = item.tags?.all.some(t => t.toLocaleLowerCase() === "mais-vendido-mes")
+    const bestSeller = item.tags?.all.some(t => t.toLocaleLowerCase() === "mais-vendido")
 
     return (
         <li className="snap-start border-b py-2" id={item.id} ref={ref}>
@@ -269,7 +273,14 @@ const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) =>
                         !item.imageTransformedURL && " col-span-8"
                     )
                 }>
-                    <h3 className="font-body-website text-xl tracking-wider font-semibold uppercase mb-1">{item.name}</h3>
+                    <div className="flex flex-col gap-0 mb-1">
+                        <h3 className="font-body-website text-xl tracking-wider font-semibold uppercase">{item.name}</h3>
+                        <div className="flex flex-col gap-2">
+                            {bestSeller && <AwardBadge>A mais desejada</AwardBadge>}
+                            {bestMonthlySeller && <AwardBadge>Mais vendida do mes</AwardBadge>}
+                        </div>
+                    </div>
+
                     {italyProduct && <ItalyIngredientsStatement />}
                     <p className="leading-snug text-[15px] my-2">{capitalize(item.ingredients)}</p>
                     <CardapioItemPrice prices={item?.priceVariations} cnLabel="text-black" showValuta={false} />
