@@ -1,25 +1,22 @@
-import { Form, Link, useActionData, useOutletContext } from "@remix-run/react";
-import MenuItemList from "~/domain/cardapio/components/menu-item-list/menu-item-list";
-import { AdminCardapioOutletContext } from "./admin.gerenciamento.cardapio";
-import { MenuItem } from "@prisma/client";
-import { LoaderFunctionArgs } from "@remix-run/node";
-import { prismaIt } from "~/lib/prisma/prisma-it.server";
-import { badRequest, ok } from "~/utils/http-response.server";
-import { toast } from "~/components/ui/use-toast";
 
-import tryit from "~/utils/try-it";
-import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
-import { menuItemPriceVariationsEntity } from "~/domain/cardapio/menu-item-price-variations.prisma.entity.server";
-import randomReactKey from "~/utils/random-react-key";
-import { Category } from "~/domain/category/category.model.server";
-import MenuItemCard from "~/domain/cardapio/components/menu-item-card/menu-item-card";
-import { Menu } from "lucide-react";
-import { Separator } from "~/components/ui/separator";
-import BadgeTag from "~/domain/tags/components/badge-tag";
-import capitalize from "~/utils/capitalize";
-import { Switch } from "~/components/ui/switch";
-import React from "react";
+import { MenuItem, Category } from "@prisma/client"
+import { LoaderFunctionArgs } from "@remix-run/node"
+import { Form, Link, useActionData, useOutletContext } from "@remix-run/react"
+import { ok } from "assert"
 
+import React from "react"
+import { toast } from "~/components/ui/use-toast"
+import items from "~/domain/cardapio/db-mock/items"
+import { menuItemPriceVariationsEntity } from "~/domain/cardapio/menu-item-price-variations.prisma.entity.server"
+import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server"
+import BadgeTag from "~/domain/tags/components/badge-tag"
+import { prismaIt } from "~/lib/prisma/prisma-it.server"
+import capitalize from "~/utils/capitalize"
+import { badRequest } from "~/utils/http-response.server"
+import tryit from "~/utils/try-it"
+import { AdminCardapioOutletContext } from "./admin.gerenciamento.cardapio"
+import { Separator } from "~/components/ui/separator"
+import { Switch } from "~/components/ui/switch"
 
 
 export type MenuItemActionSearchParam = "menu-item-create" | "menu-item-edit" | "menu-item-delete" | "menu-items-sortorder" | null
@@ -124,7 +121,7 @@ export async function action({ request }: LoaderFunctionArgs) {
     return null
 }
 
-export default function AdminCardapio() {
+export default function AdminGerenciamentoCardapioMain() {
     const outletContext: AdminCardapioOutletContext = useOutletContext()
     const items = outletContext?.items || [] as { category: Category["name"], menuItems: MenuItemWithAssociations[] }[]
 
@@ -149,32 +146,10 @@ export default function AdminCardapio() {
         })
     }
 
+
     return (
-
-        <div className="flex flex-col gap-4 ">
-            <div className="grid grid-cols-8  gap-4">
-                <div className="flex flex-col gap-2 justify-center items-center mb-2 col-span-2 border rounded-md p-4">
-                    <span className="uppercase font-semibold text-xs tracking-wide">Publicados</span>
-                    <span className="text-3xl text-muted-foreground">{items.filter(item => item?.visible).length}</span>
-                </div>
-                <div className="flex flex-col gap-2 justify-center items-center mb-2 col-span-2 border rounded-md p-4">
-                    <span className="uppercase font-semibold text-xs tracking-wide">Invisiveis</span>
-                    <span className="text-3xl text-muted-foreground">{items.filter(item => item?.visible === false).length}</span>
-                </div>
-
-                <div className="flex flex-col gap-2 justify-center items-center mb-2 col-span-2 border rounded-md p-4">
-                    <span className="uppercase font-semibold text-xs tracking-wide">Sem Imagem</span>
-                    <span className="text-3xl text-muted-foreground">{items.filter(item => item?.imageId === null).length}</span>
-                </div>
-                <div className="flex flex-col gap-2 justify-center items-center mb-2 col-span-2 border rounded-md p-4">
-                    <span className="uppercase font-semibold text-xs tracking-wide">Futuro lançamento</span>
-                    <span className="text-3xl text-muted-foreground">{items.filter(item => item?.tags?.all?.includes("futuro-lançamento")).length}</span>
-                </div>
-            </div>
-            {/* <MenuItemListStat items={items} /> */}
-            {/* <MenuItemList initialItems={items} /> */}
-
-            <div className="grid grid-cols-2 gap-4">
+        <>
+            <div className="hidden md:grid md:grid-cols-2 md:gap-6 ">
                 <div>
                     {items.slice(0, Math.ceil(items.length / 2)).map((item) => (
                         <MenuItemListSliced key={item.category} item={item} />
@@ -187,12 +162,15 @@ export default function AdminCardapio() {
                 </div>
             </div>
 
-
-        </div>
+            <div className="flex flex-col md:hidden">
+                {items.map((item) => (
+                    <MenuItemListSliced key={item.category} item={item} />
+                ))}
+            </div>
+        </>
 
     )
 }
-
 
 function MenuItemListSliced({ item }: { item: { category: Category["name"], menuItems: MenuItemWithAssociations[] } }) {
     const [visible, setVisible] = React.useState(false)
@@ -245,10 +223,3 @@ function MenuItemListSliced({ item }: { item: { category: Category["name"], menu
         </div>
     )
 }
-
-
-
-
-
-
-

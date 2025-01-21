@@ -1,5 +1,5 @@
 import NoRecordsFound from "~/components/primitives/no-records-found/no-records-found"
-import { MenuItemActionSearchParam } from "~/routes/admin.gerenciamento.cardapio._index"
+import { MenuItemActionSearchParam } from "~/routes/admin.gerenciamento.cardapio._index333"
 import MenuItemCard from "../menu-item-card/menu-item-card"
 import { useState } from "react"
 import { useFetcher } from "@remix-run/react"
