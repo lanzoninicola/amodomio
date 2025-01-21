@@ -133,7 +133,7 @@ export default function CardapioWebIndex() {
 
     return (
 
-        <section className="flex flex-col">
+        <section className="flex flex-col mb-24" data-element="cardapio-index">
 
             <Separator className="my-4" />
 
@@ -144,7 +144,7 @@ export default function CardapioWebIndex() {
 
                         return (
                             <section className="flex flex-col gap-4 mx-2 md:grid md:grid-cols-2">
-
+                                {/** @ts-ignore */}
                                 <CardapioItemListDestaque items={items} title="em destaque" tagFilter="em-destaque" />
                                 <CardapioItemListDestaque items={items} title="mais vendidos" tagFilter="mais-vendido" />
 

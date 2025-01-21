@@ -12,9 +12,10 @@ interface BadgeTagProps {
     actionName?: string
     classNameContainer?: string
     classNameLabel?: string
+    allowRemove?: boolean
 }
 
-export default function BadgeTag({ tag, tagColor = true, actionName, classNameContainer, classNameLabel }: BadgeTagProps) {
+export default function BadgeTag({ tag, tagColor = true, actionName, classNameContainer, classNameLabel, allowRemove = true }: BadgeTagProps) {
     const [isHovered, setIsHovered] = useState(false)
 
 
@@ -47,9 +48,11 @@ export default function BadgeTag({ tag, tagColor = true, actionName, classNameCo
                     classNameLabel
                 )
             }>{tag.name}</span>
-            {isHovered && <button type="submit" name="_action" value={actionName} className="ml-2 hover:opacity-50">
-                <X size={12} />
-            </button>}
+            {
+                allowRemove && isHovered && <button type="submit" name="_action" value={actionName} className="ml-2 hover:opacity-50">
+                    <X size={12} />
+                </button>
+            }
         </div>
     )
 }

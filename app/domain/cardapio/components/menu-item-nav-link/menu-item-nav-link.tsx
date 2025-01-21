@@ -4,11 +4,16 @@ import { cn } from "~/lib/utils";
 
 interface MenuItemNavLinkProps {
     children: React.ReactNode;
-    to: string;
+    to: string | null;
     isActive?: boolean;
 }
 
 export default function MenuItemNavLink({ children, to, isActive }: MenuItemNavLinkProps) {
+
+    if (!to) {
+        return <code>Missing to property</code>
+    }
+
     return (
 
         <Link to={to}

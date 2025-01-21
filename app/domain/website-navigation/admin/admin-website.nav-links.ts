@@ -36,6 +36,12 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
       title: "Financeiro",
       items: [
         {
+          title: "Custos itens cardápio delivery",
+          href: "/admin/gerenciamento/cardapio-items-costs",
+          items: [],
+          disabled: false,
+        },
+        {
           title: "Fechamento do dia",
           href: "/admin/financeiro/fechamento-dia",
           items: [],

@@ -4,7 +4,7 @@ import SubmitButton from "~/components/primitives/submit-button/submit-button"
 import Fieldset from "~/components/ui/fieldset"
 import { Input } from "~/components/ui/input"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select"
-import { loader } from "~/routes/admin.gerenciamento.cardapio._index"
+import { loader } from "~/routes/admin.gerenciamento.cardapio._index333"
 import { CategoryTypeSelectElement } from "../../category.entity.server"
 import { Category } from "../../category.model.server"
 

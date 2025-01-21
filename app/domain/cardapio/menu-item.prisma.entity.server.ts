@@ -39,6 +39,13 @@ export interface MenuItemWithAssociations extends MenuItem {
   };
   shares?: number;
   imageTransformedURL: string;
+  meta: {
+    isItalyProduct: boolean;
+    isBestSeller: boolean;
+    isMonthlySpecial: boolean;
+    isMonthlyBestSeller: boolean;
+    isChefSpecial: boolean;
+  };
 }
 
 interface MenuItemEntityFindAllProps {
@@ -53,6 +60,11 @@ interface MenuItemEntityFindAllProps {
 export class MenuItemPrismaEntity {
   #menuItemQueryIncludes = {
     priceVariations: true,
+    costVariations: {
+      include: {
+        MenuItemSize: true,
+      },
+    },
     Category: true,
     tags: {
       include: {
@@ -74,7 +86,7 @@ export class MenuItemPrismaEntity {
 
   constructor({ client }: PrismaEntityProps) {
     this.client = client;
-    this.cache = new NodeCache({ stdTTL: 100, checkperiod: 120 }); // TTL in seconds
+    this.cache = new NodeCache({ stdTTL: 60, checkperiod: 30 });
   }
 
   async findAll(
@@ -88,16 +100,11 @@ export class MenuItemPrismaEntity {
     let result = this.cache.get<MenuItemWithAssociations[]>(cacheKey);
 
     if (result) {
-      if (typeof result === "string") {
-        result = JSON.parse(result);
-      }
-
-      // console.log("cache hit", cacheKey);
-
+      console.log("cache hit", cacheKey);
       return result;
     }
 
-    // console.log("cache miss", cacheKey);
+    console.log("cache miss", cacheKey);
 
     if (params?.mock) {
       return items;
@@ -108,54 +115,84 @@ export class MenuItemPrismaEntity {
       include: this.#menuItemQueryIncludes,
     });
 
-    const records = recordsFounded.map((r) => {
-      return {
-        ...r,
-        imageTransformedURL: CloudinaryUtils.scaleWidth(
-          r.MenuItemImage?.publicId || "",
-          {
-            width: options.imageScaleWidth,
-          }
+    const records = recordsFounded.map((r) => ({
+      ...r,
+      imageTransformedURL: CloudinaryUtils.scaleWidth(
+        r.MenuItemImage?.publicId || "",
+        { width: options.imageScaleWidth }
+      ),
+      tags: {
+        all: r.tags.map((t) => t.Tag?.name),
+        public: r.tags
+          .filter((t) => t.Tag?.public === true)
+          .map((t) => t.Tag?.name),
+        models: r.tags.map((t) => t.Tag),
+      },
+      likes: { amount: r.MenuItemLike.length },
+      shares: r.MenuItemShare.length,
+      meta: {
+        isItalyProduct: r.tags.some(
+          (t) => t.Tag?.name.toLowerCase() === "produtos-italiano"
         ),
-        tags: {
-          all: r.tags.map((t) => t.Tag?.name),
-          public: r.tags
-            .filter((t) => t.Tag?.public === true)
-            .map((t) => t.Tag?.name),
-          models: r.tags.map((t) => t.Tag),
-        },
-        likes: {
-          amount: r.MenuItemLike.length,
-        },
-        shares: r.MenuItemShare.length,
-      };
-    });
+        isBestSeller: r.tags.some(
+          (t) => t.Tag?.name.toLowerCase() === "mais-vendido"
+        ),
+        isMonthlyBestSeller: r.tags.some(
+          (t) => t.Tag?.name.toLowerCase() === "mais-vendido-mes"
+        ),
+        isChefSpecial: r.tags.some(
+          (t) => t.Tag?.name.toLowerCase() === "especial-chef"
+        ),
+        isMonthlySpecial: r.tags.some(
+          (t) => t.Tag?.name.toLowerCase() === "especial-mes"
+        ),
+      },
+    }));
 
-    let returnedRecords: MenuItemWithAssociations[] = [];
+    const returnedRecords = params?.option?.sorted
+      ? records.sort((a, b) => {
+          const direction = params.option?.direction === "asc" ? 1 : -1;
+          return (a.sortOrderIndex - b.sortOrderIndex) * direction;
+        })
+      : [...records];
 
-    if (records.length === 0) {
-      return returnedRecords;
-    }
-
-    if (!params?.option?.sorted) {
-      // @ts-ignore
-      returnedRecords = [...records];
-    }
-
-    // @ts-ignore
-    returnedRecords = records.sort((a, b) => {
-      if (params?.option && params?.option.direction === "asc") {
-        return a.sortOrderIndex - b.sortOrderIndex;
-      }
-
-      return b.sortOrderIndex - a.sortOrderIndex;
-    });
-
-    // this.cache.set(cacheKey, JSON.stringify(returnedRecords));
-
-    // console.log("cache set", cacheKey);
+    this.cache.set(cacheKey, returnedRecords);
+    console.log("cache set", cacheKey);
 
     return returnedRecords;
+  }
+
+  async findAllGroupedByCategory(
+    params: MenuItemEntityFindAllProps = {},
+    options = {
+      imageTransform: false,
+      imageScaleWidth: 1280,
+    }
+  ) {
+    // Use the existing findAll function to fetch records
+    const allMenuItems = (await this.findAll(params, options)) || [];
+
+    // Group records by category in memory
+    const groupedByCategory = allMenuItems.reduce((acc, menuItem) => {
+      const categoryName = menuItem.Category?.name || "Sem categoria";
+
+      if (!acc[categoryName]) {
+        acc[categoryName] = [];
+      }
+
+      // @ts-ignore
+      acc[categoryName].push(menuItem);
+
+      return acc;
+    }, {} as Record<string, MenuItemWithAssociations[]>);
+
+    // Convert to an ordered array of categories
+    return Object.keys(groupedByCategory)
+      .sort() // Sort categories alphabetically; customize as needed
+      .map((categoryName) => ({
+        category: categoryName,
+        menuItems: groupedByCategory[categoryName],
+      }));
   }
 
   async findById(
@@ -225,6 +262,8 @@ export class MenuItemPrismaEntity {
       sortOrderIndex: lastsortOrderIndex + 1,
     };
 
+    await this.invalidateCache();
+
     return await this.client.menuItem.create({ data: nextItem });
   }
 
@@ -233,14 +272,20 @@ export class MenuItemPrismaEntity {
       data.updatedAt = new Date().toISOString();
     }
 
+    await this.invalidateCache();
+
     return await this.client.menuItem.update({ where: { id }, data });
   }
 
   async delete(id: string) {
+    await this.invalidateCache();
+
     return await this.client.menuItem.delete({ where: { id } });
   }
 
   async associateTag(itemId: string, tag: Tag) {
+    await this.invalidateCache();
+
     return await menuItemTagPrismaEntity.create({
       createdAt: new Date().toISOString(),
       MenuItem: {
@@ -273,6 +318,8 @@ export class MenuItemPrismaEntity {
   }
 
   async removeTag(itemId: string, tagId: string) {
+    await this.invalidateCache();
+
     const tag = await this.client.menuItemTag.findFirst({
       where: {
         tagId,
@@ -301,6 +348,11 @@ export class MenuItemPrismaEntity {
         },
       },
     });
+  }
+
+  async invalidateCache() {
+    this.cache.flushAll(); // Simple example to clear the entire cache
+    console.log("Cache invalidated");
   }
 }
 

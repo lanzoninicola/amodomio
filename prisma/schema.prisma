@@ -133,6 +133,29 @@ model SubCategory {
   @@map("sub_categories")
 }
 
+model GroceryList {
+  id              String            @id @default(uuid())
+  name            String
+  createdAt       DateTime          @map("created_at")
+  updatedAt       DateTime          @default(now()) @updatedAt @map("updated_at")
+  GroceryListItem GroceryListItem[]
+
+  @@map("grocery_list")
+}
+
+model GroceryListItem {
+  id            String      @id @default(uuid())
+  createdAt     DateTime    @map("created_at")
+  updatedAt     DateTime    @default(now()) @updatedAt @map("updated_at")
+  groceryListId String      @map("grocery_list_id")
+  GroceryList   GroceryList @relation(fields: [groceryListId], references: [id])
+  name          String?
+  quantity      Int
+  purchased     Boolean
+
+  @@map("grocery_list_items")
+}
+
 model MenuItem {
   id              String                   @id @default(uuid())
   name            String
@@ -143,7 +166,6 @@ model MenuItem {
   basePriceAmount Float                    @map("base_price_amount")
   priceVariations MenuItemPriceVariation[]
   costVariations  MenuItemCostVariation[]
-  sizeVariation   MenuItemSizeVariation[]
   visible         Boolean
   mogoId          String                   @map("mogo_id")
   createdAt       DateTime                 @map("created_at")
@@ -181,51 +203,53 @@ model MenuItemImage {
 }
 
 model MenuItemPriceVariation {
-  id                 String                  @id @default(uuid())
-  MenuItem           MenuItem?               @relation(fields: [menuItemId], references: [id])
-  menuItemId         String?                 @map("menu_item_id")
-  sizeVariations     MenuItemSizeVariation[]
+  id                 String        @id @default(uuid())
+  MenuItem           MenuItem?     @relation(fields: [menuItemId], references: [id])
+  menuItemId         String?       @map("menu_item_id")
+  MenuItemSize       MenuItemSize? @relation(fields: [menuItemSizeId], references: [id])
+  menuItemSizeId     String?       @map("menu_item_size__id")
   label              String
-  basePrice          Float                   @default(0) @map("base_price")
+  basePrice          Float         @default(0) @map("base_price")
   amount             Float
-  discountPercentage Float                   @map("discount_percentage")
-  showOnCardapio     Boolean                 @default(false) @map("show_on_cardapio")
-  showOnCardapioAt   DateTime?               @map("show_on_cardapio_at")
-  createdAt          DateTime                @map("created_at")
-  updatedAt          DateTime                @default(now()) @updatedAt @map("updated_at")
-  updatedBy          String?                 @map("updated_by")
-  latestAmount       Float                   @default(0)
+  discountPercentage Float         @map("discount_percentage")
+  showOnCardapio     Boolean       @default(false) @map("show_on_cardapio")
+  showOnCardapioAt   DateTime?     @map("show_on_cardapio_at")
+  createdAt          DateTime      @map("created_at")
+  updatedAt          DateTime      @default(now()) @updatedAt @map("updated_at")
+  updatedBy          String?       @map("updated_by")
+  latestAmount       Float         @default(0)
 
   @@map("menu_item_price_variations")
 }
 
 model MenuItemCostVariation {
-  id              String                  @id @default(uuid())
-  MenuItem        MenuItem?               @relation(fields: [menuItemId], references: [id])
-  menuItemId      String?                 @map("menu_item_id")
-  sizeVariations  MenuItemSizeVariation[]
-  crustPrice      Float                   @default(0) @map("crust_price")
-  ingredientPrice Float                   @default(0) @map("ingredient_price")
-  amount          Float
-  createdAt       DateTime                @map("created_at")
-  updatedAt       DateTime                @default(now()) @updatedAt @map("updated_at")
-  updatedBy       String?                 @map("updated_by")
-  latestAmount    Float                   @default(0)
+  id               String       @id @default(uuid())
+  MenuItem         MenuItem     @relation(fields: [menuItemId], references: [id])
+  menuItemId       String       @map("menu_item_id")
+  MenuItemSize     MenuItemSize @relation(fields: [menuItemSizeId], references: [id])
+  menuItemSizeId   String       @map("menu_item_size_id")
+  recipeCostAmount Float        @default(0) @map("recipe_cost_amount")
+  createdAt        DateTime     @map("created_at")
+  updatedAt        DateTime     @default(now()) @updatedAt @map("updated_at")
+  updatedBy        String?      @map("updated_by")
 
   @@map("menu_item_cost_variations")
 }
 
-model MenuItemSizeVariation {
-  id                       String                  @id @default(uuid())
-  MenuItem                 MenuItem?               @relation(fields: [menuItemId], references: [id])
-  menuItemId               String?                 @map("menu_item_id")
-  label                    String
-  MenuItemCostVariation    MenuItemCostVariation?  @relation(fields: [menuItemCostVariationId], references: [id])
-  menuItemCostVariationId  String?
-  MenuItemPriceVariation   MenuItemPriceVariation? @relation(fields: [menuItemPriceVariationId], references: [id])
-  menuItemPriceVariationId String?
+model MenuItemSize {
+  id                     String                   @id @default(uuid())
+  name                   String
+  group                  String                   @default("")
+  costBase               Float                    @default(0) @map("cost_base")
+  slug                   String                   @unique @map("slug")
+  costScalingFactor      Float                    @default(1) @map("cost_scaling_factor") // Multiplier/divisor to scale the base recipe cost
+  sortOrderIndex         Int                      @default(0) @map("sort_order_index")
+  createdAt              DateTime                 @map("created_at")
+  updatedAt              DateTime                 @default(now()) @updatedAt @map("updated_at")
+  MenuItemPriceVariation MenuItemPriceVariation[]
+  MenuItemCostVariation  MenuItemCostVariation[]
 
-  @@map("menu_item_size_variations")
+  @@map("menu_item_sizes")
 }
 
 model MenuItemLike {
