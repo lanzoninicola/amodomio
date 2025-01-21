@@ -1,17 +1,16 @@
-import { MenuItemPriceVariation } from "@prisma/client";
+import { MenuItemPriceVariation, menuItemSize } from "@prisma/client";
 import { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { Form, MetaFunction, useLoaderData } from "@remix-run/react";
-import { ok } from "assert";
-import { useState } from "react";
 import { Input } from "~/components/ui/input";
 import { authenticator } from "~/domain/auth/google.server";
+import menuItemSizeSelector from "~/domain/cardapio/components/menu-item-size-variation-selector/menu-item-size-variations-selector";
 import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
+import prismaClient from "~/lib/prisma/client.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
-import { cn } from "~/lib/utils";
-import { badRequest, serverError } from "~/utils/http-response.server";
+import { badRequest, ok, serverError } from "~/utils/http-response.server";
 import { jsonParse } from "~/utils/json-helper";
 import parserFormDataEntryToNumber from "~/utils/parse-form-data-entry-to-number";
-import toNumber from "~/utils/to-number";
+import tryit from "~/utils/try-it";
 import { urlAt } from "~/utils/url";
 
 export const meta: MetaFunction<typeof loader> = ({ data }) => {
@@ -24,12 +23,13 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => {
 
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
-    const itemId = urlAt(request.url, -3);
+    const itemId = urlAt(request.url, -2);
     let user = await authenticator.isAuthenticated(request);
 
     if (!itemId) {
         return badRequest("Nenhum item encontrado");
     }
+
 
     const [err, item] = await prismaIt(menuItemPrismaEntity.findById(itemId));
 
@@ -41,8 +41,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         return badRequest("Nenhum item encontrado");
     }
 
+    const [errSizeVariations, sizeVariations] = await tryit(prismaClient.menuItemSize.findMany())
+
     return ok({
         item,
+        sizeVariations,
         loggedUser: user
     });
 }
@@ -78,25 +81,33 @@ export default function SingleMenuItemCosts() {
 
     const loaderData = useLoaderData<typeof loader>()
     const item: MenuItemWithAssociations = loaderData.payload?.item
+    const sizeVariations: menuItemSize[] = loaderData.payload?.sizeVariations || []
+
+    const costVariations = item.costVariations || []
+
+    console.log({ item })
+
+    if (costVariations.length === 0) {
+        return (
+            <div className="flex flex-col gap-4">
+                <p className="text-sm text-muted-foreground">Nenhum custos cadastrado</p>
+            </div>
+        )
+    }
 
 
     return (
-        <div className="flex flex-col gap-4">
-            <Form method="post">
-                {/* <div className="grid grid-cols-8">
-                    <span className="text-xs uppercase tracking-wider col-span-1 font-semibold text-muted-foreground ">Ultímo custo</span>
-                    <Input type="text"
-                        name="ingredientsCost"
-                        defaultValue={toNumber(item.MenuItemCost.ingredientsCost).toFixed(2)}
-                        className={
-                            cn(
-                                "text-xs md:text-sm text-right w-full py-2 border",
-                            )
-                        }
-                    />
-                </div> */}
-            </Form>
+        <div></div>
+        // <div className="flex flex-col gap-4">
+        //     ingredientPrice
+        //             <Form method="post" key={cost.id}>
+        //                 <input type="hidden" name="id" value={cost.id} />
+        //                 <menuItemSizeSelector variations={sizeVariations} />
+        //                 <Input type="string" name="ingredientsPrice" placeholder="Valor dos Ingredientes" defaultValue={cost.recipeCostAmount} className="w-full" />
+        //             </Form>
+        //         ))
+        //     }
 
-        </div>
+        // </div>
     )
 }

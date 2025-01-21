@@ -1,5 +1,5 @@
 import NoRecordsFound from "~/components/primitives/no-records-found/no-records-found"
-import { MenuItemActionSearchParam } from "~/routes/admin.gerenciamento.cardapio._index"
+import { MenuItemActionSearchParam } from "~/routes/admin.gerenciamento.cardapio._index333"
 import MenuItemCard from "../menu-item-card/menu-item-card"
 import { useState } from "react"
 import { useFetcher } from "@remix-run/react"
@@ -81,10 +81,8 @@ export default function MenuItemList({ initialItems, action }: MenuItemListProps
                         onClick={() => setDragEnabled(!dragEnable)}
                     >{dragEnable === true ? 'Desabilitar ordernamento' : 'Abilitar ordenamento'}</span>
                 </div>
-                <div className="items-center mb-2 col-span-2">
-                    <span>Sabores publicados {items.filter(item => item?.visible).length}</span>
-                </div>
-                <div className="items-center mb-2 col-span-4" >
+
+                <div className="items-center mb-2 col-span-6" >
                     <Input name="search" className="w-full" placeholder="Pesquisar..." onChange={(e) => handleSearch(e)} value={search} />
                 </div>
             </div>

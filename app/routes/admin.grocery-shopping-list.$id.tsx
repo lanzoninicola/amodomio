@@ -1,17 +1,24 @@
 import { LoaderFunctionArgs, redirect } from "@remix-run/node";
-import { Form, Link, Outlet, useActionData, useLoaderData } from "@remix-run/react";
+import { Form, Link, Outlet, useActionData, useLoaderData, useLocation } from "@remix-run/react";
 import { ChevronRight, Globe, PlusSquareIcon, SaveIcon } from "lucide-react";
 import { PlusIcon } from "lucide-react";
 import { useState } from "react";
 import { Button } from "~/components/ui/button";
 import { toast } from "~/components/ui/use-toast";
+import MenuItemNavLink from "~/domain/cardapio/components/menu-item-nav-link/menu-item-nav-link";
+import items from "~/domain/cardapio/db-mock/items";
+import { menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import GroceryItem from "~/domain/grocery-list/components/grocery-item";
 import { groceryListEntity } from "~/domain/grocery-list/grocery-list.entity.server";
 import { GroceryList, GroceryListItem } from "~/domain/grocery-list/grocery-list.model.server";
+import prismaClient from "~/lib/prisma/client.server";
+import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { cn } from "~/lib/utils";
+import getSearchParam from "~/utils/get-search-param";
 import { ok, serverError } from "~/utils/http-response.server";
 import { jsonParse } from "~/utils/json-helper";
 import tryit from "~/utils/try-it";
+import { lastUrlSegment } from "~/utils/url";
 
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
@@ -22,15 +29,32 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         return redirect("/admin/grocery-shopping-list")
     }
 
-    const [err, list] = await tryit(groceryListEntity.findById(listId))
+    const purchasable = getSearchParam({ request, paramName: 'purchasable' })
+
+    const [err, groceryListWithItems] = await prismaIt(prismaClient.groceryList.findFirst({
+        where: {
+            id: listId
+        },
+        include: {
+            GroceryListItem: true
+        }
+    }))
+
 
     if (err) {
         return serverError(err)
     }
 
-    console.log({ items: list?.items, err })
+    if (purchasable === "true") {
+        return ok({
+            groceryListWithItems: {
+                ...groceryListWithItems,
+                items: groceryListWithItems?.GroceryListItem.filter(i => i.quantity > 0)
+            }
+        })
+    }
 
-    return ok({ list })
+    return ok({ groceryListWithItems })
 
 }
 
@@ -42,7 +66,7 @@ export async function action({ request }: LoaderFunctionArgs) {
 
     if (_action === "start-purchase") {
 
-        const [err, list] = await tryit(groceryListEntity.startPurchase(values.listId as string))
+        const [err, groceryListWithItems] = await tryit(groceryListEntity.startPurchase(values.listId as string))
 
         if (err) {
             return serverError(err)
@@ -55,7 +79,7 @@ export async function action({ request }: LoaderFunctionArgs) {
         const listId = values.listId as string
         const item = values.item as unknown as GroceryListItem
 
-        const [err, list] = await tryit(groceryListEntity.updateItem(listId, item.id!, item))
+        const [err, groceryListWithItems] = await tryit(groceryListEntity.updateItem(listId, item.id!, item))
 
         if (err) {
             return serverError(err)
@@ -70,7 +94,7 @@ export async function action({ request }: LoaderFunctionArgs) {
 
         console.log({ listId, itemId })
 
-        const [err, list] = await tryit(groceryListEntity.removeItem(listId, itemId))
+        const [err, groceryListWithItems] = await tryit(groceryListEntity.removeItem(listId, itemId))
 
         if (err) {
             return serverError(err)
@@ -85,7 +109,7 @@ export async function action({ request }: LoaderFunctionArgs) {
 
 export default function SingleGroceryList() {
     const loaderData = useLoaderData<typeof loader>()
-    const list = loaderData?.payload.list as GroceryList
+    const groceryListWithItems = loaderData?.payload.groceryListWithItems as GroceryList
 
     const actionData = useActionData<typeof action>()
     const status = actionData?.status
@@ -105,28 +129,31 @@ export default function SingleGroceryList() {
         })
     }
 
+    const location = useLocation()
+
     return (
         <div className="flex flex-col gap-4">
-
-            <Link to="products">
-                <div className="flex gap-2 items-center justify-end">
-                    <span className="">Adicionar Produtos</span>
-                    <PlusSquareIcon />
-                </div>
-            </Link>
-
-            <Outlet />
             <div className="flex flex-col mt-2">
                 <Form method="post">
                     <div className="mb-6">
-                        <h3 className="text-lg font-semibold tracking-tight mb-2">{list.name}</h3>
-                        <input type="hidden" name="listId" value={list.id} />
-                        <ActionBar />
+                        <h3 className="text-lg font-semibold tracking-tight mb-2">{groceryListWithItems.name}</h3>
+                        <div className="grid grid-cols-2">
+                            <MenuItemNavLink to={`/admin/grocery-shopping-list/${groceryListWithItems.id}`} isActive={location.search === ""}>Todos</MenuItemNavLink>
+                            <MenuItemNavLink to={`/admin/grocery-shopping-list/${groceryListWithItems.id}?purchasable=true`} isActive={location.search !== ""}>A Comprar</MenuItemNavLink>
+
+                        </div>
+                        <ul>
+                            {
+                                groceryListWithItems?.items && groceryListWithItems.items.map((item) => (
+                                    <li key={item}>
+                                        <span>item</span>
+                                    </li>
+                                ))
+                            }
+                        </ul>
+
                     </div>
-                    <GroceryItemsList items={list.items || []} listId={list.id} />
                 </Form>
-
-
             </div>
         </div>
     )
