@@ -123,7 +123,7 @@ export async function action({ request }: LoaderFunctionArgs) {
 
 export default function AdminGerenciamentoCardapioMain() {
     const outletContext: AdminCardapioOutletContext = useOutletContext()
-    const items = outletContext?.items || [] as { category: Category["name"], menuItems: MenuItemWithAssociations[] }[]
+    const itemsGroupedCategory = outletContext?.itemsGroupedCategory || [] as { category: Category["name"], menuItems: MenuItemWithAssociations[] }[]
 
     const actionData = useActionData<typeof action>()
 
@@ -151,19 +151,19 @@ export default function AdminGerenciamentoCardapioMain() {
         <>
             <div className="hidden md:grid md:grid-cols-2 md:gap-6 ">
                 <div>
-                    {items.slice(0, Math.ceil(items.length / 2)).map((item) => (
+                    {itemsGroupedCategory.slice(0, Math.ceil(items.length / 2)).map((item) => (
                         <MenuItemListSliced key={item.category} item={item} />
                     ))}
                 </div>
                 <div>
-                    {items.slice(Math.ceil(items.length / 2)).map((item) => (
+                    {itemsGroupedCategory.slice(Math.ceil(items.length / 2)).map((item) => (
                         <MenuItemListSliced key={item.category} item={item} />
                     ))}
                 </div>
             </div>
 
             <div className="flex flex-col md:hidden">
-                {items.map((item) => (
+                {itemsGroupedCategory.map((item) => (
                     <MenuItemListSliced key={item.category} item={item} />
                 ))}
             </div>
