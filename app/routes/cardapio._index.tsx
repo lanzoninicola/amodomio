@@ -297,9 +297,7 @@ const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) =>
             <div className="grid grid-cols-8 min-h-[120px] mx-4 gap-x-4">
                 <div className={
                     cn(
-                        "flex flex-col mb-2",
-                        item.imageTransformedURL && " col-span-5",
-                        !item.imageTransformedURL && " col-span-8"
+                        "flex flex-col mb-2 col-span-5",
                     )
                 }>
                     <div className="flex flex-col gap-0 mb-1">
@@ -315,11 +313,11 @@ const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) =>
                     <CardapioItemPrice prices={item?.priceVariations} cnLabel="text-black" showValuta={false} />
                     <CardapioItemActionBar item={item} />
                 </div>
-                {
-                    item.imageTransformedURL &&
-                    <CardapioItemImage imageURL={item.imageTransformedURL}
-                        cnClassName="col-span-3 h-[120px] rounded-lg overflow-hidden" />
-                }
+                <CardapioItemImage imageURL={item.imageTransformedURL}
+                    cnClassName="col-span-3 h-[120px] rounded-lg overflow-hidden"
+                    placeholderImage={true}
+                    cnImage={"bg-left"}
+                />
 
             </div>
 
