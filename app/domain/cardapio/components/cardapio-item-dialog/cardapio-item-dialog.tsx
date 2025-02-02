@@ -32,7 +32,14 @@ export default function CardapioItemDialog({ item, children, triggerComponent }:
             </DialogTrigger>
             <DialogContent className="p-0 bg-transparent border-none">
                 <div className="mx-4 bg-white mb-4">
-                    <CardapioItemImage item={item} withOverlay={false} />
+                    <div className="h-[200px] p-4">
+                        <CardapioItemImage
+                            imageURL={item.imageTransformedURL}
+                            withOverlay={false}
+                            placeholderImage={true}
+                            cnClassName="h-full w-full rounded-none"
+                        />
+                    </div>
                     <div className="p-4">
                         <div className="flex flex-col gap-0 mb-2">
                             <h3 className="font-body-website text-2xl tracking-wider font-semibold uppercase">{item.name}</h3>

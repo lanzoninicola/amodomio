@@ -146,6 +146,8 @@ module.exports = {
         hero: "url('/images/hero-image.jpg')",
         banner: "url('/images/cardapio-web-app/banner.jpg')",
         "banner-md": "url('/images/cardapio-web-app/banner-md.jpg')",
+        "pizza-placeholder-sm":
+          "url('/images/cardapio-web-app/pizza-placeholder-sm.jpg')",
       },
     },
   },
