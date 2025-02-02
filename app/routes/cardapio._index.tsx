@@ -146,6 +146,7 @@ export default function CardapioWebIndex() {
                             <section className="flex flex-col gap-4 mx-2 md:grid md:grid-cols-2">
                                 {/** @ts-ignore */}
                                 <CardapioItemListDestaque items={items} title="Sugestões do chef" tagFilter="em-destaque" />
+                                {/** @ts-ignore */}
                                 <CardapioItemListDestaque items={items} title="mais vendidos" tagFilter="mais-vendido" />
 
                             </section>
