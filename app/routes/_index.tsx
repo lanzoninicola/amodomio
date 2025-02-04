@@ -1,9 +1,11 @@
 import { LoaderFunctionArgs } from "@remix-run/node";
-import { Link, useLoaderData } from "@remix-run/react";
+import { Await, Link, defer, useLoaderData } from "@remix-run/react";
+import { Video } from "lucide-react";
 import { Heart, Instagram, Map, MapPin, MenuSquare, Share2 } from "lucide-react";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import TypewriterComponent from "typewriter-effect";
 import Container from "~/components/layout/container/container";
+import Loading from "~/components/loading/loading";
 import ExternalLink from "~/components/primitives/external-link/external-link";
 import Logo from "~/components/primitives/logo/logo";
 import WhatsappExternalLink from "~/components/primitives/whatsapp/whatsapp-external-link";
@@ -19,40 +21,90 @@ import { ok } from "~/utils/http-response.server";
 
 
 export async function loader({ request }: LoaderFunctionArgs) {
+    const videoURLs = {
+        video480: CloudinaryUtils.getVideoURL("amodomio-hero_480p_haz9se"),
+        video1080: CloudinaryUtils.getVideoURL("amodomio-hero_1080p_vgk1eq")
+    };
 
-    const video480URL = CloudinaryUtils.getVideoURL("amodomio-hero_480p_haz9se")
+    return defer({
+        videoURLs: Promise.resolve(videoURLs)
+    });
+}
 
-    const video480URLPromise: Promise<string> = new Promise((resolve) => resolve(video480URL))
+export default function HomePage() {
 
-    return ok({
-        video480URL
-    })
+
+    return (
+        <>
+            <section className="relative">
+                <HomePageVideoBackground />
+                <div className="absolute inset-0 p-4">
+                    <div className="flex flex-col">
+
+                        <h1 className="text-white font-rubik font-semibold text-5xl leading-[90%] tracking-tight mb-6 md:hidden">
+                            A pizza mais <br />desejada <br />de Pato Branco
+                        </h1>
+                        <p className="text-white font-rubik font-semibold leading-[120%] tracking-wide">Preparada com ingredientes selecionados e técnicas artesanais, nossa pizza combina tradição italiana e inovação para entregar uma experiência única. Crocante, leve e irresistível, ela conquistou Pato Branco e agora espera por você.</p>
+                    </div>
+
+                </div>
+            </section >
+
+        </>
+    );
 }
 
 
-export default function HomePage() {
-    const loaderData = useLoaderData<typeof loader>()
-    const video480URL = loaderData?.payload?.video480URL
+function HomePageVideoBackground() {
+    const { videoURLs } = useLoaderData<typeof loader>();
 
-    console.log({ video480URL })
+    const loading = (
+        <div className="bg-black w-screen h-screen grid place-items-center">
+            <Loading showText={true} text="As pizzas estão sendo montadas..." />
+        </div>
+    );
+
+    const VideoComponent = ({ videoPromise }: { videoPromise: Promise<string> }) => (
+        <Suspense fallback={<div className="w-screen h-screen grid place-items-center">{loading}</div>}>
+            <Await resolve={videoPromise}>
+                {(videoURL) => (
+                    <video
+                        controls={false}
+                        poster={'/images/cardapio-web-app/amodomio-hero-f000000.png'}
+                        disablePictureInPicture={true}
+                        autoPlay={true}
+                        loop={true}
+                        className="w-screen h-screen object-cover z-[-1]"
+                    >
+                        <source src={videoURL} />
+                    </video>
+                )}
+            </Await>
+        </Suspense>
+    );
+
+    const Overlay = () => {
+        return (
+            <div className="absolute inset-0 overflow-hidden rotate-0" style={{
+                background: "linear-gradient(180deg, #00000033 60%, #0000009e 85%)"
+            }}>
+            </div>
+        )
+    }
 
     return (
+        <>
 
-        <video
-            controls={false}
-            poster={'/images/hero-image.jpg'}
-            disablePictureInPicture={true}
-            autoPlay={true}
-            loop={true}
-            className={
-                cn(
-                    "w-screen h-screen object-cover fixed top-0 left-0 z-[-1]",
-                )
-            }
-        >
-            <source src={video480URL} />
-        </video>
-    )
+            <div className="md:hidden">
+                <VideoComponent videoPromise={videoURLs.then(({ video480 }) => video480)} />
+            </div>
+            <div className="hidden md:block">
+                <VideoComponent videoPromise={videoURLs.then(({ video1080 }) => video1080)} />
+            </div>
+            <Overlay />
+
+        </>
+    );
 }
 
 // export default function HomePage() {

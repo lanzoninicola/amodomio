@@ -52,6 +52,12 @@
     --font-sans-website: Agdasima;
 
     --font-title: Montagu Slab;
+
+    --font-rubik: Rubik;
+
+    --font-gayathri: Gayathri;
+
+    --font-accent: GrapeNuts;
   }
 
   .dark {
@@ -164,6 +170,88 @@
     font-family: "Agdasima";
     src: url("/fonts/Agdasima-Regular.ttf") format("truetype");
     font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+  }
+
+  /* [2024-04-02] BRANDING IANCA ALVES*/
+
+  @font-face {
+    font-family: "Gayathri";
+    src: url("/fonts/Gayathri-Regular.ttf") format("truetype");
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+  }
+
+  @font-face {
+    font-family: "Gayathri";
+    src: url("/fonts/Gayathri-Bold.ttf") format("truetype");
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+  }
+
+  @font-face {
+    font-family: "Gayathri";
+    src: url("/fonts/Gayathri-Thin.ttf") format("truetype");
+    font-weight: 300;
+    font-style: normal;
+    font-display: swap;
+  }
+
+  @font-face {
+    font-family: "GrapeNuts";
+    src: url("/fonts/GrapeNuts-Regular.ttf") format("truetype");
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+  }
+
+  @font-face {
+    font-family: "Rubik";
+    src: url("/fonts/Rubik-Light.ttf") format("truetype");
+    font-weight: 200;
+    font-style: normal;
+    font-display: swap;
+  }
+
+  @font-face {
+    font-family: "Rubik";
+    src: url("/fonts/Rubik-Regular.ttf") format("truetype");
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+  }
+
+  @font-face {
+    font-family: "Rubik";
+    src: url("/fonts/Rubik-Medium.ttf") format("truetype");
+    font-weight: 500;
+    font-style: normal;
+    font-display: swap;
+  }
+
+  @font-face {
+    font-family: "Rubik";
+    src: url("/fonts/Rubik-SemiBold.ttf") format("truetype");
+    font-weight: 600;
+    font-style: normal;
+    font-display: swap;
+  }
+
+  @font-face {
+    font-family: "Rubik";
+    src: url("/fonts/Rubik-Bold.ttf") format("truetype");
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+  }
+
+  @font-face {
+    font-family: "Rubik";
+    src: url("/fonts/Rubik-Black.ttf") format("truetype");
+    font-weight: 900;
     font-style: normal;
     font-display: swap;
   }
