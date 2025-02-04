@@ -2,7 +2,7 @@ import { LoaderFunctionArgs } from "@remix-run/node";
 import { Await, Link, defer, useLoaderData } from "@remix-run/react";
 import { ChevronRight, Video } from "lucide-react";
 import { Heart, Instagram, Map, MapPin, MenuSquare, Share2 } from "lucide-react";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import TypewriterComponent from "typewriter-effect";
 import Container from "~/components/layout/container/container";
 import Loading from "~/components/loading/loading";
@@ -51,12 +51,8 @@ export default function HomePage() {
                 <div className="absolute inset-0 p-4 pt-24 md:pt-32">
                     <div className="flex flex-col">
 
-                        <h1 className="text-white font-rubik font-bold transition-all
-                            text-5xl leading-[90%] tracking-tight mb-6
-                            md:text-7xl md:max-w-3xl
-                        ">
-                            A pizza mais desejada de Pato Branco
-                        </h1>
+                        <HomePageTitle />
+
                         <p className="text-white font-rubik font-semibold  tracking-wide max-w-prose transition-all
                             text-[1rem] leading-[120%]
                             md:text-xl md:leading-tight
@@ -81,6 +77,41 @@ export default function HomePage() {
             </div>
 
         </>
+    );
+}
+
+
+function HomePageTitle() {
+    const words = ["desejada", "aconselhada"];
+    const [index, setIndex] = useState(0);
+    const [fade, setFade] = useState(false);
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setFade(true);
+            setTimeout(() => {
+                setIndex((prevIndex) => (prevIndex + 1) % words.length);
+                setFade(false);
+            }, 500); // Tempo para a animação de saída
+        }, 3000);
+
+        return () => clearInterval(interval);
+    }, []);
+
+    return (
+        <h1 className="text-white font-rubik font-semibold transition-all
+                       text-5xl leading-[90%] tracking-tight mb-6 max-w-[350px]
+                       md:text-7xl md:max-w-3xl">
+            A pizza mais{" "}
+            <span
+                className={`transition-opacity duration-500 ${fade ? "opacity-0" : "opacity-100"
+                    }`}
+            >
+                {words[index]}
+            </span>{" "}
+            de{" "}
+            <span className="font-accent text-6xl md:text-8xl">Pato Branco</span>
+        </h1>
     );
 }
 
