@@ -1,6 +1,6 @@
 import { LoaderFunctionArgs } from "@remix-run/node";
 import { Await, Link, defer, useLoaderData } from "@remix-run/react";
-import { Video } from "lucide-react";
+import { ChevronRight, Video } from "lucide-react";
 import { Heart, Instagram, Map, MapPin, MenuSquare, Share2 } from "lucide-react";
 import { Suspense, useState } from "react";
 import TypewriterComponent from "typewriter-effect";
@@ -12,6 +12,8 @@ import WhatsappExternalLink from "~/components/primitives/whatsapp/whatsapp-exte
 import WhatsAppIcon from "~/components/primitives/whatsapp/whatsapp-icon";
 import { Separator } from "~/components/ui/separator";
 import FazerPedidoButton from "~/domain/cardapio/components/fazer-pedido-button/fazer-pedido-button";
+import GLOBAL_LINKS from "~/domain/website-navigation/global-links.constant";
+import PUBLIC_WEBSITE_NAVIGATION_ITEMS from "~/domain/website-navigation/public/public-website.nav-links";
 import { CloudinaryUtils } from "~/lib/cloudinary";
 import { cn } from "~/lib/utils";
 import { ok } from "~/utils/http-response.server";
@@ -33,22 +35,51 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export default function HomePage() {
 
-
     return (
         <>
+            <header className="fixed top-0 left-0 w-screen z-50 transition-all p-4 flex justify-between items-center">
+                <div className="w-[130px] ">
+                    <Logo onlyText={true} className="w-full h-full" />
+                </div>
+                <Link to={GLOBAL_LINKS.cardapioPublic.href} className="hidden md:block" >
+                    <div className="bg-black px-2 py-2 rounded-lg w-max flex items-center gap-2">
+                        <span className="font-rubik font-semibold text-white uppercase tracking-wider text-xs">cardápio</span>
+                    </div>
+                </Link>
+            </header>
             <section className="relative">
                 <HomePageVideoBackground />
-                <div className="absolute inset-0 p-4">
+                <div className="absolute inset-0 p-4 pt-24 md:pt-32">
                     <div className="flex flex-col">
 
-                        <h1 className="text-white font-rubik font-semibold text-5xl leading-[90%] tracking-tight mb-6 md:hidden">
-                            A pizza mais <br />desejada <br />de Pato Branco
+                        <h1 className="text-white font-rubik font-bold transition-all
+                            text-5xl leading-[90%] tracking-tight mb-6
+                            md:text-7xl md:max-w-3xl
+                        ">
+                            A pizza mais desejada de Pato Branco
                         </h1>
-                        <p className="text-white font-rubik font-semibold leading-[120%] tracking-wide">Preparada com ingredientes selecionados e técnicas artesanais, nossa pizza combina tradição italiana e inovação para entregar uma experiência única. Crocante, leve e irresistível, ela conquistou Pato Branco e agora espera por você.</p>
+                        <p className="text-white font-rubik font-semibold  tracking-wide max-w-prose transition-all
+                            text-[1rem] leading-[120%]
+                            md:text-xl md:leading-tight
+                        ">
+                            Preparada com ingredientes selecionados e técnicas artesanais, nossa pizza combina tradição italiana e inovação para entregar uma experiência única. Crocante, leve e irresistível, ela conquistou Pato Branco e agora espera por você.
+                        </p>
+
                     </div>
 
                 </div>
             </section >
+
+            <div className="fixed right-4 bottom-8">
+
+                <Link to={GLOBAL_LINKS.cardapioPublic.href} >
+                    <div className="bg-black px-8 py-4 rounded-lg w-max flex items-center gap-2">
+                        <span className="font-rubik font-bold text-white">Vai ao cardápio</span>
+                        <ChevronRight color="#ffffff" />
+                    </div>
+                </Link>
+
+            </div>
 
         </>
     );
@@ -85,9 +116,11 @@ function HomePageVideoBackground() {
 
     const Overlay = () => {
         return (
-            <div className="absolute inset-0 overflow-hidden rotate-0" style={{
-                background: "linear-gradient(180deg, #00000033 60%, #0000009e 85%)"
-            }}>
+            <div className="absolute inset-0 overflow-hidden rotate-0 opacity-60" style={{
+                background: "radial-gradient(circle at top, #242424 , #999999)"
+            }}
+                data-element="hero-overlay"
+            >
             </div>
         )
     }
