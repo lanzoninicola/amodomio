@@ -77,6 +77,8 @@ module.exports = {
         "body-website": ["var(--font-sans-website)", ...fontFamily.sans],
         accent: ["var(--font-accent)", ...fontFamily.sans],
         title: ["var(--font-title)", ...fontFamily.sans],
+        rubik: ["var(--font-rubik)", ...fontFamily.sans],
+        gayathri: ["var(--font-gayathri)", ...fontFamily.sans],
       },
       keyframes: {
         "accordion-down": {
@@ -146,6 +148,8 @@ module.exports = {
         hero: "url('/images/hero-image.jpg')",
         banner: "url('/images/cardapio-web-app/banner.jpg')",
         "banner-md": "url('/images/cardapio-web-app/banner-md.jpg')",
+        "pizza-placeholder-sm":
+          "url('/images/cardapio-web-app/pizza-placeholder-sm.jpg')",
       },
     },
   },

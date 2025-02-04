@@ -1,15 +1,18 @@
-import ItalyFlag from "~/components/italy-flag/italy-flag";
-import { MenuItemWithAssociations } from "../../menu-item.prisma.entity.server";
 import { cn } from "~/lib/utils";
 
 interface CardapioItemImageProps {
-    item: MenuItemWithAssociations;
-    withOverlay?: boolean;
-    cnImage?: string;
+    imageURL?: string
+    cnClassName?: string
+    cnImage?: string
+    withOverlay?: boolean
+    placeholderImage?: boolean
 }
 
-const CardapioItemImage = ({ item, withOverlay = true, cnImage }: CardapioItemImageProps) => {
+export default function CardapioItemImage({ imageURL, cnClassName, cnImage, withOverlay = false, placeholderImage = false }: CardapioItemImageProps) {
 
+    if (placeholderImage === true && !imageURL) {
+        imageURL = "/images/cardapio-web-app/pizza-placeholder-sm.png"
+    }
 
     const Overlay = () => {
         return (
@@ -21,35 +24,28 @@ const CardapioItemImage = ({ item, withOverlay = true, cnImage }: CardapioItemIm
     }
 
 
-
     return (
-        <div className="relative ">
-            {
-                item.imageTransformedURL ?
-                    <img
-                        src={item.imageTransformedURL}
-                        alt={item.name}
-                        loading="lazy"
-                        className={
-                            cn(
-                                "w-full max-h-[250px] object-cover object-center",
-                                cnImage
-                            )
-                        }
-                    />
-                    :
-                    <div className={
-                        cn(
-                            "w-full h-[250px] object-cover object-center",
-                            "bg-slate-50",
-                            cnImage
-                        )
-                    }></div>
+        <div className={
+            cn(
+                "relative",
+                withOverlay && "overflow-hidden",
+                cnClassName
+            )
+        } data-element="cardapio-item-image">
+            <div className={
+                cn(
+                    "bg-center bg-cover bg-no-repeat h-full w-full",
+                    cnImage
+                )
             }
+                style={{
+                    backgroundImage: `url(${imageURL})`,
+                }}>
 
+            </div>
             {withOverlay && <Overlay />}
         </div>
     )
 }
 
-export default CardapioItemImage
+

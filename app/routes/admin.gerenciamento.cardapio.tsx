@@ -43,7 +43,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     // https://github.com/remix-run/remix/discussions/6149
 
     const categories = categoryPrismaEntity.findAll()
-    const items = menuItemPrismaEntity.findAllGroupedByCategory({
+    const itemsGroupedCategory = menuItemPrismaEntity.findAllGroupedByCategory({
         option: {
             sorted: true,
             direction: "asc"
@@ -55,7 +55,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const tags = menuItemTagPrismaEntity.findAll()
     const sizeVariations = prismaClient.menuItemSize.findMany()
 
-    const data = Promise.all([categories, items, tags, sizeVariations]);
+    const data = Promise.all([categories, itemsGroupedCategory, tags, sizeVariations]);
 
     return defer({ data });
 }
@@ -63,8 +63,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export interface AdminCardapioOutletContext {
     categories: Category[]
-    items?: { category: Category["name"], menuItems: MenuItemWithAssociations[] }[]
-    tags: MenuItemTag[]
+    itemsGroupedCategory?: { category: Category["name"], menuItems: MenuItemWithAssociations[] }[]
+    tags: MenuItemTag[],
+    sizeVariations: PizzaSizeVariation[]
 }
 
 export default function AdminCardapioOutlet() {
@@ -101,7 +102,7 @@ export default function AdminCardapioOutlet() {
 
         <Suspense fallback={<Loading />}>
             <Await resolve={data}>
-                {([categories, items, tags, sizeVariations]) => {
+                {([categories, itemsGroupedCategory, tags, sizeVariations]) => {
 
 
                     return (
@@ -150,7 +151,7 @@ export default function AdminCardapioOutlet() {
 
                                 <div className="flex flex-col gap-6 mb-4">
                                     {/** @ts-ignore */}
-                                    <CardapioAdminStats items={items} />
+                                    <CardapioAdminStats itemsGroupedCategory={itemsGroupedCategory} />
 
                                     <div className="flex gap-4 items-center">
                                         <MenuItemNavLink to={"main"} isActive={activeTab === "main"}>
@@ -172,10 +173,11 @@ export default function AdminCardapioOutlet() {
 
 
                             <Outlet context={{
-                                items,
+                                itemsGroupedCategory,
                                 categories,
                                 tags,
                                 sizeVariations,
+
 
                             }} />
 
@@ -195,14 +197,16 @@ export default function AdminCardapioOutlet() {
 
 
 interface CardapioAdminStatsProps {
-    items: { category: Category["name"], menuItems: MenuItemWithAssociations[] }[]
+    itemsGroupedCategory: { category: Category["name"], menuItems: MenuItemWithAssociations[] }[]
 }
 
 
-function CardapioAdminStats({ items }: CardapioAdminStatsProps) {
+function CardapioAdminStats({ itemsGroupedCategory }: CardapioAdminStatsProps) {
+
+    console.log({ itemsGroupedCategory })
 
 
-    const publicados = items
+    const publicados = itemsGroupedCategory
         .map(category =>
             category.menuItems
                 .filter(menuItem => menuItem.visible === true)
@@ -211,7 +215,7 @@ function CardapioAdminStats({ items }: CardapioAdminStatsProps) {
         .reduce((sum, count) => sum + count, 0);
 
 
-    const invisivels = items
+    const invisivels = itemsGroupedCategory
         .map(category =>
             category.menuItems
                 .filter(menuItem => menuItem.visible === false)
@@ -219,7 +223,7 @@ function CardapioAdminStats({ items }: CardapioAdminStatsProps) {
         )
         .reduce((sum, count) => sum + count, 0);
 
-    const semImagem = items
+    const semImagem = itemsGroupedCategory
         .map(category =>
             category.menuItems
                 .filter(menuItem => menuItem.imageId === null)
@@ -227,7 +231,7 @@ function CardapioAdminStats({ items }: CardapioAdminStatsProps) {
         )
         .reduce((sum, count) => sum + count, 0);
 
-    const futuroLançamento = items
+    const futuroLançamento = itemsGroupedCategory
         .map(category =>
             category.menuItems
                 .filter(menuItem => menuItem.tags?.all?.includes("futuro-lançamento"))
