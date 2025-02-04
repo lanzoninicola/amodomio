@@ -18,6 +18,8 @@ import AwardBadge from "~/components/award-badge/award-badge";
 import { Separator } from "~/components/ui/separator";
 import CardapioItemDialog from "~/domain/cardapio/components/cardapio-item-dialog/cardapio-item-dialog";
 import CardapioItemPrice from "~/domain/cardapio/components/cardapio-item-price/cardapio-item-price";
+import { image } from "@cloudinary/url-gen/qualifiers/source";
+import CardapioItemImage from "~/domain/cardapio/components/cardapio-item-image/cardapio-item-image";
 
 export const headers: HeadersFunction = () => ({
     'Cache-Control': 's-maxage=1, stale-while-revalidate=59',
@@ -295,9 +297,7 @@ const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) =>
             <div className="grid grid-cols-8 min-h-[120px] mx-4 gap-x-4">
                 <div className={
                     cn(
-                        "flex flex-col mb-2",
-                        item.imageTransformedURL && " col-span-5",
-                        !item.imageTransformedURL && " col-span-8"
+                        "flex flex-col mb-2 col-span-5",
                     )
                 }>
                     <div className="flex flex-col gap-0 mb-1">
@@ -313,9 +313,11 @@ const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) =>
                     <CardapioItemPrice prices={item?.priceVariations} cnLabel="text-black" showValuta={false} />
                     <CardapioItemActionBar item={item} />
                 </div>
-                {
-                    item.imageTransformedURL && <CardapioItemImage imageURL={item.imageTransformedURL} cnClassName="col-span-3" />
-                }
+                <CardapioItemImage imageURL={item.imageTransformedURL}
+                    cnClassName="col-span-3 h-[120px] rounded-lg overflow-hidden"
+                    placeholderImage={true}
+                    cnImage={"bg-left"}
+                />
 
             </div>
 
@@ -327,27 +329,7 @@ const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) =>
 
 
 
-interface CardapioItemImageProps {
-    imageURL?: string
-    cnClassName?: string
-}
 
-function CardapioItemImage({ imageURL, cnClassName }: CardapioItemImageProps) {
-
-    return (
-        <div className={
-            cn(
-                "bg-center bg-cover bg-no-repeat rounded-lg h-[112px]",
-                cnClassName
-            )
-        }
-            style={{
-                backgroundImage: `url(${imageURL})`,
-            }}>
-
-        </div>
-    )
-}
 
 interface CardapioItemListDestaqueProps {
     title: string
@@ -371,13 +353,18 @@ function CardapioItemListDestaque({ title, items, tagFilter }: CardapioItemListD
                                 <div className="grid place-items-center rounded-md bg-slate-50 h-[112px]">
 
                                     <div className="flex flex-col gap-2  items-center justify-center">
-                                        <div className="rounded-full h-[60px] w-[60px]">
+                                        <div className="rounded-full h-[60px] w-[60px] overflow-hidden">
                                             {
                                                 // @ts-ignore
-                                                i.imageTransformedURL ?
-                                                    <CardapioItemImage imageURL={i.imageTransformedURL} cnClassName="h-[60px] rounded-full" />
-                                                    :
-                                                    <div className="h-[60px] w-[60px] bg-slate-200 rounded-full"></div>
+
+                                                <CardapioItemImage imageURL={i.imageTransformedURL}
+                                                    cnClassName="h-full w-full rounded-full"
+                                                    cnImage={
+                                                        cn(!i.imageTransformedURL && "bg-left")
+                                                    }
+                                                    placeholderImage={true} />
+
+                                                // <div className="h-[60px] w-[60px] bg-slate-200 rounded-full"></div>
                                             }
                                         </div>
                                         <span className="font-body-website font-semibold tracking-wide uppercase text-center">{i.name}</span>
