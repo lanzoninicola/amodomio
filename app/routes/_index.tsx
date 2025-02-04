@@ -23,15 +23,14 @@ import { ok } from "~/utils/http-response.server";
 
 
 export async function loader({ request }: LoaderFunctionArgs) {
-    const videoURLs = {
-        video480: CloudinaryUtils.getVideoURL("amodomio-hero_480p_haz9se"),
-        video1080: CloudinaryUtils.getVideoURL("amodomio-hero_1080p_vgk1eq")
-    };
-
-    return defer({
-        videoURLs: Promise.resolve(videoURLs)
+    return ok({
+        videoURLs: {
+            video480: CloudinaryUtils.getVideoURL("amodomio-hero_480p_haz9se"),
+            video1080: CloudinaryUtils.getVideoURL("amodomio-hero_1080p_vgk1eq")
+        }
     });
 }
+
 
 export default function HomePage() {
 
@@ -86,59 +85,45 @@ export default function HomePage() {
 }
 
 
+
 function HomePageVideoBackground() {
-    const { videoURLs } = useLoaderData<typeof loader>();
-
-    const loading = (
-        <div className="bg-black w-screen h-screen grid place-items-center">
-            <Loading showText={true} text="As pizzas estão sendo montadas..." />
-        </div>
-    );
-
-    const VideoComponent = ({ videoPromise }: { videoPromise: Promise<string> }) => (
-        <Suspense fallback={<div className="w-screen h-screen grid place-items-center">{loading}</div>}>
-            <Await resolve={videoPromise}>
-                {(videoURL) => (
-                    <video
-                        controls={false}
-                        poster={'/images/cardapio-web-app/amodomio-hero-f000000.png'}
-                        disablePictureInPicture={true}
-                        autoPlay={true}
-                        loop={true}
-                        className="w-screen h-screen object-cover z-[-1]"
-                    >
-                        <source src={videoURL} />
-                    </video>
-                )}
-            </Await>
-        </Suspense>
-    );
-
-    const Overlay = () => {
-        return (
-            <div className="absolute inset-0 overflow-hidden rotate-0 opacity-60" style={{
-                background: "radial-gradient(circle at top, #242424 , #999999)"
-            }}
-                data-element="hero-overlay"
-            >
-            </div>
-        )
-    }
+    const loaderData = useLoaderData<typeof loader>();
+    const videoURLs = loaderData.payload?.videoURLs
 
     return (
         <>
-
             <div className="md:hidden">
-                <VideoComponent videoPromise={videoURLs.then(({ video480 }) => video480)} />
+                <video
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                    className="w-screen h-screen object-cover z-[-1]"
+                    poster="/images/cardapio-web-app/amodomio-hero-f000000.png"
+                >
+                    <source src={videoURLs.video480} type="video/mp4" />
+                </video>
             </div>
             <div className="hidden md:block">
-                <VideoComponent videoPromise={videoURLs.then(({ video1080 }) => video1080)} />
+                <video
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                    className="w-screen h-screen object-cover z-[-1]"
+                    poster="/images/cardapio-web-app/amodomio-hero-f000000.png"
+                >
+                    <source src={videoURLs.video1080} type="video/mp4" />
+                </video>
             </div>
-            <Overlay />
-
+            <div className="absolute inset-0 overflow-hidden rotate-0 opacity-60"
+                style={{ background: "radial-gradient(circle at top, #242424 , #999999)" }}
+                data-element="hero-overlay"
+            />
         </>
     );
 }
+
 
 // export default function HomePage() {
 //     return (
