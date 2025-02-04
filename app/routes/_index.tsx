@@ -1,4 +1,5 @@
-import { Link } from "@remix-run/react";
+import { LoaderFunctionArgs } from "@remix-run/node";
+import { Link, useLoaderData } from "@remix-run/react";
 import { Heart, Instagram, Map, MapPin, MenuSquare, Share2 } from "lucide-react";
 import { useState } from "react";
 import TypewriterComponent from "typewriter-effect";
@@ -9,53 +10,94 @@ import WhatsappExternalLink from "~/components/primitives/whatsapp/whatsapp-exte
 import WhatsAppIcon from "~/components/primitives/whatsapp/whatsapp-icon";
 import { Separator } from "~/components/ui/separator";
 import FazerPedidoButton from "~/domain/cardapio/components/fazer-pedido-button/fazer-pedido-button";
+import { CloudinaryUtils } from "~/lib/cloudinary";
 import { cn } from "~/lib/utils";
+import { ok } from "~/utils/http-response.server";
 
 // https://smart-pizza-marketing.framer.ai/
+// https://traderepublic.com/pt-pt
+
+
+export async function loader({ request }: LoaderFunctionArgs) {
+
+    const video480URL = CloudinaryUtils.getVideoURL("amodomio-hero_480p_haz9se")
+
+    const video480URLPromise: Promise<string> = new Promise((resolve) => resolve(video480URL))
+
+    return ok({
+        video480URL
+    })
+}
+
 
 export default function HomePage() {
+    const loaderData = useLoaderData<typeof loader>()
+    const video480URL = loaderData?.payload?.video480URL
+
+    console.log({ video480URL })
+
     return (
-        <div className="bg-black h-screen p-4 md:py-24 md:px-32 lg:px-96">
 
-            <div className="bg-white h-full rounded-lg">
-
-                {/* <!-- Mobile screen -> */}
-                <main className="md:hidden grid grid-cols-1 grid-rows-[auto_1fr_auto] h-full">
-                    <header>
-                        <WebsiteCardHeader />
-                        <div className="p-4 ">
-                            <p className="font-body-website leading-tight max-w-prose text-3xl ">A autentica pizza italiana<br /> em Pato Branco feita <br /> das mãos de um italiano.</p>
-                        </div>
-                    </header>
-                    <div className="bg-hero bg-center bg-cover bg-no-repeat"></div>
-                    <WebsiteCardFooter />
-                </main>
-
-
-                {/* <!-- Large screen -> */}
-                <div className="hidden md:grid md:grid-cols-2 md:h-full">
-                    <div className="bg-hero bg-center bg-cover bg-no-repeat"></div>
-                    <div className="grid grid-cols-1 grid-rows-[auto_1fr_auto] h-full p-8">
-
-                        <WebsiteCardHeader >
-                            <Separator className="my-2" />
-                        </WebsiteCardHeader>
-
-                        <div className="p-4 ">
-                            <p className="font-body-website leading-tight max-w-prose text-3xl ">A autentica pizza italiana<br /> em Pato Branco feita <br /> das mãos de um italiano.</p>
-                        </div>
-
-                        <WebsiteCardFooter />
-                    </div>
-
-                </div>
-
-            </div>
-
-
-        </div>
+        <video
+            controls={false}
+            poster={'/images/hero-image.jpg'}
+            disablePictureInPicture={true}
+            autoPlay={true}
+            loop={true}
+            className={
+                cn(
+                    "w-screen h-screen object-cover fixed top-0 left-0 z-[-1]",
+                )
+            }
+        >
+            <source src={video480URL} />
+        </video>
     )
 }
+
+// export default function HomePage() {
+//     return (
+//         <div className="bg-black h-screen p-4 md:py-24 md:px-32 lg:px-96">
+
+//             <div className="bg-white h-full rounded-lg">
+
+//                 {/* <!-- Mobile screen -> */}
+//                 <main className="md:hidden grid grid-cols-1 grid-rows-[auto_1fr_auto] h-full">
+//                     <header>
+//                         <WebsiteCardHeader />
+//                         <div className="p-4 ">
+//                             <p className="font-body-website leading-tight max-w-prose text-3xl ">A autentica pizza italiana<br /> em Pato Branco feita <br /> das mãos de um italiano.</p>
+//                         </div>
+//                     </header>
+//                     <div className="bg-hero bg-center bg-cover bg-no-repeat"></div>
+//                     <WebsiteCardFooter />
+//                 </main>
+
+
+//                 {/* <!-- Large screen -> */}
+//                 <div className="hidden md:grid md:grid-cols-2 md:h-full">
+//                     <div className="bg-hero bg-center bg-cover bg-no-repeat"></div>
+//                     <div className="grid grid-cols-1 grid-rows-[auto_1fr_auto] h-full p-8">
+
+//                         <WebsiteCardHeader >
+//                             <Separator className="my-2" />
+//                         </WebsiteCardHeader>
+
+//                         <div className="p-4 ">
+//                             <p className="font-body-website leading-tight max-w-prose text-3xl ">A autentica pizza italiana<br /> em Pato Branco feita <br /> das mãos de um italiano.</p>
+//                         </div>
+
+//                         <WebsiteCardFooter />
+//                     </div>
+
+//                 </div>
+
+//             </div>
+
+
+//         </div>
+//     )
+// }
 
 interface WebsiteCardHeaderProps {
     children?: React.ReactNode;
