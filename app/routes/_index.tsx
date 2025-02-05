@@ -37,7 +37,7 @@ export default function HomePage() {
     return (
         <>
             <header className="fixed top-0 left-0 w-screen z-50 transition-all p-4 flex justify-between items-center">
-                <div className="w-[130px] ">
+                <div className="w-[130px] md:w-[150px] ">
                     <Logo onlyText={true} className="w-full h-full" />
                 </div>
                 <Link to={GLOBAL_LINKS.cardapioPublic.href} className="hidden md:block" >
@@ -117,8 +117,7 @@ function HomePageVideoBackground() {
                     <source src={videoURLs.video1080} type="video/mp4" />
                 </video>
             </div>
-            <div className="absolute inset-0 overflow-hidden rotate-0 opacity-60"
-                style={{ background: "radial-gradient(circle at top, #242424 , #999999)" }}
+            <div className="absolute inset-0 overflow-hidden rotate-0 opacity-40 bg-black"
                 data-element="hero-overlay"
             />
         </>
