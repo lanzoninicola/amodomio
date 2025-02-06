@@ -77,6 +77,8 @@ module.exports = {
         "body-website": ["var(--font-sans-website)", ...fontFamily.sans],
         accent: ["var(--font-accent)", ...fontFamily.sans],
         title: ["var(--font-title)", ...fontFamily.sans],
+        rubik: ["var(--font-rubik)", ...fontFamily.sans],
+        gayathri: ["var(--font-gayathri)", ...fontFamily.sans],
       },
       keyframes: {
         "accordion-down": {
