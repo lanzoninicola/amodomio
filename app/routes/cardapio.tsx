@@ -1,25 +1,17 @@
-import { Tag } from "@prisma/client";
 import { MetaFunction } from "@remix-run/node";
-import { Link, Outlet, useLocation, useSearchParams } from "@remix-run/react";
-import { Filter, Instagram, MapPin, SearchIcon, XIcon } from "lucide-react";
-import { ReactNode, useEffect, useRef, useState } from "react";
+import { Link, Outlet, useLocation } from "@remix-run/react";
+import { Instagram, MapPin, SearchIcon } from "lucide-react";
+import { ReactNode, useState } from "react";
 
 import ItalyFlag from "~/components/italy-flag/italy-flag";
-import Badge from "~/components/primitives/badge/badge";
 import Logo from "~/components/primitives/logo/logo";
 import WhatsappExternalLink from "~/components/primitives/whatsapp/whatsapp-external-link";
 import WhatsAppIcon from "~/components/primitives/whatsapp/whatsapp-icon";
-import { Button } from "~/components/ui/button";
-import { Input } from "~/components/ui/input";
-import { Separator } from "~/components/ui/separator";
-import CardapioItemDialog from "~/domain/cardapio/components/cardapio-item-dialog/cardapio-item-dialog";
 import FazerPedidoButton from "~/domain/cardapio/components/fazer-pedido-button/fazer-pedido-button";
 import { MenuItemWithAssociations } from "~/domain/cardapio/menu-item.prisma.entity.server";
-import BadgeTag from "~/domain/tags/components/badge-tag";
 import { WebsiteNavigationSidebar } from "~/domain/website-navigation/components/website-navigation-sidebar";
 import GLOBAL_LINKS from "~/domain/website-navigation/global-links.constant";
 import PUBLIC_WEBSITE_NAVIGATION_ITEMS from "~/domain/website-navigation/public/public-website.nav-links";
-import useBrandColors from "~/hooks/use-brand-colors";
 import { cn } from "~/lib/utils";
 
 
@@ -150,7 +142,7 @@ function CardapioHeader() {
 
                     <Link to={GLOBAL_LINKS.cardapioPublic.href} className="flex justify-center">
                         <div className="px-4 -py-3">
-                            <Logo color="black" className="w-[90px] h-[30px] md:w-[150px] md:h-[50px]" tagline={false} />
+                            <Logo color="black" onlyText={true} className="w-[120px] h-[30px] md:w-[150px] md:h-[50px]" tagline={false} />
                         </div>
                     </Link>
                     <Link to={'buscar'} className="flex justify-end">
