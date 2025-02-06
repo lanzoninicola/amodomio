@@ -8,29 +8,12 @@ import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { badRequest, ok, serverError } from "~/utils/http-response.server";
 import { lastUrlSegment, urlAt } from "~/utils/url";
 
-const navigation = [
+const menuItemNavigation = [
     { name: 'Principal', href: 'main' },
     { name: 'Venda', href: 'venda/prices' },
     { name: 'Tags', href: 'tags' },
+    { name: 'Custos', href: 'costs' }
 ]
-
-// export async function loader({ request }: LoaderFunctionArgs) {
-//     const itemId = urlAt(request.url, -2)
-
-//     if (!itemId) {
-//         return badRequest("Nenhum item encontrado");
-//     }
-
-//     const [err, item] = await prismaIt(menuItemPrismaEntity.findById(itemId));
-
-
-//     if (err) {
-//         return badRequest(err);
-//     }
-
-//     return ok({ item })
-
-// }
 
 
 export default function SingleCardapioItem() {
@@ -62,7 +45,7 @@ export default function SingleCardapioItem() {
                         <div className="flex items-center col-span-6">
 
                             {
-                                navigation.map((item) => (
+                                menuItemNavigation.map((item) => (
                                     <MenuItemNavLink key={item.name} to={item.href} isActive={activeTab === item.href}>
                                         {item.name}
                                     </MenuItemNavLink>

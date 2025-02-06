@@ -2,6 +2,10 @@ import { scale } from "@cloudinary/url-gen/actions/resize";
 import cld from "./cloudinary-client";
 import { CloudinaryImageInfo } from "./cloudinary.types";
 
+interface VideoURLOptions {
+  width?: number;
+}
+
 export default class CloudinaryUtils {
   /**
    * Helper function to build cloudinary image info
@@ -47,5 +51,21 @@ export default class CloudinaryUtils {
         .resize(scale().width(options.width))
         .toURL() || null
     );
+  }
+
+  /**
+   * https://cloudinary.com/documentation/javascript_video_transformations
+   *
+   * @param publicId The public id of the video from cloudinary
+   * @returns
+   */
+  static getVideoURL(publicId: string, options: VideoURLOptions = {}) {
+    const video = cld.video(publicId).format("auto");
+
+    if (options.width) {
+      video.resize(scale().width(options.width));
+    }
+
+    return video.toURL();
   }
 }

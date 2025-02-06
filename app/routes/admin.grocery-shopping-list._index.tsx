@@ -2,13 +2,21 @@ import { Link, useLoaderData } from "@remix-run/react";
 import { Edit } from "lucide-react";
 import { groceryListEntity } from "~/domain/grocery-list/grocery-list.entity.server";
 import { GroceryList } from "~/domain/grocery-list/grocery-list.model.server";
-import { ok } from "~/utils/http-response.server";
+import prismaClient from "~/lib/prisma/client.server";
+import { prismaIt } from "~/lib/prisma/prisma-it.server";
+import { ok, serverError } from "~/utils/http-response.server";
 
 
 
 export async function loader() {
-    const groceriesList = await groceryListEntity.findAll()
-    return ok({ groceriesList })
+    const [err, records] = await prismaIt(prismaClient.groceryList.findMany())
+
+    if (err) {
+        return serverError(err)
+    }
+
+
+    return ok({ groceriesList: records })
 }
 
 
