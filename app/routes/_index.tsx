@@ -48,11 +48,11 @@ export default function HomePage() {
             </header>
             <section className="relative">
                 <HomePageVideoBackground />
-                <div className="absolute inset-0 p-4 pt-24 md:pt-32">
+                <div className="absolute inset-0 p-4 pt-32">
                     <div className="flex flex-col">
 
                         <h1 className="text-white font-rubik font-semibold transition-all
-                            text-5xl leading-[90%] tracking-tight mb-6 max-w-[300px]
+                            text-5xl leading-none tracking-tight mb-6 max-w-[300px]
                             md:text-7xl md:max-w-3xl
                         ">
                             A pizza mais desejada de Pato Branco
