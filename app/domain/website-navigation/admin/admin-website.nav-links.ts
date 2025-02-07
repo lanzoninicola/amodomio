@@ -9,7 +9,7 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
       items: [
         {
           title: "Cardápio Delivery",
-          href: "/admin/gerenciamento/cardapio",
+          href: "/admin/gerenciamento/cardapio/main",
           items: [],
         },
         {
