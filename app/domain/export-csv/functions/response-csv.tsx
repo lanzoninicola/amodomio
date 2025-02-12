@@ -1,10 +1,9 @@
-import { json } from "@remix-run/node";
-import type { LoaderFunction } from "@remix-run/node";
+
 import Papa from "papaparse";
 
-
-export const loader: LoaderFunction = async () => {
-    // Sample data (replace with your actual dataset)
+/**
+ *
+ *  // Sample data (replace with your actual dataset)
     const data: {
         id: number;
         name: string;
@@ -14,8 +13,9 @@ export const loader: LoaderFunction = async () => {
             { id: 2, name: "Diavola", price: 55 },
             { id: 3, name: "Quattro Formaggi", price: 60 }
         ];
+ */
 
-    // Convert data to CSV format
+export default function responseCSV(data: []) {
     const csv = Papa.unparse(data, { header: true })
 
     // Return CSV as a file response
@@ -24,5 +24,6 @@ export const loader: LoaderFunction = async () => {
             "Content-Type": "text/csv",
             "Content-Disposition": 'attachment; filename="export.csv"',
         },
-    });
-};
+    }
+    )
+}
