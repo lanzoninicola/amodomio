@@ -122,55 +122,46 @@ export async function action({ request }: LoaderFunctionArgs) {
 }
 
 export default function AdminGerenciamentoCardapioMain() {
-    const outletContext: AdminCardapioOutletContext = useOutletContext()
-    const itemsGroupedCategory = outletContext?.itemsGroupedCategory || [] as { category: Category["name"], menuItems: MenuItemWithAssociations[] }[]
-
-    const actionData = useActionData<typeof action>()
-
-
-
+    const outletContext: AdminCardapioOutletContext = useOutletContext();
+    const listGroupedByCategory = outletContext?.listGroupedByCategory || [];
+    const actionData = useActionData<typeof action>();
 
     if (actionData && actionData.status > 399) {
         toast({
             title: "Erro",
             description: actionData.message,
-        })
+        });
     }
 
     if (actionData && actionData.status === 200) {
-
-
         toast({
             title: "Ok",
             description: actionData.message,
-        })
+        });
     }
-
 
     return (
         <>
-            <div className="hidden md:grid md:grid-cols-2 md:gap-6 ">
-                <div>
-                    {itemsGroupedCategory.slice(0, Math.ceil(items.length / 2)).map((item) => (
-                        <MenuItemListSliced key={item.category} item={item} />
-                    ))}
-                </div>
-                <div>
-                    {itemsGroupedCategory.slice(Math.ceil(items.length / 2)).map((item) => (
-                        <MenuItemListSliced key={item.category} item={item} />
-                    ))}
-                </div>
+            {/* Desktop com multi-colunas */}
+            <div className="hidden md:columns-2 md:gap-6">
+                {listGroupedByCategory.map((item) => (
+                    <div key={item.category} className="break-inside-avoid mb-6">
+                        <MenuItemListSliced item={item} />
+                    </div>
+                ))}
             </div>
 
+            {/* Mobile */}
             <div className="flex flex-col md:hidden">
-                {itemsGroupedCategory.map((item) => (
+                {listGroupedByCategory.map((item) => (
                     <MenuItemListSliced key={item.category} item={item} />
                 ))}
             </div>
         </>
-
-    )
+    );
 }
+
+
 
 function MenuItemListSliced({ item }: { item: { category: Category["name"], menuItems: MenuItemWithAssociations[] } }) {
     const [visible, setVisible] = React.useState(false)
@@ -186,7 +177,7 @@ function MenuItemListSliced({ item }: { item: { category: Category["name"], menu
     }
 
     return (
-        <div key={item.category} className="flex flex-col mb-6">
+        <div key={item.category} className="flex flex-col mb-6" data-element="menu-item-list-sliced">
             <h3 className="uppercase font-semibold text-3xl tracking-tight">{item.category}</h3>
             <Separator className="my-2" />
             <ul>
