@@ -12,6 +12,7 @@ import { menuItemTagPrismaEntity } from "~/domain/cardapio/menu-item-tags.prisma
 import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { categoryPrismaEntity } from "~/domain/category/category.entity.server";
 import { Category } from "~/domain/category/category.model.server";
+import ExportCsvButton from "~/domain/export-csv/components/export-csv-button/export-csv-button";
 import { PizzaSizeVariation } from "~/domain/pizza/pizza.entity.server";
 import prismaClient from "~/lib/prisma/client.server";
 import { prismaAll } from "~/lib/prisma/prisma-all.server";
@@ -164,6 +165,7 @@ export default function AdminCardapioOutlet() {
                                         <MenuItemNavLink to={"sell-price-management"} isActive={activeTab === "sell-price-management"}>
                                             Calculo preço de vendas
                                         </MenuItemNavLink>
+                                        <ExportCsvButton context="menu-items-price-variations" />
                                     </div>
                                 </div>
 
