@@ -140,10 +140,12 @@ export default function AdminGerenciamentoCardapioMain() {
         });
     }
 
+    console.log({ listGroupedByCategory })
+
     return (
         <>
             {/* Desktop com multi-colunas */}
-            <div className="hidden md:columns-2 md:gap-6">
+            <div className="hidden md:columns-2 md:gap-6 md:block">
                 {listGroupedByCategory.map((item) => (
                     <div key={item.category} className="break-inside-avoid mb-6">
                         <MenuItemListSliced item={item} />
