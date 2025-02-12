@@ -140,7 +140,6 @@ export default function AdminGerenciamentoCardapioMain() {
         });
     }
 
-    console.log({ listGroupedByCategory })
 
     return (
         <>
@@ -185,30 +184,36 @@ function MenuItemListSliced({ item }: { item: { category: Category["name"], menu
             <ul>
                 {item.menuItems.map((menuItem) => (
                     <li key={menuItem.id} className="flex flex-col mb-2">
-                        <Link to={`/admin/gerenciamento/cardapio/${menuItem?.id}/main`} className="flex flex-col p-1 hover:bg-muted">
-                            <div className="grid grid-cols-6">
-                                <span className="font-semibold uppercase mb-0 tracking-wider col-span-4">{menuItem.name}</span>
-                                <Form method="post" className="flex justify-between md:justify-end gap-2 w-full items-center col-span-2">
 
-                                    <span className="font-semibold text-sm">Públicar</span>
-                                    <Switch defaultChecked={menuItem?.visible || false} onCheckedChange={handleVisibility} />
-                                    <input type="hidden" name="id" value={menuItem?.id} />
-                                    <button ref={submitBtnRef} className="hidden" type="submit" value={"menu-item-visibility-change"} name="_action" />
+                        <div className="grid grid-cols-6 items-start p-1  hover:bg-muted">
+                            <Link to={`/admin/gerenciamento/cardapio/${menuItem?.id}/main`} className="flex flex-col col-span-4">
+                                <div className="flex flex-col ">
+                                    <span className="font-semibold uppercase mb-0 tracking-wider col-span-4">{menuItem.name}</span>
+                                    <div className="flex gap-2 mb-2">
+                                        {menuItem.tags?.models.map((tag) => (
+                                            <BadgeTag key={tag?.id} tag={tag} allowRemove={false}
+                                                classNameLabel="text-[11px] uppercase tracking-wider leading-none"
+                                                classNameContainer="py-0 px-1"
+                                            />
+                                        ))}
+                                    </div>
+                                    <span className="text-sm">{capitalize(menuItem.ingredients)}</span>
+                                </div>
+                            </Link>
 
-                                </Form>
-                            </div>
+                            <Form method="post" className="flex justify-between md:justify-end gap-2 w-full items-center  col-span-2">
 
-                            <div className="flex gap-2">
-                                {menuItem.tags?.models.map((tag) => (
-                                    <BadgeTag key={tag?.id} tag={tag} allowRemove={false}
-                                        classNameLabel="text-xs uppercase tracking-wider"
-                                        classNameContainer="py-0 px-1.5"
-                                    />
-                                ))}
-                            </div>
-                            <span>{capitalize(menuItem.ingredients)}</span>
+                                <span className="font-semibold text-sm">Públicar</span>
+                                <Switch defaultChecked={menuItem?.visible || false} onCheckedChange={handleVisibility} />
+                                <input type="hidden" name="id" value={menuItem?.id} />
+                                <button ref={submitBtnRef} className="hidden" type="submit" value={"menu-item-visibility-change"} name="_action" />
 
-                        </Link>
+                            </Form>
+
+
+                        </div>
+
+
 
                     </li>
                 ))}
