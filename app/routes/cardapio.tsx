@@ -382,7 +382,7 @@ function CardapioSizesDialog() {
                                                 <Donut size={32} />
                                             </div> : "Tamanho"
                             }
-                            <span>Maximo {
+                            <span>Máximo {
                                 currentSize === "individual" ? "1" :
                                     currentSize === "medio" ? "2" :
                                         currentSize === "familia" ? "4" : "Tamanho"
