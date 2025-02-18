@@ -9,7 +9,7 @@ import Logo from "~/components/primitives/logo/logo";
 import WhatsappExternalLink from "~/components/primitives/whatsapp/whatsapp-external-link";
 import WhatsAppIcon from "~/components/primitives/whatsapp/whatsapp-icon";
 import { Button } from "~/components/ui/button";
-import { Dialog, DialogContent, DialogTrigger } from "~/components/ui/dialog";
+import { Dialog, DialogClose, DialogContent, DialogTrigger } from "~/components/ui/dialog";
 import { Separator } from "~/components/ui/separator";
 import FazerPedidoButton from "~/domain/cardapio/components/fazer-pedido-button/fazer-pedido-button";
 import { MenuItemWithAssociations } from "~/domain/cardapio/menu-item.prisma.entity.server";
@@ -253,7 +253,7 @@ function CardapioFooter() {
     return (
         <div className={
             cn(
-                "fixed bottom-0 w-screen md:max-w-6xl md:-translate-x-1/2 md:left-1/2 ",
+                "fixed bottom-0 w-screen md:max-w-6xl md:-translate-x-1/2 md:left-1/2  shadow-sm",
             )
         }>
             <footer className="grid grid-cols-4 md:grid-cols-8 gap-x-2 bg-white px-4" >
@@ -284,8 +284,18 @@ function CardapioFooterMenuItemDialog({ children, triggerComponent }: CardapioFo
             <DialogContent className="p-0 bg-transparent border-none">
                 <div className="bg-white p-4">
                     {children}
+                    <DialogClose asChild>
+                        <div className="w-full">
+                            <Button type="button" variant="secondary" className="w-full" >
+                                <span className=" tracking-wide font-semibold uppercase">Fechar</span>
+                            </Button>
+                        </div>
+
+                    </DialogClose>
                 </div>
+
             </DialogContent>
+
         </Dialog>
     )
 }
@@ -300,7 +310,7 @@ function CardapioSizesDialog() {
         return (
             <button
                 className={cn(
-                    "grid grid-rows-4 justify-items-center items-center rounded-md",
+                    "grid grid-rows-4 justify-items-center items-center rounded-md p-1",
                     currentSize === size && "border-2 border-brand-blue"
                 )}
                 onClick={() => setCurrentSize(size)}
@@ -309,7 +319,7 @@ function CardapioSizesDialog() {
                     className={
                         cn(
                             "w-[50px] row-span-3",
-                            size === "medio" && "w-[80px]",
+                            size === "medio" && "w-[75px]",
                             size === "familia" && "w-[150px]"
                         )
                     }
@@ -328,8 +338,8 @@ function CardapioSizesDialog() {
     return (
         <CardapioFooterMenuItemDialog triggerComponent={
             <div className="flex flex-col gap-0 justify-center items-center">
-                <Proportions className="col-span-1 md:col-span-2 text-muted-foreground" />
-                <span className="font-body-website tracking-widest text-sm text-muted-foreground">Tamanhos</span>
+                <Proportions className="col-span-1 md:col-span-2" />
+                <span className="font-body-website tracking-widest text-sm">Tamanhos</span>
             </div>}
         >
             <div className="h-[550px] overflow-auto py-4">
@@ -383,19 +393,20 @@ function CardapioSizesDialog() {
                                             </div> : "Tamanho"
                             }
                             <span>Máximo {
-                                currentSize === "individual" ? "1" :
-                                    currentSize === "medio" ? "2" :
-                                        currentSize === "familia" ? "4" : "Tamanho"
-                            } sabores</span>
+                                currentSize === "individual" ? "1 sabor" :
+                                    currentSize === "medio" ? "2 sabores" :
+                                        currentSize === "familia" ? "4 sabores" : "Tamanho"
+                            }</span>
 
                         </div>
                         <div className="flex flex-col gap-0 items-center">
                             <Proportions size={32} />
                             <span>{
-                                currentSize === "individual" ? "25x15cm aprox" :
-                                    currentSize === "medio" ? "40x20cm aprox" :
-                                        currentSize === "familia" ? "60x40cm aprox" : "Tamanho"
+                                currentSize === "individual" ? "aprox. 25x15cm " :
+                                    currentSize === "medio" ? "aprox. 40x20cm (8 fatias)" :
+                                        currentSize === "familia" ? "aprox. 60x40cm (16 fatias)" : "Tamanho"
                             }</span>
+
                         </div>
                     </div>
 
