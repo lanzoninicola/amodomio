@@ -12,6 +12,7 @@ import { menuItemTagPrismaEntity } from "~/domain/cardapio/menu-item-tags.prisma
 import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { categoryPrismaEntity } from "~/domain/category/category.entity.server";
 import { Category } from "~/domain/category/category.model.server";
+import ExportCsvButton from "~/domain/export-csv/components/export-csv-button/export-csv-button";
 import { PizzaSizeVariation } from "~/domain/pizza/pizza.entity.server";
 import prismaClient from "~/lib/prisma/client.server";
 import { prismaAll } from "~/lib/prisma/prisma-all.server";
@@ -43,7 +44,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     // https://github.com/remix-run/remix/discussions/6149
 
     const categories = categoryPrismaEntity.findAll()
-    const itemsGroupedCategory = menuItemPrismaEntity.findAllGroupedByCategory({
+    const listGroupedByCategory = menuItemPrismaEntity.findAllGroupedByCategory({
         option: {
             sorted: true,
             direction: "asc"
@@ -55,7 +56,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const tags = menuItemTagPrismaEntity.findAll()
     const sizeVariations = prismaClient.menuItemSize.findMany()
 
-    const data = Promise.all([categories, itemsGroupedCategory, tags, sizeVariations]);
+    const data = Promise.all([categories, listGroupedByCategory, tags, sizeVariations]);
 
     return defer({ data });
 }
@@ -63,7 +64,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export interface AdminCardapioOutletContext {
     categories: Category[]
-    itemsGroupedCategory?: { category: Category["name"], menuItems: MenuItemWithAssociations[] }[]
+    listGroupedByCategory?: { category: Category["name"], menuItems: MenuItemWithAssociations[] }[]
     tags: MenuItemTag[],
     sizeVariations: PizzaSizeVariation[]
 }
@@ -102,7 +103,7 @@ export default function AdminCardapioOutlet() {
 
         <Suspense fallback={<Loading />}>
             <Await resolve={data}>
-                {([categories, itemsGroupedCategory, tags, sizeVariations]) => {
+                {([categories, listGroupedByCategory, tags, sizeVariations]) => {
 
 
                     return (
@@ -151,7 +152,7 @@ export default function AdminCardapioOutlet() {
 
                                 <div className="flex flex-col gap-6 mb-4">
                                     {/** @ts-ignore */}
-                                    <CardapioAdminStats itemsGroupedCategory={itemsGroupedCategory} />
+                                    <CardapioAdminStats listGroupedByCategory={listGroupedByCategory} />
 
                                     <div className="flex gap-4 items-center">
                                         <MenuItemNavLink to={"main"} isActive={activeTab === "main"}>
@@ -164,6 +165,7 @@ export default function AdminCardapioOutlet() {
                                         <MenuItemNavLink to={"sell-price-management"} isActive={activeTab === "sell-price-management"}>
                                             Calculo preço de vendas
                                         </MenuItemNavLink>
+
                                     </div>
                                 </div>
 
@@ -173,7 +175,7 @@ export default function AdminCardapioOutlet() {
 
 
                             <Outlet context={{
-                                itemsGroupedCategory,
+                                listGroupedByCategory,
                                 categories,
                                 tags,
                                 sizeVariations,
@@ -197,16 +199,16 @@ export default function AdminCardapioOutlet() {
 
 
 interface CardapioAdminStatsProps {
-    itemsGroupedCategory: { category: Category["name"], menuItems: MenuItemWithAssociations[] }[]
+    listGroupedByCategory: { category: Category["name"], menuItems: MenuItemWithAssociations[] }[]
 }
 
 
-function CardapioAdminStats({ itemsGroupedCategory }: CardapioAdminStatsProps) {
+function CardapioAdminStats({ listGroupedByCategory }: CardapioAdminStatsProps) {
 
-    console.log({ itemsGroupedCategory })
+    console.log({ listGroupedByCategory })
 
 
-    const publicados = itemsGroupedCategory
+    const publicados = listGroupedByCategory
         .map(category =>
             category.menuItems
                 .filter(menuItem => menuItem.visible === true)
@@ -215,7 +217,7 @@ function CardapioAdminStats({ itemsGroupedCategory }: CardapioAdminStatsProps) {
         .reduce((sum, count) => sum + count, 0);
 
 
-    const invisivels = itemsGroupedCategory
+    const invisivels = listGroupedByCategory
         .map(category =>
             category.menuItems
                 .filter(menuItem => menuItem.visible === false)
@@ -223,7 +225,7 @@ function CardapioAdminStats({ itemsGroupedCategory }: CardapioAdminStatsProps) {
         )
         .reduce((sum, count) => sum + count, 0);
 
-    const semImagem = itemsGroupedCategory
+    const semImagem = listGroupedByCategory
         .map(category =>
             category.menuItems
                 .filter(menuItem => menuItem.imageId === null)
@@ -231,7 +233,7 @@ function CardapioAdminStats({ itemsGroupedCategory }: CardapioAdminStatsProps) {
         )
         .reduce((sum, count) => sum + count, 0);
 
-    const futuroLançamento = itemsGroupedCategory
+    const futuroLançamento = listGroupedByCategory
         .map(category =>
             category.menuItems
                 .filter(menuItem => menuItem.tags?.all?.includes("futuro-lançamento"))

@@ -18,10 +18,10 @@ import { ok } from "./utils/http-response.server";
 
 export const meta: MetaFunction = () => {
   return [
-    { title: "A Modio Mio - La vera pizza italiana di Pato Branco" },
+    { title: "Pizza Delivery Italiana em Pato Branco - A Modo Mio" },
     {
       name: "description",
-      content: "Bem vindo ao cardápio da Pizza Delivery A Modo Mio",
+      content: "Experimente a autêntica pizza italiana da A Modo Mio em Pato Branco. Crocante, artesanal e irresistível. Peça agora!",
     },
     {
       name: "keywords",
@@ -65,7 +65,7 @@ export const links: LinksFunction = () => [
   // },
   {
     href: "https://fonts.googleapis.com/css2?family=Inter&family=Montagu+Slab:opsz,wght@16..144,400;16..144,600;16..144,700&display=swap",
-    rel: "stylesheet",
+    rel: "preload",
   },
   // {
   //   rel: 'apple-touch-icon',

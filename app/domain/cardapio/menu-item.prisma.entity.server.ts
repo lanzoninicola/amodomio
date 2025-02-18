@@ -276,6 +276,35 @@ export class MenuItemPrismaEntity {
     }));
   }
 
+  async findAllPriceVariations(
+    params: MenuItemEntityFindAllProps = {},
+    options = {
+      imageTransform: false,
+      imageScaleWidth: 1280,
+    }
+  ) {
+    // Use the existing findAll function to fetch records
+    const allMenuItems = (await this.findAll(params, options)) || [];
+
+    return allMenuItems.map((item) => ({
+      id: item.id,
+      name: item.name,
+      ingredients: item.ingredients,
+      priceVariations: item.priceVariations.map((v) => ({
+        id: v.id,
+        label: v.label,
+        amount: v.amount,
+        discountPercentage: v.discountPercentage,
+        showOnCardapio: v.showOnCardapio,
+        showOnCardapioAt: v.showOnCardapioAt,
+        createdAt: v.createdAt,
+        updatedAt: v.updatedAt,
+        updatedBy: v.updatedBy,
+        latestAmount: v.latestAmount,
+      })),
+    }));
+  }
+
   async findById(
     id: string,
     options = {
