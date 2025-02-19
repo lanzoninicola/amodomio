@@ -1,18 +1,18 @@
 import { Category, Prisma } from "@prisma/client";
 import { LoaderFunctionArgs, MetaFunction, redirect } from "@remix-run/node";
-import { useActionData, useLoaderData } from "@remix-run/react";
-import { AlertCircle } from "lucide-react";
+import { Await, defer, useLoaderData } from "@remix-run/react";
+import { Suspense } from "react";
+import Loading from "~/components/loading/loading";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
-import { toast } from "~/components/ui/use-toast";
 import MenuItemForm from "~/domain/cardapio/components/menu-item-form/menu-item-form";
 import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { categoryPrismaEntity } from "~/domain/category/category.entity.server";
-import { CloudinaryImageInfo } from "~/lib/cloudinary";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
-import { badRequest, ok, serverError } from "~/utils/http-response.server";
+import { badRequest, ok } from "~/utils/http-response.server";
 import { jsonParse } from "~/utils/json-helper";
 
 export const meta: MetaFunction<typeof loader> = ({ data }) => {
+    // @ts-ignore
     const item: MenuItemWithAssociations = data?.payload?.item
 
     return [
@@ -27,29 +27,23 @@ export async function loader({ params }: LoaderFunctionArgs) {
         return badRequest("Nenhum item encontrado");
     }
 
-    const [errItem, item] = await prismaIt(menuItemPrismaEntity.findById(itemId));
-    const [errCat, categories] = await prismaIt(categoryPrismaEntity.findAll());
-
-    const err = errItem || errCat
-
-    // console.log({ err })
+    const itemQryResult = prismaIt(menuItemPrismaEntity.findById(itemId));
+    const categoriesQryResult = prismaIt(categoryPrismaEntity.findAll());
 
 
-    if (err) {
-        return badRequest(err);
-    }
+    const data = Promise.all([
+        itemQryResult,
+        categoriesQryResult
+    ]);
 
-    return ok({
-        item,
-        categories
-    });
+    return defer({ data })
 }
 
 export async function action({ request }: LoaderFunctionArgs) {
 
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);
-    console.log({ action: _action, values })
+    // console.log({ action: _action, values })
 
     if (_action === "menu-item-update") {
 
@@ -126,21 +120,43 @@ export async function action({ request }: LoaderFunctionArgs) {
 
 
 export default function SingleMenuItemMain() {
-    const loaderData = useLoaderData<typeof loader>()
-    const item = loaderData.payload?.item
-    const categories = loaderData.payload?.categories || []
+    const {
+        data,
+    } = useLoaderData<typeof loader>();
 
-    if (loaderData?.status !== 200) {
-        toast({
-            title: "Erro",
-            description: loaderData?.message,
-        })
-    }
+
 
     return (
-        <MenuItemForm action="menu-item-update" item={item} categories={categories} />
 
+        <div className="min-h-[200px]">
+            <Suspense fallback={<Loading />}>
+                <Await resolve={data}>
+                    {
+                        ([itemQryResult, categoriesQryResult]) => {
+
+                            const err = itemQryResult[0] || categoriesQryResult[0]
+                            if (err) {
+                                return (
+                                    <Alert variant={"destructive"} >
+                                        <AlertTitle>Erro</AlertTitle>
+                                        <AlertDescription>{err?.name}</AlertDescription>
+                                    </Alert>
+                                )
+                            }
+
+
+                            return (
+                                <MenuItemForm action="menu-item-update" item={itemQryResult[1]} categories={categoriesQryResult[1]} />
+                            )
+                        }
+                    }
+
+                </Await>
+            </Suspense>
+        </div>
     )
+
+
 
 }
 
