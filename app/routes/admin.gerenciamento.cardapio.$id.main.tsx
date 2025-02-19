@@ -1,6 +1,9 @@
 import { Category, Prisma } from "@prisma/client";
 import { LoaderFunctionArgs, MetaFunction, redirect } from "@remix-run/node";
 import { useActionData, useLoaderData } from "@remix-run/react";
+import { AlertCircle } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
+import { toast } from "~/components/ui/use-toast";
 import MenuItemForm from "~/domain/cardapio/components/menu-item-form/menu-item-form";
 import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { categoryPrismaEntity } from "~/domain/category/category.entity.server";
@@ -29,10 +32,12 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
     const err = errItem || errCat
 
-    if (err) {
-        return serverError(err);
-    }
+    // console.log({ err })
 
+
+    if (err) {
+        return badRequest(err);
+    }
 
     return ok({
         item,
@@ -44,7 +49,7 @@ export async function action({ request }: LoaderFunctionArgs) {
 
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);
-    // console.log({ action: _action, values })
+    console.log({ action: _action, values })
 
     if (_action === "menu-item-update") {
 
@@ -124,6 +129,13 @@ export default function SingleMenuItemMain() {
     const loaderData = useLoaderData<typeof loader>()
     const item = loaderData.payload?.item
     const categories = loaderData.payload?.categories || []
+
+    if (loaderData?.status !== 200) {
+        toast({
+            title: "Erro",
+            description: loaderData?.message,
+        })
+    }
 
     return (
         <MenuItemForm action="menu-item-update" item={item} categories={categories} />

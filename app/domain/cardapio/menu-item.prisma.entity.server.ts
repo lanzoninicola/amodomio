@@ -100,7 +100,7 @@ export class MenuItemPrismaEntity {
     },
     MenuItemShare: true,
     MenuItemImage: true,
-    MenuItemSize: true,
+    // MenuItemSize: true,
   };
 
   client;

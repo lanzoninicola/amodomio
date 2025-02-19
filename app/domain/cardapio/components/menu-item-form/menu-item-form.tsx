@@ -39,6 +39,7 @@ export default function MenuItemForm({ item, action, className, categories }: Me
         submitButtonRef.current.click()
     }
 
+
     return (
 
         <div className="flex flex-col">
