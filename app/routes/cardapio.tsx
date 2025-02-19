@@ -1,12 +1,16 @@
+import { SizeIcon } from "@radix-ui/react-icons";
 import { MetaFunction } from "@remix-run/node";
 import { Link, Outlet, useLocation } from "@remix-run/react";
-import { Instagram, MapPin, SearchIcon } from "lucide-react";
+import { Donut, Instagram, MapPin, Proportions, SearchIcon, User, Users } from "lucide-react";
 import { ReactNode, useState } from "react";
 
 import ItalyFlag from "~/components/italy-flag/italy-flag";
 import Logo from "~/components/primitives/logo/logo";
 import WhatsappExternalLink from "~/components/primitives/whatsapp/whatsapp-external-link";
 import WhatsAppIcon from "~/components/primitives/whatsapp/whatsapp-icon";
+import { Button } from "~/components/ui/button";
+import { Dialog, DialogClose, DialogContent, DialogTrigger } from "~/components/ui/dialog";
+import { Separator } from "~/components/ui/separator";
 import FazerPedidoButton from "~/domain/cardapio/components/fazer-pedido-button/fazer-pedido-button";
 import { MenuItemWithAssociations } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { WebsiteNavigationSidebar } from "~/domain/website-navigation/components/website-navigation-sidebar";
@@ -249,11 +253,12 @@ function CardapioFooter() {
     return (
         <div className={
             cn(
-                "fixed bottom-0 w-screen md:max-w-6xl md:-translate-x-1/2 md:left-1/2 ",
+                "fixed bottom-0 w-screen md:max-w-6xl md:-translate-x-1/2 md:left-1/2  shadow-sm",
             )
         }>
-            <footer >
-                <div className="h-full w-full py-2 px-4 bg-white">
+            <footer className="grid grid-cols-4 md:grid-cols-8 gap-x-2 bg-white px-4" >
+                <CardapioSizesDialog />
+                <div className="h-full w-full py-2 col-span-3 md:col-span-6">
                     <FazerPedidoButton variant="accent" cnLabel="text-2xl tracking-wider" />
                 </div>
             </footer>
@@ -262,4 +267,153 @@ function CardapioFooter() {
     )
 }
 
+interface CardapioFooterMenuItemDialogProps {
+    children?: React.ReactNode;
+    triggerComponent?: React.ReactNode;
+}
+
+function CardapioFooterMenuItemDialog({ children, triggerComponent }: CardapioFooterMenuItemDialogProps) {
+
+    return (
+        <Dialog>
+            <DialogTrigger asChild className="w-full">
+                <button>
+                    {triggerComponent}
+                </button>
+            </DialogTrigger>
+            <DialogContent className="p-0 bg-transparent border-none">
+                <div className="bg-white p-4">
+                    {children}
+                    <DialogClose asChild>
+                        <div className="w-full">
+                            <Button type="button" variant="secondary" className="w-full" >
+                                <span className=" tracking-wide font-semibold uppercase">Fechar</span>
+                            </Button>
+                        </div>
+
+                    </DialogClose>
+                </div>
+
+            </DialogContent>
+
+        </Dialog>
+    )
+}
+
+type SizesSelection = "individual" | "medio" | "familia"
+
+function CardapioSizesDialog() {
+
+    const [currentSize, setCurrentSize] = useState<SizesSelection>("individual")
+
+    const ButtonSelection = ({ size }: { size: SizesSelection }) => {
+        return (
+            <button
+                className={cn(
+                    "grid grid-rows-4 justify-items-center items-center rounded-md p-1",
+                    currentSize === size && "border-2 border-brand-blue"
+                )}
+                onClick={() => setCurrentSize(size)}
+            >
+                <img src="/images/cardapio-web-app/pizza-placeholder-sm.png" alt={`Tamanho ${size}`}
+                    className={
+                        cn(
+                            "w-[50px] row-span-3",
+                            size === "medio" && "w-[75px]",
+                            size === "familia" && "w-[150px]"
+                        )
+                    }
+                />
+                <span className="font-body-website tracking-wider font-semibold row-span-1">
+                    {
+                        size === "individual" ? "Individual" :
+                            size === "medio" ? "Médio" :
+                                size === "familia" ? "Família" : "Tamanho"
+                    }
+                </span>
+            </button>
+        )
+    }
+
+    return (
+        <CardapioFooterMenuItemDialog triggerComponent={
+            <div className="flex flex-col gap-0 justify-center items-center">
+                <Proportions className="col-span-1 md:col-span-2" />
+                <span className="font-body-website tracking-widest text-sm">Tamanhos</span>
+            </div>}
+        >
+            <div className="h-[550px] overflow-auto py-4">
+                <div className="mb-6">
+                    <h3 className="font-semibold text-2xl uppercase font-body-website tracking-wider">
+                        Tamanhos disponiveis
+                    </h3>
+                    <span className="text-sm">Seleciona o tamanho para visualizar os detalhes</span>
+                </div>
+                <div className="grid grid-cols-3 gap-4">
+
+                    <ButtonSelection size="individual" />
+                    <ButtonSelection size="medio" />
+                    <ButtonSelection size="familia" />
+
+                </div>
+                <Separator className="my-6" />
+
+                <div className="flex flex-col justify-center gap-y-4">
+                    <h4 className="font-body-website tracking-widest font-semibold text-lg uppercase text-center mb-4">
+                        Tamanho {
+                            currentSize === "individual" ? "Individual" :
+                                currentSize === "medio" ? "Médio" :
+                                    currentSize === "familia" ? "Família" : "Tamanho"
+                        }
+                    </h4>
+                    <div className="grid grid-rows-3 gap-y-6">
+                        <div className="flex flex-col gap-0 items-center">
+                            {
+                                currentSize === "individual" ? <User size={32} /> : <Users size={32} />
+                            }
+                            <span>Serve até {
+                                currentSize === "individual" ? "1 pessoa" :
+                                    currentSize === "medio" ? "2 pessoas" :
+                                        currentSize === "familia" ? "6 pessoas" : "Tamanho"
+                            }</span>
+                        </div>
+                        <div className="flex flex-col gap-0 items-center">
+                            {
+                                currentSize === "individual" ? <Donut size={32} /> :
+                                    currentSize === "medio" ? <div className="flex gap-x-2">
+                                        <Donut size={32} />
+                                        <Donut size={32} />
+                                    </div> :
+                                        currentSize === "familia" ?
+                                            <div className="flex gap-x-2">
+                                                <Donut size={32} />
+                                                <Donut size={32} />
+                                                <Donut size={32} />
+                                                <Donut size={32} />
+                                            </div> : "Tamanho"
+                            }
+                            <span>Máximo {
+                                currentSize === "individual" ? "1 sabor" :
+                                    currentSize === "medio" ? "2 sabores" :
+                                        currentSize === "familia" ? "4 sabores" : "Tamanho"
+                            }</span>
+
+                        </div>
+                        <div className="flex flex-col gap-0 items-center">
+                            <Proportions size={32} />
+                            <span>{
+                                currentSize === "individual" ? "aprox. 25x15cm " :
+                                    currentSize === "medio" ? "aprox. 40x20cm (8 fatias)" :
+                                        currentSize === "familia" ? "aprox. 60x40cm (16 fatias)" : "Tamanho"
+                            }</span>
+
+                        </div>
+                    </div>
+
+                </div>
+
+            </div>
+        </CardapioFooterMenuItemDialog >
+    )
+}
 

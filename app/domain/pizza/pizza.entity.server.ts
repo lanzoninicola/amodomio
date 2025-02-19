@@ -1,5 +1,4 @@
 import type { Product, ProductInfo } from "../product/product.model.server";
-import type { Size } from "../size/size.model.server";
 
 // A pizza is a product with variation of sizes
 export interface Pizza extends Product {
@@ -7,8 +6,13 @@ export interface Pizza extends Product {
 }
 
 // each size has a variation of toppings
-export interface PizzaSizeVariation extends Size {
-  toppings: Topping[];
+export interface PizzaSizeVariation {
+  key: "individual" | "media" | "familia";
+  name: string;
+  slices: number;
+  maxPersonServeAmount: number;
+  maxToppingsAmount: number;
+  toppings?: Topping[];
 }
 
 interface ToppingInfo extends ProductInfo {
