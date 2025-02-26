@@ -151,7 +151,7 @@ model GroceryListItem {
   GroceryList   GroceryList @relation(fields: [groceryListId], references: [id])
   name          String?
   quantity      Int
-  purchased     Boolean
+  purchased     Boolean     @default(false)
 
   @@map("grocery_list_items")
 }
@@ -207,7 +207,7 @@ model MenuItemPriceVariation {
   MenuItem           MenuItem?     @relation(fields: [menuItemId], references: [id])
   menuItemId         String?       @map("menu_item_id")
   MenuItemSize       MenuItemSize? @relation(fields: [menuItemSizeId], references: [id])
-  menuItemSizeId     String?       @map("menu_item_size__id")
+  menuItemSizeId     String?       @map("menu_item_size_id")
   label              String
   basePrice          Float         @default(0) @map("base_price")
   amount             Float
