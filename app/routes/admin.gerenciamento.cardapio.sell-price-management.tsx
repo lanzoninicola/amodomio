@@ -70,28 +70,28 @@ export default function AdminGerenciamentoCardapioSellPriceManagement() {
                                                             {/* <span className="text-[10px] text-muted-foreground">{menuItem.ingredients}</span> */}
                                                         </div>
                                                         <div className="flex gap-1">
-                                                            <Input defaultValue={menuItem.priceVariations.find(cv => cv.sizeId === sizes[0].id)?.latestAmount} />
+                                                            <Input defaultValue={menuItem.priceVariations.find(cv => cv.sizeId === sizes[0].id)?.amount} />
                                                             <Input defaultValue={menuItem.priceVariations.find(cv => cv.sizeId === sizes[0].id)?.discountPercentage} />
                                                         </div>
 
                                                         <div className="flex  gap-1">
-                                                            <Input defaultValue={menuItem.priceVariations.find(cv => cv.sizeId === sizes[1].id)?.latestAmount} />
+                                                            <Input defaultValue={menuItem.priceVariations.find(cv => cv.sizeId === sizes[1].id)?.amount} />
                                                             <Input defaultValue={menuItem.priceVariations.find(cv => cv.sizeId === sizes[1].id)?.discountPercentage} />
                                                         </div>
 
                                                         <div className="flex  gap-1">
-                                                            <Input defaultValue={menuItem.priceVariations.find(cv => cv.sizeId === sizes[2].id)?.latestAmount} />
+                                                            <Input defaultValue={menuItem.priceVariations.find(cv => cv.sizeId === sizes[2].id)?.amount} />
                                                             <Input defaultValue={menuItem.priceVariations.find(cv => cv.sizeId === sizes[2].id)?.discountPercentage} />
                                                         </div>
 
 
                                                         <div className="flex  gap-1">
-                                                            <Input defaultValue={menuItem.priceVariations.find(cv => cv.sizeId === sizes[3].id)?.latestAmount} />
+                                                            <Input defaultValue={menuItem.priceVariations.find(cv => cv.sizeId === sizes[3].id)?.amount} />
                                                             <Input defaultValue={menuItem.priceVariations.find(cv => cv.sizeId === sizes[3].id)?.discountPercentage} />
                                                         </div>
 
                                                         <div className="flex  gap-1">
-                                                            <Input defaultValue={menuItem.priceVariations.find(cv => cv.sizeId === sizes[4].id)?.latestAmount} />
+                                                            <Input defaultValue={menuItem.priceVariations.find(cv => cv.sizeId === sizes[4].id)?.amount} />
                                                             <Input defaultValue={menuItem.priceVariations.find(cv => cv.sizeId === sizes[4].id)?.discountPercentage} />
                                                         </div>
 
