@@ -77,6 +77,7 @@ export interface MenuItemWithSellPriceVariations {
   priceVariations: {
     menuItemPriceVariationId: MenuItemPriceVariation["id"];
     sizeId: MenuItemSize["id"];
+    sizeName: MenuItemSize["name"];
     name: MenuItemSize["name"];
     amount: number;
     discountPercentage: number;
@@ -329,6 +330,7 @@ export class MenuItemPrismaEntity {
           return {
             menuItemPriceVariationId: variation.id || "",
             sizeId: size.id,
+            sizeName: size.name,
             name: size.name,
             amount: variation.amount || 0,
             discountPercentage: variation.discountPercentage || 0,
