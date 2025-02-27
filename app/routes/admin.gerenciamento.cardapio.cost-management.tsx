@@ -28,6 +28,7 @@ export default function AdminGerenciamentoCardapioCostManagement() {
 
         <Suspense fallback={<span>Carregando...</span>}>
             <Await resolve={data}>
+                {/* @ts-ignore */}
                 {([menuItemsWithCostVariations, sizes]) => {
 
                     return (

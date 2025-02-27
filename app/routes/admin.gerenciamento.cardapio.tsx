@@ -163,7 +163,7 @@ export default function AdminCardapioOutlet() {
                                         </MenuItemNavLink>
 
                                         <MenuItemNavLink to={"sell-price-management"} isActive={activeTab === "sell-price-management"}>
-                                            Calculo preço de vendas
+                                            Gerenciamento preço de venda
                                         </MenuItemNavLink>
 
                                     </div>

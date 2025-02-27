@@ -70,6 +70,26 @@ export interface MenuItemWithCostVariations {
   }[];
 }
 
+export interface MenuItemWithSellPriceVariations {
+  id: string;
+  name: string;
+  ingredients: string;
+  priceVariations: {
+    menuItemPriceVariationId: MenuItemPriceVariation["id"];
+    sizeId: MenuItemSize["id"];
+    sizeName: MenuItemSize["name"];
+    name: MenuItemSize["name"];
+    amount: number;
+    discountPercentage: number;
+    showOnCardapio: boolean;
+    showOnCardapioAt: Date | null;
+    createdAt: Date;
+    updatedAt: Date;
+    updatedBy: string | null;
+    latestAmount: number;
+  }[];
+}
+
 interface MenuItemEntityFindAllProps {
   where?: Prisma.MenuItemWhereInput;
   option?: {
@@ -100,7 +120,7 @@ export class MenuItemPrismaEntity {
     },
     MenuItemShare: true,
     MenuItemImage: true,
-    MenuItemSize: true,
+    // MenuItemSize: true,
   };
 
   client;
@@ -249,31 +269,36 @@ export class MenuItemPrismaEntity {
       imageScaleWidth: 1280,
     }
   ): Promise<MenuItemWithCostVariations[]> {
-    // Use the existing findAll function to fetch records
+    // Fetch all menu items
     const allMenuItems = (await this.findAll(params, options)) || [];
-
+    // Fetch all sizes
     const sizes = await this.client.menuItemSize.findMany();
 
-    return allMenuItems.map((item) => ({
-      id: item.id,
-      name: item.name,
-      ingredients: item.ingredients,
-      costVariations: sizes.map((size) => ({
-        menuItemCostVariationId:
-          item.costVariations.find((v) => v.menuItemSizeId === size.id)?.id ||
-          "",
-        sizeId: size.id,
-        name: size.name,
-        slug: size.slug,
-        costBase: size.costBase,
-        recipeCostAmount:
-          item.costVariations.find((v) => v.menuItemSizeId === size.id)
-            ?.recipeCostAmount || 0,
-        recipeCostAmountUpdatedBy:
-          item.costVariations.find((v) => v.menuItemSizeId === size.id)
-            ?.updatedBy || null,
-      })),
-    }));
+    return allMenuItems.map((item) => {
+      // Create an index for cost variations keyed by menuItemSizeId
+      const costVariationsMap = item.costVariations.reduce((acc, variation) => {
+        acc[variation.menuItemSizeId] = variation;
+        return acc;
+      }, {} as Record<string, (typeof item.costVariations)[number]>);
+
+      return {
+        id: item.id,
+        name: item.name,
+        ingredients: item.ingredients,
+        costVariations: sizes.map((size) => {
+          const variation = costVariationsMap[size.id] || {};
+          return {
+            menuItemCostVariationId: variation.id || "",
+            sizeId: size.id,
+            name: size.name,
+            slug: size.slug,
+            costBase: size.costBase,
+            recipeCostAmount: variation.recipeCostAmount || 0,
+            recipeCostAmountUpdatedBy: variation.updatedBy || null,
+          };
+        }),
+      };
+    });
   }
 
   async findAllPriceVariations(
@@ -283,26 +308,42 @@ export class MenuItemPrismaEntity {
       imageScaleWidth: 1280,
     }
   ) {
-    // Use the existing findAll function to fetch records
+    // Fetch all menu items
     const allMenuItems = (await this.findAll(params, options)) || [];
 
-    return allMenuItems.map((item) => ({
-      id: item.id,
-      name: item.name,
-      ingredients: item.ingredients,
-      priceVariations: item.priceVariations.map((v) => ({
-        id: v.id,
-        label: v.label,
-        amount: v.amount,
-        discountPercentage: v.discountPercentage,
-        showOnCardapio: v.showOnCardapio,
-        showOnCardapioAt: v.showOnCardapioAt,
-        createdAt: v.createdAt,
-        updatedAt: v.updatedAt,
-        updatedBy: v.updatedBy,
-        latestAmount: v.latestAmount,
-      })),
-    }));
+    // Fetch all sizes
+    const sizes = await this.client.menuItemSize.findMany();
+
+    return allMenuItems.map((item) => {
+      // Pre-index the price variations by size ID
+      const variationsMap = item.priceVariations.reduce((acc, variation) => {
+        acc[variation.menuItemSizeId] = variation;
+        return acc;
+      }, {} as Record<string, (typeof item.priceVariations)[number]>);
+
+      return {
+        id: item.id,
+        name: item.name,
+        ingredients: item.ingredients,
+        priceVariations: sizes.map((size) => {
+          const variation = variationsMap[size.id] || {};
+          return {
+            menuItemPriceVariationId: variation.id || "",
+            sizeId: size.id,
+            sizeName: size.name,
+            name: size.name,
+            amount: variation.amount || 0,
+            discountPercentage: variation.discountPercentage || 0,
+            showOnCardapio: variation.showOnCardapio || false,
+            showOnCardapioAt: variation.showOnCardapioAt,
+            createdAt: variation.createdAt || new Date(),
+            updatedAt: variation.updatedAt || new Date(),
+            updatedBy: variation.updatedBy,
+            latestAmount: variation.latestAmount,
+          };
+        }),
+      };
+    });
   }
 
   async findById(
