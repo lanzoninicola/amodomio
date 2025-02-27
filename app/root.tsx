@@ -18,6 +18,10 @@ import { ok } from "./utils/http-response.server";
 import { Button } from "./components/ui/button";
 import PUBLIC_WEBSITE_NAVIGATION_ITEMS from "./domain/website-navigation/public/public-website.nav-links";
 import GLOBAL_LINKS from "./domain/website-navigation/global-links.constant";
+import ExternalLink from "./components/primitives/external-link/external-link";
+import { cn } from "./lib/utils";
+import { ArrowRight } from "lucide-react";
+import Logo from "./components/primitives/logo/logo";
 
 export const meta: MetaFunction = () => {
   return [
@@ -189,18 +193,33 @@ export function ErrorBoundary() {
               ? error.message
               : "Unknown Error"}
         </h1> */}
-        <div className="w-screen h-screen bg-[#CBF2F5] grid place-items-center">
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-col">
-              <h1 className="font-thin leading-none text-6xl md:text-7xl">Desculpe</h1>
-              <h2 className="font-semibold text-xl">mas alguma coisa deu errado.</h2>
+        <div className="w-screen h-screen">
+          <div className="grid grid-rows-6 w-full h-full items-center justify-center">
+            <Logo onlyText={true} className="w-full h-full px-32 flex row-span-2" color="black" />
+            <div className="flex flex-col items-center row-span-2" >
+              <div className="flex flex-col ">
+                <h1 className="font-thin leading-none text-6xl md:text-7xl">Desculpe</h1>
+                <h2 className="font-semibold text-xl">mas alguma coisa deu errado.</h2>
+              </div>
+              <img src="/images/gato-chorando.gif" alt="Erro" className="h-64" />
             </div>
-            <img src="/images/gato-chorando.gif" alt="Erro" className="max-w-[250px] md:max-w-lg" />
             <div className="flex flex-col items-center justify-center gap-2">
-              <p className="text-sm md:text-lg">Se você estava procurando o cardápio</p>
-              <a href={GLOBAL_LINKS.mogoCardapio.href} title={GLOBAL_LINKS.mogoCardapio.title}>
-                <Button className="uppercase tracking-wider">Clique aqui</Button>
-              </a>
+              <ExternalLink
+                to={GLOBAL_LINKS.mogoCardapio.href}
+                ariaLabel="Cardápio digital pizzaria A Modo Mio"
+              >
+                <div className='flex gap-2 items-center justify-between px-4 py-2 bg-black rounded-lg'>
+                  <span className={
+                    cn(
+                      "uppercase tracking-wide font-semibold text-white",
+                    )
+                  }>
+                    Visualizar o cardápio
+                  </span>
+                  <ArrowRight color="white" />
+                </div>
+              </ExternalLink>
+
             </div>
 
 
