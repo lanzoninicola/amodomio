@@ -15,6 +15,9 @@ import GoogleTagManagerScriptTag from "./components/primitives/google-tag-manage
 import GoogleTagManagerNoScriptTag from "./components/primitives/google-tag-manager/gtm-noscript";
 import { Analytics } from '@vercel/analytics/react';
 import { ok } from "./utils/http-response.server";
+import { Button } from "./components/ui/button";
+import PUBLIC_WEBSITE_NAVIGATION_ITEMS from "./domain/website-navigation/public/public-website.nav-links";
+import GLOBAL_LINKS from "./domain/website-navigation/global-links.constant";
 
 export const meta: MetaFunction = () => {
   return [
@@ -169,6 +172,8 @@ export default function App() {
 export function ErrorBoundary() {
   const error = useRouteError();
 
+  console.log({ error })
+
   return (
     <html>
       <head>
@@ -177,13 +182,31 @@ export function ErrorBoundary() {
         <Links />
       </head>
       <body>
-        <h1>
+        {/* <h1>
           {isRouteErrorResponse(error)
             ? `${error.status} ${error.statusText}`
             : error instanceof Error
               ? error.message
               : "Unknown Error"}
-        </h1>
+        </h1> */}
+        <div className="w-screen h-screen bg-[#CBF2F5] grid place-items-center">
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col">
+              <h1 className="font-thin leading-none text-6xl md:text-7xl">Desculpe</h1>
+              <h2 className="font-semibold text-xl">mas alguma coisa deu errado.</h2>
+            </div>
+            <img src="/images/gato-chorando.gif" alt="Erro" className="max-w-[250px] md:max-w-lg" />
+            <div className="flex flex-col items-center justify-center gap-2">
+              <p className="text-sm md:text-lg">Se você estava procurando o cardápio</p>
+              <a href={GLOBAL_LINKS.mogoCardapio.href} title={GLOBAL_LINKS.mogoCardapio.title}>
+                <Button className="uppercase tracking-wider">Clique aqui</Button>
+              </a>
+            </div>
+
+
+          </div>
+
+        </div>
         <Scripts />
       </body>
     </html>
