@@ -21,6 +21,8 @@ import { cn } from "~/lib/utils";
 
 /**
  * TODO:
+ * - [] ragrupamento, quando inserisco uma nova pizza sae sempre para ultima
+ * - [] clico na foto e abre um modal com a foto maior
  * - [x] Add to menu Horario Atendimento
  * - [x] Add to menu link instagram
  * - [] Add anotações pizza (batas fritas, batata ao forno)

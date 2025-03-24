@@ -2,7 +2,7 @@
 import { MenuItem, Category } from "@prisma/client"
 import { LoaderFunctionArgs } from "@remix-run/node"
 import { Form, Link, useActionData, useOutletContext } from "@remix-run/react"
-import { ok } from "assert"
+
 
 import React from "react"
 import { toast } from "~/components/ui/use-toast"
@@ -12,7 +12,7 @@ import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapi
 import BadgeTag from "~/domain/tags/components/badge-tag"
 import { prismaIt } from "~/lib/prisma/prisma-it.server"
 import capitalize from "~/utils/capitalize"
-import { badRequest } from "~/utils/http-response.server"
+import { badRequest, ok } from "~/utils/http-response.server"
 import tryit from "~/utils/try-it"
 import { AdminCardapioOutletContext } from "./admin.gerenciamento.cardapio"
 import { Separator } from "~/components/ui/separator"
@@ -26,7 +26,7 @@ export async function action({ request }: LoaderFunctionArgs) {
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);
 
-    // console.log({ action: _action, values })
+    console.log({ action: _action, values })
 
     if (values?.action === "menu-item-move") {
         const items = JSON.parse(formData.get('items') as string);
@@ -203,7 +203,13 @@ function MenuItemListSliced({ item }: { item: { category: Category["name"], menu
 
                             <Form method="post" className="flex justify-between md:justify-end gap-2 w-full items-center  col-span-2">
 
-                                <span className="font-semibold text-sm">Públicar</span>
+
+                                <div className="flex flex-col gap-0">
+                                    <span className="font-semibold text-sm">Pausar venda</span>
+                                    <span className="text-[11px] text-muted-foreground">
+                                        Status: {menuItem.visible ? "Ativado" : "Pausado"}
+                                    </span>
+                                </div>
                                 <Switch defaultChecked={menuItem?.visible || false} onCheckedChange={handleVisibility} />
                                 <input type="hidden" name="id" value={menuItem?.id} />
                                 <button ref={submitBtnRef} className="hidden" type="submit" value={"menu-item-visibility-change"} name="_action" />
