@@ -130,16 +130,7 @@ export default function AdminCardapioOutlet() {
                                                         Imprimir para a parede
                                                     </span>
                                                 </Link>
-                                                <Link to="/admin/gerenciamento/cardapio-finance/cost-management" className="py-2 px-4 rounded-md border border-black hover:bg-black/10">
-                                                    <span className="font-semibold">
-                                                        Gestão custos
-                                                    </span>
-                                                </Link>
-                                                <Link to="/admin/gerenciamento/cardapio-finance/sales-management" className="py-2 px-4 rounded-md border border-black hover:bg-black/10">
-                                                    <span className="font-semibold">
-                                                        Gestão preços de venda
-                                                    </span>
-                                                </Link>
+
                                             </div>
 
                                         </div>

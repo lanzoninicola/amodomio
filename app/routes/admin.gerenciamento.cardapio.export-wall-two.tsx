@@ -6,6 +6,15 @@ export default function GerenciamentoCardapioExport() {
     const outletContext = useOutletContext<GerenciamentoCardapioOutletContext>();
 
     const allItems = outletContext?.items || [];
+
+    if (!allItems.length) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <div className="text-2xl text-gray-500">Nenhum item visível</div>
+            </div>
+        )
+    }
+
     // Filtrar apenas os itens visíveis e ordenar alfabeticamente
     const sortedItems = allItems.filter(i => i.visible).sort((a, b) => a.name.localeCompare(b.name));
 
