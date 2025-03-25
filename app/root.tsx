@@ -195,7 +195,7 @@ export function ErrorBoundary() {
         </h1> */}
         <div className="w-screen h-screen">
           <div className="grid grid-rows-6 w-full h-full items-center justify-center">
-            <Logo onlyText={true} className="w-full h-full px-32 flex row-span-2" color="black" />
+            <Logo onlyText={true} className="w-full h-full px-32 flex row-span-2 mb:w-[250px]" color="black" />
             <div className="flex flex-col items-center row-span-2" >
               <div className="flex flex-col ">
                 <h1 className="font-thin leading-none text-6xl md:text-7xl">Desculpe</h1>

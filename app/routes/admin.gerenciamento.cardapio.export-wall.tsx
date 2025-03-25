@@ -15,6 +15,14 @@ export default function GerenciamentoCardapioExport() {
     const allItems = outletContext?.items || []
     const items = allItems.filter(i => i.visible === true)
 
+    if (!items.length) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <div className="text-2xl text-gray-500">Nenhum item visível</div>
+            </div>
+        )
+    }
+
     const sortedArray = items.sort((a, b) => a.name.localeCompare(b.name));
     const half = Math.ceil(sortedArray.length / 2);
     const firstColumn = sortedArray.slice(0, half);

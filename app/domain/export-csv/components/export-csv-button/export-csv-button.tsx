@@ -9,7 +9,7 @@ interface ExportCsvButtonProps {
 }
 export default function ExportCsvButton({ cnContainer, children, context }: ExportCsvButtonProps) {
     return (
-        <Link to={`/admin/export?format=csv&context=${context}`} download>
+        <Link to={`/admin/gerenciamento/cardapio/export?format=csv&context=${context}`} download>
             <Button className={
                 cn(
                     "transition-colors duration-200",

@@ -35,7 +35,7 @@ export default function BadgeTag({ tag, tagColor = true, actionName, classNameCo
     return (
         <div className={
             cn(
-                "cursor-pointer, flex, gap-3 px-4 py-1 items-center rounded-md",
+                "cursor-pointer flex px-4 py-1 items-center rounded-md",
                 tag.colorHEX === "#FFFFFF" && "border border-black",
                 classNameContainer
             )
