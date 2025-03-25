@@ -1,15 +1,12 @@
-import { Form, Link, useOutletContext } from "@remix-run/react"
+import { Form, Link } from "@remix-run/react"
 import { AlertCircle, ChevronRight, Loader } from "lucide-react"
-import { AdminCardapioOutletContext } from "~/routes/admin.gerenciamento.cardapio"
 import { OveredPoint } from "../menu-item-list/menu-item-list"
 import { MenuItemWithAssociations } from "../../menu-item.prisma.entity.server"
 import { mapPriceVariationsLabel } from "../../fn.utils"
 import { Switch } from "~/components/ui/switch"
 import React, { useState } from "react"
 import { Button } from "~/components/ui/button"
-import { Input } from "~/components/ui/input"
 import { toast } from "~/components/ui/use-toast"
-import { MenuItemPriceVariationPrismaEntity } from "../../menu-item-price-variations.prisma.entity.server"
 import { MenuItemPriceVariation } from "@prisma/client"
 import MenuItemPriceVariationUtility from "../../menu-item-price-variations-utility"
 import randomReactKey from "~/utils/random-react-key"
@@ -27,7 +24,7 @@ interface MenuItemCardProps {
 }
 
 export default function MenuItemCard({ item, dragAndDrop }: MenuItemCardProps) {
-    const outletContext: AdminCardapioOutletContext = useOutletContext()
+
     // const missingInfo = !item?.name || !item?.ingredients
 
     // const [searchParams, setSearchParams] = useSearchParams()

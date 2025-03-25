@@ -1,5 +1,4 @@
 import { Await, useLoaderData, useOutletContext } from "@remix-run/react"
-import { AdminCardapioOutletContext } from "./admin.gerenciamento.cardapio"
 import { MenuItemWithCostVariations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { defer } from "react-router";
 import prismaClient from "~/lib/prisma/client.server";
