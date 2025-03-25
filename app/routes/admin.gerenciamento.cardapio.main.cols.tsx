@@ -49,7 +49,7 @@ export async function action({ request }: LoaderFunctionArgs) {
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);
 
-    console.log({ action: _action, values })
+    // console.log({ action: _action, values })
 
     if (values?.action === "menu-item-move") {
         const items = JSON.parse(formData.get('items') as string);
@@ -262,8 +262,6 @@ function SearchItem({ allItemsGrouped, itemsGroupedFound, setItemsGroupedFound }
             })
             .filter(group => group.menuItems.length > 0); // Remove categorias vazias
 
-
-        console.log({ searchedGroupedItems })
 
         setItemsGroupedFound(searchedGroupedItems);
     };
