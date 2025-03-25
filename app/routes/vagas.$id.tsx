@@ -32,7 +32,7 @@ export default function VagaSingle() {
         <Container className="my-8">
 
             <div className="flex flex-col mb-8">
-                <h1 className="text-xl font-semibold tracking-tight">Vaga: Auxiliar de Cozinha</h1>
+                <h1 className="text-xl font-semibold tracking-tight">Vaga: Auxiliar de Cozinha (Março 2025)</h1>
                 <h2 className="text-md mb-4 text-muted-foreground tracking-tight">Empresa: A Modo Mio, Pato Branco, Paraná</h2>
                 <h4 className="flex gap-2 items-center">
                     <Instagram />
@@ -56,26 +56,27 @@ export default function VagaSingle() {
 
             <section className="mb-8">
                 <h3 className="text-base font-semibold mb-2">Descrição da Vaga:</h3>
-                <p>Estamos em busca de um Auxiliar de Cozinha para se juntar à nossa equipe na pizzaria A Modo Mio. Se você é uma pessoa proativa, gosta de trabalhar em equipe e tem paixão pela culinária, queremos conhecer você!</p>
+                <p>Estamos contratando um Auxiliar de Cozinha para atuar com foco na <strong>limpeza e organização do ambiente durante e após o serviço</strong>.</p>
             </section>
 
             <section className="mb-8">
                 <h3 className="text-base font-semibold mb-2">Responsabilidades</h3>
                 <ul className="list-disc pl-4">
-                    <li>Auxiliar na preparação de ingredientes para as pizzas.</li>
-                    <li>Manter a cozinha organizada e limpa durante e depois do serviço</li>
-                    <li>Seguir as normas de higiene e segurança alimentar</li>
-                    <li>Colaborar com a equipe para garantir a eficiência e qualidade no serviço</li>
+                    <li>Manter bancadas e utensílios limpos durante o expediente.</li>
+                    <li>Lavar louças, assadeiras e equipamentos</li>
+                    <li>Auxiliar na organização da cozinha após o encerramento do turno</li>
+                    <li>Limpar pisos, superfícies, fogões e áreas de preparo</li>
+                    <li>Apoiar a equipe de cozinha no que for necessário</li>
                 </ul>
             </section>
 
             <section className="mb-8">
                 <h3 className="text-base font-semibold mb-2">Requisitos</h3>
                 <ul className="list-disc pl-4">
-                    <li>Disponibilidade para trabalhar <strong>sextas, sábados e domingos, das 19:30 às 23:30</strong>.</li>
+                    <li>Disponibilidade para trabalhar à noite (<strong>sextas, sábados e domingos, das 19:00 às 24:00</strong>).</li>
+                    <li>Agilidade, atenção aos detalhes e proatividade.</li>
+                    <li>Comprometimento com higiene e segurança alimentar.</li>
                     <li>Facilidade para trabalhar em equipe.</li>
-                    <li>Comprometimento e responsabilidade.</li>
-                    <li>Boa comunicação e agilidade.</li>
                 </ul>
             </section>
 
