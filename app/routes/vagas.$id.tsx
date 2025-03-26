@@ -97,6 +97,13 @@ export default function VagaSingle() {
                 </p>
             </section>
 
+            <section className="mb-8">
+                <div className="rounded-md bg-yellow-100 p-4">
+                    <h3 className="text-base font-semibold mb-2 uppercase">Observação importante</h3>
+                    <p>Para esta vaga, a contratação será exclusivamente no regime <strong>CLT</strong>. Sabemos que muitos candidatos perguntam sobre outras formas de contratação, mas <strong>não estamos considerando propostas fora da CLT</strong>. Agradecemos a compreensão</p>
+                </div>
+            </section>
+
             <ExternalLink to="https://forms.gle/fRbMznRjVrxFbmzFA" ariaLabel="Canditarme" className="flex w-full justify-center bg-green-400 rounded-xl uppercase font-semibold tracking-wider py-2">
                 Candidatar-me
             </ExternalLink>
