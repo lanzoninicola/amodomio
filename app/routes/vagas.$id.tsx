@@ -104,7 +104,7 @@ export default function VagaSingle() {
                 </div>
             </section>
 
-            <ExternalLink to="https://forms.gle/fRbMznRjVrxFbmzFA" ariaLabel="Canditarme" className="flex w-full justify-center bg-green-400 rounded-xl uppercase font-semibold tracking-wider py-2">
+            <ExternalLink to="https://docs.google.com/forms/d/e/1FAIpQLScByfEGO83NNhmSq_24UBmlFqROLfzCvVrBQIzwYwNO3gzXWA/viewform" ariaLabel="Canditarme" className="flex w-full justify-center bg-green-400 rounded-xl uppercase font-semibold tracking-wider py-2">
                 Candidatar-me
             </ExternalLink>
         </Container>
