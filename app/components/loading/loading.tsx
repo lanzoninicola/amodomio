@@ -6,14 +6,20 @@ interface LoadingProps {
     showText?: boolean
     text?: string
     color?: string
+    cnContainer?: string
 }
 
-export default function Loading({ showText, text, color }: LoadingProps) {
+export default function Loading({ showText, text, color, cnContainer }: LoadingProps) {
 
     let colorIconAndText = color === "black" ? "#111111" : color = "white" ? "#ffffff" : "";
 
     return (
-        <div className="flex flex-col gap-6 w-full justify-center items-center">
+        <div className={
+            cn(
+                "flex flex-col gap-6 w-full justify-center items-center min-h-[150px]",
+                cnContainer || ""
+            )
+        }>
             <div className="relative h-[50px] w-[50px]">
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-full">
                     <HelixLoaderIcon color={colorIconAndText} />

@@ -17,6 +17,10 @@ import useSaveShortcut from "~/hooks/use-save-shortcut.hook"
 import { Button } from "~/components/ui/button"
 import { CloudinaryImageInfo, CloudinaryUploadWidget, CloudinaryUtils } from "~/lib/cloudinary"
 import { jsonStringify } from "~/utils/json-helper"
+import MenuItemSwitchVisibility from "../menu-item-switch-visibility/menu-item-switch-visibility"
+import { Alert } from "~/components/ui/alert"
+import { AlertCircle } from "lucide-react"
+import { LoggedUser } from "~/domain/auth/types.server"
 
 
 export type MenuItemFormAction = "menu-item-create" | "menu-item-update"
@@ -26,9 +30,10 @@ interface MenuItemFormProps {
     categories?: Category[]
     action: MenuItemFormAction
     className?: string
+    loggedUser?: LoggedUser
 }
 
-export default function MenuItemForm({ item, action, className, categories }: MenuItemFormProps) {
+export default function MenuItemForm({ item, action, className, categories, loggedUser }: MenuItemFormProps) {
     const [currentBasePrice, setCurrentBasePrice] = useState(item?.basePriceAmount || 0)
 
     const submitButtonRef = useRef<any>()
@@ -43,8 +48,35 @@ export default function MenuItemForm({ item, action, className, categories }: Me
     return (
 
         <div className="flex flex-col">
+            {
+                item?.visible === false && item?.active === true
+                && (
+                    <Alert className="mb-4 border-orange-400">
+                        <AlertCircle size={16} className="mr-2" />
+                        <div className="flex flex-col">
+                            <span className="text-sm font-semibold text-orange-400">Sabor pausado</span>
+                            <span className="text-xs text-orange-300">Esse sabor está pausado e não será exibido no cardápio</span>
+                        </div>
+                    </Alert>
+                )
+            }
 
-            <Form method="post" className={cn(className)}  >
+            {
+                item?.active === false && (
+                    <Alert className="mb-4" variant={"destructive"}>
+                        <AlertCircle size={16} className="mr-2" />
+                        <div className="flex flex-col">
+                            <span className="text-sm font-bold uppercase tracking-wide">Sabor excluido</span>
+                            <span className="text-xs">Esse sabor foi excluido do cardápio</span>
+                        </div>
+                    </Alert>
+                )
+            }
+
+            <Form method="post" className={cn(
+                className,
+                item?.active === false && "opacity-50 pointer-events-none",
+            )}  >
 
                 <input type="hidden" name="id" value={item?.id} />
 
@@ -67,8 +99,16 @@ export default function MenuItemForm({ item, action, className, categories }: Me
                     </div> */}
 
                     <div className="flex justify-between md:justify-end gap-4 w-full items-center mt-2 col-span-7">
-                        <span className="font-semibold text-sm">Públicar no cardápio</span>
-                        <Switch id="visible" name="visible" defaultChecked={item?.visible || false} />
+                        {/* <span className="font-semibold text-sm">Públicar no cardápio</span>
+                        <Switch id="visible" name="visible" defaultChecked={item?.visible || false} /> */}
+
+                        <MenuItemSwitchVisibility
+                            menuItem={item}
+                            visible={item?.visible || false}
+                            setVisible={() => { }}
+                            cnLabel="text-sm"
+                            cnSubLabel="text-xs"
+                        />
                     </div>
 
 
@@ -193,8 +233,9 @@ export default function MenuItemForm({ item, action, className, categories }: Me
 
                     <SubmitButton ref={submitButtonRef} actionName={action} labelClassName="text-xs" variant={"outline"} tabIndex={0} iconColor="black" />
                     {action === "menu-item-update" && (
-                        <DeleteItemButton actionName="menu-item-delete" label="Deletar" />
+                        <DeleteItemButton actionName="menu-item-soft-delete" label="Inativar" />
                     )}
+                    <input type="hidden" name="loggedUser" value={jsonStringify(loggedUser)} />
                 </div>
             </Form>
         </div>

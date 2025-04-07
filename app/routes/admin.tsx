@@ -65,7 +65,7 @@ export default function AdminOutlet() {
         <>
             <AdminHeader urlSegment={urlSegment} />
             {/* {env === "development" && <EnvironmentAlert />} */}
-            <div className="mt-12">
+            <div className="mt-6">
                 <Outlet context={{
                     loggedUser,
                 }} />

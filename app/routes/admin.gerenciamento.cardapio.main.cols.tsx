@@ -16,11 +16,15 @@ import { Switch } from "~/components/ui/switch"
 import Loading from "~/components/loading/loading"
 import { cn } from "~/lib/utils"
 import { Input } from "~/components/ui/input"
+import MenuItemSwitchVisibility from "~/domain/cardapio/components/menu-item-switch-visibility/menu-item-switch-visibility"
+import { authenticator } from "~/domain/auth/google.server"
 
 
 export type MenuItemActionSearchParam = "menu-item-create" | "menu-item-edit" | "menu-item-delete" | "menu-items-sortorder" | null
 
 export async function loader({ request }: LoaderFunctionArgs) {
+
+
 
     // https://github.com/remix-run/remix/discussions/6149
 
@@ -289,19 +293,10 @@ function SearchItem({ allItemsGrouped, itemsGroupedFound, setItemsGroupedFound }
 
 
 
-function MenuItemListSliced({ category, menuItems }: { category: Category["name"], menuItems: MenuItemWithAssociations[] }) {
+function MenuItemListSliced({ category, menuItems, loggedUser }: { category: Category["name"], menuItems: MenuItemWithAssociations[], loggedUser: string }) {
 
     const [visible, setVisible] = React.useState(false)
-    const submitBtnRef = React.useRef<HTMLButtonElement>(null)
 
-    function handleVisibility() {
-
-        setVisible(!visible)
-
-        if (submitBtnRef.current) {
-            submitBtnRef.current.click()
-        }
-    }
 
     return (
         <div key={category} className="flex flex-col mb-6" data-element="menu-item-list-sliced">
@@ -332,20 +327,7 @@ function MenuItemListSliced({ category, menuItems }: { category: Category["name"
                                 </div>
                             </Link>
 
-                            <Form method="post" className="flex justify-between md:justify-end gap-2 w-full items-center  col-span-2">
-
-
-                                <div className="flex flex-col gap-0">
-                                    <span className="font-semibold text-sm">Ativar venda</span>
-                                    <span className="text-[11px] text-muted-foreground">
-                                        Status: {menuItem.visible ? "Ativado" : "Pausado"}
-                                    </span>
-                                </div>
-                                <Switch defaultChecked={menuItem?.visible || false} onCheckedChange={handleVisibility} />
-                                <input type="hidden" name="id" value={menuItem?.id} />
-                                <button ref={submitBtnRef} className="hidden" type="submit" value={"menu-item-visibility-change"} name="_action" />
-
-                            </Form>
+                            <MenuItemSwitchVisibility menuItem={menuItem} visible={visible} setVisible={setVisible} />
 
 
                         </div>

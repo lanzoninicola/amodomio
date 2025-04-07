@@ -4,6 +4,7 @@ import {
   MenuItemCostVariation,
   MenuItemImage,
   MenuItemLike,
+  MenuItemNote,
   MenuItemPriceVariation,
   MenuItemShare,
   MenuItemSize,
@@ -36,6 +37,7 @@ export interface MenuItemWithAssociations extends MenuItem {
   MenuItemTag: MenuItemTag[];
   MenuItemShare: MenuItemShare[];
   MenuItemImage: MenuItemImage | null; // Handle cases where image may not exist
+  MenuItemNote: MenuItemNote[];
   likes: {
     amount: number; // Number of likes
   };
@@ -426,6 +428,19 @@ export class MenuItemPrismaEntity {
     await this.invalidateCache();
 
     return await this.client.menuItem.update({ where: { id }, data });
+  }
+
+  async softDelete(id: string, deletedBy: string = "undefined") {
+    await this.invalidateCache();
+
+    return await this.client.menuItem.update({
+      where: { id },
+      data: {
+        active: false,
+        deletedAt: new Date().toISOString(),
+        deletedBy: deletedBy,
+      },
+    });
   }
 
   async delete(id: string) {

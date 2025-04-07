@@ -1,15 +1,19 @@
 import { Category, Prisma } from "@prisma/client";
 import { LoaderFunctionArgs, MetaFunction, redirect } from "@remix-run/node";
-import { Await, defer, useLoaderData } from "@remix-run/react";
+import { Await, defer, useActionData, useLoaderData } from "@remix-run/react";
 import { Suspense } from "react";
 import Loading from "~/components/loading/loading";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
+import { toast } from "~/components/ui/use-toast";
+import { authenticator } from "~/domain/auth/google.server";
+import { LoggedUser } from "~/domain/auth/types.server";
 import MenuItemForm from "~/domain/cardapio/components/menu-item-form/menu-item-form";
 import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { categoryPrismaEntity } from "~/domain/category/category.entity.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { badRequest, ok } from "~/utils/http-response.server";
-import { jsonParse } from "~/utils/json-helper";
+import { jsonParse, jsonStringify } from "~/utils/json-helper";
+import tryit from "~/utils/try-it";
 
 export const meta: MetaFunction<typeof loader> = ({ data }) => {
     // @ts-ignore
@@ -20,12 +24,14 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => {
     ];
 };
 
-export async function loader({ params }: LoaderFunctionArgs) {
+export async function loader({ request, params }: LoaderFunctionArgs) {
     const itemId = params.id;
 
     if (!itemId) {
         return badRequest("Nenhum item encontrado");
     }
+
+    let loggedUser: Promise<LoggedUser> = authenticator.isAuthenticated(request);
 
     const itemQryResult = prismaIt(menuItemPrismaEntity.findById(itemId));
     const categoriesQryResult = prismaIt(categoryPrismaEntity.findAll());
@@ -33,7 +39,8 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
     const data = Promise.all([
         itemQryResult,
-        categoriesQryResult
+        categoriesQryResult,
+        loggedUser
     ]);
 
     return defer({ data })
@@ -100,16 +107,31 @@ export async function action({ request }: LoaderFunctionArgs) {
         return ok("Elemento atualizado com successo")
     }
 
-    if (_action === "menu-item-delete") {
-        const id = values?.id as string
+    if (_action === "menu-item-soft-delete") {
 
-        const [err, result] = await prismaIt(menuItemPrismaEntity.delete(id))
+        const id = values?.id as string
+        const loggedUser = jsonParse(values?.loggedUser as string)?.email || ""
+
+        const [errItem, item] = await prismaIt(menuItemPrismaEntity.findById(id));
+
+        if (errItem) {
+            return badRequest(errItem)
+        }
+
+        if (!item) {
+            return badRequest("Item não encontrado")
+        }
+
+        const [err, result] = await prismaIt(menuItemPrismaEntity.softDelete(id, loggedUser))
+
 
         if (err) {
             return badRequest(err)
         }
 
-        return redirect("/admin/gerenciamento/cardapio")
+        const returnedMessage = !item.active === false ? `Sabor "${item.name}" excluido` : `Algo deu errado ao excluir o sabor "${item.name}"`;
+
+        return ok(returnedMessage);
     }
 
 
@@ -125,6 +147,22 @@ export default function SingleMenuItemMain() {
     } = useLoaderData<typeof loader>();
 
 
+    const actionData = useActionData<typeof action>();
+
+    if (actionData && actionData.status > 399) {
+        toast({
+            title: "Erro",
+            description: actionData.message,
+        });
+    }
+
+    if (actionData && actionData.status === 200) {
+        toast({
+            title: "Ok",
+            description: actionData.message,
+        });
+    }
+
 
     return (
 
@@ -132,7 +170,7 @@ export default function SingleMenuItemMain() {
             <Suspense fallback={<Loading />}>
                 <Await resolve={data}>
                     {
-                        ([itemQryResult, categoriesQryResult]) => {
+                        ([itemQryResult, categoriesQryResult, loggedUser]) => {
 
                             const err = itemQryResult[0] || categoriesQryResult[0]
                             if (err) {
@@ -146,7 +184,7 @@ export default function SingleMenuItemMain() {
 
 
                             return (
-                                <MenuItemForm action="menu-item-update" item={itemQryResult[1]} categories={categoriesQryResult[1]} />
+                                <MenuItemForm action="menu-item-update" item={itemQryResult[1]} categories={categoriesQryResult[1]} loggedUser={loggedUser} />
                             )
                         }
                     }
