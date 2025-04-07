@@ -19,14 +19,16 @@ export const meta: MetaFunction = () => {
 export async function loader() {
 
     const statusVaga = process.env?.HR_VAGA_STATUS_AUXILIAR_COZINHA || "Aberta"
+    const gFormLink = process.env?.HR_VAGA_STATUS_AUXILIAR_COZINHA_GFORM_LINK || "https://docs.google.com/forms"
 
-    return ok({ statusVaga })
+    return ok({ statusVaga, gFormLink })
 }
 
 
 export default function VagaSingle() {
     const loaderData = useLoaderData<typeof loader>()
     const statusVaga = loaderData?.payload?.statusVaga || []
+    const gFormLink = loaderData?.payload?.gFormLink || []
 
     return (
         <Container className="my-8">
@@ -104,7 +106,7 @@ export default function VagaSingle() {
                 </div>
             </section>
 
-            <ExternalLink to="https://docs.google.com/forms/d/e/1FAIpQLScByfEGO83NNhmSq_24UBmlFqROLfzCvVrBQIzwYwNO3gzXWA/viewform" ariaLabel="Canditarme" className="flex w-full justify-center bg-green-400 rounded-xl uppercase font-semibold tracking-wider py-2">
+            <ExternalLink to={gFormLink} ariaLabel="Canditarme" className="flex w-full justify-center bg-green-400 rounded-xl uppercase font-semibold tracking-wider py-2">
                 Candidatar-me
             </ExternalLink>
         </Container>
