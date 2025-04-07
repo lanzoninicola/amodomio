@@ -9,6 +9,7 @@ import {
   MenuItemShare,
   MenuItemSize,
   MenuItemTag,
+  MenuItemVariation,
   Prisma,
   Tag,
 } from "@prisma/client";
@@ -60,9 +61,8 @@ export interface MenuItemWithCostVariations {
     /** The id of association between the menuItem the size and its cost amount*/
     menuItemCostVariationId: MenuItemCostVariation["id"];
     /** The id of the size*/
-    sizeId: MenuItemSize["id"];
-    name: MenuItemSize["name"];
-    slug: MenuItemSize["slug"];
+    variationId: MenuItemVariation["id"];
+    variationName: MenuItemVariation["name"];
     /** The cost of the final dough for the size */
     costBase: MenuItemSize["costBase"];
     /** Ficha tecnica cost */
@@ -78,9 +78,8 @@ export interface MenuItemWithSellPriceVariations {
   ingredients: string;
   priceVariations: {
     menuItemPriceVariationId: MenuItemPriceVariation["id"];
-    sizeId: MenuItemSize["id"];
-    sizeName: MenuItemSize["name"];
-    name: MenuItemSize["name"];
+    variationId: MenuItemVariation["id"];
+    variationName: MenuItemVariation["name"];
     amount: number;
     discountPercentage: number;
     showOnCardapio: boolean;
@@ -106,7 +105,7 @@ export class MenuItemPrismaEntity {
     priceVariations: true,
     costVariations: {
       include: {
-        MenuItemSize: true,
+        MenuItemVariation: true,
       },
     },
     Category: true,
@@ -162,7 +161,7 @@ export class MenuItemPrismaEntity {
         priceVariations: true,
         costVariations: {
           include: {
-            MenuItemSize: true,
+            MenuItemVariation: true,
           },
         },
         Category: true,
@@ -279,7 +278,7 @@ export class MenuItemPrismaEntity {
     return allMenuItems.map((item) => {
       // Create an index for cost variations keyed by menuItemSizeId
       const costVariationsMap = item.costVariations.reduce((acc, variation) => {
-        acc[variation.menuItemSizeId] = variation;
+        acc[variation.menuIteVariationId] = variation;
         return acc;
       }, {} as Record<string, (typeof item.costVariations)[number]>);
 
@@ -287,14 +286,13 @@ export class MenuItemPrismaEntity {
         id: item.id,
         name: item.name,
         ingredients: item.ingredients,
-        costVariations: sizes.map((size) => {
-          const variation = costVariationsMap[size.id] || {};
+        costVariations: sizes.map((v) => {
+          const variation = costVariationsMap[v.id] || {};
           return {
             menuItemCostVariationId: variation.id || "",
-            sizeId: size.id,
-            name: size.name,
-            slug: size.slug,
-            costBase: size.costBase,
+            variationId: v.id,
+            name: v.name,
+            costBase: v.costBase,
             recipeCostAmount: variation.recipeCostAmount || 0,
             recipeCostAmountUpdatedBy: variation.updatedBy || null,
           };
@@ -314,12 +312,12 @@ export class MenuItemPrismaEntity {
     const allMenuItems = (await this.findAll(params, options)) || [];
 
     // Fetch all sizes
-    const sizes = await this.client.menuItemSize.findMany();
+    const variations = await this.client.menuItemVariation.findMany();
 
     return allMenuItems.map((item) => {
       // Pre-index the price variations by size ID
       const variationsMap = item.priceVariations.reduce((acc, variation) => {
-        acc[variation.menuItemSizeId] = variation;
+        acc[variation.menuIteVariationId] = variation;
         return acc;
       }, {} as Record<string, (typeof item.priceVariations)[number]>);
 
@@ -327,13 +325,12 @@ export class MenuItemPrismaEntity {
         id: item.id,
         name: item.name,
         ingredients: item.ingredients,
-        priceVariations: sizes.map((size) => {
-          const variation = variationsMap[size.id] || {};
+        priceVariations: variations.map((v) => {
+          const variation = variationsMap[v.id] || {};
           return {
             menuItemPriceVariationId: variation.id || "",
-            sizeId: size.id,
-            sizeName: size.name,
-            name: size.name,
+            variationId: v.id,
+            variationName: v.name,
             amount: variation.amount || 0,
             discountPercentage: variation.discountPercentage || 0,
             showOnCardapio: variation.showOnCardapio || false,

@@ -99,6 +99,7 @@ export default function AdminGerenciamentoCardapioSellPriceManagement() {
                         return (
 
                             <div className="h-[500px] overflow-y-scroll">
+                                <p className="text-[73px]">cucu</p>
                                 <ul>
                                     {
                                         menuItemsWithSellPriceVariations.map((menuItem: MenuItemWithSellPriceVariations) => {
@@ -116,13 +117,13 @@ export default function AdminGerenciamentoCardapioSellPriceManagement() {
                                                                 return (
                                                                     <li key={pv.menuItemPriceVariationId} >
                                                                         <div className="flex flex-col gap-2">
-                                                                            <span className="text-sm">{pv.sizeName}</span>
+                                                                            <span className="text-sm">{pv.variationName}</span>
                                                                             <Form method="post" className="flex items-end">
                                                                                 <div className="flex gap-1">
                                                                                     <input type="hidden" name="name" defaultValue={menuItem.name} />
                                                                                     <input type="hidden" name="menuItemPriceVariationId" defaultValue={pv.menuItemPriceVariationId} />
                                                                                     <input type="hidden" name="updatedBy" defaultValue={pv.updatedBy || ""} />
-                                                                                    <input type="hidden" name="sizeName" defaultValue={pv.sizeName} />
+                                                                                    <input type="hidden" name="name" defaultValue={pv.variationName} />
                                                                                     <div className="flex flex-col gap-y-0">
                                                                                         <span className="text-muted-foreground text-[11px]">Valor</span>
                                                                                         <Input name="amount" defaultValue={pv.amount} />
