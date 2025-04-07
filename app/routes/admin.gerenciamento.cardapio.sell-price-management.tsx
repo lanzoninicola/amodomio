@@ -99,7 +99,6 @@ export default function AdminGerenciamentoCardapioSellPriceManagement() {
                         return (
 
                             <div className="h-[500px] overflow-y-scroll">
-                                <p className="text-[73px]">cucu</p>
                                 <ul>
                                     {
                                         menuItemsWithSellPriceVariations.map((menuItem: MenuItemWithSellPriceVariations) => {
