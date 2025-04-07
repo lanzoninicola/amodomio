@@ -167,9 +167,12 @@ model MenuItem {
   priceVariations MenuItemPriceVariation[]
   costVariations  MenuItemCostVariation[]
   visible         Boolean
+  active          Boolean                  @default(true)
   mogoId          String                   @map("mogo_id")
   createdAt       DateTime                 @map("created_at")
   updatedAt       DateTime                 @default(now()) @updatedAt @map("updated_at")
+  deletedAt       DateTime?                @map("deleted_at")
+  deletedBy       String?                  @map("deleted_by")
   tags            MenuItemTag[]
   /// this track the position inside the menu
   sortOrderIndex  Int                      @default(0) @map("sort_order_index")
@@ -178,6 +181,7 @@ model MenuItem {
   MenuItemShare   MenuItemShare[]
   imageId         String?                  @map("image_id")
   MenuItemImage   MenuItemImage?           @relation(fields: [imageId], references: [id])
+  MenuItemNote    MenuItemNote[]
 
   @@map("menu_items")
 }
@@ -316,6 +320,45 @@ model Tag {
   MenuItemTag MenuItemTag[]
 
   @@map("tags")
+}
+
+model MenuItemNote {
+  id         String    @id @default(uuid())
+  MenuItem   MenuItem? @relation(fields: [menuItemId], references: [id])
+  menuItemId String?   @map("menu_item_id")
+  Note       Note?     @relation(fields: [noteId], references: [id])
+  noteId     String?   @map("note_id")
+  deletedAt  DateTime? @map("deleted_at")
+  createdAt  DateTime  @map("created_at")
+  updatedAt  DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  @@map("menu_item_notes")
+}
+
+model Note {
+  id           String         @id @default(uuid())
+  name         String
+  public       Boolean        @default(false)
+  validFrom    DateTime?      @map("valid_from")
+  validTo      DateTime?      @map("valid_to")
+  createdAt    DateTime       @map("created_at")
+  updatedAt    DateTime       @default(now()) @updatedAt @map("updated_at")
+  MenuItemNote MenuItemNote[]
+
+  @@map("notes")
+}
+
+model Announcement {
+  id        String    @id @default(uuid())
+  name      String
+  public    Boolean   @default(false)
+  validFrom DateTime? @map("valid_from")
+  validTo   DateTime? @map("valid_to")
+  createdAt DateTime  @map("created_at")
+  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  @@map("announcements")
 }
 
 model Setting {
