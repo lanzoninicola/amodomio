@@ -3,14 +3,14 @@ import { ActionFunctionArgs, LoaderFunctionArgs, } from "@remix-run/node";
 import { Await, useLoaderData, defer, Form, Link } from "@remix-run/react";
 import { Suspense } from "react";
 import Loading from "~/components/loading/loading";
+import { NumericInput } from "~/components/numeric-input/numeric-input";
 import SubmitButton from "~/components/primitives/submit-button/submit-button";
-import { Input } from "~/components/ui/input";
 import { Separator } from "~/components/ui/separator";
 import { authenticator } from "~/domain/auth/google.server";
 import { menuItemPriceVariationsEntity } from "~/domain/cardapio/menu-item-price-variations.prisma.entity.server";
 import { MenuItemWithSellPriceVariations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import ExportCsvButton from "~/domain/export-csv/components/export-csv-button/export-csv-button";
-import DnaEmpresaForm from "~/domain/finance/components/dna-empresa-form";
+import prismaClient from "~/lib/prisma/client.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { badRequest, ok } from "~/utils/http-response.server";
 import { jsonParse } from "~/utils/json-helper";
@@ -24,8 +24,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
     const user = authenticator.isAuthenticated(request);
 
+    const dnaEmpresaSettings = prismaIt(prismaClient.dnaEmpresaSettings.findFirst())
 
-    const data = Promise.all([menuItemsWithSellPriceVariations, user]);
+
+    const data = Promise.all([menuItemsWithSellPriceVariations, user, dnaEmpresaSettings]);
 
     return defer({
         data
@@ -93,73 +95,84 @@ export default function AdminGerenciamentoCardapioSellPriceManagement() {
             <Suspense fallback={<Loading />}>
                 <Await resolve={data}>
                     {/* @ts-ignore */}
-                    {([menuItemsWithSellPriceVariations, user]) => {
+                    {([menuItemsWithSellPriceVariations, user, [err, dnaEmpresaSettings]]) => {
 
+                        console.log({ dnaEmpresaSettings })
 
                         return (
 
-                            <div className="h-[500px] overflow-y-scroll">
-                                <ul>
-                                    {
-                                        menuItemsWithSellPriceVariations.map((menuItem: MenuItemWithSellPriceVariations) => {
+                            <>
+                                <div className="flex items-center justify-center">
+                                    <p className="text-lg">DNA Empresa: <span className="font-semibold text-xl">{dnaEmpresaSettings?.dnaPerc}%</span></p>
+                                </div>
 
-                                            return (
-                                                <li key={menuItem.id} className="mb-6 hover:bg-slate-50 p-2">
-                                                    <div className="flex flex-col gap-0 mb-4">
-                                                        <span className="text-md font-semibold">{menuItem.name}</span>
-                                                        {/* <span className="text-[10px] text-muted-foreground">{menuItem.ingredients}</span> */}
-                                                    </div>
+                                <div className="h-[500px] overflow-y-scroll">
+                                    <ul>
+                                        {
+                                            menuItemsWithSellPriceVariations.map((menuItem: MenuItemWithSellPriceVariations) => {
 
-                                                    <ul className="grid grid-cols-5 gap-x-4">
-                                                        {
-                                                            menuItem.priceVariations.map(pv => {
-                                                                return (
-                                                                    <li key={pv.menuItemPriceVariationId} >
-                                                                        <div className="flex flex-col gap-2">
-                                                                            <span className="text-sm">{pv.variationName}</span>
-                                                                            <Form method="post" className="flex items-end">
-                                                                                <div className="flex gap-1">
-                                                                                    <input type="hidden" name="name" defaultValue={menuItem.name} />
-                                                                                    <input type="hidden" name="menuItemPriceVariationId" defaultValue={pv.menuItemPriceVariationId} />
-                                                                                    <input type="hidden" name="updatedBy" defaultValue={pv.updatedBy || ""} />
-                                                                                    <input type="hidden" name="name" defaultValue={pv.variationName} />
-                                                                                    <div className="flex flex-col gap-y-0">
-                                                                                        <span className="text-muted-foreground text-[11px]">Valor</span>
-                                                                                        <Input name="amount" defaultValue={pv.amount} />
+                                                return (
+                                                    <li key={menuItem.id} className="mb-6 hover:bg-slate-50 p-2">
+                                                        <div className="flex flex-col gap-0 mb-4">
+                                                            <span className="text-md font-semibold">{menuItem.name}</span>
+                                                            {/* <span className="text-[10px] text-muted-foreground">{menuItem.ingredients}</span> */}
+                                                        </div>
+
+                                                        <ul className="grid grid-cols-5 gap-x-4">
+                                                            {
+                                                                menuItem.priceVariations.map(pv => {
+                                                                    return (
+                                                                        <li key={pv.menuItemPriceVariationId} >
+                                                                            <div className="flex flex-col">
+                                                                                <span className="text-[12px] font-medium uppercase tracking-wider">{pv.variationName}</span>
+                                                                                <Form method="post" className="flex flex-col gap-1 justify-center items-center">
+
+                                                                                    <div className="flex gap-1">
+                                                                                        <input type="hidden" name="name" defaultValue={menuItem.name} />
+                                                                                        <input type="hidden" name="menuItemPriceVariationId" defaultValue={pv.menuItemPriceVariationId} />
+                                                                                        <input type="hidden" name="updatedBy" defaultValue={pv.updatedBy || ""} />
+                                                                                        <input type="hidden" name="name" defaultValue={pv.variationName} />
+                                                                                        <div className="flex flex-col gap-y-0">
+                                                                                            <span className="text-muted-foreground text-[11px]">Valor</span>
+                                                                                            <NumericInput name="amount" defaultValue={pv.amount} placeholder="0" />
+                                                                                        </div>
+                                                                                        <div className="flex flex-col gap-y-0">
+                                                                                            <span className="text-muted-foreground text-[11px]">% Desc.</span>
+                                                                                            <NumericInput name="discountPercentage" defaultValue={pv.discountPercentage} decimalScale={0} />
+                                                                                        </div>
+
                                                                                     </div>
-                                                                                    <div className="flex flex-col gap-y-0">
-                                                                                        <span className="text-muted-foreground text-[11px]">% Desc.</span>
-                                                                                        <Input name="discountPercentage" defaultValue={pv.discountPercentage} />
-                                                                                    </div>
 
-                                                                                </div>
-                                                                                <div className="flex flex-col gap-y-0">
-                                                                                    <span className=""></span>
-                                                                                    <SubmitButton actionName="menu-item-price-variation-update" onlyIcon variant={"ghost"} tabIndex={0} iconColor="black"
-                                                                                        className="md:px-2"
+                                                                                    <SubmitButton actionName="menu-item-price-variation-update" tabIndex={0}
+                                                                                        cnContainer="md:px-12 md:py-0 bg-slate-300 hover:bg-slate-400"
+                                                                                        cnLabel="text-[11px] tracking-widest text-black uppercase"
+                                                                                        iconColor="black"
+
+
                                                                                     />
-                                                                                </div>
 
-                                                                            </Form>
-                                                                        </div>
-                                                                    </li>
+                                                                                </Form>
+                                                                            </div>
+                                                                        </li>
 
-                                                                )
-                                                            })
-                                                        }
-                                                    </ul>
+                                                                    )
+                                                                })
+                                                            }
+                                                        </ul>
 
-                                                    <Separator className="my-4" />
-
+                                                        <Separator className="my-4" />
 
 
 
-                                                </li>
-                                            )
-                                        })
-                                    }
-                                </ul>
-                            </div>
+
+                                                    </li>
+                                                )
+                                            })
+                                        }
+                                    </ul>
+                                </div>
+
+                            </>
                         )
 
                     }}

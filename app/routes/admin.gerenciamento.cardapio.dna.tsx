@@ -1,22 +1,26 @@
 import { LoaderFunctionArgs, defer } from "@remix-run/node";
 import { useActionData, Form, Await, useLoaderData } from "@remix-run/react";
-import { ok } from "assert";
+
 import { Suspense, useTransition } from "react";
 import SubmitButton from "~/components/primitives/submit-button/submit-button";
-import { Input } from "~/components/ui/input";
 import prismaClient from "~/lib/prisma/client.server";
 
 import type { ActionFunction } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
-import { badRequest } from "~/utils/http-response.server";
+import { badRequest, ok } from "~/utils/http-response.server";
 import { toast } from "~/components/ui/use-toast";
 import Loading from "~/components/loading/loading";
+import { NumericInput } from "~/components/numeric-input/numeric-input";
+import { Separator } from "~/components/ui/separator";
+import toFixedNumber from "~/utils/to-fixed-number";
 
 
 export async function loader({ request }: LoaderFunctionArgs) {
 
-    const dnaEmpresaSettings = prismaClient.dnaEmpresaSettings.findFirst()
+    const dnaEmpresaSettings = prismaIt(prismaClient.dnaEmpresaSettings.findFirst())
+
+
 
     return defer({
         dnaEmpresaSettings
@@ -40,11 +44,10 @@ export const action: ActionFunction = async ({ request }) => {
     // Extração dos valores do formulário
     const faturamentoBrutoAmount = formData.get("faturamentoBrutoAmount");
     const custoFixoAmount = formData.get("custoFixoAmount");
-    const custoFixoPerc = formData.get("custoFixoPerc");
     const taxaCartaoPerc = formData.get("taxaCartaoPerc");
     const taxaMarketplacePerc = formData.get("taxaMarketplacePerc");
     const impostoPerc = formData.get("impostoPerc");
-    const dnaPerc = formData.get("dnaPerc");
+
 
     // Validação simples (é possível aprimorar conforme necessário)
     let errors: ActionData["errors"] = {};
@@ -62,17 +65,21 @@ export const action: ActionFunction = async ({ request }) => {
 
     const settingsRecord = await prismaClient.dnaEmpresaSettings.findFirst();
 
+    const custoFixoPerc = toFixedNumber(toFixedNumber(custoFixoAmount) / toFixedNumber(faturamentoBrutoAmount) * 100);
+    const dnaPerc = toFixedNumber(custoFixoPerc) + toFixedNumber(taxaCartaoPerc) + toFixedNumber(taxaMarketplacePerc) + toFixedNumber(impostoPerc);
+
+
     if (!settingsRecord) {
         // create the record
         const [err, record] = await prismaIt(prismaClient.dnaEmpresaSettings.create({
             data: {
                 faturamentoBrutoAmount: Number(faturamentoBrutoAmount),
                 custoFixoAmount: Number(custoFixoAmount),
-                custoFixoPerc: Number(custoFixoPerc),
+                custoFixoPerc,
                 taxaCartaoPerc: Number(taxaCartaoPerc),
                 taxaMarketplacePerc: Number(taxaMarketplacePerc),
                 impostoPerc: Number(impostoPerc),
-                dnaPerc: Number(dnaPerc),
+                dnaPerc,
             },
         }));
 
@@ -89,11 +96,11 @@ export const action: ActionFunction = async ({ request }) => {
         data: {
             faturamentoBrutoAmount: Number(faturamentoBrutoAmount),
             custoFixoAmount: Number(custoFixoAmount),
-            custoFixoPerc: Number(custoFixoPerc),
+            custoFixoPerc,
             taxaCartaoPerc: Number(taxaCartaoPerc),
             taxaMarketplacePerc: Number(taxaMarketplacePerc),
             impostoPerc: Number(impostoPerc),
-            dnaPerc: Number(dnaPerc),
+            dnaPerc,
         },
     }))
 
@@ -101,7 +108,7 @@ export const action: ActionFunction = async ({ request }) => {
         return badRequest(err);
     }
 
-    return ok('Atualizdo'); // Redireciona para uma página de sucesso
+    return ok('Atualizado'); // Redireciona para uma página de sucesso
 };
 
 
@@ -129,109 +136,132 @@ export default function DnaEmpresaSettingsPage() {
             <Suspense fallback={<Loading />}>
 
                 <Await resolve={dnaEmpresaSettings}>
-                    {(is) => {
+                    {([err, dnaEmpresaSettings]) => {
+
 
                         // @ts-ignore
                         return (
                             <div className="mb-6">
                                 <div className="flex flex-col mb-4">
-                                    <h3 className="font-semibold">DNA da Empresa</h3>
-                                    <p className="text-sm text-muted-foreground">
-                                        Essa percentagem deve ser imbutida ao preço de venda do produto
-                                    </p>
-                                </div>
-                                <div className="flex gap-2 mb-4">
-                                    <div className="flex flex-col gap-y-0">
-                                        <span className="text-muted-foreground text-[11px]">
-                                            Faturamento Bruto (R$)
-                                        </span>
-                                        <Input name="faturamentoBrutoAmount" defaultValue={0} />
-                                        {actionData?.errors?.faturamentoBrutoAmount && (
-                                            <span className="text-red-500 text-xs">
-                                                {actionData.errors.faturamentoBrutoAmount}
-                                            </span>
-                                        )}
-                                    </div>
-
-                                    <div className="flex flex-col gap-y-0">
-                                        <span className="text-muted-foreground text-[11px]">
-                                            Custo Fixo (R$)
-                                        </span>
-                                        <Input name="custoFixoAmount" defaultValue={0} />
-                                        {actionData?.errors?.custoFixoAmount && (
-                                            <span className="text-red-500 text-xs">
-                                                {actionData.errors.custoFixoAmount}
-                                            </span>
-                                        )}
-                                    </div>
-
-                                    <div className="flex flex-col gap-y-0">
-                                        <span className="text-muted-foreground text-[11px]">
-                                            Custo Fixo (%)
-                                        </span>
-                                        <Input
-                                            name="custoFixoPerc"
-                                            defaultValue={0}
-                                            className="border-none"
-                                            readOnly
-                                        />
-                                    </div>
-
-                                    <div className="flex flex-col gap-y-0">
-                                        <span className="text-muted-foreground text-[11px]">
-                                            Taxa cartão (%)
-                                        </span>
-                                        <Input name="taxaCartaoPerc" defaultValue={0} />
-                                        {actionData?.errors?.taxaCartaoPerc && (
-                                            <span className="text-red-500 text-xs">
-                                                {actionData.errors.taxaCartaoPerc}
-                                            </span>
-                                        )}
-                                    </div>
-
-                                    <div className="flex flex-col gap-y-0">
-                                        <span className="text-muted-foreground text-[11px]">
-                                            Taxa marketplace (%)
-                                        </span>
-                                        <Input name="taxaMarketplacePerc" defaultValue={0} />
-                                        {actionData?.errors?.taxaMarketplacePerc && (
-                                            <span className="text-red-500 text-xs">
-                                                {actionData.errors.taxaMarketplacePerc}
-                                            </span>
-                                        )}
-                                    </div>
-
-                                    <div className="flex flex-col gap-y-0">
-                                        <span className="text-muted-foreground text-[11px]">
-                                            Imposto (%)
-                                        </span>
-                                        <Input name="impostoPerc" defaultValue={0} />
-                                        {actionData?.errors?.impostoPerc && (
-                                            <span className="text-red-500 text-xs">
-                                                {actionData.errors.impostoPerc}
-                                            </span>
-                                        )}
-                                    </div>
-
-                                    <div className="flex flex-col gap-y-0">
-                                        <span className="text-muted-foreground text-[11px]">
-                                            DNA (%)
-                                        </span>
-                                        <Input
-                                            name="dnaPerc"
-                                            defaultValue={0}
-                                            className="border-none"
-                                            readOnly
-                                        />
+                                    <h3 className="font-semibold mb-2">DNA da Empresa</h3>
+                                    <div className="flex flex-col">
+                                        <p className="text-sm text-muted-foreground mb-2">
+                                            A percentagem do DNA (%) deve ser imbutida ao preço de venda do produto
+                                        </p>
+                                        <div className="text-sm flex items-center gap-2">
+                                            <p className="font-semibold">Fonte:</p>
+                                            <a href="https://www.youtube.com/watch?v=iOitqHfbRHA&list=PL5G6QFIQaDlQOkSW24dvXlxg7FPzi6eNH&index=19"
+                                                target="_blank"
+                                            >Video Youtube</a>
+                                        </div>
                                     </div>
                                 </div>
 
-                                <SubmitButton
-                                    actionName="dna-empresa-update"
-                                    disabled={isPending === true}
-                                >
-                                    {isPending === true ? "Salvando..." : "Salvar"}
-                                </SubmitButton>
+                                <div className="md:px-64 md:py-6">
+                                    <div className="flex flex-col gap-2 mb-4 justify-center ">
+                                        <div className="grid grid-cols-2">
+                                            <span className="text-muted-foreground ">
+                                                Faturamento Bruto (R$)
+                                            </span>
+                                            <NumericInput name="faturamentoBrutoAmount" defaultValue={dnaEmpresaSettings?.faturamentoBrutoAmount || 0} />
+                                            {actionData?.errors?.faturamentoBrutoAmount && (
+                                                <span className="text-red-500 text-xs">
+                                                    {actionData.errors.faturamentoBrutoAmount}
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        <div className="grid grid-cols-2">
+                                            <span className="text-muted-foreground ">
+                                                Custo Fixo (R$)
+                                            </span>
+                                            <NumericInput name="custoFixoAmount" defaultValue={dnaEmpresaSettings?.custoFixoAmount || 0} />
+                                            {actionData?.errors?.custoFixoAmount && (
+                                                <span className="text-red-500 text-xs">
+                                                    {actionData.errors.custoFixoAmount}
+                                                </span>
+                                            )}
+                                        </div>
+
+
+
+                                        <div className="grid grid-cols-2">
+                                            <span className="text-muted-foreground ">
+                                                Custo Fixo (%)
+                                            </span>
+                                            <NumericInput
+                                                name="custoFixoPerc"
+                                                defaultValue={dnaEmpresaSettings?.custoFixoPerc || 0}
+                                                className="border-none  bg-slate-100"
+                                                readOnly
+                                            />
+                                        </div>
+
+                                        <Separator className="my-4" />
+
+                                        <div className="flex flex-col gap-4">
+
+                                            <div className="grid grid-cols-2">
+                                                <span className="text-muted-foreground ">
+                                                    Taxa cartão (%)
+                                                </span>
+                                                <NumericInput name="taxaCartaoPerc" defaultValue={dnaEmpresaSettings?.taxaCartaoPerc || 0} />
+                                                {actionData?.errors?.taxaCartaoPerc && (
+                                                    <span className="text-red-500 text-xs">
+                                                        {actionData.errors.taxaCartaoPerc}
+                                                    </span>
+                                                )}
+                                            </div>
+
+                                            <div className="grid grid-cols-2">
+                                                <span className="text-muted-foreground ">
+                                                    Taxa marketplace (%)
+                                                </span>
+                                                <NumericInput name="taxaMarketplacePerc" defaultValue={dnaEmpresaSettings?.taxaCartaoPerc || 0} />
+                                                {actionData?.errors?.taxaMarketplacePerc && (
+                                                    <span className="text-red-500 text-xs">
+                                                        {actionData.errors.taxaMarketplacePerc}
+                                                    </span>
+                                                )}
+                                            </div>
+
+                                            <div className="grid grid-cols-2">
+                                                <span className="text-muted-foreground ">
+                                                    Imposto (%)
+                                                </span>
+                                                <NumericInput name="impostoPerc" defaultValue={dnaEmpresaSettings?.impostoPerc || 0} />
+                                                {actionData?.errors?.impostoPerc && (
+                                                    <span className="text-red-500 text-xs">
+                                                        {actionData.errors.impostoPerc}
+                                                    </span>
+                                                )}
+                                            </div>
+
+                                            <div className="grid grid-cols-2">
+                                                <span className="text-muted-foreground ">
+                                                    DNA (%)
+                                                </span>
+
+                                                <NumericInput
+                                                    name="dnaPerc"
+                                                    defaultValue={dnaEmpresaSettings?.dnaPerc || 0}
+                                                    decimalScale={2}
+                                                    className="border-none bg-slate-100 font-semibold text-lg"
+                                                    readOnly
+                                                />
+                                            </div>
+
+                                        </div>
+                                    </div>
+                                    <SubmitButton
+                                        actionName="dna-empresa-update"
+                                        disabled={isPending === true}
+                                    >
+                                        {isPending === true ? "Salvando..." : "Salvar"}
+                                    </SubmitButton>
+                                </div>
+
+
                             </div>
                         )
                     }}

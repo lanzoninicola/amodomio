@@ -253,14 +253,14 @@ model MenuItemCostVariation {
 }
 
 model DnaEmpresaSettings {
-  id                     String  @id @default(uuid())
-  faturamentoBrutoAmount Decimal @default(0) @map("faturamento_bruto_amount")
-  custoFixoAmount        Decimal @default(0) @map("custo_fixo_amount")
-  custoFixoPerc          Decimal @default(0) @map("custo_fixo_perc")
-  taxaCartaoPerc         Decimal @default(0) @map("taxa_cartao_perc")
-  taxaMarketplacePerc    Decimal @default(0) @map("taxa_marketplace_perc")
-  impostoPerc            Decimal @default(0) @map("imposto_perc")
-  dnaPerc                Decimal @default(0) @map("dna_perc")
+  id                     String @id @default(uuid())
+  faturamentoBrutoAmount Float  @default(0) @map("faturamento_bruto_amount")
+  custoFixoAmount        Float  @default(0) @map("custo_fixo_amount")
+  custoFixoPerc          Float  @default(0) @map("custo_fixo_perc")
+  taxaCartaoPerc         Float  @default(0) @map("taxa_cartao_perc")
+  taxaMarketplacePerc    Float  @default(0) @map("taxa_marketplace_perc")
+  impostoPerc            Float  @default(0) @map("imposto_perc")
+  dnaPerc                Float  @default(0) @map("dna_perc")
 
   @@map("dna_empresa_settings")
 }

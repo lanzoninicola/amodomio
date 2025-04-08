@@ -23,6 +23,7 @@ import NodeCache from "node-cache";
 import { CloudinaryUtils } from "~/lib/cloudinary";
 import { scale } from "@cloudinary/url-gen/actions/resize";
 import { jsonStringify } from "~/utils/json-helper";
+import randomReactKey from "~/utils/random-react-key";
 
 export interface MenuItemWithAssociations extends MenuItem {
   priceVariations: MenuItemPriceVariation[];
@@ -328,7 +329,7 @@ export class MenuItemPrismaEntity {
         priceVariations: variations.map((v) => {
           const variation = variationsMap[v.id] || {};
           return {
-            menuItemPriceVariationId: variation.id || "",
+            menuItemPriceVariationId: variation.id || randomReactKey(),
             variationId: v.id,
             variationName: v.name,
             amount: variation.amount || 0,
