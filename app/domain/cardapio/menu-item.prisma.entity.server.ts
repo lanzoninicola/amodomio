@@ -74,24 +74,30 @@ export interface MenuItemWithCostVariations {
   }[];
 }
 
-export interface MenuItemWithSellPriceVariations {
+export interface MenuItemSellPriceVariation {
+  menuItemPriceVariationId: string | null;
+  variationId: string;
+  variationKey: string;
+  variationName: string;
+  sortOrder: number | null;
+  amount: number;
+  discountPercentage: number;
+  showOnCardapio: boolean;
+  showOnCardapioAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+  updatedBy: string | null;
+  latestAmount: number;
+  group: string;
+}
+
+export interface MenuItemWithGroupedSellPriceVariations {
   id: string;
   name: string;
   ingredients: string;
   priceVariations: {
-    menuItemPriceVariationId: MenuItemPriceVariation["id"];
-    variationId: MenuItemVariation["id"];
-    variationKey: MenuItemVariation["key"];
-    variationName: MenuItemVariation["name"];
-    sortOrder: MenuItemVariation["sortOrderIndex"];
-    amount: number;
-    discountPercentage: number;
-    showOnCardapio: boolean;
-    showOnCardapioAt: Date | null;
-    createdAt: Date;
-    updatedAt: Date;
-    updatedBy: string | null;
-    latestAmount: number;
+    group: string;
+    variations: MenuItemSellPriceVariation[];
   }[];
 }
 
@@ -311,8 +317,7 @@ export class MenuItemPrismaEntity {
       imageTransform: false,
       imageScaleWidth: 1280,
     }
-  ) {
-    // Fetch all menu items
+  ): Promise<MenuItemWithGroupedSellPriceVariations[]> {
     const allMenuItems = await this.client.menuItem.findMany({
       where: params?.where,
       include: {
@@ -320,37 +325,68 @@ export class MenuItemPrismaEntity {
       },
     });
 
-    // Fetch all variations
     const variations = await this.client.menuItemVariation.findMany();
 
     return allMenuItems.map((item) => {
+      const mapped = variations.map((v) => this.mapVariation(item, v));
+      const grouped = this.groupAndSortVariations(mapped);
+
       return {
         id: item.id,
         name: item.name,
         ingredients: item.ingredients,
-        priceVariations: variations.map((v) => {
-          const priceVariationRecord = item.priceVariations.find(
-            (pv) => pv.menuItemVariationId === v.id
-          );
-
-          return {
-            menuItemPriceVariationId: priceVariationRecord?.id || createUUID(),
-            variationId: v.id,
-            variationKey: v.key,
-            variationName: v.name,
-            sortOrder: v.sortOrderIndex,
-            amount: priceVariationRecord?.amount || 0,
-            discountPercentage: priceVariationRecord?.discountPercentage || 0,
-            showOnCardapio: priceVariationRecord?.showOnCardapio || true,
-            showOnCardapioAt: priceVariationRecord?.showOnCardapioAt || null,
-            createdAt: priceVariationRecord?.createdAt || new Date(),
-            updatedAt: priceVariationRecord?.updatedAt || new Date(),
-            updatedBy: priceVariationRecord?.updatedBy || null,
-            latestAmount: priceVariationRecord?.latestAmount || 0,
-          };
-        }),
+        priceVariations: grouped,
       };
     });
+  }
+
+  mapVariation(
+    item: MenuItemWithAssociations,
+    variation: MenuItemVariation
+  ): MenuItemSellPriceVariation {
+    const record = item.priceVariations.find(
+      (pv) => pv.menuItemVariationId === variation.id
+    );
+
+    const [group] = variation.key.split("@") || ["default"];
+
+    return {
+      menuItemPriceVariationId: record?.id || null,
+      variationId: variation.id,
+      variationKey: variation.key,
+      variationName: variation.name,
+      sortOrder: variation.sortOrderIndex,
+      amount: record?.amount || 0,
+      discountPercentage: record?.discountPercentage || 0,
+      showOnCardapio: record?.showOnCardapio ?? true,
+      showOnCardapioAt: record?.showOnCardapioAt ?? null,
+      createdAt: record?.createdAt ?? new Date(),
+      updatedAt: record?.updatedAt ?? new Date(),
+      updatedBy: record?.updatedBy ?? null,
+      latestAmount: record?.latestAmount ?? 0,
+      group,
+    };
+  }
+
+  groupAndSortVariations(mappedVariations: MenuItemSellPriceVariation[]): {
+    group: string;
+    variations: MenuItemSellPriceVariation[];
+  }[] {
+    const grouped = new Map();
+
+    for (const v of mappedVariations) {
+      if (!grouped.has(v.group)) {
+        grouped.set(v.group, []);
+      }
+      grouped.get(v.group).push(v);
+    }
+
+    return Array.from(grouped.entries()).map(([group, variations]) => ({
+      group,
+      variations: variations.sort(
+        (a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)
+      ),
+    }));
   }
 
   async findById(
