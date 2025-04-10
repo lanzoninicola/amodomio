@@ -18,6 +18,9 @@ interface SubmitButtonProps extends ButtonProps {
     size?: "sm" | "lg" | "default" | null | undefined,
     icon?: JSX.Element
     iconColor?: string
+    cnContainer?: string
+    cnLabel?: string
+    cnIcon?: string
 }
 
 const SubmitButton = forwardRef<HTMLButtonElement, SubmitButtonProps>(({
@@ -32,6 +35,9 @@ const SubmitButton = forwardRef<HTMLButtonElement, SubmitButtonProps>(({
     icon,
     iconColor,
     labelClassName,
+    cnContainer,
+    cnLabel,
+    cnIcon,
     ...props
 }, ref: Ref<HTMLButtonElement>) => {
 
@@ -42,7 +48,9 @@ const SubmitButton = forwardRef<HTMLButtonElement, SubmitButtonProps>(({
         formSubmissionInProgress = false;
     }
 
-    let buttonIcon = formSubmissionInProgress ? <Loader size={16} color={iconColor || "white"} /> : <Save size={16} color={iconColor || "white"} />;
+    let buttonIcon = formSubmissionInProgress ?
+        <Loader size={16} color={iconColor || "white"} className={cn(cnIcon)} /> :
+        <Save size={16} color={iconColor || "white"} className={cn(cnIcon)} />;
     let text = formSubmissionInProgress ? (loadingText || "Salvando...") : (idleText || "Salvar");
     let disabled = formSubmissionInProgress || props.disabled;
 
@@ -59,7 +67,8 @@ const SubmitButton = forwardRef<HTMLButtonElement, SubmitButtonProps>(({
             {...props}
             className={cn(
                 `flex gap-2 w-full md:max-w-max md:px-8`,
-                className
+                className,
+                cnContainer,
             )}
         >
             {buttonIcon}
@@ -68,7 +77,8 @@ const SubmitButton = forwardRef<HTMLButtonElement, SubmitButtonProps>(({
                     size === "sm" && "text-sm",
                     size === "lg" && "text-lg",
                     size === "default" && "text-md",
-                    labelClassName
+                    labelClassName,
+                    cnLabel,
                 )}>
                     {showText === true && text}
                 </span>)
