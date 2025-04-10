@@ -28,7 +28,7 @@ export const loader: LoaderFunction = async ({ request, params }) => {
 
     if (context === "menu-items-price-variations") {
 
-        const [err, menuItemsWithPrices] = await prismaIt(menuItemPrismaEntity.findAllPriceVariations({
+        const [err, menuItemsWithPrices] = await prismaIt(menuItemPrismaEntity.findAllWithPriceVariations({
             where: {
                 visible: true
             }

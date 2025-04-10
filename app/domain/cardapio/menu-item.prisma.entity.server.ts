@@ -9,6 +9,7 @@ import {
   MenuItemShare,
   MenuItemSize,
   MenuItemTag,
+  MenuItemVariation,
   Prisma,
   Tag,
 } from "@prisma/client";
@@ -22,6 +23,8 @@ import NodeCache from "node-cache";
 import { CloudinaryUtils } from "~/lib/cloudinary";
 import { scale } from "@cloudinary/url-gen/actions/resize";
 import { jsonStringify } from "~/utils/json-helper";
+import randomReactKey from "~/utils/random-react-key";
+import createUUID from "~/utils/uuid";
 
 export interface MenuItemWithAssociations extends MenuItem {
   priceVariations: MenuItemPriceVariation[];
@@ -60,9 +63,8 @@ export interface MenuItemWithCostVariations {
     /** The id of association between the menuItem the size and its cost amount*/
     menuItemCostVariationId: MenuItemCostVariation["id"];
     /** The id of the size*/
-    sizeId: MenuItemSize["id"];
-    name: MenuItemSize["name"];
-    slug: MenuItemSize["slug"];
+    variationId: MenuItemVariation["id"];
+    variationName: MenuItemVariation["name"];
     /** The cost of the final dough for the size */
     costBase: MenuItemSize["costBase"];
     /** Ficha tecnica cost */
@@ -78,9 +80,9 @@ export interface MenuItemWithSellPriceVariations {
   ingredients: string;
   priceVariations: {
     menuItemPriceVariationId: MenuItemPriceVariation["id"];
-    sizeId: MenuItemSize["id"];
-    sizeName: MenuItemSize["name"];
-    name: MenuItemSize["name"];
+    variationId: MenuItemVariation["id"];
+    variationName: MenuItemVariation["name"];
+    sortOrder: MenuItemVariation["sortOrderIndex"];
     amount: number;
     discountPercentage: number;
     showOnCardapio: boolean;
@@ -106,7 +108,7 @@ export class MenuItemPrismaEntity {
     priceVariations: true,
     costVariations: {
       include: {
-        MenuItemSize: true,
+        MenuItemVariation: true,
       },
     },
     Category: true,
@@ -162,7 +164,7 @@ export class MenuItemPrismaEntity {
         priceVariations: true,
         costVariations: {
           include: {
-            MenuItemSize: true,
+            MenuItemVariation: true,
           },
         },
         Category: true,
@@ -279,7 +281,7 @@ export class MenuItemPrismaEntity {
     return allMenuItems.map((item) => {
       // Create an index for cost variations keyed by menuItemSizeId
       const costVariationsMap = item.costVariations.reduce((acc, variation) => {
-        acc[variation.menuItemSizeId] = variation;
+        acc[variation.menuIteVariationId] = variation;
         return acc;
       }, {} as Record<string, (typeof item.costVariations)[number]>);
 
@@ -287,14 +289,13 @@ export class MenuItemPrismaEntity {
         id: item.id,
         name: item.name,
         ingredients: item.ingredients,
-        costVariations: sizes.map((size) => {
-          const variation = costVariationsMap[size.id] || {};
+        costVariations: sizes.map((v) => {
+          const variation = costVariationsMap[v.id] || {};
           return {
             menuItemCostVariationId: variation.id || "",
-            sizeId: size.id,
-            name: size.name,
-            slug: size.slug,
-            costBase: size.costBase,
+            variationId: v.id,
+            name: v.name,
+            costBase: v.costBase,
             recipeCostAmount: variation.recipeCostAmount || 0,
             recipeCostAmountUpdatedBy: variation.updatedBy || null,
           };
@@ -303,7 +304,7 @@ export class MenuItemPrismaEntity {
     });
   }
 
-  async findAllPriceVariations(
+  async findAllWithPriceVariations(
     params: MenuItemEntityFindAllProps = {},
     options = {
       imageTransform: false,
@@ -311,37 +312,39 @@ export class MenuItemPrismaEntity {
     }
   ) {
     // Fetch all menu items
-    const allMenuItems = (await this.findAll(params, options)) || [];
+    const allMenuItems = await this.client.menuItem.findMany({
+      where: params?.where,
+      include: {
+        priceVariations: true,
+      },
+    });
 
-    // Fetch all sizes
-    const sizes = await this.client.menuItemSize.findMany();
+    // Fetch all variations
+    const variations = await this.client.menuItemVariation.findMany();
 
     return allMenuItems.map((item) => {
-      // Pre-index the price variations by size ID
-      const variationsMap = item.priceVariations.reduce((acc, variation) => {
-        acc[variation.menuItemSizeId] = variation;
-        return acc;
-      }, {} as Record<string, (typeof item.priceVariations)[number]>);
-
       return {
         id: item.id,
         name: item.name,
         ingredients: item.ingredients,
-        priceVariations: sizes.map((size) => {
-          const variation = variationsMap[size.id] || {};
+        priceVariations: variations.map((v) => {
+          const priceVariationRecord = item.priceVariations.find(
+            (pv) => pv.menuItemVariationId === v.id
+          );
+
           return {
-            menuItemPriceVariationId: variation.id || "",
-            sizeId: size.id,
-            sizeName: size.name,
-            name: size.name,
-            amount: variation.amount || 0,
-            discountPercentage: variation.discountPercentage || 0,
-            showOnCardapio: variation.showOnCardapio || false,
-            showOnCardapioAt: variation.showOnCardapioAt,
-            createdAt: variation.createdAt || new Date(),
-            updatedAt: variation.updatedAt || new Date(),
-            updatedBy: variation.updatedBy,
-            latestAmount: variation.latestAmount,
+            menuItemPriceVariationId: priceVariationRecord?.id || createUUID(),
+            variationId: v.id,
+            variationName: v.name,
+            sortOrder: v.sortOrderIndex,
+            amount: priceVariationRecord?.amount || 0,
+            discountPercentage: priceVariationRecord?.discountPercentage || 0,
+            showOnCardapio: priceVariationRecord?.showOnCardapio || true,
+            showOnCardapioAt: priceVariationRecord?.showOnCardapioAt || null,
+            createdAt: priceVariationRecord?.createdAt || new Date(),
+            updatedAt: priceVariationRecord?.updatedAt || new Date(),
+            updatedBy: priceVariationRecord?.updatedBy || null,
+            latestAmount: priceVariationRecord?.latestAmount || 0,
           };
         }),
       };

@@ -206,65 +206,75 @@ model MenuItemImage {
   @@map("menu_items_image")
 }
 
-model MenuItemPriceVariation {
-  id                 String        @id @default(uuid())
-  MenuItem           MenuItem?     @relation(fields: [menuItemId], references: [id])
-  menuItemId         String?       @map("menu_item_id")
-  MenuItemSize       MenuItemSize? @relation(fields: [menuItemSizeId], references: [id])
-  menuItemSizeId     String?       @map("menu_item_size_id")
-  label              String
-  basePrice          Float         @default(0) @map("base_price")
-  amount             Float
-  discountPercentage Float         @map("discount_percentage")
-  showOnCardapio     Boolean       @default(false) @map("show_on_cardapio")
-  showOnCardapioAt   DateTime?     @map("show_on_cardapio_at")
-  createdAt          DateTime      @map("created_at")
-  updatedAt          DateTime      @default(now()) @updatedAt @map("updated_at")
-  updatedBy          String?       @map("updated_by")
-  latestAmount       Float         @default(0)
-
-  @@map("menu_item_price_variations")
-}
-
-model MenuItemCostVariation {
-  id               String       @id @default(uuid())
-  MenuItem         MenuItem     @relation(fields: [menuItemId], references: [id])
-  menuItemId       String       @map("menu_item_id")
-  MenuItemSize     MenuItemSize @relation(fields: [menuItemSizeId], references: [id])
-  menuItemSizeId   String       @map("menu_item_size_id")
-  recipeCostAmount Float        @default(0) @map("recipe_cost_amount")
-  createdAt        DateTime     @map("created_at")
-  updatedAt        DateTime     @default(now()) @updatedAt @map("updated_at")
-  updatedBy        String?      @map("updated_by")
-
-  @@map("menu_item_cost_variations")
-}
-
-model DnaEmpresaSettings {
-  id                     String  @id @default(uuid())
-  faturamentoBrutoAmount Decimal @default(0) @map("faturamento_bruto_amount")
-  custoFixoAmount        Decimal @default(0) @map("custo_fixo_amount")
-  custoFixoPerc          Decimal @default(0) @map("custo_fixo_perc")
-  taxaCartaoPerc         Decimal @default(0) @map("taxa_cartao_perc")
-  taxaMarketplacePerc    Decimal @default(0) @map("taxa_marketplace_perc")
-  impostoPerc            Decimal @default(0) @map("imposto_perc")
-  dnaPerc                Decimal @default(0) @map("dna_perc")
-
-  @@map("dna_empresa_settings")
-}
-
-model MenuItemSize {
+model MenuItemVariation {
   id                     String                   @id @default(uuid())
+  key                    String?                  @map("key")
   name                   String
-  group                  String                   @default("")
-  costBase               Float                    @default(0) @map("cost_base")
-  slug                   String                   @unique @map("slug")
-  costScalingFactor      Float                    @default(1) @map("cost_scaling_factor") // Multiplier/divisor to scale the base recipe cost
   sortOrderIndex         Int                      @default(0) @map("sort_order_index")
   createdAt              DateTime                 @map("created_at")
   updatedAt              DateTime                 @default(now()) @updatedAt @map("updated_at")
   MenuItemPriceVariation MenuItemPriceVariation[]
   MenuItemCostVariation  MenuItemCostVariation[]
+
+  @@map("menu_item_variations")
+}
+
+model MenuItemPriceVariation {
+  id                  String             @id @default(uuid())
+  MenuItem            MenuItem?          @relation(fields: [menuItemId], references: [id])
+  menuItemId          String?            @map("menu_item_id")
+  MenuItemVariation   MenuItemVariation? @relation(fields: [menuItemVariationId], references: [id])
+  menuItemVariationId String?            @map("menu_item_variation_id")
+  basePrice           Float              @default(0) @map("base_price")
+  amount              Float
+  discountPercentage  Float              @map("discount_percentage")
+  showOnCardapio      Boolean            @default(false) @map("show_on_cardapio")
+  showOnCardapioAt    DateTime?          @map("show_on_cardapio_at")
+  createdAt           DateTime           @map("created_at")
+  updatedAt           DateTime           @default(now()) @updatedAt @map("updated_at")
+  updatedBy           String?            @map("updated_by")
+  latestAmount        Float              @default(0)
+
+  @@map("menu_item_price_variations")
+}
+
+model MenuItemCostVariation {
+  id                 String             @id @default(uuid())
+  MenuItem           MenuItem           @relation(fields: [menuItemId], references: [id])
+  menuItemId         String             @map("menu_item_id")
+  MenuItemVariation  MenuItemVariation? @relation(fields: [menuIteVariationId], references: [id])
+  menuIteVariationId String?            @map("menu_item_variation_id")
+  recipeCostAmount   Float              @default(0) @map("recipe_cost_amount")
+  createdAt          DateTime           @map("created_at")
+  updatedAt          DateTime           @default(now()) @updatedAt @map("updated_at")
+  updatedBy          String?            @map("updated_by")
+
+  @@map("menu_item_cost_variations")
+}
+
+model DnaEmpresaSettings {
+  id                     String @id @default(uuid())
+  faturamentoBrutoAmount Float  @default(0) @map("faturamento_bruto_amount")
+  custoFixoAmount        Float  @default(0) @map("custo_fixo_amount")
+  custoFixoPerc          Float  @default(0) @map("custo_fixo_perc")
+  taxaCartaoPerc         Float  @default(0) @map("taxa_cartao_perc")
+  taxaMarketplacePerc    Float  @default(0) @map("taxa_marketplace_perc")
+  impostoPerc            Float  @default(0) @map("imposto_perc")
+  dnaPerc                Float  @default(0) @map("dna_perc")
+
+  @@map("dna_empresa_settings")
+}
+
+model MenuItemSize {
+  id                String   @id @default(uuid())
+  name              String
+  group             String   @default("")
+  costBase          Float    @default(0) @map("cost_base")
+  slug              String   @unique @map("slug")
+  costScalingFactor Float    @default(1) @map("cost_scaling_factor") // Multiplier/divisor to scale the base recipe cost
+  sortOrderIndex    Int      @default(0) @map("sort_order_index")
+  createdAt         DateTime @map("created_at")
+  updatedAt         DateTime @default(now()) @updatedAt @map("updated_at")
 
   @@map("menu_item_sizes")
 }
