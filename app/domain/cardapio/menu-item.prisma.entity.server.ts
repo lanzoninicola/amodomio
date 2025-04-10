@@ -81,6 +81,7 @@ export interface MenuItemWithSellPriceVariations {
   priceVariations: {
     menuItemPriceVariationId: MenuItemPriceVariation["id"];
     variationId: MenuItemVariation["id"];
+    variationKey: MenuItemVariation["key"];
     variationName: MenuItemVariation["name"];
     sortOrder: MenuItemVariation["sortOrderIndex"];
     amount: number;
@@ -335,6 +336,7 @@ export class MenuItemPrismaEntity {
           return {
             menuItemPriceVariationId: priceVariationRecord?.id || createUUID(),
             variationId: v.id,
+            variationKey: v.key,
             variationName: v.name,
             sortOrder: v.sortOrderIndex,
             amount: priceVariationRecord?.amount || 0,
