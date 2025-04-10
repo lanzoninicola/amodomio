@@ -55,26 +55,30 @@ export interface MenuItemWithAssociations extends MenuItem {
   };
 }
 
-export interface MenuItemWithCostVariations {
-  id: MenuItem["id"];
-  name: MenuItem["name"];
-  ingredients: MenuItem["ingredients"];
+export interface MenuItemWithCostVariation {
+  menuItemPriceVariationId: string | null;
+  variationId: string;
+  variationKey: string;
+  variationName: string;
+  sortOrder: number | null;
+  recipeCostAmount: number;
+  createdAt: Date;
+  updatedAt: Date;
+  updatedBy: string | null;
+  group: string;
+}
+
+export interface MenuItemWithGroupedCostVariations {
+  id: string;
+  name: string;
+  ingredients: string;
   costVariations: {
-    /** The id of association between the menuItem the size and its cost amount*/
-    menuItemCostVariationId: MenuItemCostVariation["id"];
-    /** The id of the size*/
-    variationId: MenuItemVariation["id"];
-    variationName: MenuItemVariation["name"];
-    /** The cost of the final dough for the size */
-    costBase: MenuItemSize["costBase"];
-    /** Ficha tecnica cost */
-    recipeCostAmount: MenuItemCostVariation["recipeCostAmount"];
-    /** Who updates the ficha tecnica cost */
-    recipeCostAmountUpdatedBy: MenuItemCostVariation["updatedBy"] | null;
+    group: string;
+    variations: MenuItemWithCostVariation[];
   }[];
 }
 
-export interface MenuItemSellPriceVariation {
+export interface MenuItemWithSellPriceVariation {
   menuItemPriceVariationId: string | null;
   variationId: string;
   variationKey: string;
@@ -97,7 +101,7 @@ export interface MenuItemWithGroupedSellPriceVariations {
   ingredients: string;
   priceVariations: {
     group: string;
-    variations: MenuItemSellPriceVariation[];
+    variations: MenuItemWithSellPriceVariation[];
   }[];
 }
 
@@ -273,40 +277,31 @@ export class MenuItemPrismaEntity {
   /**
    * Find all menu items with cost associated to each size
    */
-  async findAllCostVariations(
+  async findAllWithCostVariations(
     params: MenuItemEntityFindAllProps = {},
     options = {
       imageTransform: false,
       imageScaleWidth: 1280,
     }
-  ): Promise<MenuItemWithCostVariations[]> {
-    // Fetch all menu items
-    const allMenuItems = (await this.findAll(params, options)) || [];
-    // Fetch all sizes
-    const sizes = await this.client.menuItemSize.findMany();
+  ): Promise<MenuItemWithGroupedCostVariations[]> {
+    const allMenuItems = await this.client.menuItem.findMany({
+      where: params?.where,
+      include: {
+        priceVariations: true,
+      },
+    });
+
+    const variations = await this.client.menuItemVariation.findMany();
 
     return allMenuItems.map((item) => {
-      // Create an index for cost variations keyed by menuItemSizeId
-      const costVariationsMap = item.costVariations.reduce((acc, variation) => {
-        acc[variation.menuIteVariationId] = variation;
-        return acc;
-      }, {} as Record<string, (typeof item.costVariations)[number]>);
+      const mapped = variations.map((v) => this.mapVariation(item, v));
+      const grouped = this.groupAndSortVariations(mapped);
 
       return {
         id: item.id,
         name: item.name,
         ingredients: item.ingredients,
-        costVariations: sizes.map((v) => {
-          const variation = costVariationsMap[v.id] || {};
-          return {
-            menuItemCostVariationId: variation.id || "",
-            variationId: v.id,
-            name: v.name,
-            costBase: v.costBase,
-            recipeCostAmount: variation.recipeCostAmount || 0,
-            recipeCostAmountUpdatedBy: variation.updatedBy || null,
-          };
-        }),
+        costVariations: grouped,
       };
     });
   }
@@ -343,7 +338,7 @@ export class MenuItemPrismaEntity {
   mapVariation(
     item: MenuItemWithAssociations,
     variation: MenuItemVariation
-  ): MenuItemSellPriceVariation {
+  ): MenuItemWithSellPriceVariation {
     const record = item.priceVariations.find(
       (pv) => pv.menuItemVariationId === variation.id
     );
@@ -368,9 +363,9 @@ export class MenuItemPrismaEntity {
     };
   }
 
-  groupAndSortVariations(mappedVariations: MenuItemSellPriceVariation[]): {
+  groupAndSortVariations(mappedVariations: MenuItemWithSellPriceVariation[]): {
     group: string;
-    variations: MenuItemSellPriceVariation[];
+    variations: MenuItemWithSellPriceVariation[];
   }[] {
     const grouped = new Map();
 
