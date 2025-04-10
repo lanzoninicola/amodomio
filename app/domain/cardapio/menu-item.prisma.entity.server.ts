@@ -6,10 +6,9 @@ import {
   MenuItemLike,
   MenuItemNote,
   MenuItemPriceVariation,
+  MenuItemSellingPriceVariation,
   MenuItemShare,
-  MenuItemSize,
   MenuItemTag,
-  MenuItemVariation,
   Prisma,
   Tag,
 } from "@prisma/client";
@@ -18,13 +17,8 @@ import { PrismaEntityProps } from "~/lib/prisma/types.server";
 import { menuItemTagPrismaEntity } from "./menu-item-tags.prisma.entity.server";
 import MenuItemPriceVariationUtility from "./menu-item-price-variations-utility";
 import { v4 as uuidv4 } from "uuid";
-import items from "./db-mock/items";
 import NodeCache from "node-cache";
 import { CloudinaryUtils } from "~/lib/cloudinary";
-import { scale } from "@cloudinary/url-gen/actions/resize";
-import { jsonStringify } from "~/utils/json-helper";
-import randomReactKey from "~/utils/random-react-key";
-import createUUID from "~/utils/uuid";
 
 export interface MenuItemWithAssociations extends MenuItem {
   priceVariations: MenuItemPriceVariation[];
@@ -173,11 +167,6 @@ export class MenuItemPrismaEntity {
       where: params?.where,
       include: {
         priceVariations: true,
-        costVariations: {
-          include: {
-            MenuItemVariation: true,
-          },
-        },
         Category: true,
         tags: {
           include: {
