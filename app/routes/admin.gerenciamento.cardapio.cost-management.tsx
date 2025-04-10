@@ -142,35 +142,32 @@ export default function AdminGerenciamentoCardapioSellPriceManagement() {
                                                                 <Separator className="my-2" />
 
                                                                 <ul className="flex gap-6">
-                                                                    {grouped.variations.map((pv, index: number) => (
+                                                                    {grouped.variations.map((v, index: number) => (
                                                                         <li key={randomReactKey()}>
                                                                             <div className="flex flex-col">
                                                                                 <span className="text-[12px] font-medium uppercase tracking-wider">
-                                                                                    {pv.variationName}
+                                                                                    {v.variationName}
                                                                                 </span>
 
                                                                                 <Form method="post" className="flex flex-col gap-1 justify-center items-center">
                                                                                     <div className="flex flex-col gap-2">
                                                                                         <div className="flex gap-1">
-                                                                                            <input type="hidden" name="menuItemPriceVariationId" value={pv.menuItemPriceVariationId ?? ""} />
+                                                                                            <input type="hidden" name="menuItemPriceVariationId" value={v.menuItemPriceVariationId ?? ""} />
                                                                                             <input type="hidden" name="menuItemId" value={menuItem.id} />
-                                                                                            <input type="hidden" name="variationId" value={pv.variationId} />
-                                                                                            <input type="hidden" name="updatedBy" value={pv.updatedBy || user?.email || ""} />
-                                                                                            <input type="hidden" name="latestAmount" value={pv.latestAmount} />
+                                                                                            <input type="hidden" name="variationId" value={v.variationId} />
+                                                                                            <input type="hidden" name="updatedBy" value={v.updatedBy || user?.email || ""} />
+                                                                                            <input type="hidden" name="latestAmount" value={v.latestAmount} />
 
                                                                                             <div className="flex flex-col gap-y-0">
-                                                                                                <span className="text-muted-foreground text-[11px]">Valor</span>
-                                                                                                <NumericInput name="amount" defaultValue={pv.amount} />
+                                                                                                <span className="text-muted-foreground text-[11px]">Custo Ficha Tecnica</span>
+                                                                                                <NumericInput name="amount" defaultValue={v.recipeCostAmount} />
                                                                                             </div>
 
-                                                                                            <div className="flex flex-col gap-y-0">
-                                                                                                <span className="text-muted-foreground text-[11px]">% Desc.</span>
-                                                                                                <NumericInput name="discountPercentage" value={pv.discountPercentage} decimalScale={0} />
-                                                                                            </div>
+
                                                                                         </div>
 
                                                                                         <div className="flex flex-col gap-1">
-                                                                                            <span className="text-xs text-muted-foreground">Último preço: {pv.latestAmount}</span>
+                                                                                            <span className="text-xs text-muted-foreground">Último preço: {v.latestAmount}</span>
                                                                                         </div>
                                                                                     </div>
 
