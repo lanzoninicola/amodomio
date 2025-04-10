@@ -1,11 +1,12 @@
 import { MenuItemPriceVariation } from "@prisma/client";
 import { ActionFunctionArgs, LoaderFunctionArgs, } from "@remix-run/node";
-import { Await, useLoaderData, defer, Form, Link } from "@remix-run/react";
+import { Await, useLoaderData, defer, Form, Link, useActionData } from "@remix-run/react";
 import { Suspense } from "react";
 import Loading from "~/components/loading/loading";
 import { NumericInput } from "~/components/numeric-input/numeric-input";
 import SubmitButton from "~/components/primitives/submit-button/submit-button";
 import { Separator } from "~/components/ui/separator";
+import { toast } from "~/components/ui/use-toast";
 import { authenticator } from "~/domain/auth/google.server";
 import { menuItemPriceVariationsEntity } from "~/domain/cardapio/menu-item-price-variations.prisma.entity.server";
 import { MenuItemWithSellPriceVariations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
@@ -15,12 +16,14 @@ import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { badRequest, ok } from "~/utils/http-response.server";
 import { jsonParse } from "~/utils/json-helper";
 import parserFormDataEntryToNumber from "~/utils/parse-form-data-entry-to-number";
+import toFixedNumber from "~/utils/to-fixed-number";
+import toNumber from "~/utils/to-number";
 
 
 
 export async function loader({ request }: LoaderFunctionArgs) {
 
-    const menuItemsWithSellPriceVariations = menuItemPrismaEntity.findAllPriceVariations()
+    const menuItemsWithSellPriceVariations = menuItemPrismaEntity.findAllWithPriceVariations()
 
     const user = authenticator.isAuthenticated(request);
 
@@ -43,30 +46,40 @@ export async function action({ request }: ActionFunctionArgs) {
 
     if (_action === "menu-item-price-variation-update") {
 
-        const name = values?.name as string
 
-        const amount = isNaN(Number(values?.amount)) ? 0 : Number(values?.amount)
-        const latestAmount = parserFormDataEntryToNumber(values?.latestAmount)
+
+        const menuItemPriceVariationId = values?.menuItemPriceVariationId as string
+        const menuItemId = values?.menuItemId as string
+        const variationId = values?.variationId as string
+        const amount = toFixedNumber(values?.amount, 2)
+        const latestAmount = toFixedNumber(values?.latestAmount, 2)
         const discountPercentage = isNaN(Number(values?.discountPercentage)) ? 0 : Number(values?.discountPercentage)
         const showOnCardapio = values?.showOnCardapio === "on" ? true : false
-        const updatedBy = jsonParse(values?.updatedBy)?.email || ""
+        const updatedBy = values?.updatedBy as string
 
         const nextPrice: Partial<MenuItemPriceVariation> = {
-            id: values.id as string,
+            id: menuItemPriceVariationId,
+            menuItemId,
             amount,
             discountPercentage,
             showOnCardapio,
             latestAmount,
-            updatedBy
+            updatedBy,
+            menuItemVariationId: variationId,
+            basePrice: amount,
         }
 
-        const [err, result] = await prismaIt(menuItemPriceVariationsEntity.update(values.id as string, nextPrice))
+        console.log({ nextPrice })
+
+        const [err, result] = await prismaIt(menuItemPriceVariationsEntity.upsert(menuItemPriceVariationId, nextPrice))
+
+        console.log({ err })
 
         if (err) {
             return badRequest(err)
         }
 
-        return ok(`O preço de venda do item ${name} do tamanho ${values.sizeName} foi atualizado com sucesso`)
+        return ok(`O preço de venda foi atualizado com sucesso`)
     }
 
 
@@ -76,6 +89,22 @@ export async function action({ request }: ActionFunctionArgs) {
 
 export default function AdminGerenciamentoCardapioSellPriceManagement() {
     const { data } = useLoaderData<typeof loader>()
+
+    const actionData = useActionData<typeof action>();
+
+    if (actionData && actionData.status > 399) {
+        toast({
+            title: "Erro",
+            description: actionData.message,
+        });
+    }
+
+    if (actionData && actionData.status === 200) {
+        toast({
+            title: "Ok",
+            description: actionData.message,
+        });
+    }
 
     return (
         <div className="flex flex-col gap-4">
@@ -96,8 +125,6 @@ export default function AdminGerenciamentoCardapioSellPriceManagement() {
                 <Await resolve={data}>
                     {/* @ts-ignore */}
                     {([menuItemsWithSellPriceVariations, user, [err, dnaEmpresaSettings]]) => {
-
-                        console.log({ dnaEmpresaSettings })
 
                         return (
 
@@ -120,25 +147,47 @@ export default function AdminGerenciamentoCardapioSellPriceManagement() {
 
                                                         <ul className="grid grid-cols-5 gap-x-4">
                                                             {
-                                                                menuItem.priceVariations.map(pv => {
+                                                                menuItem.priceVariations.sort((a, b) => a.sortOrder - b.sortOrder).map(pv => {
+
+                                                                    console.log({ pv })
+
+                                                                    const amount = pv.amount.toLocaleString('pt-BR', {
+                                                                        minimumFractionDigits: 2,
+                                                                        maximumFractionDigits: 2
+                                                                    })
+
                                                                     return (
                                                                         <li key={pv.menuItemPriceVariationId} >
                                                                             <div className="flex flex-col">
                                                                                 <span className="text-[12px] font-medium uppercase tracking-wider">{pv.variationName}</span>
                                                                                 <Form method="post" className="flex flex-col gap-1 justify-center items-center">
 
-                                                                                    <div className="flex gap-1">
-                                                                                        <input type="hidden" name="name" defaultValue={menuItem.name} />
-                                                                                        <input type="hidden" name="menuItemPriceVariationId" defaultValue={pv.menuItemPriceVariationId} />
-                                                                                        <input type="hidden" name="updatedBy" defaultValue={pv.updatedBy || ""} />
-                                                                                        <input type="hidden" name="name" defaultValue={pv.variationName} />
-                                                                                        <div className="flex flex-col gap-y-0">
-                                                                                            <span className="text-muted-foreground text-[11px]">Valor</span>
-                                                                                            <NumericInput name="amount" defaultValue={pv.amount} placeholder="0" />
+
+                                                                                    <div className="flex flex-col gap-2">
+
+                                                                                        <div className="flex gap-1">
+                                                                                            <input type="hidden" name="menuItemPriceVariationId" value={pv.menuItemPriceVariationId} />
+                                                                                            <input type="hidden" name="menuItemId" value={menuItem.id} />
+                                                                                            <input type="hidden" name="variationId" value={pv.variationId} />
+                                                                                            <input type="hidden" name="updatedBy" value={pv.updatedBy || user?.email || ""} />
+                                                                                            <input type="hidden" name="latestAmount" value={pv.latestAmount} />
+                                                                                            <div className="flex flex-col gap-y-0">
+                                                                                                <span className="text-muted-foreground text-[11px]">Valor</span>
+                                                                                                <NumericInput name="amount" defaultValue={pv.amount} />
+
+                                                                                            </div>
+                                                                                            <div className="flex flex-col gap-y-0">
+                                                                                                <span className="text-muted-foreground text-[11px]">% Desc.</span>
+                                                                                                <NumericInput name="discountPercentage" value={pv.discountPercentage} decimalScale={0} />
+                                                                                            </div>
+
                                                                                         </div>
-                                                                                        <div className="flex flex-col gap-y-0">
-                                                                                            <span className="text-muted-foreground text-[11px]">% Desc.</span>
-                                                                                            <NumericInput name="discountPercentage" defaultValue={pv.discountPercentage} decimalScale={0} />
+
+
+                                                                                        <div className="flex flex-col gap-1">
+                                                                                            <span className="text-xs text-muted-foreground">Ultimo preço: {pv.amount}</span>
+                                                                                            {/* <span className="text-xs text-muted-foreground">Atualizado por: {pv.updatedBy}</span> */}
+
                                                                                         </div>
 
                                                                                     </div>

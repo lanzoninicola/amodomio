@@ -24,6 +24,7 @@ import { CloudinaryUtils } from "~/lib/cloudinary";
 import { scale } from "@cloudinary/url-gen/actions/resize";
 import { jsonStringify } from "~/utils/json-helper";
 import randomReactKey from "~/utils/random-react-key";
+import createUUID from "~/utils/uuid";
 
 export interface MenuItemWithAssociations extends MenuItem {
   priceVariations: MenuItemPriceVariation[];
@@ -81,6 +82,7 @@ export interface MenuItemWithSellPriceVariations {
     menuItemPriceVariationId: MenuItemPriceVariation["id"];
     variationId: MenuItemVariation["id"];
     variationName: MenuItemVariation["name"];
+    sortOrder: MenuItemVariation["sortOrderIndex"];
     amount: number;
     discountPercentage: number;
     showOnCardapio: boolean;
@@ -302,7 +304,7 @@ export class MenuItemPrismaEntity {
     });
   }
 
-  async findAllPriceVariations(
+  async findAllWithPriceVariations(
     params: MenuItemEntityFindAllProps = {},
     options = {
       imageTransform: false,
@@ -310,36 +312,39 @@ export class MenuItemPrismaEntity {
     }
   ) {
     // Fetch all menu items
-    const allMenuItems = (await this.findAll(params, options)) || [];
+    const allMenuItems = await this.client.menuItem.findMany({
+      where: params?.where,
+      include: {
+        priceVariations: true,
+      },
+    });
 
-    // Fetch all sizes
+    // Fetch all variations
     const variations = await this.client.menuItemVariation.findMany();
 
     return allMenuItems.map((item) => {
-      // Pre-index the price variations by size ID
-      const variationsMap = item.priceVariations.reduce((acc, variation) => {
-        acc[variation.menuIteVariationId] = variation;
-        return acc;
-      }, {} as Record<string, (typeof item.priceVariations)[number]>);
-
       return {
         id: item.id,
         name: item.name,
         ingredients: item.ingredients,
         priceVariations: variations.map((v) => {
-          const variation = variationsMap[v.id] || {};
+          const priceVariationRecord = item.priceVariations.find(
+            (pv) => pv.menuItemVariationId === v.id
+          );
+
           return {
-            menuItemPriceVariationId: variation.id || randomReactKey(),
+            menuItemPriceVariationId: priceVariationRecord?.id || createUUID(),
             variationId: v.id,
             variationName: v.name,
-            amount: variation.amount || 0,
-            discountPercentage: variation.discountPercentage || 0,
-            showOnCardapio: variation.showOnCardapio || false,
-            showOnCardapioAt: variation.showOnCardapioAt,
-            createdAt: variation.createdAt || new Date(),
-            updatedAt: variation.updatedAt || new Date(),
-            updatedBy: variation.updatedBy,
-            latestAmount: variation.latestAmount,
+            sortOrder: v.sortOrderIndex,
+            amount: priceVariationRecord?.amount || 0,
+            discountPercentage: priceVariationRecord?.discountPercentage || 0,
+            showOnCardapio: priceVariationRecord?.showOnCardapio || true,
+            showOnCardapioAt: priceVariationRecord?.showOnCardapioAt || null,
+            createdAt: priceVariationRecord?.createdAt || new Date(),
+            updatedAt: priceVariationRecord?.updatedAt || new Date(),
+            updatedBy: priceVariationRecord?.updatedBy || null,
+            latestAmount: priceVariationRecord?.latestAmount || 0,
           };
         }),
       };

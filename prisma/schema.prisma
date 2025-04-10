@@ -208,6 +208,7 @@ model MenuItemImage {
 
 model MenuItemVariation {
   id                     String                   @id @default(uuid())
+  key                    String?                  @map("key")
   name                   String
   sortOrderIndex         Int                      @default(0) @map("sort_order_index")
   createdAt              DateTime                 @map("created_at")
@@ -219,21 +220,20 @@ model MenuItemVariation {
 }
 
 model MenuItemPriceVariation {
-  id                 String             @id @default(uuid())
-  MenuItem           MenuItem?          @relation(fields: [menuItemId], references: [id])
-  menuItemId         String?            @map("menu_item_id")
-  MenuItemVariation  MenuItemVariation? @relation(fields: [menuIteVariationId], references: [id])
-  menuIteVariationId String?            @map("menu_item_variation_id")
-  label              String
-  basePrice          Float              @default(0) @map("base_price")
-  amount             Float
-  discountPercentage Float              @map("discount_percentage")
-  showOnCardapio     Boolean            @default(false) @map("show_on_cardapio")
-  showOnCardapioAt   DateTime?          @map("show_on_cardapio_at")
-  createdAt          DateTime           @map("created_at")
-  updatedAt          DateTime           @default(now()) @updatedAt @map("updated_at")
-  updatedBy          String?            @map("updated_by")
-  latestAmount       Float              @default(0)
+  id                  String             @id @default(uuid())
+  MenuItem            MenuItem?          @relation(fields: [menuItemId], references: [id])
+  menuItemId          String?            @map("menu_item_id")
+  MenuItemVariation   MenuItemVariation? @relation(fields: [menuItemVariationId], references: [id])
+  menuItemVariationId String?            @map("menu_item_variation_id")
+  basePrice           Float              @default(0) @map("base_price")
+  amount              Float
+  discountPercentage  Float              @map("discount_percentage")
+  showOnCardapio      Boolean            @default(false) @map("show_on_cardapio")
+  showOnCardapioAt    DateTime?          @map("show_on_cardapio_at")
+  createdAt           DateTime           @map("created_at")
+  updatedAt           DateTime           @default(now()) @updatedAt @map("updated_at")
+  updatedBy           String?            @map("updated_by")
+  latestAmount        Float              @default(0)
 
   @@map("menu_item_price_variations")
 }
