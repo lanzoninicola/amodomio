@@ -6,10 +6,9 @@ import {
   MenuItemLike,
   MenuItemNote,
   MenuItemPriceVariation,
+  MenuItemSellingPriceVariation,
   MenuItemShare,
-  MenuItemSize,
   MenuItemTag,
-  MenuItemVariation,
   Prisma,
   Tag,
 } from "@prisma/client";
@@ -18,13 +17,8 @@ import { PrismaEntityProps } from "~/lib/prisma/types.server";
 import { menuItemTagPrismaEntity } from "./menu-item-tags.prisma.entity.server";
 import MenuItemPriceVariationUtility from "./menu-item-price-variations-utility";
 import { v4 as uuidv4 } from "uuid";
-import items from "./db-mock/items";
 import NodeCache from "node-cache";
 import { CloudinaryUtils } from "~/lib/cloudinary";
-import { scale } from "@cloudinary/url-gen/actions/resize";
-import { jsonStringify } from "~/utils/json-helper";
-import randomReactKey from "~/utils/random-react-key";
-import createUUID from "~/utils/uuid";
 
 export interface MenuItemWithAssociations extends MenuItem {
   priceVariations: MenuItemPriceVariation[];
@@ -55,42 +49,53 @@ export interface MenuItemWithAssociations extends MenuItem {
   };
 }
 
-export interface MenuItemWithCostVariations {
-  id: MenuItem["id"];
-  name: MenuItem["name"];
-  ingredients: MenuItem["ingredients"];
+export interface MenuItemWithCostVariation {
+  menuItemPriceVariationId: string | null;
+  variationId: string;
+  variationKey: string;
+  variationName: string;
+  sortOrder: number | null;
+  recipeCostAmount: number;
+  createdAt: Date;
+  updatedAt: Date;
+  updatedBy: string | null;
+  group: string;
+}
+
+export interface MenuItemWithGroupedCostVariations {
+  id: string;
+  name: string;
+  ingredients: string;
   costVariations: {
-    /** The id of association between the menuItem the size and its cost amount*/
-    menuItemCostVariationId: MenuItemCostVariation["id"];
-    /** The id of the size*/
-    variationId: MenuItemVariation["id"];
-    variationName: MenuItemVariation["name"];
-    /** The cost of the final dough for the size */
-    costBase: MenuItemSize["costBase"];
-    /** Ficha tecnica cost */
-    recipeCostAmount: MenuItemCostVariation["recipeCostAmount"];
-    /** Who updates the ficha tecnica cost */
-    recipeCostAmountUpdatedBy: MenuItemCostVariation["updatedBy"] | null;
+    group: string;
+    variations: MenuItemWithCostVariation[];
   }[];
 }
 
-export interface MenuItemWithSellPriceVariations {
+export interface MenuItemWithSellPriceVariation {
+  menuItemPriceVariationId: string | null;
+  variationId: string;
+  variationKey: string;
+  variationName: string;
+  sortOrder: number | null;
+  amount: number;
+  discountPercentage: number;
+  showOnCardapio: boolean;
+  showOnCardapioAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+  updatedBy: string | null;
+  latestAmount: number;
+  group: string;
+}
+
+export interface MenuItemWithGroupedSellPriceVariations {
   id: string;
   name: string;
   ingredients: string;
   priceVariations: {
-    menuItemPriceVariationId: MenuItemPriceVariation["id"];
-    variationId: MenuItemVariation["id"];
-    variationName: MenuItemVariation["name"];
-    sortOrder: MenuItemVariation["sortOrderIndex"];
-    amount: number;
-    discountPercentage: number;
-    showOnCardapio: boolean;
-    showOnCardapioAt: Date | null;
-    createdAt: Date;
-    updatedAt: Date;
-    updatedBy: string | null;
-    latestAmount: number;
+    group: string;
+    variations: MenuItemWithSellPriceVariation[];
   }[];
 }
 
@@ -162,11 +167,6 @@ export class MenuItemPrismaEntity {
       where: params?.where,
       include: {
         priceVariations: true,
-        costVariations: {
-          include: {
-            MenuItemVariation: true,
-          },
-        },
         Category: true,
         tags: {
           include: {
@@ -266,40 +266,31 @@ export class MenuItemPrismaEntity {
   /**
    * Find all menu items with cost associated to each size
    */
-  async findAllCostVariations(
+  async findAllWithCostVariations(
     params: MenuItemEntityFindAllProps = {},
     options = {
       imageTransform: false,
       imageScaleWidth: 1280,
     }
-  ): Promise<MenuItemWithCostVariations[]> {
-    // Fetch all menu items
-    const allMenuItems = (await this.findAll(params, options)) || [];
-    // Fetch all sizes
-    const sizes = await this.client.menuItemSize.findMany();
+  ): Promise<MenuItemWithGroupedCostVariations[]> {
+    const allMenuItems = await this.client.menuItem.findMany({
+      where: params?.where,
+      include: {
+        priceVariations: true,
+      },
+    });
+
+    const variations = await this.client.menuItemVariation.findMany();
 
     return allMenuItems.map((item) => {
-      // Create an index for cost variations keyed by menuItemSizeId
-      const costVariationsMap = item.costVariations.reduce((acc, variation) => {
-        acc[variation.menuIteVariationId] = variation;
-        return acc;
-      }, {} as Record<string, (typeof item.costVariations)[number]>);
+      const mapped = variations.map((v) => this.mapVariation(item, v));
+      const grouped = this.groupAndSortVariations(mapped);
 
       return {
         id: item.id,
         name: item.name,
         ingredients: item.ingredients,
-        costVariations: sizes.map((v) => {
-          const variation = costVariationsMap[v.id] || {};
-          return {
-            menuItemCostVariationId: variation.id || "",
-            variationId: v.id,
-            name: v.name,
-            costBase: v.costBase,
-            recipeCostAmount: variation.recipeCostAmount || 0,
-            recipeCostAmountUpdatedBy: variation.updatedBy || null,
-          };
-        }),
+        costVariations: grouped,
       };
     });
   }
@@ -310,8 +301,7 @@ export class MenuItemPrismaEntity {
       imageTransform: false,
       imageScaleWidth: 1280,
     }
-  ) {
-    // Fetch all menu items
+  ): Promise<MenuItemWithGroupedSellPriceVariations[]> {
     const allMenuItems = await this.client.menuItem.findMany({
       where: params?.where,
       include: {
@@ -319,36 +309,68 @@ export class MenuItemPrismaEntity {
       },
     });
 
-    // Fetch all variations
     const variations = await this.client.menuItemVariation.findMany();
 
     return allMenuItems.map((item) => {
+      const mapped = variations.map((v) => this.mapVariation(item, v));
+      const grouped = this.groupAndSortVariations(mapped);
+
       return {
         id: item.id,
         name: item.name,
         ingredients: item.ingredients,
-        priceVariations: variations.map((v) => {
-          const priceVariationRecord = item.priceVariations.find(
-            (pv) => pv.menuItemVariationId === v.id
-          );
-
-          return {
-            menuItemPriceVariationId: priceVariationRecord?.id || createUUID(),
-            variationId: v.id,
-            variationName: v.name,
-            sortOrder: v.sortOrderIndex,
-            amount: priceVariationRecord?.amount || 0,
-            discountPercentage: priceVariationRecord?.discountPercentage || 0,
-            showOnCardapio: priceVariationRecord?.showOnCardapio || true,
-            showOnCardapioAt: priceVariationRecord?.showOnCardapioAt || null,
-            createdAt: priceVariationRecord?.createdAt || new Date(),
-            updatedAt: priceVariationRecord?.updatedAt || new Date(),
-            updatedBy: priceVariationRecord?.updatedBy || null,
-            latestAmount: priceVariationRecord?.latestAmount || 0,
-          };
-        }),
+        priceVariations: grouped,
       };
     });
+  }
+
+  mapVariation(
+    item: MenuItemWithAssociations,
+    variation: MenuItemVariation
+  ): MenuItemWithSellPriceVariation {
+    const record = item.priceVariations.find(
+      (pv) => pv.menuItemVariationId === variation.id
+    );
+
+    const [group] = variation.key.split("@") || ["default"];
+
+    return {
+      menuItemPriceVariationId: record?.id || null,
+      variationId: variation.id,
+      variationKey: variation.key,
+      variationName: variation.name,
+      sortOrder: variation.sortOrderIndex,
+      amount: record?.amount || 0,
+      discountPercentage: record?.discountPercentage || 0,
+      showOnCardapio: record?.showOnCardapio ?? true,
+      showOnCardapioAt: record?.showOnCardapioAt ?? null,
+      createdAt: record?.createdAt ?? new Date(),
+      updatedAt: record?.updatedAt ?? new Date(),
+      updatedBy: record?.updatedBy ?? null,
+      latestAmount: record?.latestAmount ?? 0,
+      group,
+    };
+  }
+
+  groupAndSortVariations(mappedVariations: MenuItemWithSellPriceVariation[]): {
+    group: string;
+    variations: MenuItemWithSellPriceVariation[];
+  }[] {
+    const grouped = new Map();
+
+    for (const v of mappedVariations) {
+      if (!grouped.has(v.group)) {
+        grouped.set(v.group, []);
+      }
+      grouped.get(v.group).push(v);
+    }
+
+    return Array.from(grouped.entries()).map(([group, variations]) => ({
+      group,
+      variations: variations.sort(
+        (a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)
+      ),
+    }));
   }
 
   async findById(

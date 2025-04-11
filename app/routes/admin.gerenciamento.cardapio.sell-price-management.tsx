@@ -9,13 +9,14 @@ import { Separator } from "~/components/ui/separator";
 import { toast } from "~/components/ui/use-toast";
 import { authenticator } from "~/domain/auth/google.server";
 import { menuItemPriceVariationsEntity } from "~/domain/cardapio/menu-item-price-variations.prisma.entity.server";
-import { MenuItemWithSellPriceVariations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
+import { MenuItemSellPriceVariations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import ExportCsvButton from "~/domain/export-csv/components/export-csv-button/export-csv-button";
 import prismaClient from "~/lib/prisma/client.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { badRequest, ok } from "~/utils/http-response.server";
 import { jsonParse } from "~/utils/json-helper";
 import parserFormDataEntryToNumber from "~/utils/parse-form-data-entry-to-number";
+import randomReactKey from "~/utils/random-react-key";
 import toFixedNumber from "~/utils/to-fixed-number";
 import toNumber from "~/utils/to-number";
 
@@ -51,8 +52,8 @@ export async function action({ request }: ActionFunctionArgs) {
         const menuItemPriceVariationId = values?.menuItemPriceVariationId as string
         const menuItemId = values?.menuItemId as string
         const variationId = values?.variationId as string
-        const amount = toFixedNumber(values?.amount, 2)
-        const latestAmount = toFixedNumber(values?.latestAmount, 2)
+        const amount = toFixedNumber(values?.amount, 2) || 0
+        const latestAmount = toFixedNumber(values?.latestAmount, 2) || 0
         const discountPercentage = isNaN(Number(values?.discountPercentage)) ? 0 : Number(values?.discountPercentage)
         const showOnCardapio = values?.showOnCardapio === "on" ? true : false
         const updatedBy = values?.updatedBy as string
@@ -136,77 +137,73 @@ export default function AdminGerenciamentoCardapioSellPriceManagement() {
                                 <div className="h-[500px] overflow-y-scroll">
                                     <ul>
                                         {
-                                            menuItemsWithSellPriceVariations.map((menuItem: MenuItemWithSellPriceVariations) => {
+                                            // @ts-ignore
+                                            menuItemsWithSellPriceVariations.map((menuItem: MenuItemSellPriceVariations) => {
 
                                                 return (
-                                                    <li key={menuItem.id} className="mb-6 hover:bg-slate-50 p-2">
-                                                        <div className="flex flex-col gap-0 mb-4">
+                                                    <li key={menuItem.id} className="mb-6  p-2">
+                                                        <div className="flex flex-col gap-0 mb-4 bg-slate-300 rounded-md px-4 py-1">
                                                             <span className="text-md font-semibold">{menuItem.name}</span>
                                                             {/* <span className="text-[10px] text-muted-foreground">{menuItem.ingredients}</span> */}
                                                         </div>
 
-                                                        <ul className="grid grid-cols-5 gap-x-4">
-                                                            {
-                                                                menuItem.priceVariations.sort((a, b) => a.sortOrder - b.sortOrder).map(pv => {
+                                                        <ul className="flex flex-col">
+                                                            {menuItem.priceVariations.map((grouped, index: number) => (
+                                                                <section key={randomReactKey()} className="mb-8">
+                                                                    <h3 className="text-sm font-semibold uppercase tracking-wider mb-2">
+                                                                        {grouped.group}
+                                                                    </h3>
 
-                                                                    console.log({ pv })
+                                                                    <Separator className="my-2" />
 
-                                                                    const amount = pv.amount.toLocaleString('pt-BR', {
-                                                                        minimumFractionDigits: 2,
-                                                                        maximumFractionDigits: 2
-                                                                    })
+                                                                    <ul className="flex gap-6">
+                                                                        {grouped.variations.map((pv, index: number) => (
+                                                                            <li key={randomReactKey()}>
+                                                                                <div className="flex flex-col">
+                                                                                    <span className="text-[12px] font-medium uppercase tracking-wider">
+                                                                                        {pv.variationName}
+                                                                                    </span>
 
-                                                                    return (
-                                                                        <li key={pv.menuItemPriceVariationId} >
-                                                                            <div className="flex flex-col">
-                                                                                <span className="text-[12px] font-medium uppercase tracking-wider">{pv.variationName}</span>
-                                                                                <Form method="post" className="flex flex-col gap-1 justify-center items-center">
+                                                                                    <Form method="post" className="flex flex-col gap-1 justify-center items-center">
+                                                                                        <div className="flex flex-col gap-2">
+                                                                                            <div className="flex gap-1">
+                                                                                                <input type="hidden" name="menuItemPriceVariationId" value={pv.menuItemPriceVariationId ?? ""} />
+                                                                                                <input type="hidden" name="menuItemId" value={menuItem.id} />
+                                                                                                <input type="hidden" name="variationId" value={pv.variationId} />
+                                                                                                <input type="hidden" name="updatedBy" value={pv.updatedBy || user?.email || ""} />
+                                                                                                <input type="hidden" name="latestAmount" value={pv.latestAmount} />
 
+                                                                                                <div className="flex flex-col gap-y-0">
+                                                                                                    <span className="text-muted-foreground text-[11px]">Valor</span>
+                                                                                                    <NumericInput name="amount" defaultValue={pv.amount} />
+                                                                                                </div>
 
-                                                                                    <div className="flex flex-col gap-2">
-
-                                                                                        <div className="flex gap-1">
-                                                                                            <input type="hidden" name="menuItemPriceVariationId" value={pv.menuItemPriceVariationId} />
-                                                                                            <input type="hidden" name="menuItemId" value={menuItem.id} />
-                                                                                            <input type="hidden" name="variationId" value={pv.variationId} />
-                                                                                            <input type="hidden" name="updatedBy" value={pv.updatedBy || user?.email || ""} />
-                                                                                            <input type="hidden" name="latestAmount" value={pv.latestAmount} />
-                                                                                            <div className="flex flex-col gap-y-0">
-                                                                                                <span className="text-muted-foreground text-[11px]">Valor</span>
-                                                                                                <NumericInput name="amount" defaultValue={pv.amount} />
-
+                                                                                                <div className="flex flex-col gap-y-0">
+                                                                                                    <span className="text-muted-foreground text-[11px]">% Desc.</span>
+                                                                                                    <NumericInput name="discountPercentage" value={pv.discountPercentage} decimalScale={0} />
+                                                                                                </div>
                                                                                             </div>
-                                                                                            <div className="flex flex-col gap-y-0">
-                                                                                                <span className="text-muted-foreground text-[11px]">% Desc.</span>
-                                                                                                <NumericInput name="discountPercentage" value={pv.discountPercentage} decimalScale={0} />
-                                                                                            </div>
 
+                                                                                            <div className="flex flex-col gap-1">
+                                                                                                <span className="text-xs text-muted-foreground">Último preço: {pv.latestAmount}</span>
+                                                                                            </div>
                                                                                         </div>
 
+                                                                                        <SubmitButton
+                                                                                            actionName="menu-item-price-variation-update"
+                                                                                            tabIndex={0}
+                                                                                            cnContainer="md:px-12 md:py-0 bg-slate-300 hover:bg-slate-400"
+                                                                                            cnLabel="text-[11px] tracking-widest text-black uppercase"
+                                                                                            iconColor="black"
+                                                                                        />
+                                                                                    </Form>
+                                                                                </div>
+                                                                            </li>
+                                                                        ))}
+                                                                    </ul>
+                                                                </section>
+                                                            ))}
 
-                                                                                        <div className="flex flex-col gap-1">
-                                                                                            <span className="text-xs text-muted-foreground">Ultimo preço: {pv.amount}</span>
-                                                                                            {/* <span className="text-xs text-muted-foreground">Atualizado por: {pv.updatedBy}</span> */}
-
-                                                                                        </div>
-
-                                                                                    </div>
-
-                                                                                    <SubmitButton actionName="menu-item-price-variation-update" tabIndex={0}
-                                                                                        cnContainer="md:px-12 md:py-0 bg-slate-300 hover:bg-slate-400"
-                                                                                        cnLabel="text-[11px] tracking-widest text-black uppercase"
-                                                                                        iconColor="black"
-
-
-                                                                                    />
-
-                                                                                </Form>
-                                                                            </div>
-                                                                        </li>
-
-                                                                    )
-                                                                })
-                                                            }
                                                         </ul>
 
                                                         <Separator className="my-4" />
