@@ -1,13 +1,13 @@
 
 import { LoaderFunctionArgs, redirect } from "@remix-run/node";
-import { Await, defer, useLoaderData } from "@remix-run/react";
+import { Await, MetaFunction, defer, useLoaderData } from "@remix-run/react";
 import { Suspense } from "react";
 import Loading from "~/components/loading/loading";
 import { Separator } from "~/components/ui/separator";
 import CardapioItemPrice from "~/domain/cardapio/components/cardapio-item-price/cardapio-item-price";
-import { menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
+import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
-import { ok } from "~/utils/http-response.server";
+
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
 
@@ -19,9 +19,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   // Aqui você pode buscar o item do cardápio pelo ID
   const itemQuery = prismaIt(menuItemPrismaEntity.findById(id));
-
-
-
 
   return defer({
     itemQuery,
@@ -45,12 +42,11 @@ export default function SingleCardapioItem() {
         {([err, item]) => {
 
           if (err) {
-            console.error(err)
-            return <div>Erro ao carregar o item do cardápio</div>
+
+            return <div className="grid place-items-center w-screen h-screen">
+              <h1 className="text-2xl font-body-website text-brand-blue font-bold">Nenhum item encontrado</h1>
+            </div>
           }
-
-
-          console.log({ item })
 
           const itemImageUrl = item?.imageTransformedURL
           const itemName = item?.name
