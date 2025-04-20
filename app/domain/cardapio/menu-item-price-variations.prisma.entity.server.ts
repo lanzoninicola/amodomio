@@ -1,25 +1,11 @@
 import { PrismaEntityProps } from "~/lib/prisma/types.server";
 import prismaClient from "~/lib/prisma/client.server";
-import { MenuItemPriceVariation, Prisma } from "@prisma/client";
+import {
+  MenuItemPriceVariation,
+  MenuItemSellingVariation,
+  Prisma,
+} from "@prisma/client";
 import createUUID from "~/utils/uuid";
-
-export type MenuItemPriceVariationValue =
-  | "Tamanho Individual"
-  | "Tamanho Médio"
-  | "Tamanho Família"
-  | "Aiqfome"
-  | "Ifood";
-
-export type MenuItemPriceVariationIndex =
-  | "individual"
-  | "medio"
-  | "familia"
-  | "aiqfome"
-  | "ifood";
-export type MenuItemPriceVariationsOptions = {
-  value: MenuItemPriceVariationValue;
-  index: MenuItemPriceVariationIndex;
-};
 
 export type PartialMenuItemPriceVariation = Omit<
   MenuItemPriceVariation,
