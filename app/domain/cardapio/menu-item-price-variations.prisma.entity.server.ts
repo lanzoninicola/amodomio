@@ -1,20 +1,11 @@
 import { PrismaEntityProps } from "~/lib/prisma/types.server";
-import {
-  MenuItemPrismaEntity,
-  MenuItemWithAssociations,
-} from "./menu-item.prisma.entity.server";
 import prismaClient from "~/lib/prisma/client.server";
-import { MenuItemPriceVariation, Prisma } from "@prisma/client";
-
-export type MenuItemPriceVariationLabel =
-  | "media"
-  | "familia"
-  | "fatia"
-  | "individual";
-export type MenuItemPriceVariationsOptions = {
-  label: MenuItemPriceVariationLabel;
-  value: string;
-};
+import {
+  MenuItemPriceVariation,
+  MenuItemSellingVariation,
+  Prisma,
+} from "@prisma/client";
+import createUUID from "~/utils/uuid";
 
 export type PartialMenuItemPriceVariation = Omit<
   MenuItemPriceVariation,
@@ -25,6 +16,20 @@ export class MenuItemPriceVariationPrismaEntity {
   client;
   constructor({ client }: PrismaEntityProps) {
     this.client = client;
+  }
+
+  async findAll() {
+    return await this.client.menuItemPriceVariation.findMany({
+      include: {
+        MenuItem: {
+          select: {
+            id: true,
+            name: true,
+            ingredients: true,
+          },
+        },
+      },
+    });
   }
 
   async create(data: Prisma.MenuItemPriceVariationCreateInput) {
@@ -43,16 +48,45 @@ export class MenuItemPriceVariationPrismaEntity {
   }
 
   async upsert(id: string, data: Prisma.MenuItemPriceVariationCreateInput) {
-    return await this.client.menuItemPriceVariation.upsert({
+    if (!data.updatedAt) {
+      data.updatedAt = new Date().toISOString();
+    }
+
+    if (!data.createdAt) {
+      data.createdAt = new Date().toISOString();
+    }
+
+    // find the record
+    const record = await this.client.menuItemPriceVariation.findFirst({
       where: { id },
-      create: data,
-      update: data,
     });
+
+    if (record) {
+      // if the record exists, update it
+      return await this.client.menuItemPriceVariation.update({
+        where: { id },
+        data,
+      });
+    }
+
+    // if the record does not exist, create it
+    data.id = createUUID();
+
+    return await this.create(data);
   }
 
   async findByItemId(id: string) {
     return await this.client.menuItemPriceVariation.findMany({
       where: { menuItemId: id },
+      include: {
+        MenuItem: {
+          select: {
+            id: true,
+            name: true,
+            ingredients: true,
+          },
+        },
+      },
     });
   }
 

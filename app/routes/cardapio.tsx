@@ -1,6 +1,5 @@
-import { SizeIcon } from "@radix-ui/react-icons";
 import { MetaFunction } from "@remix-run/node";
-import { Link, Outlet, useLocation } from "@remix-run/react";
+import { Link, Outlet, matchPath, useLocation } from "@remix-run/react";
 import { Donut, Instagram, MapPin, Proportions, SearchIcon, User, Users } from "lucide-react";
 import { ReactNode, useState } from "react";
 
@@ -21,6 +20,8 @@ import { cn } from "~/lib/utils";
 
 /**
  * TODO:
+ * - [] ragrupamento, quando inserisco uma nova pizza sae sempre para ultima
+ * - [] clico na foto e abre um modal com a foto maior
  * - [x] Add to menu Horario Atendimento
  * - [x] Add to menu link instagram
  * - [] Add anotações pizza (batas fritas, batata ao forno)
@@ -64,42 +65,40 @@ export const meta: MetaFunction = ({ data }) => {
 
 export default function CardapioWeb() {
     const location = useLocation();
+    const pathname = location?.pathname;
 
-    // const [storedValue, setStoredValue] = useLocalStorage("sessionId", null)
+    const searchPagePath = "/cardapio/buscar";
+    const singleItemPattern = "/cardapio/:id";
 
+    const isSearchPage = pathname === searchPagePath;
+    const isSingleItemPage = matchPath(singleItemPattern, pathname);
 
+    const currentPage = isSearchPage
+        ? "busca"
+        : isSingleItemPage
+            ? "single"
+            : "other";
 
-    // // synchronize initially
-    // useLayoutEffect(() => {
-    //     setStoredValue("sidebar")
+    // const sessionId = useClientSessionId();
+
+    // // Controle de renderização no cliente
+    // const [isClient, setIsClient] = useState(false);
+    // useEffect(() => {
+    //     setIsClient(true);
     // }, []);
 
-    // synchronize on change
-    // useEffect(() => {
-    //     window.localStorage.setItem("sidebar", isOpen);
-    // }, [isOpen]);
-
-
-
-
-    const pathname = location?.pathname
-    const currentPage = pathname === "/cardapio/buscar" ? "busca" : "other"
-
+    // if (!isClient) return null; // ou um spinner, se quiser
 
     return (
         <>
             <CardapioHeader />
             <div className="md:m-auto md:max-w-6xl">
-                {currentPage !== "busca" && <CompanyInfo />}
-
-                {/* <Featured /> */}
-
+                {currentPage === "other" && <CompanyInfo />}
                 <Outlet />
             </div>
-
-            {currentPage !== "busca" && <CardapioFooter />}
+            {currentPage === "other" && <CardapioFooter />}
         </>
-    )
+    );
 }
 
 
@@ -200,6 +199,8 @@ const ScrollingBanner = ({ children, cnContainer, style }: { children?: ReactNod
 
 
 function CompanyInfo() {
+
+
 
 
     return (

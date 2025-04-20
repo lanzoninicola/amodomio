@@ -4,9 +4,11 @@ import {
   MenuItemCostVariation,
   MenuItemImage,
   MenuItemLike,
+  MenuItemNote,
   MenuItemPriceVariation,
+  MenuItemSellingPriceVariation,
+  MenuItemSellingVariation,
   MenuItemShare,
-  MenuItemSize,
   MenuItemTag,
   Prisma,
   Tag,
@@ -16,11 +18,8 @@ import { PrismaEntityProps } from "~/lib/prisma/types.server";
 import { menuItemTagPrismaEntity } from "./menu-item-tags.prisma.entity.server";
 import MenuItemPriceVariationUtility from "./menu-item-price-variations-utility";
 import { v4 as uuidv4 } from "uuid";
-import items from "./db-mock/items";
 import NodeCache from "node-cache";
 import { CloudinaryUtils } from "~/lib/cloudinary";
-import { scale } from "@cloudinary/url-gen/actions/resize";
-import { jsonStringify } from "~/utils/json-helper";
 
 export interface MenuItemWithAssociations extends MenuItem {
   priceVariations: MenuItemPriceVariation[];
@@ -36,6 +35,7 @@ export interface MenuItemWithAssociations extends MenuItem {
   MenuItemTag: MenuItemTag[];
   MenuItemShare: MenuItemShare[];
   MenuItemImage: MenuItemImage | null; // Handle cases where image may not exist
+  MenuItemNote: MenuItemNote[];
   likes: {
     amount: number; // Number of likes
   };
@@ -50,23 +50,53 @@ export interface MenuItemWithAssociations extends MenuItem {
   };
 }
 
-export interface MenuItemWithCostVariations {
-  id: MenuItem["id"];
-  name: MenuItem["name"];
-  ingredients: MenuItem["ingredients"];
+export interface MenuItemWithCostVariation {
+  menuItemPriceVariationId: string | null;
+  variationId: string;
+  variationKey: string;
+  variationName: string;
+  sortOrder: number | null;
+  recipeCostAmount: number;
+  createdAt: Date;
+  updatedAt: Date;
+  updatedBy: string | null;
+  group: string;
+}
+
+export interface MenuItemWithGroupedCostVariations {
+  id: string;
+  name: string;
+  ingredients: string;
   costVariations: {
-    /** The id of association between the menuItem the size and its cost amount*/
-    menuItemCostVariationId: MenuItemCostVariation["id"];
-    /** The id of the size*/
-    sizeId: MenuItemSize["id"];
-    name: MenuItemSize["name"];
-    slug: MenuItemSize["slug"];
-    /** The cost of the final dough for the size */
-    costBase: MenuItemSize["costBase"];
-    /** Ficha tecnica cost */
-    recipeCostAmount: MenuItemCostVariation["recipeCostAmount"];
-    /** Who updates the ficha tecnica cost */
-    recipeCostAmountUpdatedBy: MenuItemCostVariation["updatedBy"] | null;
+    group: string;
+    variations: MenuItemWithCostVariation[];
+  }[];
+}
+
+export interface MenuItemWithSellPriceVariation {
+  menuItemPriceVariationId: string | null;
+  variationId: string;
+  variationKey: string;
+  variationName: string;
+  sortOrder: number;
+  amount: number;
+  discountPercentage: number;
+  showOnCardapio: boolean;
+  showOnCardapioAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+  updatedBy: string | null;
+  latestAmount: number;
+  group: string;
+}
+
+export interface MenuItemWithGroupedSellPriceVariations {
+  id: string;
+  name: string;
+  ingredients: string;
+  priceVariations: {
+    group: string;
+    variations: MenuItemWithSellPriceVariation[];
   }[];
 }
 
@@ -80,29 +110,6 @@ interface MenuItemEntityFindAllProps {
 }
 
 export class MenuItemPrismaEntity {
-  #menuItemQueryIncludes = {
-    priceVariations: true,
-    costVariations: {
-      include: {
-        MenuItemSize: true,
-      },
-    },
-    Category: true,
-    tags: {
-      include: {
-        Tag: true,
-      },
-    },
-    MenuItemLike: {
-      where: {
-        deletedAt: null,
-      },
-    },
-    MenuItemShare: true,
-    MenuItemImage: true,
-    MenuItemSize: true,
-  };
-
   client;
   // Simple in-memory cache
   private cache: NodeCache;
@@ -138,11 +145,6 @@ export class MenuItemPrismaEntity {
       where: params?.where,
       include: {
         priceVariations: true,
-        costVariations: {
-          include: {
-            MenuItemSize: true,
-          },
-        },
         Category: true,
         tags: {
           include: {
@@ -242,66 +244,115 @@ export class MenuItemPrismaEntity {
   /**
    * Find all menu items with cost associated to each size
    */
-  async findAllCostVariations(
+  async findAllWithCostVariations(
     params: MenuItemEntityFindAllProps = {},
     options = {
       imageTransform: false,
       imageScaleWidth: 1280,
     }
-  ): Promise<MenuItemWithCostVariations[]> {
-    // Use the existing findAll function to fetch records
-    const allMenuItems = (await this.findAll(params, options)) || [];
+  ): Promise<MenuItemWithGroupedCostVariations[]> {
+    const allMenuItems = await this.client.menuItem.findMany({
+      where: params?.where,
+      include: {
+        priceVariations: true,
+      },
+    });
 
-    const sizes = await this.client.menuItemSize.findMany();
+    const variations = await this.client.menuItemVariation.findMany();
 
-    return allMenuItems.map((item) => ({
-      id: item.id,
-      name: item.name,
-      ingredients: item.ingredients,
-      costVariations: sizes.map((size) => ({
-        menuItemCostVariationId:
-          item.costVariations.find((v) => v.menuItemSizeId === size.id)?.id ||
-          "",
-        sizeId: size.id,
-        name: size.name,
-        slug: size.slug,
-        costBase: size.costBase,
-        recipeCostAmount:
-          item.costVariations.find((v) => v.menuItemSizeId === size.id)
-            ?.recipeCostAmount || 0,
-        recipeCostAmountUpdatedBy:
-          item.costVariations.find((v) => v.menuItemSizeId === size.id)
-            ?.updatedBy || null,
-      })),
-    }));
+    return allMenuItems.map((item) => {
+      const mapped = variations.map((v) => this.mapVariation(item, v));
+      const grouped = this.groupAndSortVariations(mapped);
+
+      return {
+        id: item.id,
+        name: item.name,
+        ingredients: item.ingredients,
+        costVariations: grouped,
+      };
+    });
   }
 
-  async findAllPriceVariations(
+  async findAllWithPriceVariations(
     params: MenuItemEntityFindAllProps = {},
     options = {
       imageTransform: false,
       imageScaleWidth: 1280,
     }
-  ) {
-    // Use the existing findAll function to fetch records
-    const allMenuItems = (await this.findAll(params, options)) || [];
+  ): Promise<MenuItemWithGroupedSellPriceVariations[]> {
+    const allMenuItems = await this.client.menuItem.findMany({
+      where: params?.where,
+      include: {
+        priceVariations: true,
+      },
+    });
 
-    return allMenuItems.map((item) => ({
-      id: item.id,
-      name: item.name,
-      ingredients: item.ingredients,
-      priceVariations: item.priceVariations.map((v) => ({
-        id: v.id,
-        label: v.label,
-        amount: v.amount,
-        discountPercentage: v.discountPercentage,
-        showOnCardapio: v.showOnCardapio,
-        showOnCardapioAt: v.showOnCardapioAt,
-        createdAt: v.createdAt,
-        updatedAt: v.updatedAt,
-        updatedBy: v.updatedBy,
-        latestAmount: v.latestAmount,
-      })),
+    console.log({ allMenuItems });
+
+    const variations = await this.client.menuItemVariation.findMany();
+
+    return allMenuItems.map((item) => {
+      const mapped = variations.map((v) => this.mapVariation(item, v));
+      const grouped = this.groupAndSortVariations(mapped);
+
+      return {
+        id: item.id,
+        name: item.name,
+        ingredients: item.ingredients,
+        priceVariations: grouped,
+      };
+    });
+  }
+
+  mapVariation(
+    item: MenuItemWithAssociations,
+    variation: MenuItemSellingVariation
+  ): MenuItemWithSellPriceVariation {
+    const record = item.priceVariations.find(
+      (pv) => pv.menuItemVariationId === variation.id
+    );
+
+    const [group] = variation.key.split("@") || ["default"];
+
+    return {
+      menuItemPriceVariationId: record?.id || null,
+      variationId: variation.id,
+      variationKey: variation.key,
+      variationName: variation.name,
+      sortOrder: variation.sortOrderIndex ?? 0,
+      amount: record?.amount ?? 0,
+      discountPercentage: record?.discountPercentage ?? 0,
+      showOnCardapio: record?.showOnCardapio ?? true,
+      showOnCardapioAt: record?.showOnCardapioAt ?? null,
+      createdAt: record?.createdAt ?? new Date(),
+      updatedAt: record?.updatedAt ?? new Date(),
+      updatedBy: record?.updatedBy ?? null,
+      latestAmount: record?.latestAmount ?? 0,
+      group,
+    };
+  }
+
+  groupAndSortVariations(mappedVariations: MenuItemWithSellPriceVariation[]): {
+    group: string;
+    variations: MenuItemWithSellPriceVariation[];
+  }[] {
+    const grouped = new Map();
+
+    for (const v of mappedVariations) {
+      if (!grouped.has(v.group)) {
+        grouped.set(v.group, []);
+      }
+      grouped.get(v.group).push(v);
+    }
+
+    return Array.from(grouped.entries()).map(([group, variations]) => ({
+      group,
+      variations: variations.sort(
+        (
+          a: MenuItemWithSellPriceVariation["sortOrder"],
+          b: MenuItemWithSellPriceVariation["sortOrder"]
+        ) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)
+      ),
     }));
   }
 
@@ -313,7 +364,24 @@ export class MenuItemPrismaEntity {
   ) {
     const item = await this.client.menuItem.findFirst({
       where: { id },
-      include: this.#menuItemQueryIncludes,
+      include: {
+        priceVariations: true,
+        Category: true,
+        tags: {
+          include: {
+            Tag: true,
+          },
+        },
+        MenuItemLike: {
+          where: {
+            deletedAt: null,
+          },
+        },
+        MenuItemShare: true,
+        MenuItemImage: true,
+        MenuItemCostVariation: true,
+        MenuItemSellingPriceVariation: true,
+      },
     });
 
     if (!item) {
@@ -385,6 +453,19 @@ export class MenuItemPrismaEntity {
     await this.invalidateCache();
 
     return await this.client.menuItem.update({ where: { id }, data });
+  }
+
+  async softDelete(id: string, deletedBy: string = "undefined") {
+    await this.invalidateCache();
+
+    return await this.client.menuItem.update({
+      where: { id },
+      data: {
+        active: false,
+        deletedAt: new Date().toISOString(),
+        deletedBy: deletedBy,
+      },
+    });
   }
 
   async delete(id: string) {

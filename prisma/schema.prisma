@@ -151,33 +151,38 @@ model GroceryListItem {
   GroceryList   GroceryList @relation(fields: [groceryListId], references: [id])
   name          String?
   quantity      Int
-  purchased     Boolean
+  purchased     Boolean     @default(false)
 
   @@map("grocery_list_items")
 }
 
 model MenuItem {
-  id              String                   @id @default(uuid())
-  name            String
-  description     String
-  ingredients     String
-  categoryId      String                   @map("category_id")
-  Category        Category                 @relation(fields: [categoryId], references: [id])
-  basePriceAmount Float                    @map("base_price_amount")
-  priceVariations MenuItemPriceVariation[]
-  costVariations  MenuItemCostVariation[]
-  visible         Boolean
-  mogoId          String                   @map("mogo_id")
-  createdAt       DateTime                 @map("created_at")
-  updatedAt       DateTime                 @default(now()) @updatedAt @map("updated_at")
-  tags            MenuItemTag[]
+  id                            String                          @id @default(uuid())
+  name                          String
+  description                   String
+  ingredients                   String
+  categoryId                    String                          @map("category_id")
+  Category                      Category                        @relation(fields: [categoryId], references: [id])
+  basePriceAmount               Float                           @map("base_price_amount")
+  visible                       Boolean
+  active                        Boolean                         @default(true)
+  mogoId                        String                          @map("mogo_id")
+  createdAt                     DateTime                        @map("created_at")
+  updatedAt                     DateTime                        @default(now()) @updatedAt @map("updated_at")
+  deletedAt                     DateTime?                       @map("deleted_at")
+  deletedBy                     String?                         @map("deleted_by")
+  tags                          MenuItemTag[]
   /// this track the position inside the menu
-  sortOrderIndex  Int                      @default(0) @map("sort_order_index")
-  notesPublic     String?                  @map("note_public")
-  MenuItemLike    MenuItemLike[]
-  MenuItemShare   MenuItemShare[]
-  imageId         String?                  @map("image_id")
-  MenuItemImage   MenuItemImage?           @relation(fields: [imageId], references: [id])
+  sortOrderIndex                Int                             @default(0) @map("sort_order_index")
+  notesPublic                   String?                         @map("note_public")
+  MenuItemLike                  MenuItemLike[]
+  MenuItemShare                 MenuItemShare[]
+  imageId                       String?                         @map("image_id")
+  MenuItemImage                 MenuItemImage?                  @relation(fields: [imageId], references: [id])
+  MenuItemNote                  MenuItemNote[]
+  MenuItemSellingPriceVariation MenuItemSellingPriceVariation[]
+  MenuItemCostVariation         MenuItemCostVariation[]
+  priceVariations               MenuItemPriceVariation[]
 
   @@map("menu_items")
 }
@@ -202,38 +207,110 @@ model MenuItemImage {
   @@map("menu_items_image")
 }
 
+/// to remove  DO NOT USE
+model MenuItemVariation {
+  id                     String                   @id @default(uuid())
+  key                    String?                  @map("key")
+  name                   String
+  sortOrderIndex         Int                      @default(0) @map("sort_order_index")
+  createdAt              DateTime                 @map("created_at")
+  updatedAt              DateTime                 @default(now()) @updatedAt @map("updated_at")
+  MenuItemPriceVariation MenuItemPriceVariation[]
+
+  @@map("menu_item_variations")
+}
+
+/// to remove  DO NOT USE
 model MenuItemPriceVariation {
-  id                 String        @id @default(uuid())
-  MenuItem           MenuItem?     @relation(fields: [menuItemId], references: [id])
-  menuItemId         String?       @map("menu_item_id")
-  MenuItemSize       MenuItemSize? @relation(fields: [menuItemSizeId], references: [id])
-  menuItemSizeId     String?       @map("menu_item_size__id")
-  label              String
-  basePrice          Float         @default(0) @map("base_price")
-  amount             Float
-  discountPercentage Float         @map("discount_percentage")
-  showOnCardapio     Boolean       @default(false) @map("show_on_cardapio")
-  showOnCardapioAt   DateTime?     @map("show_on_cardapio_at")
-  createdAt          DateTime      @map("created_at")
-  updatedAt          DateTime      @default(now()) @updatedAt @map("updated_at")
-  updatedBy          String?       @map("updated_by")
-  latestAmount       Float         @default(0)
+  id                  String             @id @default(uuid())
+  MenuItem            MenuItem?          @relation(fields: [menuItemId], references: [id])
+  menuItemId          String?            @map("menu_item_id")
+  MenuItemVariation   MenuItemVariation? @relation(fields: [menuItemVariationId], references: [id])
+  menuItemVariationId String?            @map("menu_item_variation_id")
+  label               String
+  basePrice           Float              @default(0) @map("base_price")
+  amount              Float
+  discountPercentage  Float              @map("discount_percentage")
+  showOnCardapio      Boolean            @default(false) @map("show_on_cardapio")
+  showOnCardapioAt    DateTime?          @map("show_on_cardapio_at")
+  createdAt           DateTime           @map("created_at")
+  updatedAt           DateTime           @default(now()) @updatedAt @map("updated_at")
+  updatedBy           String?            @map("updated_by")
+  latestAmount        Float              @default(0) @map("latest_amount")
+  MenuItemSize        MenuItemSize?      @relation(fields: [menuItemSizeId], references: [id])
+  menuItemSizeId      String?            @map("menu_item_size_id")
 
   @@map("menu_item_price_variations")
 }
 
-model MenuItemCostVariation {
-  id               String       @id @default(uuid())
-  MenuItem         MenuItem     @relation(fields: [menuItemId], references: [id])
-  menuItemId       String       @map("menu_item_id")
-  MenuItemSize     MenuItemSize @relation(fields: [menuItemSizeId], references: [id])
-  menuItemSizeId   String       @map("menu_item_size_id")
-  recipeCostAmount Float        @default(0) @map("recipe_cost_amount")
-  createdAt        DateTime     @map("created_at")
-  updatedAt        DateTime     @default(now()) @updatedAt @map("updated_at")
-  updatedBy        String?      @map("updated_by")
+model MenuItemSellingVariation {
+  id                            String                          @id @default(uuid())
+  key                           String                          @map("key")
+  name                          String
+  sortOrderIndex                Int                             @default(0) @map("sort_order_index")
+  createdAt                     DateTime                        @map("created_at")
+  updatedAt                     DateTime                        @default(now()) @updatedAt @map("updated_at")
+  MenuItemSellingPriceVariation MenuItemSellingPriceVariation[]
 
-  @@map("menu_item_cost_variations")
+  @@map("menu_item_selling_variations")
+}
+
+model MenuItemSellingPriceVariation {
+  id                         String                    @id @default(uuid())
+  MenuItem                   MenuItem?                 @relation(fields: [menuItemId], references: [id])
+  menuItemId                 String?                   @map("menu_item_id")
+  MenuItemSellingVariation   MenuItemSellingVariation? @relation(fields: [menuItemSellingVariationId], references: [id])
+  menuItemSellingVariationId String?                   @map("menu_item_selling_variation_id")
+  basePrice                  Float                     @default(0) @map("base_price")
+  amount                     Float
+  discountPercentage         Float                     @map("discount_percentage")
+  showOnCardapio             Boolean                   @default(false) @map("show_on_cardapio")
+  showOnCardapioAt           DateTime?                 @map("show_on_cardapio_at")
+  createdAt                  DateTime                  @map("created_at")
+  updatedAt                  DateTime                  @default(now()) @updatedAt @map("updated_at")
+  updatedBy                  String?                   @map("updated_by")
+  latestAmount               Float                     @default(0)
+
+  @@map("menu_item_selling_prices")
+}
+
+model MenuItemCostingVariation {
+  id                    String                  @id @default(uuid())
+  key                   String?                 @map("key")
+  name                  String
+  sortOrderIndex        Int                     @default(0) @map("sort_order_index")
+  createdAt             DateTime                @map("created_at")
+  updatedAt             DateTime                @default(now()) @updatedAt @map("updated_at")
+  MenuItemCostVariation MenuItemCostVariation[]
+
+  @@map("menu_item_costing_variations")
+}
+
+model MenuItemCostVariation {
+  id                         String                    @id @default(uuid())
+  MenuItem                   MenuItem                  @relation(fields: [menuItemId], references: [id])
+  menuItemId                 String                    @map("menu_item_id")
+  MenuItemCostingVariation   MenuItemCostingVariation? @relation(fields: [menuItemCostingVariationId], references: [id])
+  menuItemCostingVariationId String?                   @map("menu_item_costing_variation_id")
+  recipeCostAmount           Float                     @default(0) @map("recipe_cost_amount")
+  createdAt                  DateTime                  @map("created_at")
+  updatedAt                  DateTime                  @default(now()) @updatedAt @map("updated_at")
+  updatedBy                  String?                   @map("updated_by")
+
+  @@map("menu_item_costs")
+}
+
+model DnaEmpresaSettings {
+  id                     String @id @default(uuid())
+  faturamentoBrutoAmount Float  @default(0) @map("faturamento_bruto_amount")
+  custoFixoAmount        Float  @default(0) @map("custo_fixo_amount")
+  custoFixoPerc          Float  @default(0) @map("custo_fixo_perc")
+  taxaCartaoPerc         Float  @default(0) @map("taxa_cartao_perc")
+  taxaMarketplacePerc    Float  @default(0) @map("taxa_marketplace_perc")
+  impostoPerc            Float  @default(0) @map("imposto_perc")
+  dnaPerc                Float  @default(0) @map("dna_perc")
+
+  @@map("dna_empresa_settings")
 }
 
 model MenuItemSize {
@@ -247,7 +324,6 @@ model MenuItemSize {
   createdAt              DateTime                 @map("created_at")
   updatedAt              DateTime                 @default(now()) @updatedAt @map("updated_at")
   MenuItemPriceVariation MenuItemPriceVariation[]
-  MenuItemCostVariation  MenuItemCostVariation[]
 
   @@map("menu_item_sizes")
 }
@@ -303,6 +379,45 @@ model Tag {
   MenuItemTag MenuItemTag[]
 
   @@map("tags")
+}
+
+model MenuItemNote {
+  id         String    @id @default(uuid())
+  MenuItem   MenuItem? @relation(fields: [menuItemId], references: [id])
+  menuItemId String?   @map("menu_item_id")
+  Note       Note?     @relation(fields: [noteId], references: [id])
+  noteId     String?   @map("note_id")
+  deletedAt  DateTime? @map("deleted_at")
+  createdAt  DateTime  @map("created_at")
+  updatedAt  DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  @@map("menu_item_notes")
+}
+
+model Note {
+  id           String         @id @default(uuid())
+  name         String
+  public       Boolean        @default(false)
+  validFrom    DateTime?      @map("valid_from")
+  validTo      DateTime?      @map("valid_to")
+  createdAt    DateTime       @map("created_at")
+  updatedAt    DateTime       @default(now()) @updatedAt @map("updated_at")
+  MenuItemNote MenuItemNote[]
+
+  @@map("notes")
+}
+
+model Announcement {
+  id        String    @id @default(uuid())
+  name      String
+  public    Boolean   @default(false)
+  validFrom DateTime? @map("valid_from")
+  validTo   DateTime? @map("valid_to")
+  createdAt DateTime  @map("created_at")
+  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  @@map("announcements")
 }
 
 model Setting {

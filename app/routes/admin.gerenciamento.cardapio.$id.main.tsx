@@ -1,15 +1,22 @@
 import { Category, Prisma } from "@prisma/client";
 import { LoaderFunctionArgs, MetaFunction, redirect } from "@remix-run/node";
-import { useActionData, useLoaderData } from "@remix-run/react";
+import { Await, defer, useActionData, useLoaderData } from "@remix-run/react";
+import { Suspense } from "react";
+import Loading from "~/components/loading/loading";
+import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
+import { toast } from "~/components/ui/use-toast";
+import { authenticator } from "~/domain/auth/google.server";
+import { LoggedUser } from "~/domain/auth/types.server";
 import MenuItemForm from "~/domain/cardapio/components/menu-item-form/menu-item-form";
 import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { categoryPrismaEntity } from "~/domain/category/category.entity.server";
-import { CloudinaryImageInfo } from "~/lib/cloudinary";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
-import { badRequest, ok, serverError } from "~/utils/http-response.server";
-import { jsonParse } from "~/utils/json-helper";
+import { badRequest, ok } from "~/utils/http-response.server";
+import { jsonParse, jsonStringify } from "~/utils/json-helper";
+import tryit from "~/utils/try-it";
 
 export const meta: MetaFunction<typeof loader> = ({ data }) => {
+    // @ts-ignore
     const item: MenuItemWithAssociations = data?.payload?.item
 
     return [
@@ -17,27 +24,26 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => {
     ];
 };
 
-export async function loader({ params }: LoaderFunctionArgs) {
+export async function loader({ request, params }: LoaderFunctionArgs) {
     const itemId = params.id;
 
     if (!itemId) {
         return badRequest("Nenhum item encontrado");
     }
 
-    const [errItem, item] = await prismaIt(menuItemPrismaEntity.findById(itemId));
-    const [errCat, categories] = await prismaIt(categoryPrismaEntity.findAll());
+    let loggedUser: Promise<LoggedUser> = authenticator.isAuthenticated(request);
 
-    const err = errItem || errCat
-
-    if (err) {
-        return serverError(err);
-    }
+    const itemQryResult = prismaIt(menuItemPrismaEntity.findById(itemId));
+    const categoriesQryResult = prismaIt(categoryPrismaEntity.findAll());
 
 
-    return ok({
-        item,
-        categories
-    });
+    const data = Promise.all([
+        itemQryResult,
+        categoriesQryResult,
+        loggedUser
+    ]);
+
+    return defer({ data })
 }
 
 export async function action({ request }: LoaderFunctionArgs) {
@@ -101,16 +107,31 @@ export async function action({ request }: LoaderFunctionArgs) {
         return ok("Elemento atualizado com successo")
     }
 
-    if (_action === "menu-item-delete") {
-        const id = values?.id as string
+    if (_action === "menu-item-soft-delete") {
 
-        const [err, result] = await prismaIt(menuItemPrismaEntity.delete(id))
+        const id = values?.id as string
+        const loggedUser = jsonParse(values?.loggedUser as string)?.email || ""
+
+        const [errItem, item] = await prismaIt(menuItemPrismaEntity.findById(id));
+
+        if (errItem) {
+            return badRequest(errItem)
+        }
+
+        if (!item) {
+            return badRequest("Item não encontrado")
+        }
+
+        const [err, result] = await prismaIt(menuItemPrismaEntity.softDelete(id, loggedUser))
+
 
         if (err) {
             return badRequest(err)
         }
 
-        return redirect("/admin/gerenciamento/cardapio")
+        const returnedMessage = !item.active === false ? `Sabor "${item.name}" excluido` : `Algo deu errado ao excluir o sabor "${item.name}"`;
+
+        return ok(returnedMessage);
     }
 
 
@@ -121,14 +142,59 @@ export async function action({ request }: LoaderFunctionArgs) {
 
 
 export default function SingleMenuItemMain() {
-    const loaderData = useLoaderData<typeof loader>()
-    const item = loaderData.payload?.item
-    const categories = loaderData.payload?.categories || []
+    const {
+        data,
+    } = useLoaderData<typeof loader>();
+
+
+    const actionData = useActionData<typeof action>();
+
+    if (actionData && actionData.status > 399) {
+        toast({
+            title: "Erro",
+            description: actionData.message,
+        });
+    }
+
+    if (actionData && actionData.status === 200) {
+        toast({
+            title: "Ok",
+            description: actionData.message,
+        });
+    }
+
 
     return (
-        <MenuItemForm action="menu-item-update" item={item} categories={categories} />
 
+        <div className="min-h-[200px]">
+            <Suspense fallback={<Loading />}>
+                <Await resolve={data}>
+                    {
+                        ([itemQryResult, categoriesQryResult, loggedUser]) => {
+
+                            const err = itemQryResult[0] || categoriesQryResult[0]
+                            if (err) {
+                                return (
+                                    <Alert variant={"destructive"} >
+                                        <AlertTitle>Erro</AlertTitle>
+                                        <AlertDescription>{err?.name}</AlertDescription>
+                                    </Alert>
+                                )
+                            }
+
+
+                            return (
+                                <MenuItemForm action="menu-item-update" item={itemQryResult[1]} categories={categoriesQryResult[1]} loggedUser={loggedUser} />
+                            )
+                        }
+                    }
+
+                </Await>
+            </Suspense>
+        </div>
     )
+
+
 
 }
 

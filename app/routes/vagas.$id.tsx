@@ -19,20 +19,22 @@ export const meta: MetaFunction = () => {
 export async function loader() {
 
     const statusVaga = process.env?.HR_VAGA_STATUS_AUXILIAR_COZINHA || "Aberta"
+    const gFormLink = process.env?.HR_VAGA_STATUS_AUXILIAR_COZINHA_GFORM_LINK || "https://docs.google.com/forms"
 
-    return ok({ statusVaga })
+    return ok({ statusVaga, gFormLink })
 }
 
 
 export default function VagaSingle() {
     const loaderData = useLoaderData<typeof loader>()
     const statusVaga = loaderData?.payload?.statusVaga || []
+    const gFormLink = loaderData?.payload?.gFormLink || []
 
     return (
         <Container className="my-8">
 
             <div className="flex flex-col mb-8">
-                <h1 className="text-xl font-semibold tracking-tight">Vaga: Auxiliar de Cozinha</h1>
+                <h1 className="text-xl font-semibold tracking-tight">Vaga: Auxiliar de Cozinha (Março 2025)</h1>
                 <h2 className="text-md mb-4 text-muted-foreground tracking-tight">Empresa: A Modo Mio, Pato Branco, Paraná</h2>
                 <h4 className="flex gap-2 items-center">
                     <Instagram />
@@ -56,26 +58,27 @@ export default function VagaSingle() {
 
             <section className="mb-8">
                 <h3 className="text-base font-semibold mb-2">Descrição da Vaga:</h3>
-                <p>Estamos em busca de um Auxiliar de Cozinha para se juntar à nossa equipe na pizzaria A Modo Mio. Se você é uma pessoa proativa, gosta de trabalhar em equipe e tem paixão pela culinária, queremos conhecer você!</p>
+                <p>Estamos contratando um Auxiliar de Cozinha para atuar com foco na <strong>limpeza e organização do ambiente durante e após o serviço</strong>.</p>
             </section>
 
             <section className="mb-8">
                 <h3 className="text-base font-semibold mb-2">Responsabilidades</h3>
                 <ul className="list-disc pl-4">
-                    <li>Auxiliar na preparação de ingredientes para as pizzas.</li>
-                    <li>Manter a cozinha organizada e limpa durante e depois do serviço</li>
-                    <li>Seguir as normas de higiene e segurança alimentar</li>
-                    <li>Colaborar com a equipe para garantir a eficiência e qualidade no serviço</li>
+                    <li>Manter bancadas e utensílios limpos durante o expediente.</li>
+                    <li>Lavar louças, assadeiras e equipamentos</li>
+                    <li>Auxiliar na organização da cozinha após o encerramento do turno</li>
+                    <li>Limpar pisos, superfícies, fogões e áreas de preparo</li>
+                    <li>Apoiar a equipe de cozinha no que for necessário</li>
                 </ul>
             </section>
 
             <section className="mb-8">
                 <h3 className="text-base font-semibold mb-2">Requisitos</h3>
                 <ul className="list-disc pl-4">
-                    <li>Disponibilidade para trabalhar <strong>sextas, sábados e domingos, das 19:30 às 23:30</strong>.</li>
+                    <li>Disponibilidade para trabalhar à noite (<strong>sextas, sábados e domingos, das 19:00 às 24:00</strong>).</li>
+                    <li>Agilidade, atenção aos detalhes e proatividade.</li>
+                    <li>Comprometimento com higiene e segurança alimentar.</li>
                     <li>Facilidade para trabalhar em equipe.</li>
-                    <li>Comprometimento e responsabilidade.</li>
-                    <li>Boa comunicação e agilidade.</li>
                 </ul>
             </section>
 
@@ -96,7 +99,14 @@ export default function VagaSingle() {
                 </p>
             </section>
 
-            <ExternalLink to="https://forms.gle/fRbMznRjVrxFbmzFA" ariaLabel="Canditarme" className="flex w-full justify-center bg-green-400 rounded-xl uppercase font-semibold tracking-wider py-2">
+            <section className="mb-8">
+                <div className="rounded-md bg-yellow-100 p-4">
+                    <h3 className="text-base font-semibold mb-2 uppercase">Observação importante</h3>
+                    <p>Para esta vaga, a contratação será exclusivamente no regime <strong>CLT</strong>. Sabemos que muitos candidatos perguntam sobre outras formas de contratação, mas <strong>não estamos considerando propostas fora da CLT</strong>. Agradecemos a compreensão</p>
+                </div>
+            </section>
+
+            <ExternalLink to={gFormLink} ariaLabel="Canditarme" className="flex w-full justify-center bg-green-400 rounded-xl uppercase font-semibold tracking-wider py-2">
                 Candidatar-me
             </ExternalLink>
         </Container>
