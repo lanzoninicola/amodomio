@@ -9,7 +9,7 @@ interface LoadingProps {
     cnContainer?: string
 }
 
-export default function Loading({ showText, text, color, cnContainer }: LoadingProps) {
+export default function Loading({ showText, text, color = "black", cnContainer }: LoadingProps) {
 
     let colorIconAndText = color === "black" ? "#111111" : color = "white" ? "#ffffff" : "";
 
