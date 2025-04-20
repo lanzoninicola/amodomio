@@ -61,6 +61,10 @@ export default function SingleCardapioItem() {
               <CardapioItemImageSingle
                 src={itemImageUrl || ""}
                 placeholder={itemImagePlaceholder || ""}
+                placeholderIcon={true}
+                cnPlaceholderIcon="w-[100px]"
+                placeholderText="Imagem ainda não disponível"
+                cnPlaceholderText="font-body-website uppercase font-semibold tracking-wider mt-2"
               />
               {/* Overlay de gradiente preto */}
               <div className="absolute inset-0 bg-gradient-to-t from-black via-black/10 to-transparent" />
@@ -71,7 +75,7 @@ export default function SingleCardapioItem() {
                 <h1 className="font-body-website text-2xl uppercase font-semibold tracking-wider">{itemName}</h1>
                 <p className="leading-snug text-[15px] my-2">{itemIngredients}</p>
                 <Separator className="my-2 bg-white/20" />
-                <CardapioItemPrice prices={item?.priceVariations} cnLabel="text-white" cnValue="text-white" showValuta={false} />
+                <CardapioItemPrice prices={item?.priceVariations || []} cnLabel="text-white" cnValue="text-white" showValuta={false} />
               </div>
             </>
 
