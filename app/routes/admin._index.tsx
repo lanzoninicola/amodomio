@@ -14,6 +14,11 @@ import tryit from "~/utils/try-it";
 import { Separator } from "~/components/ui/separator";
 import { cn } from "~/lib/utils";
 import { toast } from "~/components/ui/use-toast";
+import { Dialog, DialogClose, DialogContent, DialogTrigger } from "~/components/ui/dialog";
+import { Button } from "~/components/ui/button";
+import { DialogTitle } from "@radix-ui/react-dialog";
+import { ExpandIcon } from "lucide-react";
+
 
 export const loader = async () => {
 
@@ -184,60 +189,126 @@ function CardapioItems({
             <Separator className="my-2 w-full" />
 
             <div className="h-[350px] overflow-y-auto p-2 md:px-6">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4">
+                <ul className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4">
                     {
                         items.filter(i => {
                             return showActiveItems === true ? i.visible === true : i.visible === false
                         }).map(item => {
                             return (
-                                <div className={
-                                    cn(
-                                        "border rounded-lg p-4",
-                                        item?.visible === false && "border-red-500/50 bg-red-500/10",
-                                    )
-                                } key={item.id}>
-                                    <div className="flex flex-col  mb-2">
+                                <CardapioItem item={item} setVisible={setVisible} visible={visible} />
 
-                                        <div className="flex justify-between items-center">
-                                            <h2 className="text-xs uppercase font-semibold tracking-wide">{item.name}</h2>
-                                            <CopyButton
-                                                // label="Copiar elenco para imprimir"
-                                                classNameLabel="text-sm md:text-xs "
-                                                classNameButton="border-none text-sm md:text-xs p-1 mr-0 h-max hover:bg-black/20 hover:text-white"
-                                                textToCopy={`*${item.name}*: ${item.ingredients}`}
-                                                variant="outline"
-                                            />
-                                        </div>
-
-
-                                    </div>
-
-                                    <ul className="grid grid-cols-2 items-end mb-2">
-                                        {
-                                            item.priceVariations.map(pv => {
-                                                if (pv.amount <= 0) return
-
-                                                return (
-                                                    <li className="flex flex-col" key={pv.id}>
-                                                        <p className="text-xs">{mapPriceVariationsLabel(pv.label)}: <span className="font-semibold">{pv.amount.toFixed(2)}</span></p>
-                                                    </li>
-                                                )
-                                            })
-                                        }
-                                    </ul>
-                                    <p className="text-xs text-muted-foreground line-clamp-2 ">{item.ingredients}</p>
-                                    <Separator className="my-3" />
-
-                                    <MenuItemSwitchVisibility menuItem={item} visible={visible} setVisible={setVisible} cnLabel="text-[12px]" />
-                                </div>
                             )
                         })
                     }
 
-                </div>
+                </ul>
             </div>
 
 
         </div>
+    )
+}
+
+
+
+interface CardapioItemProps {
+    item: MenuItemWithAssociations
+    visible: boolean,
+    setVisible: React.Dispatch<React.SetStateAction<boolean>>
+    showExpandButton?: boolean
+}
+
+function CardapioItem({ item, setVisible, visible, showExpandButton = true }: CardapioItemProps) {
+
+
+    return (
+        <div className={
+            cn(
+                "border rounded-lg p-4",
+                item?.visible === false && "border-red-500/50 bg-red-500/10",
+            )
+        } key={item.id}>
+            <div className="flex flex-col  mb-2">
+
+                <div className="flex justify-between items-center">
+                    <h2 className="text-xs uppercase font-semibold tracking-wide">{item.name}</h2>
+                    <div className="flex gap-2 items-center">
+                        {
+                            showExpandButton === true && (
+                                <CardapioItemDialog key={item.id} triggerComponent={
+                                    <ExpandIcon size={16} />
+                                }>
+                                    <CardapioItem item={item} setVisible={setVisible} visible={visible} showExpandButton={false} />
+                                </CardapioItemDialog>
+                            )
+                        }
+
+                        <CopyButton
+                            // label="Copiar elenco para imprimir"
+                            classNameLabel="text-sm md:text-xs "
+                            classNameButton="border-none text-sm md:text-xs p-1 mr-0 h-max hover:bg-black/20 hover:text-white"
+                            textToCopy={`*${item.name}*: ${item.ingredients}`}
+                            variant="outline"
+                        />
+                    </div>
+                </div>
+
+
+            </div>
+
+            <ul className="grid grid-cols-2 items-end mb-2">
+                {
+                    item.priceVariations.map(pv => {
+                        if (pv.amount <= 0) return
+
+                        return (
+                            <li className="flex flex-col" key={pv.id}>
+                                <p className="text-xs text-left">{mapPriceVariationsLabel(pv.label)}: <span className="font-semibold">{pv.amount.toFixed(2)}</span></p>
+                            </li>
+                        )
+                    })
+                }
+            </ul>
+            <p className="text-xs text-muted-foreground line-clamp-2 text-left">{item.ingredients}</p>
+            <Separator className="my-3" />
+
+            <MenuItemSwitchVisibility menuItem={item} visible={visible} setVisible={setVisible} cnLabel="text-[12px]" />
+        </div>
+    )
+}
+
+interface CardapioItemDialogProps {
+    children?: React.ReactNode;
+    triggerComponent?: React.ReactNode;
+}
+
+function CardapioItemDialog({ children, triggerComponent }: CardapioItemDialogProps) {
+
+    return (
+        <Dialog >
+            <DialogTrigger asChild className="w-full">
+                <button>
+                    {triggerComponent}
+                </button>
+            </DialogTrigger>
+            <DialogContent className="p-0 bg-transparent border-none">
+                <div className="bg-white p-4">
+                    <DialogTitle className="text-lg font-bold leading-tight tracking-tighter md:text-lg lg:leading-[1.1] mb-4">
+                        Detalhes do sabor
+                    </DialogTitle>
+                    {children}
+                    <DialogClose asChild>
+                        <div className="w-full mt-6">
+                            <Button type="button" variant="secondary" className="w-full" >
+                                <span className=" tracking-wide font-semibold uppercase">Fechar</span>
+                            </Button>
+                        </div>
+
+                    </DialogClose>
+                </div>
+
+            </DialogContent>
+
+        </Dialog>
     )
 }
