@@ -1,10 +1,16 @@
 import { useState } from "react";
+import { cn } from "~/lib/utils";
 
 type Props = {
     src?: string;
     alt?: string;
     fallbackColor?: string;
     placeholder?: string;
+    placeholderIcon?: boolean;
+    cnPlaceholderIcon?: string;
+    placeholderText?: string;
+    cnPlaceholderText?: string;
+    cnContainer?: string;
 };
 
 export default function CardapioItemImageSingle({
@@ -12,11 +18,21 @@ export default function CardapioItemImageSingle({
     alt = "Imagem do item",
     fallbackColor = "#1f2937",
     placeholder,
+    placeholderIcon = false,
+    cnPlaceholderIcon,
+    placeholderText,
+    cnPlaceholderText,
+    cnContainer
 }: Props) {
     const [loaded, setLoaded] = useState(false);
 
     return (
-        <div className="relative w-full h-screen overflow-hidden bg-gray-800">
+        <div className={
+            cn(
+                "relative w-full h-screen overflow-hidden bg-gray-800",
+                cnContainer
+            )
+        }>
             {/* Placeholder */}
             {placeholder && !loaded && (
                 <img
@@ -36,7 +52,35 @@ export default function CardapioItemImageSingle({
                         }`}
                 />
             ) : (
-                <div className="absolute inset-0 bg-gray-700" />
+                <div className="absolute inset-0 bg-gray-700">
+                    <div className="w-full h-full grid place-items-center">
+                        <div className="flex flex-col justify-center gap-1">
+                            {placeholderIcon && (
+
+                                <img src="/images/cardapio-web-app/pizza-placeholder-grey-sm.png" alt="Placeholder icon"
+                                    className={
+                                        cn(
+                                            "w-[50px] mx-auto",
+                                            cnPlaceholderIcon
+                                        )
+                                    }
+
+                                />
+
+                            )}
+                            {placeholderText && (
+                                <p className={
+                                    cn(
+                                        "text-white text-center",
+                                        cnPlaceholderText
+                                    )
+                                }>
+                                    {placeholderText}
+                                </p>
+                            )}
+                        </div>
+                    </div>
+                </div>
             )}
 
             {/* Overlay */}

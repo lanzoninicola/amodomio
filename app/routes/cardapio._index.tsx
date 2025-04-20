@@ -20,6 +20,7 @@ import CardapioItemPrice from "~/domain/cardapio/components/cardapio-item-price/
 import CardapioItemImage from "~/domain/cardapio/components/cardapio-item-image/cardapio-item-image";
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "~/components/ui/carousel";
 import Autoplay from "embla-carousel-autoplay"
+import CardapioItemImageSingle from "~/domain/cardapio/components/cardapio-item-image-single/cardapio-item-image-single";
 
 
 export const headers: HeadersFunction = () => ({
@@ -370,28 +371,25 @@ function CardapioItemListDestaque({ title, items, tagFilter, carouselDelay = 200
                         items.filter(i => i.tags?.all.some(t => t === tagFilter)).slice(0, 4).map(i => (
 
                             <CarouselItem key={i.id} className="basis-1/2 md:basis-1/3" data-element="carousel-item">
-                                <CardapioItemDialog item={i} triggerComponent={
+                                <Link to={`/cardapio/${i.id}`} className="w-full">
+
                                     <div className="grid place-items-center rounded-md bg-slate-50 h-[112px]">
+                                        <CardapioItemImageSingle
+                                            src={i.imageTransformedURL || ""}
+                                            placeholder={i.imagePlaceholderURL || ""}
 
-                                        <div className="flex flex-col gap-2  items-center justify-center">
-                                            <div className="rounded-full h-[60px] w-[60px] overflow-hidden">
-                                                {
-                                                    // @ts-ignore
+                                            placeholderIcon={true}
 
-                                                    <CardapioItemImage imageURL={i.imageTransformedURL}
-                                                        cnClassName="h-full w-full rounded-full"
-                                                        cnImage={
-                                                            cn(!i.imageTransformedURL && "bg-left")
-                                                        }
-                                                        placeholderImage={true} />
+                                            // placeholderText="Imagem não disponível"
+                                            cnContainer="h-full w-full rounded-md"
+                                        />
 
-                                                    // <div className="h-[60px] w-[60px] bg-slate-200 rounded-full"></div>
-                                                }
-                                            </div>
-                                            <span className="font-body-website font-semibold tracking-wide uppercase text-center">{i.name}</span>
+                                        <div className="absolute bottom-2">
+                                            <span className="font-body-website font-semibold tracking-widest uppercase text-white">{i.name}</span>
                                         </div>
+
                                     </div>
-                                } />
+                                </Link>
                             </CarouselItem>
 
                         ))}
