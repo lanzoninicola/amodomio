@@ -1,5 +1,5 @@
 import { HeadersFunction, LoaderFunctionArgs } from "@remix-run/node";
-import { Await, defer, useLoaderData, useSearchParams } from "@remix-run/react";
+import { Await, Link, defer, useLoaderData, useSearchParams } from "@remix-run/react";
 import React, { useState, useRef, useCallback, useEffect, Suspense } from "react";
 import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
@@ -265,11 +265,13 @@ const CardapioItemList = ({ allItems }: { allItems: MenuItemWithAssociations[] }
                     {items.map((item, index) => {
                         const isLastItem = items.length === index + 1;
                         return (
-                            <CardapioItem
-                                ref={isLastItem ? lastItemRef : null}
-                                key={item.id}
-                                item={item}
-                            />
+                            <Link to={`/cardapio/${item.id}`} key={item.id} className="w-full">
+                                <CardapioItem
+                                    ref={isLastItem ? lastItemRef : null}
+                                    key={item.id}
+                                    item={item}
+                                />
+                            </Link>
                         );
                     })}
                 </ul>
