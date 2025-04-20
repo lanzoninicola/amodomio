@@ -58,7 +58,9 @@ export default function SingleCardapioItem() {
               className="relative w-full h-screen bg-cover bg-center"
               style={{
                 backgroundImage: itemImageUrl ? `url(${itemImageUrl})` : "none",
+                backgroundColor: itemImageUrl ? "transparent" : "#000", // fallback
               }}
+              aria-label={`Imagem do sabor ${itemName}`}
             >
               {/* Overlay de gradiente preto */}
               <div className="absolute inset-0 bg-gradient-to-t from-black via-black/10 to-transparent" />
