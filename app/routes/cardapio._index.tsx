@@ -373,7 +373,7 @@ function CardapioItemListDestaque({ title, items, tagFilter, carouselDelay = 200
                             <CarouselItem key={i.id} className="basis-1/2 md:basis-1/3" data-element="carousel-item">
                                 <Link to={`/cardapio/${i.id}`} className="w-full">
 
-                                    <div className="grid place-items-center rounded-md bg-slate-50 h-[112px]">
+                                    <div className="relative grid place-items-center rounded-md bg-slate-50 h-[112px]">
                                         <CardapioItemImageSingle
                                             src={i.imageTransformedURL || ""}
                                             placeholder={i.imagePlaceholderURL || ""}
@@ -384,8 +384,8 @@ function CardapioItemListDestaque({ title, items, tagFilter, carouselDelay = 200
                                             cnContainer="h-full w-full rounded-md"
                                         />
 
-                                        <div className="absolute bottom-2">
-                                            <span className="font-body-website font-semibold tracking-widest uppercase text-white">{i.name}</span>
+                                        <div className="absolute bottom-2 mx-auto">
+                                            <p className="font-body-website font-semibold tracking-widest uppercase text-white">{i.name}</p>
                                         </div>
 
                                     </div>
