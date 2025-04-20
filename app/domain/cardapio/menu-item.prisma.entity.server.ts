@@ -41,6 +41,7 @@ export interface MenuItemWithAssociations extends MenuItem {
   };
   shares: number; // Number of shares
   imageTransformedURL: string; // Transformed image URL from Cloudinary
+  imagePlaceholderURL: string; // Placeholder image URL from Cloudinary
   meta: {
     isItalyProduct: boolean; // Whether the product is marked as an Italy product
     isBestSeller: boolean; // Whether the product is marked as a best seller
@@ -398,6 +399,10 @@ export class MenuItemPrismaEntity {
         {
           width: options.imageScaleWidth,
         }
+      ),
+      imagePlaceholderURL: CloudinaryUtils.scaleWidth(
+        item.MenuItemImage?.publicId || "",
+        { width: 20, quality: 1, blur: 1000 }
       ),
       tags: {
         all: item.tags.map((t) => t.Tag?.name),
