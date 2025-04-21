@@ -319,10 +319,17 @@ const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) =>
                     <CardapioItemPrice prices={item?.priceVariations} cnLabel="text-black" showValuta={false} />
                     <CardapioItemActionBar item={item} />
                 </div>
-                <CardapioItemImage imageURL={item.imageTransformedURL}
+                {/* <CardapioItemImage imageURL={item.imageTransformedURL}
                     cnClassName="col-span-3 h-[120px] rounded-lg overflow-hidden"
                     placeholderImage={true}
                     cnImage={"bg-left"}
+                /> */}
+                <CardapioItemImageSingle
+                    src={item.imageTransformedURL || ""}
+                    placeholder={item.imagePlaceholderURL || ""}
+                    placeholderIcon={true}
+                    enableOverlay={false}
+                    cnContainer="col-span-3 h-[120px] rounded-lg overflow-hidden"
                 />
 
             </div>
