@@ -259,7 +259,7 @@ export class MenuItemPrismaEntity {
       },
     });
 
-    const variations = await this.client.menuItemVariation.findMany();
+    const variations = await this.client.menuItemCostingVariation.findMany();
 
     return allMenuItems.map((item) => {
       const mapped = variations.map((v) => this.mapVariation(item, v));
@@ -275,11 +275,7 @@ export class MenuItemPrismaEntity {
   }
 
   async findAllWithPriceVariations(
-    params: MenuItemEntityFindAllProps = {},
-    options = {
-      imageTransform: false,
-      imageScaleWidth: 1280,
-    }
+    params: MenuItemEntityFindAllProps = {}
   ): Promise<MenuItemWithGroupedSellPriceVariations[]> {
     const allMenuItems = await this.client.menuItem.findMany({
       where: params?.where,
@@ -288,9 +284,7 @@ export class MenuItemPrismaEntity {
       },
     });
 
-    console.log({ allMenuItems });
-
-    const variations = await this.client.menuItemVariation.findMany();
+    const variations = await this.client.menuItemSellingVariation.findMany();
 
     return allMenuItems.map((item) => {
       const mapped = variations.map((v) => this.mapVariation(item, v));

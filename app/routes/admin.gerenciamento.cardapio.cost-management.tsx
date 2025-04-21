@@ -1,5 +1,5 @@
 
-import { MenuItemPriceVariation } from "@prisma/client";
+import { MenuItemCostVariation, MenuItemCostingVariation, MenuItemPriceVariation } from "@prisma/client";
 import { ActionFunctionArgs, LoaderFunctionArgs, } from "@remix-run/node";
 import { Await, useLoaderData, defer, Form, Link, useActionData } from "@remix-run/react";
 import { Suspense } from "react";
@@ -10,7 +10,7 @@ import { Separator } from "~/components/ui/separator";
 import { toast } from "~/components/ui/use-toast";
 import { authenticator } from "~/domain/auth/google.server";
 import { menuItemPriceVariationsEntity } from "~/domain/cardapio/menu-item-price-variations.prisma.entity.server";
-import { MenuItemWithSellPriceVariations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
+import { menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import ExportCsvButton from "~/domain/export-csv/components/export-csv-button/export-csv-button";
 import prismaClient from "~/lib/prisma/client.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
@@ -29,8 +29,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
     const user = authenticator.isAuthenticated(request);
 
-
-
     const data = Promise.all([menuItemsWithCostVariations, user]);
 
     return defer({
@@ -45,40 +43,65 @@ export async function action({ request }: ActionFunctionArgs) {
 
     console.log({ action: _action, values })
 
-    if (_action === "menu-item-price-variation-update") {
+    if (_action === "menu-item-cost-variation-update") {
 
+        /**
+         * {
+          action: 'menu-item-cost-variation-update',
+          values: {
+            menuItemId: '81de6228-e3e4-4740-a229-a101c741004e',
+            menuItemCostingVariationId: '',
+            updatedBy: 'lanzoni.nicola@gmail.com',
+            previousCostAmount: '',
+            recipeCostAmount: ''
+          }
+         */
 
-
-        const menuItemPriceVariationId = values?.menuItemPriceVariationId as string
         const menuItemId = values?.menuItemId as string
-        const variationId = values?.variationId as string
-        const amount = toFixedNumber(values?.amount, 2) || 0
-        const latestAmount = toFixedNumber(values?.latestAmount, 2) || 0
-        const discountPercentage = isNaN(Number(values?.discountPercentage)) ? 0 : Number(values?.discountPercentage)
-        const showOnCardapio = values?.showOnCardapio === "on" ? true : false
+        const menuItemCostingVariationId = values?.menuItemCostingVariationId as string
         const updatedBy = values?.updatedBy as string
+        const recipeCostAmount = parserFormDataEntryToNumber(values?.recipeCostAmount) || 0
+        const previousCostAmount = parserFormDataEntryToNumber(values?.previousCostAmount) || 0
 
-        const nextPrice: Partial<MenuItemPriceVariation> = {
-            id: menuItemPriceVariationId,
+        const nextCost: MenuItemCostVariation = {
+            id: menuItemCostingVariationId,
             menuItemId,
-            amount,
-            discountPercentage,
-            showOnCardapio,
-            latestAmount,
+            recipeCostAmount,
+            previousCostAmount,
             updatedBy,
-            menuItemVariationId: variationId,
-            basePrice: amount,
         }
 
-        console.log({ nextPrice })
 
-        const [err, result] = await prismaIt(menuItemPriceVariationsEntity.upsert(menuItemPriceVariationId, nextPrice))
+        // const menuItemPriceVariationId = values?.menuItemPriceVariationId as string
+        // const menuItemId = values?.menuItemId as string
+        // const variationId = values?.variationId as string
+        // const amount = toFixedNumber(values?.amount, 2) || 0
+        // const latestAmount = toFixedNumber(values?.latestAmount, 2) || 0
+        // const discountPercentage = isNaN(Number(values?.discountPercentage)) ? 0 : Number(values?.discountPercentage)
+        // const showOnCardapio = values?.showOnCardapio === "on" ? true : false
+        // const updatedBy = values?.updatedBy as string
 
-        console.log({ err })
+        // const nextPrice: Partial<MenuItemPriceVariation> = {
+        //     id: menuItemPriceVariationId,
+        //     menuItemId,
+        //     amount,
+        //     discountPercentage,
+        //     showOnCardapio,
+        //     latestAmount,
+        //     updatedBy,
+        //     menuItemVariationId: variationId,
+        //     basePrice: amount,
+        // }
 
-        if (err) {
-            return badRequest(err)
-        }
+        // console.log({ nextPrice })
+
+        // const [err, result] = await prismaIt(menuItemPriceVariationsEntity.upsert(menuItemPriceVariationId, nextPrice))
+
+        // console.log({ err })
+
+        // if (err) {
+        //     return badRequest(err)
+        // }
 
         return ok(`O preço de venda foi atualizado com sucesso`)
     }
@@ -152,15 +175,14 @@ export default function AdminGerenciamentoCardapioSellPriceManagement() {
                                                                                 <Form method="post" className="flex flex-col gap-1 justify-center items-center">
                                                                                     <div className="flex flex-col gap-2">
                                                                                         <div className="flex gap-1">
-                                                                                            <input type="hidden" name="menuItemPriceVariationId" value={v.menuItemPriceVariationId ?? ""} />
                                                                                             <input type="hidden" name="menuItemId" value={menuItem.id} />
-                                                                                            <input type="hidden" name="variationId" value={v.variationId} />
+                                                                                            <input type="hidden" name="menuItemCostingVariationId" value={v.menuItemCostingVariationId ?? ""} />
                                                                                             <input type="hidden" name="updatedBy" value={v.updatedBy || user?.email || ""} />
-                                                                                            <input type="hidden" name="latestAmount" value={v.latestAmount} />
+                                                                                            <input type="hidden" name="previousCostAmount" value={v.previousCostAmount} />
 
                                                                                             <div className="flex flex-col gap-y-0">
                                                                                                 <span className="text-muted-foreground text-[11px]">Custo Ficha Tecnica</span>
-                                                                                                <NumericInput name="amount" defaultValue={v.recipeCostAmount} />
+                                                                                                <NumericInput name="recipeCostAmount" defaultValue={v.recipeCostAmount} />
                                                                                             </div>
 
 
@@ -172,7 +194,7 @@ export default function AdminGerenciamentoCardapioSellPriceManagement() {
                                                                                     </div>
 
                                                                                     <SubmitButton
-                                                                                        actionName="menu-item-price-variation-update"
+                                                                                        actionName="menu-item-cost-variation-update"
                                                                                         tabIndex={0}
                                                                                         cnContainer="md:px-12 md:py-0 bg-slate-300 hover:bg-slate-400"
                                                                                         cnLabel="text-[11px] tracking-widest text-black uppercase"
