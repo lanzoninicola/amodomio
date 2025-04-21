@@ -1,17 +1,22 @@
 import { vitePlugin as remix } from "@remix-run/dev";
 import { defineConfig } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
-import { installGlobals } from "@remix-run/node"
+import { installGlobals } from "@remix-run/node";
 import { RemixVitePWA } from "@vite-pwa/remix";
 
 installGlobals();
 
-const { RemixVitePWAPlugin, RemixPWAPreset } = RemixVitePWA(); // sem opções aqui
+// Gera um hash/versão por build com base em timestamp
+const buildVersion = `v${new Date().toISOString().replace(/[-:.TZ]/g, '')}`;
+
+const { RemixVitePWAPlugin, RemixPWAPreset } = RemixVitePWA();
 
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(buildVersion) // para usar no frontend
+  },
   server: { port: 3000 },
   plugins: [
-    // ① Remix ‑ agora com o preset
     remix({
       presets: [RemixPWAPreset()],
       ignoredRouteFiles: ["**/*.css"],
@@ -22,9 +27,9 @@ export default defineConfig({
       },
     }),
 
-    // ② Plugin PWA com suas opções
     RemixVitePWAPlugin({
       registerType: "autoUpdate",
+      injectRegister: "auto", // assegura que o registro será feito
       manifest: {
         name: "A Modo Mio",
         short_name: "A Modo Mio",
@@ -37,9 +42,8 @@ export default defineConfig({
           { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any maskable" }
         ]
       },
-
-      // — ponto 6 —
       workbox: {
+        cleanupOutdatedCaches: true,
         runtimeCaching: [
           {
             urlPattern: /\.(png|jpe?g|gif|svg|webp)$/,
@@ -48,15 +52,22 @@ export default defineConfig({
               cacheName: "images",
               expiration: { maxEntries: 60, maxAgeSeconds: 60 * 60 * 24 * 30 }
             }
+          },
+          {
+            urlPattern: /^\/(sabores|promocoes|ofertas)$/,
+            handler: "NetworkFirst",
+            options: {
+              cacheName: "dynamic-pages",
+              expiration: { maxEntries: 20, maxAgeSeconds: 3600 }
+            }
           }
         ]
       },
-
-      // — ponto 7 —
-      devOptions: { navigateFallback: "/_offline" }
+      devOptions: {
+        navigateFallback: "/_offline"
+      }
     }),
 
-    // ③ Qualquer outro plugin
     tsconfigPaths()
   ]
 });

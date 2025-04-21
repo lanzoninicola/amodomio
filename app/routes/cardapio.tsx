@@ -128,7 +128,10 @@ function CardapioHeader() {
                         cnLink="font-body-website text-xl uppercase tracking-widest"
 
                     >
-                        <div className="flex flex-col justify-center mb-2 font-body-website">
+
+                        <Separator className="my-6" />
+
+                        <div className="flex flex-col justify-center font-body-website">
                             <p className=" font-semibold text-xl leading-relaxed uppercase tracking-wide">Hórarios de funcionamento</p>
                             <div className="flex flex-col justify-center mb-4">
                                 <p className="text-muted-foreground font-body-website text-xl">Quarta - Domingo</p>
@@ -136,6 +139,11 @@ function CardapioHeader() {
                             </div>
                         </div>
 
+                        <div className="w-full py-2 text-xs text-muted-foreground">
+                            <span className="opacity-60 font-mono">Versão {__APP_VERSION__}</span>
+                        </div>
+
+                        <Separator className="my-6" />
 
                         <div className="pr-4 mb-4">
                             <FazerPedidoButton cnLabel="text-2xl tracking-wider" />
