@@ -43,6 +43,8 @@ export default function SingleCardapioItem() {
       <Await resolve={itemQuery}>
         {([err, item]) => {
 
+          console.log({ err })
+
           if (err) {
 
             return <div className="grid place-items-center w-screen h-screen">
