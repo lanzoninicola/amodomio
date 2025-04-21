@@ -1,9 +1,11 @@
 
 import { LoaderFunctionArgs, redirect } from "@remix-run/node";
 import { Await, MetaFunction, defer, useLoaderData } from "@remix-run/react";
+import { Car } from "lucide-react";
 import { Suspense } from "react";
 import Loading from "~/components/loading/loading";
 import { Separator } from "~/components/ui/separator";
+import CardapioItemImageSingle from "~/domain/cardapio/components/cardapio-item-image-single/cardapio-item-image-single";
 import CardapioItemPrice from "~/domain/cardapio/components/cardapio-item-price/cardapio-item-price";
 import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
@@ -49,17 +51,21 @@ export default function SingleCardapioItem() {
           }
 
           const itemImageUrl = item?.imageTransformedURL
+          const itemImagePlaceholder = item?.imagePlaceholderURL
           const itemName = item?.name
           const itemIngredients = item?.ingredients
 
           // @ts-ignore
           return (
-            <div
-              className="relative w-full h-screen bg-cover bg-center"
-              style={{
-                backgroundImage: itemImageUrl ? `url(${itemImageUrl})` : "none",
-              }}
-            >
+            <>
+              <CardapioItemImageSingle
+                src={itemImageUrl || ""}
+                placeholder={itemImagePlaceholder || ""}
+                placeholderIcon={true}
+                cnPlaceholderIcon="w-[100px]"
+                placeholderText="Imagem ainda não disponível"
+                cnPlaceholderText="font-body-website uppercase font-semibold tracking-wider mt-2"
+              />
               {/* Overlay de gradiente preto */}
               <div className="absolute inset-0 bg-gradient-to-t from-black via-black/10 to-transparent" />
 
@@ -69,10 +75,10 @@ export default function SingleCardapioItem() {
                 <h1 className="font-body-website text-2xl uppercase font-semibold tracking-wider">{itemName}</h1>
                 <p className="leading-snug text-[15px] my-2">{itemIngredients}</p>
                 <Separator className="my-2 bg-white/20" />
-                <CardapioItemPrice prices={item?.priceVariations} cnLabel="text-white" cnValue="text-white" showValuta={false} />
+                <CardapioItemPrice prices={item?.priceVariations || []} cnLabel="text-white" cnValue="text-white" showValuta={false} />
               </div>
+            </>
 
-            </div>
           )
         }}
       </Await>

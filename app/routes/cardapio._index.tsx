@@ -13,13 +13,15 @@ import Loading from "~/components/loading/loading";
 import FiltersTags from "~/domain/cardapio/components/filter-tags/filter-tags";
 import { cn } from "~/lib/utils";
 import capitalize from "~/utils/capitalize";
-import { Award } from "lucide-react";
 import AwardBadge from "~/components/award-badge/award-badge";
 import { Separator } from "~/components/ui/separator";
 import CardapioItemDialog from "~/domain/cardapio/components/cardapio-item-dialog/cardapio-item-dialog";
 import CardapioItemPrice from "~/domain/cardapio/components/cardapio-item-price/cardapio-item-price";
-import { image } from "@cloudinary/url-gen/qualifiers/source";
 import CardapioItemImage from "~/domain/cardapio/components/cardapio-item-image/cardapio-item-image";
+import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "~/components/ui/carousel";
+import Autoplay from "embla-carousel-autoplay"
+import CardapioItemImageSingle from "~/domain/cardapio/components/cardapio-item-image-single/cardapio-item-image-single";
+
 
 export const headers: HeadersFunction = () => ({
     'Cache-Control': 's-maxage=1, stale-while-revalidate=59',
@@ -146,10 +148,12 @@ export default function CardapioWebIndex() {
 
                         return (
                             <section className="flex flex-col gap-4 mx-2 md:grid md:grid-cols-2">
+
+
                                 {/** @ts-ignore */}
                                 <CardapioItemListDestaque items={items} title="Sugestões do chef" tagFilter="em-destaque" />
                                 {/** @ts-ignore */}
-                                <CardapioItemListDestaque items={items} title="mais vendidos" tagFilter="mais-vendido" />
+                                <CardapioItemListDestaque items={items} title="mais vendidos" tagFilter="mais-vendido" carouselDelay={2100} />
 
                             </section>
                         )
@@ -337,50 +341,60 @@ interface CardapioItemListDestaqueProps {
     title: string
     items: MenuItemWithAssociations
     tagFilter?: string
+    carouselDelay?: number
 }
 
 
-function CardapioItemListDestaque({ title, items, tagFilter }: CardapioItemListDestaqueProps) {
+function CardapioItemListDestaque({ title, items, tagFilter, carouselDelay = 2000 }: CardapioItemListDestaqueProps) {
 
     return (
         <div className="rounded-md p-2">
             <h3 className="font-semibold text-2xl uppercase mb-4 font-body-website tracking-wider">{title}</h3>
-            <ul className="grid grid-cols-2 gap-2">
-                {
-                    // @ts-ignore
-                    items.filter(i => i.tags?.all.some(t => t === tagFilter)).slice(0, 4).map(i => (
-                        <li key={i.id}>
+            {/* <Carousel>
+                <CarouselContent className="-ml-2 md:-ml-4">
+                    <CarouselItem className="pl-2 md:pl-4">...</CarouselItem>
+                    <CarouselItem className="pl-2 md:pl-4">...</CarouselItem>
+                    <CarouselItem className="pl-2 md:pl-4">...</CarouselItem>
+                </CarouselContent>
+            </Carousel> */}
+            <Carousel
+                plugins={[
+                    Autoplay({
+                        delay: carouselDelay,
+                    }),
+                ]}
+            >
+                <CarouselContent className="-ml-2 md:-ml-4">
 
-                            <CardapioItemDialog item={i} triggerComponent={
-                                <div className="grid place-items-center rounded-md bg-slate-50 h-[112px]">
+                    {
+                        // @ts-ignore
+                        items.filter(i => i.tags?.all.some(t => t === tagFilter)).slice(0, 4).map(i => (
 
-                                    <div className="flex flex-col gap-2  items-center justify-center">
-                                        <div className="rounded-full h-[60px] w-[60px] overflow-hidden">
-                                            {
-                                                // @ts-ignore
+                            <CarouselItem key={i.id} className="basis-1/2 md:basis-1/3" data-element="carousel-item">
+                                <Link to={`/cardapio/${i.id}`} className="w-full">
 
-                                                <CardapioItemImage imageURL={i.imageTransformedURL}
-                                                    cnClassName="h-full w-full rounded-full"
-                                                    cnImage={
-                                                        cn(!i.imageTransformedURL && "bg-left")
-                                                    }
-                                                    placeholderImage={true} />
+                                    <div className="relative grid place-items-center rounded-md bg-slate-50 h-[112px]">
+                                        <CardapioItemImageSingle
+                                            src={i.imageTransformedURL || ""}
+                                            placeholder={i.imagePlaceholderURL || ""}
 
-                                                // <div className="h-[60px] w-[60px] bg-slate-200 rounded-full"></div>
-                                            }
+                                            placeholderIcon={true}
+
+                                            // placeholderText="Imagem não disponível"
+                                            cnContainer="h-full w-full rounded-md"
+                                        />
+
+                                        <div className="absolute bottom-2 w-full">
+                                            <p className=" ml-3 font-body-website font-semibold tracking-widest uppercase text-white">{i.name}</p>
                                         </div>
-                                        <span className="font-body-website font-semibold tracking-wide uppercase text-center">{i.name}</span>
+
                                     </div>
-                                </div>
-                            } />
+                                </Link>
+                            </CarouselItem>
 
-
-
-
-
-                        </li>
-                    ))}
-            </ul>
+                        ))}
+                </CarouselContent>
+            </Carousel>
         </div>
     )
 }
