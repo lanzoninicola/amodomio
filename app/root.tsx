@@ -33,7 +33,10 @@ export const meta: MetaFunction = () => {
     {
       name: "keywords",
       content: "pizza, pizza pato branco, pizza em pedaços, pizza al taglio, delivery, pizza delivery, pizza delivery a modo mio, pizzaria pato branco, pizza pato branco, pizza al taglio",
-    }
+    },
+    { name: "theme-color", content: "#262626" },
+    { name: "apple-mobile-web-app-capable", content: "yes" },
+    { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" }
   ];
 };
 
@@ -107,6 +110,8 @@ export const links: LinksFunction = () => [
   // { rel: 'icon', href: '/favicon.ico' },
 
   // ...linkFontVariant("Lufga"),
+  { rel: "manifest", href: "/manifest.webmanifest" },
+  { rel: "apple-touch-icon", href: "/icons/icon-192.png" }
 
 ];
 
