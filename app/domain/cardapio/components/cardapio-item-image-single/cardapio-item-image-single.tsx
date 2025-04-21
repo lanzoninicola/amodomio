@@ -11,6 +11,7 @@ type Props = {
     placeholderText?: string;
     cnPlaceholderText?: string;
     cnContainer?: string;
+    enableOverlay?: boolean;
 };
 
 export default function CardapioItemImageSingle({
@@ -22,7 +23,8 @@ export default function CardapioItemImageSingle({
     cnPlaceholderIcon,
     placeholderText,
     cnPlaceholderText,
-    cnContainer
+    cnContainer,
+    enableOverlay = true,
 }: Props) {
     const [loaded, setLoaded] = useState(false);
     const imgRef = useRef<HTMLImageElement>(null);
@@ -78,7 +80,9 @@ export default function CardapioItemImageSingle({
             )}
 
             {/* Overlay */}
-            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/10 to-transparent" />
+            {enableOverlay && (
+                <div className="absolute inset-0 bg-gradient-to-t from-black via-black/10 to-transparent" />
+            )}
         </div>
     );
 }
