@@ -95,7 +95,7 @@ export function WebsiteNavigationSidebar({
                 >
                     <span className="font-bold">{homeLink.label ?? "Iniçio"}</span>
                 </MobileLink>
-                <ScrollArea className="my-4 h-[calc(100vh-10rem)] pl-6">
+                <ScrollArea className="my-4 h-[calc(100vh-1rem) md:h-[calc(100vh-28rem)] pl-6">
                     <div className="flex flex-col space-y-3">
                         {navigationLinks?.mainNav && navigationLinks.mainNav?.map(
                             (item) =>
