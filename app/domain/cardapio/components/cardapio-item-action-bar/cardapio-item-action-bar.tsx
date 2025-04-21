@@ -74,14 +74,14 @@ export default function CardapioItemActionBar({ item }: { item: MenuItemWithAsso
                     </div>
                 </div>
 
-                {/* <WhatsappExternalLink
+                <WhatsappExternalLink
                     phoneNumber="46991272525"
                     ariaLabel="Envia uma mensagem com WhatsApp"
                     message={"Olá, gostaria fazer um pedido"}
                     className="flex flex-col gap-1 items-end cursor-pointer p-2 active:bg-black/50"
                 >
                     <WhatsAppIcon color="black" />
-                </WhatsappExternalLink> */}
+                </WhatsappExternalLink>
             </div>
             {likesAmount === 0 && (
                 <div className="flex items-center gap-1">
