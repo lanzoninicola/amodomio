@@ -271,6 +271,9 @@ model MenuItemSellingPriceVariation {
   updatedBy                  String?                   @map("updated_by")
   latestAmount               Float                     @default(0)
 
+  costVariation   MenuItemCostVariation? @relation(fields: [costVariationId], references: [id])
+  costVariationId String?                @map("cost_variation_id")
+
   @@map("menu_item_selling_prices")
 }
 
@@ -287,15 +290,16 @@ model MenuItemCostingVariation {
 }
 
 model MenuItemCostVariation {
-  id                         String                    @id @default(uuid())
-  MenuItem                   MenuItem                  @relation(fields: [menuItemId], references: [id])
-  menuItemId                 String                    @map("menu_item_id")
-  MenuItemCostingVariation   MenuItemCostingVariation? @relation(fields: [menuItemCostingVariationId], references: [id])
-  menuItemCostingVariationId String?                   @map("menu_item_costing_variation_id")
-  recipeCostAmount           Float                     @default(0) @map("recipe_cost_amount")
-  createdAt                  DateTime                  @map("created_at")
-  updatedAt                  DateTime                  @default(now()) @updatedAt @map("updated_at")
-  updatedBy                  String?                   @map("updated_by")
+  id                            String                          @id @default(uuid())
+  MenuItem                      MenuItem                        @relation(fields: [menuItemId], references: [id])
+  menuItemId                    String                          @map("menu_item_id")
+  MenuItemCostingVariation      MenuItemCostingVariation?       @relation(fields: [menuItemCostingVariationId], references: [id])
+  menuItemCostingVariationId    String?                         @map("menu_item_costing_variation_id")
+  recipeCostAmount              Float                           @default(0) @map("recipe_cost_amount")
+  createdAt                     DateTime                        @map("created_at")
+  updatedAt                     DateTime                        @default(now()) @updatedAt @map("updated_at")
+  updatedBy                     String?                         @map("updated_by")
+  MenuItemSellingPriceVariation MenuItemSellingPriceVariation[]
 
   @@map("menu_item_costs")
 }
