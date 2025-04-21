@@ -384,8 +384,8 @@ function CardapioItemListDestaque({ title, items, tagFilter, carouselDelay = 200
                                             cnContainer="h-full w-full rounded-md"
                                         />
 
-                                        <div className="absolute bottom-2 mx-auto">
-                                            <p className="font-body-website font-semibold tracking-widest uppercase text-white">{i.name}</p>
+                                        <div className="absolute bottom-2 w-full">
+                                            <p className=" ml-3 font-body-website font-semibold tracking-widest uppercase text-white">{i.name}</p>
                                         </div>
 
                                     </div>
