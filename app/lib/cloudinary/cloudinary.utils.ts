@@ -1,6 +1,8 @@
 import { scale } from "@cloudinary/url-gen/actions/resize";
 import cld from "./cloudinary-client";
 import { CloudinaryImageInfo } from "./cloudinary.types";
+import { quality } from "@cloudinary/url-gen/actions/delivery";
+import { blur } from "@cloudinary/url-gen/actions/effect";
 
 interface VideoURLOptions {
   width?: number;
@@ -43,14 +45,32 @@ export default class CloudinaryUtils {
    * @param options.width The width to resize the image
    * @returns  The url of the resized image
    */
-  static scaleWidth(publicId: string, options = { width: 1280 }) {
-    return (
-      cld
-        .image(publicId) // this is the public id
-        .format("auto")
-        .resize(scale().width(options.width))
-        .toURL() || null
-    );
+
+  static scaleWidth(
+    publicId: string,
+    options: {
+      width?: number;
+      quality?: number;
+      blur?: number;
+    } = {}
+  ) {
+    if (!publicId) return null;
+
+    const img = cld.image(publicId).format("auto");
+
+    if (options.width) {
+      img.resize(scale().width(options.width));
+    }
+
+    if (options.quality) {
+      img.delivery(quality(options.quality));
+    }
+
+    if (options.blur) {
+      img.effect(blur().strength(options.blur));
+    }
+
+    return img.toURL();
   }
 
   /**

@@ -126,6 +126,15 @@ module.exports = {
             transform: "translateX(-100%)",
           },
         },
+        slowZoom: {
+          "0%": { transform: "scale(1)" },
+          "50%": { transform: "scale(1.05)" },
+          "100%": { transform: "scale(1)" },
+        },
+        zoomOnce: {
+          "0%": { transform: "scale(1)" },
+          "100%": { transform: "scale(1.05)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -143,6 +152,10 @@ module.exports = {
         pulse: "pulse 1s ease-in-out infinite",
         pulseSlow: "pulse 2s ease-in-out infinite",
         scrollingText: "scrollingText 18s linear infinite",
+        slowZoom: "slowZoom 20s infinite linear",
+        animation: {
+          zoomOnce: "zoomOnce 2.5s ease-out forwards",
+        },
       },
       backgroundImage: {
         hero: "url('/images/hero-image.jpg')",

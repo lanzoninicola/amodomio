@@ -7,6 +7,7 @@ import {
   MenuItemNote,
   MenuItemPriceVariation,
   MenuItemSellingPriceVariation,
+  MenuItemSellingVariation,
   MenuItemShare,
   MenuItemTag,
   Prisma,
@@ -40,6 +41,7 @@ export interface MenuItemWithAssociations extends MenuItem {
   };
   shares: number; // Number of shares
   imageTransformedURL: string; // Transformed image URL from Cloudinary
+  imagePlaceholderURL: string; // Placeholder image URL from Cloudinary
   meta: {
     isItalyProduct: boolean; // Whether the product is marked as an Italy product
     isBestSeller: boolean; // Whether the product is marked as a best seller
@@ -77,7 +79,7 @@ export interface MenuItemWithSellPriceVariation {
   variationId: string;
   variationKey: string;
   variationName: string;
-  sortOrder: number | null;
+  sortOrder: number;
   amount: number;
   discountPercentage: number;
   showOnCardapio: boolean;
@@ -109,29 +111,6 @@ interface MenuItemEntityFindAllProps {
 }
 
 export class MenuItemPrismaEntity {
-  #menuItemQueryIncludes = {
-    priceVariations: true,
-    costVariations: {
-      include: {
-        MenuItemVariation: true,
-      },
-    },
-    Category: true,
-    tags: {
-      include: {
-        Tag: true,
-      },
-    },
-    MenuItemLike: {
-      where: {
-        deletedAt: null,
-      },
-    },
-    MenuItemShare: true,
-    MenuItemImage: true,
-    // MenuItemSize: true,
-  };
-
   client;
   // Simple in-memory cache
   private cache: NodeCache;
@@ -309,6 +288,8 @@ export class MenuItemPrismaEntity {
       },
     });
 
+    console.log({ allMenuItems });
+
     const variations = await this.client.menuItemVariation.findMany();
 
     return allMenuItems.map((item) => {
@@ -326,7 +307,7 @@ export class MenuItemPrismaEntity {
 
   mapVariation(
     item: MenuItemWithAssociations,
-    variation: MenuItemVariation
+    variation: MenuItemSellingVariation
   ): MenuItemWithSellPriceVariation {
     const record = item.priceVariations.find(
       (pv) => pv.menuItemVariationId === variation.id
@@ -339,9 +320,9 @@ export class MenuItemPrismaEntity {
       variationId: variation.id,
       variationKey: variation.key,
       variationName: variation.name,
-      sortOrder: variation.sortOrderIndex,
-      amount: record?.amount || 0,
-      discountPercentage: record?.discountPercentage || 0,
+      sortOrder: variation.sortOrderIndex ?? 0,
+      amount: record?.amount ?? 0,
+      discountPercentage: record?.discountPercentage ?? 0,
       showOnCardapio: record?.showOnCardapio ?? true,
       showOnCardapioAt: record?.showOnCardapioAt ?? null,
       createdAt: record?.createdAt ?? new Date(),
@@ -368,7 +349,10 @@ export class MenuItemPrismaEntity {
     return Array.from(grouped.entries()).map(([group, variations]) => ({
       group,
       variations: variations.sort(
-        (a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)
+        (
+          a: MenuItemWithSellPriceVariation["sortOrder"],
+          b: MenuItemWithSellPriceVariation["sortOrder"]
+        ) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)
       ),
     }));
   }
@@ -381,7 +365,24 @@ export class MenuItemPrismaEntity {
   ) {
     const item = await this.client.menuItem.findFirst({
       where: { id },
-      include: this.#menuItemQueryIncludes,
+      include: {
+        priceVariations: true,
+        Category: true,
+        tags: {
+          include: {
+            Tag: true,
+          },
+        },
+        MenuItemLike: {
+          where: {
+            deletedAt: null,
+          },
+        },
+        MenuItemShare: true,
+        MenuItemImage: true,
+        MenuItemCostVariation: true,
+        MenuItemSellingPriceVariation: true,
+      },
     });
 
     if (!item) {
@@ -398,6 +399,10 @@ export class MenuItemPrismaEntity {
         {
           width: options.imageScaleWidth,
         }
+      ),
+      imagePlaceholderURL: CloudinaryUtils.scaleWidth(
+        item.MenuItemImage?.publicId || "",
+        { width: 20, quality: 1, blur: 1000 }
       ),
       tags: {
         all: item.tags.map((t) => t.Tag?.name),

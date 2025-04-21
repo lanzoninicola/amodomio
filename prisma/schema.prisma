@@ -245,7 +245,7 @@ model MenuItemPriceVariation {
 
 model MenuItemSellingVariation {
   id                            String                          @id @default(uuid())
-  key                           String?                         @map("key")
+  key                           String                          @map("key")
   name                          String
   sortOrderIndex                Int                             @default(0) @map("sort_order_index")
   createdAt                     DateTime                        @map("created_at")

@@ -9,7 +9,7 @@ import { Separator } from "~/components/ui/separator";
 import { toast } from "~/components/ui/use-toast";
 import { authenticator } from "~/domain/auth/google.server";
 import { menuItemPriceVariationsEntity } from "~/domain/cardapio/menu-item-price-variations.prisma.entity.server";
-import { MenuItemSellPriceVariations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
+import { MenuItemWithGroupedSellPriceVariations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import ExportCsvButton from "~/domain/export-csv/components/export-csv-button/export-csv-button";
 import prismaClient from "~/lib/prisma/client.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
@@ -26,10 +26,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
     const menuItemsWithSellPriceVariations = menuItemPrismaEntity.findAllWithPriceVariations()
 
+
+
     const user = authenticator.isAuthenticated(request);
 
     const dnaEmpresaSettings = prismaIt(prismaClient.dnaEmpresaSettings.findFirst())
-
 
     const data = Promise.all([menuItemsWithSellPriceVariations, user, dnaEmpresaSettings]);
 
@@ -138,7 +139,9 @@ export default function AdminGerenciamentoCardapioSellPriceManagement() {
                                     <ul>
                                         {
                                             // @ts-ignore
-                                            menuItemsWithSellPriceVariations.map((menuItem: MenuItemSellPriceVariations) => {
+                                            menuItemsWithSellPriceVariations.map((menuItem: MenuItemWithGroupedSellPriceVariations) => {
+
+
 
                                                 return (
                                                     <li key={menuItem.id} className="mb-6  p-2">
@@ -149,6 +152,9 @@ export default function AdminGerenciamentoCardapioSellPriceManagement() {
 
                                                         <ul className="flex flex-col">
                                                             {menuItem.priceVariations.map((grouped, index: number) => (
+
+
+
                                                                 <section key={randomReactKey()} className="mb-8">
                                                                     <h3 className="text-sm font-semibold uppercase tracking-wider mb-2">
                                                                         {grouped.group}
