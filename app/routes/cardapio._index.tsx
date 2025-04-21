@@ -15,11 +15,9 @@ import { cn } from "~/lib/utils";
 import capitalize from "~/utils/capitalize";
 import AwardBadge from "~/components/award-badge/award-badge";
 import { Separator } from "~/components/ui/separator";
-import CardapioItemDialog from "~/domain/cardapio/components/cardapio-item-dialog/cardapio-item-dialog";
 import CardapioItemPrice from "~/domain/cardapio/components/cardapio-item-price/cardapio-item-price";
-import CardapioItemImage from "~/domain/cardapio/components/cardapio-item-image/cardapio-item-image";
-import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "~/components/ui/carousel";
-import Autoplay from "embla-carousel-autoplay"
+import { Carousel, CarouselContent, CarouselItem } from "~/components/ui/carousel";
+import Autoplay from "embla-carousel-autoplay";
 import CardapioItemImageSingle from "~/domain/cardapio/components/cardapio-item-image-single/cardapio-item-image-single";
 
 

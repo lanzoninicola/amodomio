@@ -26,13 +26,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
     const menuItemsWithSellPriceVariations = menuItemPrismaEntity.findAllWithPriceVariations()
 
-
+    const menuItemCostingVariation = prismaIt(prismaClient.menuItemCostingVariation.findMany())
 
     const user = authenticator.isAuthenticated(request);
 
     const dnaEmpresaSettings = prismaIt(prismaClient.dnaEmpresaSettings.findFirst())
 
-    const data = Promise.all([menuItemsWithSellPriceVariations, user, dnaEmpresaSettings]);
+    const data = Promise.all([menuItemsWithSellPriceVariations, user, dnaEmpresaSettings, menuItemCostingVariation]);
 
     return defer({
         data
@@ -126,7 +126,9 @@ export default function AdminGerenciamentoCardapioSellPriceManagement() {
             <Suspense fallback={<Loading />}>
                 <Await resolve={data}>
                     {/* @ts-ignore */}
-                    {([menuItemsWithSellPriceVariations, user, [err, dnaEmpresaSettings]]) => {
+                    {([menuItemsWithSellPriceVariations, user, [err, dnaEmpresaSettings], [errCostVariation, costingVariation]]) => {
+
+                        console.log({ costingVariation })
 
                         return (
 
