@@ -3,9 +3,12 @@ import { Outlet, useLoaderData } from "@remix-run/react";
 import { X } from "lucide-react";
 import { useState } from "react";
 import { AdminHeader } from "~/components/layout/admin-header/admin-header";
+import { SidebarProvider, SidebarTrigger } from "~/components/ui/sidebar";
 import { authenticator } from "~/domain/auth/google.server";
 import { LoggedUser } from "~/domain/auth/types.server";
 import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
+import ADMIN_WEBSITE_NAVIGATION_ITEMS from "~/domain/website-navigation/admin/admin-website.nav-links";
+import { AdminSidebar } from "~/domain/website-navigation/components/admin-sidebar";
 import prismaClient from "~/lib/prisma/client.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { cn } from "~/lib/utils";
@@ -62,15 +65,19 @@ export default function AdminOutlet() {
     const env = loaderData?.payload?.environment
 
     return (
-        <>
-            <AdminHeader urlSegment={urlSegment} />
-            {/* {env === "development" && <EnvironmentAlert />} */}
-            <div className="mt-6">
-                <Outlet context={{
-                    loggedUser,
-                }} />
-            </div>
-        </>
+        <SidebarProvider>
+            <AdminSidebar navigationLinks={ADMIN_WEBSITE_NAVIGATION_ITEMS} />
+            <main>
+                <SidebarTrigger />
+                <AdminHeader urlSegment={urlSegment} />
+                {/* {env === "development" && <EnvironmentAlert />} */}
+                <div className="mt-6">
+                    <Outlet context={{
+                        loggedUser,
+                    }} />
+                </div>
+            </main>
+        </SidebarProvider>
     )
 }
 

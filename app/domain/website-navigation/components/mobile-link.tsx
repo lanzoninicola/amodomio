@@ -1,0 +1,28 @@
+import { Link, LinkProps } from "@remix-run/react"
+
+interface MobileLinkProps extends LinkProps {
+  onOpenChange?: (open: boolean) => void
+  children: React.ReactNode
+  className?: string
+}
+
+export default function MobileLink({
+  to,
+  onOpenChange,
+  className,
+  children,
+  ...props
+}: MobileLinkProps) {
+  return (
+    <Link
+      to={to}
+      onClick={() => {
+        onOpenChange?.(false)
+      }}
+      className={cn(className)}
+      {...props}
+    >
+      {children}
+    </Link>
+  )
+}

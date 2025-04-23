@@ -90,7 +90,7 @@ export default function AdminIndex() {
     }
 
     return (
-        <Container>
+        <Container className="md:max-w-none mx-4">
             <div className="flex flex-col gap-4 items-center mb-6">
                 <h1 className="text-center text-xl font-bold leading-tight tracking-tighter md:text-lg lg:leading-[1.1]">
                     Bem vindo ao painel de administração! 👋🏻
@@ -195,7 +195,7 @@ function CardapioItems({
                             return showActiveItems === true ? i.visible === true : i.visible === false
                         }).map(item => {
                             return (
-                                <CardapioItem item={item} setVisible={setVisible} visible={visible} />
+                                <CardapioItem key={item.id} item={item} setVisible={setVisible} visible={visible} />
 
                             )
                         })
