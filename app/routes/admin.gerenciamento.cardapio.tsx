@@ -91,7 +91,7 @@ export default function AdminCardapioOutlet() {
 
 
 
-        <Container className="mb-24">
+        <Container className="mb-24" fullWidth={true} >
             <div className={
                 cn(
                     "flex flex-col",

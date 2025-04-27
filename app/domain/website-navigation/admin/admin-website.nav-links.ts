@@ -1,9 +1,29 @@
 import GLOBAL_LINKS from "../global-links.constant";
 import { WebsiteNavigationLinks } from "../website-navigation.type";
+import { Shield } from "lucide-react";
 
 const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
   mainNav: [GLOBAL_LINKS.admin, GLOBAL_LINKS.website],
   sidebarNav: [
+    {
+      title: "Iniçio",
+      items: [
+        {
+          title: "Pagina Inicial",
+          href: "/admin",
+          items: [],
+          disabled: false,
+          highlight: true,
+          icon: Shield,
+        },
+        {
+          title: "Website",
+          href: "/",
+          items: [],
+          disabled: true,
+        },
+      ],
+    },
     {
       title: "Gerenciamento",
       items: [
