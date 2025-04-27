@@ -90,9 +90,9 @@ export default function AdminIndex() {
     }
 
     return (
-        <Container>
-            <div className="flex flex-col gap-4 items-center mb-6">
-                <h1 className="text-center text-xl font-bold leading-tight tracking-tighter md:text-lg lg:leading-[1.1]">
+        <Container className="md:max-w-none">
+            <div className="flex flex-col gap-4 mb-6">
+                <h1 className="text-xl font-bold leading-tight tracking-tighter md:text-lg lg:leading-[1.1]">
                     Bem vindo ao painel de administração! 👋🏻
                 </h1>
             </div>
@@ -152,10 +152,31 @@ function CardapioItems({
 
     const [showActiveItems, setShowActiveItems] = useState(true)
 
+    const ActiveTab = ({ label, showActiveItems, highlightCondition }: {
+        label: string, showActiveItems: boolean,
+        highlightCondition: boolean
+    }) => {
+        return (
+            <div className={
+                cn(
+                    "grid place-items-center bg-none",
+                    highlightCondition === true && "bg-black text-white font-semibold px-2 py-1",
+                )
+            }>
+                <span className={
+                    cn(
+                        "text-xs uppercase tracking-widest cursor-pointer hover:underline",
+                    )
+                }
+                    onClick={() => setShowActiveItems(showActiveItems)}>{label}</span>
+            </div>
+        )
+    }
+
     return (
         <div className="flex flex-col items-center">
 
-            <div className="flex flex-col gap-4 items-center md:w-[500px] mb-6">
+            <div className="flex flex-col gap-4 items-center w-full mb-6">
                 <Input name="search" className="w-full py-4 text-lg" placeholder="Pesquisar no cardapio..." onChange={(e) => handleSearch(e)} value={search} />
                 <div className="flex flex-col md:flex-row gap-4 justify-between items-center w-full">
                     <div className="flex gap-4">
@@ -169,40 +190,28 @@ function CardapioItems({
             </div>
 
             <div className="flex gap-4 items-center">
-                <span className={
-                    cn(
-                        "text-xs uppercase tracking-widest cursor-pointer hover:underline text-muted-foreground",
-                        showActiveItems === true && "text-black font-semibold"
-                    )
-                }
-                    onClick={() => setShowActiveItems(true)}>Venda ativa</span>
-
+                <ActiveTab label="Venda ativa" showActiveItems={true} highlightCondition={showActiveItems === true} />
                 <span>-</span>
-                <span className={
-                    cn(
-                        "text-xs uppercase tracking-widest cursor-pointer hover:underline text-muted-foreground",
-                        showActiveItems === false && "text-black font-semibold"
-                    )
-                }
-                    onClick={() => setShowActiveItems(false)}>Venda pausada</span>
+                <ActiveTab label="Venda pausada" showActiveItems={false} highlightCondition={showActiveItems === false} />
+
             </div>
             <Separator className="my-2 w-full" />
 
-            <div className="h-[350px] overflow-y-auto p-2 md:px-6">
-                <ul className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4">
-                    {
-                        items.filter(i => {
-                            return showActiveItems === true ? i.visible === true : i.visible === false
-                        }).map(item => {
-                            return (
-                                <CardapioItem item={item} setVisible={setVisible} visible={visible} />
 
-                            )
-                        })
-                    }
+            <ul className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4">
+                {
+                    items.filter(i => {
+                        return showActiveItems === true ? i.visible === true : i.visible === false
+                    }).map(item => {
+                        return (
+                            <CardapioItem key={item.id} item={item} setVisible={setVisible} visible={visible} />
 
-                </ul>
-            </div>
+                        )
+                    })
+                }
+
+            </ul>
+
 
 
         </div>

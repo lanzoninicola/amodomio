@@ -1,12 +1,13 @@
-import { Icons } from "~/components/primitives/icons/icons";
+import { LucideIcon } from "lucide-react";
 
 export interface NavItem {
   title: string;
   href?: string;
   disabled?: boolean;
   external?: boolean;
-  icon?: keyof typeof Icons;
+  icon?: LucideIcon | ((props: React.SVGProps<SVGSVGElement>) => JSX.Element);
   label?: string;
+  highlight?: boolean;
 }
 
 export interface NavItemWithChildren extends NavItem {

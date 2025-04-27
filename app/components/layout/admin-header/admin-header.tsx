@@ -26,14 +26,14 @@ export function AdminHeader({ urlSegment }: AdminHeaderProps) {
             )
         }>
             <div className="container flex h-14 max-w-screen-2xl items-center">
-                <WebsiteNavigationSidebar
+                {/* <WebsiteNavigationSidebar
                     homeLink={{ label: "Iniçio", to: "admin" }}
                     navigationLinks={ADMIN_WEBSITE_NAVIGATION_ITEMS}
                     buttonTrigger={{
                         label: "Menu de navegação",
                     }}
 
-                />
+                /> */}
                 <div className="flex flex-1 items-center justify-between space-x-2 md:justify-end">
                     <div className="w-full flex-1 md:w-auto md:flex-none">
                         {/* <CommandMenu /> */}
@@ -42,7 +42,7 @@ export function AdminHeader({ urlSegment }: AdminHeaderProps) {
                         <Link to={"/admin"}>
                             <div className="flex gap-2 items-center hover:bg-slate-50 rounded-md p-2">
                                 <Shield />
-                                <span className="hidden text-foreground/60 transition-colors hover:text-foreground/80 lg:block">Administraçao</span>
+                                <span className="hidden text-foreground/60 transition-colors hover:text-foreground/80 lg:block">Pagina Iniçial</span>
                             </div>
                         </Link>
                         <Link to={"/"}>
