@@ -1,29 +1,28 @@
-import { Link, LinkProps } from "@remix-run/react"
-import React, { Children } from "react"
+import React from "react"
 import { Button } from "~/components/ui/button"
 import { ScrollArea } from "~/components/ui/scroll-area"
 import { Sheet, SheetContent, SheetTrigger } from "~/components/ui/sheet"
 import { cn } from "~/lib/utils"
+import { AlignLeftIcon } from "lucide-react"
+import MobileLink from "./mobile-link"
 import { WebsiteNavigationLinks } from "../website-navigation.type"
-import { HamburgerMenuIcon } from "@radix-ui/react-icons"
-import { AlignLeft, AlignLeftIcon } from "lucide-react"
 
-
-interface WebsiteNavigationSidebarProps {
+export interface WebsiteNavigationSidebarProps {
     buttonTrigger?: {
-        label: string
-        classNameLabel?: string
-        classNameButton?: string
-        colorIcon?: string
-    },
+        label: string;
+        classNameLabel?: string;
+        classNameButton?: string;
+        colorIcon?: string;
+    };
     homeLink: {
-        label: string
-        to: string
-    }
-    cnLink?: string
-    navigationLinks: Partial<WebsiteNavigationLinks>
-    children?: React.ReactNode
+        label: string;
+        to: string;
+    };
+    cnLink?: string;
+    navigationLinks: Partial<WebsiteNavigationLinks>;
+    children?: React.ReactNode;
 }
+
 
 export function WebsiteNavigationSidebar({
     buttonTrigger,
@@ -147,29 +146,3 @@ export function WebsiteNavigationSidebar({
     )
 }
 
-interface MobileLinkProps extends LinkProps {
-    onOpenChange?: (open: boolean) => void
-    children: React.ReactNode
-    className?: string
-}
-
-function MobileLink({
-    to,
-    onOpenChange,
-    className,
-    children,
-    ...props
-}: MobileLinkProps) {
-    return (
-        <Link
-            to={to}
-            onClick={() => {
-                onOpenChange?.(false)
-            }}
-            className={cn(className)}
-            {...props}
-        >
-            {children}
-        </Link>
-    )
-}
