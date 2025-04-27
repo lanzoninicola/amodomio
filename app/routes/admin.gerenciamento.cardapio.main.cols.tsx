@@ -1,7 +1,7 @@
 
 import { MenuItem, Category } from "@prisma/client"
 import { LoaderFunctionArgs } from "@remix-run/node"
-import { Await, Form, Link, defer, useActionData, useLoaderData } from "@remix-run/react"
+import { Await, Link, defer, useActionData, useLoaderData } from "@remix-run/react"
 import React, { Suspense, useState } from "react"
 import { toast } from "~/components/ui/use-toast"
 import { menuItemPriceVariationsEntity } from "~/domain/cardapio/menu-item-price-variations.prisma.entity.server"
@@ -12,12 +12,10 @@ import capitalize from "~/utils/capitalize"
 import { badRequest, ok } from "~/utils/http-response.server"
 import tryit from "~/utils/try-it"
 import { Separator } from "~/components/ui/separator"
-import { Switch } from "~/components/ui/switch"
 import Loading from "~/components/loading/loading"
 import { cn } from "~/lib/utils"
 import { Input } from "~/components/ui/input"
 import MenuItemSwitchVisibility from "~/domain/cardapio/components/menu-item-switch-visibility/menu-item-switch-visibility"
-import { authenticator } from "~/domain/auth/google.server"
 
 
 export type MenuItemActionSearchParam = "menu-item-create" | "menu-item-edit" | "menu-item-delete" | "menu-items-sortorder" | null

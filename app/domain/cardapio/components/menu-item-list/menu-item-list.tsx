@@ -1,5 +1,5 @@
 import NoRecordsFound from "~/components/primitives/no-records-found/no-records-found"
-import { MenuItemActionSearchParam } from "~/routes/admin.gerenciamento.cardapio._index333"
+
 import MenuItemCard from "../menu-item-card/menu-item-card"
 import { useState } from "react"
 import { useFetcher } from "@remix-run/react"
@@ -10,12 +10,11 @@ import { Input } from "~/components/ui/input"
 
 interface MenuItemListProps {
     initialItems: MenuItemWithAssociations[]
-    action?: Partial<MenuItemActionSearchParam>
 }
 
 export type OveredPoint = "none" | "top" | "bottom"
 
-export default function MenuItemList({ initialItems, action }: MenuItemListProps) {
+export default function MenuItemList({ initialItems }: MenuItemListProps) {
 
     if (!initialItems || initialItems.length === 0) {
         return <NoRecordsFound text="Nenhum item encontrado" />
