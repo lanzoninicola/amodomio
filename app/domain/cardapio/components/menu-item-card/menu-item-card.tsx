@@ -12,6 +12,7 @@ import MenuItemPriceVariationUtility from "../../menu-item-price-variations-util
 import randomReactKey from "~/utils/random-react-key"
 import { cn } from "~/lib/utils"
 import useFormSubmissionnState from "~/hooks/useFormSubmissionState"
+import MenuItemSwitchVisibility from "../menu-item-switch-visibility/menu-item-switch-visibility"
 
 
 interface MenuItemCardProps {
@@ -64,7 +65,7 @@ export default function MenuItemCard({ item, dragAndDrop }: MenuItemCardProps) {
                             <div className="w-full h-full bg-muted rounded-lg" />
                         }
                     </div>
-                    <div className="flex items-center col-span-3 gap-2">
+                    <div className="flex items-center col-span-7 gap-2">
                         <div className="flex flex-col gap-0">
                             <h4 className="text-lg font-bold tracking-tight">
                                 {item.name}
@@ -72,24 +73,22 @@ export default function MenuItemCard({ item, dragAndDrop }: MenuItemCardProps) {
                             <span className="text-[10px] text-muted-foreground cursor-pointer" onClick={copyItemId}>{item.id}</span>
                         </div>
                     </div>
-                    <div className="grid grid-cols-5 col-span-4 gap-x-2">
+                    {/* <div className="grid grid-cols-5 col-span-4 gap-x-2">
                         <div className="flex flex-col justify-start items-center  gap-1 mr-2">
                             <span className="text-[9px] text-muted-foreground uppercase tracking-wider">Base</span>
                             <input type="text" name="price" defaultValue={item.basePriceAmount.toFixed(2)}
                                 className="border-none outline-none w-full text-[0.75rem] text-center bg-muted rounded-sm" />
                         </div>
                         <PriceVariationsInCard item={item} />
-                    </div>
+                    </div> */}
 
                     <div className="mt-2 col-span-3">
-                        <Form method="post" className="flex justify-between md:justify-end gap-4 w-full items-center ">
 
-                            <span className="font-semibold text-sm">Públicar no cardápio</span>
-                            <Switch defaultChecked={item?.visible || false} onCheckedChange={handleVisibility} />
-                            <input type="hidden" name="id" value={item?.id} />
-                            <button ref={submitBtnRef} className="hidden" type="submit" value={"menu-item-visibility-change"} name="_action" />
-
-                        </Form>
+                        <MenuItemSwitchVisibility
+                            menuItem={item}
+                            setVisible={setVisible}
+                            visible={visible}
+                        />
                     </div>
 
                     <div className="col-span-1 flex justify-end">
