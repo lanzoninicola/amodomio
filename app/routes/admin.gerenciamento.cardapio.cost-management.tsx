@@ -136,74 +136,80 @@ export default function AdminGerenciamentoCardapioSellPriceManagement() {
 
                         return (
 
-                            <div className="h-[500px] overflow-y-scroll">
-                                <ul>
-                                    {
-                                        // @ts-ignore
-                                        menuItemsWithCostVariations.map((menuItem: MenuItemWithCostVariations) => {
+                            <div className="flex flex-col ">
+                                <h2>Gerenciamento Custos Itens</h2>
+                                <Separator className="my-4" />
 
-                                            return (
-                                                <li key={menuItem.menuItemId} className="mb-6  p-2">
-                                                    <div className="flex flex-col gap-0 mb-4 bg-slate-300 rounded-md px-4 py-1">
-                                                        <span className="text-md font-semibold">{menuItem.name}</span>
-                                                        {/* <span className="text-[10px] text-muted-foreground">{menuItem.ingredients}</span> */}
-                                                    </div>
+                                <div className="h-[500px] overflow-y-scroll">
+                                    <ul>
+                                        {
+                                            // @ts-ignore
+                                            menuItemsWithCostVariations.map((menuItem: MenuItemWithCostVariations) => {
 
-                                                    <ul className="grid grid-cols-5 gap-x-1">
-                                                        {menuItem.costVariations.map((record) => (
-                                                            <section key={randomReactKey()} className="mb-8">
+                                                return (
+                                                    <li key={menuItem.menuItemId} className="mb-6  p-2">
+                                                        <div className="flex flex-col gap-0 mb-4 bg-slate-300 rounded-md px-4 py-1">
+                                                            <span className="text-md font-semibold">{menuItem.name}</span>
+                                                            {/* <span className="text-[10px] text-muted-foreground">{menuItem.ingredients}</span> */}
+                                                        </div>
 
-                                                                <ul className="flex gap-6">
-                                                                    <li key={record.sizeId}>
-                                                                        <div className="flex flex-col">
-                                                                            <span className="text-[12px] font-medium uppercase tracking-wider">
-                                                                                {record.sizeName}
-                                                                            </span>
+                                                        <ul className="grid grid-cols-5 gap-x-1">
+                                                            {menuItem.costVariations.map((record) => (
+                                                                <section key={randomReactKey()} className="mb-8">
 
-                                                                            <Form method="post" className="flex flex-col gap-1 justify-center items-center">
-                                                                                <div className="flex flex-col gap-2">
-                                                                                    <div className="flex gap-1">
-                                                                                        <input type="hidden" name="menuItemId" value={menuItem.menuItemId} />
-                                                                                        <input type="hidden" name="menuItemCostVariationId" value={record.menuItemCostVariationId ?? ""} />
-                                                                                        <input type="hidden" name="updatedBy" value={record.updatedBy || user?.email || ""} />
-                                                                                        <input type="hidden" name="previousCostAmount" value={record.previousCostAmount} />
+                                                                    <ul className="flex gap-6">
+                                                                        <li key={record.sizeId}>
+                                                                            <div className="flex flex-col">
+                                                                                <span className="text-[12px] font-medium uppercase tracking-wider">
+                                                                                    {record.sizeName}
+                                                                                </span>
 
-                                                                                        <div className="flex flex-col gap-y-0">
-                                                                                            <span className="text-muted-foreground text-[11px]">Custo Ficha Tecnica</span>
-                                                                                            <NumericInput name="costAmount" defaultValue={record.costAmount} />
+                                                                                <Form method="post" className="flex flex-col gap-1 justify-center items-center">
+                                                                                    <div className="flex flex-col gap-2">
+                                                                                        <div className="flex gap-1">
+                                                                                            <input type="hidden" name="menuItemId" value={menuItem.menuItemId} />
+                                                                                            <input type="hidden" name="menuItemCostVariationId" value={record.menuItemCostVariationId ?? ""} />
+                                                                                            <input type="hidden" name="updatedBy" value={record.updatedBy || user?.email || ""} />
+                                                                                            <input type="hidden" name="previousCostAmount" value={record.previousCostAmount} />
+
+                                                                                            <div className="flex flex-col gap-y-0">
+                                                                                                <span className="text-muted-foreground text-[11px]">Custo Ficha Tecnica</span>
+                                                                                                <NumericInput name="costAmount" defaultValue={record.costAmount} />
+                                                                                            </div>
+
+
                                                                                         </div>
 
-
+                                                                                        <div className="flex flex-col gap-1">
+                                                                                            <span className="text-xs text-muted-foreground">Custo anterior: {record.previousCostAmount}</span>
+                                                                                        </div>
                                                                                     </div>
 
-                                                                                    <div className="flex flex-col gap-1">
-                                                                                        <span className="text-xs text-muted-foreground">Custo anterior: {record.previousCostAmount}</span>
-                                                                                    </div>
-                                                                                </div>
+                                                                                    <SubmitButton
+                                                                                        actionName="menu-item-cost-variation-update"
+                                                                                        tabIndex={0}
+                                                                                        cnContainer="md:px-12 md:py-0 bg-slate-300 hover:bg-slate-400"
+                                                                                        cnLabel="text-[11px] tracking-widest text-black uppercase"
+                                                                                        iconColor="black"
+                                                                                    />
+                                                                                </Form>
+                                                                            </div>
+                                                                        </li>
 
-                                                                                <SubmitButton
-                                                                                    actionName="menu-item-cost-variation-update"
-                                                                                    tabIndex={0}
-                                                                                    cnContainer="md:px-12 md:py-0 bg-slate-300 hover:bg-slate-400"
-                                                                                    cnLabel="text-[11px] tracking-widest text-black uppercase"
-                                                                                    iconColor="black"
-                                                                                />
-                                                                            </Form>
-                                                                        </div>
-                                                                    </li>
+                                                                    </ul>
+                                                                </section>
+                                                            ))}
 
-                                                                </ul>
-                                                            </section>
-                                                        ))}
-
-                                                    </ul>
+                                                        </ul>
 
 
-                                                </li>
-                                            )
-                                        })
-                                    }
-                                </ul>
+                                                    </li>
+                                                )
+                                            })
+                                        }
+                                    </ul>
+                                </div>
+
                             </div>
 
 

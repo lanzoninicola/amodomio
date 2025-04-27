@@ -25,11 +25,23 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
       ],
     },
     {
-      title: "Gerenciamento",
+      title: "Gerenciamento Cardápio",
       items: [
         {
           title: "Cardápio Delivery",
           href: "/admin/gerenciamento/cardapio/main/list",
+          items: [],
+          disabled: false,
+        },
+        {
+          title: "Custos Itens",
+          href: "/admin/gerenciamento/cardapio/cost-management",
+          items: [],
+          disabled: false,
+        },
+        {
+          title: "Preços de Venda",
+          href: "/admin/gerenciamento/cardapio/sell-price-management",
           items: [],
           disabled: false,
         },
@@ -45,6 +57,11 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
           items: [],
           disabled: false,
         },
+      ],
+    },
+    {
+      title: "Produção",
+      items: [
         {
           title: "Stock Massa",
           href: "/admin/gerenciamento/stock-massa-init",

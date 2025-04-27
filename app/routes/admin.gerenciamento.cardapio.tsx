@@ -100,55 +100,17 @@ export default function AdminCardapioOutlet() {
             }>
 
                 <div className="w-full p-6 bg-muted mb-8 rounded-lg" >
-                    <div className="flex justify-between mb-4 items-center">
-                        <h1 className="font-bold text-xl mb-1">Cardapio</h1>
+                    <div className="flex justify-between items-center">
+                        <h1 className="font-bold text-xl mb-1">Gerenciamento Cardápio</h1>
 
-                        <Link to="/admin/gerenciamento/cardapio/main" >
+                        <Link to="/admin/gerenciamento/cardapio/main/list" >
                             <span className="text-[12px] underline uppercase tracking-wider">Voltar para a lista</span>
                         </Link>
                     </div>
-                    <Separator className="my-1" />
-                    <div className="flex gap-2 md:grid md:grid-cols-12">
-                        <Link to="new"
-                            className="flex flex-col gap-1 items-center hover:bg-muted-foreground p-1 rounded-md">
-                            <SquarePlus size={16} />
-                            <span className="text-[11px] font-semibold leading-[1.15] text-center">Novo item</span>
-                        </Link>
-
-                        <Link to="/admin/gerenciamento/cardapio/export-wall"
-                            className="flex flex-col gap-1 items-center hover:bg-muted-foreground p-1 rounded-md">
-                            <Printer size={16} />
-                            <span className="text-[11px] font-semibold leading-[1.15] text-center">Imprimir</span>
-                        </Link>
-                        <Link to="/admin/gerenciamento/cardapio/export"
-                            className="flex flex-col gap-1 items-center hover:bg-muted-foreground p-1 rounded-md">
-                            <CircleArrowOutUpRight size={16} />
-                            <span className="text-[11px] font-semibold leading-[1.15] text-center">Exportar</span>
-                        </Link>
-                    </div>
-                    <Separator className="my-1" />
                 </div>
 
-                <div className="flex flex-col gap-6 mb-4">
-                    {/** @ts-ignore */}
-                    {/* <CardapioAdminStats listGroupedByCategory={listGroupedByCategory} /> */}
 
-                    <div className="flex gap-4 items-center">
-                        <MenuItemNavLink to={"main"} isActive={activeTab === "main"}>
-                            <span>Itens</span>
-                        </MenuItemNavLink>
-                        <MenuItemNavLink to={"cost-management"} isActive={activeTab === "cost-management"}>
-                            Gerenciamento custos
-                        </MenuItemNavLink>
 
-                        <MenuItemNavLink to={"sell-price-management"} isActive={activeTab === "sell-price-management"}>
-                            Gerenciamento preço de venda
-                        </MenuItemNavLink>
-
-                    </div>
-                </div>
-
-                <Separator className="mb-4" />
 
             </div>
 
