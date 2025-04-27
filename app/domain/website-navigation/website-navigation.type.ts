@@ -1,5 +1,4 @@
 import { LucideIcon } from "lucide-react";
-import { Icons } from "~/components/primitives/icons/icons";
 
 export interface NavItem {
   title: string;

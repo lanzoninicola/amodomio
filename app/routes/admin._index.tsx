@@ -152,6 +152,27 @@ function CardapioItems({
 
     const [showActiveItems, setShowActiveItems] = useState(true)
 
+    const ActiveTab = ({ label, showActiveItems, highlightCondition }: {
+        label: string, showActiveItems: boolean,
+        highlightCondition: boolean
+    }) => {
+        return (
+            <div className={
+                cn(
+                    "grid place-items-center bg-none",
+                    highlightCondition === true && "bg-black text-white font-semibold px-2 py-1",
+                )
+            }>
+                <span className={
+                    cn(
+                        "text-xs uppercase tracking-widest cursor-pointer hover:underline",
+                    )
+                }
+                    onClick={() => setShowActiveItems(showActiveItems)}>{label}</span>
+            </div>
+        )
+    }
+
     return (
         <div className="flex flex-col items-center">
 
@@ -169,22 +190,10 @@ function CardapioItems({
             </div>
 
             <div className="flex gap-4 items-center">
-                <span className={
-                    cn(
-                        "text-xs uppercase tracking-widest cursor-pointer hover:underline text-muted-foreground",
-                        showActiveItems === true && "text-black font-semibold"
-                    )
-                }
-                    onClick={() => setShowActiveItems(true)}>Venda ativa</span>
-
+                <ActiveTab label="Venda ativa" showActiveItems={true} highlightCondition={showActiveItems === true} />
                 <span>-</span>
-                <span className={
-                    cn(
-                        "text-xs uppercase tracking-widest cursor-pointer hover:underline text-muted-foreground",
-                        showActiveItems === false && "text-black font-semibold"
-                    )
-                }
-                    onClick={() => setShowActiveItems(false)}>Venda pausada</span>
+                <ActiveTab label="Venda pausada" showActiveItems={false} highlightCondition={showActiveItems === false} />
+
             </div>
             <Separator className="my-2 w-full" />
 

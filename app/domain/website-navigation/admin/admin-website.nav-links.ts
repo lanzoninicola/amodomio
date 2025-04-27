@@ -31,6 +31,7 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
           title: "Cardápio Delivery",
           href: "/admin/gerenciamento/cardapio/main",
           items: [],
+          disabled: false,
         },
         {
           title: "Cardápio Pizza Al Taglio",
