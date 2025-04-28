@@ -37,7 +37,7 @@ export async function action({ request }: ActionFunctionArgs) {
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);
 
-    console.log({ action: _action, values })
+    // console.log({ action: _action, values })
 
     if (_action === "menu-item-cost-variation-upsert-user-input") {
 
@@ -62,14 +62,9 @@ export async function action({ request }: ActionFunctionArgs) {
             }
         ))
 
-        console.log({ err })
-
         if (err) {
             return badRequest(err)
         }
-
-
-
 
         return ok(`O custo da ficha tecnica foi atualizado com sucesso`)
     }
@@ -97,14 +92,9 @@ export async function action({ request }: ActionFunctionArgs) {
             }
         ))
 
-        console.log({ err })
-
         if (err) {
             return badRequest(err)
         }
-
-
-
 
         return ok(`O custo da ficha tecnica foi atualizado com sucesso`)
     }
@@ -133,16 +123,12 @@ export async function action({ request }: ActionFunctionArgs) {
 
         const [err, result] = await prismaIt(menuItemCostVariationPrismaEntity.upsertMany(menuItemId, costVariations))
 
-        console.log({ err })
-
         if (err) {
             return badRequest(err)
         }
 
         return ok(`Os custos da ficha tecnica foi atualizado com sucesso`)
     }
-
-
 
     return ok("Elemento atualizado com successo")
 }
