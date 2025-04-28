@@ -186,6 +186,7 @@ export default function AdminGerenciamentoCardapioCostManagementIndex() {
                                             return (
                                                 <li key={menuItem.menuItemId} className="p-2">
                                                     <div className="flex justify-between  items-center mb-4 bg-slate-300 rounded-md px-4 py-1">
+
                                                         <h3 className="text-md font-semibold">{menuItem.name}</h3>
                                                         <Form method="post" className="flex gap-2">
                                                             <input type="hidden" name="menuItemId" value={menuItem.menuItemId} />
@@ -213,14 +214,21 @@ export default function AdminGerenciamentoCardapioCostManagementIndex() {
                                                                         )
                                                                     }>
                                                                         <div className="flex flex-col">
-                                                                            <h4 className={
+                                                                            <div className={
                                                                                 cn(
-                                                                                    "text-[12px] font-medium uppercase tracking-wider mb-2",
-                                                                                    record.sizeKey === "pizza-medium" && "font-semibold",
+                                                                                    " mb-2",
+                                                                                    record.sizeKey === "pizza-medium" && "grid place-items-center bg-black",
                                                                                 )
                                                                             }>
-                                                                                {record.sizeName}
-                                                                            </h4>
+                                                                                <h4 className={
+                                                                                    cn(
+                                                                                        "text-[12px] font-medium uppercase tracking-wider",
+                                                                                        record.sizeKey === "pizza-medium" && "font-semibold text-white",
+                                                                                    )
+                                                                                }>
+                                                                                    {record.sizeName}
+                                                                                </h4>
+                                                                            </div>
 
                                                                             <Form method="post" className="flex flex-col gap-1 justify-center items-center">
                                                                                 <div className="flex flex-col gap-2 mb-2">
