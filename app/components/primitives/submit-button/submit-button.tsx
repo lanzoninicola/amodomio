@@ -2,38 +2,39 @@ import { Loader, Save } from "lucide-react";
 import { Ref, forwardRef } from "react";
 import type { ButtonProps } from "~/components/ui/button";
 import { Button } from "~/components/ui/button";
-import useFormSubmissionnState from "~/hooks/useFormSubmissionState";
+import useFormSubmissionState from "~/hooks/useFormSubmissionState";
 import { cn } from "~/lib/utils";
 
-
 interface SubmitButtonProps extends ButtonProps {
-    actionName: string,
-    showText?: boolean
-    idleText?: string,
-    loadingText?: string,
-    disableLoadingAnimation?: boolean,
-    onlyIcon?: boolean
-    className?: string
-    labelClassName?: string
-    size?: "sm" | "lg" | "default" | null | undefined,
-    icon?: JSX.Element
-    iconColor?: string
-    cnContainer?: string
-    cnLabel?: string
-    cnIcon?: string
+    actionName: string;
+    showText?: boolean;
+    idleText?: string;
+    loadingText?: string;
+    disableLoadingAnimation?: boolean;
+    onlyIcon?: boolean;
+    hideIcon?: boolean;
+    size?: "sm" | "lg" | "default" | null | undefined;
+    icon?: JSX.Element;
+    iconColor?: string;
+    className?: string;
+    labelClassName?: string;
+    cnContainer?: string;
+    cnLabel?: string;
+    cnIcon?: string;
 }
 
 const SubmitButton = forwardRef<HTMLButtonElement, SubmitButtonProps>(({
     actionName,
     showText = true,
-    idleText,
-    loadingText,
-    disableLoadingAnimation,
+    idleText = "Salvar",
+    loadingText = "Salvando...",
+    disableLoadingAnimation = false,
     onlyIcon = false,
-    className,
+    hideIcon = false,
     size = "default",
     icon,
-    iconColor,
+    iconColor = "white",
+    className,
     labelClassName,
     cnContainer,
     cnLabel,
@@ -41,50 +42,59 @@ const SubmitButton = forwardRef<HTMLButtonElement, SubmitButtonProps>(({
     ...props
 }, ref: Ref<HTMLButtonElement>) => {
 
-    const formSubmissionState = useFormSubmissionnState();
-    let formSubmissionInProgress = formSubmissionState === "submitting";
+    const formSubmissionState = useFormSubmissionState();
+    const formSubmissionInProgress = !disableLoadingAnimation && formSubmissionState === "submitting";
 
-    if (disableLoadingAnimation) {
-        formSubmissionInProgress = false;
-    }
+    // Define qual ícone usar
+    const defaultIcon = formSubmissionInProgress
+        ? <Loader size={16} color={iconColor} className={cn(cnIcon)} />
+        : <Save size={16} color={iconColor} className={cn(cnIcon)} />;
 
-    let buttonIcon = formSubmissionInProgress ?
-        <Loader size={16} color={iconColor || "white"} className={cn(cnIcon)} /> :
-        <Save size={16} color={iconColor || "white"} className={cn(cnIcon)} />;
-    let text = formSubmissionInProgress ? (loadingText || "Salvando...") : (idleText || "Salvar");
-    let disabled = formSubmissionInProgress || props.disabled;
+    const buttonIcon = icon || defaultIcon;
 
-    buttonIcon = icon ? icon : buttonIcon;
+    // Define o texto do botão
+    const buttonText = formSubmissionInProgress ? loadingText : idleText;
+
+    const disabled = formSubmissionInProgress || props.disabled;
 
     return (
         <Button
             type="submit"
             name="_action"
-            size="sm"
             value={actionName}
-            disabled={disabled}
+            size="sm"
             ref={ref}
+            disabled={disabled}
             {...props}
             className={cn(
-                `flex gap-2 w-full md:max-w-max md:px-8`,
+                "flex items-center w-full md:max-w-max",
+                (hideIcon || onlyIcon) ? "" : "gap-2",
+                "md:px-8",
                 className,
                 cnContainer,
             )}
         >
-            {buttonIcon}
-            {onlyIcon === false &&
-                (<span className={cn(
-                    size === "sm" && "text-sm",
-                    size === "lg" && "text-lg",
-                    size === "default" && "text-md",
-                    labelClassName,
-                    cnLabel,
-                )}>
-                    {showText === true && text}
-                </span>)
-            }
+            {/* Ícone */}
+            {!hideIcon && buttonIcon}
+
+            {/* Texto */}
+            {!onlyIcon && (
+                <span
+                    className={cn(
+                        size === "sm" && "text-sm",
+                        size === "lg" && "text-lg",
+                        size === "default" && "text-md",
+                        labelClassName,
+                        cnLabel,
+                    )}
+                >
+                    {showText && buttonText}
+                </span>
+            )}
         </Button>
     );
 });
+
+SubmitButton.displayName = "SubmitButton"; // Boa prática para componentes com forwardRef
 
 export default SubmitButton;
