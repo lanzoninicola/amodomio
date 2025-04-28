@@ -16,12 +16,17 @@ import { PrismaEntityProps } from "~/lib/prisma/types.server";
 import { menuItemTagPrismaEntity } from "./menu-item-tags.prisma.entity.server";
 import MenuItemPriceVariationUtility from "./menu-item-price-variations-utility";
 import { v4 as uuidv4 } from "uuid";
-import NodeCache from "node-cache";
 import { CloudinaryUtils } from "~/lib/cloudinary";
 import {
   MenuItemWithCostVariations,
   MenuItemWithSellPriceVariations,
 } from "./menu-item.types";
+import {
+  MenuItemCostVariationPrismaEntity,
+  PizzaSizeKey,
+  menuItemCostVariationPrismaEntity,
+} from "./menu-item-cost-variation.entity.server";
+import { CacheManager } from "../cache/cache-manager.server";
 
 export interface MenuItemWithAssociations extends MenuItem {
   priceVariations: MenuItemPriceVariation[];
@@ -62,14 +67,22 @@ interface MenuItemEntityFindAllProps {
   mock?: boolean;
 }
 
+interface MenuItemEntityProps extends PrismaEntityProps {
+  menuItemCostVariation: MenuItemCostVariationPrismaEntity;
+}
+
 export class MenuItemPrismaEntity {
   client;
   // Simple in-memory cache
-  private cache: NodeCache;
+  private cacheManager: CacheManager;
 
-  constructor({ client }: PrismaEntityProps) {
+  menuItemCostVariation: MenuItemCostVariationPrismaEntity;
+
+  constructor({ client, menuItemCostVariation }: MenuItemEntityProps) {
     this.client = client;
-    this.cache = new NodeCache({ stdTTL: 60, checkperiod: 30 });
+    this.cacheManager = new CacheManager();
+
+    this.menuItemCostVariation = menuItemCostVariation;
   }
 
   async findAll(
@@ -79,15 +92,12 @@ export class MenuItemPrismaEntity {
       imageScaleWidth: 1280,
     }
   ) {
-    const cacheKey = `findAll:${JSON.stringify(params)}`;
-    let result = this.cache.get<MenuItemWithAssociations[]>(cacheKey);
+    const cacheKey = `MenuItemPrismaEntity.findAll:${JSON.stringify(params)}`;
+    let result = this.cacheManager.get<MenuItemWithAssociations[]>(cacheKey);
 
     if (result) {
-      console.log("cache hit", cacheKey);
       return result;
     }
-
-    console.log("cache miss", cacheKey);
 
     if (params?.mock) {
       // fake to remove TS error. need to be fixed
@@ -155,8 +165,7 @@ export class MenuItemPrismaEntity {
         })
       : [...records];
 
-    this.cache.set(cacheKey, returnedRecords);
-    console.log("cache set", cacheKey);
+    this.cacheManager.set(cacheKey, returnedRecords);
 
     return returnedRecords;
   }
@@ -206,28 +215,50 @@ export class MenuItemPrismaEntity {
         priceVariations: true,
         MenuItemCostVariation: true,
       },
+      orderBy: { sortOrderIndex: "asc" },
     });
 
     const sizes = await this.client.menuItemSize.findMany({
       orderBy: { sortOrderIndex: "asc" },
     });
 
-    return allMenuItems.map((item) => {
-      const costVariations = sizes.map((size) => {
-        const variation = item.MenuItemCostVariation?.find(
-          (cv) => cv.menuItemSizeId === size.id
-        );
+    // array of medium size cost variations for all items
+    const allReferenceCostVariations =
+      await this.menuItemCostVariation.findAllReferenceCost();
 
-        return {
-          menuItemCostVariationId: variation?.id,
-          sizeId: size.id,
-          sizeName: size.name,
-          costAmount: variation?.costAmount ?? 0,
-          updatedBy: variation?.updatedBy,
-          updatedAt: variation?.updatedAt,
-          previousCostAmount: variation?.previousCostAmount ?? 0,
-        };
-      });
+    return allMenuItems.map((item) => {
+      const costVariations = sizes
+        .sort((a, b) => a.sortOrderIndex - b.sortOrderIndex)
+        .map((size) => {
+          const variation = item.MenuItemCostVariation?.find(
+            (cv) => cv.menuItemSizeId === size.id
+          );
+
+          let sizeKey: PizzaSizeKey = "pizza-medium"; // Default size key
+          sizeKey = size.key as PizzaSizeKey;
+
+          const itemReferenceCost = allReferenceCostVariations.find(
+            (c) => c.menuItemId === item.id
+          );
+
+          const proposedCostAmount =
+            MenuItemCostVariationPrismaEntity.calculateItemProposedCostVariation(
+              sizeKey,
+              itemReferenceCost?.costAmount ?? 0
+            );
+
+          return {
+            menuItemCostVariationId: variation?.id,
+            sizeId: size.id,
+            sizeKey,
+            sizeName: size.name,
+            costAmount: variation?.costAmount ?? 0,
+            proposedCostAmount: proposedCostAmount ?? 0,
+            updatedBy: variation?.updatedBy,
+            updatedAt: variation?.updatedAt,
+            previousCostAmount: variation?.previousCostAmount ?? 0,
+          };
+        });
 
       return {
         menuItemId: item.id,
@@ -371,7 +402,7 @@ export class MenuItemPrismaEntity {
       sortOrderIndex: lastsortOrderIndex + 1,
     };
 
-    await this.invalidateCache();
+    await this.cacheManager.invalidate();
 
     return await this.client.menuItem.create({ data: nextItem });
   }
@@ -381,13 +412,13 @@ export class MenuItemPrismaEntity {
       data.updatedAt = new Date().toISOString();
     }
 
-    await this.invalidateCache();
+    await this.cacheManager.invalidate();
 
     return await this.client.menuItem.update({ where: { id }, data });
   }
 
   async softDelete(id: string, deletedBy: string = "undefined") {
-    await this.invalidateCache();
+    await this.cacheManager.invalidate();
 
     return await this.client.menuItem.update({
       where: { id },
@@ -400,13 +431,13 @@ export class MenuItemPrismaEntity {
   }
 
   async delete(id: string) {
-    await this.invalidateCache();
+    await this.cacheManager.invalidate();
 
     return await this.client.menuItem.delete({ where: { id } });
   }
 
   async associateTag(itemId: string, tag: Tag) {
-    await this.invalidateCache();
+    await this.cacheManager.invalidate();
 
     return await menuItemTagPrismaEntity.create({
       createdAt: new Date().toISOString(),
@@ -440,7 +471,7 @@ export class MenuItemPrismaEntity {
   }
 
   async removeTag(itemId: string, tagId: string) {
-    await this.invalidateCache();
+    await this.cacheManager.invalidate();
 
     const tag = await this.client.menuItemTag.findFirst({
       where: {
@@ -471,15 +502,11 @@ export class MenuItemPrismaEntity {
       },
     });
   }
-
-  async invalidateCache() {
-    this.cache.flushAll(); // Simple example to clear the entire cache
-    console.log("Cache invalidated");
-  }
 }
 
 const menuItemPrismaEntity = new MenuItemPrismaEntity({
   client: prismaClient,
+  menuItemCostVariation: menuItemCostVariationPrismaEntity,
 });
 
 export { menuItemPrismaEntity };
