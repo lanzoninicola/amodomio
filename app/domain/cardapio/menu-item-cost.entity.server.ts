@@ -2,6 +2,13 @@ import { Prisma } from "@prisma/client";
 import prismaClient from "~/lib/prisma/client.server";
 import { PrismaEntityProps } from "~/lib/prisma/types.server";
 
+/**
+ * DO NOT USE
+ *
+ * // deprecated
+ * // This entity is deprecated and will be removed in the future.
+ * @deprecated
+ */
 class MenuItemCostPrismaEntity {
   client;
   constructor({ client }: PrismaEntityProps) {

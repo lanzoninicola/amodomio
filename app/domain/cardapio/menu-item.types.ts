@@ -9,8 +9,10 @@ export interface MenuItemWithCostVariations {
 interface MenuItemCostVariationBySize {
   menuItemCostVariationId: string | undefined;
   sizeId: string;
+  sizeKey: string;
   sizeName: string;
   costAmount: number;
+  proposedCostAmount: number;
   updatedBy: string | null | undefined;
   updatedAt: Date | undefined;
   previousCostAmount: number;

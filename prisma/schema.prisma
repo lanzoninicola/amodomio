@@ -156,6 +156,23 @@ model GroceryListItem {
   @@map("grocery_list_items")
 }
 
+model MenuItemGroup {
+  id             String    @id @default(uuid())
+  name           String
+  description    String
+  /// sortOrder should be 1000 for the first group, 2000 for the second, etc
+  sortOrderIndex Int       @map("sort_order_index")
+  visible        Boolean   @default(true)
+  createdAt      DateTime  @map("created_at")
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+  deletedBy      String?   @map("deleted_by")
+
+  MenuItem MenuItem[]
+
+  @@map("menu_item_groups")
+}
+
 model MenuItem {
   id                            String                          @id @default(uuid())
   name                          String
@@ -183,6 +200,8 @@ model MenuItem {
   MenuItemSellingPriceVariation MenuItemSellingPriceVariation[]
   MenuItemCostVariation         MenuItemCostVariation[]
   priceVariations               MenuItemPriceVariation[]
+  MenuItemGroup                 MenuItemGroup?                  @relation(fields: [menuItemGroupId], references: [id])
+  menuItemGroupId               String?                         @map("menu_item_group_id")
 
   @@map("menu_items")
 }

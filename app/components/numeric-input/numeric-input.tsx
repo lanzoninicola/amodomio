@@ -40,6 +40,7 @@ export function NumericInput({ decimalScale = 2, ...props }: NumericInputProps) 
             className={cn(
                 `text-right font-mono ${props.className ?? ''}`,
                 props.className,
+                props.readOnly && 'cursor-not-allowed border-none outline-none ',
 
             )}
         />
