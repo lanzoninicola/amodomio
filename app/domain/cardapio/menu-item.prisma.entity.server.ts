@@ -206,7 +206,7 @@ export class MenuItemPrismaEntity {
   /**
    * Find all menu items with cost associated to each size
    */
-  async findAllWithCostVariations(
+  async findManyWithCostVariations(
     params: MenuItemEntityFindAllProps = {}
   ): Promise<MenuItemWithCostVariations[]> {
     const allMenuItems = await this.client.menuItem.findMany({
@@ -267,6 +267,31 @@ export class MenuItemPrismaEntity {
         costVariations,
       };
     });
+  }
+
+  async findOneWithCostVariations(
+    menuItemId: string,
+    options = {
+      imageScaleWidth: 1280,
+    }
+  ): Promise<MenuItemWithCostVariations | null> {
+    const item = await this.client.menuItem.findFirst({
+      where: { id: menuItemId },
+      include: {
+        priceVariations: true,
+        MenuItemCostVariation: true,
+      },
+    });
+
+    if (!item) {
+      return null;
+    }
+
+    const costVariations = await this.findManyWithCostVariations({
+      where: { id: menuItemId },
+    });
+
+    return costVariations[0];
   }
 
   async findAllWithSellPriceVariations(

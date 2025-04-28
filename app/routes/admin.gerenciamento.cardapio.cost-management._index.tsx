@@ -21,7 +21,7 @@ import createUUID from "~/utils/uuid";
 
 export async function loader({ request }: LoaderFunctionArgs) {
 
-    const menuItemsWithCostVariations = menuItemPrismaEntity.findAllWithCostVariations()
+    const menuItemsWithCostVariations = menuItemPrismaEntity.findManyWithCostVariations()
 
     const user = authenticator.isAuthenticated(request);
 
@@ -39,7 +39,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
     console.log({ action: _action, values })
 
-    if (_action === "menu-item-cost-variation-update-user-input") {
+    if (_action === "menu-item-cost-variation-upsert-user-input") {
 
         const menuItemId = values?.menuItemId as string
         const menuItemCostVariationId = values?.menuItemCostVariationId as string
@@ -74,7 +74,7 @@ export async function action({ request }: ActionFunctionArgs) {
         return ok(`O custo da ficha tecnica foi atualizado com sucesso`)
     }
 
-    if (_action === "menu-item-cost-variation-update-proposed-input") {
+    if (_action === "menu-item-cost-variation-upsert-proposed-input") {
 
         const menuItemId = values?.menuItemId as string
         const menuItemCostVariationId = values?.menuItemCostVariationId as string
@@ -107,6 +107,39 @@ export async function action({ request }: ActionFunctionArgs) {
 
 
         return ok(`O custo da ficha tecnica foi atualizado com sucesso`)
+    }
+
+    if (_action === "menu-item-cost-variation-upsert-all-proposed-input") {
+        const menuItemId = values?.menuItemId as string
+        const updatedBy = values?.updatedBy as string
+
+        const menuItemWithCostVariations = await menuItemPrismaEntity.findOneWithCostVariations(menuItemId)
+
+        if (!menuItemWithCostVariations) {
+            return badRequest("Nenhum item encontrado")
+        }
+
+        const costVariations = menuItemWithCostVariations.costVariations.map(record => {
+            return {
+                id: record.menuItemCostVariationId,
+                menuItemId,
+                costAmount: record.proposedCostAmount,
+                updatedAt: record.updatedAt,
+                updatedBy,
+                previousCostAmount: record.costAmount,
+                menuItemSizeId: record.sizeId,
+            }
+        })
+
+        const [err, result] = await prismaIt(menuItemCostVariationPrismaEntity.upsertMany(menuItemId, costVariations))
+
+        console.log({ err })
+
+        if (err) {
+            return badRequest(err)
+        }
+
+        return ok(`Os custos da ficha tecnica foi atualizado com sucesso`)
     }
 
 
@@ -152,9 +185,21 @@ export default function AdminGerenciamentoCardapioCostManagementIndex() {
 
                                             return (
                                                 <li key={menuItem.menuItemId} className="p-2">
-                                                    <div className="flex flex-col gap-0 mb-4 bg-slate-300 rounded-md px-4 py-1">
-                                                        <span className="text-md font-semibold">{menuItem.name}</span>
-                                                        {/* <span className="text-[10px] text-muted-foreground">{menuItem.ingredients}</span> */}
+                                                    <div className="flex justify-between  items-center mb-4 bg-slate-300 rounded-md px-4 py-1">
+                                                        <h3 className="text-md font-semibold">{menuItem.name}</h3>
+                                                        <Form method="post" className="flex gap-2">
+                                                            <input type="hidden" name="menuItemId" value={menuItem.menuItemId} />
+                                                            <input type="hidden" name="updatedBy" value={user?.email || ""} />
+                                                            <SubmitButton
+                                                                actionName="menu-item-cost-variation-upsert-all-proposed-input"
+                                                                tabIndex={0}
+                                                                cnContainer="bg-white border w-full hover:bg-slate-200"
+                                                                cnLabel="text-[11px] tracking-widest text-black uppercase leading-[1.15]"
+                                                                hideIcon
+                                                                idleText="Aceitar todas as propostas"
+                                                                loadingText="Aceitando..."
+                                                            />
+                                                        </Form>
                                                     </div>
 
                                                     <ul className="grid grid-cols-5 gap-x-1">
@@ -193,7 +238,7 @@ export default function AdminGerenciamentoCardapioCostManagementIndex() {
                                                                                                 <NumericInput name="costAmount" defaultValue={record.costAmount} />
                                                                                             </div>
                                                                                             <SubmitButton
-                                                                                                actionName="menu-item-cost-variation-update-user-input"
+                                                                                                actionName="menu-item-cost-variation-upsert-user-input"
                                                                                                 tabIndex={0}
                                                                                                 cnContainer="md:py-0 bg-slate-300 hover:bg-slate-400"
                                                                                                 cnLabel="text-[11px] tracking-widest text-black uppercase"
@@ -207,7 +252,7 @@ export default function AdminGerenciamentoCardapioCostManagementIndex() {
                                                                                                 <NumericInput name="proposedCostAmount" defaultValue={record.proposedCostAmount} readOnly />
                                                                                             </div>
                                                                                             <SubmitButton
-                                                                                                actionName="menu-item-cost-variation-update-proposed-input"
+                                                                                                actionName="menu-item-cost-variation-upsert-proposed-input"
                                                                                                 tabIndex={0}
                                                                                                 cnContainer="bg-white border w-full hover:bg-slate-200"
                                                                                                 cnLabel="text-[11px] tracking-widest text-black uppercase leading-[1.15]"

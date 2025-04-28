@@ -46,8 +46,6 @@ export class MenuItemCostVariationPrismaEntity {
   }
 
   async upsert(id: string, data: MenuItemCostVariationUpsertInput) {
-    console.log("upsert", { id, data });
-
     const record = await this.client.menuItemCostVariation.findUnique({
       where: { id },
     });
@@ -67,6 +65,31 @@ export class MenuItemCostVariationPrismaEntity {
     return await this.create({
       ...data,
     });
+  }
+
+  async upsertMany(
+    menuItemId: string,
+    data: MenuItemCostVariationUpsertInput[]
+  ) {
+    const now = new Date();
+
+    const upsertPromises = data.map((item) =>
+      this.client.menuItemCostVariation.upsert({
+        where: { id: item.id || "" },
+        create: {
+          ...item,
+          menuItemId,
+          createdAt: now,
+          updatedAt: now,
+        },
+        update: {
+          ...item,
+          updatedAt: now,
+        },
+      })
+    );
+
+    return await Promise.all(upsertPromises);
   }
 
   async findAllCostBySizeKey(sizeKey: PizzaSizeKey = "pizza-medium") {
