@@ -20,17 +20,24 @@ interface MenuItemCostVariationBySize {
 
 // para preços de venda
 export interface MenuItemWithSellPriceVariations {
-  id: string;
+  menuItemId: string;
   name: string;
   ingredients: string;
   sellPriceVariations: MenuItemSellPriceVariationBySizeAndChannel[];
 }
 
 interface MenuItemSellPriceVariationBySizeAndChannel {
+  menuItemSellPriceVariationId: string | undefined;
   sizeId: string;
+  sizeKey: string;
   sizeName: string;
   channelId: string;
+  channelKey: string;
   channelName: string;
   priceAmount: number;
+  proposedPriceAmount: number;
   discountPercentage: number;
+  updatedBy: string | null | undefined;
+  updatedAt: Date | undefined;
+  previousPriceAmount: number;
 }

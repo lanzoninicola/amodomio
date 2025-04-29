@@ -2,13 +2,7 @@ import { MenuItem, Prisma } from "@prisma/client";
 import prismaClient from "~/lib/prisma/client.server";
 import { PrismaEntityProps } from "~/lib/prisma/types.server";
 import createUUID from "~/utils/uuid";
-
-export type PizzaSizeKey =
-  | "pizza-small"
-  | "pizza-medium"
-  | "pizza-big"
-  | "pizza-bigger"
-  | "pizza-slice";
+import { PizzaSizeKey } from "./menu-item-size.entity.server";
 
 export interface MenuItemCostVariationBaseInput {
   menuItemId: string;
@@ -102,11 +96,38 @@ export class MenuItemCostVariationPrismaEntity {
     });
   }
 
+  async findOneCostBySizeKey(menuItemId: string, sizeKey: PizzaSizeKey) {
+    return await this.client.menuItemCostVariation.findFirst({
+      where: {
+        menuItemId,
+        MenuItemSize: {
+          is: { key: sizeKey },
+        },
+      },
+    });
+  }
+
+  /**
+   * Find all cost variations for the reference size key.
+   *
+   * Other costs are calculated based on this reference size key.
+   * At this moment, the reference size key is "pizza-medium".
+   *
+   * @returns
+   */
   async findAllReferenceCost() {
     return await this.findAllCostBySizeKey(this.pizzaSizeKeyRef);
   }
 
-  static calculateItemProposedCostVariation(
+  /**
+   * The logic for calculating the cost variation for each pizza topping
+   * based on the size key.
+   *
+   * @param size
+   * @param refCostAmount
+   * @returns
+   */
+  static calculateOneProposedCostVariation(
     size: PizzaSizeKey,
     refCostAmount: number
   ): number {

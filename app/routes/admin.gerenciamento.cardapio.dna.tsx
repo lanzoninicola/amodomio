@@ -33,7 +33,6 @@ type ActionData = {
         faturamentoBrutoAmount?: string;
         custoFixoAmount?: string;
         taxaCartaoPerc?: string;
-        taxaMarketplacePerc?: string;
         impostoPerc?: string;
     };
 };
@@ -45,7 +44,6 @@ export const action: ActionFunction = async ({ request }) => {
     const faturamentoBrutoAmount = formData.get("faturamentoBrutoAmount");
     const custoFixoAmount = formData.get("custoFixoAmount");
     const taxaCartaoPerc = formData.get("taxaCartaoPerc");
-    const taxaMarketplacePerc = formData.get("taxaMarketplacePerc");
     const impostoPerc = formData.get("impostoPerc");
 
 
@@ -66,7 +64,7 @@ export const action: ActionFunction = async ({ request }) => {
     const settingsRecord = await prismaClient.dnaEmpresaSettings.findFirst();
 
     const custoFixoPerc = toFixedNumber(toFixedNumber(custoFixoAmount) / toFixedNumber(faturamentoBrutoAmount) * 100);
-    const dnaPerc = toFixedNumber(custoFixoPerc) + toFixedNumber(taxaCartaoPerc) + toFixedNumber(taxaMarketplacePerc) + toFixedNumber(impostoPerc);
+    const dnaPerc = toFixedNumber(custoFixoPerc) + toFixedNumber(taxaCartaoPerc) + toFixedNumber(impostoPerc);
 
 
     if (!settingsRecord) {
@@ -77,7 +75,6 @@ export const action: ActionFunction = async ({ request }) => {
                 custoFixoAmount: Number(custoFixoAmount),
                 custoFixoPerc,
                 taxaCartaoPerc: Number(taxaCartaoPerc),
-                taxaMarketplacePerc: Number(taxaMarketplacePerc),
                 impostoPerc: Number(impostoPerc),
                 dnaPerc,
             },
@@ -98,7 +95,6 @@ export const action: ActionFunction = async ({ request }) => {
             custoFixoAmount: Number(custoFixoAmount),
             custoFixoPerc,
             taxaCartaoPerc: Number(taxaCartaoPerc),
-            taxaMarketplacePerc: Number(taxaMarketplacePerc),
             impostoPerc: Number(impostoPerc),
             dnaPerc,
         },

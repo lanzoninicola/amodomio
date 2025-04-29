@@ -10,7 +10,7 @@ export default function AdminGerenciamentoCardapioCostManagement() {
   return (
     <div className="flex flex-col">
       <div className="flex justify-between items-center mb-2">
-        <h2>Gerenciamento Custos Itens</h2>
+        <h2 className="mb-2">Gerenciamento Custos Itens</h2>
 
         <Link to="/admin/gerenciamento/cardapio/cost-management/settings"
           className="flex gap-2 items-center hover:underline hover:cursor-pointer"

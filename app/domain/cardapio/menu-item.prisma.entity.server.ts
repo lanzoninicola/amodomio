@@ -23,10 +23,10 @@ import {
 } from "./menu-item.types";
 import {
   MenuItemCostVariationPrismaEntity,
-  PizzaSizeKey,
   menuItemCostVariationPrismaEntity,
 } from "./menu-item-cost-variation.entity.server";
 import { CacheManager } from "../cache/cache-manager.server";
+import { PizzaSizeKey } from "./menu-item-size.entity.server";
 
 export interface MenuItemWithAssociations extends MenuItem {
   priceVariations: MenuItemPriceVariation[];
@@ -67,8 +67,14 @@ interface MenuItemEntityFindAllProps {
   mock?: boolean;
 }
 
+interface FindManyWithSellPriceVariationsProps
+  extends MenuItemEntityFindAllProps {
+  channelKey?: string;
+  sizeKey?: string;
+}
+
 interface MenuItemEntityProps extends PrismaEntityProps {
-  menuItemCostVariation: MenuItemCostVariationPrismaEntity;
+  menuItemCostVariation: typeof menuItemCostVariationPrismaEntity;
 }
 
 export class MenuItemPrismaEntity {
@@ -76,7 +82,7 @@ export class MenuItemPrismaEntity {
   // Simple in-memory cache
   private cacheManager: CacheManager;
 
-  menuItemCostVariation: MenuItemCostVariationPrismaEntity;
+  menuItemCostVariation: typeof menuItemCostVariationPrismaEntity;
 
   constructor({ client, menuItemCostVariation }: MenuItemEntityProps) {
     this.client = client;
@@ -242,7 +248,7 @@ export class MenuItemPrismaEntity {
           );
 
           const proposedCostAmount =
-            MenuItemCostVariationPrismaEntity.calculateItemProposedCostVariation(
+            MenuItemCostVariationPrismaEntity.calculateOneProposedCostVariation(
               sizeKey,
               itemReferenceCost?.costAmount ?? 0
             );
@@ -294,14 +300,15 @@ export class MenuItemPrismaEntity {
     return costVariations[0];
   }
 
-  async findAllWithSellPriceVariations(
-    params: MenuItemEntityFindAllProps = {}
+  async findManyWithSellPriceVariations(
+    params: FindManyWithSellPriceVariationsProps = {}
   ): Promise<MenuItemWithSellPriceVariations[]> {
     const allMenuItems = await this.client.menuItem.findMany({
       where: params?.where,
       include: {
         MenuItemSellingPriceVariation: true,
       },
+      orderBy: { sortOrderIndex: "asc" },
     });
 
     const sizes = await this.client.menuItemSize.findMany({
@@ -311,27 +318,50 @@ export class MenuItemPrismaEntity {
     const channels = await this.client.menuItemSellingChannel.findMany();
 
     return allMenuItems.map((item) => {
-      const sellPriceVariations = sizes.flatMap((size) =>
-        channels.map((channel) => {
-          const variation = item.MenuItemSellingPriceVariation?.find(
-            (spv) =>
-              spv.menuItemSizeId === size.id &&
-              spv.menuItemSellingChannelId === channel.id
-          );
+      const sellPriceVariations = sizes
+        .filter((size) => {
+          if (params?.sizeKey) {
+            return size.key === params.sizeKey;
+          }
 
-          return {
-            sizeId: size.id,
-            sizeName: size.name,
-            channelId: channel.id,
-            channelName: channel.name,
-            priceAmount: variation?.priceAmount ?? 0,
-            discountPercentage: variation?.discountPercentage ?? 0,
-          };
+          return true;
         })
-      );
+        .flatMap((size) =>
+          channels
+            .filter((c) => {
+              if (params?.channelKey) {
+                return c.key === params.channelKey;
+              }
+
+              return true;
+            })
+            .map((channel) => {
+              const variation = item.MenuItemSellingPriceVariation?.find(
+                (spv) =>
+                  spv.menuItemSizeId === size.id &&
+                  spv.menuItemSellingChannelId === channel.id
+              );
+
+              return {
+                menuItemSellPriceVariationId: variation?.id,
+                sizeId: size.id,
+                sizeKey: size.key as PizzaSizeKey,
+                sizeName: size.name,
+                channelId: channel.id,
+                channelKey: channel.key,
+                channelName: channel.name,
+                priceAmount: variation?.priceAmount ?? 0,
+                proposedPriceAmount: 99999,
+                discountPercentage: variation?.discountPercentage ?? 0,
+                updatedBy: variation?.updatedBy,
+                updatedAt: variation?.updatedAt,
+                previousPriceAmount: variation?.previousPriceAmount ?? 0,
+              };
+            })
+        );
 
       return {
-        id: item.id,
+        menuItemId: item.id,
         name: item.name,
         ingredients: item.ingredients,
         sellPriceVariations,

@@ -1,0 +1,268 @@
+import { MenuItemPriceVariation } from "@prisma/client";
+import { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
+import { Await, useLoaderData, defer, Form, useActionData, redirect } from "@remix-run/react";
+import { Suspense } from "react";
+import Loading from "~/components/loading/loading";
+import { NumericInput } from "~/components/numeric-input/numeric-input";
+import SubmitButton from "~/components/primitives/submit-button/submit-button";
+import { toast } from "~/components/ui/use-toast";
+import { authenticator } from "~/domain/auth/google.server";
+import { menuItemPriceVariationsEntity } from "~/domain/cardapio/menu-item-price-variations.prisma.entity.server";
+import { menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
+import { MenuItemWithSellPriceVariations } from "~/domain/cardapio/menu-item.types";
+import prismaClient from "~/lib/prisma/client.server";
+import { prismaIt } from "~/lib/prisma/prisma-it.server";
+import { cn } from "~/lib/utils";
+import { badRequest, ok } from "~/utils/http-response.server";
+import randomReactKey from "~/utils/random-react-key";
+import toFixedNumber from "~/utils/to-fixed-number";
+
+export async function loader({ request, params }: LoaderFunctionArgs) {
+  const sellingChannelKey = params.channel as string;
+  const sellingChannel = await prismaClient.menuItemSellingChannel.findFirst({
+    where: {
+      key: sellingChannelKey,
+    },
+  })
+
+  if (!sellingChannel) {
+    return badRequest(`Can not find selling channel with key ${sellingChannelKey}`)
+  }
+
+  const menuItemsWithSellPriceVariations = menuItemPrismaEntity.findManyWithSellPriceVariations({
+    channelKey: sellingChannel.key,
+  })
+
+  const menuItemWithCostVariations = menuItemPrismaEntity.findManyWithCostVariations()
+
+  const user = authenticator.isAuthenticated(request);
+
+  const dnaEmpresaSettings = prismaIt(prismaClient.dnaEmpresaSettings.findFirst())
+
+  const data = Promise.all([
+    menuItemsWithSellPriceVariations,
+    user,
+    dnaEmpresaSettings,
+    menuItemWithCostVariations,
+    sellingChannel
+  ]);
+
+  return defer({
+    data
+  })
+}
+
+export async function action({ request }: ActionFunctionArgs) {
+
+  let formData = await request.formData();
+  const { _action, ...values } = Object.fromEntries(formData);
+
+  console.log({ action: _action, values })
+
+  if (_action === "menu-item-price-variation-update") {
+
+
+
+    const menuItemPriceVariationId = values?.menuItemPriceVariationId as string
+    const menuItemId = values?.menuItemId as string
+    const variationId = values?.variationId as string
+    const amount = toFixedNumber(values?.amount, 2) || 0
+    const latestAmount = toFixedNumber(values?.latestAmount, 2) || 0
+    const discountPercentage = isNaN(Number(values?.discountPercentage)) ? 0 : Number(values?.discountPercentage)
+    const showOnCardapio = values?.showOnCardapio === "on" ? true : false
+    const updatedBy = values?.updatedBy as string
+
+    const nextPrice: Partial<MenuItemPriceVariation> = {
+      id: menuItemPriceVariationId,
+      menuItemId,
+      amount,
+      discountPercentage,
+      showOnCardapio,
+      latestAmount,
+      updatedBy,
+      menuItemVariationId: variationId,
+      basePrice: amount,
+    }
+
+    console.log({ nextPrice })
+
+    const [err, result] = await prismaIt(menuItemPriceVariationsEntity.upsert(menuItemPriceVariationId, nextPrice))
+
+    console.log({ err })
+
+    if (err) {
+      return badRequest(err)
+    }
+
+    return ok(`O preço de venda foi atualizado com sucesso`)
+  }
+
+
+
+  return ok("Elemento atualizado com successo")
+}
+
+export default function AdminGerenciamentoCardapioSellPriceManagementSingleChannel() {
+  const { data } = useLoaderData<typeof loader>()
+  const actionData = useActionData<typeof action>();
+
+
+  if (actionData && actionData.status > 399) {
+    toast({
+      title: "Erro",
+      description: actionData.message,
+    });
+  }
+
+  if (actionData && actionData.status === 200) {
+    toast({
+      title: "Ok",
+      description: actionData.message,
+    });
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+
+      <Suspense fallback={<Loading />}>
+        <Await resolve={data}>
+          {/* @ts-ignore */}
+          {([menuItemsWithSellPriceVariations, user, dnaEmpresaSettings, menuItemWithCostVariations, sellingChannel]) => {
+
+            return (
+              <div className="h-[500px] overflow-y-scroll">
+                <ul>
+                  {
+                    // @ts-ignore
+                    menuItemsWithSellPriceVariations.map((menuItem: MenuItemWithSellPriceVariations) => {
+
+                      // console.log({ menuItem })
+
+                      return (
+                        <li key={menuItem.menuItemId} className="p-2">
+                          <div className="flex justify-between  items-center mb-4 bg-slate-300 rounded-md px-4 py-1">
+
+                            <h3 className="text-md font-semibold">{menuItem.name} ({sellingChannel.name})</h3>
+                            <Form method="post" className="flex gap-2">
+                              <input type="hidden" name="menuItemId" value={menuItem.menuItemId} />
+                              <input type="hidden" name="updatedBy" value={user?.email || ""} />
+                              <SubmitButton
+                                actionName="menu-item-sell-price-variation-upsert-all-proposed-input"
+                                tabIndex={0}
+                                cnContainer="bg-white border w-full hover:bg-slate-200"
+                                cnLabel="text-[11px] tracking-widest text-black uppercase leading-[1.15]"
+                                hideIcon
+                                idleText="Aceitar todas as propostas"
+                                loadingText="Aceitando..."
+                              />
+                            </Form>
+                          </div>
+
+                          <ul className="grid grid-cols-5 gap-x-1">
+                            {menuItem.sellPriceVariations.map((record) => (
+
+                              <section key={randomReactKey()} className="mb-8">
+
+                                <ul className="flex gap-6">
+                                  <li key={record.sizeId} className={
+                                    cn(
+                                      "p-2 rounded-md",
+                                    )
+                                  }>
+                                    <div className="flex flex-col">
+                                      <div className={
+                                        cn(
+                                          " mb-2",
+                                          record.sizeKey === "pizza-medium" && "grid place-items-center bg-black",
+                                        )
+                                      }>
+                                        <h4 className={
+                                          cn(
+                                            "text-[12px] font-medium uppercase tracking-wider",
+                                            record.sizeKey === "pizza-medium" && "font-semibold text-white",
+                                          )
+                                        }>
+                                          {record.sizeName}
+                                        </h4>
+                                      </div>
+
+                                      <Form method="post" className="flex flex-col gap-1 justify-center items-center">
+                                        <div className="flex flex-col gap-2 mb-2">
+                                          <input type="hidden" name="menuItemId" value={menuItem.menuItemId} />
+                                          <input type="hidden" name="menuItemSellPriceVariationId" value={record.menuItemSellPriceVariationId ?? ""} />
+                                          <input type="hidden" name="menuItemSellingChannelId" value={sellingChannel.id ?? ""} />
+                                          <input type="hidden" name="menuItemSizeId" value={record.sizeId ?? ""} />
+                                          <input type="hidden" name="updatedBy" value={record.updatedBy || user?.email || ""} />
+                                          <input type="hidden" name="previousCostAmount" value={record.previousPriceAmount} />
+
+                                          <div className="grid grid-cols-2 gap-2">
+
+                                            <div className="flex flex-col gap-1 items-center">
+                                              <div className="flex flex-col gap-y-0">
+                                                <span className="text-muted-foreground text-[11px]">Novo preço:</span>
+                                                <NumericInput name="costAmount" defaultValue={record.priceAmount} />
+                                              </div>
+                                              <SubmitButton
+                                                actionName="menu-item-sell-price-variation-upsert-user-input"
+                                                tabIndex={0}
+                                                cnContainer="md:py-0 bg-slate-300 hover:bg-slate-400"
+                                                cnLabel="text-[11px] tracking-widest text-black uppercase"
+                                                iconColor="black"
+                                              />
+                                            </div>
+
+                                            <div className="flex flex-col gap-1 items-center">
+                                              <div className="flex flex-col gap-y-0">
+                                                <span className="text-muted-foreground text-[11px]">Valor proposto</span>
+                                                <NumericInput name="proposedCostAmount" defaultValue={9999} readOnly />
+                                              </div>
+                                              <SubmitButton
+                                                actionName="menu-item-sell-price-variation-upsert-proposed-input"
+                                                tabIndex={0}
+                                                cnContainer="bg-white border w-full hover:bg-slate-200"
+                                                cnLabel="text-[11px] tracking-widest text-black uppercase leading-[1.15]"
+                                                hideIcon
+                                                idleText="Aceitar proposta"
+                                                loadingText="Aceitando..."
+                                              />
+                                            </div>
+
+                                          </div>
+
+
+
+
+                                          <div className="flex flex-col gap-1">
+                                            <span className="text-xs">Preço atual: {record.priceAmount}</span>
+                                            <span className="text-xs text-muted-foreground">Preço anterior: {record.previousPriceAmount}</span>
+                                          </div>
+                                        </div>
+
+
+                                      </Form>
+                                    </div>
+                                  </li>
+
+                                </ul>
+                              </section>
+                            ))}
+
+                          </ul>
+
+
+                        </li>
+                      )
+                    })
+                  }
+                </ul>
+              </div>
+            )
+
+          }}
+        </Await>
+      </Suspense>
+
+
+    </div>
+  )
+}

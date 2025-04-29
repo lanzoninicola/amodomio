@@ -99,14 +99,15 @@ export default function AdminCardapioOutlet() {
                 )
             }>
 
-                <div className="w-full p-6 bg-muted mb-8 rounded-lg" >
+                <div className="w-full mb-8 rounded-lg" >
                     <div className="flex justify-between items-center">
-                        <h1 className="font-bold text-xl mb-1">Gerenciamento Cardápio</h1>
+                        <h1 className="font-semibold text-2xl mb-1">Gerenciamento Cardápio</h1>
 
                         <Link to="/admin/gerenciamento/cardapio/main/list" >
                             <span className="text-[12px] underline uppercase tracking-wider">Voltar para a lista</span>
                         </Link>
                     </div>
+                    <Separator className="mb-2" />
                 </div>
 
 
