@@ -13,8 +13,9 @@ interface MenuItemSellingPriceVariationPrismaEntityConstructorProps
 export interface MenuItemSellingPriceVariationBaseInput {
   menuItemId: string;
   menuItemSizeId: string | null;
-  menuItemSellinChannelId: string | null;
+  menuItemSellingChannelId: string | null;
   priceAmount: number;
+  previousPriceAmount: number;
   discountPercentage: number;
   showOnCardapio: boolean;
   showOnCardapioAt: Date | null;

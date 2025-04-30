@@ -8,6 +8,7 @@ import SubmitButton from "~/components/primitives/submit-button/submit-button";
 import { toast } from "~/components/ui/use-toast";
 import { authenticator } from "~/domain/auth/google.server";
 import { menuItemPriceVariationsEntity } from "~/domain/cardapio/menu-item-price-variations.prisma.entity.server";
+import { MenuItemSellingPriceVariationCreateInput } from "~/domain/cardapio/menu-item-selling-price-variation.entity.server";
 import { menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { MenuItemWithSellPriceVariations } from "~/domain/cardapio/menu-item.types";
 import prismaClient from "~/lib/prisma/client.server";
@@ -31,6 +32,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   const menuItemsWithSellPriceVariations = menuItemPrismaEntity.findManyWithSellPriceVariations({
     channelKey: sellingChannel.key,
+    includeRecommendedPrice: true,
   })
 
   const menuItemWithCostVariations = menuItemPrismaEntity.findManyWithCostVariations()
@@ -61,32 +63,36 @@ export async function action({ request }: ActionFunctionArgs) {
 
   if (_action === "menu-item-price-variation-update") {
 
-
-
-    const menuItemPriceVariationId = values?.menuItemPriceVariationId as string
+    const menuItemSellPriceVariationId = values?.menuItemSellPriceVariationId as string
+    const menuItemSellingChannelId = values?.menuItemSellingChannelId as string
+    const menuItemSizeId = values?.menuItemSizeId as string
     const menuItemId = values?.menuItemId as string
-    const variationId = values?.variationId as string
-    const amount = toFixedNumber(values?.amount, 2) || 0
-    const latestAmount = toFixedNumber(values?.latestAmount, 2) || 0
+    const priceAmount = toFixedNumber(values?.priceAmount, 2) || 0
+    const previousPriceAmount = toFixedNumber(values?.previousPriceAmount, 2) || 0
+
+    // at the moment we are not using the discount percentage
     const discountPercentage = isNaN(Number(values?.discountPercentage)) ? 0 : Number(values?.discountPercentage)
+
+    // at the moment we are not using the showOnCardapioAt
     const showOnCardapio = values?.showOnCardapio === "on" ? true : false
+
     const updatedBy = values?.updatedBy as string
 
-    const nextPrice: Partial<MenuItemPriceVariation> = {
-      id: menuItemPriceVariationId,
+    const nextPrice: MenuItemSellingPriceVariationCreateInput = {
       menuItemId,
-      amount,
+      menuItemSellingChannelId,
+      menuItemSizeId,
+      priceAmount: priceAmount,
+      previousPriceAmount: previousPriceAmount,
       discountPercentage,
       showOnCardapio,
-      latestAmount,
       updatedBy,
-      menuItemVariationId: variationId,
-      basePrice: amount,
+      showOnCardapioAt: null,
     }
 
     console.log({ nextPrice })
 
-    const [err, result] = await prismaIt(menuItemPriceVariationsEntity.upsert(menuItemPriceVariationId, nextPrice))
+    const [err, result] = await prismaIt(menuItemPriceVariationsEntity.upsert(menuItemSellPriceVariationId, nextPrice))
 
     console.log({ err })
 
@@ -214,7 +220,7 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
                                             <div className="flex flex-col gap-1 items-center">
                                               <div className="flex flex-col gap-y-0">
                                                 <span className="text-muted-foreground text-[11px]">Valor proposto</span>
-                                                <NumericInput name="proposedCostAmount" defaultValue={9999} readOnly />
+                                                <NumericInput name="proposedCostAmount" defaultValue={record.computedSellingPriceBreakdown?.finalPriceWithChannelTax} readOnly />
                                               </div>
                                               <SubmitButton
                                                 actionName="menu-item-sell-price-variation-upsert-proposed-input"

@@ -1,3 +1,6 @@
+import { ComputedSellingPriceBreakdown } from "./menu-item-selling-price-utility.entity.server";
+import { PizzaSizeKey } from "./menu-item-size.entity.server";
+
 // para custos
 export interface MenuItemWithCostVariations {
   menuItemId: string;
@@ -18,26 +21,25 @@ interface MenuItemCostVariationBySize {
   previousCostAmount: number;
 }
 
-// para preços de venda
-export interface MenuItemWithSellPriceVariations {
-  menuItemId: string;
-  name: string;
-  ingredients: string;
-  sellPriceVariations: MenuItemSellPriceVariationBySizeAndChannel[];
-}
-
-interface MenuItemSellPriceVariationBySizeAndChannel {
-  menuItemSellPriceVariationId: string | undefined;
+export interface SellPriceVariation {
+  menuItemSellPriceVariationId?: string;
   sizeId: string;
-  sizeKey: string;
+  sizeKey: PizzaSizeKey;
   sizeName: string;
   channelId: string;
   channelKey: string;
   channelName: string;
   priceAmount: number;
-  proposedPriceAmount: number;
+  computedSellingPriceBreakdown: ComputedSellingPriceBreakdown | null;
   discountPercentage: number;
-  updatedBy: string | null | undefined;
-  updatedAt: Date | undefined;
+  updatedBy?: string;
+  updatedAt?: Date;
   previousPriceAmount: number;
+}
+
+export interface MenuItemWithSellPriceVariations {
+  menuItemId: string;
+  name: string;
+  ingredients?: string;
+  sellPriceVariations: SellPriceVariation[];
 }

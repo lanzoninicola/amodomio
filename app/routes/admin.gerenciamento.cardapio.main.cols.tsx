@@ -4,7 +4,6 @@ import { LoaderFunctionArgs } from "@remix-run/node"
 import { Await, Link, defer, useActionData, useLoaderData } from "@remix-run/react"
 import React, { Suspense, useState } from "react"
 import { toast } from "~/components/ui/use-toast"
-import { menuItemPriceVariationsEntity } from "~/domain/cardapio/menu-item-price-variations.prisma.entity.server"
 import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server"
 import BadgeTag from "~/domain/tags/components/badge-tag"
 import { prismaIt } from "~/lib/prisma/prisma-it.server"
@@ -16,6 +15,7 @@ import Loading from "~/components/loading/loading"
 import { cn } from "~/lib/utils"
 import { Input } from "~/components/ui/input"
 import MenuItemSwitchVisibility from "~/domain/cardapio/components/menu-item-switch-visibility/menu-item-switch-visibility"
+import { menuItemPriceVariationsEntity } from "~/domain/cardapio/menu-item-price-variations.prisma.entity.server"
 
 
 export type MenuItemActionSearchParam = "menu-item-create" | "menu-item-edit" | "menu-item-delete" | "menu-items-sortorder" | null

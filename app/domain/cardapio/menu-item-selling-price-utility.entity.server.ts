@@ -18,23 +18,25 @@ interface MenuItemSellingPriceUtilityEntityConstructorProps
   menuItemSizePrismaEntity: typeof menuItemSizePrismaEntity;
 }
 
-type CoreParams = {
-  /** Identificador do item do cardápio (ex.: “margherita-40cm”) */
-  menuItemId: string;
-  /** Canal de venda (loja física, delivery app, etc.) */
-  channelKey: SellingChannelKey;
-  /** Tamanho da pizza (médio, família…) */
-  sizeKey: PizzaSizeKey;
-};
-
-type SellingPriceConfig = {
+interface SellingPriceConfig {
   /** DNA = custos fixos + taxa de cartão + impostos (%) */
   dnaPercentage: number; // default 0
   /** Mark-up (≠ margem) desejado (%) */
   markupPercentage: number; // default 0
   /** Quebra / desperdício de insumos (%) */
   wastePercentage: number; // default 0
-};
+}
+
+export interface ComputedSellingPriceBreakdown {
+  baseCost: number;
+  wasteCost: number;
+  dnaCost: number;
+  packagingCostAmount: number;
+  channelCost: number;
+  markupValue: number;
+  finalPrice: number;
+  finalPriceWithChannelTax: number;
+}
 
 class MenuItemSellingPriceUtilityEntity {
   client;
@@ -91,11 +93,21 @@ class MenuItemSellingPriceUtilityEntity {
     };
   }
 
-  async calculateSellingPrice(
+  /**
+   * Calculates the selling price of a menu item based on its cost,
+   * sales channel fee, and packaging cost.
+   *
+   * @param menuItemId - The ID of the menu item
+   * @param channelKey - The key identifying the sales channel (e.g., iFood, website, etc.)
+   * @param sizeKey - The key representing the size variant of the menu item
+   * @returns ComputedSellingPriceBreakdown - An object detailing the breakdown of the selling price
+   */
+
+  async calculateOneSellingPrice(
     menuItemId: string,
     channelKey: SellingChannelKey,
     sizeKey: PizzaSizeKey
-  ) {
+  ): Promise<ComputedSellingPriceBreakdown> {
     /* ──────── 1. Dados de base ──────── */
     const [channel, itemCost, size, sellingPriceConfig] = await Promise.all([
       this.menuItemSellingChannelEntity.findOneByKey(channelKey),
@@ -124,14 +136,18 @@ class MenuItemSellingPriceUtilityEntity {
 
     /* ──────── 4. Detalhamento para auditoria ──────── */
     return {
-      baseCost,
-      wasteCost: baseCost * (wasteFactor - 1),
-      dnaCost: baseCost * wasteFactor * (dnaFactor - 1),
-      packagingCostAmount: size?.packagingCostAmount ?? 0,
-      channelCost: costWithOverheads * (channelFactor - 1),
-      markupValue: price - costWithOverheads * channelFactor,
-      finalPrice: Math.ceil(price / 0.05) * 0.05, // arredonda p/ 5 centavos
-      finalPriceWithChannelTax: Math.ceil(priceWithChannelTax / 0.05) * 0.05, // arredonda p/ 5 centavos
+      baseCost: Number(baseCost.toFixed(2)),
+      wasteCost: Number((baseCost * (wasteFactor - 1)).toFixed(2)),
+      dnaCost: Number((baseCost * wasteFactor * (dnaFactor - 1)).toFixed(2)),
+      packagingCostAmount: Number((size?.packagingCostAmount ?? 0).toFixed(2)),
+      channelCost: Number((costWithOverheads * (channelFactor - 1)).toFixed(2)),
+      markupValue: Number(
+        (price - costWithOverheads * channelFactor).toFixed(2)
+      ),
+      finalPrice: Number((Math.ceil(price / 0.05) * 0.05).toFixed(2)),
+      finalPriceWithChannelTax: Number(
+        (Math.ceil(priceWithChannelTax / 0.05) * 0.05).toFixed(2)
+      ),
     };
   }
 }
