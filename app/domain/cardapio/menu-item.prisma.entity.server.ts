@@ -353,7 +353,7 @@ export class MenuItemPrismaEntity {
 
       if (params.includeRecommendedPrice) {
         computedSellingPriceBreakdown =
-          await this.menuItemSellingPriceUtility.calculateOneSellingPrice(
+          await this.menuItemSellingPriceUtility.calculateSellingPriceForCardapio(
             item.id,
             channel.key as SellingChannelKey,
             size.key as PizzaSizeKey

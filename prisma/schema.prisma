@@ -286,7 +286,12 @@ model MenuItemSellingChannel {
   id                            String                          @id @default(uuid())
   key                           String                          @map("key")
   name                          String
-  percentageTax                 Float                           @map("percentage_tax")
+  feeAmount                     Float                           @default(0) @map("fee_amount")
+  taxPerc                       Float                           @default(0) @map("tax_perc")
+  onlinePaymentTaxPerc          Float                           @default(0) @map("online_payment_tax_perc")
+  targetMarginPerc              Float                           @default(0) @map("target_margin_perc")
+  isMarketplace                 Boolean                         @default(false) @map("is_marketplace")
+  sortOrderIndex                Int                             @default(0) @map("sort_order_index")
   MenuItemSellingPriceVariation MenuItemSellingPriceVariation[]
 
   @@map("menu_item_selling_channels")

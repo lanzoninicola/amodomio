@@ -10,6 +10,7 @@ import {
   PizzaSizeKey,
   menuItemSizePrismaEntity,
 } from "./menu-item-size.entity.server";
+import { on } from "events";
 
 interface MenuItemSellingPriceUtilityEntityConstructorProps
   extends PrismaEntityProps {
@@ -21,21 +22,28 @@ interface MenuItemSellingPriceUtilityEntityConstructorProps
 interface SellingPriceConfig {
   /** DNA = custos fixos + taxa de cartão + impostos (%) */
   dnaPercentage: number; // default 0
-  /** Mark-up (≠ margem) desejado (%) */
-  markupPercentage: number; // default 0
   /** Quebra / desperdício de insumos (%) */
   wastePercentage: number; // default 0
 }
 
 export interface ComputedSellingPriceBreakdown {
-  baseCost: number;
+  custoFichaTecnica: number;
   wasteCost: number;
-  dnaCost: number;
   packagingCostAmount: number;
-  channelCost: number;
-  markupValue: number;
+  channel: {
+    name: string;
+    taxPerc: number;
+    feeAmount: number;
+    isMarketplace: boolean;
+    onlinePaymentTaxPerc: number;
+  };
   finalPrice: number;
-  finalPriceWithChannelTax: number;
+}
+
+export interface ComputedSellingPriceWithChannelTax {
+  channelKey: SellingChannelKey;
+  sizeKey: PizzaSizeKey;
+  priceWithChannelTax: number;
 }
 
 class MenuItemSellingPriceUtilityEntity {
@@ -59,20 +67,6 @@ class MenuItemSellingPriceUtilityEntity {
     this.menuItemSizePrismaEntity = menuItemSizePrismaEntity;
   }
 
-  /**
-   * Calcula a percentagem de mark-up necessária para atingir a margem desejada.
-   *
-   * @param targetMarginPerc % desejada (15 - 20 etc..)
-   * @returns
-   */
-  calculateMarkupBasedOnTargetMargin(targetMarginPerc: number) {
-    const marginFactor = targetMarginPerc / 100;
-    const markupFactor = marginFactor / (1 - marginFactor);
-
-    // Ajusta o mark-up para o valor mais próximo de 0,05
-    return Math.ceil(markupFactor * 100) * 0.05;
-  }
-
   async getSellingPriceConfig(): Promise<SellingPriceConfig> {
     const dnaSettings = await this.client.dnaEmpresaSettings.findFirst();
 
@@ -82,13 +76,8 @@ class MenuItemSellingPriceUtilityEntity {
       );
     }
 
-    const markupPerc = this.calculateMarkupBasedOnTargetMargin(
-      dnaSettings?.targetMarginPerc ?? 0
-    );
-
     return {
       dnaPercentage: dnaSettings?.dnaPerc ?? 0,
-      markupPercentage: markupPerc,
       wastePercentage: dnaSettings?.wastePerc ?? 0,
     };
   }
@@ -103,7 +92,7 @@ class MenuItemSellingPriceUtilityEntity {
    * @returns ComputedSellingPriceBreakdown - An object detailing the breakdown of the selling price
    */
 
-  async calculateOneSellingPrice(
+  async calculateSellingPriceByChannel(
     menuItemId: string,
     channelKey: SellingChannelKey,
     sizeKey: PizzaSizeKey
@@ -119,36 +108,94 @@ class MenuItemSellingPriceUtilityEntity {
       this.getSellingPriceConfig(),
     ]);
 
-    const baseCost = itemCost?.costAmount ?? 0;
+    // custo ficha tecnica
+    const custoFichaTecnica = itemCost?.costAmount ?? 0;
 
     /* ──────── 2. Fatores multiplicativos ──────── */
     const wasteFactor = 1 + sellingPriceConfig.wastePercentage / 100;
-    const dnaFactor = 1 + sellingPriceConfig.dnaPercentage / 100;
-    const channelFactor = 1 + (channel?.percentageTax ?? 0) / 100;
-    const markupFactor = 1 + sellingPriceConfig.markupPercentage / 100;
 
-    /* ──────── 3. Preço calculado ──────── */
-    const costWithOverheads =
-      baseCost * wasteFactor * dnaFactor + (size?.packagingCostAmount ?? 0);
-    const price = costWithOverheads * markupFactor;
-    const priceWithChannelTax =
-      costWithOverheads * channelFactor * markupFactor;
+    const itemTotalCost =
+      custoFichaTecnica * wasteFactor + (size?.packagingCostAmount ?? 0);
+    const targetMarginPerc = channel?.targetMarginPerc ?? 0;
+
+    let price = 0;
+
+    /* ──────── 3. Calculo preço de venda ──────── */
+    price = this.calculateSellingPrice(
+      itemTotalCost,
+      sellingPriceConfig.dnaPercentage,
+      targetMarginPerc
+    );
+
+    // se o canal for um marketplace (aiqfome, ifood), o preço de venda é calculado
+    if (channel?.isMarketplace) {
+      // to define otherCosts
+      const otherCosts = 0;
+      const channelTaxPerc = channel?.taxPerc ?? 0;
+
+      price = this.calculateSellingPriceForMarketplace(
+        price,
+        otherCosts,
+        channelTaxPerc
+      );
+    }
 
     /* ──────── 4. Detalhamento para auditoria ──────── */
     return {
-      baseCost: Number(baseCost.toFixed(2)),
-      wasteCost: Number((baseCost * (wasteFactor - 1)).toFixed(2)),
-      dnaCost: Number((baseCost * wasteFactor * (dnaFactor - 1)).toFixed(2)),
+      custoFichaTecnica: Number(custoFichaTecnica.toFixed(2)),
+      wasteCost: Number((custoFichaTecnica * (wasteFactor - 1)).toFixed(2)),
       packagingCostAmount: Number((size?.packagingCostAmount ?? 0).toFixed(2)),
-      channelCost: Number((costWithOverheads * (channelFactor - 1)).toFixed(2)),
-      markupValue: Number(
-        (price - costWithOverheads * channelFactor).toFixed(2)
-      ),
+      channel: {
+        name: channel?.name ?? "",
+        taxPerc: channel?.taxPerc ?? 0,
+        feeAmount: channel?.feeAmount ?? 0,
+        isMarketplace: channel?.isMarketplace ?? false,
+        onlinePaymentTaxPerc: channel?.onlinePaymentTaxPerc ?? 0,
+      },
       finalPrice: Number((Math.ceil(price / 0.05) * 0.05).toFixed(2)),
-      finalPriceWithChannelTax: Number(
-        (Math.ceil(priceWithChannelTax / 0.05) * 0.05).toFixed(2)
-      ),
     };
+  }
+
+  /**
+   * Calculates the selling price based on curso DNA 2.0
+   *
+   * Calculco Marketplace
+   * https://www.youtube.com/watch?v=-Ris4KjxWrw&list=PL5G6QFIQaDlQOkSW24dvXlxg7FPzi6eNH&index=27
+   *
+   * @param amount O valor total do custo do item ou o preço de venda em caso de marketplace
+   * @param dnaPerc % DNA Empres
+   * @param targetMarginPerc % lucro desejado
+   * @returns preço de venda redondo para cima em 0.05
+   */
+  calculateSellingPrice(
+    amount: number,
+    dnaPerc: number,
+    targetMarginPerc: number
+  ) {
+    const divisor = 1 - (dnaPerc / 100 + targetMarginPerc / 100);
+
+    const price = amount / divisor;
+
+    return Number((Math.ceil(price / 0.05) * 0.05).toFixed(2));
+  }
+
+  /**
+   *
+   * @param sellingPrice O preço de venda do produto aplicado no cardápio da loja
+   * @param otherCosts Outros custos que o produto tem, como taxa de cartão, taxa de entrega, etc.
+   * @param channelTaxPerc a taxa do canal de venda (iFood, site, etc.)
+   * @returns  O preço de venda do produto aplicado no canal de venda
+   */
+  calculateSellingPriceForMarketplace(
+    sellingPrice: number,
+    otherCosts: number,
+    channelTaxPerc: number
+  ) {
+    const divisor = 1 - channelTaxPerc / 100;
+
+    const price = (sellingPrice + otherCosts) / divisor;
+
+    return Number((Math.ceil(price / 0.05) * 0.05).toFixed(2));
   }
 }
 

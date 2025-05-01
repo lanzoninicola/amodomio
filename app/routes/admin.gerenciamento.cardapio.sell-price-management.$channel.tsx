@@ -5,9 +5,14 @@ import { Suspense } from "react";
 import Loading from "~/components/loading/loading";
 import { NumericInput } from "~/components/numeric-input/numeric-input";
 import SubmitButton from "~/components/primitives/submit-button/submit-button";
+import { Button } from "~/components/ui/button";
+import { Dialog, DialogClose, DialogContent, DialogTrigger } from "~/components/ui/dialog";
+import { Separator } from "~/components/ui/separator";
 import { toast } from "~/components/ui/use-toast";
 import { authenticator } from "~/domain/auth/google.server";
 import { menuItemPriceVariationsEntity } from "~/domain/cardapio/menu-item-price-variations.prisma.entity.server";
+
+import { ComputedSellingPriceBreakdown } from "~/domain/cardapio/menu-item-selling-price-utility.entity.server";
 import { MenuItemSellingPriceVariationCreateInput } from "~/domain/cardapio/menu-item-selling-price-variation.entity.server";
 import { menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { MenuItemWithSellPriceVariations } from "~/domain/cardapio/menu-item.types";
@@ -219,8 +224,8 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
 
                                             <div className="flex flex-col gap-1 items-center">
                                               <div className="flex flex-col gap-y-0">
-                                                <span className="text-muted-foreground text-[11px]">Valor proposto</span>
-                                                <NumericInput name="proposedCostAmount" defaultValue={record.computedSellingPriceBreakdown?.finalPriceWithChannelTax} readOnly />
+                                                <ValorPropostoLabelDialog computedSellingPriceBreakdown={record.computedSellingPriceBreakdown} />
+                                                <NumericInput name="proposedCostAmount" defaultValue={record.computedSellingPriceBreakdown?.finalPrice} readOnly />
                                               </div>
                                               <SubmitButton
                                                 actionName="menu-item-sell-price-variation-upsert-proposed-input"
@@ -270,5 +275,112 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
 
 
     </div>
+  )
+}
+
+interface ValorPropostoLabelDialogProps {
+  computedSellingPriceBreakdown: ComputedSellingPriceBreakdown | null
+
+}
+
+function ValorPropostoLabelDialog({ computedSellingPriceBreakdown }: ValorPropostoLabelDialogProps
+) {
+
+
+  const Amount = ({ children }: { children: React.ReactNode }) => {
+    return (
+      <span className="font-mono col-span-1">
+        {children}
+      </span>
+    )
+  }
+
+  const Label = ({ children, cnContainer }: { children: React.ReactNode, cnContainer?: string }) => {
+    return (
+      <span className={cn("text-sm col-span-3", cnContainer)}>
+        {children}
+      </span>
+    )
+  }
+
+  const cspb = { ...computedSellingPriceBreakdown }
+
+  return (
+    <Dialog>
+      <DialogTrigger asChild className="w-full">
+        <span className="text-muted-foreground text-[11px] cursor-pointer hover:underline">Valor proposto</span>
+      </DialogTrigger>
+      <DialogContent>
+
+        <div className="flex flex-col">
+          <div className="flex flex-col gap-2">
+            <div className="grid grid-cols-4 items-center">
+              <Label>Custo Ficha Tecnica</Label>
+              <Amount>{cspb?.baseCost ?? 0}</Amount>
+            </div>
+
+            <div className="grid grid-cols-4 items-center">
+              <Label>Desperdício</Label>
+              <Amount>{cspb?.wasteCost}</Amount>
+            </div>
+
+            <div className="grid grid-cols-4 items-center">
+              <Label>Custo DNA</Label>
+              <Amount>{cspb?.dnaCost}</Amount>
+            </div>
+
+            <div className="grid grid-cols-4 items-center">
+              <Label>Custo Embalagens</Label>
+              <Amount>{cspb?.packagingCostAmount}</Amount>
+            </div>
+
+            <div className="grid grid-cols-4 items-center">
+              <Label>Custo Marketplace</Label>
+              <Amount>{cspb?.channelCost}</Amount>
+            </div>
+
+            <Separator className="my-4" />
+
+            <div className="grid grid-cols-4 items-center">
+              <Label cnContainer="font-semibold">Total Custo</Label>
+              <Amount>{
+                (cspb?.baseCost ?? 0)
+                + (cspb?.wasteCost ?? 0)
+                + (cspb?.dnaCost ?? 0)
+                + (cspb?.packagingCostAmount ?? 0)
+                + (cspb?.channelCost ?? 0)
+              }</Amount>
+            </div>
+
+            <Separator className="my-4" />
+
+            <div className="grid grid-cols-4 items-center">
+              <Label>Valor de Markup</Label>
+              <Amount>{cspb?.markupValue}</Amount>
+            </div>
+
+            <Separator className="my-4" />
+
+            <div className="grid grid-cols-4 items-center">
+              <span className="font-semibold text-sm col-span-3">Preço de venda final</span>
+              <Amount>{cspb?.finalPrice}</Amount>
+            </div>
+
+            <div className="grid grid-cols-4 items-center">
+              <span className="font-semibold text-sm col-span-3">Preço de venda final com taxa marketplace</span>
+              <Amount>{cspb?.finalPriceWithChannelTax}</Amount>
+            </div>
+          </div>
+          <DialogClose asChild>
+            <div className="w-full px-4 py-6">
+              <Button type="button" variant="secondary" className="w-full" >
+                <span className=" tracking-wide font-semibold uppercase">Fechar</span>
+              </Button>
+            </div>
+
+          </DialogClose>
+        </div>
+      </DialogContent>
+    </Dialog >
   )
 }
