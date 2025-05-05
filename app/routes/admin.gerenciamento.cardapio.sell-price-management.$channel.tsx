@@ -40,7 +40,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   const menuItemsWithSellPriceVariations = menuItemPrismaEntity.findManyWithSellPriceVariations({
     channelKey: sellingChannel.key,
-    includeRecommendedPrice: false,
+    includeRecommendedPrice: true,
   })
 
   const menuItemWithCostVariations = menuItemPrismaEntity.findManyWithCostVariations()
@@ -340,6 +340,8 @@ function ValorPropostoLabelDialog({ computedSellingPriceBreakdown }: ValorPropos
   }
 
   const cspb = { ...computedSellingPriceBreakdown }
+
+
 
   return (
     <Dialog>

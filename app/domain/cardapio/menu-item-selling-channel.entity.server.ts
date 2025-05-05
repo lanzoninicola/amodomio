@@ -10,6 +10,14 @@ class MenuItemSellingChannelPrismaEntity {
     this.client = client;
   }
 
+  async findAll() {
+    return await this.client.menuItemSellingChannel.findMany({
+      orderBy: {
+        key: "asc",
+      },
+    });
+  }
+
   async findOneByKey(key: SellingChannelKey) {
     return await this.client.menuItemSellingChannel.findFirst({
       where: {

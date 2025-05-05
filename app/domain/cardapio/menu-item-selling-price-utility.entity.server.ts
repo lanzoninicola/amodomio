@@ -12,6 +12,11 @@ import {
 } from "./menu-item-size.entity.server";
 import { on } from "events";
 import formatDecimalPlaces from "~/utils/format-decimal-places";
+import {
+  MenuItemCostVariation,
+  MenuItemSellingChannel,
+  MenuItemSize,
+} from "@prisma/client";
 
 interface MenuItemSellingPriceUtilityEntityConstructorProps
   extends PrismaEntityProps {
@@ -100,47 +105,25 @@ class MenuItemSellingPriceUtilityEntity {
    */
 
   async calculateSellingPriceByChannel(
-    menuItemId: string,
-    channelKey: SellingChannelKey,
-    sizeKey: PizzaSizeKey
+    channel: MenuItemSellingChannel,
+    itemCost: number,
+    size: MenuItemSize | null,
+    sellingPriceConfig: SellingPriceConfig
   ): Promise<ComputedSellingPriceBreakdown> {
-    /* ──────── 1. Dados de base ──────── */
-    const [channel, itemCost, size, sellingPriceConfig] = await Promise.all([
-      this.menuItemSellingChannelEntity.findOneByKey(channelKey),
-      this.menuItemCostVariationEntity.findOneCostBySizeKey(
-        menuItemId,
-        sizeKey
-      ),
-      this.menuItemSizePrismaEntity.findOneByKey(sizeKey),
-      this.getSellingPriceConfig(),
-    ]);
-
-    // custo ficha tecnica
-    const custoFichaTecnica = itemCost?.costAmount ?? 0;
-
-    /* ──────── 2. Fatores multiplicativos ──────── */
+    const custoFichaTecnica = itemCost ?? 0;
     const wasteFactor = 1 + sellingPriceConfig.wastePercentage / 100;
 
     const itemTotalCost =
       custoFichaTecnica * wasteFactor + (size?.packagingCostAmount ?? 0);
     const targetMarginPerc = channel?.targetMarginPerc ?? 0;
 
-    let price = {
-      formulaExplanation: "",
-      formulaExpression: "",
-      priceAmount: 0,
-    };
-
-    /* ──────── 3. Calculo preço de venda ──────── */
-    price = this.calculateSellingPrice(
+    let price = this.calculateSellingPrice(
       itemTotalCost,
       sellingPriceConfig.dnaPercentage,
       targetMarginPerc
     );
 
-    // se o canal for um marketplace (aiqfome, ifood), o preço de venda é calculado
     if (channel?.isMarketplace) {
-      // to define otherCosts
       const otherCosts = 0;
       const channelTaxPerc = channel?.taxPerc ?? 0;
 
@@ -151,7 +134,6 @@ class MenuItemSellingPriceUtilityEntity {
       );
     }
 
-    /* ──────── 4. Detalhamento para auditoria ──────── */
     return {
       custoFichaTecnica: Number(custoFichaTecnica.toFixed(2)),
       wasteCost: Number((custoFichaTecnica * (wasteFactor - 1)).toFixed(2)),

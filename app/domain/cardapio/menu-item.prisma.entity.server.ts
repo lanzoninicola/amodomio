@@ -6,7 +6,9 @@ import {
   MenuItemLike,
   MenuItemNote,
   MenuItemPriceVariation,
+  MenuItemSellingChannel,
   MenuItemShare,
+  MenuItemSize,
   MenuItemTag,
   Prisma,
   Tag,
@@ -18,18 +20,29 @@ import MenuItemPriceVariationUtility from "./menu-item-price-variations-utility"
 import { v4 as uuidv4 } from "uuid";
 import { CloudinaryUtils } from "~/lib/cloudinary";
 import {
+  MenuItemCostVariationBySize,
   MenuItemWithCostVariations,
   MenuItemWithSellPriceVariations,
   SellPriceVariation,
 } from "./menu-item.types";
 import {
+  MenuItemCostVariationBaseInput,
   MenuItemCostVariationPrismaEntity,
   menuItemCostVariationPrismaEntity,
 } from "./menu-item-cost-variation.entity.server";
 import { CacheManager } from "../cache/cache-manager.server";
-import { PizzaSizeKey } from "./menu-item-size.entity.server";
-import { menuItemSellingPriceUtilityEntity } from "./menu-item-selling-price-utility.entity.server";
-import { SellingChannelKey } from "./menu-item-selling-channel.entity.server";
+import {
+  PizzaSizeKey,
+  menuItemSizePrismaEntity,
+} from "./menu-item-size.entity.server";
+import {
+  ComputedSellingPriceBreakdown,
+  menuItemSellingPriceUtilityEntity,
+} from "./menu-item-selling-price-utility.entity.server";
+import {
+  SellingChannelKey,
+  menuItemSellingChannelPrismaEntity,
+} from "./menu-item-selling-channel.entity.server";
 
 export interface MenuItemWithAssociations extends MenuItem {
   priceVariations: MenuItemPriceVariation[];
@@ -87,6 +100,8 @@ interface FindManyWithSellPriceVariationsProps {
 interface MenuItemEntityProps extends PrismaEntityProps {
   menuItemCostVariation: typeof menuItemCostVariationPrismaEntity;
   menuItemSellingPriceUtility: typeof menuItemSellingPriceUtilityEntity;
+  menuItemSize: typeof menuItemSizePrismaEntity;
+  menuItemSellingChannel: typeof menuItemSellingChannelPrismaEntity;
 }
 
 export class MenuItemPrismaEntity {
@@ -98,16 +113,25 @@ export class MenuItemPrismaEntity {
 
   menuItemSellingPriceUtility: typeof menuItemSellingPriceUtilityEntity;
 
+  menuItemSellingChannel: typeof menuItemSellingChannelPrismaEntity;
+
+  menuItemSize: typeof menuItemSizePrismaEntity;
+
   constructor({
     client,
     menuItemCostVariation,
     menuItemSellingPriceUtility,
+    menuItemSize,
+    menuItemSellingChannel,
   }: MenuItemEntityProps) {
     this.client = client;
     this.cacheManager = new CacheManager();
 
     this.menuItemCostVariation = menuItemCostVariation;
     this.menuItemSellingPriceUtility = menuItemSellingPriceUtilityEntity;
+
+    this.menuItemSize = menuItemSize;
+    this.menuItemSellingChannel = menuItemSellingChannel;
   }
 
   async findAll(
@@ -322,17 +346,20 @@ export class MenuItemPrismaEntity {
   }
 
   async findManyWithSellPriceVariations(
-    params: FindManyWithSellPriceVariationsProps = {}
+    params: FindManyWithSellPriceVariationsProps = {
+      where: {},
+      sizeKey: undefined,
+      channelKey: undefined,
+      includeRecommendedPrice: false,
+    }
   ): Promise<MenuItemWithSellPriceVariations[]> {
-    const [allMenuItems, sizes, channels] = await Promise.all([
-      this.client.menuItem.findMany({
-        where: params?.where,
-        include: { MenuItemSellingPriceVariation: true },
-        orderBy: { sortOrderIndex: "asc" },
-      }),
-      this.client.menuItemSize.findMany({ orderBy: { sortOrderIndex: "asc" } }),
-      this.client.menuItemSellingChannel.findMany(),
-    ]);
+    const [allMenuItemsWithCosts, sizes, channels, sellingPriceConfig] =
+      await Promise.all([
+        this.findManyWithCostVariations(params),
+        this.menuItemSize.findAll(),
+        this.menuItemSellingChannel.findAll(),
+        this.menuItemSellingPriceUtility.getSellingPriceConfig(),
+      ]);
 
     const filterSizes = (size: any) =>
       !params.sizeKey || size.key === params.sizeKey;
@@ -340,32 +367,41 @@ export class MenuItemPrismaEntity {
     const filterChannels = (channel: any) =>
       !params.channelKey || channel.key === params.channelKey;
 
+    const costByItemAndSize: Record<string, MenuItemCostVariationBySize> = {};
+    allMenuItemsWithCosts.forEach((item) => {
+      item.costVariations.forEach((variation) => {
+        costByItemAndSize[`${item.menuItemId}_${variation.sizeKey}`] =
+          variation;
+      });
+    });
+
     const buildVariation = async (
-      item: any,
-      size: any,
-      channel: any
+      item: MenuItemWithCostVariations,
+      size: MenuItemSize,
+      channel: MenuItemSellingChannel
     ): Promise<SellPriceVariation> => {
-      const variation = item.MenuItemSellingPriceVariation?.find(
+      const variation = item.costVariations?.find(
         (spv: any) =>
           spv.menuItemSizeId === size.id &&
           spv.menuItemSellingChannelId === channel.id
       );
 
-      let computedSellingPriceBreakdown = null;
-
-      if (params.includeRecommendedPrice) {
-        computedSellingPriceBreakdown =
-          await this.menuItemSellingPriceUtility.calculateSellingPriceByChannel(
-            item.id,
-            channel.key as SellingChannelKey,
-            size.key as PizzaSizeKey
-          );
-      }
+      // Calculate the selling price breakdown
+      const computedSellingPriceBreakdown =
+        params.includeRecommendedPrice === true
+          ? await this.menuItemSellingPriceUtility.calculateSellingPriceByChannel(
+              channel,
+              costByItemAndSize[`${item.menuItemId}_${size.key}`]?.costAmount ??
+                0,
+              size,
+              sellingPriceConfig
+            )
+          : null;
 
       return {
         menuItemSellPriceVariationId: variation?.id,
         sizeId: size.id,
-        sizeKey: size.key as PizzaSizeKey,
+        sizeKey: size.key,
         sizeName: size.name,
         channelId: channel.id,
         channelKey: channel.key,
@@ -380,18 +416,20 @@ export class MenuItemPrismaEntity {
     };
 
     const results = await Promise.all(
-      allMenuItems.map(async (item) => {
-        const variations: SellPriceVariation[] = [];
+      allMenuItemsWithCosts.map(async (item) => {
+        const filteredSizes = sizes.filter(filterSizes);
+        const filteredChannels = channels.filter(filterChannels);
 
-        for (const size of sizes.filter(filterSizes)) {
-          for (const channel of channels.filter(filterChannels)) {
-            const variation = await buildVariation(item, size, channel);
-            variations.push(variation);
-          }
-        }
+        const variations = await Promise.all(
+          filteredSizes.flatMap((size) =>
+            filteredChannels.map((channel) =>
+              buildVariation(item, size, channel)
+            )
+          )
+        );
 
         return {
-          menuItemId: item.id,
+          menuItemId: item.menuItemId,
           name: item.name,
           ingredients: item.ingredients,
           visible: item.visible,
@@ -599,6 +637,8 @@ const menuItemPrismaEntity = new MenuItemPrismaEntity({
   client: prismaClient,
   menuItemCostVariation: menuItemCostVariationPrismaEntity,
   menuItemSellingPriceUtility: menuItemSellingPriceUtilityEntity,
+  menuItemSize: menuItemSizePrismaEntity,
+  menuItemSellingChannel: menuItemSellingChannelPrismaEntity,
 });
 
 export { menuItemPrismaEntity };

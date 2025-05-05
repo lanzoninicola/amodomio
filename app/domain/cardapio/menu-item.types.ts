@@ -11,7 +11,7 @@ export interface MenuItemWithCostVariations {
   costVariations: MenuItemCostVariationBySize[];
 }
 
-interface MenuItemCostVariationBySize {
+export interface MenuItemCostVariationBySize {
   menuItemCostVariationId: string | undefined;
   sizeId: string;
   sizeKey: string;
@@ -26,10 +26,10 @@ interface MenuItemCostVariationBySize {
 export interface SellPriceVariation {
   menuItemSellPriceVariationId?: string;
   sizeId: string;
-  sizeKey: PizzaSizeKey;
+  sizeKey: PizzaSizeKey | null;
   sizeName: string;
-  channelId: string;
-  channelKey: string;
+  channelId: string | null;
+  channelKey: string | null;
   channelName: string;
   priceAmount: number;
   computedSellingPriceBreakdown: ComputedSellingPriceBreakdown | null;
@@ -45,5 +45,15 @@ export interface MenuItemWithSellPriceVariations {
   ingredients?: string;
   visible: boolean;
   active: boolean;
+  sellPriceVariations: SellPriceVariation[];
+}
+
+export interface MenuItemWithSellPriceVariationsAndCostVariations {
+  menuItemId: string;
+  name: string;
+  ingredients?: string;
+  visible: boolean;
+  active: boolean;
+  costVariations: MenuItemCostVariationBySize[];
   sellPriceVariations: SellPriceVariation[];
 }
