@@ -87,16 +87,18 @@ export default function MenuItemCard({ item, dragAndDrop }: MenuItemCardProps) {
                     <div className="mt-2 col-span-3">
 
                         <div className="flex gap-4">
+                            <MenuItemSwitchActivation
+                                menuItem={item}
+                                setActive={setActive}
+                                active={active}
+                                cnContainer="md:justify-start"
+                            />
                             <MenuItemSwitchVisibility
                                 menuItem={item}
                                 setVisible={setVisible}
                                 visible={visible}
                             />
-                            <MenuItemSwitchActivation
-                                menuItem={item}
-                                setActive={setActive}
-                                active={active}
-                            />
+
                         </div>
                     </div>
 

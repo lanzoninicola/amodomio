@@ -28,7 +28,7 @@ export default function MenuItemSwitchVisibility({ menuItem, visible, setVisible
     }
 
     return (
-        <Form method="post" className="flex justify-between md:justify-end gap-2 w-full items-center col-span-2">
+        <Form method="post" className="grid grid-cols-2 md:justify-end gap-2 w-full items-center col-span-2">
 
 
             <div className="flex flex-col gap-0">

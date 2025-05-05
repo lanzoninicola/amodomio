@@ -39,7 +39,7 @@ export default function MenuItemSwitchActivation({
     return (
         <Form method="post" className={
             cn(
-                "flex justify-between md:justify-end gap-2 w-full items-center col-span-2",
+                "grid grid-cols-2 md:justify-end gap-2 w-full items-center col-span-2",
                 cnContainer
             )
         }>
@@ -65,6 +65,7 @@ export default function MenuItemSwitchActivation({
                     )
                 }
             </div>
+
             <Switch defaultChecked={menuItem?.active || false} onCheckedChange={handleActivation} className="data-[state=checked]:bg-red-500" />
             <input type="hidden" name="id" value={menuItem?.id} />
             <button ref={submitBtnRef} className="hidden" type="submit" value={"menu-item-activation-change"} name="_action" />

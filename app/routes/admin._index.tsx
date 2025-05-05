@@ -270,7 +270,7 @@ function CardapioItem({ item, setVisible, visible, active, setActive, showExpand
                                 <CardapioItemDialog key={item.id} triggerComponent={
                                     <ExpandIcon size={16} />
                                 }>
-                                    <CardapioItem item={item} setVisible={setVisible} visible={visible} showExpandButton={false} />
+                                    <CardapioItem item={item} setVisible={setVisible} visible={visible} active={active} setActive={setActive} showExpandButton={false} />
                                 </CardapioItemDialog>
                             )
                         }

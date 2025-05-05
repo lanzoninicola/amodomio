@@ -8,6 +8,7 @@ import { GripVertical } from "lucide-react"
 import { cn } from "~/lib/utils"
 import { Input } from "~/components/ui/input"
 import OptionTab from "~/components/layout/option-tab/option-tab"
+import { Separator } from "~/components/ui/separator"
 
 interface MenuItemListProps {
     initialItems: MenuItemWithAssociations[]
@@ -21,7 +22,7 @@ export default function MenuItemList({ initialItems }: MenuItemListProps) {
         return <NoRecordsFound text="Nenhum item encontrado" />
     }
 
-    const [items, setItems] = useState<any[]>(initialItems);
+    const [items, setItems] = useState<any[]>(initialItems.filter(i => i.visible === true && i.active === true));
     const [search, setSearch] = useState("")
 
     const handleSearch = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -66,6 +67,19 @@ export default function MenuItemList({ initialItems }: MenuItemListProps) {
         );
     };
 
+    const [optVisibleItems, setOptVisibleItems] = useState<boolean | null>(true)
+    const [optActiveItems, setOptActiveItems] = useState<boolean | null>(null)
+
+    const handleOptionVisibileItems = (state: boolean) => {
+        setOptVisibleItems(state)
+        setOptActiveItems(null)
+        setItems(initialItems.filter(item => item.visible === state && item.active === true))
+    }
+    const handleOptionActiveItems = (state: boolean) => {
+        setOptActiveItems(state)
+        setOptVisibleItems(null)
+        setItems(initialItems.filter(item => item.active === state))
+    }
 
 
     return (
@@ -81,14 +95,15 @@ export default function MenuItemList({ initialItems }: MenuItemListProps) {
                     <Input name="search" className="w-full" placeholder="Pesquisar..." onChange={(e) => handleSearch(e)} value={search} />
                 </div>
             </div>
-            <div className="flex gap-4 items-center">
-                <OptionTab label="Venda ativa" setState={setShowVisibleItems} state={true} highlightCondition={showVisibleItems === true} />
+            <div className="flex gap-4 items-center justify-center">
+                <OptionTab label="Venda ativa" onClickFn={() => handleOptionVisibileItems(true)} state={true} highlightCondition={optVisibleItems === true && optActiveItems === null} />
                 <span>-</span>
-                <OptionTab label="Venda pausada" setState={setShowVisibleItems} state={false} highlightCondition={showVisibleItems === false} />
+                <OptionTab label="Venda pausada" onClickFn={() => handleOptionVisibileItems(false)} state={false} highlightCondition={optVisibleItems === false && optActiveItems === null} />
                 <span>-</span>
-                <OptionTab label="Inativos" setState={setShowVisibleItems} state={false} highlightCondition={showVisibleItems === false} />
+                <OptionTab label="Inativos" onClickFn={() => handleOptionActiveItems(false)} state={false} highlightCondition={optActiveItems === false && optVisibleItems === null} />
 
             </div>
+            <Separator className="my-4" />
             <ul className="flex flex-col gap-y-4">
                 {items.map((item, index) => (
                     <li
