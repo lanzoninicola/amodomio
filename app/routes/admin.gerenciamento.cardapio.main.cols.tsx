@@ -16,6 +16,8 @@ import { cn } from "~/lib/utils"
 import { Input } from "~/components/ui/input"
 import MenuItemSwitchVisibility from "~/domain/cardapio/components/menu-item-switch-visibility/menu-item-switch-visibility"
 import { menuItemPriceVariationsEntity } from "~/domain/cardapio/menu-item-price-variations.prisma.entity.server"
+import { Menu } from "lucide-react"
+import MenuItemSwitchActivation from "~/domain/cardapio/components/menu-item-switch-activation.tsx/menu-item-switch-activation"
 
 
 export type MenuItemActionSearchParam = "menu-item-create" | "menu-item-edit" | "menu-item-delete" | "menu-items-sortorder" | null
@@ -93,6 +95,32 @@ export async function action({ request }: LoaderFunctionArgs) {
         }
 
         const returnedMessage = !item.visible === true ? `Sabor "${item.name}" visivel no cardápio` : `Sabor "${item.name}" não visivel no cardápio`;
+
+        return ok(returnedMessage);
+    }
+
+    if (_action === "menu-item-activation-change") {
+        const id = values?.id as string
+
+        const [errItem, item] = await prismaIt(menuItemPrismaEntity.findById(id));
+
+        if (errItem) {
+            return badRequest(errItem)
+        }
+
+        if (!item) {
+            return badRequest("Item não encontrado")
+        }
+
+        const [err, result] = await tryit(menuItemPrismaEntity.update(id, {
+            active: !item.active
+        }))
+
+        if (err) {
+            return badRequest(err)
+        }
+
+        const returnedMessage = !item.active === true ? `Sabor "${item.name}" ativado` : `Sabor "${item.name}" inativado`;
 
         return ok(returnedMessage);
     }
@@ -294,6 +322,7 @@ function SearchItem({ allItemsGrouped, itemsGroupedFound, setItemsGroupedFound }
 function MenuItemListSliced({ category, menuItems, loggedUser }: { category: Category["name"], menuItems: MenuItemWithAssociations[], loggedUser: string }) {
 
     const [visible, setVisible] = React.useState(false)
+    const [active, setActive] = React.useState(false)
 
 
     return (
@@ -325,7 +354,10 @@ function MenuItemListSliced({ category, menuItems, loggedUser }: { category: Cat
                                 </div>
                             </Link>
 
-                            <MenuItemSwitchVisibility menuItem={menuItem} visible={visible} setVisible={setVisible} />
+                            <div className="flex gap-4">
+                                <MenuItemSwitchVisibility menuItem={menuItem} visible={visible} setVisible={setVisible} />
+                                <MenuItemSwitchActivation menuItem={menuItem} active={active} setActive={setActive} />
+                            </div>
 
 
                         </div>

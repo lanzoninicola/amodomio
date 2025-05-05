@@ -509,6 +509,7 @@ export class MenuItemPrismaEntity {
     return await this.client.menuItem.update({
       where: { id },
       data: {
+        visible: false,
         active: false,
         deletedAt: new Date().toISOString(),
         deletedBy: deletedBy,

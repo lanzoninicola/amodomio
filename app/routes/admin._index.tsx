@@ -18,15 +18,13 @@ import { Dialog, DialogClose, DialogContent, DialogTrigger } from "~/components/
 import { Button } from "~/components/ui/button";
 import { DialogTitle } from "@radix-ui/react-dialog";
 import { ExpandIcon } from "lucide-react";
+import OptionTab from "~/components/layout/option-tab/option-tab";
+import MenuItemSwitchActivation from "~/domain/cardapio/components/menu-item-switch-activation.tsx/menu-item-switch-activation";
 
 
 export const loader = async () => {
 
-    const cardapioItems = menuItemPrismaEntity.findAll({
-        where: {
-            active: true
-        }
-    })
+    const cardapioItems = menuItemPrismaEntity.findAll()
 
     return defer({
         cardapioItems,
@@ -60,6 +58,30 @@ export async function action({ request }: LoaderFunctionArgs) {
         }
 
         const returnedMessage = !item.visible === true ? `Sabor "${item.name}" visivel no cardápio` : `Sabor "${item.name}" não visivel no cardápio`;
+
+        return ok(returnedMessage);
+    }
+
+    if (_action === "menu-item-activation-change") {
+        const id = values?.id as string
+
+        const [errItem, item] = await prismaIt(menuItemPrismaEntity.findById(id));
+
+        if (errItem) {
+            return badRequest(errItem)
+        }
+
+        if (!item) {
+            return badRequest("Item não encontrado")
+        }
+
+        const [err, result] = await tryit(menuItemPrismaEntity.softDelete(id))
+
+        if (err) {
+            return badRequest(err)
+        }
+
+        const returnedMessage = !item.active === true ? `Sabor "${item.name}" ativado` : `Sabor "${item.name}" desativado`;
 
         return ok(returnedMessage);
     }
@@ -118,7 +140,7 @@ function CardapioItems({
 ) {
     // const outletContext = useOutletContext<AdminOutletContext>()
     // const initialItems = outletContext?.cardapioItems
-    const [items, setItems] = useState<MenuItemWithAssociations[]>(cardapioItems || [])
+    const [items, setItems] = useState<MenuItemWithAssociations[]>(cardapioItems.filter(i => i.visible === true) || [])
 
     const [search, setSearch] = useState("")
 
@@ -149,29 +171,22 @@ function CardapioItems({
     }
 
     const [visible, setVisible] = useState(false)
+    const [active, setActive] = useState(false)
 
-    const [showActiveItems, setShowActiveItems] = useState(true)
+    const [optVisibleItems, setOptVisibleItems] = useState<boolean | null>(true)
+    const [optActiveItems, setOptActiveItems] = useState<boolean | null>(null)
 
-    const ActiveTab = ({ label, showActiveItems, highlightCondition }: {
-        label: string, showActiveItems: boolean,
-        highlightCondition: boolean
-    }) => {
-        return (
-            <div className={
-                cn(
-                    "grid place-items-center bg-none",
-                    highlightCondition === true && "bg-black text-white font-semibold px-2 py-1",
-                )
-            }>
-                <span className={
-                    cn(
-                        "text-xs uppercase tracking-widest cursor-pointer hover:underline",
-                    )
-                }
-                    onClick={() => setShowActiveItems(showActiveItems)}>{label}</span>
-            </div>
-        )
+    const handleOptionVisibileItems = (state: boolean) => {
+        setOptVisibleItems(state)
+        setOptActiveItems(null)
+        setItems(cardapioItems.filter(item => item.visible === state && item.active === true))
     }
+    const handleOptionActiveItems = (state: boolean) => {
+        setOptActiveItems(state)
+        setOptVisibleItems(null)
+        setItems(cardapioItems.filter(item => item.active === state))
+    }
+
 
     return (
         <div className="flex flex-col items-center">
@@ -188,11 +203,12 @@ function CardapioItems({
                     <span className="text-xs text-muted-foreground ">Resultados: {items.length}</span>
                 </div>
             </div>
-
             <div className="flex gap-4 items-center">
-                <ActiveTab label="Venda ativa" showActiveItems={true} highlightCondition={showActiveItems === true} />
+                <OptionTab label="Venda ativa" onClickFn={() => handleOptionVisibileItems(true)} state={true} highlightCondition={optVisibleItems === true && optActiveItems === null} />
                 <span>-</span>
-                <ActiveTab label="Venda pausada" showActiveItems={false} highlightCondition={showActiveItems === false} />
+                <OptionTab label="Venda pausada" onClickFn={() => handleOptionVisibileItems(false)} state={false} highlightCondition={optVisibleItems === false && optActiveItems === null} />
+                <span>-</span>
+                <OptionTab label="Inativos" onClickFn={() => handleOptionActiveItems(false)} state={false} highlightCondition={optActiveItems === false && optVisibleItems === null} />
 
             </div>
             <Separator className="my-2 w-full" />
@@ -200,11 +216,16 @@ function CardapioItems({
 
             <ul className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4">
                 {
-                    items.filter(i => {
-                        return showActiveItems === true ? i.visible === true : i.visible === false
-                    }).map(item => {
+                    items.map(item => {
                         return (
-                            <CardapioItem key={item.id} item={item} setVisible={setVisible} visible={visible} />
+                            <CardapioItem
+                                key={item.id}
+                                item={item}
+                                setVisible={setVisible}
+                                visible={visible}
+                                active={active}
+                                setActive={setActive}
+                            />
 
                         )
                     })
@@ -224,10 +245,12 @@ interface CardapioItemProps {
     item: MenuItemWithAssociations
     visible: boolean,
     setVisible: React.Dispatch<React.SetStateAction<boolean>>
+    active: boolean
+    setActive: React.Dispatch<React.SetStateAction<boolean>>
     showExpandButton?: boolean
 }
 
-function CardapioItem({ item, setVisible, visible, showExpandButton = true }: CardapioItemProps) {
+function CardapioItem({ item, setVisible, visible, active, setActive, showExpandButton = true }: CardapioItemProps) {
 
 
     return (
@@ -281,7 +304,10 @@ function CardapioItem({ item, setVisible, visible, showExpandButton = true }: Ca
             <p className="text-xs text-muted-foreground line-clamp-2 text-left">{item.ingredients}</p>
             <Separator className="my-3" />
 
-            <MenuItemSwitchVisibility menuItem={item} visible={visible} setVisible={setVisible} cnLabel="text-[12px]" />
+            <div className="flex justify-between">
+                <MenuItemSwitchActivation menuItem={item} active={active} setActive={setActive} cnLabel="text-[12px]" cnContainer="md:justify-start" />
+                <MenuItemSwitchVisibility menuItem={item} visible={visible} setVisible={setVisible} cnLabel="text-[12px]" />
+            </div>
         </div>
     )
 }

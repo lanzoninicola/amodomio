@@ -13,6 +13,7 @@ import randomReactKey from "~/utils/random-react-key"
 import { cn } from "~/lib/utils"
 import useFormSubmissionnState from "~/hooks/useFormSubmissionState"
 import MenuItemSwitchVisibility from "../menu-item-switch-visibility/menu-item-switch-visibility"
+import MenuItemSwitchActivation from "../menu-item-switch-activation.tsx/menu-item-switch-activation"
 
 
 interface MenuItemCardProps {
@@ -32,6 +33,7 @@ export default function MenuItemCard({ item, dragAndDrop }: MenuItemCardProps) {
     // const action = searchParams.get("_action")
 
     const [visible, setVisible] = useState(false)
+    const [active, setActive] = useState(false)
     const submitBtnRef = React.useRef<HTMLButtonElement>(null)
 
     function handleVisibility() {
@@ -84,11 +86,18 @@ export default function MenuItemCard({ item, dragAndDrop }: MenuItemCardProps) {
 
                     <div className="mt-2 col-span-3">
 
-                        <MenuItemSwitchVisibility
-                            menuItem={item}
-                            setVisible={setVisible}
-                            visible={visible}
-                        />
+                        <div className="flex gap-4">
+                            <MenuItemSwitchVisibility
+                                menuItem={item}
+                                setVisible={setVisible}
+                                visible={visible}
+                            />
+                            <MenuItemSwitchActivation
+                                menuItem={item}
+                                setActive={setActive}
+                                active={active}
+                            />
+                        </div>
                     </div>
 
                     <div className="col-span-1 flex justify-end">
