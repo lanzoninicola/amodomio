@@ -18,6 +18,7 @@ import MenuItemSwitchVisibility from "~/domain/cardapio/components/menu-item-swi
 import { menuItemPriceVariationsEntity } from "~/domain/cardapio/menu-item-price-variations.prisma.entity.server"
 import { Menu } from "lucide-react"
 import MenuItemSwitchActivation from "~/domain/cardapio/components/menu-item-switch-activation.tsx/menu-item-switch-activation"
+import OptionTab from "~/components/layout/option-tab/option-tab"
 
 
 export type MenuItemActionSearchParam = "menu-item-create" | "menu-item-edit" | "menu-item-delete" | "menu-items-sortorder" | null
@@ -207,24 +208,49 @@ export default function AdminGerenciamentoCardapioMainColsLayout() {
 
                     const [itemsGroupedFound, setItemsGroupedFound] = useState(listGroupedByCategory || [])
 
+
+                    const [optVisibleItems, setOptVisibleItems] = useState<boolean | null>(true)
+                    const [optActiveItems, setOptActiveItems] = useState<boolean | null>(null)
+
+                    const handleOptionVisibileItems = (state: boolean) => {
+                        setOptVisibleItems(state)
+                        setOptActiveItems(null)
+                        setItemsGroupedFound(itemsGroupedFound.filter(item => item.menuItems.some(menuItem => menuItem.visible === state && menuItem.active === true)))
+                    }
+                    const handleOptionActiveItems = (state: boolean) => {
+                        setOptActiveItems(state)
+                        setOptVisibleItems(null)
+                        setItemsGroupedFound(itemsGroupedFound.filter(item => item.menuItems.some(menuItem => menuItem.active === state)))
+                    }
+
                     return (
                         <>
-                            <div className="flex flex-col gap-6">
+                            <div className="flex flex-col">
                                 {/* @ts-ignore */}
-                                <SearchItem
-                                    allItemsGrouped={listGroupedByCategory}
-                                    itemsGroupedFound={itemsGroupedFound}
-                                    setItemsGroupedFound={setItemsGroupedFound}
-                                />
+                                <SearchItem allItemsGrouped={listGroupedByCategory} itemsGroupedFound={itemsGroupedFound} setItemsGroupedFound={setItemsGroupedFound} />
+
+                                {/* <Separator className="my-4" />
+
+                                <div className="flex gap-4 items-center justify-center">
+                                    <OptionTab label="Venda ativa" onClickFn={() => handleOptionVisibileItems(true)} state={true} highlightCondition={optVisibleItems === true && optActiveItems === null} />
+                                    <span>-</span>
+                                    <OptionTab label="Venda pausada" onClickFn={() => handleOptionVisibileItems(false)} state={false} highlightCondition={optVisibleItems === false && optActiveItems === null} />
+                                    <span>-</span>
+                                    <OptionTab label="Inativos" onClickFn={() => handleOptionActiveItems(false)} state={false} highlightCondition={optActiveItems === false && optVisibleItems === null} />
+
+                                </div> */}
+
+                                <Separator className="my-4" />
+
                                 {/* Desktop com multi-colunas */}
                                 <div className="hidden md:columns-2 md:gap-6 md:block" >
                                     {
-                                        itemsGroupedFound.map((item) => (
+                                        itemsGroupedFound.map((categoryItems) => (
 
 
-                                            <div key={item.category} className="break-inside-avoid mb-6">
+                                            <div className="break-inside-avoid mb-6">
                                                 {/* @ts-ignore */}
-                                                <MenuItemListSliced category={item.category} menuItems={item.menuItems} />
+                                                <MenuItemListSliced categoryItems={categoryItems} />
                                             </div>
 
                                         ))
@@ -235,10 +261,13 @@ export default function AdminGerenciamentoCardapioMainColsLayout() {
 
                             {/* Mobile */}
                             <div className="flex flex-col md:hidden">
-                                {listGroupedByCategory.map((item) => (
-                                    <div className="flex flex-col gap-4" key={item.category}>
+                                {itemsGroupedFound.map((categoryItems) => (
+
+
+                                    <div key={categoryItems.category} className="flex flex-col gap-4">
                                         {/* <SearchItem menuItems={item.menuItems} /> */}
-                                        <MenuItemListSliced category={item.category} menuItems={item.menuItems} />
+                                        {/* @ts-ignore */}
+                                        <MenuItemListSliced categoryItems={categoryItems} />
                                     </div>
                                 ))}
                             </div>
@@ -317,28 +346,33 @@ function SearchItem({ allItemsGrouped, itemsGroupedFound, setItemsGroupedFound }
     )
 }
 
+interface MenuItemListSlicedProps {
+    categoryItems: { category: Category["name"], menuItems: MenuItemWithAssociations[] }
+    loggedUser: string
+}
 
-
-function MenuItemListSliced({ category, menuItems, loggedUser }: { category: Category["name"], menuItems: MenuItemWithAssociations[], loggedUser: string }) {
+function MenuItemListSliced({ categoryItems, loggedUser }: MenuItemListSlicedProps) {
 
     const [visible, setVisible] = React.useState(false)
     const [active, setActive] = React.useState(false)
 
-
     return (
-        <div key={category} className="flex flex-col mb-6" data-element="menu-item-list-sliced">
-            <h3 className="uppercase font-semibold text-3xl tracking-tight">{category}</h3>
+
+
+        <div className="flex flex-col mb-6" data-element="menu-item-list-sliced">
+            <h3 className="uppercase font-semibold text-3xl tracking-tight">{categoryItems.category}</h3>
             <Separator className="my-2" />
             <ul>
-                {menuItems.map((menuItem) => (
+                {categoryItems.menuItems.map((menuItem) => (
                     <li key={menuItem.id} className={
                         cn(
                             "flex flex-col mb-2",
-                            menuItem.visible === false && "opacity-40"
+                            menuItem.visible === false && "opacity-40",
+                            menuItem.active === false && "opacity-40",
                         )
                     }>
 
-                        <div className="grid grid-cols-6 items-start p-1  hover:bg-muted">
+                        <div className="grid grid-cols-8 items-start p-1  hover:bg-muted">
                             <Link to={`/admin/gerenciamento/cardapio/${menuItem?.id}/main`} className="flex flex-col col-span-4">
                                 <div className="flex flex-col ">
                                     <span className="font-semibold uppercase mb-0 tracking-wider col-span-4">{menuItem.name}</span>
@@ -354,7 +388,7 @@ function MenuItemListSliced({ category, menuItems, loggedUser }: { category: Cat
                                 </div>
                             </Link>
 
-                            <div className="flex gap-4">
+                            <div className="flex gap-4 col-span-4">
                                 <MenuItemSwitchVisibility menuItem={menuItem} visible={visible} setVisible={setVisible} />
                                 <MenuItemSwitchActivation menuItem={menuItem} active={active} setActive={setActive} />
                             </div>
@@ -368,5 +402,6 @@ function MenuItemListSliced({ category, menuItems, loggedUser }: { category: Cat
                 ))}
             </ul>
         </div>
+
     )
 }

@@ -289,6 +289,8 @@ export class MenuItemPrismaEntity {
         menuItemId: item.id,
         name: item.name,
         ingredients: item.ingredients,
+        visible: item.visible,
+        active: item.active,
         costVariations,
       };
     });
@@ -392,6 +394,8 @@ export class MenuItemPrismaEntity {
           menuItemId: item.id,
           name: item.name,
           ingredients: item.ingredients,
+          visible: item.visible,
+          active: item.active,
           sellPriceVariations: variations,
         };
       })

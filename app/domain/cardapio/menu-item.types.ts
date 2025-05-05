@@ -6,6 +6,8 @@ export interface MenuItemWithCostVariations {
   menuItemId: string;
   name: string;
   ingredients: string;
+  visible: boolean;
+  active: boolean;
   costVariations: MenuItemCostVariationBySize[];
 }
 
@@ -41,5 +43,7 @@ export interface MenuItemWithSellPriceVariations {
   menuItemId: string;
   name: string;
   ingredients?: string;
+  visible: boolean;
+  active: boolean;
   sellPriceVariations: SellPriceVariation[];
 }
