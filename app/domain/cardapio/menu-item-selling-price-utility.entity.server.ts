@@ -11,6 +11,7 @@ import {
   menuItemSizePrismaEntity,
 } from "./menu-item-size.entity.server";
 import { on } from "events";
+import formatDecimalPlaces from "~/utils/format-decimal-places";
 
 interface MenuItemSellingPriceUtilityEntityConstructorProps
   extends PrismaEntityProps {
@@ -37,13 +38,19 @@ export interface ComputedSellingPriceBreakdown {
     isMarketplace: boolean;
     onlinePaymentTaxPerc: number;
   };
-  finalPrice: number;
+  recommendedPrice: SellingPriceAudit;
 }
 
 export interface ComputedSellingPriceWithChannelTax {
   channelKey: SellingChannelKey;
   sizeKey: PizzaSizeKey;
   priceWithChannelTax: number;
+}
+
+export interface SellingPriceAudit {
+  formulaExplanation: string;
+  formulaExpression: string;
+  priceAmount: number;
 }
 
 class MenuItemSellingPriceUtilityEntity {
@@ -118,7 +125,11 @@ class MenuItemSellingPriceUtilityEntity {
       custoFichaTecnica * wasteFactor + (size?.packagingCostAmount ?? 0);
     const targetMarginPerc = channel?.targetMarginPerc ?? 0;
 
-    let price = 0;
+    let price = {
+      formulaExplanation: "",
+      formulaExpression: "",
+      priceAmount: 0,
+    };
 
     /* ──────── 3. Calculo preço de venda ──────── */
     price = this.calculateSellingPrice(
@@ -134,7 +145,7 @@ class MenuItemSellingPriceUtilityEntity {
       const channelTaxPerc = channel?.taxPerc ?? 0;
 
       price = this.calculateSellingPriceForMarketplace(
-        price,
+        price.priceAmount,
         otherCosts,
         channelTaxPerc
       );
@@ -152,7 +163,13 @@ class MenuItemSellingPriceUtilityEntity {
         isMarketplace: channel?.isMarketplace ?? false,
         onlinePaymentTaxPerc: channel?.onlinePaymentTaxPerc ?? 0,
       },
-      finalPrice: Number((Math.ceil(price / 0.05) * 0.05).toFixed(2)),
+      recommendedPrice: {
+        priceAmount: Number(
+          (Math.ceil(price.priceAmount / 0.05) * 0.05).toFixed(2)
+        ),
+        formulaExpression: price.formulaExpression,
+        formulaExplanation: price.formulaExplanation,
+      },
     };
   }
 
@@ -171,12 +188,20 @@ class MenuItemSellingPriceUtilityEntity {
     amount: number,
     dnaPerc: number,
     targetMarginPerc: number
-  ) {
+  ): SellingPriceAudit {
     const divisor = 1 - (dnaPerc / 100 + targetMarginPerc / 100);
 
     const price = amount / divisor;
 
-    return Number((Math.ceil(price / 0.05) * 0.05).toFixed(2));
+    return {
+      formulaExplanation: `(Custo ficha técnica + Desperdício + Custo embalagem) / (1 - (% Dna + % Margem))`,
+      formulaExpression: `(${formatDecimalPlaces(
+        amount
+      )} / (1 - (${formatDecimalPlaces(dnaPerc)} / 100 + ${formatDecimalPlaces(
+        targetMarginPerc
+      )} / 100)))`,
+      priceAmount: Number((Math.ceil(price / 0.05) * 0.05).toFixed(2)),
+    };
   }
 
   /**
@@ -190,12 +215,18 @@ class MenuItemSellingPriceUtilityEntity {
     sellingPrice: number,
     otherCosts: number,
     channelTaxPerc: number
-  ) {
+  ): SellingPriceAudit {
     const divisor = 1 - channelTaxPerc / 100;
 
     const price = (sellingPrice + otherCosts) / divisor;
 
-    return Number((Math.ceil(price / 0.05) * 0.05).toFixed(2));
+    return {
+      formulaExplanation: `(Preço de venda + Outros custos) / (1 - Taxa do canal)`,
+      formulaExpression: `(${formatDecimalPlaces(
+        sellingPrice
+      )} + ${formatDecimalPlaces(otherCosts)}) / (1 - ${channelTaxPerc} / 100)`,
+      priceAmount: Number((Math.ceil(price / 0.05) * 0.05).toFixed(2)),
+    };
   }
 }
 

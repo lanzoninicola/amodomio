@@ -117,6 +117,8 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
   const { data } = useLoaderData<typeof loader>()
   const actionData = useActionData<typeof action>();
 
+  console.log({ actionData })
+
 
   if (actionData && actionData.status > 399) {
     toast({
@@ -158,7 +160,7 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
                               <input type="hidden" name="menuItemId" value={menuItem.menuItemId} />
                               <input type="hidden" name="updatedBy" value={user?.email || ""} />
                               <SubmitButton
-                                actionName="menu-item-sell-price-variation-upsert-all-proposed-input"
+                                actionName="menu-item-sell-price-variation-upsert-all-recommended-input"
                                 tabIndex={0}
                                 cnContainer="bg-white border w-full hover:bg-slate-200"
                                 cnLabel="text-[11px] tracking-widest text-black uppercase leading-[1.15]"
@@ -225,10 +227,10 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
                                             <div className="flex flex-col gap-1 items-center">
                                               <div className="flex flex-col gap-y-0">
                                                 <ValorPropostoLabelDialog computedSellingPriceBreakdown={record.computedSellingPriceBreakdown} />
-                                                <NumericInput name="proposedCostAmount" defaultValue={record.computedSellingPriceBreakdown?.finalPrice} readOnly />
+                                                <NumericInput name="recommendedCostAmount" defaultValue={record.computedSellingPriceBreakdown?.recommendedPrice.priceAmount} readOnly />
                                               </div>
                                               <SubmitButton
-                                                actionName="menu-item-sell-price-variation-upsert-proposed-input"
+                                                actionName="menu-item-sell-price-variation-upsert-recommended-input"
                                                 tabIndex={0}
                                                 cnContainer="bg-white border w-full hover:bg-slate-200"
                                                 cnLabel="text-[11px] tracking-widest text-black uppercase leading-[1.15]"
@@ -316,7 +318,7 @@ function ValorPropostoLabelDialog({ computedSellingPriceBreakdown }: ValorPropos
           <div className="flex flex-col gap-2">
             <div className="grid grid-cols-4 items-center">
               <Label>Custo Ficha Tecnica</Label>
-              <Amount>{cspb?.baseCost ?? 0}</Amount>
+              <Amount>{cspb?.custoFichaTecnica ?? 0}</Amount>
             </div>
 
             <div className="grid grid-cols-4 items-center">
@@ -324,52 +326,64 @@ function ValorPropostoLabelDialog({ computedSellingPriceBreakdown }: ValorPropos
               <Amount>{cspb?.wasteCost}</Amount>
             </div>
 
-            <div className="grid grid-cols-4 items-center">
-              <Label>Custo DNA</Label>
-              <Amount>{cspb?.dnaCost}</Amount>
-            </div>
+
+
 
             <div className="grid grid-cols-4 items-center">
               <Label>Custo Embalagens</Label>
               <Amount>{cspb?.packagingCostAmount}</Amount>
             </div>
 
-            <div className="grid grid-cols-4 items-center">
-              <Label>Custo Marketplace</Label>
-              <Amount>{cspb?.channelCost}</Amount>
-            </div>
 
             <Separator className="my-4" />
+
+            {
+              cspb?.channel?.isMarketplace && (
+                <>
+                  <Label>{`Custo Marketplace (${cspb?.channel?.name})`}</Label>
+                  <div className="grid grid-cols-4 items-center">
+                    <Label cnContainer="text-[12px]">Taxa mensal</Label>
+                    <Amount>{cspb?.channel?.feeAmount}</Amount>
+                  </div>
+                  <div className="grid grid-cols-4 items-center">
+                    <Label cnContainer="text-[12px]">Taxa transação </Label>
+                    <Amount>{cspb?.channel?.taxPerc}</Amount>
+                  </div>
+
+                  <div className="grid grid-cols-4 items-center">
+                    <Label cnContainer="text-[12px]">Taxa pagamento online</Label>
+                    <Amount>{cspb?.channel?.onlinePaymentTaxPerc}</Amount>
+                  </div>
+
+                  <Separator className="my-4" />
+                </>
+              )
+            }
+
+
 
             <div className="grid grid-cols-4 items-center">
               <Label cnContainer="font-semibold">Total Custo</Label>
               <Amount>{
-                (cspb?.baseCost ?? 0)
-                + (cspb?.wasteCost ?? 0)
-                + (cspb?.dnaCost ?? 0)
-                + (cspb?.packagingCostAmount ?? 0)
-                + (cspb?.channelCost ?? 0)
+                Number((cspb?.custoFichaTecnica ?? 0)
+                  + (cspb?.wasteCost ?? 0)
+                  + (cspb?.packagingCostAmount ?? 0)
+                  + (cspb?.channel?.taxPerc ?? 0)).toFixed(2)
               }</Amount>
             </div>
 
             <Separator className="my-4" />
 
-            <div className="grid grid-cols-4 items-center">
-              <Label>Valor de Markup</Label>
-              <Amount>{cspb?.markupValue}</Amount>
+            <div className="flex flex-col gap-2">
+              <div className="grid grid-cols-4 items-center">
+                <span className="font-semibold text-sm col-span-3">Preço de venda sugerido</span>
+                <Amount>{Number(cspb?.recommendedPrice?.priceAmount ?? 0).toFixed(2)}</Amount>
+              </div>
+              <span className="text-[12px] font-mono">{cspb?.recommendedPrice?.formulaExplanation}</span>
+              <span className="text-[12px] font-mono">{cspb?.recommendedPrice?.formulaExpression}</span>
             </div>
 
             <Separator className="my-4" />
-
-            <div className="grid grid-cols-4 items-center">
-              <span className="font-semibold text-sm col-span-3">Preço de venda final</span>
-              <Amount>{cspb?.finalPrice}</Amount>
-            </div>
-
-            <div className="grid grid-cols-4 items-center">
-              <span className="font-semibold text-sm col-span-3">Preço de venda final com taxa marketplace</span>
-              <Amount>{cspb?.finalPriceWithChannelTax}</Amount>
-            </div>
           </div>
           <DialogClose asChild>
             <div className="w-full px-4 py-6">
