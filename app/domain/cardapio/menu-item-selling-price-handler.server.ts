@@ -5,7 +5,6 @@ import {
   MenuItemWithCostVariations,
   MenuItemWithSellPriceVariations,
   SellPriceVariation,
-  SellPriceVariationWithComputed,
 } from "./menu-item.types";
 import { CacheManager } from "../cache/cache-manager.server";
 import {
@@ -91,9 +90,9 @@ export class MenuItemSellingPriceHandler {
       item: MenuItemWithSellPriceVariations,
       size: MenuItemSize,
       channel: MenuItemSellingChannel
-    ): Promise<SellPriceVariationWithComputed> => {
+    ): Promise<SellPriceVariation> => {
       const variation = item.sellPriceVariations?.find(
-        (spv: SellPriceVariation | SellPriceVariationWithComputed) =>
+        (spv: SellPriceVariation | SellPriceVariation) =>
           spv.sizeId === size.id && spv.channelId === channel.id
       );
 

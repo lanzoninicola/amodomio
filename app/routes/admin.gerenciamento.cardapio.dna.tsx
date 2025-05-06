@@ -51,7 +51,7 @@ export const action: ActionFunction = async ({ request }) => {
     const taxaCartaoPerc = formData.get("taxaCartaoPerc");
     const impostoPerc = formData.get("impostoPerc");
     const wastePerc = formData.get("wastePerc");
-    const targetMarginPerc = formData.get("targetMarginPerc");
+
 
 
     // Validação simples (é possível aprimorar conforme necessário)
@@ -76,9 +76,6 @@ export const action: ActionFunction = async ({ request }) => {
         errors.wastePerc = "Valor inválido para desperdício";
     }
 
-    if (!targetMarginPerc || isNaN(Number(targetMarginPerc))) {
-        errors.targetMarginPerc = "Valor inválido para margem desejada";
-    }
 
     if (Object.keys(errors).length > 0) {
         return json({ errors }, { status: 400 });
@@ -101,7 +98,6 @@ export const action: ActionFunction = async ({ request }) => {
                 impostoPerc: Number(impostoPerc),
                 dnaPerc,
                 wastePerc: Number(wastePerc),
-                targetMarginPerc: Number(targetMarginPerc),
             },
         }));
 
@@ -123,7 +119,6 @@ export const action: ActionFunction = async ({ request }) => {
             impostoPerc: Number(impostoPerc),
             dnaPerc,
             wastePerc: Number(wastePerc),
-            targetMarginPerc: Number(targetMarginPerc),
         },
     }))
 
@@ -315,21 +310,7 @@ export default function DnaEmpresaSettingsPage() {
 
                                             </div>
                                         </div>
-                                        <Separator className="hidden md:block md:col-span-1" orientation="vertical" />
-                                        <div className="flex flex-col gap-2 mb-4 justify-center col-span-3">
 
-                                            <div className="grid grid-cols-2">
-                                                <span className="text-muted-foreground ">
-                                                    Lucro Desejado (%)
-                                                </span>
-                                                <NumericInput name="targetMarginPerc" defaultValue={dnaEmpresaSettings?.targetMarginPerc || 0} />
-                                                {actionData?.errors?.targetMarginPerc && (
-                                                    <span className="text-red-500 text-xs">
-                                                        {actionData.errors.targetMarginPerc}
-                                                    </span>
-                                                )}
-                                            </div>
-                                        </div>
                                     </div>
                                     <SubmitButton
                                         actionName="dna-empresa-update"

@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import prismaClient from "~/lib/prisma/client.server";
 import { PrismaEntityProps } from "~/lib/prisma/types.server";
 
@@ -13,7 +14,7 @@ class MenuItemSellingChannelPrismaEntity {
   async findAll() {
     return await this.client.menuItemSellingChannel.findMany({
       orderBy: {
-        key: "asc",
+        sortOrderIndex: "asc",
       },
     });
   }
@@ -23,6 +24,13 @@ class MenuItemSellingChannelPrismaEntity {
       where: {
         key,
       },
+    });
+  }
+
+  async update({ where, data }: Prisma.MenuItemSellingChannelUpdateArgs) {
+    return await this.client.menuItemSellingChannel.update({
+      where,
+      data,
     });
   }
 }

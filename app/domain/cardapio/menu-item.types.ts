@@ -35,6 +35,7 @@ export interface SellPriceVariation {
   updatedBy?: string;
   updatedAt?: Date;
   previousPriceAmount: number;
+  computedSellingPriceBreakdown?: ComputedSellingPriceBreakdown;
 }
 
 export interface MenuItemWithSellPriceVariations {
@@ -43,11 +44,7 @@ export interface MenuItemWithSellPriceVariations {
   ingredients?: string;
   visible: boolean;
   active: boolean;
-  sellPriceVariations: SellPriceVariation[] | SellPriceVariationWithComputed[];
-}
-
-export interface SellPriceVariationWithComputed extends SellPriceVariation {
-  computedSellingPriceBreakdown: ComputedSellingPriceBreakdown;
+  sellPriceVariations: SellPriceVariation[];
 }
 
 export interface MenuItemWithSellPriceVariationsAndCostVariations {

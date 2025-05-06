@@ -320,7 +320,6 @@ model DnaEmpresaSettings {
   taxaCartaoPerc         Float  @default(0) @map("taxa_cartao_perc")
   impostoPerc            Float  @default(0) @map("imposto_perc")
   dnaPerc                Float  @default(0) @map("dna_perc")
-  targetMarginPerc       Float  @default(0) @map("target_margin_perc")
   wastePerc              Float  @default(0) @map("waste_perc")
 
   @@map("dna_empresa_settings")
@@ -334,6 +333,7 @@ model MenuItemSize {
   createdAt                     DateTime                        @map("created_at")
   updatedAt                     DateTime                        @default(now()) @updatedAt @map("updated_at")
   packagingCostAmount           Float                           @default(0) @map("packaging_cost_amount")
+  visible                       Boolean                         @default(true)
   MenuItemPriceVariation        MenuItemPriceVariation[]
   MenuItemSellingPriceVariation MenuItemSellingPriceVariation[]
   MenuItemCostVariation         MenuItemCostVariation[]

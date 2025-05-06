@@ -1,6 +1,5 @@
-import { MenuItemPriceVariation } from "@prisma/client";
 import { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
-import { Await, useLoaderData, defer, Form, useActionData, redirect } from "@remix-run/react";
+import { Await, useLoaderData, defer, Form, useActionData } from "@remix-run/react";
 import { Suspense, useState } from "react";
 import OptionTab from "~/components/layout/option-tab/option-tab";
 import Loading from "~/components/loading/loading";
@@ -16,14 +15,12 @@ import { menuItemSellingPriceHandler } from "~/domain/cardapio/menu-item-selling
 
 import { ComputedSellingPriceBreakdown } from "~/domain/cardapio/menu-item-selling-price-utility.entity.server";
 import { MenuItemSellingPriceVariationUpsertParams, menuItemSellingPriceVariationPrismaEntity } from "~/domain/cardapio/menu-item-selling-price-variation.entity.server";
-import { menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { MenuItemWithSellPriceVariations } from "~/domain/cardapio/menu-item.types";
 import prismaClient from "~/lib/prisma/client.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { cn } from "~/lib/utils";
 import formatDecimalPlaces from "~/utils/format-decimal-places";
 import { badRequest, ok } from "~/utils/http-response.server";
-import { jsonStringify } from "~/utils/json-helper";
 import randomReactKey from "~/utils/random-react-key";
 import toFixedNumber from "~/utils/to-fixed-number";
 
@@ -47,7 +44,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   const dnaEmpresaSettings = prismaIt(prismaClient.dnaEmpresaSettings.findFirst())
 
-  const data = Promise.all([
+  const returnedData = Promise.all([
     menuItemsWithSellPriceVariations,
     user,
     dnaEmpresaSettings,
@@ -55,7 +52,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   ]);
 
   return defer({
-    data
+    returnedData
   })
 }
 
@@ -97,7 +94,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
     const [err, result] = await prismaIt(menuItemSellingPriceVariationPrismaEntity.upsert(menuItemSellPriceVariationId, nextPrice))
 
-    console.log({ result, err })
+
 
     if (err) {
       return badRequest(err)
@@ -112,7 +109,7 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function AdminGerenciamentoCardapioSellPriceManagementSingleChannel() {
-  const { data } = useLoaderData<typeof loader>()
+  const { returnedData } = useLoaderData<typeof loader>()
   const actionData = useActionData<typeof action>();
 
 
@@ -134,7 +131,7 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
     <div className="flex flex-col gap-4">
 
       <Suspense fallback={<Loading />}>
-        <Await resolve={data}>
+        <Await resolve={returnedData}>
           {/* @ts-ignore */}
           {([menuItemsWithSellPriceVariations, user, dnaEmpresaSettings, sellingChannel]) => {
 
@@ -160,7 +157,8 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
 
             return (
               <div className="flex flex-col">
-                <div className="flex gap-4 items-center justify-center">
+
+                <div className="flex gap-4 items-center justify-center mt-4">
                   <OptionTab label="Venda ativa" onClickFn={() => handleOptionVisibileItems(true)} state={true} highlightCondition={optVisibleItems === true && optActiveItems === null} />
                   <span>-</span>
                   <OptionTab label="Venda pausada" onClickFn={() => handleOptionVisibileItems(false)} state={false} highlightCondition={optVisibleItems === false && optActiveItems === null} />
@@ -189,7 +187,7 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
                                   <ul className="grid grid-cols-5 mb-4">
                                     {menuItem.sellPriceVariations.map((record) => {
 
-                                      const recommendedPriceAmount = record.computedSellingPriceBreakdown?.recommendedPrice.priceAmount
+                                      const recommendedPriceAmount = record.computedSellingPriceBreakdown?.recommendedPrice?.priceAmount ?? 0
 
                                       return (
                                         <li key={randomReactKey()} >
@@ -206,7 +204,9 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
                                               >{formatDecimalPlaces(record.priceAmount)}</p>
                                             </div>
                                             <div className="flex flex-col text-center">
-                                              <p className="text-[11px] text-muted-foreground">Valor recomendado:</p>
+                                              {/* <p className="text-[11px] text-muted-foreground">Valor recomendado:</p> */}
+
+                                              <ValorRecomendadoLabelDialog computedSellingPriceBreakdown={record.computedSellingPriceBreakdown} />
                                               <p className="text-[12px] font-mono">{formatDecimalPlaces(recommendedPriceAmount)}</p>
                                             </div>
                                           </div>
@@ -276,7 +276,7 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
 
                                                     <div className="flex flex-col gap-1 items-center">
                                                       <div className="flex flex-col gap-y-0">
-                                                        <ValorPropostoLabelDialog computedSellingPriceBreakdown={record.computedSellingPriceBreakdown} />
+                                                        <ValorRecomendadoLabelDialog computedSellingPriceBreakdown={record.computedSellingPriceBreakdown} />
                                                         <NumericInput name="recommendedCostAmount" defaultValue={record.computedSellingPriceBreakdown?.recommendedPrice.priceAmount} readOnly />
                                                       </div>
                                                       <SubmitButton
@@ -349,12 +349,12 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
   )
 }
 
-interface ValorPropostoLabelDialogProps {
-  computedSellingPriceBreakdown: ComputedSellingPriceBreakdown | null
+interface ValorRecomendadoLabelDialogProps {
+  computedSellingPriceBreakdown: ComputedSellingPriceBreakdown | undefined | null
 
 }
 
-function ValorPropostoLabelDialog({ computedSellingPriceBreakdown }: ValorPropostoLabelDialogProps
+function ValorRecomendadoLabelDialog({ computedSellingPriceBreakdown }: ValorRecomendadoLabelDialogProps
 ) {
 
 
@@ -381,7 +381,7 @@ function ValorPropostoLabelDialog({ computedSellingPriceBreakdown }: ValorPropos
   return (
     <Dialog>
       <DialogTrigger asChild className="w-full">
-        <span className="text-muted-foreground text-[11px] cursor-pointer hover:underline">Valor proposto</span>
+        <span className="text-muted-foreground text-[11px] cursor-pointer hover:underline">Valor recomendado</span>
       </DialogTrigger>
       <DialogContent>
 

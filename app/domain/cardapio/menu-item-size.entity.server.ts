@@ -19,6 +19,9 @@ class MenuItemSizePrismaEntity {
 
   async findAll() {
     return await this.client.menuItemSize.findMany({
+      where: {
+        visible: true,
+      },
       orderBy: {
         sortOrderIndex: "asc",
       },
