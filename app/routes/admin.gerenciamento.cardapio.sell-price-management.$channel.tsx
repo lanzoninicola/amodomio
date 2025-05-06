@@ -6,6 +6,7 @@ import OptionTab from "~/components/layout/option-tab/option-tab";
 import Loading from "~/components/loading/loading";
 import { NumericInput } from "~/components/numeric-input/numeric-input";
 import SubmitButton from "~/components/primitives/submit-button/submit-button";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "~/components/ui/accordion";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from "~/components/ui/dialog";
 import { Separator } from "~/components/ui/separator";
@@ -20,6 +21,7 @@ import { MenuItemWithSellPriceVariations } from "~/domain/cardapio/menu-item.typ
 import prismaClient from "~/lib/prisma/client.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { cn } from "~/lib/utils";
+import formatDecimalPlaces from "~/utils/format-decimal-places";
 import { badRequest, ok } from "~/utils/http-response.server";
 import { jsonStringify } from "~/utils/json-helper";
 import randomReactKey from "~/utils/random-react-key";
@@ -173,117 +175,160 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
                       // @ts-ignore
                       items.map((menuItem: MenuItemWithSellPriceVariations) => {
 
+
+
                         return (
-                          <li key={menuItem.menuItemId} className="p-2">
-                            <div className="flex justify-between  items-center mb-4 bg-slate-300 rounded-md px-4 py-1">
+                          <li key={menuItem.menuItemId}>
 
-                              <h3 className="text-md font-semibold">{menuItem.name} ({sellingChannel.name})</h3>
-                              <Form method="post" className="flex gap-2">
-                                <input type="hidden" name="menuItemId" value={menuItem.menuItemId} />
-                                <input type="hidden" name="updatedBy" value={user?.email || ""} />
-                                <SubmitButton
-                                  actionName="menu-item-sell-price-variation-upsert-all-recommended-input"
-                                  tabIndex={0}
-                                  cnContainer="bg-white border w-full hover:bg-slate-200"
-                                  cnLabel="text-[11px] tracking-widest text-black uppercase leading-[1.15]"
-                                  hideIcon
-                                  idleText="Aceitar todas as propostas"
-                                  loadingText="Aceitando..."
-                                />
-                              </Form>
-                            </div>
+                            <Accordion type="single" collapsible className="border rounded-md px-4 py-2 mb-4">
+                              <AccordionItem value="item-1">
+                                <div className="flex flex-col w-full">
+                                  <AccordionTrigger>
+                                    <h3 className="text-md font-semibold">{menuItem.name} ({sellingChannel.name})</h3>
+                                  </AccordionTrigger>
+                                  <ul className="grid grid-cols-5 mb-4">
+                                    {menuItem.sellPriceVariations.map((record) => {
 
-                            <ul className="grid grid-cols-5 gap-x-1">
-                              {menuItem.sellPriceVariations.map((record) => (
+                                      const recommendedPriceAmount = record.computedSellingPriceBreakdown?.recommendedPrice.priceAmount
 
-                                <section key={randomReactKey()} className="mb-8">
-
-                                  <ul className="flex gap-6">
-                                    <li key={record.sizeId} className={
-                                      cn(
-                                        "p-2 rounded-md",
-                                      )
-                                    }>
-                                      <div className="flex flex-col">
-                                        <div className={
-                                          cn(
-                                            " mb-2",
-                                            record.sizeKey === "pizza-medium" && "grid place-items-center bg-black",
-                                          )
-                                        }>
-                                          <h4 className={
-                                            cn(
-                                              "text-[12px] font-medium uppercase tracking-wider",
-                                              record.sizeKey === "pizza-medium" && "font-semibold text-white",
-                                            )
-                                          }>
-                                            {record.sizeName}
-                                          </h4>
-                                        </div>
-
-                                        <Form method="post" className="flex flex-col gap-1 justify-center items-center">
-                                          <div className="flex flex-col gap-2 mb-2">
-                                            <input type="hidden" name="menuItemId" value={menuItem.menuItemId} />
-                                            <input type="hidden" name="menuItemSellPriceVariationId" value={record.menuItemSellPriceVariationId ?? ""} />
-                                            <input type="hidden" name="menuItemSellingChannelId" value={sellingChannel.id ?? ""} />
-                                            <input type="hidden" name="menuItemSizeId" value={record.sizeId ?? ""} />
-                                            <input type="hidden" name="updatedBy" value={record.updatedBy || user?.email || ""} />
-                                            <input type="hidden" name="previousCostAmount" value={record.previousPriceAmount} />
-
-
-                                            <div className="grid grid-cols-2 gap-2">
-
-                                              <div className="flex flex-col gap-1 items-center">
-                                                <div className="flex flex-col gap-y-0">
-                                                  <span className="text-muted-foreground text-[11px]">Novo preço:</span>
-                                                  <NumericInput name="priceAmount" defaultValue={record.priceAmount} />
-                                                </div>
-                                                <SubmitButton
-                                                  actionName="menu-item-sell-price-variation-upsert-user-input"
-                                                  tabIndex={0}
-                                                  cnContainer="md:py-0 bg-slate-300 hover:bg-slate-400"
-                                                  cnLabel="text-[11px] tracking-widest text-black uppercase"
-                                                  iconColor="black"
-                                                />
-                                              </div>
-
-                                              <div className="flex flex-col gap-1 items-center">
-                                                <div className="flex flex-col gap-y-0">
-                                                  <ValorPropostoLabelDialog computedSellingPriceBreakdown={record.computedSellingPriceBreakdown} />
-                                                  <NumericInput name="recommendedCostAmount" defaultValue={record.computedSellingPriceBreakdown?.recommendedPrice.priceAmount} readOnly />
-                                                </div>
-                                                <SubmitButton
-                                                  actionName="menu-item-sell-price-variation-upsert-recommended-input"
-                                                  tabIndex={0}
-                                                  cnContainer="bg-white border w-full hover:bg-slate-200"
-                                                  cnLabel="text-[11px] tracking-widest text-black uppercase leading-[1.15]"
-                                                  hideIcon
-                                                  idleText="Aceitar proposta"
-                                                  loadingText="Aceitando..."
-                                                />
-                                              </div>
-
+                                      return (
+                                        <li key={randomReactKey()} >
+                                          <p className="text-[11px] uppercase text-center mb-2">{record.sizeName}</p>
+                                          <div className="grid grid-cols-2 gap-2 justify-center">
+                                            <div className="flex flex-col text-center">
+                                              <p className="text-[11px] text-muted-foreground">Valor:</p>
+                                              <p className={
+                                                cn(
+                                                  "text-[12px] font-mono",
+                                                  record.priceAmount > 0 && recommendedPriceAmount > record.priceAmount && 'bg-red-500'
+                                                )
+                                              }
+                                              >{formatDecimalPlaces(record.priceAmount)}</p>
                                             </div>
-
-
-
-
-                                            <div className="flex flex-col gap-1">
-                                              <span className="text-xs">Preço atual: {record.priceAmount}</span>
-                                              <span className="text-xs text-muted-foreground">Preço anterior: {record.previousPriceAmount}</span>
+                                            <div className="flex flex-col text-center">
+                                              <p className="text-[11px] text-muted-foreground">Valor recomendado:</p>
+                                              <p className="text-[12px] font-mono">{formatDecimalPlaces(recommendedPriceAmount)}</p>
                                             </div>
                                           </div>
 
+                                        </li>
+                                      )
+                                    })}
+                                  </ul>
+                                </div>
+                                <AccordionContent>
 
-                                        </Form>
-                                      </div>
-                                    </li>
+                                  <Separator className="my-4" />
+
+                                  <ul className="grid grid-cols-5 gap-x-1">
+                                    {menuItem.sellPriceVariations.map((record) => (
+
+                                      <section key={randomReactKey()} className="mb-8">
+
+                                        <ul className="flex gap-6">
+                                          <li key={record.sizeId} className={
+                                            cn(
+                                              "p-2 rounded-md",
+                                            )
+                                          }>
+                                            <div className="flex flex-col">
+                                              <div className={
+                                                cn(
+                                                  " mb-2",
+                                                  record.sizeKey === "pizza-medium" && "grid place-items-center bg-black",
+                                                )
+                                              }>
+                                                <h4 className={
+                                                  cn(
+                                                    "text-[12px] font-medium uppercase tracking-wider",
+                                                    record.sizeKey === "pizza-medium" && "font-semibold text-white",
+                                                  )
+                                                }>
+                                                  {record.sizeName}
+                                                </h4>
+                                              </div>
+
+                                              <Form method="post" className="flex flex-col gap-1 justify-center items-center">
+                                                <div className="flex flex-col gap-2 mb-2">
+                                                  <input type="hidden" name="menuItemId" value={menuItem.menuItemId} />
+                                                  <input type="hidden" name="menuItemSellPriceVariationId" value={record.menuItemSellPriceVariationId ?? ""} />
+                                                  <input type="hidden" name="menuItemSellingChannelId" value={sellingChannel.id ?? ""} />
+                                                  <input type="hidden" name="menuItemSizeId" value={record.sizeId ?? ""} />
+                                                  <input type="hidden" name="updatedBy" value={record.updatedBy || user?.email || ""} />
+                                                  <input type="hidden" name="previousCostAmount" value={record.previousPriceAmount} />
+
+
+                                                  <div className="grid grid-cols-2 gap-2">
+
+                                                    <div className="flex flex-col gap-1 items-center">
+                                                      <div className="flex flex-col gap-y-0">
+                                                        <span className="text-muted-foreground text-[11px]">Novo preço:</span>
+                                                        <NumericInput name="priceAmount" defaultValue={record.priceAmount} />
+                                                      </div>
+                                                      <SubmitButton
+                                                        actionName="menu-item-sell-price-variation-upsert-user-input"
+                                                        tabIndex={0}
+                                                        cnContainer="md:py-0 bg-slate-300 hover:bg-slate-400"
+                                                        cnLabel="text-[11px] tracking-widest text-black uppercase"
+                                                        iconColor="black"
+                                                      />
+                                                    </div>
+
+                                                    <div className="flex flex-col gap-1 items-center">
+                                                      <div className="flex flex-col gap-y-0">
+                                                        <ValorPropostoLabelDialog computedSellingPriceBreakdown={record.computedSellingPriceBreakdown} />
+                                                        <NumericInput name="recommendedCostAmount" defaultValue={record.computedSellingPriceBreakdown?.recommendedPrice.priceAmount} readOnly />
+                                                      </div>
+                                                      <SubmitButton
+                                                        actionName="menu-item-sell-price-variation-upsert-recommended-input"
+                                                        tabIndex={0}
+                                                        cnContainer="bg-white border w-full hover:bg-slate-200"
+                                                        cnLabel="text-[11px] tracking-widest text-black uppercase leading-[1.15]"
+                                                        hideIcon
+                                                        idleText="Aceitar proposta"
+                                                        loadingText="Aceitando..."
+                                                      />
+                                                    </div>
+
+                                                  </div>
+
+
+
+
+                                                  <div className="flex flex-col gap-1">
+                                                    <span className="text-xs">Preço atual: {record.priceAmount}</span>
+                                                    <span className="text-xs text-muted-foreground">Preço anterior: {record.previousPriceAmount}</span>
+                                                  </div>
+                                                </div>
+
+
+                                              </Form>
+                                            </div>
+                                          </li>
+
+                                        </ul>
+                                      </section>
+                                    ))}
 
                                   </ul>
-                                </section>
-                              ))}
 
-                            </ul>
+                                  <Form method="post" className="flex gap-2">
+                                    <input type="hidden" name="menuItemId" value={menuItem.menuItemId} />
+                                    <input type="hidden" name="updatedBy" value={user?.email || ""} />
+                                    <SubmitButton
+                                      actionName="menu-item-sell-price-variation-upsert-all-recommended-input"
+                                      tabIndex={0}
+                                      cnContainer="bg-white border w-full hover:bg-slate-200"
+                                      cnLabel="text-[11px] tracking-widest text-black uppercase leading-[1.15]"
+                                      hideIcon
+                                      idleText="Aceitar todas as propostas"
+                                      loadingText="Aceitando..."
+                                    />
+                                  </Form>
+
+                                </AccordionContent>
+                              </AccordionItem>
+                            </Accordion>
 
 
                           </li>
