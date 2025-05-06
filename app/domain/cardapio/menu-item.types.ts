@@ -17,7 +17,6 @@ export interface MenuItemCostVariationBySize {
   sizeKey: string;
   sizeName: string;
   costAmount: number;
-  proposedCostAmount: number;
   updatedBy: string | null | undefined;
   updatedAt: Date | undefined;
   previousCostAmount: number;
@@ -32,7 +31,6 @@ export interface SellPriceVariation {
   channelKey: string | null;
   channelName: string;
   priceAmount: number;
-  computedSellingPriceBreakdown: ComputedSellingPriceBreakdown | null;
   discountPercentage: number;
   updatedBy?: string;
   updatedAt?: Date;
@@ -45,7 +43,11 @@ export interface MenuItemWithSellPriceVariations {
   ingredients?: string;
   visible: boolean;
   active: boolean;
-  sellPriceVariations: SellPriceVariation[];
+  sellPriceVariations: SellPriceVariation[] | SellPriceVariationWithComputed[];
+}
+
+export interface SellPriceVariationWithComputed extends SellPriceVariation {
+  computedSellingPriceBreakdown: ComputedSellingPriceBreakdown;
 }
 
 export interface MenuItemWithSellPriceVariationsAndCostVariations {

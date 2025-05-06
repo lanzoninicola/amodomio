@@ -11,16 +11,17 @@ import { Dialog, DialogClose, DialogContent, DialogTrigger } from "~/components/
 import { Separator } from "~/components/ui/separator";
 import { toast } from "~/components/ui/use-toast";
 import { authenticator } from "~/domain/auth/google.server";
-import { menuItemPriceVariationsEntity } from "~/domain/cardapio/menu-item-price-variations.prisma.entity.server";
+import { menuItemSellingPriceHandler } from "~/domain/cardapio/menu-item-selling-price-handler.server";
 
 import { ComputedSellingPriceBreakdown } from "~/domain/cardapio/menu-item-selling-price-utility.entity.server";
-import { MenuItemSellingPriceVariationCreateInput } from "~/domain/cardapio/menu-item-selling-price-variation.entity.server";
+import { MenuItemSellingPriceVariationUpsertParams, menuItemSellingPriceVariationPrismaEntity } from "~/domain/cardapio/menu-item-selling-price-variation.entity.server";
 import { menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { MenuItemWithSellPriceVariations } from "~/domain/cardapio/menu-item.types";
 import prismaClient from "~/lib/prisma/client.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { cn } from "~/lib/utils";
 import { badRequest, ok } from "~/utils/http-response.server";
+import { jsonStringify } from "~/utils/json-helper";
 import randomReactKey from "~/utils/random-react-key";
 import toFixedNumber from "~/utils/to-fixed-number";
 
@@ -36,14 +37,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     return badRequest(`Can not find selling channel with key ${sellingChannelKey}`)
   }
 
-  console.log({ sellingChannel })
-
-  const menuItemsWithSellPriceVariations = menuItemPrismaEntity.findManyWithSellPriceVariations({
+  const menuItemsWithSellPriceVariations = menuItemSellingPriceHandler.loadMany({
     channelKey: sellingChannel.key,
-    includeRecommendedPrice: true,
   })
-
-  const menuItemWithCostVariations = menuItemPrismaEntity.findManyWithCostVariations()
 
   const user = authenticator.isAuthenticated(request);
 
@@ -53,7 +49,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     menuItemsWithSellPriceVariations,
     user,
     dnaEmpresaSettings,
-    menuItemWithCostVariations,
     sellingChannel
   ]);
 
@@ -67,9 +62,9 @@ export async function action({ request }: ActionFunctionArgs) {
   let formData = await request.formData();
   const { _action, ...values } = Object.fromEntries(formData);
 
-  console.log({ action: _action, values })
+  console.log({ _action, values })
 
-  if (_action === "menu-item-price-variation-update") {
+  if (_action === "menu-item-sell-price-variation-upsert-user-input") {
 
     const menuItemSellPriceVariationId = values?.menuItemSellPriceVariationId as string
     const menuItemSellingChannelId = values?.menuItemSellingChannelId as string
@@ -86,7 +81,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
     const updatedBy = values?.updatedBy as string
 
-    const nextPrice: MenuItemSellingPriceVariationCreateInput = {
+    const nextPrice: MenuItemSellingPriceVariationUpsertParams = {
       menuItemId,
       menuItemSellingChannelId,
       menuItemSizeId,
@@ -98,11 +93,9 @@ export async function action({ request }: ActionFunctionArgs) {
       showOnCardapioAt: null,
     }
 
-    console.log({ nextPrice })
+    const [err, result] = await prismaIt(menuItemSellingPriceVariationPrismaEntity.upsert(menuItemSellPriceVariationId, nextPrice))
 
-    const [err, result] = await prismaIt(menuItemPriceVariationsEntity.upsert(menuItemSellPriceVariationId, nextPrice))
-
-    console.log({ err })
+    console.log({ result, err })
 
     if (err) {
       return badRequest(err)
@@ -119,8 +112,6 @@ export async function action({ request }: ActionFunctionArgs) {
 export default function AdminGerenciamentoCardapioSellPriceManagementSingleChannel() {
   const { data } = useLoaderData<typeof loader>()
   const actionData = useActionData<typeof action>();
-
-  console.log({ actionData })
 
 
   if (actionData && actionData.status > 399) {
@@ -143,11 +134,11 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
       <Suspense fallback={<Loading />}>
         <Await resolve={data}>
           {/* @ts-ignore */}
-          {([menuItemsWithSellPriceVariations, user, dnaEmpresaSettings, menuItemWithCostVariations, sellingChannel]) => {
+          {([menuItemsWithSellPriceVariations, user, dnaEmpresaSettings, sellingChannel]) => {
 
 
             {/* @ts-ignore */ }
-            const [items, setItems] = useState<MenuItemsWithSellPriceVariations[]>(menuItemsWithSellPriceVariations || [])
+            const [items, setItems] = useState<MenuItemsWithSellPriceVariations[]>(menuItemsWithSellPriceVariations.filter(item => item.visible === true && item.active === true) || [])
 
             const [optVisibleItems, setOptVisibleItems] = useState<boolean | null>(true)
             const [optActiveItems, setOptActiveItems] = useState<boolean | null>(null)
@@ -181,8 +172,6 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
                     {
                       // @ts-ignore
                       items.map((menuItem: MenuItemWithSellPriceVariations) => {
-
-                        // console.log({ menuItem })
 
                         return (
                           <li key={menuItem.menuItemId} className="p-2">
@@ -241,12 +230,13 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
                                             <input type="hidden" name="updatedBy" value={record.updatedBy || user?.email || ""} />
                                             <input type="hidden" name="previousCostAmount" value={record.previousPriceAmount} />
 
+
                                             <div className="grid grid-cols-2 gap-2">
 
                                               <div className="flex flex-col gap-1 items-center">
                                                 <div className="flex flex-col gap-y-0">
                                                   <span className="text-muted-foreground text-[11px]">Novo preço:</span>
-                                                  <NumericInput name="costAmount" defaultValue={record.priceAmount} />
+                                                  <NumericInput name="priceAmount" defaultValue={record.priceAmount} />
                                                 </div>
                                                 <SubmitButton
                                                   actionName="menu-item-sell-price-variation-upsert-user-input"

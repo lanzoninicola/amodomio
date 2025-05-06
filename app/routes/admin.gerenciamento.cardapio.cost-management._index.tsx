@@ -9,6 +9,7 @@ import SubmitButton from "~/components/primitives/submit-button/submit-button";
 import { Separator } from "~/components/ui/separator";
 import { toast } from "~/components/ui/use-toast";
 import { authenticator } from "~/domain/auth/google.server";
+import { menuItemCostHandler } from "~/domain/cardapio/menu-item-cost-handler.server";
 import { menuItemCostVariationPrismaEntity } from "~/domain/cardapio/menu-item-cost-variation.entity.server";
 import { menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { MenuItemWithCostVariations } from "~/domain/cardapio/menu-item.types";
@@ -23,11 +24,11 @@ import createUUID from "~/utils/uuid";
 
 export async function loader({ request }: LoaderFunctionArgs) {
 
-    const menuItemsWithCostVariations = menuItemPrismaEntity.findManyWithCostVariations()
+    const menuItemsWithCostVariationsAndRecommended = menuItemCostHandler.loadAll()
 
     const user = authenticator.isAuthenticated(request);
 
-    const data = Promise.all([menuItemsWithCostVariations, user]);
+    const data = Promise.all([menuItemsWithCostVariationsAndRecommended, user]);
 
     return defer({
         data
@@ -160,10 +161,10 @@ export default function AdminGerenciamentoCardapioCostManagementIndex() {
             <Suspense fallback={<Loading />}>
                 <Await resolve={data}>
                     {/* @ts-ignore */}
-                    {([menuItemsWithCostVariations, user]) => {
+                    {([menuItemsWithCostVariationsAndRecommended, user]) => {
 
                         {/* @ts-ignore */ }
-                        const [items, setItems] = useState<MenuItemWithCostVariations[]>(menuItemsWithCostVariations || [])
+                        const [items, setItems] = useState<MenuItemWithCostVariations[]>(menuItemsWithCostVariationsAndRecommended || [])
 
                         const [optVisibleItems, setOptVisibleItems] = useState<boolean | null>(true)
                         const [optActiveItems, setOptActiveItems] = useState<boolean | null>(null)
@@ -172,13 +173,13 @@ export default function AdminGerenciamentoCardapioCostManagementIndex() {
                             setOptVisibleItems(state)
                             setOptActiveItems(null)
                             // @ts-ignore
-                            setItems(menuItemsWithCostVariations.filter(item => item.visible === state && item.active === true))
+                            setItems(menuItemsWithCostVariationsAndRecommended.filter(item => item.visible === state && item.active === true))
                         }
                         const handleOptionActiveItems = (state: boolean) => {
                             setOptActiveItems(state)
                             setOptVisibleItems(null)
                             // @ts-ignore
-                            setItems(menuItemsWithCostVariations.filter(item => item.active === state))
+                            setItems(menuItemsWithCostVariationsAndRecommended.filter(item => item.active === state))
                         }
 
 

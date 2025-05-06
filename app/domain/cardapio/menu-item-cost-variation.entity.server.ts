@@ -4,7 +4,7 @@ import { PrismaEntityProps } from "~/lib/prisma/types.server";
 import createUUID from "~/utils/uuid";
 import { PizzaSizeKey } from "./menu-item-size.entity.server";
 
-export interface MenuItemCostVariationBaseInput {
+export interface MenuItemCostVariationBaseParams {
   menuItemId: string;
   costAmount: number;
   previousCostAmount: number;
@@ -13,15 +13,14 @@ export interface MenuItemCostVariationBaseInput {
 }
 
 export interface MenuItemCostVariationCreateInput
-  extends MenuItemCostVariationBaseInput {}
+  extends MenuItemCostVariationBaseParams {}
 
 export interface MenuItemCostVariationUpsertInput
-  extends MenuItemCostVariationBaseInput {
+  extends MenuItemCostVariationBaseParams {
   id?: string;
 }
 
 export class MenuItemCostVariationPrismaEntity {
-  pizzaSizeKeyRef: PizzaSizeKey = "pizza-medium";
   client;
 
   constructor({ client }: PrismaEntityProps) {
@@ -105,46 +104,6 @@ export class MenuItemCostVariationPrismaEntity {
         },
       },
     });
-  }
-
-  /**
-   * Find all cost variations for the reference size key.
-   *
-   * Other costs are calculated based on this reference size key.
-   * At this moment, the reference size key is "pizza-medium".
-   *
-   * @returns
-   */
-  async findAllReferenceCost() {
-    return await this.findAllCostBySizeKey(this.pizzaSizeKeyRef);
-  }
-
-  /**
-   * The logic for calculating the cost variation for each pizza topping
-   * based on the size key.
-   *
-   * @param size
-   * @param refCostAmount
-   * @returns
-   */
-  static calculateOneProposedCostVariation(
-    size: PizzaSizeKey,
-    refCostAmount: number
-  ): number {
-    switch (size) {
-      case "pizza-small":
-        return refCostAmount * 0.5;
-      case "pizza-medium":
-        return refCostAmount;
-      case "pizza-big":
-        return refCostAmount * 1.25;
-      case "pizza-bigger":
-        return refCostAmount * 2;
-      case "pizza-slice":
-        return refCostAmount * 0.25;
-      default:
-        throw new Error("Invalid pizza size");
-    }
   }
 }
 

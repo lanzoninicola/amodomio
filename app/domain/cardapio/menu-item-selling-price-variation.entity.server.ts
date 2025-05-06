@@ -10,7 +10,7 @@ interface MenuItemSellingPriceVariationPrismaEntityConstructorProps
   menuItemSellingChannelEntity: typeof menuItemSellingChannelPrismaEntity;
 }
 
-export interface MenuItemSellingPriceVariationBaseInput {
+export interface MenuItemSellingPriceVariationBaseParams {
   menuItemId: string;
   menuItemSizeId: string | null;
   menuItemSellingChannelId: string | null;
@@ -22,11 +22,11 @@ export interface MenuItemSellingPriceVariationBaseInput {
   updatedBy?: string | null;
 }
 
-export interface MenuItemSellingPriceVariationCreateInput
-  extends MenuItemSellingPriceVariationBaseInput {}
+export interface MenuItemSellingPriceVariationCreateParams
+  extends MenuItemSellingPriceVariationBaseParams {}
 
-export interface MenuItemSellingPriceVariationUpsertInput
-  extends MenuItemSellingPriceVariationBaseInput {
+export interface MenuItemSellingPriceVariationUpsertParams
+  extends MenuItemSellingPriceVariationBaseParams {
   id?: string;
 }
 
@@ -47,7 +47,7 @@ class MenuItemSellingPriceVariationPrismaEntity {
     this.menuItemSellingChannelEntity = menuItemSellingChannelEntity;
   }
 
-  async create(data: MenuItemSellingPriceVariationCreateInput) {
+  async create(data: MenuItemSellingPriceVariationCreateParams) {
     return await this.client.menuItemSellingPriceVariation.create({
       data: {
         ...data,
@@ -58,7 +58,7 @@ class MenuItemSellingPriceVariationPrismaEntity {
     });
   }
 
-  async upsert(id: string, data: MenuItemSellingPriceVariationUpsertInput) {
+  async upsert(id: string, data: MenuItemSellingPriceVariationUpsertParams) {
     const record = await this.client.menuItemSellingPriceVariation.findUnique({
       where: { id },
     });
@@ -82,7 +82,7 @@ class MenuItemSellingPriceVariationPrismaEntity {
 
   async upsertMany(
     menuItemId: string,
-    data: MenuItemSellingPriceVariationUpsertInput[]
+    data: MenuItemSellingPriceVariationUpsertParams[]
   ) {
     const now = new Date();
 
