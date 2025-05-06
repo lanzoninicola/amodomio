@@ -1,10 +1,6 @@
 import { PrismaEntityProps } from "~/lib/prisma/types.server";
 import prismaClient from "~/lib/prisma/client.server";
-import {
-  MenuItemPriceVariation,
-  MenuItemSellingVariation,
-  Prisma,
-} from "@prisma/client";
+import { MenuItemPriceVariation, Prisma } from "@prisma/client";
 import createUUID from "~/utils/uuid";
 
 export type PartialMenuItemPriceVariation = Omit<

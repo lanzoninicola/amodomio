@@ -156,6 +156,23 @@ model GroceryListItem {
   @@map("grocery_list_items")
 }
 
+model MenuItemGroup {
+  id             String    @id @default(uuid())
+  name           String
+  description    String
+  /// sortOrder should be 1000 for the first group, 2000 for the second, etc
+  sortOrderIndex Int       @map("sort_order_index")
+  visible        Boolean   @default(true)
+  createdAt      DateTime  @map("created_at")
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+  deletedBy      String?   @map("deleted_by")
+
+  MenuItem MenuItem[]
+
+  @@map("menu_item_groups")
+}
+
 model MenuItem {
   id                            String                          @id @default(uuid())
   name                          String
@@ -183,6 +200,8 @@ model MenuItem {
   MenuItemSellingPriceVariation MenuItemSellingPriceVariation[]
   MenuItemCostVariation         MenuItemCostVariation[]
   priceVariations               MenuItemPriceVariation[]
+  MenuItemGroup                 MenuItemGroup?                  @relation(fields: [menuItemGroupId], references: [id])
+  menuItemGroupId               String?                         @map("menu_item_group_id")
 
   @@map("menu_items")
 }
@@ -267,7 +286,12 @@ model MenuItemSellingChannel {
   id                            String                          @id @default(uuid())
   key                           String                          @map("key")
   name                          String
-  percentageTax                 Float                           @map("percentage_tax")
+  feeAmount                     Float                           @default(0) @map("fee_amount")
+  taxPerc                       Float                           @default(0) @map("tax_perc")
+  onlinePaymentTaxPerc          Float                           @default(0) @map("online_payment_tax_perc")
+  targetMarginPerc              Float                           @default(0) @map("target_margin_perc")
+  isMarketplace                 Boolean                         @default(false) @map("is_marketplace")
+  sortOrderIndex                Int                             @default(0) @map("sort_order_index")
   MenuItemSellingPriceVariation MenuItemSellingPriceVariation[]
 
   @@map("menu_item_selling_channels")
@@ -294,9 +318,9 @@ model DnaEmpresaSettings {
   custoFixoAmount        Float  @default(0) @map("custo_fixo_amount")
   custoFixoPerc          Float  @default(0) @map("custo_fixo_perc")
   taxaCartaoPerc         Float  @default(0) @map("taxa_cartao_perc")
-  taxaMarketplacePerc    Float  @default(0) @map("taxa_marketplace_perc")
   impostoPerc            Float  @default(0) @map("imposto_perc")
   dnaPerc                Float  @default(0) @map("dna_perc")
+  wastePerc              Float  @default(0) @map("waste_perc")
 
   @@map("dna_empresa_settings")
 }
@@ -308,6 +332,8 @@ model MenuItemSize {
   sortOrderIndex                Int                             @default(0) @map("sort_order_index")
   createdAt                     DateTime                        @map("created_at")
   updatedAt                     DateTime                        @default(now()) @updatedAt @map("updated_at")
+  packagingCostAmount           Float                           @default(0) @map("packaging_cost_amount")
+  visible                       Boolean                         @default(true)
   MenuItemPriceVariation        MenuItemPriceVariation[]
   MenuItemSellingPriceVariation MenuItemSellingPriceVariation[]
   MenuItemCostVariation         MenuItemCostVariation[]

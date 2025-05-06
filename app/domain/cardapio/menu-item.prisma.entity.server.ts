@@ -6,7 +6,9 @@ import {
   MenuItemLike,
   MenuItemNote,
   MenuItemPriceVariation,
+  MenuItemSellingChannel,
   MenuItemShare,
+  MenuItemSize,
   MenuItemTag,
   Prisma,
   Tag,
@@ -16,12 +18,31 @@ import { PrismaEntityProps } from "~/lib/prisma/types.server";
 import { menuItemTagPrismaEntity } from "./menu-item-tags.prisma.entity.server";
 import MenuItemPriceVariationUtility from "./menu-item-price-variations-utility";
 import { v4 as uuidv4 } from "uuid";
-import NodeCache from "node-cache";
 import { CloudinaryUtils } from "~/lib/cloudinary";
 import {
+  MenuItemCostVariationBySize,
   MenuItemWithCostVariations,
   MenuItemWithSellPriceVariations,
+  SellPriceVariation,
 } from "./menu-item.types";
+import {
+  MenuItemCostVariationBaseInput,
+  MenuItemCostVariationPrismaEntity,
+  menuItemCostVariationPrismaEntity,
+} from "./menu-item-cost-variation.entity.server";
+import { CacheManager } from "../cache/cache-manager.server";
+import {
+  PizzaSizeKey,
+  menuItemSizePrismaEntity,
+} from "./menu-item-size.entity.server";
+import {
+  ComputedSellingPriceBreakdown,
+  menuItemSellingPriceUtilityEntity,
+} from "./menu-item-selling-price-utility.entity.server";
+import {
+  SellingChannelKey,
+  menuItemSellingChannelPrismaEntity,
+} from "./menu-item-selling-channel.entity.server";
 
 export interface MenuItemWithAssociations extends MenuItem {
   priceVariations: MenuItemPriceVariation[];
@@ -53,7 +74,7 @@ export interface MenuItemWithAssociations extends MenuItem {
   };
 }
 
-interface MenuItemEntityFindAllProps {
+export interface MenuItemEntityFindAllProps {
   where?: Prisma.MenuItemWhereInput;
   option?: {
     sorted?: boolean;
@@ -62,14 +83,51 @@ interface MenuItemEntityFindAllProps {
   mock?: boolean;
 }
 
+interface FindManyWithSellPriceVariationsProps
+  extends MenuItemEntityFindAllProps {
+  channelKey?: string;
+  sizeKey?: string;
+  includeRecommendedPrice?: boolean;
+}
+
+interface FindManyWithSellPriceVariationsProps {
+  where?: any; // Substitua por tipo gerado do Prisma se possível
+  sizeKey?: string;
+  channelKey?: string;
+}
+
+interface MenuItemEntityProps extends PrismaEntityProps {
+  menuItemCostVariation: typeof menuItemCostVariationPrismaEntity;
+  menuItemSellingPriceUtility: typeof menuItemSellingPriceUtilityEntity;
+  menuItemSize: typeof menuItemSizePrismaEntity;
+  menuItemSellingChannel: typeof menuItemSellingChannelPrismaEntity;
+}
+
 export class MenuItemPrismaEntity {
   client;
   // Simple in-memory cache
-  private cache: NodeCache;
+  private cacheManager: CacheManager;
 
-  constructor({ client }: PrismaEntityProps) {
+  menuItemCostVariation: typeof menuItemCostVariationPrismaEntity;
+
+  menuItemSellingChannel: typeof menuItemSellingChannelPrismaEntity;
+
+  menuItemSize: typeof menuItemSizePrismaEntity;
+
+  constructor({
+    client,
+    menuItemCostVariation,
+
+    menuItemSize,
+    menuItemSellingChannel,
+  }: MenuItemEntityProps) {
     this.client = client;
-    this.cache = new NodeCache({ stdTTL: 60, checkperiod: 30 });
+    this.cacheManager = new CacheManager();
+
+    this.menuItemCostVariation = menuItemCostVariation;
+
+    this.menuItemSize = menuItemSize;
+    this.menuItemSellingChannel = menuItemSellingChannel;
   }
 
   async findAll(
@@ -79,15 +137,12 @@ export class MenuItemPrismaEntity {
       imageScaleWidth: 1280,
     }
   ) {
-    const cacheKey = `findAll:${JSON.stringify(params)}`;
-    let result = this.cache.get<MenuItemWithAssociations[]>(cacheKey);
+    const cacheKey = `MenuItemPrismaEntity.findAll:${JSON.stringify(params)}`;
+    let result = this.cacheManager.get<MenuItemWithAssociations[]>(cacheKey);
 
     if (result) {
-      console.log("cache hit", cacheKey);
       return result;
     }
-
-    console.log("cache miss", cacheKey);
 
     if (params?.mock) {
       // fake to remove TS error. need to be fixed
@@ -155,8 +210,7 @@ export class MenuItemPrismaEntity {
         })
       : [...records];
 
-    this.cache.set(cacheKey, returnedRecords);
-    console.log("cache set", cacheKey);
+    this.cacheManager.set(cacheKey, returnedRecords);
 
     return returnedRecords;
   }
@@ -197,91 +251,126 @@ export class MenuItemPrismaEntity {
   /**
    * Find all menu items with cost associated to each size
    */
-  async findAllWithCostVariations(
+  async findManyWithCostVariations(
     params: MenuItemEntityFindAllProps = {}
   ): Promise<MenuItemWithCostVariations[]> {
     const allMenuItems = await this.client.menuItem.findMany({
       where: params?.where,
       include: {
-        priceVariations: true,
         MenuItemCostVariation: true,
       },
+      orderBy: { sortOrderIndex: "asc" },
     });
 
     const sizes = await this.client.menuItemSize.findMany({
       orderBy: { sortOrderIndex: "asc" },
     });
 
+    // array of medium size cost variations for all items
     return allMenuItems.map((item) => {
-      const costVariations = sizes.map((size) => {
-        const variation = item.MenuItemCostVariation?.find(
-          (cv) => cv.menuItemSizeId === size.id
-        );
+      const costVariations = sizes
+        .sort((a, b) => a.sortOrderIndex - b.sortOrderIndex)
+        .map((size) => {
+          const variation = item.MenuItemCostVariation?.find(
+            (cv) => cv.menuItemSizeId === size.id
+          );
 
-        return {
-          menuItemCostVariationId: variation?.id,
-          sizeId: size.id,
-          sizeName: size.name,
-          costAmount: variation?.costAmount ?? 0,
-          updatedBy: variation?.updatedBy,
-          updatedAt: variation?.updatedAt,
-          previousCostAmount: variation?.previousCostAmount ?? 0,
-        };
-      });
+          let sizeKey: PizzaSizeKey = "pizza-medium"; // Default size key
+          sizeKey = size.key as PizzaSizeKey;
+
+          return {
+            menuItemCostVariationId: variation?.id,
+            sizeId: size.id,
+            sizeKey,
+            sizeName: size.name,
+            costAmount: variation?.costAmount ?? 0,
+            updatedBy: variation?.updatedBy,
+            updatedAt: variation?.updatedAt,
+            previousCostAmount: variation?.previousCostAmount ?? 0,
+          };
+        });
 
       return {
         menuItemId: item.id,
         name: item.name,
         ingredients: item.ingredients,
+        visible: item.visible,
+        active: item.active,
         costVariations,
       };
     });
   }
 
-  async findAllWithSellPriceVariations(
+  async findOneWithCostVariations(
+    menuItemId: string
+  ): Promise<MenuItemWithCostVariations | null> {
+    const costVariations = await this.findManyWithCostVariations({
+      where: { id: menuItemId },
+    });
+
+    return costVariations[0];
+  }
+
+  async findManyWithSellPriceVariations(
     params: MenuItemEntityFindAllProps = {}
   ): Promise<MenuItemWithSellPriceVariations[]> {
     const allMenuItems = await this.client.menuItem.findMany({
       where: params?.where,
       include: {
-        MenuItemSellingPriceVariation: true,
+        MenuItemSellingPriceVariation: {
+          include: {
+            MenuItemSellingChannel: true,
+            MenuItemSize: true,
+          },
+        },
       },
+      orderBy: { sortOrderIndex: "asc" },
     });
 
     const sizes = await this.client.menuItemSize.findMany({
       orderBy: { sortOrderIndex: "asc" },
     });
 
-    const channels = await this.client.menuItemSellingChannel.findMany();
-
+    // array of medium size cost variations for all items
     return allMenuItems.map((item) => {
-      const sellPriceVariations = sizes.flatMap((size) =>
-        channels.map((channel) => {
+      const sellPriceVariations = sizes
+        .sort((a, b) => a.sortOrderIndex - b.sortOrderIndex)
+        .map((size) => {
           const variation = item.MenuItemSellingPriceVariation?.find(
-            (spv) =>
-              spv.menuItemSizeId === size.id &&
-              spv.menuItemSellingChannelId === channel.id
+            (cv) => cv.menuItemSizeId === size.id
           );
 
+          let sizeKey: PizzaSizeKey = "pizza-medium"; // Default size key
+          sizeKey = size.key as PizzaSizeKey;
+
           return {
-            sizeId: size.id,
-            sizeName: size.name,
-            channelId: channel.id,
-            channelName: channel.name,
+            menuItemSellPriceVariationId: variation?.id,
+            sizeId: variation?.MenuItemSize?.id,
+            sizeKey: variation?.MenuItemSize?.key,
+            sizeName: variation?.MenuItemSize?.name,
+            channelId: variation?.MenuItemSellingChannel?.id,
+            channelKey: variation?.MenuItemSellingChannel?.key,
+            channelName: variation?.MenuItemSellingChannel?.name,
             priceAmount: variation?.priceAmount ?? 0,
+            updatedBy: variation?.updatedBy,
+            updatedAt: variation?.updatedAt,
+            previousPriceAmount: variation?.previousPriceAmount ?? 0,
             discountPercentage: variation?.discountPercentage ?? 0,
           };
-        })
-      );
+        });
 
       return {
-        id: item.id,
+        menuItemId: item.id,
         name: item.name,
         ingredients: item.ingredients,
+        visible: item.visible,
+        active: item.active,
         sellPriceVariations,
       };
     });
   }
+
+  async findManyWithCostAndSellPriceVariations() {}
 
   async findById(
     id: string,
@@ -371,7 +460,7 @@ export class MenuItemPrismaEntity {
       sortOrderIndex: lastsortOrderIndex + 1,
     };
 
-    await this.invalidateCache();
+    await this.cacheManager.invalidate();
 
     return await this.client.menuItem.create({ data: nextItem });
   }
@@ -381,17 +470,18 @@ export class MenuItemPrismaEntity {
       data.updatedAt = new Date().toISOString();
     }
 
-    await this.invalidateCache();
+    await this.cacheManager.invalidate();
 
     return await this.client.menuItem.update({ where: { id }, data });
   }
 
   async softDelete(id: string, deletedBy: string = "undefined") {
-    await this.invalidateCache();
+    await this.cacheManager.invalidate();
 
     return await this.client.menuItem.update({
       where: { id },
       data: {
+        visible: false,
         active: false,
         deletedAt: new Date().toISOString(),
         deletedBy: deletedBy,
@@ -400,13 +490,13 @@ export class MenuItemPrismaEntity {
   }
 
   async delete(id: string) {
-    await this.invalidateCache();
+    await this.cacheManager.invalidate();
 
     return await this.client.menuItem.delete({ where: { id } });
   }
 
   async associateTag(itemId: string, tag: Tag) {
-    await this.invalidateCache();
+    await this.cacheManager.invalidate();
 
     return await menuItemTagPrismaEntity.create({
       createdAt: new Date().toISOString(),
@@ -440,7 +530,7 @@ export class MenuItemPrismaEntity {
   }
 
   async removeTag(itemId: string, tagId: string) {
-    await this.invalidateCache();
+    await this.cacheManager.invalidate();
 
     const tag = await this.client.menuItemTag.findFirst({
       where: {
@@ -471,414 +561,14 @@ export class MenuItemPrismaEntity {
       },
     });
   }
-
-  async invalidateCache() {
-    this.cache.flushAll(); // Simple example to clear the entire cache
-    console.log("Cache invalidated");
-  }
 }
 
 const menuItemPrismaEntity = new MenuItemPrismaEntity({
   client: prismaClient,
+  menuItemCostVariation: menuItemCostVariationPrismaEntity,
+  menuItemSellingPriceUtility: menuItemSellingPriceUtilityEntity,
+  menuItemSize: menuItemSizePrismaEntity,
+  menuItemSellingChannel: menuItemSellingChannelPrismaEntity,
 });
 
 export { menuItemPrismaEntity };
-
-/**
-
- {
-   "id":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-   "name":"Margherita",
-   "description":"",
-   "ingredients":"Molho de tomate, muçarela, manjericão fresco, azeite de oliva aromatizado com manjericão",
-   "categoryId":"fc38088c-09ba-4d87-bbd1-4313251955d2",
-   "basePriceAmount":69.9,
-   "visible":true,
-   "mogoId":"1",
-   "createdAt":"2025-01-18T18:36:48.996Z",
-   "updatedAt":"2025-01-18T18:36:48.996Z",
-   "sortOrderIndex":0,
-   "notesPublic":"",
-   "imageId":"4d7574ac-010b-49cf-9804-adf7920b68df",
-   "priceVariations":[
-      {
-         "id":"148f66ca-5496-4d3c-9957-5bafba516d1b",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "menuItemSizeId":null,
-         "label":"fatia",
-         "basePrice":69.9,
-         "amount":0,
-         "discountPercentage":0,
-         "showOnCardapio":false,
-         "showOnCardapioAt":null,
-         "createdAt":"2024-07-21T15:48:18.028Z",
-         "updatedAt":"2024-07-21T15:48:18.028Z",
-         "updatedBy":null,
-         "latestAmount":0
-      },
-      {
-         "id":"58f671af-ef4a-41d6-8a9f-a17095bfc4da",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "menuItemSizeId":null,
-         "label":"individual",
-         "basePrice":69.9,
-         "amount":0,
-         "discountPercentage":0,
-         "showOnCardapio":false,
-         "showOnCardapioAt":null,
-         "createdAt":"2024-07-21T15:48:18.028Z",
-         "updatedAt":"2024-07-21T15:48:18.028Z",
-         "updatedBy":null,
-         "latestAmount":0
-      },
-      {
-         "id":"ea5b4efd-e562-4dd5-9f67-5fbdaada9bac",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "menuItemSizeId":null,
-         "label":"familia",
-         "basePrice":69.9,
-         "amount":159.9,
-         "discountPercentage":0,
-         "showOnCardapio":true,
-         "showOnCardapioAt":null,
-         "createdAt":"2024-07-21T15:48:18.028Z",
-         "updatedAt":"2024-10-09T14:26:31.499Z",
-         "updatedBy":null,
-         "latestAmount":0
-      },
-      {
-         "id":"1faa2aca-c2f0-4e40-ad1b-b008372666ad",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "menuItemSizeId":null,
-         "label":"media",
-         "basePrice":69.9,
-         "amount":79.9,
-         "discountPercentage":0,
-         "showOnCardapio":true,
-         "showOnCardapioAt":null,
-         "createdAt":"2024-07-21T15:48:18.028Z",
-         "updatedAt":"2024-10-09T14:26:23.595Z",
-         "updatedBy":null,
-         "latestAmount":0
-      }
-   ],
-   "costVariations":[
-      {
-         "id":"0617a1e1-6ece-44d5-92ac-0cadd542419c",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "menuItemSizeId":"04da4a27-6e0d-46d1-a058-5d2beceaa4c3",
-         "recipeCostAmount":2,
-         "createdAt":"2024-11-09T18:54:51.635Z",
-         "updatedAt":"2024-11-09T18:54:51.635Z",
-         "updatedBy":"admin",
-         "MenuItemSize":{
-            "id":"04da4a27-6e0d-46d1-a058-5d2beceaa4c3",
-            "name":"Tamanho Individual",
-            "group":"pizza",
-            "costBase":6.84,
-            "slug":"pizza-small",
-            "costScalingFactor":0.75,
-            "sortOrderIndex":0,
-            "createdAt":"2024-11-08T17:30:25.281Z",
-            "updatedAt":"2024-11-08T17:30:25.281Z"
-         }
-      },
-      {
-         "id":"64ec5817-f226-4c02-917c-666a8cb92bf0",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "menuItemSizeId":"70f05239-565a-4cec-9716-4048e5417f66",
-         "recipeCostAmount":11.1,
-         "createdAt":"2024-11-15T16:04:00.355Z",
-         "updatedAt":"2024-11-15T16:04:00.355Z",
-         "updatedBy":"admin",
-         "MenuItemSize":{
-            "id":"70f05239-565a-4cec-9716-4048e5417f66",
-            "name":"Tamanho Medio",
-            "group":"pizza",
-            "costBase":8.86,
-            "slug":"pizza-medium",
-            "costScalingFactor":1,
-            "sortOrderIndex":1,
-            "createdAt":"2024-11-08T17:30:25.281Z",
-            "updatedAt":"2024-11-08T17:30:25.281Z"
-         }
-      }
-   ],
-   "Category":{
-      "id":"fc38088c-09ba-4d87-bbd1-4313251955d2",
-      "name":"Sabor Italiano",
-      "sortOrder":1000,
-      "type":"cardapio",
-      "createdAt":"2024-07-21T00:00:00.000Z",
-      "updatedAt":"2024-07-21T14:49:22.321Z"
-   },
-   "tags":{
-      "all":[
-         "vegetariana"
-      ],
-      "public":[
-         "vegetariana"
-      ],
-      "models":[
-         {
-            "id":"fbf538f9-1a46-4aeb-84ad-a21d39908a3d",
-            "name":"vegetariana",
-            "public":true,
-            "colorHEX":"#aec355",
-            "deletedAt":null,
-            "createdAt":"2024-08-03T00:00:00.000Z",
-            "updatedAt":"2024-08-03T16:37:50.540Z"
-         }
-      ]
-   },
-   "MenuItemLike":[
-      {
-         "id":"4877d544-47fe-4b30-8c7a-34e9a0e89164",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "sessionId":null,
-         "amount":1,
-         "createdAt":"2024-08-04T15:50:40.583Z",
-         "updatedAt":"2024-08-04T15:50:40.772Z",
-         "deletedAt":null
-      },
-      {
-         "id":"6b3b53bb-8e70-4850-9ece-9685717a5e52",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "sessionId":null,
-         "amount":1,
-         "createdAt":"2024-08-04T15:50:40.758Z",
-         "updatedAt":"2024-08-04T15:50:41.010Z",
-         "deletedAt":null
-      },
-      {
-         "id":"d8dfb94c-4545-45a7-a880-ca99c6ded3de",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "sessionId":null,
-         "amount":1,
-         "createdAt":"2024-08-04T15:50:40.924Z",
-         "updatedAt":"2024-08-04T15:50:41.105Z",
-         "deletedAt":null
-      },
-      {
-         "id":"747bc0da-0285-4cb3-96b7-de61701ece5f",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "sessionId":null,
-         "amount":1,
-         "createdAt":"2024-08-04T15:50:41.056Z",
-         "updatedAt":"2024-08-04T15:50:41.224Z",
-         "deletedAt":null
-      },
-      {
-         "id":"87c906c6-ca55-4b24-b0b9-14866bd47100",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "sessionId":null,
-         "amount":1,
-         "createdAt":"2024-08-04T15:50:41.223Z",
-         "updatedAt":"2024-08-04T15:50:41.383Z",
-         "deletedAt":null
-      },
-      {
-         "id":"bfadaefd-3bc4-46c6-88da-6cdb94261bfa",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "sessionId":null,
-         "amount":1,
-         "createdAt":"2024-08-05T16:50:55.420Z",
-         "updatedAt":"2024-08-05T16:50:56.066Z",
-         "deletedAt":null
-      },
-      {
-         "id":"b3c7ff51-05b2-417a-bf62-ed17e3bb7d7b",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "sessionId":null,
-         "amount":1,
-         "createdAt":"2024-08-13T13:54:41.687Z",
-         "updatedAt":"2024-08-13T13:54:42.364Z",
-         "deletedAt":null
-      },
-      {
-         "id":"1839241d-3c2b-4c56-81f9-126a4e4f3fc1",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "sessionId":null,
-         "amount":1,
-         "createdAt":"2024-08-13T13:54:47.583Z",
-         "updatedAt":"2024-08-13T13:54:48.324Z",
-         "deletedAt":null
-      },
-      {
-         "id":"c0842a0a-8b65-4a7d-a352-945795d0779e",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "sessionId":null,
-         "amount":1,
-         "createdAt":"2024-10-31T19:59:41.739Z",
-         "updatedAt":"2024-10-31T19:59:41.744Z",
-         "deletedAt":null
-      },
-      {
-         "id":"6f5d29e0-88f2-4228-bc39-a7bed785fdb4",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "sessionId":null,
-         "amount":1,
-         "createdAt":"2024-10-31T19:59:42.579Z",
-         "updatedAt":"2024-10-31T19:59:42.580Z",
-         "deletedAt":null
-      },
-      {
-         "id":"43afb7ce-94f5-42b5-b5d4-97a183135810",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "sessionId":null,
-         "amount":1,
-         "createdAt":"2024-10-31T19:59:43.601Z",
-         "updatedAt":"2024-10-31T19:59:43.791Z",
-         "deletedAt":null
-      },
-      {
-         "id":"d99b54bb-f1a8-47fd-88ab-50d3b0914c5d",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "sessionId":null,
-         "amount":1,
-         "createdAt":"2024-10-31T19:59:45.601Z",
-         "updatedAt":"2024-10-31T19:59:45.897Z",
-         "deletedAt":null
-      },
-      {
-         "id":"8b8dd458-7259-4290-b6fb-da06ddbcba54",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "sessionId":null,
-         "amount":1,
-         "createdAt":"2024-11-25T18:24:58.777Z",
-         "updatedAt":"2024-11-25T18:24:58.779Z",
-         "deletedAt":null
-      },
-      {
-         "id":"005ec9ef-a6f2-4980-b64f-c4269489e478",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "sessionId":null,
-         "amount":1,
-         "createdAt":"2024-11-25T18:25:01.804Z",
-         "updatedAt":"2024-11-25T18:25:01.806Z",
-         "deletedAt":null
-      },
-      {
-         "id":"07344457-c0ee-4b32-8a7c-4da033d96cc0",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "sessionId":null,
-         "amount":1,
-         "createdAt":"2024-11-25T18:25:03.963Z",
-         "updatedAt":"2024-11-25T18:25:03.965Z",
-         "deletedAt":null
-      },
-      {
-         "id":"c8e3092c-3ee4-479a-a6dc-74135bff5918",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "sessionId":null,
-         "amount":1,
-         "createdAt":"2024-12-06T22:26:33.331Z",
-         "updatedAt":"2024-12-06T22:26:33.332Z",
-         "deletedAt":null
-      },
-      {
-         "id":"dbf5d147-45b9-4e92-9c1c-42cf709b151e",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "sessionId":null,
-         "amount":1,
-         "createdAt":"2024-12-17T21:31:05.036Z",
-         "updatedAt":"2024-12-17T21:31:05.038Z",
-         "deletedAt":null
-      },
-      {
-         "id":"86efc6d0-cecb-45e7-b873-592ddbdfaa24",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "sessionId":null,
-         "amount":1,
-         "createdAt":"2024-12-21T23:38:48.038Z",
-         "updatedAt":"2024-12-21T23:38:48.040Z",
-         "deletedAt":null
-      },
-      {
-         "id":"9f9345b0-37ed-4ff5-8d64-1ab14ea50560",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "sessionId":null,
-         "amount":1,
-         "createdAt":"2025-01-19T20:38:08.728Z",
-         "updatedAt":"2025-01-19T20:38:08.840Z",
-         "deletedAt":null
-      }
-   ],
-   "MenuItemShare":[
-      {
-         "id":"2aa76bde-1627-4bb5-ae90-bcb80ff1707b",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "sessionId":null,
-         "createdAt":"2024-08-04T17:05:38.074Z",
-         "updatedAt":"2024-08-04T17:05:38.751Z"
-      },
-      {
-         "id":"40128d07-fcb0-456c-90d7-9e3ef88f1da9",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "sessionId":null,
-         "createdAt":"2024-08-04T17:09:50.817Z",
-         "updatedAt":"2024-08-04T17:09:51.555Z"
-      },
-      {
-         "id":"97ceb1ca-4bbf-4854-9c58-c0c4c115e316",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "sessionId":null,
-         "createdAt":"2024-08-04T17:54:27.928Z",
-         "updatedAt":"2024-08-04T17:54:28.854Z"
-      },
-      {
-         "id":"27a64eb9-6c17-41bf-8637-d2b755c93097",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "sessionId":null,
-         "createdAt":"2024-09-15T23:33:11.880Z",
-         "updatedAt":"2024-09-15T23:33:11.882Z"
-      },
-      {
-         "id":"4f61494a-8f00-4b3a-82da-24878d56b3e3",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "sessionId":null,
-         "createdAt":"2024-11-06T16:30:18.994Z",
-         "updatedAt":"2024-11-06T16:30:19.012Z"
-      },
-      {
-         "id":"52f49b2c-1be6-4211-abb5-5f73d10d1757",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "sessionId":null,
-         "createdAt":"2024-11-16T21:21:43.216Z",
-         "updatedAt":"2024-11-16T21:21:43.503Z"
-      },
-      {
-         "id":"47b0fee4-1445-4098-ad48-c8b0599d0281",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "sessionId":null,
-         "createdAt":"2024-11-18T19:09:12.766Z",
-         "updatedAt":"2024-11-18T19:09:12.776Z"
-      }
-   ],
-   "MenuItemImage":{
-      "id":"4d7574ac-010b-49cf-9804-adf7920b68df",
-      "secureUrl":"https://res.cloudinary.com/dy8gw8ahl/image/upload/v1723220649/py5qmavfq71ovzovhobf.jpg",
-      "assetFolder":"cardapio",
-      "originalFileName":"margherita",
-      "displayName":"margherita",
-      "height":792,
-      "width":1190,
-      "thumbnailUrl":"https://res.cloudinary.com/dy8gw8ahl/image/upload/c_limit,h_60,w_90/v1723220649/py5qmavfq71ovzovhobf.jpg",
-      "format":"jpg",
-      "publicId":"py5qmavfq71ovzovhobf"
-   },
-   "imageTransformedURL":"https://res.cloudinary.com/dy8gw8ahl/image/upload/f_auto/c_scale,w_1280/py5qmavfq71ovzovhobf?_a=DATAfRDeZAA0",
-   "likes":{
-      "amount":19
-   },
-   "shares":7,
-   "meta":{
-      "isItalyProduct":false,
-      "isBestSeller":false,
-      "isMonthlyBestSeller":false,
-      "isChefSpecial":false,
-      "isMonthlySpecial":false
-   }
-}
-
- */

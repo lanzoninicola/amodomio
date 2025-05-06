@@ -1,226 +1,38 @@
-
-import { MenuItemCostVariation } from "@prisma/client";
-import { ActionFunctionArgs, LoaderFunctionArgs, } from "@remix-run/node";
-import { Await, useLoaderData, defer, Form, useActionData } from "@remix-run/react";
-import { Suspense } from "react";
-import Loading from "~/components/loading/loading";
-import { NumericInput } from "~/components/numeric-input/numeric-input";
-import SubmitButton from "~/components/primitives/submit-button/submit-button";
+import { Link, Outlet } from "@remix-run/react";
+import { Settings, Terminal } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Separator } from "~/components/ui/separator";
-import { toast } from "~/components/ui/use-toast";
-import { authenticator } from "~/domain/auth/google.server";
-import { menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
-import { MenuItemWithCostVariations } from "~/domain/cardapio/menu-item.types";
-import { ok } from "~/utils/http-response.server";
-import parserFormDataEntryToNumber from "~/utils/parse-form-data-entry-to-number";
-import randomReactKey from "~/utils/random-react-key";
 
 
 
-export async function loader({ request }: LoaderFunctionArgs) {
+export default function AdminGerenciamentoCardapioCostManagement() {
 
-    const menuItemsWithCostVariations = menuItemPrismaEntity.findAllWithCostVariations()
+  return (
+    <div className="flex flex-col">
+      <div className="flex justify-between items-center mb-2">
+        <h2 className="mb-2">Gerenciamento Custos Itens</h2>
 
-    const user = authenticator.isAuthenticated(request);
+        <Link to="/admin/gerenciamento/cardapio/cost-management/settings"
+          className="flex gap-2 items-center hover:underline hover:cursor-pointer"
+        >
+          <Settings size={20} />
+          <span className="text-[12px] uppercase tracking-wider">Configurações</span>
+        </Link>
 
-    const data = Promise.all([menuItemsWithCostVariations, user]);
+      </div>
 
-    return defer({
-        data
-    })
+      <Alert variant={"destructive"}>
+        <Terminal className="h-4 w-4" />
+        <AlertTitle>Atenção</AlertTitle>
+        <AlertDescription>
+          Usar o ponto como delimitador dos decimais
+        </AlertDescription>
+      </Alert>
+
+      <Separator className="my-4" />
+
+      <Outlet />
+
+    </div>
+  )
 }
-
-export async function action({ request }: ActionFunctionArgs) {
-
-    let formData = await request.formData();
-    const { _action, ...values } = Object.fromEntries(formData);
-
-    console.log({ action: _action, values })
-
-    if (_action === "menu-item-cost-variation-update") {
-
-        /**
-         * {
-          action: 'menu-item-cost-variation-update',
-          values: {
-            menuItemId: '81de6228-e3e4-4740-a229-a101c741004e',
-            menuItemCostingVariationId: '',
-            updatedBy: 'lanzoni.nicola@gmail.com',
-            previousCostAmount: '',
-            costAmount: ''
-          }
-         */
-
-        const menuItemId = values?.menuItemId as string
-        const menuItemCostingVariationId = values?.menuItemCostingVariationId as string
-        const updatedBy = values?.updatedBy as string
-        const costAmount = parserFormDataEntryToNumber(values?.costAmount) || 0
-        const previousCostAmount = parserFormDataEntryToNumber(values?.previousCostAmount) || 0
-
-        const nextCost: MenuItemCostVariation = {
-            id: menuItemCostingVariationId,
-            menuItemId,
-            costAmount,
-            previousCostAmount,
-            updatedBy,
-        }
-
-
-        // const menuItemPriceVariationId = values?.menuItemPriceVariationId as string
-        // const menuItemId = values?.menuItemId as string
-        // const variationId = values?.variationId as string
-        // const amount = toFixedNumber(values?.amount, 2) || 0
-        // const latestAmount = toFixedNumber(values?.latestAmount, 2) || 0
-        // const discountPercentage = isNaN(Number(values?.discountPercentage)) ? 0 : Number(values?.discountPercentage)
-        // const showOnCardapio = values?.showOnCardapio === "on" ? true : false
-        // const updatedBy = values?.updatedBy as string
-
-        // const nextPrice: Partial<MenuItemPriceVariation> = {
-        //     id: menuItemPriceVariationId,
-        //     menuItemId,
-        //     amount,
-        //     discountPercentage,
-        //     showOnCardapio,
-        //     latestAmount,
-        //     updatedBy,
-        //     menuItemVariationId: variationId,
-        //     basePrice: amount,
-        // }
-
-        // console.log({ nextPrice })
-
-        // const [err, result] = await prismaIt(menuItemPriceVariationsEntity.upsert(menuItemPriceVariationId, nextPrice))
-
-        // console.log({ err })
-
-        // if (err) {
-        //     return badRequest(err)
-        // }
-
-        return ok(`O preço de venda foi atualizado com sucesso`)
-    }
-
-
-
-    return ok("Elemento atualizado com successo")
-}
-
-export default function AdminGerenciamentoCardapioSellPriceManagement() {
-    const { data } = useLoaderData<typeof loader>()
-
-    const actionData = useActionData<typeof action>();
-
-    if (actionData && actionData.status > 399) {
-        toast({
-            title: "Erro",
-            description: actionData.message,
-        });
-    }
-
-    if (actionData && actionData.status === 200) {
-        toast({
-            title: "Ok",
-            description: actionData.message,
-        });
-    }
-
-    return (
-        <div className="flex flex-col gap-4">
-
-            <Suspense fallback={<Loading />}>
-                <Await resolve={data}>
-                    {/* @ts-ignore */}
-                    {([menuItemsWithCostVariations, user]) => {
-
-                        console.log({ menuItemsWithCostVariations })
-
-                        return (
-
-                            <div className="flex flex-col ">
-                                <h2>Gerenciamento Custos Itens</h2>
-                                <Separator className="my-4" />
-
-                                <div className="h-[500px] overflow-y-scroll">
-                                    <ul>
-                                        {
-                                            // @ts-ignore
-                                            menuItemsWithCostVariations.map((menuItem: MenuItemWithCostVariations) => {
-
-                                                return (
-                                                    <li key={menuItem.menuItemId} className="mb-6  p-2">
-                                                        <div className="flex flex-col gap-0 mb-4 bg-slate-300 rounded-md px-4 py-1">
-                                                            <span className="text-md font-semibold">{menuItem.name}</span>
-                                                            {/* <span className="text-[10px] text-muted-foreground">{menuItem.ingredients}</span> */}
-                                                        </div>
-
-                                                        <ul className="grid grid-cols-5 gap-x-1">
-                                                            {menuItem.costVariations.map((record) => (
-                                                                <section key={randomReactKey()} className="mb-8">
-
-                                                                    <ul className="flex gap-6">
-                                                                        <li key={record.sizeId}>
-                                                                            <div className="flex flex-col">
-                                                                                <span className="text-[12px] font-medium uppercase tracking-wider">
-                                                                                    {record.sizeName}
-                                                                                </span>
-
-                                                                                <Form method="post" className="flex flex-col gap-1 justify-center items-center">
-                                                                                    <div className="flex flex-col gap-2">
-                                                                                        <div className="flex gap-1">
-                                                                                            <input type="hidden" name="menuItemId" value={menuItem.menuItemId} />
-                                                                                            <input type="hidden" name="menuItemCostVariationId" value={record.menuItemCostVariationId ?? ""} />
-                                                                                            <input type="hidden" name="updatedBy" value={record.updatedBy || user?.email || ""} />
-                                                                                            <input type="hidden" name="previousCostAmount" value={record.previousCostAmount} />
-
-                                                                                            <div className="flex flex-col gap-y-0">
-                                                                                                <span className="text-muted-foreground text-[11px]">Custo Ficha Tecnica</span>
-                                                                                                <NumericInput name="costAmount" defaultValue={record.costAmount} />
-                                                                                            </div>
-
-
-                                                                                        </div>
-
-                                                                                        <div className="flex flex-col gap-1">
-                                                                                            <span className="text-xs text-muted-foreground">Custo anterior: {record.previousCostAmount}</span>
-                                                                                        </div>
-                                                                                    </div>
-
-                                                                                    <SubmitButton
-                                                                                        actionName="menu-item-cost-variation-update"
-                                                                                        tabIndex={0}
-                                                                                        cnContainer="md:px-12 md:py-0 bg-slate-300 hover:bg-slate-400"
-                                                                                        cnLabel="text-[11px] tracking-widest text-black uppercase"
-                                                                                        iconColor="black"
-                                                                                    />
-                                                                                </Form>
-                                                                            </div>
-                                                                        </li>
-
-                                                                    </ul>
-                                                                </section>
-                                                            ))}
-
-                                                        </ul>
-
-
-                                                    </li>
-                                                )
-                                            })
-                                        }
-                                    </ul>
-                                </div>
-
-                            </div>
-
-
-                        )
-
-                    }}
-                </Await>
-            </Suspense>
-
-
-        </div>
-    )
-}
-
