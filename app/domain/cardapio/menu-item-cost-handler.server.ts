@@ -1,18 +1,14 @@
 import prismaClient from "~/lib/prisma/client.server";
-import {
-  MenuItemCostVariationPrismaEntity,
-  menuItemCostVariationPrismaEntity,
-} from "./menu-item-cost-variation.entity.server";
-import { menuItemSellingChannelPrismaEntity } from "./menu-item-selling-channel.entity.server";
+import { menuItemCostVariationPrismaEntity } from "./menu-item-cost-variation.entity.server";
 import {
   PizzaSizeKey,
   menuItemSizePrismaEntity,
 } from "./menu-item-size.entity.server";
-import { MenuItemWithCostVariations } from "./menu-item.types";
+import { MenuItemCostVariationBySize } from "./menu-item.types";
 import { MenuItemEntityFindAllProps } from "./menu-item.prisma.entity.server";
 
 export interface MenuItemWithCostVariationsAndRecommendedCost
-  extends MenuItemWithCostVariations {
+  extends MenuItemCostVariationBySize {
   proposedCostAmount: number;
 }
 

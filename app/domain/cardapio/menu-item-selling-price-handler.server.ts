@@ -2,7 +2,6 @@ import { MenuItemSellingChannel, MenuItemSize } from "@prisma/client";
 import prismaClient from "~/lib/prisma/client.server";
 import {
   MenuItemCostVariationBySize,
-  MenuItemWithCostVariations,
   MenuItemWithSellPriceVariations,
   SellPriceVariation,
 } from "./menu-item.types";

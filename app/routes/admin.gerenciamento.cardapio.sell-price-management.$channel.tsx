@@ -187,7 +187,8 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
                                   <ul className="grid grid-cols-5 mb-4">
                                     {menuItem.sellPriceVariations.map((record) => {
 
-                                      const recommendedPriceAmount = record.computedSellingPriceBreakdown?.recommendedPrice?.priceAmount ?? 0
+                                      const recommendedPriceAmountWithMargin = record.computedSellingPriceBreakdown?.recommendedPrice?.priceAmount.withMargin ?? 0
+                                      const recommendedPriceAmountWithoutMargin = record.computedSellingPriceBreakdown?.recommendedPrice?.priceAmount.withoutMargin ?? 0
 
                                       return (
                                         <li key={randomReactKey()} >
@@ -198,7 +199,7 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
                                               <p className={
                                                 cn(
                                                   "text-[12px] font-mono",
-                                                  record.priceAmount > 0 && recommendedPriceAmount > record.priceAmount && 'bg-red-500'
+                                                  record.priceAmount > 0 && recommendedPriceAmountWithMargin > record.priceAmount && 'bg-red-500'
                                                 )
                                               }
                                               >{formatDecimalPlaces(record.priceAmount)}</p>
@@ -207,7 +208,7 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
                                               {/* <p className="text-[11px] text-muted-foreground">Valor recomendado:</p> */}
 
                                               <ValorRecomendadoLabelDialog computedSellingPriceBreakdown={record.computedSellingPriceBreakdown} />
-                                              <p className="text-[12px] font-mono">{formatDecimalPlaces(recommendedPriceAmount)}</p>
+                                              <p className="text-[12px] font-mono">{formatDecimalPlaces(recommendedPriceAmountWithMargin)}</p>
                                             </div>
                                           </div>
 
@@ -277,7 +278,7 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
                                                     <div className="flex flex-col gap-1 items-center">
                                                       <div className="flex flex-col gap-y-0">
                                                         <ValorRecomendadoLabelDialog computedSellingPriceBreakdown={record.computedSellingPriceBreakdown} />
-                                                        <NumericInput name="recommendedCostAmount" defaultValue={record.computedSellingPriceBreakdown?.recommendedPrice.priceAmount} readOnly />
+                                                        <NumericInput name="recommendedCostAmount" defaultValue={record.computedSellingPriceBreakdown?.recommendedPrice.priceAmount.withMargin} readOnly />
                                                       </div>
                                                       <SubmitButton
                                                         actionName="menu-item-sell-price-variation-upsert-recommended-input"
@@ -446,10 +447,17 @@ function ValorRecomendadoLabelDialog({ computedSellingPriceBreakdown }: ValorRec
             <Separator className="my-4" />
 
             <div className="flex flex-col gap-2">
+              <Label cnContainer="font-semibold">{`Preço de venda sugerido`}</Label>
               <div className="grid grid-cols-4 items-center">
-                <span className="font-semibold text-sm col-span-3">Preço de venda sugerido</span>
-                <Amount>{Number(cspb?.recommendedPrice?.priceAmount ?? 0).toFixed(2)}</Amount>
+                <span className="text-xs col-span-3">Sem margem (com cobertura custos fixos)</span>
+                <Amount>{Number(cspb?.recommendedPrice?.priceAmount.withoutMargin ?? 0).toFixed(2)}</Amount>
               </div>
+
+              <div className="grid grid-cols-4 items-center mb-2">
+                <span className="text-xs col-span-3">Com margem</span>
+                <Amount>{Number(cspb?.recommendedPrice?.priceAmount.withMargin ?? 0).toFixed(2)}</Amount>
+              </div>
+
               <span className="text-[12px] font-mono">{cspb?.recommendedPrice?.formulaExplanation}</span>
               <span className="text-[12px] font-mono">{cspb?.recommendedPrice?.formulaExpression}</span>
             </div>

@@ -55,7 +55,10 @@ export interface ComputedSellingPriceWithChannelTax {
 export interface SellingPriceAudit {
   formulaExplanation: string;
   formulaExpression: string;
-  priceAmount: number;
+  priceAmount: {
+    withMargin: number;
+    withoutMargin: number;
+  };
 }
 
 class MenuItemSellingPriceUtilityEntity {
@@ -81,12 +84,6 @@ class MenuItemSellingPriceUtilityEntity {
 
   async getSellingPriceConfig(): Promise<SellingPriceConfig> {
     const dnaSettings = await this.client.dnaEmpresaSettings.findFirst();
-
-    if (!dnaSettings?.targetMarginPerc || dnaSettings?.targetMarginPerc === 0) {
-      throw new Error(
-        "Verifique as configurações do DNA. A percentagem de margem desejado não está definido"
-      );
-    }
 
     return {
       dnaPercentage: dnaSettings?.dnaPerc ?? 0,
@@ -128,7 +125,7 @@ class MenuItemSellingPriceUtilityEntity {
       const channelTaxPerc = channel?.taxPerc ?? 0;
 
       price = this.calculateSellingPriceForMarketplace(
-        price.priceAmount,
+        price.priceAmount.withMargin,
         otherCosts,
         channelTaxPerc
       );
@@ -146,9 +143,14 @@ class MenuItemSellingPriceUtilityEntity {
         onlinePaymentTaxPerc: channel?.onlinePaymentTaxPerc ?? 0,
       },
       recommendedPrice: {
-        priceAmount: Number(
-          (Math.ceil(price.priceAmount / 0.05) * 0.05).toFixed(2)
-        ),
+        priceAmount: {
+          withMargin: formatDecimalPlaces(
+            Math.ceil(price.priceAmount.withMargin / 0.05) * 0.05
+          ),
+          withoutMargin: formatDecimalPlaces(
+            Math.ceil(price.priceAmount.withoutMargin / 0.05) * 0.05
+          ),
+        },
         formulaExpression: price.formulaExpression,
         formulaExplanation: price.formulaExplanation,
       },
@@ -172,8 +174,10 @@ class MenuItemSellingPriceUtilityEntity {
     targetMarginPerc: number
   ): SellingPriceAudit {
     const divisor = 1 - (dnaPerc / 100 + targetMarginPerc / 100);
+    const priceWithMargin = amount / divisor;
 
-    const price = amount / divisor;
+    const divisorWithoutMargin = 1 - dnaPerc / 100;
+    const priceWithoutMargin = amount / divisorWithoutMargin;
 
     return {
       formulaExplanation: `(Custo ficha técnica + Desperdício + Custo embalagem) / (1 - (% Dna + % Margem))`,
@@ -182,7 +186,14 @@ class MenuItemSellingPriceUtilityEntity {
       )} / (1 - (${formatDecimalPlaces(dnaPerc)} / 100 + ${formatDecimalPlaces(
         targetMarginPerc
       )} / 100)))`,
-      priceAmount: Number((Math.ceil(price / 0.05) * 0.05).toFixed(2)),
+      priceAmount: {
+        withMargin: formatDecimalPlaces(
+          Math.ceil(priceWithMargin / 0.05) * 0.05
+        ),
+        withoutMargin: formatDecimalPlaces(
+          Math.ceil(priceWithoutMargin / 0.05) * 0.05
+        ),
+      },
     };
   }
 

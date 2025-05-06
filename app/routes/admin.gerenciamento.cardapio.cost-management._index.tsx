@@ -105,6 +105,7 @@ export async function action({ request }: ActionFunctionArgs) {
     if (_action === "menu-item-cost-variation-upsert-all-proposed-input") {
         const menuItemId = values?.menuItemId as string
         const updatedBy = values?.updatedBy as string
+        const proposedCostAmount = parserFormDataEntryToNumber(values?.proposedCostAmount) || 0
 
         const menuItemWithCostVariations = await menuItemPrismaEntity.findOneWithCostVariations(menuItemId)
 
@@ -116,7 +117,7 @@ export async function action({ request }: ActionFunctionArgs) {
             return {
                 id: record.menuItemCostVariationId,
                 menuItemId,
-                costAmount: record.proposedCostAmount,
+                costAmount: proposedCostAmount,
                 updatedAt: record.updatedAt,
                 updatedBy,
                 previousCostAmount: record.costAmount,
@@ -276,7 +277,7 @@ export default function AdminGerenciamentoCardapioCostManagementIndex() {
                                                                                             <div className="flex flex-col gap-1 items-center">
                                                                                                 <div className="flex flex-col gap-y-0">
                                                                                                     <span className="text-muted-foreground text-[11px]">Valor proposto</span>
-                                                                                                    <NumericInput name="proposedCostAmount" defaultValue={record.proposedCostAmount} readOnly />
+                                                                                                    <NumericInput name="proposedCostAmount" defaultValue={record.costAmount} readOnly />
                                                                                                 </div>
                                                                                                 <SubmitButton
                                                                                                     actionName="menu-item-cost-variation-upsert-proposed-input"
