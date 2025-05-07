@@ -4,13 +4,8 @@ import {
   PizzaSizeKey,
   menuItemSizePrismaEntity,
 } from "./menu-item-size.entity.server";
-import { MenuItemCostVariationBySize } from "./menu-item.types";
+import { MenuItemWithCostVariations } from "./menu-item.types";
 import { MenuItemEntityFindAllProps } from "./menu-item.prisma.entity.server";
-
-export interface MenuItemWithCostVariationsAndRecommendedCost
-  extends MenuItemCostVariationBySize {
-  proposedCostAmount: number;
-}
 
 class MenuItemCostHandler {
   pizzaSizeKeyRef: PizzaSizeKey = "pizza-medium";
@@ -35,7 +30,7 @@ class MenuItemCostHandler {
 
   async loadAll(
     params: MenuItemEntityFindAllProps = {}
-  ): Promise<MenuItemWithCostVariationsAndRecommendedCost[]> {
+  ): Promise<MenuItemWithCostVariations[]> {
     const allMenuItems = await this.client.menuItem.findMany({
       where: params?.where,
       include: {
@@ -64,10 +59,11 @@ class MenuItemCostHandler {
             (c) => c.menuItemId === item.id
           );
 
-          const proposedCostAmount = this.calculateOneProposedCostVariation(
-            sizeKey,
-            itemReferenceCost?.costAmount ?? 0
-          );
+          const recommendedCostAmount =
+            this.calculateRecommendedCostVariationBySizeKey(
+              sizeKey,
+              itemReferenceCost?.costAmount ?? 0
+            );
 
           return {
             menuItemCostVariationId: variation?.id,
@@ -75,7 +71,7 @@ class MenuItemCostHandler {
             sizeKey,
             sizeName: size.name,
             costAmount: variation?.costAmount ?? 0,
-            proposedCostAmount: proposedCostAmount ?? 0,
+            recommendedCostAmount: recommendedCostAmount ?? 0,
             updatedBy: variation?.updatedBy,
             updatedAt: variation?.updatedAt,
             previousCostAmount: variation?.previousCostAmount ?? 0,
@@ -94,14 +90,14 @@ class MenuItemCostHandler {
   }
 
   /**
-   * The logic for calculating the cost variation for each pizza topping
-   * based on the size key.
    *
-   * @param size
-   * @param refCostAmount
+   * Calcula o custo recomendado para cada tamanho de pizza com base no custo da pizza de tamanho médio.
+   *
+   * @param size O tamanho da pizza para o qual o custo recomendado deve ser calculado.
+   * @param refCostAmount O custo de referência é o custo do tamanho médio no momento
    * @returns
    */
-  calculateOneProposedCostVariation(
+  calculateRecommendedCostVariationBySizeKey(
     size: PizzaSizeKey,
     refCostAmount: number
   ): number {

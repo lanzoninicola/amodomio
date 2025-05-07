@@ -1,5 +1,6 @@
 import { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { Await, useLoaderData, defer, Form, useActionData } from "@remix-run/react";
+import { AlertCircleIcon } from "lucide-react";
 import { Suspense, useState } from "react";
 import OptionTab from "~/components/layout/option-tab/option-tab";
 import Loading from "~/components/loading/loading";
@@ -192,26 +193,36 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
 
                                       return (
                                         <li key={randomReactKey()} >
-                                          <p className="text-[11px] uppercase text-center mb-2">{record.sizeName}</p>
-                                          <div className="grid grid-cols-2 gap-2 justify-center">
-                                            <div className="flex flex-col text-center">
-                                              <p className="text-[11px] text-muted-foreground">Valor:</p>
-                                              <p className={
-                                                cn(
-                                                  "text-[12px] font-mono",
-                                                  record.priceAmount > 0 && recommendedPriceAmountWithMargin > record.priceAmount && 'bg-red-500'
-                                                )
-                                              }
-                                              >{formatDecimalPlaces(record.priceAmount)}</p>
-                                            </div>
-                                            <div className="flex flex-col text-center">
-                                              {/* <p className="text-[11px] text-muted-foreground">Valor recomendado:</p> */}
 
-                                              <ValorRecomendadoLabelDialog computedSellingPriceBreakdown={record.computedSellingPriceBreakdown} />
-                                              <p className="text-[12px] font-mono">{formatDecimalPlaces(recommendedPriceAmountWithMargin)}</p>
+                                          <div className="flex flex-col justify-center">
+                                            <p className="text-[11px] uppercase text-center ">{record.sizeName}</p>
+
+                                            <div className="grid grid-cols-2 gap-2 justify-center">
+                                              <div className="flex flex-col text-center">
+                                                <p className="text-[11px] text-muted-foreground">Valor:</p>
+                                                <p className={
+                                                  cn(
+                                                    "text-[12px] font-mono",
+                                                    record.priceAmount > 0 && recommendedPriceAmountWithMargin > record.priceAmount && 'bg-red-500'
+                                                  )
+                                                }
+                                                >{formatDecimalPlaces(record.priceAmount)}</p>
+                                              </div>
+                                              <div className="flex flex-col text-center">
+                                                {/* <p className="text-[11px] text-muted-foreground">Valor recomendado:</p> */}
+
+                                                <ValorRecomendadoLabelDialog computedSellingPriceBreakdown={record.computedSellingPriceBreakdown} />
+                                                <p className="text-[12px] font-mono">{formatDecimalPlaces(recommendedPriceAmountWithMargin)}</p>
+                                              </div>
                                             </div>
+
+                                            {(record.computedSellingPriceBreakdown?.custoFichaTecnica ?? 0) === 0 && (
+                                              <div className="flex gap-2 items-center mt-2">
+                                                <AlertCircleIcon className="h-4 w-4 text-red-500" />
+                                                <span className="text-red-500 text-xs font font-semibold">Custo ficha tecnica não definido</span>
+                                              </div>
+                                            )}
                                           </div>
-
                                         </li>
                                       )
                                     })}
@@ -235,10 +246,11 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
                                             <div className="flex flex-col">
                                               <div className={
                                                 cn(
-                                                  " mb-2",
+                                                  "mb-2",
                                                   record.sizeKey === "pizza-medium" && "grid place-items-center bg-black",
                                                 )
                                               }>
+
                                                 <h4 className={
                                                   cn(
                                                     "text-[12px] font-medium uppercase tracking-wider",

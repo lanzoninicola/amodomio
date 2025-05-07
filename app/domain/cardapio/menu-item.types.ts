@@ -20,6 +20,7 @@ export interface MenuItemCostVariationBySize {
   updatedBy: string | null | undefined;
   updatedAt: Date | undefined;
   previousCostAmount: number;
+  recommendedCostAmount?: number;
 }
 
 export interface SellPriceVariation {
