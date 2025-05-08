@@ -110,7 +110,7 @@ export class MenuItemSellingPriceHandler {
         sizeName: size.name,
         channelName: channel.name,
         computedPrice:
-          computedSellingPriceBreakdown.recommendedPrice.priceAmount.withMargin,
+          computedSellingPriceBreakdown.minimumPrice.priceAmount.withMargin,
         actualPrice: variation?.priceAmount ?? 0,
       });
 

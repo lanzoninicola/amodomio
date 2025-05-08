@@ -43,7 +43,7 @@ export interface ComputedSellingPriceBreakdown {
     isMarketplace: boolean;
     onlinePaymentTaxPerc: number;
   };
-  recommendedPrice: SellingPriceAudit;
+  minimumPrice: SellingPriceAudit;
 }
 
 export interface ComputedSellingPriceWithChannelTax {
@@ -142,7 +142,7 @@ class MenuItemSellingPriceUtilityEntity {
         isMarketplace: channel?.isMarketplace ?? false,
         onlinePaymentTaxPerc: channel?.onlinePaymentTaxPerc ?? 0,
       },
-      recommendedPrice: {
+      minimumPrice: {
         priceAmount: {
           withMargin: formatDecimalPlaces(
             Math.ceil(price.priceAmount.withMargin / 0.05) * 0.05
