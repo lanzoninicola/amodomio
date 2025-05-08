@@ -66,7 +66,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
   console.log({ _action, values })
 
-  if (_action === "menu-item-sell-price-variation-upsert-user-input") {
+  if (_action === "upsert-by-user-input") {
 
     const menuItemSellPriceVariationId = values?.menuItemSellPriceVariationId as string
     const menuItemSellingChannelId = values?.menuItemSellingChannelId as string
@@ -105,6 +105,8 @@ export async function action({ request }: ActionFunctionArgs) {
 
     return ok(`O preço de venda foi atualizado com sucesso`)
   }
+
+
 
 
 
@@ -221,8 +223,8 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
                                   <ul className="grid grid-cols-5 mb-4">
                                     {menuItem.sellPriceVariations.map((record) => {
 
-                                      const recommendedPriceAmountWithMargin = record.computedSellingPriceBreakdown?.recommendedPrice?.priceAmount.withMargin ?? 0
-                                      const recommendedPriceAmountWithoutMargin = record.computedSellingPriceBreakdown?.recommendedPrice?.priceAmount.withoutMargin ?? 0
+                                      const minimumPriceAmountWithMargin = record.computedSellingPriceBreakdown?.minimumPrice?.priceAmount.withMargin ?? 0
+                                      const minimumPriceAmountWithoutMargin = record.computedSellingPriceBreakdown?.minimumPrice?.priceAmount.withoutMargin ?? 0
 
                                       return (
                                         <li key={randomReactKey()} >
@@ -236,7 +238,7 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
                                                 <p className={
                                                   cn(
                                                     "text-[12px] font-mono",
-                                                    record.priceAmount > 0 && recommendedPriceAmountWithMargin > record.priceAmount && 'bg-red-500'
+                                                    record.priceAmount > 0 && minimumPriceAmountWithMargin > record.priceAmount && 'bg-red-500'
                                                   )
                                                 }
                                                 >{formatDecimalPlaces(record.priceAmount)}</p>
@@ -244,8 +246,8 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
                                               <div className="flex flex-col text-center">
                                                 {/* <p className="text-[11px] text-muted-foreground">Valor recomendado:</p> */}
 
-                                                <ValorRecomendadoLabelDialog computedSellingPriceBreakdown={record.computedSellingPriceBreakdown} />
-                                                <p className="text-[12px] font-mono">{formatDecimalPlaces(recommendedPriceAmountWithMargin)}</p>
+                                                <MinimumSellPriceLabelDialog computedSellingPriceBreakdown={record.computedSellingPriceBreakdown} />
+                                                <p className="text-[12px] font-mono">{formatDecimalPlaces(minimumPriceAmountWithMargin)}</p>
                                               </div>
                                             </div>
 
@@ -301,7 +303,7 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
                                                   <input type="hidden" name="menuItemSellingChannelId" value={sellingChannel.id ?? ""} />
                                                   <input type="hidden" name="menuItemSizeId" value={record.sizeId ?? ""} />
                                                   <input type="hidden" name="updatedBy" value={record.updatedBy || user?.email || ""} />
-                                                  <input type="hidden" name="previousCostAmount" value={record.previousPriceAmount} />
+                                                  <input type="hidden" name="previousPriceAmount" value={record.previousPriceAmount} />
 
 
                                                   <div className="grid grid-cols-2 gap-2">
@@ -312,28 +314,29 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
                                                         <NumericInput name="priceAmount" defaultValue={record.priceAmount} />
                                                       </div>
                                                       <SubmitButton
-                                                        actionName="menu-item-sell-price-variation-upsert-user-input"
+                                                        actionName="upsert-by-user-input"
                                                         tabIndex={0}
-                                                        cnContainer="md:py-0 bg-slate-300 hover:bg-slate-400"
+                                                        variant={"outline"}
+                                                        cnContainer="md:py-0 hover:bg-slate-200 "
                                                         cnLabel="text-[11px] tracking-widest text-black uppercase"
                                                         iconColor="black"
                                                       />
                                                     </div>
 
                                                     <div className="flex flex-col gap-1 items-center">
-                                                      <div className="flex flex-col gap-y-0">
-                                                        <ValorRecomendadoLabelDialog computedSellingPriceBreakdown={record.computedSellingPriceBreakdown} />
-                                                        <NumericInput name="recommendedCostAmount" defaultValue={record.computedSellingPriceBreakdown?.recommendedPrice.priceAmount.withMargin} readOnly />
+                                                      <div className="flex flex-col gap-y-0 ">
+                                                        <MinimumSellPriceLabelDialog computedSellingPriceBreakdown={record.computedSellingPriceBreakdown} />
+                                                        <NumericInput name="minimumPriceAmount" defaultValue={record.computedSellingPriceBreakdown?.minimumPrice.priceAmount.withMargin} readOnly className="bg-slate-100" />
                                                       </div>
-                                                      <SubmitButton
-                                                        actionName="menu-item-sell-price-variation-upsert-recommended-input"
+                                                      {/* <SubmitButton
+                                                        actionName="upsert-by-minimum-input"
                                                         tabIndex={0}
                                                         cnContainer="bg-white border w-full hover:bg-slate-200"
                                                         cnLabel="text-[11px] tracking-widest text-black uppercase leading-[1.15]"
                                                         hideIcon
                                                         idleText="Aceitar proposta"
                                                         loadingText="Aceitando..."
-                                                      />
+                                                      /> */}
                                                     </div>
 
                                                   </div>
@@ -358,7 +361,7 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
 
                                   </ul>
 
-                                  <Form method="post" className="flex gap-2">
+                                  {/* <Form method="post" className="flex gap-2">
                                     <input type="hidden" name="menuItemId" value={menuItem.menuItemId} />
                                     <input type="hidden" name="updatedBy" value={user?.email || ""} />
                                     <SubmitButton
@@ -370,7 +373,7 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
                                       idleText="Aceitar todas as propostas"
                                       loadingText="Aceitando..."
                                     />
-                                  </Form>
+                                  </Form> */}
 
                                 </AccordionContent>
                               </AccordionItem>
@@ -395,12 +398,12 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
   )
 }
 
-interface ValorRecomendadoLabelDialogProps {
+interface MinimumPriceLabelDialogProps {
   computedSellingPriceBreakdown: ComputedSellingPriceBreakdown | undefined | null
 
 }
 
-function ValorRecomendadoLabelDialog({ computedSellingPriceBreakdown }: ValorRecomendadoLabelDialogProps
+function MinimumSellPriceLabelDialog({ computedSellingPriceBreakdown }: MinimumPriceLabelDialogProps
 ) {
 
 
@@ -427,7 +430,7 @@ function ValorRecomendadoLabelDialog({ computedSellingPriceBreakdown }: ValorRec
   return (
     <Dialog>
       <DialogTrigger asChild className="w-full">
-        <span className="text-muted-foreground text-[11px] cursor-pointer hover:underline">Valor recomendado</span>
+        <span className="text-muted-foreground text-[11px] cursor-pointer hover:underline">Valor minimo</span>
       </DialogTrigger>
       <DialogContent>
 
@@ -495,16 +498,16 @@ function ValorRecomendadoLabelDialog({ computedSellingPriceBreakdown }: ValorRec
               <Label cnContainer="font-semibold">{`Preço de venda sugerido`}</Label>
               <div className="grid grid-cols-4 items-center">
                 <span className="text-xs col-span-3">Sem margem (com cobertura custos fixos)</span>
-                <Amount>{Number(cspb?.recommendedPrice?.priceAmount.withoutMargin ?? 0).toFixed(2)}</Amount>
+                <Amount>{Number(cspb?.minimumPrice?.priceAmount.withoutMargin ?? 0).toFixed(2)}</Amount>
               </div>
 
               <div className="grid grid-cols-4 items-center mb-2">
                 <span className="text-xs col-span-3">Com margem</span>
-                <Amount>{Number(cspb?.recommendedPrice?.priceAmount.withMargin ?? 0).toFixed(2)}</Amount>
+                <Amount>{Number(cspb?.minimumPrice?.priceAmount.withMargin ?? 0).toFixed(2)}</Amount>
               </div>
 
-              <span className="text-[12px] font-mono">{cspb?.recommendedPrice?.formulaExplanation}</span>
-              <span className="text-[12px] font-mono">{cspb?.recommendedPrice?.formulaExpression}</span>
+              <span className="text-[12px] font-mono">{cspb?.minimumPrice?.formulaExplanation}</span>
+              <span className="text-[12px] font-mono">{cspb?.minimumPrice?.formulaExpression}</span>
             </div>
 
             <Separator className="my-4" />
