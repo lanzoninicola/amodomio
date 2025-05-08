@@ -244,7 +244,7 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
                                               <div className="flex flex-col text-center">
                                                 {/* <p className="text-[11px] text-muted-foreground">Valor recomendado:</p> */}
 
-                                                <ValorRecomendadoLabelDialog computedSellingPriceBreakdown={record.computedSellingPriceBreakdown} />
+                                                <MinimumSellPriceLabelDialog computedSellingPriceBreakdown={record.computedSellingPriceBreakdown} />
                                                 <p className="text-[12px] font-mono">{formatDecimalPlaces(recommendedPriceAmountWithMargin)}</p>
                                               </div>
                                             </div>
@@ -322,7 +322,7 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
 
                                                     <div className="flex flex-col gap-1 items-center">
                                                       <div className="flex flex-col gap-y-0">
-                                                        <ValorRecomendadoLabelDialog computedSellingPriceBreakdown={record.computedSellingPriceBreakdown} />
+                                                        <MinimumSellPriceLabelDialog computedSellingPriceBreakdown={record.computedSellingPriceBreakdown} />
                                                         <NumericInput name="recommendedCostAmount" defaultValue={record.computedSellingPriceBreakdown?.recommendedPrice.priceAmount.withMargin} readOnly />
                                                       </div>
                                                       <SubmitButton
@@ -400,7 +400,7 @@ interface ValorRecomendadoLabelDialogProps {
 
 }
 
-function ValorRecomendadoLabelDialog({ computedSellingPriceBreakdown }: ValorRecomendadoLabelDialogProps
+function MinimumSellPriceLabelDialog({ computedSellingPriceBreakdown }: ValorRecomendadoLabelDialogProps
 ) {
 
 
@@ -427,7 +427,7 @@ function ValorRecomendadoLabelDialog({ computedSellingPriceBreakdown }: ValorRec
   return (
     <Dialog>
       <DialogTrigger asChild className="w-full">
-        <span className="text-muted-foreground text-[11px] cursor-pointer hover:underline">Valor recomendado</span>
+        <span className="text-muted-foreground text-[11px] cursor-pointer hover:underline">Valor minimo</span>
       </DialogTrigger>
       <DialogContent>
 
