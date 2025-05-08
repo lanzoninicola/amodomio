@@ -4,6 +4,7 @@ import {
   MenuItemCostVariationBySize,
   MenuItemWithSellPriceVariations,
   SellPriceVariation,
+  Warning,
 } from "./menu-item.types";
 import { CacheManager } from "../cache/cache-manager.server";
 import {
@@ -91,11 +92,9 @@ export class MenuItemSellingPriceHandler {
       channel: MenuItemSellingChannel
     ): Promise<SellPriceVariation> => {
       const variation = item.sellPriceVariations?.find(
-        (spv: SellPriceVariation | SellPriceVariation) =>
-          spv.sizeId === size.id && spv.channelId === channel.id
+        (spv) => spv.sizeId === size.id && spv.channelId === channel.id
       );
 
-      // Calculate the selling price breakdown
       const computedSellingPriceBreakdown =
         await this.menuItemSellingPriceUtility.calculateSellingPriceByChannel(
           channel,
@@ -103,6 +102,24 @@ export class MenuItemSellingPriceHandler {
           size,
           sellingPriceConfig
         );
+
+      let itemSellPriceVariationWarnings: Warning[] = [];
+
+      const warnings = this.handleSellPriceWarnings({
+        itemName: item.name,
+        sizeName: size.name,
+        channelName: channel.name,
+        computedPrice:
+          computedSellingPriceBreakdown.recommendedPrice.priceAmount.withMargin,
+        actualPrice: variation?.priceAmount ?? 0,
+      });
+
+      if (warnings) {
+        itemSellPriceVariationWarnings = [
+          ...itemSellPriceVariationWarnings,
+          ...warnings,
+        ];
+      }
 
       return {
         menuItemSellPriceVariationId: variation?.menuItemSellPriceVariationId,
@@ -118,6 +135,7 @@ export class MenuItemSellingPriceHandler {
         updatedBy: variation?.updatedBy,
         updatedAt: variation?.updatedAt,
         previousPriceAmount: variation?.previousPriceAmount ?? 0,
+        warnings: itemSellPriceVariationWarnings,
       };
     };
 
@@ -125,6 +143,8 @@ export class MenuItemSellingPriceHandler {
       allMenuItemsWithSellPrices.map(async (item) => {
         const filteredSizes = sizes.filter(filterSizes);
         const filteredChannels = channels.filter(filterChannels);
+
+        const warnings: Warning[] = [];
 
         const variations = await Promise.all(
           filteredSizes.flatMap((size) =>
@@ -134,6 +154,12 @@ export class MenuItemSellingPriceHandler {
           )
         );
 
+        variations.forEach((variation) => {
+          if (variation.warnings) {
+            warnings.push(...variation.warnings);
+          }
+        });
+
         return {
           menuItemId: item.menuItemId,
           name: item.name,
@@ -141,11 +167,56 @@ export class MenuItemSellingPriceHandler {
           visible: item.visible,
           active: item.active,
           sellPriceVariations: variations,
+          warnings, // ← novo campo
         };
       })
     );
 
     return results;
+  }
+
+  private handleSellPriceWarnings({
+    itemName,
+    sizeName,
+    channelName,
+    computedPrice,
+    actualPrice,
+  }: {
+    itemName: string;
+    sizeName: string;
+    channelName: string;
+    computedPrice: number;
+    actualPrice: number;
+  }): Warning[] {
+    const warnings: Warning[] = [];
+
+    const base = `${itemName} (${sizeName} - ${channelName})`;
+
+    if (actualPrice === 0) {
+      warnings.push({
+        type: "critical",
+        code: "SELL_PRICE_ZERO",
+        message: `O preço de venda de ${base} está zerado.`,
+      });
+    }
+
+    if (actualPrice < computedPrice) {
+      warnings.push({
+        type: "alert",
+        code: "SELL_PRICE_BELOW_RECOMMENDED",
+        message: `O preço de venda de ${base} está abaixo do recomendado.`,
+      });
+    }
+
+    if (actualPrice > computedPrice * 1.5) {
+      warnings.push({
+        type: "info",
+        code: "SELL_PRICE_ABOVE_EXPECTED",
+        message: `O preço de venda de ${base} está muito acima do recomendado.`,
+      });
+    }
+
+    return warnings;
   }
 }
 

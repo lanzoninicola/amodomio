@@ -1,5 +1,6 @@
 import { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { Await, useLoaderData, defer, Form, useActionData } from "@remix-run/react";
+import { AlertCircleIcon } from "lucide-react";
 import { Suspense, useState } from "react";
 import OptionTab from "~/components/layout/option-tab/option-tab";
 import Loading from "~/components/loading/loading";
@@ -8,9 +9,11 @@ import SubmitButton from "~/components/primitives/submit-button/submit-button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "~/components/ui/accordion";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from "~/components/ui/dialog";
+import { Input } from "~/components/ui/input";
 import { Separator } from "~/components/ui/separator";
 import { toast } from "~/components/ui/use-toast";
 import { authenticator } from "~/domain/auth/google.server";
+import AlertsCostsAndSellPrice from "~/domain/cardapio/components/alerts-cost-and-sell-price/alerts-cost-and-sell-price";
 import { menuItemSellingPriceHandler } from "~/domain/cardapio/menu-item-selling-price-handler.server";
 
 import { ComputedSellingPriceBreakdown } from "~/domain/cardapio/menu-item-selling-price-utility.entity.server";
@@ -155,6 +158,30 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
               setItems(menuItemsWithSellPriceVariations.filter(item => item.active === state))
             }
 
+            const [search, setSearch] = useState("")
+
+            const handleSearch = (event: React.ChangeEvent<HTMLInputElement>) => {
+              const allItems = menuItemsWithSellPriceVariations.filter(item => item.visible === true && item.active === true)
+
+              const value = event.target.value
+
+              setSearch(value)
+
+              if (!value || value.length === 0 || value === "") {
+                return setItems(allItems) // ← corrigido
+              }
+
+              const searchedItems = allItems.filter(item => {
+                return (
+                  item.name?.toLowerCase().includes(value.toLowerCase()) ||
+                  item.ingredients?.toLowerCase().includes(value.toLowerCase())
+                )
+              })
+
+              setItems(searchedItems)
+            }
+
+
             return (
               <div className="flex flex-col">
 
@@ -167,6 +194,13 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
 
                 </div>
                 <Separator className="my-4" />
+                <AlertsCostsAndSellPrice items={items} />
+
+                <div className="bg-slate-50 px-60 py-2 grid place-items-center mb-4 rounded-sm">
+                  <Input name="search" className="w-full py-4 text-lg bg-white " placeholder="Pesquisar o sabor..." onChange={(e) => handleSearch(e)} value={search} />
+                </div>
+
+
                 <div className="h-[500px] overflow-y-scroll">
                   <ul>
                     {
@@ -192,26 +226,36 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
 
                                       return (
                                         <li key={randomReactKey()} >
-                                          <p className="text-[11px] uppercase text-center mb-2">{record.sizeName}</p>
-                                          <div className="grid grid-cols-2 gap-2 justify-center">
-                                            <div className="flex flex-col text-center">
-                                              <p className="text-[11px] text-muted-foreground">Valor:</p>
-                                              <p className={
-                                                cn(
-                                                  "text-[12px] font-mono",
-                                                  record.priceAmount > 0 && recommendedPriceAmountWithMargin > record.priceAmount && 'bg-red-500'
-                                                )
-                                              }
-                                              >{formatDecimalPlaces(record.priceAmount)}</p>
-                                            </div>
-                                            <div className="flex flex-col text-center">
-                                              {/* <p className="text-[11px] text-muted-foreground">Valor recomendado:</p> */}
 
-                                              <ValorRecomendadoLabelDialog computedSellingPriceBreakdown={record.computedSellingPriceBreakdown} />
-                                              <p className="text-[12px] font-mono">{formatDecimalPlaces(recommendedPriceAmountWithMargin)}</p>
+                                          <div className="flex flex-col justify-center">
+                                            <p className="text-[11px] uppercase text-center ">{record.sizeName}</p>
+
+                                            <div className="grid grid-cols-2 gap-2 justify-center">
+                                              <div className="flex flex-col text-center">
+                                                <p className="text-[11px] text-muted-foreground">Valor:</p>
+                                                <p className={
+                                                  cn(
+                                                    "text-[12px] font-mono",
+                                                    record.priceAmount > 0 && recommendedPriceAmountWithMargin > record.priceAmount && 'bg-red-500'
+                                                  )
+                                                }
+                                                >{formatDecimalPlaces(record.priceAmount)}</p>
+                                              </div>
+                                              <div className="flex flex-col text-center">
+                                                {/* <p className="text-[11px] text-muted-foreground">Valor recomendado:</p> */}
+
+                                                <ValorRecomendadoLabelDialog computedSellingPriceBreakdown={record.computedSellingPriceBreakdown} />
+                                                <p className="text-[12px] font-mono">{formatDecimalPlaces(recommendedPriceAmountWithMargin)}</p>
+                                              </div>
                                             </div>
+
+                                            {(record.computedSellingPriceBreakdown?.custoFichaTecnica ?? 0) === 0 && (
+                                              <div className="flex gap-2 items-center mt-2">
+                                                <AlertCircleIcon className="h-4 w-4 text-red-500" />
+                                                <span className="text-red-500 text-xs font font-semibold">Custo ficha tecnica não definido</span>
+                                              </div>
+                                            )}
                                           </div>
-
                                         </li>
                                       )
                                     })}
@@ -235,10 +279,11 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
                                             <div className="flex flex-col">
                                               <div className={
                                                 cn(
-                                                  " mb-2",
+                                                  "mb-2",
                                                   record.sizeKey === "pizza-medium" && "grid place-items-center bg-black",
                                                 )
                                               }>
+
                                                 <h4 className={
                                                   cn(
                                                     "text-[12px] font-medium uppercase tracking-wider",
@@ -477,3 +522,4 @@ function ValorRecomendadoLabelDialog({ computedSellingPriceBreakdown }: ValorRec
     </Dialog >
   )
 }
+

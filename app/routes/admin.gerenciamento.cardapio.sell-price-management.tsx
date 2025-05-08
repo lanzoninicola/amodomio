@@ -1,6 +1,6 @@
 import { ActionFunction, LoaderFunctionArgs } from "@remix-run/node";
 import { Await, Form, Link, Outlet, defer, useActionData, useLoaderData, useLocation } from "@remix-run/react";
-import { Option, Settings, Terminal } from "lucide-react";
+import { ArrowUp, Option, Settings, Terminal } from "lucide-react";
 import { c } from "node_modules/vite/dist/node/types.d-aGj9QkWt";
 import { NumericInput } from "~/components/numeric-input/numeric-input";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
@@ -188,6 +188,13 @@ export default function AdminGerenciamentoCardapioSellPriceManagement() {
       </div>
 
       <Separator className="my-1" />
+
+      {/* <div className="grid place-items-center min-h-[250px]">
+        <div className="flex flex-col gap-2 justify-center items-center">
+          <ArrowUp className="text-muted-foreground" size={40} />
+          <p className="font-semibold text-sm tracking-wider text-muted-foreground">Seleciona o canal de venda desejado aqui acima</p>
+        </div>
+      </div> */}
 
       <Outlet />
 

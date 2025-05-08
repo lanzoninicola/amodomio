@@ -301,7 +301,7 @@ export class MenuItemPrismaEntity {
     });
   }
 
-  async findOneWithCostVariations(
+  async findWithCostVariationsByItem(
     menuItemId: string
   ): Promise<MenuItemWithCostVariations | null> {
     const costVariations = await this.findManyWithCostVariations({
