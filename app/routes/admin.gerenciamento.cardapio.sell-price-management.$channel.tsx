@@ -9,9 +9,11 @@ import SubmitButton from "~/components/primitives/submit-button/submit-button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "~/components/ui/accordion";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from "~/components/ui/dialog";
+import { Input } from "~/components/ui/input";
 import { Separator } from "~/components/ui/separator";
 import { toast } from "~/components/ui/use-toast";
 import { authenticator } from "~/domain/auth/google.server";
+import AlertsCostsAndSellPrice from "~/domain/cardapio/components/alerts-cost-and-sell-price/alerts-cost-and-sell-price";
 import { menuItemSellingPriceHandler } from "~/domain/cardapio/menu-item-selling-price-handler.server";
 
 import { ComputedSellingPriceBreakdown } from "~/domain/cardapio/menu-item-selling-price-utility.entity.server";
@@ -156,6 +158,30 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
               setItems(menuItemsWithSellPriceVariations.filter(item => item.active === state))
             }
 
+            const [search, setSearch] = useState("")
+
+            const handleSearch = (event: React.ChangeEvent<HTMLInputElement>) => {
+              const allItems = menuItemsWithSellPriceVariations.filter(item => item.visible === true && item.active === true)
+
+              const value = event.target.value
+
+              setSearch(value)
+
+              if (!value || value.length === 0 || value === "") {
+                return setItems(allItems) // ← corrigido
+              }
+
+              const searchedItems = allItems.filter(item => {
+                return (
+                  item.name?.toLowerCase().includes(value.toLowerCase()) ||
+                  item.ingredients?.toLowerCase().includes(value.toLowerCase())
+                )
+              })
+
+              setItems(searchedItems)
+            }
+
+
             return (
               <div className="flex flex-col">
 
@@ -168,6 +194,13 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
 
                 </div>
                 <Separator className="my-4" />
+                <AlertsCostsAndSellPrice items={items} />
+
+                <div className="bg-slate-50 px-60 py-2 grid place-items-center mb-4 rounded-sm">
+                  <Input name="search" className="w-full py-4 text-lg bg-white " placeholder="Pesquisar o sabor..." onChange={(e) => handleSearch(e)} value={search} />
+                </div>
+
+
                 <div className="h-[500px] overflow-y-scroll">
                   <ul>
                     {
@@ -489,3 +522,4 @@ function ValorRecomendadoLabelDialog({ computedSellingPriceBreakdown }: ValorRec
     </Dialog >
   )
 }
+

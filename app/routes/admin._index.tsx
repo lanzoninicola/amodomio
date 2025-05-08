@@ -192,7 +192,10 @@ function CardapioItems({
         <div className="flex flex-col items-center">
 
             <div className="flex flex-col gap-4 items-center w-full mb-6">
-                <Input name="search" className="w-full py-4 text-lg" placeholder="Pesquisar no cardapio..." onChange={(e) => handleSearch(e)} value={search} />
+                <div className="bg-slate-50 w-full px-60 py-2 grid place-items-center rounded-sm">
+                    <Input name="search" className="w-full py-4 text-lg bg-white " placeholder="Pesquisar no cardapio..." onChange={(e) => handleSearch(e)} value={search} />
+                </div>
+
                 <div className="flex flex-col md:flex-row gap-4 justify-between items-center w-full">
                     <div className="flex gap-4">
                         <span className="text-xs text-muted-foreground hover:underline cursor-pointer">Novidade</span>
