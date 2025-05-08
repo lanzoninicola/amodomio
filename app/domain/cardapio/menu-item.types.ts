@@ -9,6 +9,7 @@ export interface MenuItemWithCostVariations {
   visible: boolean;
   active: boolean;
   costVariations: MenuItemCostVariationBySize[];
+  warnings?: Warning[];
 }
 
 export interface MenuItemCostVariationBySize {
@@ -20,6 +21,7 @@ export interface MenuItemCostVariationBySize {
   updatedBy: string | null | undefined;
   updatedAt: Date | undefined;
   previousCostAmount: number;
+  recommendedCostAmount?: number;
 }
 
 export interface SellPriceVariation {
@@ -36,6 +38,7 @@ export interface SellPriceVariation {
   updatedAt?: Date;
   previousPriceAmount: number;
   computedSellingPriceBreakdown?: ComputedSellingPriceBreakdown;
+  warnings?: Warning[];
 }
 
 export interface MenuItemWithSellPriceVariations {
@@ -45,6 +48,7 @@ export interface MenuItemWithSellPriceVariations {
   visible: boolean;
   active: boolean;
   sellPriceVariations: SellPriceVariation[];
+  warnings?: Warning[];
 }
 
 export interface MenuItemWithSellPriceVariationsAndCostVariations {
@@ -55,4 +59,12 @@ export interface MenuItemWithSellPriceVariationsAndCostVariations {
   active: boolean;
   costVariations: MenuItemCostVariationBySize[];
   sellPriceVariations: SellPriceVariation[];
+}
+
+type WarningType = "info" | "alert" | "critical";
+
+export interface Warning {
+  type: WarningType;
+  code: string;
+  message: string;
 }

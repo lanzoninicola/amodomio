@@ -4,12 +4,15 @@ import {
   PizzaSizeKey,
   menuItemSizePrismaEntity,
 } from "./menu-item-size.entity.server";
-import { MenuItemCostVariationBySize } from "./menu-item.types";
+import { MenuItemWithCostVariations, Warning } from "./menu-item.types";
 import { MenuItemEntityFindAllProps } from "./menu-item.prisma.entity.server";
 
-export interface MenuItemWithCostVariationsAndRecommendedCost
-  extends MenuItemCostVariationBySize {
-  proposedCostAmount: number;
+interface HandleWarningsFnParams {
+  costAmount: number;
+  previousCostAmount: number;
+  recommendedCostAmount: number;
+  itemName: string;
+  sizeName: string;
 }
 
 class MenuItemCostHandler {
@@ -35,7 +38,7 @@ class MenuItemCostHandler {
 
   async loadAll(
     params: MenuItemEntityFindAllProps = {}
-  ): Promise<MenuItemWithCostVariationsAndRecommendedCost[]> {
+  ): Promise<MenuItemWithCostVariations[]> {
     const allMenuItems = await this.client.menuItem.findMany({
       where: params?.where,
       include: {
@@ -46,10 +49,11 @@ class MenuItemCostHandler {
 
     const sizes = await this.menuItemSize.findAll();
 
-    // array of medium size cost variations for all items
     const allReferenceCostVariations = await this.findAllReferenceCost();
 
     return allMenuItems.map((item) => {
+      let itemWarnings: Warning[] = [];
+
       const costVariations = sizes
         .sort((a, b) => a.sortOrderIndex - b.sortOrderIndex)
         .map((size) => {
@@ -57,17 +61,30 @@ class MenuItemCostHandler {
             (cv) => cv.menuItemSizeId === size.id
           );
 
-          let sizeKey: PizzaSizeKey = this.pizzaSizeKeyRef; // Default size key
+          let sizeKey: PizzaSizeKey = this.pizzaSizeKeyRef;
           sizeKey = size.key as PizzaSizeKey;
 
           const itemReferenceCost = allReferenceCostVariations.find(
             (c) => c.menuItemId === item.id
           );
 
-          const proposedCostAmount = this.calculateOneProposedCostVariation(
-            sizeKey,
-            itemReferenceCost?.costAmount ?? 0
-          );
+          const recommendedCostAmount =
+            this.calculateRecommendedCostVariationBySizeKey(
+              sizeKey,
+              itemReferenceCost?.costAmount ?? 0
+            );
+
+          const warningsReturned = this.handleWarnings({
+            costAmount: variation?.costAmount ?? 0,
+            previousCostAmount: variation?.previousCostAmount ?? 0,
+            recommendedCostAmount,
+            itemName: item.name,
+            sizeName: size.name,
+          });
+
+          if (warningsReturned) {
+            itemWarnings = [...itemWarnings, ...warningsReturned];
+          }
 
           return {
             menuItemCostVariationId: variation?.id,
@@ -75,7 +92,7 @@ class MenuItemCostHandler {
             sizeKey,
             sizeName: size.name,
             costAmount: variation?.costAmount ?? 0,
-            proposedCostAmount: proposedCostAmount ?? 0,
+            recommendedCostAmount: recommendedCostAmount ?? 0,
             updatedBy: variation?.updatedBy,
             updatedAt: variation?.updatedAt,
             previousCostAmount: variation?.previousCostAmount ?? 0,
@@ -88,20 +105,13 @@ class MenuItemCostHandler {
         ingredients: item.ingredients,
         visible: item.visible,
         active: item.active,
+        warnings: itemWarnings,
         costVariations,
       };
     });
   }
 
-  /**
-   * The logic for calculating the cost variation for each pizza topping
-   * based on the size key.
-   *
-   * @param size
-   * @param refCostAmount
-   * @returns
-   */
-  calculateOneProposedCostVariation(
+  calculateRecommendedCostVariationBySizeKey(
     size: PizzaSizeKey,
     refCostAmount: number
   ): number {
@@ -121,18 +131,80 @@ class MenuItemCostHandler {
     }
   }
 
-  /**
-   * Find all cost variations for the reference size key.
-   *
-   * Other costs are calculated based on this reference size key.
-   * At this moment, the reference size key is "pizza-medium".
-   *
-   * @returns
-   */
   async findAllReferenceCost() {
     return await this.menuItemCostVariation.findAllCostBySizeKey(
       this.pizzaSizeKeyRef
     );
+  }
+
+  handleWarnings({
+    costAmount,
+    previousCostAmount,
+    recommendedCostAmount,
+    itemName,
+    sizeName,
+  }: HandleWarningsFnParams): Warning[] {
+    const warnings: Warning[] = [];
+
+    const base = `${itemName} (${sizeName})`;
+
+    if (costAmount < recommendedCostAmount) {
+      warnings.push({
+        type: "alert",
+        code: "COST_BELOW_RECOMMENDED",
+        message: `O custo de ${base} é menor que o custo recomendado.`,
+      });
+    }
+
+    if (costAmount > recommendedCostAmount) {
+      warnings.push({
+        type: "info",
+        code: "COST_ABOVE_RECOMMENDED",
+        message: `O custo de ${base} é maior que o custo recomendado.`,
+      });
+    }
+
+    if (costAmount === 0) {
+      warnings.push({
+        type: "critical",
+        code: "COST_ZERO",
+        message: `O custo de ${base} é zero.`,
+      });
+    }
+
+    if (costAmount < 0) {
+      warnings.push({
+        type: "critical",
+        code: "COST_NEGATIVE",
+        message: `O custo de ${base} é negativo.`,
+      });
+    }
+
+    if (costAmount > 0 && costAmount < 1) {
+      warnings.push({
+        type: "info",
+        code: "COST_VERY_LOW",
+        message: `O custo de ${base} é menor que 1.`,
+      });
+    }
+
+    if (costAmount > 1000) {
+      warnings.push({
+        type: "alert",
+        code: "COST_TOO_HIGH",
+        message: `O custo de ${base} é maior que 1000.`,
+      });
+    }
+
+    if (previousCostAmount !== 0 && previousCostAmount < costAmount) {
+      warnings.push({
+        type: "info",
+        code: "COST_INCREASED",
+        message: `O custo de ${base} foi aumentado de ${previousCostAmount} para ${costAmount}.`,
+      });
+    }
+
+    return warnings;
   }
 }
 

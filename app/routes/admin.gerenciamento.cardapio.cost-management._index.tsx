@@ -1,14 +1,18 @@
 
 import { ActionFunctionArgs, LoaderFunctionArgs, } from "@remix-run/node";
 import { Await, useLoaderData, defer, Form, useActionData } from "@remix-run/react";
+import { AlertCircleIcon, AlertTriangleIcon, InfoIcon, SearchIcon } from "lucide-react";
 import { Suspense, useState } from "react";
 import OptionTab from "~/components/layout/option-tab/option-tab";
 import Loading from "~/components/loading/loading";
 import { NumericInput } from "~/components/numeric-input/numeric-input";
 import SubmitButton from "~/components/primitives/submit-button/submit-button";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "~/components/ui/accordion";
+import { Input } from "~/components/ui/input";
 import { Separator } from "~/components/ui/separator";
 import { toast } from "~/components/ui/use-toast";
 import { authenticator } from "~/domain/auth/google.server";
+import AlertsCostsAndSellPrice from "~/domain/cardapio/components/alerts-cost-and-sell-price/alerts-cost-and-sell-price";
 import { menuItemCostHandler } from "~/domain/cardapio/menu-item-cost-handler.server";
 import { menuItemCostVariationPrismaEntity } from "~/domain/cardapio/menu-item-cost-variation.entity.server";
 import { menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
@@ -78,7 +82,7 @@ export async function action({ request }: ActionFunctionArgs) {
         const menuItemCostVariationId = values?.menuItemCostVariationId as string
         const menuItemSizeId = values?.menuItemSizeId as string
         const updatedBy = values?.updatedBy as string
-        const costAmount = parserFormDataEntryToNumber(values?.proposedCostAmount) || 0
+        const costAmount = parserFormDataEntryToNumber(values?.recommendedCostAmount) || 0
         const previousCostAmount = parserFormDataEntryToNumber(values?.previousCostAmount) || 0
 
 
@@ -105,9 +109,9 @@ export async function action({ request }: ActionFunctionArgs) {
     if (_action === "menu-item-cost-variation-upsert-all-proposed-input") {
         const menuItemId = values?.menuItemId as string
         const updatedBy = values?.updatedBy as string
-        const proposedCostAmount = parserFormDataEntryToNumber(values?.proposedCostAmount) || 0
+        const recommendedCostAmount = parserFormDataEntryToNumber(values?.recommendedCostAmount) || 0
 
-        const menuItemWithCostVariations = await menuItemPrismaEntity.findOneWithCostVariations(menuItemId)
+        const menuItemWithCostVariations = await menuItemPrismaEntity.findWithCostVariationsByItem(menuItemId)
 
         if (!menuItemWithCostVariations) {
             return badRequest("Nenhum item encontrado")
@@ -117,7 +121,7 @@ export async function action({ request }: ActionFunctionArgs) {
             return {
                 id: record.menuItemCostVariationId,
                 menuItemId,
-                costAmount: proposedCostAmount,
+                costAmount: recommendedCostAmount,
                 updatedAt: record.updatedAt,
                 updatedBy,
                 previousCostAmount: record.costAmount,
@@ -165,7 +169,7 @@ export default function AdminGerenciamentoCardapioCostManagementIndex() {
                     {([menuItemsWithCostVariationsAndRecommended, user]) => {
 
                         {/* @ts-ignore */ }
-                        const [items, setItems] = useState<MenuItemWithCostVariations[]>(menuItemsWithCostVariationsAndRecommended || [])
+                        const [items, setItems] = useState<MenuItemWithCostVariations[]>(menuItemsWithCostVariationsAndRecommended.filter(item => item.visible === true && item.active === true) || [])
 
                         const [optVisibleItems, setOptVisibleItems] = useState<boolean | null>(true)
                         const [optActiveItems, setOptActiveItems] = useState<boolean | null>(null)
@@ -183,6 +187,30 @@ export default function AdminGerenciamentoCardapioCostManagementIndex() {
                             setItems(menuItemsWithCostVariationsAndRecommended.filter(item => item.active === state))
                         }
 
+                        const [search, setSearch] = useState("")
+
+                        const handleSearch = (event: React.ChangeEvent<HTMLInputElement>) => {
+                            const allItems = menuItemsWithCostVariationsAndRecommended.filter(item => item.visible === true && item.active === true)
+
+                            const value = event.target.value
+
+                            setSearch(value)
+                            // @ts-ignore
+                            if (!value || value.length === 0 || value === "") {
+                                return setItems(allItems)
+                            }
+
+                            const searchedItems = items
+                                .filter(item => {
+                                    return (
+                                        item.name?.toLowerCase().includes(value.toLowerCase())
+                                        || item.ingredients?.toLowerCase().includes(value.toLowerCase())
+                                    )
+                                })
+
+                            setItems(searchedItems)
+                        }
+
 
                         return (
                             <div className="flex flex-col">
@@ -195,6 +223,13 @@ export default function AdminGerenciamentoCardapioCostManagementIndex() {
 
                                 </div>
                                 <Separator className="my-4" />
+
+                                <AlertsCostsAndSellPrice items={items} />
+
+                                <div className="bg-slate-50 px-60 py-2 grid place-items-center mb-4 rounded-sm">
+                                    <Input name="search" className="w-full py-4 text-lg bg-white " placeholder="Pesquisar o sabor..." onChange={(e) => handleSearch(e)} value={search} />
+                                </div>
+
                                 <div className="h-[500px] overflow-y-scroll">
                                     <ul>
                                         {
@@ -258,38 +293,47 @@ export default function AdminGerenciamentoCardapioCostManagementIndex() {
                                                                                         <input type="hidden" name="updatedBy" value={record.updatedBy || user?.email || ""} />
                                                                                         <input type="hidden" name="previousCostAmount" value={record.previousCostAmount} />
 
-                                                                                        <div className="grid grid-cols-2 gap-2">
+                                                                                        <div className="flex flex-col gap-2">
 
-                                                                                            <div className="flex flex-col gap-1 items-center">
-                                                                                                <div className="flex flex-col gap-y-0">
-                                                                                                    <span className="text-muted-foreground text-[11px]">Novo custo:</span>
-                                                                                                    <NumericInput name="costAmount" defaultValue={record.costAmount} />
+                                                                                            <div className="grid grid-cols-2 gap-2">
+
+                                                                                                <div className="flex flex-col gap-1 items-center">
+                                                                                                    <div className="flex flex-col gap-y-0">
+                                                                                                        <span className="text-muted-foreground text-[11px]">Novo custo:</span>
+                                                                                                        <NumericInput name="costAmount" defaultValue={record.costAmount} />
+                                                                                                    </div>
+                                                                                                    <SubmitButton
+                                                                                                        actionName="menu-item-cost-variation-upsert-user-input"
+                                                                                                        tabIndex={0}
+                                                                                                        cnContainer="md:py-0 bg-slate-300 hover:bg-slate-400"
+                                                                                                        cnLabel="text-[11px] tracking-widest text-black uppercase"
+                                                                                                        iconColor="black"
+                                                                                                    />
                                                                                                 </div>
-                                                                                                <SubmitButton
-                                                                                                    actionName="menu-item-cost-variation-upsert-user-input"
-                                                                                                    tabIndex={0}
-                                                                                                    cnContainer="md:py-0 bg-slate-300 hover:bg-slate-400"
-                                                                                                    cnLabel="text-[11px] tracking-widest text-black uppercase"
-                                                                                                    iconColor="black"
-                                                                                                />
-                                                                                            </div>
 
-                                                                                            <div className="flex flex-col gap-1 items-center">
-                                                                                                <div className="flex flex-col gap-y-0">
-                                                                                                    <span className="text-muted-foreground text-[11px]">Valor proposto</span>
-                                                                                                    <NumericInput name="proposedCostAmount" defaultValue={record.costAmount} readOnly />
+                                                                                                <div className="flex flex-col gap-1 items-center">
+                                                                                                    <div className="flex flex-col gap-y-0">
+                                                                                                        <span className="text-muted-foreground text-[11px]">Valor proposto</span>
+                                                                                                        <NumericInput name="recommendedCostAmount" defaultValue={record.recommendedCostAmount} readOnly />
+                                                                                                    </div>
+                                                                                                    <SubmitButton
+                                                                                                        actionName="menu-item-cost-variation-upsert-proposed-input"
+                                                                                                        tabIndex={0}
+                                                                                                        cnContainer="bg-white border w-full hover:bg-slate-200"
+                                                                                                        cnLabel="text-[11px] tracking-widest text-black uppercase leading-[1.15]"
+                                                                                                        hideIcon
+                                                                                                        idleText="Aceitar proposta"
+                                                                                                        loadingText="Aceitando..."
+                                                                                                    />
                                                                                                 </div>
-                                                                                                <SubmitButton
-                                                                                                    actionName="menu-item-cost-variation-upsert-proposed-input"
-                                                                                                    tabIndex={0}
-                                                                                                    cnContainer="bg-white border w-full hover:bg-slate-200"
-                                                                                                    cnLabel="text-[11px] tracking-widest text-black uppercase leading-[1.15]"
-                                                                                                    hideIcon
-                                                                                                    idleText="Aceitar proposta"
-                                                                                                    loadingText="Aceitando..."
-                                                                                                />
-                                                                                            </div>
 
+                                                                                            </div>
+                                                                                            {(record?.costAmount ?? 0) === 0 && (
+                                                                                                <div className="flex gap-2 items-center mt-2">
+                                                                                                    <AlertCircleIcon className="h-4 w-4 text-red-500" />
+                                                                                                    <span className="text-red-500 text-xs font font-semibold">Custo ficha tecnica não definido</span>
+                                                                                                </div>
+                                                                                            )}
                                                                                         </div>
 
 
@@ -330,4 +374,3 @@ export default function AdminGerenciamentoCardapioCostManagementIndex() {
         </div>
     )
 }
-
