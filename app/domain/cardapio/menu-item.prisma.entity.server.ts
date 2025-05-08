@@ -87,7 +87,7 @@ interface FindManyWithSellPriceVariationsProps
   extends MenuItemEntityFindAllProps {
   channelKey?: string;
   sizeKey?: string;
-  includeRecommendedPrice?: boolean;
+  includeMinimumPrice?: boolean;
 }
 
 interface FindManyWithSellPriceVariationsProps {
