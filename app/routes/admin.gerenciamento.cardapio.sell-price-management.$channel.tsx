@@ -263,12 +263,12 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
                     <Separator orientation="vertical" className="h-4" />
 
                     <SortOrderOption
-                      label="Preço crescente"
+                      label="Preço crescente (Tamanho Medio)"
                       sortOrderType="price-asc"
                       handleSort={handleSort}
                     />
                     <SortOrderOption
-                      label="Preço decrescente"
+                      label="Preço decrescente (Tamanho Medio)"
                       sortOrderType="price-desc"
                       handleSort={handleSort}
                     />
