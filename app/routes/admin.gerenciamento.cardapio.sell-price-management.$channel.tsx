@@ -143,9 +143,11 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
           {/* @ts-ignore */}
           {([menuItemsWithSellPriceVariations, user, dnaEmpresaSettings, sellingChannel]) => {
 
+            const menuItemsVisibleAndActive = menuItemsWithSellPriceVariations.filter(item => item.visible === true && item.active === true)
+
 
             {/* @ts-ignore */ }
-            const [items, setItems] = useState<MenuItemsWithSellPriceVariations[]>(menuItemsWithSellPriceVariations.filter(item => item.visible === true && item.active === true) || [])
+            const [items, setItems] = useState<MenuItemsWithSellPriceVariations[]>(menuItemsVisibleAndActive || [])
 
             const [optVisibleItems, setOptVisibleItems] = useState<boolean | null>(true)
             const [optActiveItems, setOptActiveItems] = useState<boolean | null>(null)
@@ -168,7 +170,7 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
             const [search, setSearch] = useState("")
 
             const handleSearch = (event: React.ChangeEvent<HTMLInputElement>) => {
-              const allItems = menuItemsWithSellPriceVariations.filter(item => item.visible === true && item.active === true)
+              const allItems = menuItemsVisibleAndActive
 
               const value = event.target.value
 
@@ -219,6 +221,9 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
                     return bPrice - aPrice;
                   });
                   break;
+                case "default":
+                  sortedItems = menuItemsVisibleAndActive
+                  break;
                 default:
                   break;
               }
@@ -248,6 +253,14 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
                 <div className="flex flex-row gap-x-4 mb-4 items-center">
                   <span className="text-xs">Ordenamento:</span>
                   <div className="flex flex-row gap-x-4 ">
+
+                    <SortOrderOption
+                      label="Padrão"
+                      sortOrderType="default"
+                      handleSort={handleSort}
+                    />
+                    <Separator orientation="vertical" className="h-4" />
+
 
                     <SortOrderOption
                       label="A-Z"
