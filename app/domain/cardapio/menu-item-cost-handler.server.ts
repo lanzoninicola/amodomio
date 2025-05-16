@@ -111,6 +111,78 @@ class MenuItemCostHandler {
     });
   }
 
+  async loadOne(
+    menuItemId: string
+  ): Promise<MenuItemWithCostVariations | null> {
+    const item = await this.client.menuItem.findUnique({
+      where: { id: menuItemId },
+      include: {
+        MenuItemCostVariation: true,
+      },
+    });
+
+    if (!item) return null;
+
+    const sizes = await this.menuItemSize.findAll();
+    const allReferenceCostVariations = await this.findAllReferenceCost();
+
+    let itemWarnings: Warning[] = [];
+
+    const costVariations = sizes
+      .sort((a, b) => a.sortOrderIndex - b.sortOrderIndex)
+      .map((size) => {
+        const variation = item.MenuItemCostVariation?.find(
+          (cv) => cv.menuItemSizeId === size.id
+        );
+
+        const sizeKey = size.key as PizzaSizeKey;
+
+        const itemReferenceCost = allReferenceCostVariations.find(
+          (c) => c.menuItemId === item.id
+        );
+
+        const recommendedCostAmount =
+          this.calculateRecommendedCostVariationBySizeKey(
+            sizeKey,
+            itemReferenceCost?.costAmount ?? 0
+          );
+
+        const warningsReturned = this.handleWarnings({
+          costAmount: variation?.costAmount ?? 0,
+          previousCostAmount: variation?.previousCostAmount ?? 0,
+          recommendedCostAmount,
+          itemName: item.name,
+          sizeName: size.name,
+        });
+
+        if (warningsReturned) {
+          itemWarnings = [...itemWarnings, ...warningsReturned];
+        }
+
+        return {
+          menuItemCostVariationId: variation?.id,
+          sizeId: size.id,
+          sizeKey,
+          sizeName: size.name,
+          costAmount: variation?.costAmount ?? 0,
+          recommendedCostAmount,
+          updatedBy: variation?.updatedBy,
+          updatedAt: variation?.updatedAt,
+          previousCostAmount: variation?.previousCostAmount ?? 0,
+        };
+      });
+
+    return {
+      menuItemId: item.id,
+      name: item.name,
+      ingredients: item.ingredients,
+      visible: item.visible,
+      active: item.active,
+      warnings: itemWarnings,
+      costVariations,
+    };
+  }
+
   calculateRecommendedCostVariationBySizeKey(
     size: PizzaSizeKey,
     refCostAmount: number

@@ -1,3 +1,4 @@
+import { MenuItemPriceVariation } from "@prisma/client";
 import { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { Await, useLoaderData, defer, Form, useActionData } from "@remix-run/react";
 import { AlertCircleIcon } from "lucide-react";
@@ -18,7 +19,7 @@ import { menuItemSellingPriceHandler } from "~/domain/cardapio/menu-item-selling
 
 import { ComputedSellingPriceBreakdown } from "~/domain/cardapio/menu-item-selling-price-utility.entity.server";
 import { MenuItemSellingPriceVariationUpsertParams, menuItemSellingPriceVariationPrismaEntity } from "~/domain/cardapio/menu-item-selling-price-variation.entity.server";
-import { MenuItemWithSellPriceVariations } from "~/domain/cardapio/menu-item.types";
+import { MenuItemWithSellPriceVariations, SellPriceVariation } from "~/domain/cardapio/menu-item.types";
 import prismaClient from "~/lib/prisma/client.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { cn } from "~/lib/utils";
@@ -26,6 +27,8 @@ import formatDecimalPlaces from "~/utils/format-decimal-places";
 import { badRequest, ok } from "~/utils/http-response.server";
 import randomReactKey from "~/utils/random-react-key";
 import toFixedNumber from "~/utils/to-fixed-number";
+
+type SortOrderType = "default" | "alphabetical-asc" | "alphabetical-desc" | "price-asc" | "price-desc";
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const sellingChannelKey = params.channel as string;
@@ -114,7 +117,8 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function AdminGerenciamentoCardapioSellPriceManagementSingleChannel() {
-  const { returnedData } = useLoaderData<typeof loader>()
+
+  const { returnedData } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
 
 
@@ -140,12 +144,16 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
           {/* @ts-ignore */}
           {([menuItemsWithSellPriceVariations, user, dnaEmpresaSettings, sellingChannel]) => {
 
+            const menuItemsVisibleAndActive = menuItemsWithSellPriceVariations.filter(item => item.visible === true && item.active === true)
+
 
             {/* @ts-ignore */ }
-            const [items, setItems] = useState<MenuItemsWithSellPriceVariations[]>(menuItemsWithSellPriceVariations.filter(item => item.visible === true && item.active === true) || [])
+            const [items, setItems] = useState<MenuItemsWithSellPriceVariations[]>(menuItemsVisibleAndActive || [])
 
             const [optVisibleItems, setOptVisibleItems] = useState<boolean | null>(true)
             const [optActiveItems, setOptActiveItems] = useState<boolean | null>(null)
+
+
 
             const handleOptionVisibileItems = (state: boolean) => {
               setOptVisibleItems(state)
@@ -163,7 +171,7 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
             const [search, setSearch] = useState("")
 
             const handleSearch = (event: React.ChangeEvent<HTMLInputElement>) => {
-              const allItems = menuItemsWithSellPriceVariations.filter(item => item.visible === true && item.active === true)
+              const allItems = menuItemsVisibleAndActive
 
               const value = event.target.value
 
@@ -183,6 +191,47 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
               setItems(searchedItems)
             }
 
+            const [sortOrderType, setSortOrderType] = useState<SortOrderType>("default")
+
+            const handleSort = (type: SortOrderType) => {
+              setSortOrderType(type)
+
+              let sortedItems: MenuItemWithSellPriceVariations[] = []
+
+              switch (type) {
+                case "alphabetical-asc":
+                  sortedItems = [...items].sort((a, b) => a.name.localeCompare(b.name))
+                  break;
+                case "alphabetical-desc":
+                  sortedItems = [...items].sort((a, b) => b.name.localeCompare(a.name))
+                  break;
+                case "price-asc":
+                  sortedItems = [...items].sort((a, b) => {
+
+                    const predicateFn = (record: SellPriceVariation) => record.sizeKey === "pizza-medium"
+                    const aPrice = a.sellPriceVariations.find(predicateFn)?.priceAmount || 0;
+                    const bPrice = b.sellPriceVariations.find(predicateFn)?.priceAmount || 0
+                    return aPrice - bPrice;
+                  });
+                  break;
+                case "price-desc":
+                  sortedItems = [...items].sort((a, b) => {
+                    const predicateFn = (record: SellPriceVariation) => record.sizeKey === "pizza-medium"
+                    const aPrice = a.sellPriceVariations.find(predicateFn)?.priceAmount || 0;
+                    const bPrice = b.sellPriceVariations.find(predicateFn)?.priceAmount || 0
+                    return bPrice - aPrice;
+                  });
+                  break;
+                case "default":
+                  sortedItems = menuItemsVisibleAndActive
+                  break;
+                default:
+                  break;
+              }
+
+              setItems(sortedItems)
+            }
+
 
             return (
               <div className="flex flex-col">
@@ -200,6 +249,44 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
 
                 <div className="bg-slate-50 px-60 py-2 grid place-items-center mb-4 rounded-sm">
                   <Input name="search" className="w-full py-4 text-lg bg-white " placeholder="Pesquisar o sabor..." onChange={(e) => handleSearch(e)} value={search} />
+                </div>
+
+                <div className="flex flex-row gap-x-4 mb-4 items-center">
+                  <span className="text-xs">Ordenamento:</span>
+                  <div className="flex flex-row gap-x-4 ">
+
+                    <SortOrderOption
+                      label="Padrão"
+                      sortOrderType="default"
+                      handleSort={handleSort}
+                    />
+                    <Separator orientation="vertical" className="h-4" />
+
+
+                    <SortOrderOption
+                      label="A-Z"
+                      sortOrderType="alphabetical-asc"
+                      handleSort={handleSort}
+                    />
+                    <SortOrderOption
+                      label="Z-A"
+                      sortOrderType="alphabetical-desc"
+                      handleSort={handleSort}
+                    />
+
+                    <Separator orientation="vertical" className="h-4" />
+
+                    <SortOrderOption
+                      label="Preço crescente (Tamanho Medio)"
+                      sortOrderType="price-asc"
+                      handleSort={handleSort}
+                    />
+                    <SortOrderOption
+                      label="Preço decrescente (Tamanho Medio)"
+                      sortOrderType="price-desc"
+                      handleSort={handleSort}
+                    />
+                  </div>
                 </div>
 
 
@@ -526,3 +613,23 @@ function MinimumSellPriceLabelDialog({ computedSellingPriceBreakdown }: MinimumP
   )
 }
 
+
+
+const SortOrderOption = ({
+  label,
+  sortOrderType,
+  handleSort,
+}: {
+  label: string;
+  sortOrderType: SortOrderType;
+  handleSort: (type: SortOrderType) => void;
+}) => {
+  return (
+    <span
+      className="text-xs text-muted-foreground hover:underline hover:cursor-pointer"
+      onClick={() => handleSort(sortOrderType)}
+    >
+      {label}
+    </span>
+  );
+}
