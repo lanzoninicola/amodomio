@@ -117,7 +117,8 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function AdminGerenciamentoCardapioSellPriceManagementSingleChannel() {
-  const { returnedData } = useLoaderData<typeof loader>()
+
+  const { returnedData } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
 
 
