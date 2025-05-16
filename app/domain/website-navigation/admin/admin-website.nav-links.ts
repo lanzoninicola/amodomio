@@ -25,6 +25,23 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
       ],
     },
     {
+      title: "Atendimento",
+      items: [
+        {
+          title: "Gerenciamento Sabores",
+          href: "/admin/atendimento/gerenciamento-sabores",
+          items: [],
+          disabled: false,
+        },
+        {
+          title: "Direçionamento clientes",
+          href: "/admin/atendimento/direcionamento-clientes",
+          items: [],
+          disabled: false,
+        },
+      ],
+    },
+    {
       title: "Gerenciamento Cardápio",
       items: [
         {
