@@ -43,6 +43,7 @@ import {
   SellingChannelKey,
   menuItemSellingChannelPrismaEntity,
 } from "./menu-item-selling-channel.entity.server";
+import { slugifyString } from "~/utils/slugify";
 
 export interface MenuItemWithAssociations extends MenuItem {
   priceVariations: MenuItemPriceVariation[];
@@ -458,6 +459,7 @@ export class MenuItemPrismaEntity {
     const nextItem = {
       ...data,
       sortOrderIndex: lastsortOrderIndex + 1,
+      slug: slugifyString(data.name),
     };
 
     await this.cacheManager.invalidate();
@@ -471,6 +473,8 @@ export class MenuItemPrismaEntity {
     }
 
     await this.cacheManager.invalidate();
+
+    data.slug = slugifyString(data.name as string);
 
     return await this.client.menuItem.update({ where: { id }, data });
   }

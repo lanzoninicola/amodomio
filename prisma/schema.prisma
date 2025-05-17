@@ -192,6 +192,7 @@ model MenuItem {
   /// this track the position inside the menu
   sortOrderIndex                Int                             @default(0) @map("sort_order_index")
   notesPublic                   String?                         @map("note_public")
+  slug                          String?                         @map("slug")
   MenuItemLike                  MenuItemLike[]
   MenuItemShare                 MenuItemShare[]
   imageId                       String?                         @map("image_id")
