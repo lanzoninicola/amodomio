@@ -13,14 +13,14 @@ import { prismaIt } from "~/lib/prisma/prisma-it.server";
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
 
-  const { id } = params;
+  const { slug } = params;
 
-  if (!id) {
+  if (!slug) {
     return redirect("/cardapio");
   }
 
   // Aqui você pode buscar o item do cardápio pelo ID
-  const itemQuery = prismaIt(menuItemPrismaEntity.findById(id));
+  const itemQuery = prismaIt(menuItemPrismaEntity.findBySlug(slug as string));
 
   return defer({
     itemQuery,

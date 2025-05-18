@@ -267,7 +267,7 @@ const CardapioItemList = ({ allItems }: { allItems: MenuItemWithAssociations[] }
                     {items.map((item, index) => {
                         const isLastItem = items.length === index + 1;
                         return (
-                            <Link to={`/cardapio/${item.id}`} key={item.id} className="w-full">
+                            <Link to={`/cardapio/${item.slug}`} key={item.id} className="w-full">
                                 <CardapioItemFullImage
                                     ref={isLastItem ? lastItemRef : null}
                                     key={item.id}
@@ -470,7 +470,7 @@ function CardapioItemListDestaque({ title, items, tagFilter, carouselDelay = 200
                         items.filter(i => i.tags?.all.some(t => t === tagFilter)).slice(0, 4).map(i => (
 
                             <CarouselItem key={i.id} className="basis-1/2 md:basis-1/3" data-element="carousel-item">
-                                <Link to={`/cardapio/${i.id}`} className="w-full">
+                                <Link to={`/cardapio/${i.slug}`} className="w-full">
 
                                     <div className="relative grid place-items-center rounded-md bg-slate-50 h-[112px]">
                                         <CardapioItemImageSingle
