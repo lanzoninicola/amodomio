@@ -43,6 +43,7 @@ import {
   SellingChannelKey,
   menuItemSellingChannelPrismaEntity,
 } from "./menu-item-selling-channel.entity.server";
+import { slugifyString } from "~/utils/slugify";
 
 export interface MenuItemWithAssociations extends MenuItem {
   priceVariations: MenuItemPriceVariation[];
@@ -433,6 +434,60 @@ export class MenuItemPrismaEntity {
     };
   }
 
+  async findBySlug(
+    slug: string,
+    options = {
+      imageScaleWidth: 1280,
+    }
+  ) {
+    const item = await this.client.menuItem.findFirst({
+      where: { slug },
+      include: {
+        priceVariations: true,
+        Category: true,
+        tags: {
+          include: {
+            Tag: true,
+          },
+        },
+        MenuItemLike: {
+          where: {
+            deletedAt: null,
+          },
+        },
+        MenuItemShare: true,
+        MenuItemImage: true,
+      },
+    });
+
+    if (!item) {
+      return null;
+    }
+
+    return {
+      ...item,
+      imageTransformedURL: CloudinaryUtils.scaleWidth(
+        item.MenuItemImage?.publicId || "",
+        {
+          width: options.imageScaleWidth,
+        }
+      ),
+      imagePlaceholderURL: CloudinaryUtils.scaleWidth(
+        item.MenuItemImage?.publicId || "",
+        { width: 20, quality: 1, blur: 1000 }
+      ),
+      tags: {
+        all: item.tags.map((t) => t.Tag?.name),
+        public: item.tags
+          .filter((t) => t.Tag?.public === true)
+          .map((t) => t.Tag?.name),
+        models: item.tags.map((t) => t.Tag),
+      },
+      likes: { amount: item.MenuItemLike.length },
+      shares: item.MenuItemShare.length,
+    };
+  }
+
   async create(data: Prisma.MenuItemCreateInput) {
     const newId = uuidv4();
     data.id = newId;
@@ -458,6 +513,7 @@ export class MenuItemPrismaEntity {
     const nextItem = {
       ...data,
       sortOrderIndex: lastsortOrderIndex + 1,
+      slug: slugifyString(data.name),
     };
 
     await this.cacheManager.invalidate();
@@ -471,6 +527,8 @@ export class MenuItemPrismaEntity {
     }
 
     await this.cacheManager.invalidate();
+
+    data.slug = slugifyString(data.name as string);
 
     return await this.client.menuItem.update({ where: { id }, data });
   }
