@@ -39,6 +39,25 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
           items: [],
           disabled: false,
         },
+
+        {
+          title: "Pedidos",
+          href: "/admin/daily-orders",
+          items: [],
+          disabled: false,
+        },
+        {
+          title: "Linha do tempo Pedidos",
+          href: "/admin/orders-delays-timeline-segmentation",
+          items: [],
+          disabled: true,
+        },
+        {
+          title: "Linha do tempo Entrega",
+          href: "/admin/orders-delivery-time-left",
+          items: [],
+          disabled: false,
+        },
       ],
     },
     {
@@ -137,35 +156,6 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
           href: "/admin/options",
           items: [],
           disabled: true,
-        },
-      ],
-    },
-    {
-      title: "Atendimento",
-      items: [
-        {
-          title: "Cardápio",
-          href: "/cardapio",
-          items: [],
-          disabled: true,
-        },
-        {
-          title: "Pedidos",
-          href: "/admin/daily-orders",
-          items: [],
-          disabled: false,
-        },
-        {
-          title: "Linha do tempo Pedidos",
-          href: "/admin/orders-delays-timeline-segmentation",
-          items: [],
-          disabled: true,
-        },
-        {
-          title: "Linha do tempo Entrega",
-          href: "/admin/orders-delivery-time-left",
-          items: [],
-          disabled: false,
         },
       ],
     },

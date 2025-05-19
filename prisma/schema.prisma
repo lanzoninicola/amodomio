@@ -408,6 +408,20 @@ model MenuItemNote {
   @@map("menu_item_notes")
 }
 
+model CustomerServicePizzaMediumCombinations {
+  id                   String    @id @default(uuid())
+  flavor1              String    @map("flavor_1")
+  flavor2              String    @map("flavor_2")
+  sellPriceAmount      Float     @map("sellprice_amount")
+  breakEvenPriceAmount Float     @map("break_even_price_amount")
+  realMarginPerc       Float     @map("real_margin_perc")
+  createdAt            DateTime  @map("created_at")
+  updatedAt            DateTime  @default(now()) @updatedAt @map("updated_at")
+  deletedAt            DateTime? @map("deleted_at")
+
+  @@map("customer_service_pizza_medium_combinations")
+}
+
 model Note {
   id           String         @id @default(uuid())
   name         String

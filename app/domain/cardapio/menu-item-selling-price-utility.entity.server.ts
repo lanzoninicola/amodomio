@@ -56,8 +56,9 @@ export interface SellingPriceAudit {
   formulaExplanation: string;
   formulaExpression: string;
   priceAmount: {
-    withMargin: number;
-    withoutMargin: number;
+    withProfit: number;
+    // valor que cobre todos os custos, sem lucro
+    breakEven: number;
   };
 }
 
@@ -125,7 +126,7 @@ class MenuItemSellingPriceUtilityEntity {
       const channelTaxPerc = channel?.taxPerc ?? 0;
 
       price = this.calculateSellingPriceForMarketplace(
-        price.priceAmount.withMargin,
+        price.priceAmount.withProfit,
         otherCosts,
         channelTaxPerc
       );
@@ -144,11 +145,11 @@ class MenuItemSellingPriceUtilityEntity {
       },
       minimumPrice: {
         priceAmount: {
-          withMargin: formatDecimalPlaces(
-            Math.ceil(price.priceAmount.withMargin / 0.05) * 0.05
+          withProfit: formatDecimalPlaces(
+            Math.ceil(price.priceAmount.withProfit / 0.05) * 0.05
           ),
-          withoutMargin: formatDecimalPlaces(
-            Math.ceil(price.priceAmount.withoutMargin / 0.05) * 0.05
+          breakEven: formatDecimalPlaces(
+            Math.ceil(price.priceAmount.breakEven / 0.05) * 0.05
           ),
         },
         formulaExpression: price.formulaExpression,
@@ -174,7 +175,7 @@ class MenuItemSellingPriceUtilityEntity {
     targetMarginPerc: number
   ): SellingPriceAudit {
     const divisor = 1 - (dnaPerc / 100 + targetMarginPerc / 100);
-    const priceWithMargin = amount / divisor;
+    const priceWithProfit = amount / divisor;
 
     const divisorWithoutMargin = 1 - dnaPerc / 100;
     const priceWithoutMargin = amount / divisorWithoutMargin;
@@ -187,10 +188,10 @@ class MenuItemSellingPriceUtilityEntity {
         targetMarginPerc
       )} / 100)))`,
       priceAmount: {
-        withMargin: formatDecimalPlaces(
-          Math.ceil(priceWithMargin / 0.05) * 0.05
+        withProfit: formatDecimalPlaces(
+          Math.ceil(priceWithProfit / 0.05) * 0.05
         ),
-        withoutMargin: formatDecimalPlaces(
+        breakEven: formatDecimalPlaces(
           Math.ceil(priceWithoutMargin / 0.05) * 0.05
         ),
       },
