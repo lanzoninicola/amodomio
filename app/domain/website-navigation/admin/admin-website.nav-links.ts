@@ -34,8 +34,8 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
           disabled: false,
         },
         {
-          title: "Direçionamento clientes",
-          href: "/admin/atendimento/direcionamento-clientes",
+          title: "Assistente de Escolha",
+          href: "/admin/atendimento/assistente-de-escolha",
           items: [],
           disabled: false,
         },
