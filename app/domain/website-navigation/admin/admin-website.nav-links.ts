@@ -196,13 +196,19 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
     },
     {
       title: "Administração",
-      disabled: true,
+      disabled: false,
       items: [
         {
           title: "Usuários",
           href: "/admin/users",
           items: [],
           disabled: true,
+        },
+        {
+          title: "Import CSV",
+          href: "/admin/importer",
+          items: [],
+          disabled: false,
         },
       ],
     },

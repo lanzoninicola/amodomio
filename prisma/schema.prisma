@@ -504,7 +504,7 @@ model ImportProfile {
   description   String?
   table         String
   domainClass   String?         @map("domain_class")
-  ofx           Boolean         @default(false)
+  type          String          @default("csv")
   createdAt     DateTime        @map("created_at")
   updatedAt     DateTime        @default(now()) @updatedAt @map("updated_at")
   ImportSession ImportSession[]
