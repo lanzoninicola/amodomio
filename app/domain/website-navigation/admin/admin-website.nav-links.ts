@@ -205,7 +205,7 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
           disabled: true,
         },
         {
-          title: "Import CSV",
+          title: "Importador de dados",
           href: "/admin/importer",
           items: [],
           disabled: false,
