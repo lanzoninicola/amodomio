@@ -26,8 +26,8 @@ export default function AdminAtendimentoDAssistenteDeEscolha() {
 
       <div className="flex gap-8 justify-center">
         <OptionLinkTab href="" label="sabores unicos" highlightCondition={location.pathname === "/admin/atendimento/assistente-de-escolha"} />
-        <OptionLinkTab href={`${rootLocation}/pizza-medium`} label="pizza media" highlightCondition={location.pathname === `${rootLocation}/pizza-medium`} />
-        <OptionLinkTab href={`${rootLocation}/pizza-bigger`} label="pizza familia" highlightCondition={location.pathname === `${rootLocation}/pizza-bigger`} />
+        <OptionLinkTab href={`${rootLocation}/pizza-medium`} label="combinações media" highlightCondition={location.pathname === `${rootLocation}/pizza-medium`} />
+        <OptionLinkTab href={`${rootLocation}/pizza-bigger`} label="combinações familia" highlightCondition={location.pathname === `${rootLocation}/pizza-bigger`} />
       </div>
       <Outlet />
     </div >
