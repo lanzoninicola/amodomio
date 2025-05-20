@@ -410,9 +410,9 @@ model MenuItemNote {
 
 model ImportCustomerServicePizzaMediumCombinations {
   id                   String    @id @default(uuid())
-  flavor1              String    @map("flavor_1")
+  topping1             String    @map("topping_1")
   ingredient1          String    @map("ingredient_1")
-  flavor2              String    @map("flavor_2")
+  topping2             String    @map("topping_2")
   ingredient2          String    @map("ingredient_2")
   sellingPriceAmount   Float     @map("selling_price_amount")
   breakEvenPriceAmount Float     @map("break_even_price_amount")
@@ -422,6 +422,26 @@ model ImportCustomerServicePizzaMediumCombinations {
   deletedAt            DateTime? @map("deleted_at")
 
   @@map("import_customer_service_pizza_medium_combinations")
+}
+
+model ImportCustomerServicePizzaBiggerCombinations {
+  id                   String    @id @default(uuid())
+  topping1             String    @map("topping_1")
+  ingredient1          String    @map("ingredient_1")
+  topping2             String    @map("topping_2")
+  ingredient2          String    @map("ingredient_2")
+  topping3             String    @map("topping_3")
+  ingredient3          String    @map("ingredient_3")
+  topping4             String    @map("topping_4")
+  ingredient4          String    @map("ingredient_4")
+  sellingPriceAmount   Float     @map("selling_price_amount")
+  breakEvenPriceAmount Float     @map("break_even_price_amount")
+  realMarginPerc       Float     @map("real_margin_perc")
+  createdAt            DateTime  @map("created_at")
+  updatedAt            DateTime  @default(now()) @updatedAt @map("updated_at")
+  deletedAt            DateTime? @map("deleted_at")
+
+  @@map("import_customer_service_pizza_bigger_combinations")
 }
 
 model Note {

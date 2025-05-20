@@ -36,9 +36,9 @@ class ImportCustomerServicePizzaMediumCombinationsServer
         return prismaClient.importCustomerServicePizzaMediumCombinations.create(
           {
             data: {
-              flavor1: row.flavor_1,
+              topping1: row.topping_1,
               ingredient1: row.ingredient_1,
-              flavor2: row.flavor_2,
+              topping2: row.topping_2,
               ingredient2: row.ingredient_2,
               breakEvenPriceAmount: breakEvenPriceAmountNumber,
               realMarginPerc: realMarginPercNumber,

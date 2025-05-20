@@ -80,8 +80,6 @@ export default function AdminAtendimentoAssistenteDeEscolhaPorTamanho() {
         <Await resolve={returnedData}>
           {([items, user]) => {
 
-            console.log({ items })
-
             // @ts-ignore
             const [allItems, setAllItems] = useState<ImportCustomerServicePizzaMediumCombinations[]>(items)
 
@@ -93,17 +91,35 @@ export default function AdminAtendimentoAssistenteDeEscolhaPorTamanho() {
               setSearch(value)
 
               if (!value || value.length === 0 || value === "") {
+                // @ts-ignore
+                setAllItems(items)
                 return
               }
 
               const searchedItems = allItems.filter(item => {
                 return (
-                  item.flavor1?.toLowerCase().includes(value.toLowerCase()) ||
-                  item.flavor2?.toLowerCase().includes(value.toLowerCase())
+                  item.topping1?.toLowerCase().includes(value.toLowerCase()) ||
+                  item.topping2?.toLowerCase().includes(value.toLowerCase())
                 )
               })
 
               setAllItems(searchedItems)
+            }
+
+
+
+            const removeToppingSelected = (toppingSelected: string) => {
+
+              const nexItems = allItems.filter(item => {
+                return (
+                  item.topping1 !== toppingSelected &&
+                  item.topping2 !== toppingSelected
+                )
+              }
+
+              )
+
+              setAllItems(nexItems)
             }
 
             // @ts-ignore
@@ -125,8 +141,14 @@ export default function AdminAtendimentoAssistenteDeEscolhaPorTamanho() {
                   {allItems.map((item) => (
                     <li key={item.id} className="grid grid-cols-8 gap-4 w-full items-center mb-2 hover:bg-green-300 ">
 
-                      <span className="text-sm col-span-2">{item.flavor1}</span>
-                      <span className="text-sm col-span-2">{item.flavor2}</span>
+                      <div className="flex flex-col gap-0 col-span-2" onClick={() => removeToppingSelected(item.topping1)}>
+                        <span className="text-sm" >{item.topping1}</span>
+                        <span className="text-[10px] text-muted-foreground leading-tight max-w-prose">{item.ingredient1}</span>
+                      </div>
+                      <div className="flex flex-col gap-0 col-span-2" onClick={() => removeToppingSelected(item.topping2)}>
+                        <span className="text-sm col-span-2">{item.topping2}</span>
+                        <span className="text-[10px] text-muted-foreground leading-tight max-w-prose">{item.ingredient2}</span>
+                      </div>
                       <PriceAmount>{item.sellingPriceAmount}</PriceAmount>
                       <PriceAmount>{item.breakEvenPriceAmount}</PriceAmount>
                       <PriceAmount>{item.realMarginPerc}</PriceAmount>
