@@ -15,12 +15,14 @@ class ImportCustomerServicePizzaMediumCombinationsServer
     // Logic to import customer service pizza medium combinations
     console.log("Importing customer service pizza medium combinations...");
 
-    return await prismaClient.$transaction(async (tx) => {
-      if (mode === "override") {
-        await tx.importCustomerServicePizzaMediumCombinations.deleteMany({});
-      }
+    if (mode === "override") {
+      await prismaClient.importCustomerServicePizzaMediumCombinations.deleteMany(
+        {}
+      );
+    }
 
-      for (const row of records) {
+    await Promise.all(
+      records.map((row) => {
         const breakEvenPriceAmountNumber = parseFloat(
           row.break_even_price_amount.replace(",", ".")
         );
@@ -31,21 +33,23 @@ class ImportCustomerServicePizzaMediumCombinationsServer
           row.selling_price_amount.replace(",", ".")
         );
 
-        await tx.importCustomerServicePizzaMediumCombinations.create({
-          data: {
-            flavor1: row.flavor_1,
-            flavor2: row.flavor_2,
-            breakEvenPriceAmount: breakEvenPriceAmountNumber,
-            realMarginPerc: realMarginPercNumber,
-            sellingPriceAmount: sellingPriceAmountNumber,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          },
-        });
-      }
+        return prismaClient.importCustomerServicePizzaMediumCombinations.create(
+          {
+            data: {
+              flavor1: row.flavor_1,
+              flavor2: row.flavor_2,
+              breakEvenPriceAmount: breakEvenPriceAmountNumber,
+              realMarginPerc: realMarginPercNumber,
+              sellingPriceAmount: sellingPriceAmountNumber,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            },
+          }
+        );
+      })
+    );
 
-      return ok("Importação concluída com sucesso");
-    });
+    return ok("Importação concluída com sucesso");
   }
 }
 

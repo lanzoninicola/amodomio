@@ -49,6 +49,7 @@ export default function CsvImporter({
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     setSubmissionStatus("idle");
+    setNotification({ status: "idle", message: 'Aguardando o arquivo CSV...' });
 
     const file = event.target.files?.[0];
     if (!file) {
