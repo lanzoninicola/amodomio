@@ -411,7 +411,9 @@ model MenuItemNote {
 model ImportCustomerServicePizzaMediumCombinations {
   id                   String    @id @default(uuid())
   flavor1              String    @map("flavor_1")
+  ingredient1          String    @map("ingredient_1")
   flavor2              String    @map("flavor_2")
+  ingredient2          String    @map("ingredient_2")
   sellingPriceAmount   Float     @map("selling_price_amount")
   breakEvenPriceAmount Float     @map("break_even_price_amount")
   realMarginPerc       Float     @map("real_margin_perc")

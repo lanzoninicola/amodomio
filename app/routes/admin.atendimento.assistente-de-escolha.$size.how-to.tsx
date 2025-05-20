@@ -2,6 +2,7 @@ import { LoaderFunctionArgs, defer } from "@remix-run/node";
 import { Await, useLoaderData } from "@remix-run/react";
 import { Suspense } from "react";
 import Loading from "~/components/loading/loading";
+import CopyButton from "~/components/primitives/copy-button/copy-button";
 import Toooltip from "~/components/tooltip/tooltip";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "~/components/ui/accordion";
 import { Separator } from "~/components/ui/separator";
@@ -77,6 +78,31 @@ export default function AdminAtendimentoAssistenteDeEscolhaPorTamanho() {
             .sort((a, b) => b.markup - a.markup);
 
 
+          const promptText = `Considere a seguinte tabela de pizzas com os campos: ID, Sabores, Ingredientes, Preço de Venda, Margem (%) e Preço de Equilíbrio.
+                          Cada campo é separado por ponto e vírgula.
+                          Gere todas as possíveis combinações de 2 sabores, considerando que a pizza média pode ser vendida com dois sabores diferentes.
+
+                          Regras:
+                          1. O preço de venda da pizza média deve ser o **mais alto** entre os dois sabores escolhidos.
+                          2. O preço de equilíbrio da combinação deve ser a **média aritmética dos preços de equilíbrio** dos dois sabores.
+                          3. A margem real (%) da combinação deve ser calculada com a fórmula:
+                          (Preço de Venda - Preço de Equilíbrio Médio) / Preço de Venda * 100
+                          4. Ordene o resultado da maior para a menor margem real.
+                          5. Mostre os campos: Sabor 1, Sabor 2, Preço de Venda, Preço de Equilíbrio Médio, Margem Real (%).
+                          6. Renomeie o campo Sabor 1 em flavor_1
+                          7. Adiciona o campo ingredient_1 para o ingredientes do Sabor 1
+                          8. Renomeie o campo Sabor 2 em flavor_2
+                          9. Adiciona o campo ingredient_2 para o ingredientes do Sabor 2
+                          10. Renomeie o campo Preço de Venda em selling_price_amount
+                          11. Renomeie o campo Preço de Equilíbrio Médio em break_even_price_amount
+                          12. Renomeie o campo Margem Real (%) em real_margin_perc
+                          13. Ignore combinações repetidas (ex: Diavola + Suave e Suave + Diavola são a mesma coisa).
+                          14. Gere a saída final em formato **CSV**, pronta para importação futura.
+
+                          Aqui está a tabela (em CSV):
+                          [visualizar a lista abaixo e copiar o conteúdo]`
+
+
 
           return (
             <>
@@ -114,7 +140,7 @@ export default function AdminAtendimentoAssistenteDeEscolhaPorTamanho() {
                                         key={item.menuItemId}
                                         className="flex text-[15px] font-mono"
                                       >
-                                        {item.menuItemId},{item.name},{sellPrice.toFixed(2)},{item.markup.toFixed(2)},{breakEven.toFixed(2)}
+                                        {item.menuItemId};{item.name};{item?.ingredients};{sellPrice.toFixed(2)};{item.markup.toFixed(2)};{breakEven.toFixed(2)}
 
                                       </li>
                                     );
@@ -148,29 +174,20 @@ export default function AdminAtendimentoAssistenteDeEscolhaPorTamanho() {
                       <section>
                         <SectionTitle>2. Copiar esse input no Chat GPT</SectionTitle>
                         <Separator className="mb-4" />
-                        <div className="text-xs font-mono border rounded-md p-4 bg-slate-50">
-                          Considere a seguinte tabela de pizzas com os campos: ID, Sabores, Preço de Venda, Margem (%) e Preço de Equilíbrio.<br />
-                          Gere todas as possíveis combinações de 2 sabores, considerando que a pizza média pode ser vendida com dois sabores diferentes.<br />
-                          <br />
-                          Regras:<br />
-                          1. O preço de venda da pizza média deve ser o **mais alto** entre os dois sabores escolhidos.<br />
-                          2. O preço de equilíbrio da combinação deve ser a **média aritmética dos preços de equilíbrio** dos dois sabores.<br />
-                          3. A margem real (%) da combinação deve ser calculada com a fórmula:<br />
-                          (Preço de Venda - Preço de Equilíbrio Médio) / Preço de Venda * 100<br />
-                          4. Ordene o resultado da maior para a menor margem real.<br />
-                          5. Mostre os campos: Sabor 1, Sabor 2, Preço de Venda, Preço de Equilíbrio Médio, Margem Real (%).<br />
-                          6. Renomeie o campo Sabor 1 em flavor_1<br />
-                          7. Renomeie o campo Sabor 2 em flavor_2<br />
-                          8. Renomeie o campo Preço de Venda em selling_price_amount<br />
-                          9. Renomeie o campo Preço de Equilíbrio Médio em break_even_price_amount<br />
-                          10. Renomeie o campo Margem Real (%) em real_margin_perc<br />
-                          11. Ignore combinações repetidas (ex: Diavola + Suave e Suave + Diavola são a mesma coisa).<br />
-                          12. Gere a saída final em formato **CSV**, pronta para importação futura.<br />
-                          <br />
-                          Aqui está a tabela (em CSV):<br />
-                          <br />
-                          [visualizar a lista abaixo e copiar o conteúdo]<br />
-                        </div><br />
+                        <div className="flex flex-col gap-2">
+                          <CopyButton
+                            label="Copiar"
+                            classNameLabel="text-sm md:text-xs text-black"
+                            classNameButton="w-full md:w-max md:px-2 py-0 bg-white border"
+                            classNameIcon="text-black"
+                            textToCopy={promptText}
+                          />
+                          <div className="border rounded-md p-4 bg-slate-50 ">
+                            <code className="text-xs font-mono whitespace-pre-line">
+                              {promptText}
+                            </code>
+                          </div>
+                        </div>
 
                       </section>
                       <section>

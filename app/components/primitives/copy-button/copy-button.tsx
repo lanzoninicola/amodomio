@@ -6,6 +6,7 @@ import { cn } from "~/lib/utils";
 
 
 interface CopyButtonProps {
+    /** The text will be copied */
     textToCopy: string;
     label?: string
     classNameButton?: string

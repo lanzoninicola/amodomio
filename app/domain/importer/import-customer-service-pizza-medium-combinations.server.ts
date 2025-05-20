@@ -37,7 +37,9 @@ class ImportCustomerServicePizzaMediumCombinationsServer
           {
             data: {
               flavor1: row.flavor_1,
+              ingredient1: row.ingredient_1,
               flavor2: row.flavor_2,
+              ingredient2: row.ingredient_2,
               breakEvenPriceAmount: breakEvenPriceAmountNumber,
               realMarginPerc: realMarginPercNumber,
               sellingPriceAmount: sellingPriceAmountNumber,
