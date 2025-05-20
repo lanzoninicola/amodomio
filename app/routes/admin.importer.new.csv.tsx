@@ -85,32 +85,7 @@ export const action: ActionFunction = async ({ request }) => {
   return ok({ result })
 };
 
-/**
-async function importIngredientes(records: any[], mode: string) {
-  return await prisma.$transaction(async (tx) => {
-    if (mode === "override") {
-      await tx.ingrediente.deleteMany({});
-    }
 
-    for (const row of records) {
-      const { nome, unidade, categoriaId } = row;
-      if (!nome || !unidade) {
-        throw new Error("Dados incompletos em uma linha");
-      }
-
-      await tx.ingrediente.create({
-        data: {
-          nome,
-          unidade,
-          categoriaId: categoriaId || null,
-        },
-      });
-    }
-
-    return json({ success: "Importação concluída com sucesso" });
-  });
-}
-   */
 
 
 export default function AdminImporterCSV() {

@@ -98,13 +98,12 @@ export default function CsvImporter({
   const submit = () => {
     setSubmissionStatus("loading");
 
-    console.log({ csvContent });
-
     fetcher.submit({
       data: jsonStringify(csvContent),
       importProfileId,
       description,
       table: destinationTable,
+      mode: "override",
       _action: "import-csv"
     }, { method: "post" });
   }

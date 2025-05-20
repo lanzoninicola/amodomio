@@ -1,5 +1,8 @@
-interface Importer {
-  loadMany(params: { records: any[] }): Promise<any>;
+export interface ICsvImporter {
+  loadMany(params: {
+    records: any[];
+    mode?: "override" | "append";
+  }): Promise<any>;
 }
 
 class CsvImporter {
@@ -19,19 +22,21 @@ class CsvImporter {
   async loadMany({
     destinationTable,
     records,
+    mode = "override",
   }: {
     destinationTable: keyof typeof this.importConfigMap;
     records: any[];
+    mode?: "override" | "append";
   }) {
     const importer = await this.loadImporterForTable(
       destinationTable as keyof typeof this.importConfigMap
     );
-    return importer.loadMany({ records });
+    return importer.loadMany({ records, mode });
   }
 
   private async loadImporterForTable(
     tableKey: keyof typeof this.importConfigMap
-  ): Promise<Importer> {
+  ): Promise<ICsvImporter> {
     const config = this.importConfigMap[tableKey];
     const module = await import(`./${config.fileName}.server.ts`);
     return new module.default();
