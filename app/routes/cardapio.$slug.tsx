@@ -1,14 +1,15 @@
 
-import { LoaderFunctionArgs, redirect } from "@remix-run/node";
+import { LoaderFunctionArgs, MetaDescriptor, redirect } from "@remix-run/node";
 import { Await, MetaFunction, defer, useLoaderData } from "@remix-run/react";
-import { Car } from "lucide-react";
-import { Suspense } from "react";
+import { Suspense, useEffect } from "react";
 import Loading from "~/components/loading/loading";
 import { Separator } from "~/components/ui/separator";
 import CardapioItemImageSingle from "~/domain/cardapio/components/cardapio-item-image-single/cardapio-item-image-single";
 import CardapioItemPrice from "~/domain/cardapio/components/cardapio-item-price/cardapio-item-price";
-import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
+import { menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
+
+
 
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
@@ -43,8 +44,6 @@ export default function SingleCardapioItem() {
       <Await resolve={itemQuery}>
         {([err, item]) => {
 
-          console.log({ err })
-
           if (err) {
 
             return <div className="grid place-items-center w-screen h-screen">
@@ -56,6 +55,13 @@ export default function SingleCardapioItem() {
           const itemImagePlaceholder = item?.imagePlaceholderURL
           const itemName = item?.name
           const itemIngredients = item?.ingredients
+
+          useEffect(() => {
+            if (item) {
+              document.title = itemName || ""
+              document.querySelector("meta[name='description']")?.setAttribute("content", `Pizza com ${itemIngredients}` || "")
+            }
+          }, [item])
 
           // @ts-ignore
           return (

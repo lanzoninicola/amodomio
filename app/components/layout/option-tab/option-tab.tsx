@@ -1,9 +1,8 @@
 import { cn } from "~/lib/utils"
 
-const OptionTab = ({ label, onClickFn, state, highlightCondition }: {
+const OptionTab = ({ label, onClickFn, highlightCondition }: {
   label: string,
-  onClickFn: () => void,
-  state: boolean,
+  onClickFn?: () => void,
   highlightCondition: boolean
 }) => {
   return (

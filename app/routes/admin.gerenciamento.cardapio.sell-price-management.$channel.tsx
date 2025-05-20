@@ -237,11 +237,11 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
               <div className="flex flex-col">
 
                 <div className="flex gap-4 items-center justify-center mt-4">
-                  <OptionTab label="Venda ativa" onClickFn={() => handleOptionVisibileItems(true)} state={true} highlightCondition={optVisibleItems === true && optActiveItems === null} />
+                  <OptionTab label="Venda ativa" onClickFn={() => handleOptionVisibileItems(true)} highlightCondition={optVisibleItems === true && optActiveItems === null} />
                   <span>-</span>
-                  <OptionTab label="Venda pausada" onClickFn={() => handleOptionVisibileItems(false)} state={false} highlightCondition={optVisibleItems === false && optActiveItems === null} />
+                  <OptionTab label="Venda pausada" onClickFn={() => handleOptionVisibileItems(false)} highlightCondition={optVisibleItems === false && optActiveItems === null} />
                   <span>-</span>
-                  <OptionTab label="Inativos" onClickFn={() => handleOptionActiveItems(false)} state={false} highlightCondition={optActiveItems === false && optVisibleItems === null} />
+                  <OptionTab label="Inativos" onClickFn={() => handleOptionActiveItems(false)} highlightCondition={optActiveItems === false && optVisibleItems === null} />
 
                 </div>
                 <Separator className="my-4" />
@@ -310,8 +310,8 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
                                   <ul className="grid grid-cols-5 mb-4">
                                     {menuItem.sellPriceVariations.map((record) => {
 
-                                      const minimumPriceAmountWithMargin = record.computedSellingPriceBreakdown?.minimumPrice?.priceAmount.withMargin ?? 0
-                                      const minimumPriceAmountWithoutMargin = record.computedSellingPriceBreakdown?.minimumPrice?.priceAmount.withoutMargin ?? 0
+                                      const minimumPriceAmountWithProfit = record.computedSellingPriceBreakdown?.minimumPrice?.priceAmount.withProfit ?? 0
+                                      const minimumPriceAmountWithoutMargin = record.computedSellingPriceBreakdown?.minimumPrice?.priceAmount.breakEven ?? 0
 
                                       return (
                                         <li key={randomReactKey()} >
@@ -325,7 +325,7 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
                                                 <p className={
                                                   cn(
                                                     "text-[12px] font-mono",
-                                                    record.priceAmount > 0 && minimumPriceAmountWithMargin > record.priceAmount && 'bg-red-500'
+                                                    record.priceAmount > 0 && minimumPriceAmountWithProfit > record.priceAmount && 'bg-red-500'
                                                   )
                                                 }
                                                 >{formatDecimalPlaces(record.priceAmount)}</p>
@@ -334,7 +334,7 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
                                                 {/* <p className="text-[11px] text-muted-foreground">Valor recomendado:</p> */}
 
                                                 <MinimumSellPriceLabelDialog computedSellingPriceBreakdown={record.computedSellingPriceBreakdown} />
-                                                <p className="text-[12px] font-mono">{formatDecimalPlaces(minimumPriceAmountWithMargin)}</p>
+                                                <p className="text-[12px] font-mono">{formatDecimalPlaces(minimumPriceAmountWithProfit)}</p>
                                               </div>
                                             </div>
 
@@ -413,7 +413,7 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
                                                     <div className="flex flex-col gap-1 items-center">
                                                       <div className="flex flex-col gap-y-0 ">
                                                         <MinimumSellPriceLabelDialog computedSellingPriceBreakdown={record.computedSellingPriceBreakdown} />
-                                                        <NumericInput name="minimumPriceAmount" defaultValue={record.computedSellingPriceBreakdown?.minimumPrice.priceAmount.withMargin} readOnly className="bg-slate-100" />
+                                                        <NumericInput name="minimumPriceAmount" defaultValue={record.computedSellingPriceBreakdown?.minimumPrice.priceAmount.withProfit} readOnly className="bg-slate-100" />
                                                       </div>
                                                       {/* <SubmitButton
                                                         actionName="upsert-by-minimum-input"
@@ -585,12 +585,12 @@ function MinimumSellPriceLabelDialog({ computedSellingPriceBreakdown }: MinimumP
               <Label cnContainer="font-semibold">{`Preço de venda sugerido`}</Label>
               <div className="grid grid-cols-4 items-center">
                 <span className="text-xs col-span-3">Sem margem (com cobertura custos fixos)</span>
-                <Amount>{Number(cspb?.minimumPrice?.priceAmount.withoutMargin ?? 0).toFixed(2)}</Amount>
+                <Amount>{Number(cspb?.minimumPrice?.priceAmount.breakEven ?? 0).toFixed(2)}</Amount>
               </div>
 
               <div className="grid grid-cols-4 items-center mb-2">
                 <span className="text-xs col-span-3">Com margem</span>
-                <Amount>{Number(cspb?.minimumPrice?.priceAmount.withMargin ?? 0).toFixed(2)}</Amount>
+                <Amount>{Number(cspb?.minimumPrice?.priceAmount.withProfit ?? 0).toFixed(2)}</Amount>
               </div>
 
               <span className="text-[12px] font-mono">{cspb?.minimumPrice?.formulaExplanation}</span>

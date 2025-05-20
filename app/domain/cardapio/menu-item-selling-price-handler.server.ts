@@ -1,4 +1,8 @@
-import { MenuItemSellingChannel, MenuItemSize } from "@prisma/client";
+import {
+  MenuItemGroup,
+  MenuItemSellingChannel,
+  MenuItemSize,
+} from "@prisma/client";
 import prismaClient from "~/lib/prisma/client.server";
 import {
   MenuItemCostVariationBySize,
@@ -22,6 +26,14 @@ interface MenuItemSellingPriceHandlerProps extends PrismaEntityProps {
   menuItemSize: typeof menuItemSizePrismaEntity;
   menuItemSellingChannel: typeof menuItemSellingChannelPrismaEntity;
 }
+
+type GroupedMenu = {
+  group: MenuItemGroup;
+  items: Omit<MenuItemWithSellPriceVariations, "group">[];
+};
+
+type LoadManyReturn<T extends "default" | "grouped" | undefined> =
+  T extends "grouped" ? GroupedMenu[] : MenuItemWithSellPriceVariations[];
 
 export class MenuItemSellingPriceHandler {
   client;
@@ -53,11 +65,17 @@ export class MenuItemSellingPriceHandler {
     this.menuItemSellingChannel = menuItemSellingChannel;
   }
 
-  async loadMany(params: {
-    channelKey?: string;
-    sizeKey?: string;
-    menuItemId?: string;
-  }): Promise<MenuItemWithSellPriceVariations[]> {
+  async loadMany<T extends "default" | "grouped" | undefined = "default">(
+    params: {
+      channelKey?: string;
+      sizeKey?: string;
+      menuItemId?: string;
+    },
+    returnedOptions?: {
+      format?: T;
+      fn?: (data: MenuItemWithSellPriceVariations[]) => LoadManyReturn<T>;
+    }
+  ): Promise<LoadManyReturn<T>> {
     const [
       allMenuItemsWithSellPrices,
       allMenuItemsWithCosts,
@@ -110,7 +128,7 @@ export class MenuItemSellingPriceHandler {
         sizeName: size.name,
         channelName: channel.name,
         computedPrice:
-          computedSellingPriceBreakdown.minimumPrice.priceAmount.withMargin,
+          computedSellingPriceBreakdown.minimumPrice.priceAmount.withProfit,
         actualPrice: variation?.priceAmount ?? 0,
       });
 
@@ -162,6 +180,7 @@ export class MenuItemSellingPriceHandler {
 
         return {
           menuItemId: item.menuItemId,
+          group: item.group,
           name: item.name,
           ingredients: item.ingredients,
           visible: item.visible,
@@ -172,7 +191,11 @@ export class MenuItemSellingPriceHandler {
       })
     );
 
-    return results;
+    if (returnedOptions?.fn) {
+      return returnedOptions.fn(results);
+    }
+
+    return results as LoadManyReturn<T>;
   }
 
   private handleSellPriceWarnings({
@@ -222,6 +245,32 @@ export class MenuItemSellingPriceHandler {
     }
 
     return warnings;
+  }
+
+  static groupMenuItems(
+    data: MenuItemWithSellPriceVariations[]
+  ): GroupedMenu[] {
+    const groupedMap = new Map<string, GroupedMenu>();
+
+    for (const item of data) {
+      const groupId = item.group.id;
+
+      if (!groupedMap.has(groupId)) {
+        groupedMap.set(groupId, {
+          group: item.group,
+          items: [],
+        });
+      }
+
+      const itemWithoutGroup: Omit<MenuItemWithSellPriceVariations, "group"> = {
+        ...item,
+      };
+      delete (itemWithoutGroup as any).group;
+
+      groupedMap.get(groupId)!.items.push(itemWithoutGroup);
+    }
+
+    return Array.from(groupedMap.values());
   }
 }
 

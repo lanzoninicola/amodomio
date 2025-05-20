@@ -324,6 +324,7 @@ export class MenuItemPrismaEntity {
             MenuItemSize: true,
           },
         },
+        MenuItemGroup: true,
       },
       orderBy: { sortOrderIndex: "asc" },
     });
@@ -362,6 +363,7 @@ export class MenuItemPrismaEntity {
 
       return {
         menuItemId: item.id,
+        group: item.MenuItemGroup,
         name: item.name,
         ingredients: item.ingredients,
         visible: item.visible,
