@@ -34,8 +34,27 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
           disabled: false,
         },
         {
-          title: "Direçionamento clientes",
-          href: "/admin/atendimento/direcionamento-clientes",
+          title: "Assistente de Escolha",
+          href: "/admin/atendimento/assistente-de-escolha",
+          items: [],
+          disabled: false,
+        },
+
+        {
+          title: "Pedidos",
+          href: "/admin/daily-orders",
+          items: [],
+          disabled: false,
+        },
+        {
+          title: "Linha do tempo Pedidos",
+          href: "/admin/orders-delays-timeline-segmentation",
+          items: [],
+          disabled: true,
+        },
+        {
+          title: "Linha do tempo Entrega",
+          href: "/admin/orders-delivery-time-left",
           items: [],
           disabled: false,
         },
@@ -141,35 +160,6 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
       ],
     },
     {
-      title: "Atendimento",
-      items: [
-        {
-          title: "Cardápio",
-          href: "/cardapio",
-          items: [],
-          disabled: true,
-        },
-        {
-          title: "Pedidos",
-          href: "/admin/daily-orders",
-          items: [],
-          disabled: false,
-        },
-        {
-          title: "Linha do tempo Pedidos",
-          href: "/admin/orders-delays-timeline-segmentation",
-          items: [],
-          disabled: true,
-        },
-        {
-          title: "Linha do tempo Entrega",
-          href: "/admin/orders-delivery-time-left",
-          items: [],
-          disabled: false,
-        },
-      ],
-    },
-    {
       title: "Cozinha",
       items: [
         {
@@ -206,13 +196,19 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
     },
     {
       title: "Administração",
-      disabled: true,
+      disabled: false,
       items: [
         {
           title: "Usuários",
           href: "/admin/users",
           items: [],
           disabled: true,
+        },
+        {
+          title: "Importador de dados",
+          href: "/admin/importer",
+          items: [],
+          disabled: false,
         },
       ],
     },
