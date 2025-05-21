@@ -1,4 +1,4 @@
-import { ImportCustomerServicePizzaMediumCombinations } from "@prisma/client";
+import { ImportCustomerServicePizzaBiggerCombinations, ImportCustomerServicePizzaMediumCombinations } from "@prisma/client";
 import { LoaderFunctionArgs, defer } from "@remix-run/node";
 import { Await, Link, Outlet, useLoaderData, useLocation } from "@remix-run/react";
 import { Suspense, useState } from "react";
@@ -11,17 +11,28 @@ import prismaClient from "~/lib/prisma/client.server";
 import { cn } from "~/lib/utils";
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
+  const paramSizeKey = params.size as string;
 
+  let items = [] as ImportCustomerServicePizzaMediumCombinations[] | ImportCustomerServicePizzaBiggerCombinations[];
 
-  const items = prismaClient.importCustomerServicePizzaMediumCombinations.findMany({
-    orderBy: { realMarginPerc: "desc" },
-  })
+  if (paramSizeKey === "pizza-medium") {
+    items = await prismaClient.importCustomerServicePizzaMediumCombinations.findMany({
+      orderBy: { realMarginPerc: "desc" },
+    })
+  }
+
+  if (paramSizeKey === "pizza-bigger") {
+    items = await prismaClient.importCustomerServicePizzaBiggerCombinations.findMany({
+      orderBy: { realMarginPerc: "desc" },
+    })
+  }
 
   const user = authenticator.isAuthenticated(request);
 
 
   const returnedData = Promise.all([
     items,
+    paramSizeKey,
     user,
   ]);
 
@@ -50,26 +61,21 @@ export default function AdminAtendimentoAssistenteDeEscolhaPorTamanho() {
     )
   }
 
-  const PriceAmount = ({ children }: { children: React.ReactNode }) => {
+  const PriceAmountCol = ({ children }: { children: React.ReactNode }) => {
     return <span className="font-mono text-xs">{children}</span>
   }
 
-  const SectionTitle = ({ children }: { children: React.ReactNode }) => {
+  const ToppingCol = ({ name, ingredients, ...props }: {
+    name: string, ingredients: string,
+    [key: string]: any
+  }) => {
     return (
-      <h4 className="font-semibold tracking-tight text-sm mb-4">{children}</h4>
+      <div className="flex flex-col gap-0 col-span-2" {...props}>
+        <span className="text-sm">{name}</span>
+        <span className="text-[10px] text-muted-foreground leading-tight max-w-prose">{ingredients}</span>
+      </div>
     )
   }
-
-  const SectionSubTitle = ({ children }: { children: React.ReactNode }) => {
-    return (
-      <h5 className="font-semibold tracking-tight text-xs mb-2">{children}</h5>
-    )
-  }
-
-
-
-
-
 
   return (
     <>
@@ -78,10 +84,10 @@ export default function AdminAtendimentoAssistenteDeEscolhaPorTamanho() {
 
       <Suspense fallback={<Loading />}>
         <Await resolve={returnedData}>
-          {([items, user]) => {
+          {([items, paramSizeKey, user]) => {
 
             // @ts-ignore
-            const [allItems, setAllItems] = useState<ImportCustomerServicePizzaMediumCombinations[]>(items)
+            const [allItems, setAllItems] = useState<ImportCustomerServicePizzaBiggerCombinations[] | ImportCustomerServicePizzaMediumCombinations[]>(items)
 
             const [search, setSearch] = useState("")
 
@@ -110,10 +116,12 @@ export default function AdminAtendimentoAssistenteDeEscolhaPorTamanho() {
 
             const removeToppingSelected = (toppingSelected: string) => {
 
-              const nexItems = allItems.filter(item => {
+              const nexItems = allItems.filter((item: ImportCustomerServicePizzaBiggerCombinations) => {
                 return (
                   item.topping1 !== toppingSelected &&
-                  item.topping2 !== toppingSelected
+                  item.topping2 !== toppingSelected &&
+                  item.topping3 !== toppingSelected &&
+                  item.topping4 !== toppingSelected
                 )
               }
 
@@ -129,9 +137,22 @@ export default function AdminAtendimentoAssistenteDeEscolhaPorTamanho() {
                   <Input name="search" className="w-full py-4 text-lg bg-white " placeholder="Pesquisar o sabor..." onChange={(e) => handleSearch(e)} value={search} />
                 </div>
                 <ul>
-                  <li className="grid grid-cols-8 gap-4 w-full items-center mb-2">
+                  <li className={
+                    cn(
+                      "grid gap-4 w-full items-center mb-2",
+                      paramSizeKey === "pizza-medium" ? "grid-cols-8" : "grid-cols-12"
+                    )
+                  }>
                     <TableHeader cnContainer="col-span-2">Sabor 1</TableHeader>
                     <TableHeader cnContainer="col-span-2">Sabor 2</TableHeader>
+                    {
+                      paramSizeKey === "pizza-bigger" && (
+                        <>
+                          <TableHeader cnContainer="col-span-2">Sabor 3</TableHeader>
+                          <TableHeader cnContainer="col-span-2">Sabor 4</TableHeader>
+                        </>
+                      )
+                    }
                     <TableHeader >Preço de venda</TableHeader>
                     <TableHeader description="Valor que permite a coberturas dos custos fixos " showMark={true}>Preço de equilibrio</TableHeader>
                     <TableHeader cnContainer="col-span-2" showMark>
@@ -139,19 +160,25 @@ export default function AdminAtendimentoAssistenteDeEscolhaPorTamanho() {
                     </TableHeader>
                   </li>
                   {allItems.map((item) => (
-                    <li key={item.id} className="grid grid-cols-8 gap-4 w-full items-center mb-2 hover:bg-green-300 ">
-
-                      <div className="flex flex-col gap-0 col-span-2" onClick={() => removeToppingSelected(item.topping1)}>
-                        <span className="text-sm" >{item.topping1}</span>
-                        <span className="text-[10px] text-muted-foreground leading-tight max-w-prose">{item.ingredient1}</span>
-                      </div>
-                      <div className="flex flex-col gap-0 col-span-2" onClick={() => removeToppingSelected(item.topping2)}>
-                        <span className="text-sm col-span-2">{item.topping2}</span>
-                        <span className="text-[10px] text-muted-foreground leading-tight max-w-prose">{item.ingredient2}</span>
-                      </div>
-                      <PriceAmount>{item.sellingPriceAmount}</PriceAmount>
-                      <PriceAmount>{item.breakEvenPriceAmount}</PriceAmount>
-                      <PriceAmount>{item.realMarginPerc}</PriceAmount>
+                    <li key={item.id} className={
+                      cn(
+                        "grid gap-4 w-full items-center mb-2 hover:bg-green-300 ",
+                        paramSizeKey === "pizza-medium" ? "grid-cols-8" : "grid-cols-12"
+                      )
+                    }>
+                      <ToppingCol name={item.topping1} ingredients={item.ingredient1} onClick={() => removeToppingSelected(item.topping1)} />
+                      <ToppingCol name={item.topping2} ingredients={item.ingredient2} onClick={() => removeToppingSelected(item.topping2)} />
+                      {
+                        paramSizeKey === "pizza-bigger" && (
+                          <>
+                            <ToppingCol name={item.topping3} ingredients={item.ingredient3} onClick={() => removeToppingSelected(item.topping3)} />
+                            <ToppingCol name={item.topping4} ingredients={item.ingredient4} onClick={() => removeToppingSelected(item.topping4)} />
+                          </>
+                        )
+                      }
+                      <PriceAmountCol>{item.sellingPriceAmount}</PriceAmountCol>
+                      <PriceAmountCol>{item.breakEvenPriceAmount}</PriceAmountCol>
+                      <PriceAmountCol>{item.realMarginPerc}</PriceAmountCol>
 
 
                     </li>
