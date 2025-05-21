@@ -2,7 +2,7 @@ import prismaClient from "~/lib/prisma/client.server";
 import { ok } from "~/utils/http-response.server";
 import { ICsvImporter } from "./csv-importer.entity.server";
 
-class ImportCustomerServicePizzaMediumCombinationsServer
+class ImportCustomerServicePizzaBiggerCombinationsServer
   implements ICsvImporter
 {
   async loadMany({
@@ -13,10 +13,10 @@ class ImportCustomerServicePizzaMediumCombinationsServer
     mode: "override" | "append";
   }) {
     // Logic to import customer service pizza medium combinations
-    console.log("Importing customer service pizza medium combinations...");
+    console.log("Importing customer service pizza bigger combinations...");
 
     if (mode === "override") {
-      await prismaClient.importCustomerServicePizzaMediumCombinations.deleteMany(
+      await prismaClient.importCustomerServicePizzaBiggerCombinations.deleteMany(
         {}
       );
     }
@@ -33,13 +33,17 @@ class ImportCustomerServicePizzaMediumCombinationsServer
           row.selling_price_amount.replace(",", ".")
         );
 
-        return prismaClient.importCustomerServicePizzaMediumCombinations.create(
+        return prismaClient.importCustomerServicePizzaBiggerCombinations.create(
           {
             data: {
               topping1: row.topping_1,
               ingredient1: row.ingredient_1,
               topping2: row.topping_2,
               ingredient2: row.ingredient_2,
+              topping3: row.topping_3,
+              ingredient3: row.ingredient_3,
+              topping4: row.topping_4,
+              ingredient4: row.ingredient_4,
               breakEvenPriceAmount: breakEvenPriceAmountNumber,
               realMarginPerc: realMarginPercNumber,
               sellingPriceAmount: sellingPriceAmountNumber,
@@ -55,4 +59,4 @@ class ImportCustomerServicePizzaMediumCombinationsServer
   }
 }
 
-export default ImportCustomerServicePizzaMediumCombinationsServer;
+export default ImportCustomerServicePizzaBiggerCombinationsServer;
