@@ -11,6 +11,10 @@ class CsvImporter {
       className: "CustomerServicePizzaMediumCombinations",
       fileName: "import-customer-service-pizza-medium-combinations",
     },
+    import_customer_service_pizza_bigger_combinations: {
+      className: "CustomerServicePizzaBiggerCombinations",
+      fileName: "import-customer-service-pizza-bigger-combinations",
+    },
   } as const;
 
   /**
@@ -38,6 +42,11 @@ class CsvImporter {
     tableKey: keyof typeof this.importConfigMap
   ): Promise<ICsvImporter> {
     const config = this.importConfigMap[tableKey];
+
+    if (!config?.fileName) {
+      throw new Error(`Falta configurar o arquivo para a tabela ${tableKey}`);
+    }
+
     const module = await import(`./${config.fileName}.server.ts`);
     return new module.default();
   }
