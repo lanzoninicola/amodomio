@@ -6,6 +6,7 @@ import {
 } from "./menu-item-size.entity.server";
 import { MenuItemWithCostVariations, Warning } from "./menu-item.types";
 import { MenuItemEntityFindAllProps } from "./menu-item.prisma.entity.server";
+import { MenuItemCostVariationUtility } from "./menu-item-cost-variation-utility.entity.server";
 
 interface HandleWarningsFnParams {
   costAmount: number;
@@ -49,12 +50,39 @@ class MenuItemCostHandler {
 
     const sizes = await this.menuItemSize.findAll();
 
+    const sizesResorted = sizes.map((size) => {
+      let newSortOrderIndex = size.sortOrderIndex;
+
+      switch (size.key) {
+        case "pizza-slice":
+          newSortOrderIndex = 1;
+          break;
+        case "pizza-small":
+          newSortOrderIndex = 2;
+          break;
+        case "pizza-medium":
+          newSortOrderIndex = 0;
+          break;
+        case "pizza-big":
+          newSortOrderIndex = 3;
+          break;
+        case "pizza-bigger":
+          newSortOrderIndex = 4;
+          break;
+      }
+
+      return {
+        ...size,
+        sortOrderIndex: newSortOrderIndex ?? 0,
+      };
+    });
+
     const allReferenceCostVariations = await this.findAllReferenceCost();
 
     return allMenuItems.map((item) => {
       let itemWarnings: Warning[] = [];
 
-      const costVariations = sizes
+      const costVariations = sizesResorted
         .sort((a, b) => a.sortOrderIndex - b.sortOrderIndex)
         .map((size) => {
           const variation = item.MenuItemCostVariation?.find(
@@ -69,7 +97,7 @@ class MenuItemCostHandler {
           );
 
           const recommendedCostAmount =
-            this.calculateRecommendedCostVariationBySizeKey(
+            MenuItemCostVariationUtility.calculateRecommendedCostVariationBySizeKey(
               sizeKey,
               itemReferenceCost?.costAmount ?? 0
             );
@@ -142,7 +170,7 @@ class MenuItemCostHandler {
         );
 
         const recommendedCostAmount =
-          this.calculateRecommendedCostVariationBySizeKey(
+          MenuItemCostVariationUtility.calculateRecommendedCostVariationBySizeKey(
             sizeKey,
             itemReferenceCost?.costAmount ?? 0
           );
@@ -183,26 +211,11 @@ class MenuItemCostHandler {
     };
   }
 
-  calculateRecommendedCostVariationBySizeKey(
-    size: PizzaSizeKey,
-    refCostAmount: number
-  ): number {
-    switch (size) {
-      case "pizza-small":
-        return refCostAmount * 0.5;
-      case "pizza-medium":
-        return refCostAmount;
-      case "pizza-big":
-        return refCostAmount * 1.25;
-      case "pizza-bigger":
-        return refCostAmount * 2;
-      case "pizza-slice":
-        return refCostAmount * 0.25;
-      default:
-        throw new Error("Invalid pizza size");
-    }
-  }
-
+  /**
+   * Finds all cost variations of menu items for the reference size key (pizza-medium).
+   *
+   * @returns The cost variations of all menu items for the reference size key (pizza-medium).
+   */
   async findAllReferenceCost() {
     return await this.menuItemCostVariation.findAllCostBySizeKey(
       this.pizzaSizeKeyRef

@@ -382,16 +382,25 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
                                                   <p className={
                                                     cn(
                                                       "text-[12px] font-mono",
-                                                      record.priceAmount > 0 && minimumPriceAmountWithProfit > record.priceAmount && 'bg-orange-200'
+                                                      record.priceAmount > 0 && minimumPriceAmountWithProfit > record.priceAmount && 'bg-orange-200',
+                                                      record.priceAmount > 0 && minimumPriceAmountWithoutProfit > record.priceAmount && 'bg-red-400',
                                                     )
                                                   }
                                                   >{formatDecimalPlaces(record.priceAmount)}</p>
                                                 </div>
-                                                <div className="flex flex-col text-center">
-                                                  {/* <p className="text-[11px] text-muted-foreground">Valor recomendado:</p> */}
+                                                <div className="flex flex-col gap-1">
+                                                  <div className="flex flex-col text-center">
+                                                    {/* <p className="text-[11px] text-muted-foreground">Valor recomendado:</p> */}
 
-                                                  <MinimumSellPriceLabelDialog computedSellingPriceBreakdown={record.computedSellingPriceBreakdown} />
-                                                  <p className="text-[12px] font-mono">{formatDecimalPlaces(minimumPriceAmountWithProfit)}</p>
+                                                    <p className="text-[11px] text-muted-foreground">Break-even:</p>
+                                                    <p className="text-[12px] font-mono">{formatDecimalPlaces(minimumPriceAmountWithoutProfit)}</p>
+                                                  </div>
+                                                  <div className="flex flex-col text-center">
+                                                    {/* <p className="text-[11px] text-muted-foreground">Valor recomendado:</p> */}
+
+                                                    <MinimumSellPriceLabelDialog computedSellingPriceBreakdown={record.computedSellingPriceBreakdown} />
+                                                    <p className="text-[12px] font-mono">{formatDecimalPlaces(minimumPriceAmountWithProfit)}</p>
+                                                  </div>
                                                 </div>
                                               </div>
                                               <Separator className="my-2 px-4" />
@@ -593,7 +602,7 @@ function MinimumSellPriceLabelDialog({ computedSellingPriceBreakdown }: MinimumP
   return (
     <Dialog>
       <DialogTrigger asChild className="w-full">
-        <span className="text-muted-foreground text-[11px] cursor-pointer hover:underline">{`Val. minimo (com profito)`}</span>
+        <span className="text-muted-foreground text-[11px] cursor-pointer hover:underline">{`Val. rec. (lucro ${cspb.channel?.targetMarginPerc}%)`}</span>
       </DialogTrigger>
       <DialogContent>
 

@@ -343,7 +343,8 @@ model MenuItemCostVariation {
   MenuItemSize       MenuItemSize? @relation(fields: [menuItemSizeId], references: [id])
   menuItemSizeId     String?       @map("menu_item_size_id")
 
-  @@map("menu_item_costs")
+  @@unique([menuItemId, menuItemSizeId])
+  @@map("menu_item_cost_variations")
 }
 
 model DnaEmpresaSettings {
