@@ -3,11 +3,15 @@ import { PrismaEntityProps } from "~/lib/prisma/types.server";
 import createUUID from "~/utils/uuid";
 import { menuItemCostVariationPrismaEntity } from "./menu-item-cost-variation.entity.server";
 import { menuItemSellingChannelPrismaEntity } from "./menu-item-selling-channel.entity.server";
+import { menuItemSellingPriceVariationAuditPrismaEntity } from "./menu-item-selling-price-variation-audit.entity.server";
+import { menuItemSellingPriceUtilityEntity } from "./menu-item-selling-price-utility.entity";
 
 interface MenuItemSellingPriceVariationPrismaEntityConstructorProps
   extends PrismaEntityProps {
   menuItemCostVariationEntity: typeof menuItemCostVariationPrismaEntity;
   menuItemSellingChannelEntity: typeof menuItemSellingChannelPrismaEntity;
+  menuItemSellingPriceUtilityEntity: typeof menuItemSellingPriceUtilityEntity;
+  menuItemSellingPriceVariationAuditEntity: typeof menuItemSellingPriceVariationAuditPrismaEntity;
 }
 
 export interface MenuItemSellingPriceVariationBaseParams {
@@ -15,7 +19,9 @@ export interface MenuItemSellingPriceVariationBaseParams {
   menuItemSizeId: string | null;
   menuItemSellingChannelId: string | null;
   priceAmount: number;
-  previousPriceAmount: number;
+  profitActualPerc: number;
+  priceExpectedAmount: number;
+  profitExpectedPerc: number;
   discountPercentage: number;
   showOnCardapio: boolean;
   showOnCardapioAt: Date | null;
@@ -37,14 +43,24 @@ class MenuItemSellingPriceVariationPrismaEntity {
 
   menuItemSellingChannelEntity;
 
+  menuItemSellingPriceUtilityEntity;
+
+  menuItemSellingPriceVariationAuditEntity;
+
   constructor({
     client,
     menuItemCostVariationEntity,
     menuItemSellingChannelEntity,
+    menuItemSellingPriceUtilityEntity,
+    menuItemSellingPriceVariationAuditEntity:
+      menuItemSellingPriceVariationAuditPrismaEntity,
   }: MenuItemSellingPriceVariationPrismaEntityConstructorProps) {
     this.client = client;
     this.menuItemCostVariationEntity = menuItemCostVariationEntity;
     this.menuItemSellingChannelEntity = menuItemSellingChannelEntity;
+    this.menuItemSellingPriceUtilityEntity = menuItemSellingPriceUtilityEntity;
+    this.menuItemSellingPriceVariationAuditEntity =
+      menuItemSellingPriceVariationAuditPrismaEntity;
   }
 
   async create(data: MenuItemSellingPriceVariationCreateParams) {
@@ -71,6 +87,7 @@ class MenuItemSellingPriceVariationPrismaEntity {
         data: {
           ...data,
           updatedAt: now,
+          previousPriceAmount: record.priceAmount,
         },
       });
     }
@@ -111,4 +128,7 @@ export const menuItemSellingPriceVariationPrismaEntity =
     client: prismaClient,
     menuItemCostVariationEntity: menuItemCostVariationPrismaEntity,
     menuItemSellingChannelEntity: menuItemSellingChannelPrismaEntity,
+    menuItemSellingPriceUtilityEntity: menuItemSellingPriceUtilityEntity,
+    menuItemSellingPriceVariationAuditEntity:
+      menuItemSellingPriceVariationAuditPrismaEntity,
   });

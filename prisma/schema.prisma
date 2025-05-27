@@ -174,35 +174,36 @@ model MenuItemGroup {
 }
 
 model MenuItem {
-  id                            String                          @id @default(uuid())
-  name                          String
-  description                   String
-  ingredients                   String
-  categoryId                    String                          @map("category_id")
-  Category                      Category                        @relation(fields: [categoryId], references: [id])
-  basePriceAmount               Float                           @map("base_price_amount")
-  visible                       Boolean
-  active                        Boolean                         @default(true)
-  mogoId                        String                          @map("mogo_id")
-  createdAt                     DateTime                        @map("created_at")
-  updatedAt                     DateTime                        @default(now()) @updatedAt @map("updated_at")
-  deletedAt                     DateTime?                       @map("deleted_at")
-  deletedBy                     String?                         @map("deleted_by")
-  tags                          MenuItemTag[]
+  id                                 String                               @id @default(uuid())
+  name                               String
+  description                        String
+  ingredients                        String
+  categoryId                         String                               @map("category_id")
+  Category                           Category                             @relation(fields: [categoryId], references: [id])
+  basePriceAmount                    Float                                @map("base_price_amount")
+  visible                            Boolean
+  active                             Boolean                              @default(true)
+  mogoId                             String                               @map("mogo_id")
+  createdAt                          DateTime                             @map("created_at")
+  updatedAt                          DateTime                             @default(now()) @updatedAt @map("updated_at")
+  deletedAt                          DateTime?                            @map("deleted_at")
+  deletedBy                          String?                              @map("deleted_by")
+  tags                               MenuItemTag[]
   /// this track the position inside the menu
-  sortOrderIndex                Int                             @default(0) @map("sort_order_index")
-  notesPublic                   String?                         @map("note_public")
-  slug                          String?                         @map("slug")
-  MenuItemLike                  MenuItemLike[]
-  MenuItemShare                 MenuItemShare[]
-  imageId                       String?                         @map("image_id")
-  MenuItemImage                 MenuItemImage?                  @relation(fields: [imageId], references: [id])
-  MenuItemNote                  MenuItemNote[]
-  MenuItemSellingPriceVariation MenuItemSellingPriceVariation[]
-  MenuItemCostVariation         MenuItemCostVariation[]
-  priceVariations               MenuItemPriceVariation[]
-  MenuItemGroup                 MenuItemGroup?                  @relation(fields: [menuItemGroupId], references: [id])
-  menuItemGroupId               String?                         @map("menu_item_group_id")
+  sortOrderIndex                     Int                                  @default(0) @map("sort_order_index")
+  notesPublic                        String?                              @map("note_public")
+  slug                               String?                              @map("slug")
+  MenuItemLike                       MenuItemLike[]
+  MenuItemShare                      MenuItemShare[]
+  imageId                            String?                              @map("image_id")
+  MenuItemImage                      MenuItemImage?                       @relation(fields: [imageId], references: [id])
+  MenuItemNote                       MenuItemNote[]
+  MenuItemSellingPriceVariation      MenuItemSellingPriceVariation[]
+  MenuItemCostVariation              MenuItemCostVariation[]
+  priceVariations                    MenuItemPriceVariation[]
+  MenuItemGroup                      MenuItemGroup?                       @relation(fields: [menuItemGroupId], references: [id])
+  menuItemGroupId                    String?                              @map("menu_item_group_id")
+  MenuItemSellingPriceVariationAudit MenuItemSellingPriceVariationAudit[]
 
   @@map("menu_items")
 }
@@ -271,7 +272,14 @@ model MenuItemSellingPriceVariation {
   menuItemSizeId           String?                 @map("menu_item_size_id")
   MenuItemSellingChannel   MenuItemSellingChannel? @relation(fields: [menuItemSellingChannelId], references: [id])
   menuItemSellingChannelId String?                 @map("menu_item_selling_channel_id")
+  /// efetivo valor de venda publico do cardapio
   priceAmount              Float                   @map("price_amount")
+  /// a percentagem do profito realizado com o efetivo valor de venda
+  profitActualPerc         Float                   @default(0) @map("profit_actual_perc")
+  /// o valor calculado com base a formula do DNA
+  priceExpectedAmount      Float                   @default(0) @map("price_expected_amount")
+  /// a percentagem do profito desejada para o canal de venda
+  profitExpectedPerc       Float                   @default(0) @map("profit_expected_perc")
   discountPercentage       Float                   @map("discount_percentage")
   showOnCardapio           Boolean                 @default(false) @map("show_on_cardapio")
   showOnCardapioAt         DateTime?               @map("show_on_cardapio_at")
@@ -283,17 +291,42 @@ model MenuItemSellingPriceVariation {
   @@map("menu_item_selling_prices")
 }
 
+model MenuItemSellingPriceVariationAudit {
+  id                         String                 @id @default(uuid())
+  MenuItem                   MenuItem               @relation(fields: [menuItemId], references: [id])
+  menuItemId                 String                 @map("menu_item_id")
+  MenuItemSize               MenuItemSize           @relation(fields: [menuItemSizeId], references: [id])
+  menuItemSizeId             String                 @map("menu_item_size_id")
+  MenuItemSellingChannel     MenuItemSellingChannel @relation(fields: [menuItemSellingChannelId], references: [id])
+  menuItemSellingChannelId   String                 @map("menu_item_selling_channel_id")
+  recipeCostAmount           Float                  @default(0) @map("recipe_cost_amount")
+  packagingCostAmount        Float                  @default(0) @map("packaging_cost_amount")
+  doughCostAmount            Float                  @default(0) @map("dough_cost_amount")
+  wasteCostAmount            Float                  @default(0) @map("waste_cost_amount")
+  dnaPerc                    Float                  @default(0) @map("dna_perc")
+  sellingPriceExpectedAmount Float                  @default(0) @map("selling_price_expected_amount")
+  profitExpectedPerc         Float                  @default(0) @map("profit_expected_perc")
+  sellingPriceActualAmount   Float                  @default(0) @map("selling_price_actual_amount")
+  profitActualPerc           Float                  @default(0) @map("profit_actual_perc")
+  createdAt                  DateTime               @map("created_at")
+  updatedAt                  DateTime               @default(now()) @updatedAt @map("updated_at")
+  updatedBy                  String                 @map("updated_by")
+
+  @@map("menu_item_selling_prices_audit")
+}
+
 model MenuItemSellingChannel {
-  id                            String                          @id @default(uuid())
-  key                           String                          @map("key")
-  name                          String
-  feeAmount                     Float                           @default(0) @map("fee_amount")
-  taxPerc                       Float                           @default(0) @map("tax_perc")
-  onlinePaymentTaxPerc          Float                           @default(0) @map("online_payment_tax_perc")
-  targetMarginPerc              Float                           @default(0) @map("target_margin_perc")
-  isMarketplace                 Boolean                         @default(false) @map("is_marketplace")
-  sortOrderIndex                Int                             @default(0) @map("sort_order_index")
-  MenuItemSellingPriceVariation MenuItemSellingPriceVariation[]
+  id                                 String                               @id @default(uuid())
+  key                                String                               @map("key")
+  name                               String
+  feeAmount                          Float                                @default(0) @map("fee_amount")
+  taxPerc                            Float                                @default(0) @map("tax_perc")
+  onlinePaymentTaxPerc               Float                                @default(0) @map("online_payment_tax_perc")
+  targetMarginPerc                   Float                                @default(0) @map("target_margin_perc")
+  isMarketplace                      Boolean                              @default(false) @map("is_marketplace")
+  sortOrderIndex                     Int                                  @default(0) @map("sort_order_index")
+  MenuItemSellingPriceVariation      MenuItemSellingPriceVariation[]
+  MenuItemSellingPriceVariationAudit MenuItemSellingPriceVariationAudit[]
 
   @@map("menu_item_selling_channels")
 }
@@ -310,7 +343,8 @@ model MenuItemCostVariation {
   MenuItemSize       MenuItemSize? @relation(fields: [menuItemSizeId], references: [id])
   menuItemSizeId     String?       @map("menu_item_size_id")
 
-  @@map("menu_item_costs")
+  @@unique([menuItemId, menuItemSizeId])
+  @@map("menu_item_cost_variations")
 }
 
 model DnaEmpresaSettings {
@@ -327,17 +361,19 @@ model DnaEmpresaSettings {
 }
 
 model MenuItemSize {
-  id                            String                          @id @default(uuid())
-  key                           String?                         @map("key")
-  name                          String
-  sortOrderIndex                Int                             @default(0) @map("sort_order_index")
-  createdAt                     DateTime                        @map("created_at")
-  updatedAt                     DateTime                        @default(now()) @updatedAt @map("updated_at")
-  packagingCostAmount           Float                           @default(0) @map("packaging_cost_amount")
-  visible                       Boolean                         @default(true)
-  MenuItemPriceVariation        MenuItemPriceVariation[]
-  MenuItemSellingPriceVariation MenuItemSellingPriceVariation[]
-  MenuItemCostVariation         MenuItemCostVariation[]
+  id                                 String                               @id @default(uuid())
+  key                                String?                              @map("key")
+  name                               String
+  sortOrderIndex                     Int                                  @default(0) @map("sort_order_index")
+  createdAt                          DateTime                             @map("created_at")
+  updatedAt                          DateTime                             @default(now()) @updatedAt @map("updated_at")
+  pizzaDoughCostAmount               Float                                @default(0) @map("pizza_dough_cost_amount")
+  packagingCostAmount                Float                                @default(0) @map("packaging_cost_amount")
+  visible                            Boolean                              @default(true)
+  MenuItemPriceVariation             MenuItemPriceVariation[]
+  MenuItemSellingPriceVariation      MenuItemSellingPriceVariation[]
+  MenuItemCostVariation              MenuItemCostVariation[]
+  MenuItemSellingPriceVariationAudit MenuItemSellingPriceVariationAudit[]
 
   @@map("menu_item_sizes")
 }

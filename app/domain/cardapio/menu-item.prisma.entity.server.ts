@@ -6,9 +6,7 @@ import {
   MenuItemLike,
   MenuItemNote,
   MenuItemPriceVariation,
-  MenuItemSellingChannel,
   MenuItemShare,
-  MenuItemSize,
   MenuItemTag,
   Prisma,
   Tag,
@@ -20,29 +18,17 @@ import MenuItemPriceVariationUtility from "./menu-item-price-variations-utility"
 import { v4 as uuidv4 } from "uuid";
 import { CloudinaryUtils } from "~/lib/cloudinary";
 import {
-  MenuItemCostVariationBySize,
   MenuItemWithCostVariations,
   MenuItemWithSellPriceVariations,
-  SellPriceVariation,
 } from "./menu-item.types";
-import {
-  MenuItemCostVariationBaseInput,
-  MenuItemCostVariationPrismaEntity,
-  menuItemCostVariationPrismaEntity,
-} from "./menu-item-cost-variation.entity.server";
+import { menuItemCostVariationPrismaEntity } from "./menu-item-cost-variation.entity.server";
 import { CacheManager } from "../cache/cache-manager.server";
 import {
   PizzaSizeKey,
   menuItemSizePrismaEntity,
 } from "./menu-item-size.entity.server";
-import {
-  ComputedSellingPriceBreakdown,
-  menuItemSellingPriceUtilityEntity,
-} from "./menu-item-selling-price-utility.entity.server";
-import {
-  SellingChannelKey,
-  menuItemSellingChannelPrismaEntity,
-} from "./menu-item-selling-channel.entity.server";
+import { menuItemSellingPriceUtilityEntity } from "./menu-item-selling-price-utility.entity";
+import { menuItemSellingChannelPrismaEntity } from "./menu-item-selling-channel.entity.server";
 import { slugifyString } from "~/utils/slugify";
 
 export interface MenuItemWithAssociations extends MenuItem {
@@ -325,6 +311,7 @@ export class MenuItemPrismaEntity {
           },
         },
         MenuItemGroup: true,
+        MenuItemSellingPriceVariationAudit: true,
       },
       orderBy: { sortOrderIndex: "asc" },
     });
@@ -342,8 +329,14 @@ export class MenuItemPrismaEntity {
             (cv) => cv.menuItemSizeId === size.id
           );
 
-          let sizeKey: PizzaSizeKey = "pizza-medium"; // Default size key
-          sizeKey = size.key as PizzaSizeKey;
+          const variationAuditRecords =
+            item.MenuItemSellingPriceVariationAudit.filter(
+              (audit) =>
+                audit.menuItemId === item.id &&
+                audit.menuItemSellingChannelId ===
+                  variation?.menuItemSellingChannelId &&
+                audit.menuItemSizeId === variation?.menuItemSizeId
+            );
 
           return {
             menuItemSellPriceVariationId: variation?.id,
@@ -354,10 +347,15 @@ export class MenuItemPrismaEntity {
             channelKey: variation?.MenuItemSellingChannel?.key,
             channelName: variation?.MenuItemSellingChannel?.name,
             priceAmount: variation?.priceAmount ?? 0,
+            profitActualPerc: variation?.profitActualPerc ?? 0,
+            priceExpectedAmount: variation?.priceExpectedAmount ?? 0,
+            profitExpectedPerc: variation?.profitExpectedPerc ?? 0,
             updatedBy: variation?.updatedBy,
             updatedAt: variation?.updatedAt,
             previousPriceAmount: variation?.previousPriceAmount ?? 0,
             discountPercentage: variation?.discountPercentage ?? 0,
+            lastAuditRecord:
+              variationAuditRecords[variationAuditRecords.length - 1],
           };
         });
 

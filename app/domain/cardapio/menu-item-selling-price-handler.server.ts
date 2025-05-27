@@ -15,7 +15,7 @@ import {
   PizzaSizeKey,
   menuItemSizePrismaEntity,
 } from "./menu-item-size.entity.server";
-import { menuItemSellingPriceUtilityEntity } from "./menu-item-selling-price-utility.entity.server";
+import { menuItemSellingPriceUtilityEntity } from "./menu-item-selling-price-utility.entity";
 import { menuItemSellingChannelPrismaEntity } from "./menu-item-selling-channel.entity.server";
 import { PrismaEntityProps } from "~/lib/prisma/types.server";
 import { menuItemPrismaEntity } from "./menu-item.prisma.entity.server";
@@ -148,11 +148,15 @@ export class MenuItemSellingPriceHandler {
         channelKey: channel.key,
         channelName: channel.name,
         priceAmount: variation?.priceAmount ?? 0,
+        profitActualPerc: variation?.profitActualPerc ?? 0,
+        priceExpectedAmount: variation?.priceExpectedAmount ?? 0,
+        profitExpectedPerc: variation?.profitExpectedPerc ?? 0,
         computedSellingPriceBreakdown,
         discountPercentage: variation?.discountPercentage ?? 0,
         updatedBy: variation?.updatedBy,
         updatedAt: variation?.updatedAt,
         previousPriceAmount: variation?.previousPriceAmount ?? 0,
+        lastAuditRecord: variation?.lastAuditRecord,
         warnings: itemSellPriceVariationWarnings,
       };
     };
@@ -233,14 +237,6 @@ export class MenuItemSellingPriceHandler {
         type: "alert",
         code: "SELL_PRICE_BELOW_RECOMMENDED",
         message: `O preço de venda de ${base} está abaixo do recomendado.`,
-      });
-    }
-
-    if (actualPrice > computedPrice * 1.5) {
-      warnings.push({
-        type: "info",
-        code: "SELL_PRICE_ABOVE_EXPECTED",
-        message: `O preço de venda de ${base} está muito acima do recomendado.`,
       });
     }
 

@@ -1,5 +1,8 @@
-import { MenuItemGroup } from "@prisma/client";
-import { ComputedSellingPriceBreakdown } from "./menu-item-selling-price-utility.entity.server";
+import {
+  MenuItemGroup,
+  MenuItemSellingPriceVariationAudit,
+} from "@prisma/client";
+import { ComputedSellingPriceBreakdown } from "./menu-item-selling-price-utility.entity";
 import { PizzaSizeKey } from "./menu-item-size.entity.server";
 
 // para custos
@@ -33,13 +36,21 @@ export interface SellPriceVariation {
   channelId: string | null;
   channelKey: string | null;
   channelName: string;
+  /** efetivo valor de venda publico do cardapio */
   priceAmount: number;
+  /** a percentagem do profito realizado com o efetivo valor de venda */
+  profitActualPerc: number;
+  /** o valor calculado com base a formula do DNA */
+  priceExpectedAmount: number;
+  /** a percentagem do profito desejada para o canal de venda */
+  profitExpectedPerc: number;
   discountPercentage: number;
   updatedBy?: string;
   updatedAt?: Date;
   previousPriceAmount: number;
   computedSellingPriceBreakdown?: ComputedSellingPriceBreakdown;
   warnings?: Warning[];
+  lastAuditRecord?: MenuItemSellingPriceVariationAudit;
 }
 
 export interface MenuItemWithSellPriceVariations {

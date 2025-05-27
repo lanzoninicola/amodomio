@@ -1,4 +1,4 @@
-import { MenuItemPriceVariation } from "@prisma/client";
+import { MenuItemPriceVariation, MenuItemSellingPriceVariationAudit } from "@prisma/client";
 import { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { Await, useLoaderData, defer, Form, useActionData } from "@remix-run/react";
 import { AlertCircleIcon } from "lucide-react";
@@ -17,7 +17,7 @@ import { authenticator } from "~/domain/auth/google.server";
 import AlertsCostsAndSellPrice from "~/domain/cardapio/components/alerts-cost-and-sell-price/alerts-cost-and-sell-price";
 import { menuItemSellingPriceHandler } from "~/domain/cardapio/menu-item-selling-price-handler.server";
 
-import { ComputedSellingPriceBreakdown } from "~/domain/cardapio/menu-item-selling-price-utility.entity.server";
+import { ComputedSellingPriceBreakdown, menuItemSellingPriceUtilityEntity } from "~/domain/cardapio/menu-item-selling-price-utility.entity";
 import { MenuItemSellingPriceVariationUpsertParams, menuItemSellingPriceVariationPrismaEntity } from "~/domain/cardapio/menu-item-selling-price-variation.entity.server";
 import { MenuItemWithSellPriceVariations, SellPriceVariation } from "~/domain/cardapio/menu-item.types";
 import prismaClient from "~/lib/prisma/client.server";
@@ -27,6 +27,7 @@ import formatDecimalPlaces from "~/utils/format-decimal-places";
 import { badRequest, ok } from "~/utils/http-response.server";
 import randomReactKey from "~/utils/random-react-key";
 import toFixedNumber from "~/utils/to-fixed-number";
+import createUUID from "~/utils/uuid";
 
 type SortOrderType = "default" | "alphabetical-asc" | "alphabetical-desc" | "price-asc" | "price-desc";
 
@@ -67,7 +68,7 @@ export async function action({ request }: ActionFunctionArgs) {
   let formData = await request.formData();
   const { _action, ...values } = Object.fromEntries(formData);
 
-  console.log({ _action, values })
+
 
   if (_action === "upsert-by-user-input") {
 
@@ -76,7 +77,13 @@ export async function action({ request }: ActionFunctionArgs) {
     const menuItemSizeId = values?.menuItemSizeId as string
     const menuItemId = values?.menuItemId as string
     const priceAmount = toFixedNumber(values?.priceAmount, 2) || 0
-    const previousPriceAmount = toFixedNumber(values?.previousPriceAmount, 2) || 0
+
+    const recipeCostAmount = toFixedNumber(values?.recipeCostAmount, 2) || 0
+    const packagingCostAmount = toFixedNumber(values?.packagingCostAmount, 2) || 0
+    const doughCostAmount = toFixedNumber(values?.doughCostAmount, 2) || 0
+    const wasteCostAmount = toFixedNumber(values?.wasteCostAmount, 2) || 0
+    const sellingPriceExpectedAmount = toFixedNumber(values?.sellingPriceExpectedAmount, 2) || 0
+    const profitExpectedPerc = toFixedNumber(values?.profitExpectedPerc, 2) || 0
 
     // at the moment we are not using the discount percentage
     const discountPercentage = isNaN(Number(values?.discountPercentage)) ? 0 : Number(values?.discountPercentage)
@@ -86,12 +93,26 @@ export async function action({ request }: ActionFunctionArgs) {
 
     const updatedBy = values?.updatedBy as string
 
+    const dnaPerc = (await menuItemSellingPriceUtilityEntity.getSellingPriceConfig()).dnaPercentage || 0
+    const profitActualPerc = menuItemSellingPriceUtilityEntity.calculateProfitPercFromSellingPrice(
+      priceAmount,
+      {
+        fichaTecnicaCostAmount: recipeCostAmount,
+        packagingCostAmount,
+        doughCostAmount,
+        wasteCostAmount,
+      },
+      dnaPerc
+    )
+
     const nextPrice: MenuItemSellingPriceVariationUpsertParams = {
       menuItemId,
       menuItemSellingChannelId,
       menuItemSizeId,
       priceAmount: priceAmount,
-      previousPriceAmount: previousPriceAmount,
+      priceExpectedAmount: sellingPriceExpectedAmount,
+      profitActualPerc,
+      profitExpectedPerc,
       discountPercentage,
       showOnCardapio,
       updatedBy,
@@ -100,10 +121,38 @@ export async function action({ request }: ActionFunctionArgs) {
 
     const [err, result] = await prismaIt(menuItemSellingPriceVariationPrismaEntity.upsert(menuItemSellPriceVariationId, nextPrice))
 
+    if (!result) {
+      return badRequest(`Não foi possível atualizar o preço de venda`)
+    }
 
+    // start audit
+    // in the future we should move this inside the class that handle the mutation of selling price for the item
+    const nextPriceAudit: MenuItemSellingPriceVariationAudit = {
+      id: createUUID(),
+      menuItemId,
+      menuItemSellingChannelId,
+      menuItemSizeId,
+      doughCostAmount,
+      packagingCostAmount,
+      recipeCostAmount,
+      wasteCostAmount,
+      sellingPriceExpectedAmount,
+      profitExpectedPerc,
+      sellingPriceActualAmount: priceAmount,
+      profitActualPerc,
+      dnaPerc,
+      updatedBy,
+      createdAt: new Date(),
+      updatedAt: new Date(),
 
-    if (err) {
-      return badRequest(err)
+    }
+
+    const [errAudit, auditResult] = await prismaIt(prismaClient.menuItemSellingPriceVariationAudit.create({
+      data: nextPriceAudit
+    }))
+
+    if (err || errAudit) {
+      return badRequest(err || errAudit || `Não foi possível atualizar o preço de venda`)
     }
 
     return ok(`O preço de venda foi atualizado com sucesso`)
@@ -245,48 +294,55 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
 
                 </div>
                 <Separator className="my-4" />
-                <AlertsCostsAndSellPrice items={items} />
-
-                <div className="bg-slate-50 px-60 py-2 grid place-items-center mb-4 rounded-sm">
-                  <Input name="search" className="w-full py-4 text-lg bg-white " placeholder="Pesquisar o sabor..." onChange={(e) => handleSearch(e)} value={search} />
-                </div>
-
-                <div className="flex flex-row gap-x-4 mb-4 items-center">
-                  <span className="text-xs">Ordenamento:</span>
-                  <div className="flex flex-row gap-x-4 ">
-
-                    <SortOrderOption
-                      label="Padrão"
-                      sortOrderType="default"
-                      handleSort={handleSort}
-                    />
-                    <Separator orientation="vertical" className="h-4" />
 
 
-                    <SortOrderOption
-                      label="A-Z"
-                      sortOrderType="alphabetical-asc"
-                      handleSort={handleSort}
-                    />
-                    <SortOrderOption
-                      label="Z-A"
-                      sortOrderType="alphabetical-desc"
-                      handleSort={handleSort}
-                    />
-
-                    <Separator orientation="vertical" className="h-4" />
-
-                    <SortOrderOption
-                      label="Preço crescente (Tamanho Medio)"
-                      sortOrderType="price-asc"
-                      handleSort={handleSort}
-                    />
-                    <SortOrderOption
-                      label="Preço decrescente (Tamanho Medio)"
-                      sortOrderType="price-desc"
-                      handleSort={handleSort}
-                    />
+                <div className="grid grid-cols-12 gap-x-2 items-center mb-4">
+                  <div className="col-span-1 flex">
+                    <AlertsCostsAndSellPrice items={items} />
                   </div>
+                  <div className="bg-slate-50 px-auto w-full py-2 px-4 grid place-items-center rounded-sm col-span-4">
+                    <Input name="search" className="w-full py-4 text-lg bg-white " placeholder="Pesquisar o sabor..." onChange={(e) => handleSearch(e)} value={search} />
+                  </div>
+
+                  <div className="flex flex-row gap-x-4  items-center justify-end col-span-7">
+                    <span className="text-xs">Ordenamento:</span>
+                    <div className="flex flex-row gap-x-4 ">
+
+                      <SortOrderOption
+                        label="Padrão"
+                        sortOrderType="default"
+                        handleSort={handleSort}
+                      />
+                      <Separator orientation="vertical" className="h-4" />
+
+
+                      <SortOrderOption
+                        label="A-Z"
+                        sortOrderType="alphabetical-asc"
+                        handleSort={handleSort}
+                      />
+                      <SortOrderOption
+                        label="Z-A"
+                        sortOrderType="alphabetical-desc"
+                        handleSort={handleSort}
+                      />
+
+                      <Separator orientation="vertical" className="h-4" />
+
+                      <SortOrderOption
+                        label="Preço crescente (Tamanho Medio)"
+                        sortOrderType="price-asc"
+                        handleSort={handleSort}
+                      />
+                      <SortOrderOption
+                        label="Preço decrescente (Tamanho Medio)"
+                        sortOrderType="price-desc"
+                        handleSort={handleSort}
+                      />
+                    </div>
+                  </div>
+
+
                 </div>
 
 
@@ -307,11 +363,11 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
                                   <AccordionTrigger>
                                     <h3 className="text-md font-semibold">{menuItem.name} ({sellingChannel.name})</h3>
                                   </AccordionTrigger>
-                                  <ul className="grid grid-cols-5 mb-4">
+                                  <ul className="grid grid-cols-5 mb-4 gap-x-2">
                                     {menuItem.sellPriceVariations.map((record) => {
 
                                       const minimumPriceAmountWithProfit = record.computedSellingPriceBreakdown?.minimumPrice?.priceAmount.withProfit ?? 0
-                                      const minimumPriceAmountWithoutMargin = record.computedSellingPriceBreakdown?.minimumPrice?.priceAmount.breakEven ?? 0
+                                      const minimumPriceAmountWithoutProfit = record.computedSellingPriceBreakdown?.minimumPrice?.priceAmount.breakEven ?? 0
 
                                       return (
                                         <li key={randomReactKey()} >
@@ -319,22 +375,45 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
                                           <div className="flex flex-col justify-center">
                                             <p className="text-[11px] uppercase text-center ">{record.sizeName}</p>
 
-                                            <div className="grid grid-cols-2 gap-2 justify-center">
-                                              <div className="flex flex-col text-center">
-                                                <p className="text-[11px] text-muted-foreground">Valor:</p>
-                                                <p className={
-                                                  cn(
-                                                    "text-[12px] font-mono",
-                                                    record.priceAmount > 0 && minimumPriceAmountWithProfit > record.priceAmount && 'bg-red-500'
-                                                  )
-                                                }
-                                                >{formatDecimalPlaces(record.priceAmount)}</p>
-                                              </div>
-                                              <div className="flex flex-col text-center">
-                                                {/* <p className="text-[11px] text-muted-foreground">Valor recomendado:</p> */}
+                                            <div className="flex flex-col gap-0">
+                                              <div className="grid grid-cols-2 gap-2 justify-center">
+                                                <div className="flex flex-col text-center">
+                                                  <p className="text-[11px] text-muted-foreground">Valor de venda:</p>
+                                                  <p className={
+                                                    cn(
+                                                      "text-[12px] font-mono",
+                                                      record.priceAmount > 0 && minimumPriceAmountWithProfit > record.priceAmount && 'bg-orange-200',
+                                                      record.priceAmount > 0 && minimumPriceAmountWithoutProfit > record.priceAmount && 'bg-red-400',
+                                                    )
+                                                  }
+                                                  >{formatDecimalPlaces(record.priceAmount)}</p>
+                                                </div>
+                                                <div className="flex flex-col gap-1">
+                                                  <div className="flex flex-col text-center">
+                                                    {/* <p className="text-[11px] text-muted-foreground">Valor recomendado:</p> */}
 
-                                                <MinimumSellPriceLabelDialog computedSellingPriceBreakdown={record.computedSellingPriceBreakdown} />
-                                                <p className="text-[12px] font-mono">{formatDecimalPlaces(minimumPriceAmountWithProfit)}</p>
+                                                    <p className="text-[11px] text-muted-foreground">Break-even:</p>
+                                                    <p className="text-[12px] font-mono">{formatDecimalPlaces(minimumPriceAmountWithoutProfit)}</p>
+                                                  </div>
+                                                  <div className="flex flex-col text-center">
+                                                    {/* <p className="text-[11px] text-muted-foreground">Valor recomendado:</p> */}
+
+                                                    <MinimumSellPriceLabelDialog computedSellingPriceBreakdown={record.computedSellingPriceBreakdown} />
+                                                    <p className="text-[12px] font-mono">{formatDecimalPlaces(minimumPriceAmountWithProfit)}</p>
+                                                  </div>
+                                                </div>
+                                              </div>
+                                              <Separator className="my-2 px-4" />
+                                              <div className="flex justify-center">
+                                                <span className={
+                                                  cn(
+                                                    "text-xs text-muted-foreground",
+                                                    record.profitActualPerc > 10 && record.profitActualPerc < sellingChannel.targetMarginPerc && "text-orange-500 font-semibold",
+                                                    record.profitActualPerc > 0 && record.profitActualPerc < 10 && "text-red-500 font-semibold",
+                                                    record.profitActualPerc >= sellingChannel.targetMarginPerc && "text-green-500 font-semibold",
+                                                    record.profitActualPerc < 0 && "text-red-500 font-semibold"
+                                                  )
+                                                }>Profitto real: {record?.profitActualPerc ?? 0}%</span>
                                               </div>
                                             </div>
 
@@ -392,6 +471,12 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
                                                   <input type="hidden" name="updatedBy" value={record.updatedBy || user?.email || ""} />
                                                   <input type="hidden" name="previousPriceAmount" value={record.previousPriceAmount} />
 
+                                                  <input type="hidden" name="recipeCostAmount" value={record.computedSellingPriceBreakdown?.custoFichaTecnica ?? 0} />
+                                                  <input type="hidden" name="packagingCostAmount" value={record.computedSellingPriceBreakdown?.packagingCostAmount ?? 0} />
+                                                  <input type="hidden" name="doughCostAmount" value={record.computedSellingPriceBreakdown?.doughCostAmount ?? 0} />
+                                                  <input type="hidden" name="wasteCostAmount" value={record.computedSellingPriceBreakdown?.wasteCost ?? 0} />
+                                                  <input type="hidden" name="sellingPriceExpectedAmount" value={record.computedSellingPriceBreakdown?.minimumPrice.priceAmount.withProfit ?? 0} />
+                                                  <input type="hidden" name="profitExpectedPerc" value={record.computedSellingPriceBreakdown?.channel.targetMarginPerc ?? 0} />
 
                                                   <div className="grid grid-cols-2 gap-2">
 
@@ -517,7 +602,7 @@ function MinimumSellPriceLabelDialog({ computedSellingPriceBreakdown }: MinimumP
   return (
     <Dialog>
       <DialogTrigger asChild className="w-full">
-        <span className="text-muted-foreground text-[11px] cursor-pointer hover:underline">Valor minimo</span>
+        <span className="text-muted-foreground text-[11px] cursor-pointer hover:underline">{`Val. rec. (lucro ${cspb.channel?.targetMarginPerc}%)`}</span>
       </DialogTrigger>
       <DialogContent>
 
@@ -533,7 +618,10 @@ function MinimumSellPriceLabelDialog({ computedSellingPriceBreakdown }: MinimumP
               <Amount>{cspb?.wasteCost}</Amount>
             </div>
 
-
+            <div className="grid grid-cols-4 items-center">
+              <Label>Custo Massa</Label>
+              <Amount>{cspb?.doughCostAmount}</Amount>
+            </div>
 
 
             <div className="grid grid-cols-4 items-center">
@@ -574,6 +662,7 @@ function MinimumSellPriceLabelDialog({ computedSellingPriceBreakdown }: MinimumP
               <Amount>{
                 Number((cspb?.custoFichaTecnica ?? 0)
                   + (cspb?.wasteCost ?? 0)
+                  + (cspb?.doughCostAmount ?? 0)
                   + (cspb?.packagingCostAmount ?? 0)
                   + (cspb?.channel?.taxPerc ?? 0)).toFixed(2)
               }</Amount>
@@ -582,14 +671,14 @@ function MinimumSellPriceLabelDialog({ computedSellingPriceBreakdown }: MinimumP
             <Separator className="my-4" />
 
             <div className="flex flex-col gap-2">
-              <Label cnContainer="font-semibold">{`Preço de venda sugerido`}</Label>
+              <Label cnContainer="font-semibold">{`Preço de venda minimo`}</Label>
               <div className="grid grid-cols-4 items-center">
-                <span className="text-xs col-span-3">Sem margem (com cobertura custos fixos)</span>
+                <span className="text-xs col-span-3">Sem profito (com cobertura custos fixos)</span>
                 <Amount>{Number(cspb?.minimumPrice?.priceAmount.breakEven ?? 0).toFixed(2)}</Amount>
               </div>
 
               <div className="grid grid-cols-4 items-center mb-2">
-                <span className="text-xs col-span-3">Com margem</span>
+                <span className="text-xs col-span-3">Com profito</span>
                 <Amount>{Number(cspb?.minimumPrice?.priceAmount.withProfit ?? 0).toFixed(2)}</Amount>
               </div>
 

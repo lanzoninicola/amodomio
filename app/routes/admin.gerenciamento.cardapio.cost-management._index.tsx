@@ -76,6 +76,24 @@ export async function action({ request }: ActionFunctionArgs) {
         return ok(`O custo da ficha tecnica foi atualizado com sucesso`)
     }
 
+    if (_action === "menu-item-cost-variation-upsert-from-medium") {
+        const menuItemId = values?.menuItemId as string
+        const updatedBy = values?.updatedBy as string
+        const costAmount = parserFormDataEntryToNumber(values?.costAmount) || 0
+
+        const [err, result] = await prismaIt(menuItemCostVariationPrismaEntity.upsertMenuItemCostVariationsFromMedium(
+            menuItemId,
+            costAmount,
+            updatedBy
+        ))
+
+        if (err) {
+            return badRequest(err)
+        }
+
+        return ok(`Os custos de todas as variações de tamanho foram atualizados com sucesso`)
+    }
+
     if (_action === "menu-item-cost-variation-upsert-proposed-input") {
 
         const menuItemId = values?.menuItemId as string
@@ -257,7 +275,7 @@ export default function AdminGerenciamentoCardapioCostManagementIndex() {
                                                             </Form>
                                                         </div>
 
-                                                        <ul className="grid grid-cols-5 gap-x-1">
+                                                        <ul className="grid grid-cols-4 gap-x-1">
                                                             {menuItem.costVariations.map((record) => (
                                                                 <section key={randomReactKey()} className="mb-8">
 
@@ -294,39 +312,59 @@ export default function AdminGerenciamentoCardapioCostManagementIndex() {
                                                                                         <input type="hidden" name="previousCostAmount" value={record.previousCostAmount} />
 
                                                                                         <div className="flex flex-col gap-2">
+                                                                                            <div className="flex flex-col gap-1">
+                                                                                                <div className="grid grid-cols-2 gap-2">
 
-                                                                                            <div className="grid grid-cols-2 gap-2">
+                                                                                                    <div className="flex flex-col gap-1 items-center">
+                                                                                                        <div className="flex flex-col gap-y-0">
+                                                                                                            <span className="text-muted-foreground text-[11px]">Novo custo:</span>
+                                                                                                            <NumericInput name="costAmount" defaultValue={record.costAmount} />
+                                                                                                        </div>
 
-                                                                                                <div className="flex flex-col gap-1 items-center">
-                                                                                                    <div className="flex flex-col gap-y-0">
-                                                                                                        <span className="text-muted-foreground text-[11px]">Novo custo:</span>
-                                                                                                        <NumericInput name="costAmount" defaultValue={record.costAmount} />
+                                                                                                        <SubmitButton
+                                                                                                            actionName="menu-item-cost-variation-upsert-user-input"
+                                                                                                            tabIndex={0}
+                                                                                                            cnContainer="bg-slate-300 md:max-w-none hover:bg-slate-400"
+                                                                                                            cnLabel="text-[11px] tracking-widest text-black uppercase"
+                                                                                                            iconColor="black"
+
+                                                                                                        />
+
+
                                                                                                     </div>
-                                                                                                    <SubmitButton
-                                                                                                        actionName="menu-item-cost-variation-upsert-user-input"
-                                                                                                        tabIndex={0}
-                                                                                                        cnContainer="md:py-0 bg-slate-300 hover:bg-slate-400"
-                                                                                                        cnLabel="text-[11px] tracking-widest text-black uppercase"
-                                                                                                        iconColor="black"
-                                                                                                    />
-                                                                                                </div>
 
-                                                                                                <div className="flex flex-col gap-1 items-center">
-                                                                                                    <div className="flex flex-col gap-y-0">
-                                                                                                        <span className="text-muted-foreground text-[11px]">Valor proposto</span>
-                                                                                                        <NumericInput name="recommendedCostAmount" defaultValue={record.recommendedCostAmount} readOnly />
+                                                                                                    <div className="flex flex-col gap-1 items-center">
+                                                                                                        <div className="flex flex-col gap-y-0 w-ma">
+                                                                                                            <span className="text-muted-foreground text-[11px]">Valor proposto</span>
+                                                                                                            <NumericInput name="recommendedCostAmount" defaultValue={record.recommendedCostAmount} readOnly />
+                                                                                                        </div>
+                                                                                                        <SubmitButton
+                                                                                                            actionName="menu-item-cost-variation-upsert-proposed-input"
+                                                                                                            tabIndex={0}
+                                                                                                            cnContainer="bg-white border w-full hover:bg-slate-200 "
+                                                                                                            cnLabel="text-[11px] tracking-widest text-black uppercase leading-[1.15]"
+                                                                                                            hideIcon
+                                                                                                            idleText="Aceitar proposta"
+                                                                                                            loadingText="Aceitando..."
+                                                                                                        />
                                                                                                     </div>
-                                                                                                    <SubmitButton
-                                                                                                        actionName="menu-item-cost-variation-upsert-proposed-input"
-                                                                                                        tabIndex={0}
-                                                                                                        cnContainer="bg-white border w-full hover:bg-slate-200"
-                                                                                                        cnLabel="text-[11px] tracking-widest text-black uppercase leading-[1.15]"
-                                                                                                        hideIcon
-                                                                                                        idleText="Aceitar proposta"
-                                                                                                        loadingText="Aceitando..."
-                                                                                                    />
-                                                                                                </div>
 
+                                                                                                </div>
+                                                                                                <SubmitButton
+                                                                                                    variant={"outline"}
+                                                                                                    actionName="menu-item-cost-variation-upsert-from-medium"
+                                                                                                    tabIndex={0}
+                                                                                                    cnContainer={
+                                                                                                        cn(
+                                                                                                            "md:max-w-none",
+                                                                                                            record.sizeKey !== "pizza-medium" && "hidden"
+                                                                                                        )
+                                                                                                    }
+                                                                                                    cnLabel="text-[11px] tracking-widest text-black uppercase leading-[1.15] "
+                                                                                                    iconColor="black"
+                                                                                                    idleText="Recalcular outros tamanhos"
+                                                                                                    loadingText="Recalculando..."
+                                                                                                />
                                                                                             </div>
                                                                                             {(record?.costAmount ?? 0) === 0 && (
                                                                                                 <div className="flex gap-2 items-center mt-2">

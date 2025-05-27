@@ -52,7 +52,7 @@ export default function MenuItemForm({ item, action, className, categories, logg
                 item?.visible === false && item?.active === true
                 && (
                     <Alert className="mb-4 border-orange-400">
-                        <AlertCircle size={16} className="mr-2" />
+                        <AlertCircle size={16} className="mr-2 " color="orange" />
                         <div className="flex flex-col">
                             <span className="text-sm font-semibold text-orange-400">Sabor pausado</span>
                             <span className="text-xs text-orange-300">Esse sabor está pausado e não será exibido no cardápio</span>
