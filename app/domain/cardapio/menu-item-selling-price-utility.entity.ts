@@ -17,6 +17,7 @@ import {
   MenuItemSellingChannel,
   MenuItemSize,
 } from "@prisma/client";
+import { se } from "date-fns/locale";
 
 interface MenuItemSellingPriceUtilityEntityConstructorProps
   extends PrismaEntityProps {
@@ -36,12 +37,14 @@ export interface ComputedSellingPriceBreakdown {
   custoFichaTecnica: number;
   wasteCost: number;
   packagingCostAmount: number;
+  doughCostAmount: number;
   channel: {
     name: string;
     taxPerc: number;
     feeAmount: number;
     isMarketplace: boolean;
     onlinePaymentTaxPerc: number;
+    targetMarginPerc: number; // percentage of profit margin desired
   };
   minimumPrice: SellingPriceAudit;
 }
@@ -112,21 +115,26 @@ class MenuItemSellingPriceUtilityEntity {
     const wasteFactor = 1 + sellingPriceConfig.wastePercentage / 100;
 
     const itemTotalCost =
-      custoFichaTecnica * wasteFactor + (size?.packagingCostAmount ?? 0);
-    const targetMarginPerc = channel?.targetMarginPerc ?? 0;
+      custoFichaTecnica * wasteFactor +
+      (size?.pizzaDoughCostAmount ?? 0) +
+      (size?.packagingCostAmount ?? 0);
+    const targetProfitPerc = channel?.targetMarginPerc ?? 0;
 
     let price = this.calculateSellingPrice(
       itemTotalCost,
       sellingPriceConfig.dnaPercentage,
-      targetMarginPerc
+      targetProfitPerc
     );
 
     if (channel?.isMarketplace) {
+      // in case there are other costs, like delivery fees or online payment fees,
       const otherCosts = 0;
       const channelTaxPerc = channel?.taxPerc ?? 0;
 
+      // calculate the selling price for marketplace,
+      // the calculation of marketplace selling prices starts from the cardapio price
       price = this.calculateSellingPriceForMarketplace(
-        price.priceAmount.withProfit,
+        price.priceAmount,
         otherCosts,
         channelTaxPerc
       );
@@ -135,6 +143,7 @@ class MenuItemSellingPriceUtilityEntity {
     return {
       custoFichaTecnica: Number(custoFichaTecnica.toFixed(2)),
       wasteCost: Number((custoFichaTecnica * (wasteFactor - 1)).toFixed(2)),
+      doughCostAmount: Number((size?.pizzaDoughCostAmount ?? 0).toFixed(2)),
       packagingCostAmount: Number((size?.packagingCostAmount ?? 0).toFixed(2)),
       channel: {
         name: channel?.name ?? "",
@@ -142,6 +151,7 @@ class MenuItemSellingPriceUtilityEntity {
         feeAmount: channel?.feeAmount ?? 0,
         isMarketplace: channel?.isMarketplace ?? false,
         onlinePaymentTaxPerc: channel?.onlinePaymentTaxPerc ?? 0,
+        targetMarginPerc: channel?.targetMarginPerc ?? 0,
       },
       minimumPrice: {
         priceAmount: {
@@ -166,33 +176,33 @@ class MenuItemSellingPriceUtilityEntity {
    *
    * @param amount O valor total do custo do item ou o preço de venda em caso de marketplace
    * @param dnaPerc % DNA Empres
-   * @param targetMarginPerc % lucro desejado
+   * @param targetProfitPerc % lucro desejado
    * @returns preço de venda redondo para cima em 0.05
    */
   calculateSellingPrice(
     amount: number,
     dnaPerc: number,
-    targetMarginPerc: number
+    targetProfitPerc: number
   ): SellingPriceAudit {
-    const divisor = 1 - (dnaPerc / 100 + targetMarginPerc / 100);
+    const divisor = 1 - (dnaPerc / 100 + targetProfitPerc / 100);
     const priceWithProfit = amount / divisor;
 
-    const divisorWithoutMargin = 1 - dnaPerc / 100;
-    const priceWithoutMargin = amount / divisorWithoutMargin;
+    const divisorWithoutProfit = 1 - dnaPerc / 100;
+    const priceWithoutProfit = amount / divisorWithoutProfit;
 
     return {
-      formulaExplanation: `(Custo ficha técnica + Desperdício + Custo embalagem) / (1 - (% Dna + % Margem))`,
+      formulaExplanation: `(Custo ficha técnica + Desperdício + Custo embalagem) / (1 - (% Dna + % Profito))`,
       formulaExpression: `(${formatDecimalPlaces(
         amount
       )} / (1 - (${formatDecimalPlaces(dnaPerc)} / 100 + ${formatDecimalPlaces(
-        targetMarginPerc
+        targetProfitPerc
       )} / 100)))`,
       priceAmount: {
         withProfit: formatDecimalPlaces(
           Math.ceil(priceWithProfit / 0.05) * 0.05
         ),
         breakEven: formatDecimalPlaces(
-          Math.ceil(priceWithoutMargin / 0.05) * 0.05
+          Math.ceil(priceWithoutProfit / 0.05) * 0.05
         ),
       },
     };
@@ -200,27 +210,79 @@ class MenuItemSellingPriceUtilityEntity {
 
   /**
    *
-   * @param sellingPrice O preço de venda do produto aplicado no cardápio da loja
+   * @param basePrice O preço de venda do produto aplicado no cardápio da loja
    * @param otherCosts Outros custos que o produto tem, como taxa de cartão, taxa de entrega, etc.
    * @param channelTaxPerc a taxa do canal de venda (iFood, site, etc.)
    * @returns  O preço de venda do produto aplicado no canal de venda
    */
   calculateSellingPriceForMarketplace(
-    sellingPrice: number,
+    basePrice: SellingPriceAudit["priceAmount"],
     otherCosts: number,
     channelTaxPerc: number
   ): SellingPriceAudit {
     const divisor = 1 - channelTaxPerc / 100;
 
-    const price = (sellingPrice + otherCosts) / divisor;
+    const priceWithProfit = (basePrice.withProfit + otherCosts) / divisor;
 
     return {
-      formulaExplanation: `(Preço de venda + Outros custos) / (1 - Taxa do canal)`,
+      formulaExplanation: `(Preço de venda + Outros custos) / (1 - Taxa do canal). O calculo de preço de venda para marketplace começa pelo preço do cardápio`,
       formulaExpression: `(${formatDecimalPlaces(
-        sellingPrice
+        basePrice.withProfit
       )} + ${formatDecimalPlaces(otherCosts)}) / (1 - ${channelTaxPerc} / 100)`,
-      priceAmount: Number((Math.ceil(price / 0.05) * 0.05).toFixed(2)),
+      priceAmount: {
+        withProfit: formatDecimalPlaces(
+          Math.ceil(priceWithProfit / 0.05) * 0.05
+        ),
+        breakEven: basePrice.breakEven, // no change for break-even price
+      },
     };
+  }
+
+  /**
+   * Calculates the profit percentage based on the selling price.
+   *
+   * This function takes into account the base cost of the item,
+   * the DNA percentage, and the selling price to compute the profit percentage.
+   * * The formula used is:
+   * *   profitPerc = 1 - (totalBaseCost / sellingPrice) - (dnaPercentage / 100)
+   * * This ensures that the profit percentage is calculated correctly,
+   * * and it returns a value that is formatted to two decimal places.
+   *
+   *
+   * @param sellingPrice
+   * @param baseCost
+   * @param dnaPercentage
+   * @returns
+   */
+  calculateProfitPercFromSellingPrice(
+    sellingPrice: number,
+    baseCost: {
+      fichaTecnicaCostAmount: number;
+      packagingCostAmount: number;
+      doughCostAmount: number;
+      wasteCostAmount: number;
+    },
+    dnaPercentage: number // Ex: 15 para 15%
+  ): number {
+    const totalBaseCost =
+      baseCost.fichaTecnicaCostAmount +
+      baseCost.packagingCostAmount +
+      baseCost.doughCostAmount +
+      baseCost.wasteCostAmount;
+
+    if (sellingPrice <= 0 || totalBaseCost <= 0) {
+      return 0;
+    }
+
+    // Ensure dnaPercentage is a valid number between 0 and 100
+    const dnaPercDecimal = dnaPercentage / 100;
+
+    // Calculate profit percentage
+    const profit = 1 - totalBaseCost / sellingPrice - dnaPercDecimal;
+
+    const profitPercPercentage = profit * 100;
+
+    return formatDecimalPlaces(profitPercPercentage); // Ensure profit percentage is not negative
   }
 }
 

@@ -103,7 +103,7 @@ export default function MenuItemCard({ item, dragAndDrop }: MenuItemCardProps) {
                     </div>
 
                     <div className="col-span-1 flex justify-end">
-                        <Link to={`${item?.id}/main`} className="hover:bg-muted rounded-full p-1">
+                        <Link to={`/admin/gerenciamento/cardapio/${item?.id}/main`} className="hover:bg-muted rounded-full p-1">
                             <ChevronRight />
                         </Link>
                     </div>

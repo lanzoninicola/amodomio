@@ -159,7 +159,7 @@ export default function AdminGerenciamentoCardapioSellPriceManagement() {
                         <Form method="post" className="flex justify-center gap-4 items-center ">
                           <input type="hidden" name="channelKey" defaultValue={channel.key} />
                           <span className="text-muted-foreground text-[11px]">
-                            Lucro Desejado (%)
+                            Profito Desejado (%)
                           </span>
                           <NumericInput name="targetMarginPerc" defaultValue={channel.targetMarginPerc} className="w-16" />
                           {actionData?.errors?.targetMarginPerc && (
