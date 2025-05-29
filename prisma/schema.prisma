@@ -183,6 +183,7 @@ model MenuItem {
   basePriceAmount                    Float                                @map("base_price_amount")
   visible                            Boolean
   active                             Boolean                              @default(true)
+  upcoming                           Boolean                              @default(false)
   mogoId                             String                               @map("mogo_id")
   createdAt                          DateTime                             @map("created_at")
   updatedAt                          DateTime                             @default(now()) @updatedAt @map("updated_at")
