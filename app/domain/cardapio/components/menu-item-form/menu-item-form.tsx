@@ -81,7 +81,7 @@ export default function MenuItemForm({ item, action, className, categories, logg
 
                 <input type="hidden" name="id" value={item?.id} />
 
-                <section className="grid grid-cols-8 gap-x-4 items-center w-full ">
+                <section className="flex flex-col gap-4 md:grid md:grid-cols-8 md:gap-x-4 items-center w-full ">
                     <Input type="text" name="name" defaultValue={item?.name}
                         placeholder="Nome da pizza"
                         className="font-semibold tracking-tight col-span-3" />
@@ -107,7 +107,7 @@ export default function MenuItemForm({ item, action, className, categories, logg
 
                 <Separator className="my-8" />
 
-                <section className="grid grid-cols-8 justify-between gap-x-2">
+                <section className="md:grid md:grid-cols-8 justify-between gap-x-2">
                     <div className="flex flex-col col-span-4">
                         <input type="hidden" name="id" value={item?.id || ""} />
 
@@ -116,7 +116,7 @@ export default function MenuItemForm({ item, action, className, categories, logg
                                 placeholder="Ingredientes"
                                 defaultValue={formatStringList(item?.ingredients, { firstLetterCapitalized: true })}
                                 className={cn(
-                                    "text-xs md:text-sm col-span-4",
+                                    "text-sm col-span-4",
                                     action === "menu-item-create" && "border",
                                     // action === "menu-item-update" && "border-none focus:px-2 p-0"
                                 )} />
@@ -163,7 +163,7 @@ export default function MenuItemForm({ item, action, className, categories, logg
 
                 </section>
 
-                <Separator className="mb-4" />
+                <Separator className="my-4" />
 
 
                 <div className="flex flex-col gap-2">

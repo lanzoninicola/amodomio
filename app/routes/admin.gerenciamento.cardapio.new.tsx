@@ -30,8 +30,6 @@ export async function action({ request }: LoaderFunctionArgs) {
 
     if (_action === "menu-item-create") {
 
-        console.log({ values })
-
         const category = jsonParse(values.category as string)
 
         if (!category?.id) {

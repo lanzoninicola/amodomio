@@ -69,39 +69,47 @@ export default function MenuItemList({ initialItems }: MenuItemListProps) {
 
     const [optVisibleItems, setOptVisibleItems] = useState<boolean | null>(true)
     const [optActiveItems, setOptActiveItems] = useState<boolean | null>(null)
+    const [optUpcomingItems, setOptUpcomingItems] = useState<boolean | null>(null)
 
     const handleOptionVisibileItems = (state: boolean) => {
         setOptVisibleItems(state)
         setOptActiveItems(null)
+        setOptUpcomingItems(null)
         setItems(initialItems.filter(item => item.visible === state && item.active === true))
     }
     const handleOptionActiveItems = (state: boolean) => {
         setOptActiveItems(state)
         setOptVisibleItems(null)
+        setOptUpcomingItems(null)
         setItems(initialItems.filter(item => item.active === state))
+    }
+
+    const handleOptionUpcomingItems = (state: boolean) => {
+        setOptUpcomingItems(state)
+        setOptVisibleItems(null)
+        setOptActiveItems(null)
+        setItems(initialItems.filter(item => item.tags?.all?.includes("futuro-lançamento") === state))
     }
 
 
     return (
         <div className="flex flex-col">
-            <div className="grid grid-cols-8 items-center">
-                <div className="p-4 items-center mb-2 col-span-2">
-                    <span className="text-sm cursor-pointer hover:underline text-muted-foreground"
+            <div className="grid grid-cols-8 gap-x-8 items-center mb-6">
+                <div className="md:p-4 items-center col-span-3 md:col-span-2">
+                    <p className="text-sm cursor-pointer hover:underline text-muted-foreground leading-tight"
                         onClick={() => setDragEnabled(!dragEnable)}
-                    >{dragEnable === true ? 'Desabilitar ordernamento' : 'Abilitar ordenamento'}</span>
+                    >{dragEnable === true ? 'Desabilitar ordernamento' : 'Abilitar ordenamento'}</p>
                 </div>
 
-                <div className="items-center mb-2 col-span-6" >
+                <div className="items-center col-span-5 md:col-span-6" >
                     <Input name="search" className="w-full" placeholder="Pesquisar..." onChange={(e) => handleSearch(e)} value={search} />
                 </div>
             </div>
-            <div className="flex gap-4 items-center justify-center">
-                <OptionTab label="Venda ativa" onClickFn={() => handleOptionVisibileItems(true)} state={true} highlightCondition={optVisibleItems === true && optActiveItems === null} />
-                <span>-</span>
-                <OptionTab label="Venda pausada" onClickFn={() => handleOptionVisibileItems(false)} state={false} highlightCondition={optVisibleItems === false && optActiveItems === null} />
-                <span>-</span>
-                <OptionTab label="Inativos" onClickFn={() => handleOptionActiveItems(false)} state={false} highlightCondition={optActiveItems === false && optVisibleItems === null} />
-
+            <div className="grid grid-cols-2 gap-4 md:flex   md:gap-4 items-center justify-center">
+                <OptionTab label="Venda ativa" onClickFn={() => handleOptionVisibileItems(true)} highlightCondition={optVisibleItems === true && optActiveItems === null} />
+                <OptionTab label="Lançamento futuro" onClickFn={() => handleOptionUpcomingItems(true)} highlightCondition={optUpcomingItems === true} />
+                <OptionTab label="Venda pausada" onClickFn={() => handleOptionVisibileItems(false)} highlightCondition={optVisibleItems === false && optActiveItems === null} />
+                <OptionTab label="Inativos" onClickFn={() => handleOptionActiveItems(false)} highlightCondition={optActiveItems === false && optVisibleItems === null} />
             </div>
             <Separator className="my-4" />
             <ul className="flex flex-col gap-y-4">
