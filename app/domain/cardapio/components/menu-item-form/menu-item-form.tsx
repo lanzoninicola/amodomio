@@ -21,6 +21,7 @@ import MenuItemSwitchVisibility from "../menu-item-switch-visibility/menu-item-s
 import { Alert } from "~/components/ui/alert"
 import { AlertCircle } from "lucide-react"
 import { LoggedUser } from "~/domain/auth/types.server"
+import MenuItemSwitchUpcoming from "../menu-item-switch-upcoming/menu-item-switch-upcoming"
 
 
 export type MenuItemFormAction = "menu-item-create" | "menu-item-update"
@@ -80,37 +81,26 @@ export default function MenuItemForm({ item, action, className, categories, logg
 
                 <input type="hidden" name="id" value={item?.id} />
 
-                <section className="grid grid-cols-12 gap-x-4 items-center w-full">
-                    <div className="flex items-center  gap-2 col-span-5">
-                        <Input type="text" name="name" defaultValue={item?.name}
-                            placeholder="Nome da pizza"
-                            className="font-semibold tracking-tight" />
-                    </div>
-                    {/* <div className="grid grid-cols-4 col-span-4">
-                        {item && item.priceVariations.map(pv => {
-                            return (
-                                <div key={pv.id} className="flex flex-col justify-center">
-                                    <span className="text-xs text-muted-foreground">{mapPriceVariationsLabel(pv.label)}</span>
-                                    <span className="text-sm font-semibold">{pv.amount.toFixed(2)}</span>
-                                </div>
-                            )
+                <section className="grid grid-cols-8 gap-x-4 items-center w-full ">
+                    <Input type="text" name="name" defaultValue={item?.name}
+                        placeholder="Nome da pizza"
+                        className="font-semibold tracking-tight col-span-3" />
+                    <MenuItemSwitchUpcoming
+                        upcoming={item?.upcoming || false}
+                        setVisible={() => { }}
+                        cnContainer="col-span-2"
+                        cnLabel="text-sm"
+                        cnSubLabel="text-xs"
+                    />
 
-                        })}
-                    </div> */}
-
-                    <div className="flex justify-between md:justify-end gap-4 w-full items-center mt-2 col-span-7">
-                        {/* <span className="font-semibold text-sm">Públicar no cardápio</span>
-                        <Switch id="visible" name="visible" defaultChecked={item?.visible || false} /> */}
-
-                        <MenuItemSwitchVisibility
-                            menuItem={item}
-                            visible={item?.visible || false}
-                            setVisible={() => { }}
-                            cnLabel="text-sm"
-                            cnSubLabel="text-xs"
-                        />
-                    </div>
-
+                    <MenuItemSwitchVisibility
+                        menuItem={item}
+                        visible={item?.visible || false}
+                        setVisible={() => { }}
+                        cnContainer="col-span-2"
+                        cnLabel="text-sm"
+                        cnSubLabel="text-xs"
+                    />
 
                 </section>
 
@@ -243,9 +233,6 @@ export default function MenuItemForm({ item, action, className, categories, logg
     )
 }
 
-interface ImageUploaderProps {
-    imageInfo: MenuItemWithAssociations["MenuItemImage"] | undefined
-}
 
 
 export function ImageUploader({ imageInfo }: ImageUploaderProps) {

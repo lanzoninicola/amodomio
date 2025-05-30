@@ -11,11 +11,12 @@ interface MenuItemSwitchVisibilityProps {
     visible: boolean,
     setVisible: React.Dispatch<React.SetStateAction<boolean>>
     showStatus?: boolean
+    cnContainer?: string
     cnLabel?: string
     cnSubLabel?: string
 }
 
-export default function MenuItemSwitchVisibility({ menuItem, visible, setVisible, showStatus = true, cnLabel, cnSubLabel }: MenuItemSwitchVisibilityProps) {
+export default function MenuItemSwitchVisibility({ menuItem, visible, setVisible, cnContainer, showStatus = true, cnLabel, cnSubLabel }: MenuItemSwitchVisibilityProps) {
     const submitBtnRef = React.useRef<HTMLButtonElement>(null)
 
     function handleVisibility() {
@@ -28,7 +29,12 @@ export default function MenuItemSwitchVisibility({ menuItem, visible, setVisible
     }
 
     return (
-        <Form method="post" className="grid grid-cols-2 md:justify-end gap-2 w-full items-center col-span-2">
+        <Form method="post" className={
+            cn(
+                "grid grid-cols-2 md:justify-end gap-2 w-full items-center col-span-2",
+                cnContainer
+            )
+        }>
 
 
             <div className="flex flex-col gap-0">
