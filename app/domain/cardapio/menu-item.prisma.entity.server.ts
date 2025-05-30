@@ -355,7 +355,7 @@ export class MenuItemPrismaEntity {
             previousPriceAmount: variation?.previousPriceAmount ?? 0,
             discountPercentage: variation?.discountPercentage ?? 0,
             lastAuditRecord:
-              variationAuditRecords[variationAuditRecords.length - 1],
+              variationAuditRecords[variationAuditRecords.length - 1] ?? null,
           };
         });
 
@@ -490,7 +490,6 @@ export class MenuItemPrismaEntity {
 
   async create(data: Prisma.MenuItemCreateInput) {
     const newId = uuidv4();
-    data.id = newId;
 
     const priceVariations =
       MenuItemPriceVariationUtility.calculatePriceVariations(
@@ -512,9 +511,23 @@ export class MenuItemPrismaEntity {
 
     const nextItem = {
       ...data,
+      id: newId,
       sortOrderIndex: lastsortOrderIndex + 1,
       slug: slugifyString(data.name),
     };
+
+    if (nextItem.upcoming === true) {
+      // se lançamento futuro, não exibir
+      nextItem.visible = false;
+
+      // const lancamentoFuturoTag = await this.client.tag.findFirst({
+      //   where: { name: "futuro-lancamento" },
+      // });
+
+      // if (lancamentoFuturoTag?.id) {
+      //   this.associateTag(nextItem.id, lancamentoFuturoTag);
+      // }
+    }
 
     await this.cacheManager.invalidate();
 
@@ -533,19 +546,7 @@ export class MenuItemPrismaEntity {
     return await this.client.menuItem.update({ where: { id }, data });
   }
 
-  async softDelete(id: string, deletedBy: string = "undefined") {
-    await this.cacheManager.invalidate();
-
-    return await this.client.menuItem.update({
-      where: { id },
-      data: {
-        visible: false,
-        active: false,
-        deletedAt: new Date().toISOString(),
-        deletedBy: deletedBy,
-      },
-    });
-  }
+  async softDelete(id: string, deletedBy: string = "undefined") {}
 
   async delete(id: string) {
     await this.cacheManager.invalidate();

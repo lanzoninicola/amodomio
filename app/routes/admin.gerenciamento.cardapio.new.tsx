@@ -36,11 +36,12 @@ export async function action({ request }: LoaderFunctionArgs) {
             return badRequest("Categoria não seleçionada")
         }
 
-        const menuItem: Prisma.MenuItemCreateInput = {
+        const nextMenuItem: Prisma.MenuItemCreateInput = {
             name: values.name as string,
             ingredients: values.ingredients as string,
             description: values?.description as string || "",
             visible: values?.visible === "on" ? true : false,
+            upcoming: values?.upcoming === "on" ? true : false,
             basePriceAmount: values?.basePriceAmount ? parseFloat(values.basePriceAmount as string) : 0,
             mogoId: values?.mogoId as string || "",
             createdAt: new Date().toISOString(),
@@ -51,14 +52,14 @@ export async function action({ request }: LoaderFunctionArgs) {
             },
         }
 
-        const [err, result] = await prismaIt(menuItemPrismaEntity.create(menuItem))
+        const [err, result] = await prismaIt(menuItemPrismaEntity.create(nextMenuItem))
 
 
         if (err) {
             return badRequest(err)
         }
 
-        return ok("Elemento criado com successo")
+        return ok(`Sabor "${result.name}" criado com sucesso!`)
 
     }
 
