@@ -153,6 +153,7 @@ function CardapioItems({
     if (!value) return setItems(cardapioItems)
 
     const searchedItems = cardapioItems
+      .filter(item => item.visible === true)
       .filter(item => {
 
         const tags = item?.tags?.public || []
