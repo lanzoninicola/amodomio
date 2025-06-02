@@ -60,7 +60,7 @@ export default function CardapioItemActionBar({ item }: { item: MenuItemWithAsso
 
     return (
         <div className="flex flex-col gap-0 my-2 justify-end">
-            <div className="flex flex-col gap-4 justify-center font-body-website">
+            <div className="flex flex-col gap-4 justify-center font-neue">
                 <WhatsappExternalLink
                     phoneNumber="46991272525"
                     ariaLabel="Envia uma mensagem com WhatsApp"
@@ -83,7 +83,7 @@ export default function CardapioItemActionBar({ item }: { item: MenuItemWithAsso
                                 item.likes?.amount && item.likes?.amount > 0 ? "stroke-red-500" : "stroke-white"
                             )}
                         />
-                        <span className="text-lg text-center font-body-website tracking-widest font-semibold uppercase text-red-500">
+                        <span className="text-lg text-center font-neue tracking-widest font-semibold uppercase text-red-500">
                             {likesAmount > 0 && `${likesAmount}`}
 
                         </span>
@@ -94,12 +94,12 @@ export default function CardapioItemActionBar({ item }: { item: MenuItemWithAsso
             </div>
             {/* {likesAmount === 0 && (
                 <div className="flex items-center gap-1">
-                    <span className="text-sm font-body-website tracking-widest font-semibold uppercase">Seja o primeiro! Curte com </span>
+                    <span className="text-sm font-neue tracking-widest font-semibold uppercase">Seja o primeiro! Curte com </span>
                     <Heart size={14} />
                 </div>
             )} */}
 
-            {/* <span className="text-sm font-body-website tracking-widest font-semibold uppercase pl-1 text-red-500">
+            {/* <span className="text-sm font-neue tracking-widest font-semibold uppercase pl-1 text-red-500">
                 {likesAmount > 0 && `${likesAmount} curtidas`}
 
             </span> */}
@@ -161,7 +161,7 @@ export default function CardapioItemActionBar({ item }: { item: MenuItemWithAsso
 
     return (
         <div className="flex flex-col gap-0 my-2">
-            <div className="grid grid-cols-2 font-body-website">
+            <div className="grid grid-cols-2 font-neue">
                 <div className="flex items-center">
                     <div className="flex flex-col gap-1 cursor-pointer p-2 active:bg-black/50" onClick={likingIt}>
                         <Heart
@@ -188,12 +188,12 @@ export default function CardapioItemActionBar({ item }: { item: MenuItemWithAsso
             </div>
             {likesAmount === 0 && (
                 <div className="flex items-center gap-1">
-                    <span className="text-sm font-body-website tracking-widest font-semibold uppercase">Seja o primeiro! Curte com </span>
+                    <span className="text-sm font-neue tracking-widest font-semibold uppercase">Seja o primeiro! Curte com </span>
                     <Heart size={14} />
                 </div>
             )}
 
-            <span className="text-sm font-body-website tracking-widest font-semibold uppercase pl-1 text-red-500">
+            <span className="text-sm font-neue tracking-widest font-semibold uppercase pl-1 text-red-500">
                 {likesAmount > 0 && `${likesAmount} curtidas`}
 
             </span>

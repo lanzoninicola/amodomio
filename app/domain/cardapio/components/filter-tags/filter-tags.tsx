@@ -34,7 +34,7 @@ export default function FiltersTags({ tags, showBanner = false }: { tags: Tag[],
 
         <div className="bg-white sticky top-20 z-10">
             <div className="flex flex-col ">
-                <p className="font-body-website font-semibold min-w-[70px] pl-2">Filtrar por:</p>
+                <p className="font-neue text-sm font-semibold min-w-[70px] pl-2">Filtrar por:</p>
                 {/* <FilterIcon className="w-4 h-4 mx-2" /> */}
                 <div className="w-full overflow-x-auto pr-2" >
 
@@ -45,7 +45,7 @@ export default function FiltersTags({ tags, showBanner = false }: { tags: Tag[],
                         {tagsWithTodos.map((tag) => (
                             <li key={tag.id} className="ml-3">
                                 <Link to={linkUrl(tag)}
-                                    className="font-lg tracking-wider font-body-website font-semibold uppercase text-muted-foreground">
+                                    className="text-[12px] font-medium tracking-widest font-neue uppercase text-muted-foreground">
                                     <BadgeTag tag={tag}
                                         classNameLabel={
                                             cn(
@@ -71,9 +71,9 @@ export default function FiltersTags({ tags, showBanner = false }: { tags: Tag[],
                         <div className="flex items-center justify-between w-full">
                             <div className="flex gap-1 items-center">
                                 <Filter size={12} />
-                                <p className="font-body-website text-[12px]">Você está visualizando os sabores <span className="font-semibold">"{tagFilter}"</span></p>
+                                <p className="font-neue text-[12px]">Você está visualizando os sabores <span className="font-semibold">"{tagFilter}"</span></p>
                             </div>
-                            <Link to={`/cardapio`} className="font-body-website text-[12px] underline font-semibold self-end">
+                            <Link to={`/cardapio`} className="font-neue text-[12px] underline font-semibold self-end">
                                 Voltar
                             </Link>
                         </div>

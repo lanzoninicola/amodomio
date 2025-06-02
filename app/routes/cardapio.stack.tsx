@@ -110,11 +110,11 @@ const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) =>
                 </div>
             </div>
             <div className="flex flex-col px-4 mb-2">
-                <h3 className="font-body-website text-sm font-semibold uppercase mb-2 text-left">{item.name}</h3>
+                <h3 className="font-neue text-sm font-semibold uppercase mb-2 text-left">{item.name}</h3>
                 {
                     italyProduct && <ItalyIngredientsStatement />
                 }
-                <p className="font-body-website leading-tight text-left">{item.ingredients}</p>
+                <p className="font-neue leading-tight text-left">{item.ingredients}</p>
             </div>
             <CardapioItemActionBar item={item} />
             {/* <Separator className="my-4" /> */}

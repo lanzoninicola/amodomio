@@ -90,6 +90,8 @@ module.exports = {
         title: ["var(--font-title)", ...fontFamily.sans],
         rubik: ["var(--font-rubik)", ...fontFamily.sans],
         gayathri: ["var(--font-gayathri)", ...fontFamily.sans],
+        urw: ["var(--font-urw)", ...fontFamily.sans],
+        neue: ["var(--font-neue)", ...fontFamily.sans],
       },
       keyframes: {
         "accordion-down": {

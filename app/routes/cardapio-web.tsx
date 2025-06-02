@@ -142,12 +142,12 @@ export default function CardapioWeb() {
 
             <div className="md:m-auto md:max-w-2xl">
                 <section className="mt-24 p-4 mb-8 ">
-                    <div className="flex flex-col font-body-website">
-                        <h2 className="font-semibold text-lg">A Modo Mio | Pizzeria Italiana</h2>
+                    <div className="flex flex-col font-neue">
+                        <h2 className="font-semibold text-xs">A Modo Mio | Pizzeria Italiana</h2>
                         <h3 className="text-muted-foreground">Pizza Al Taglio & Delivery</h3>
                     </div>
 
-                    <div className="text-xs text-muted-foreground mb-6 font-body-website">
+                    <div className="text-xs text-muted-foreground mb-6 font-neue">
                         <p>Rua Arariboia 64 - Pato Branco</p>
                     </div>
                     <div className="grid grid-cols-3 gap-x-4">
@@ -194,7 +194,7 @@ function CardapioHeader({ items, tags }: CardapioHeaderProps) {
                 <div className="grid grid-cols-3 items-center w-full">
                     {/* <div className="flex gap-1 items-center" onClick={() => setShowSearch(!showSearch)}>
                         <HamburgerMenuIcon className="w-6 h-6" />
-                        <span className="font-body-website text-[10px] font-semibold  uppercase">Menu</span>
+                        <span className="font-neue text-[10px] font-semibold  uppercase">Menu</span>
                     </div> */}
 
                     <WebsiteNavigationSidebar
@@ -202,15 +202,15 @@ function CardapioHeader({ items, tags }: CardapioHeaderProps) {
                         navigationLinks={PUBLIC_WEBSITE_NAVIGATION_ITEMS}
                         buttonTrigger={{
                             label: "Menu",
-                            classNameLabel: "block font-body-website text-[10px] font-semibold  uppercase",
+                            classNameLabel: "block font-neue text-[10px] font-semibold  uppercase",
                             classNameButton: "justify-start w-full h-full",
                         }}
                     >
                         <div className="flex flex-col justify-center mb-4">
-                            <p className="font-body-website font-semibold text-lg leading-relaxed">Hórarios de funcionamento</p>
+                            <p className="font-neue font-semibold text-lg leading-relaxed">Hórarios de funcionamento</p>
                             <div className="flex flex-col justify-center mb-4">
-                                <p className="text-muted-foreground font-body-website text-lg ">Quarta - Domingo</p>
-                                <p className="text-muted-foreground font-body-website text-lg ">18:00 - 22:00</p>
+                                <p className="text-muted-foreground font-neue text-lg ">Quarta - Domingo</p>
+                                <p className="text-muted-foreground font-neue text-lg ">18:00 - 22:00</p>
                             </div>
                         </div>
 
@@ -221,7 +221,7 @@ function CardapioHeader({ items, tags }: CardapioHeaderProps) {
                     </Link>
                     <div className="flex justify-end items-center cursor-pointer" onClick={() => setShowSearch(!showSearch)}>
                         <SearchIcon />
-                        <span className="font-body-website text-[10px] font-semibold  uppercase">Pesquisar</span>
+                        <span className="font-neue text-[10px] font-semibold  uppercase">Pesquisar</span>
                     </div>
                 </div>
                 {showSearch && <CardapioSearch items={items} setShowSearch={setShowSearch} />}
@@ -233,7 +233,7 @@ function CardapioHeader({ items, tags }: CardapioHeaderProps) {
             }}>
                 {tags.map((tag) => (
                     <li key={tag.id} className="ml-2">
-                        <Link to={`?tag=${tag.name}`} className="text-xs font-body-website font-semibold uppercase text-muted-foreground">
+                        <Link to={`?tag=${tag.name}`} className="text-xs font-neue font-semibold uppercase text-muted-foreground">
                             <BadgeTag tag={tag} classNameLabel="text-[10px]" />
                         </Link>
                     </li>
@@ -250,7 +250,7 @@ function CardapioFooter() {
             <div className="px-2 w-full">
                 <ExternalLink to={GLOBAL_LINKS.mogoCardapio.href}
                     ariaLabel="Cardápio digital pizzaria A Modo Mio"
-                    className="flex justify-between font-body-website rounded-sm bg-green-400 py-2 px-4"
+                    className="flex justify-between font-neue rounded-sm bg-green-400 py-2 px-4"
                 >
                     <span className="uppercase tracking-wide font-semibold">Fazer pedido</span>
                     <ArrowRight />
@@ -296,9 +296,9 @@ function CardapioSearch({ items, setShowSearch }: {
     return (
         <div className="flex flex-col">
             <div className="bg-white flex flex-col py-3">
-                <Input placeholder="Digitar 'abobrinha' ou 'vegetarianas'" className="font-body-website text-sm h-8" onChange={handleSearch} />
+                <Input placeholder="Digitar 'abobrinha' ou 'vegetarianas'" className="font-neue text-sm h-8" onChange={handleSearch} />
                 {
-                    search && <p className="font-body-website text-xs text-muted-foreground mt-2">{currentItems.length} de {items.length} resultados para
+                    search && <p className="font-neue text-xs text-muted-foreground mt-2">{currentItems.length} de {items.length} resultados para
                         <span className="font-semibold"> {search}</span>
                     </p>
                 }
@@ -316,8 +316,8 @@ function CardapioSearch({ items, setShowSearch }: {
                                             backgroundImage: `url(${item.MenuItemImage?.thumbnailUrl || "/images/cardapio-web-app/placeholder.png"})`,
                                         }}></div>
                                     <div className="flex flex-col col-span-7">
-                                        <span className="font-body-website text-[0.65rem] font-semibold leading-tight uppercase">{item.name}</span>
-                                        <span className="font-body-website text-[0.65rem] leading-tight">{item.ingredients}</span>
+                                        <span className="font-neue text-[0.65rem] font-semibold leading-tight uppercase">{item.name}</span>
+                                        <span className="font-neue text-[0.65rem] leading-tight">{item.ingredients}</span>
                                     </div>
 
                                 </Link>
