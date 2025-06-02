@@ -465,7 +465,7 @@ export class MenuItemPrismaEntity {
           },
         },
         MenuItemShare: true,
-        MenuItemImage: true,
+        MenuItemGalleryImage: true,
       },
     });
 
