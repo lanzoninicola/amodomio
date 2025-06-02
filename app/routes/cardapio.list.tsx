@@ -197,9 +197,9 @@ const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) =>
                     }}></div>
 
                 <div className="flex flex-col px-2 pt-2 mb-2 col-span-6">
-                    <h3 className="font-body-website text-sm font-semibold uppercase">{item.name}</h3>
+                    <h3 className="font-neue text-sm font-semibold uppercase">{item.name}</h3>
                     {italyProduct && <ItalyIngredientsStatement />}
-                    <p className="font-body-website leading-tight text-sm mb-2">{item.ingredients}</p>
+                    <p className="font-neue leading-tight text-sm mb-2">{item.ingredients}</p>
                     <CardapioItemPrice prices={item?.priceVariations} cnLabel="text-black" />
                 </div>
             </div>
@@ -241,8 +241,8 @@ function CardapioItemPrice({ prices, cnLabel }: CardapioItemPriceProps) {
                             )
 
                         }>
-                            <span className="font-body-website uppercase text-[12px]  text-muted-foreground">{p?.label}</span>
-                            <div className="flex items-start gap-[2px] font-body-website font-semibold  text-muted-foreground">
+                            <span className="font-neue uppercase text-[12px]  text-muted-foreground">{p?.label}</span>
+                            <div className="flex items-start gap-[2px] font-neue font-semibold  text-muted-foreground">
                                 <span className="text-[12px]">R$</span>
                                 <span className="text-[15px]">{p?.amount}</span>
                             </div>

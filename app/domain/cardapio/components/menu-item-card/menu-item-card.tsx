@@ -36,6 +36,8 @@ export default function MenuItemCard({ item, dragAndDrop }: MenuItemCardProps) {
     const [active, setActive] = useState(false)
     const submitBtnRef = React.useRef<HTMLButtonElement>(null)
 
+    const featuredImage = item?.MenuItemGalleryImage?.find(img => img.isPrimary)
+
     function handleVisibility() {
 
         setVisible(!visible)
@@ -69,8 +71,8 @@ export default function MenuItemCard({ item, dragAndDrop }: MenuItemCardProps) {
                 <section className="flex flex-col gap-2 md:grid md:grid-cols-12 md:items-center w-full">
 
                     <div className="hidden md:block w-16 h-16 bg-muted rounded-lg bg-center bg-no-repeat bg-cover col-span-1">
-                        {item?.MenuItemImage?.thumbnailUrl ?
-                            <img src={item?.MenuItemImage?.thumbnailUrl} alt={`Imagem so sabor ${item?.name}`} className="w-full h-full object-cover rounded-lg" />
+                        {featuredImage?.thumbnailUrl ?
+                            <img src={featuredImage?.thumbnailUrl} alt={`Imagem so sabor ${item?.name}`} className="w-full h-full object-cover rounded-lg" />
                             :
                             <div className="w-full h-full bg-muted rounded-lg" />
                         }

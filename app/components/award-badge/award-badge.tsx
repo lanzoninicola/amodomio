@@ -13,14 +13,14 @@ export default function AwardBadge({ children, cnContainer }: AwardBadgeProps) {
     return (
         <div className={
             cn(
-                "flex gap-2 items-center  px-2 py-0 w-fit",
+                "flex gap-2 items-center px-2 py-1 w-fit",
                 cnContainer || "bg-yellow-200 text-black"
             )
         }>
-            <Award size={17} />
-            <span className="font-body-website uppercase tracking-wide">
+            <Award size={16} />
+            <p className="font-neue uppercase tracking-wider leading-none text-xs font-[500]">
                 {children}
-            </span>
+            </p>
         </div>
     )
 

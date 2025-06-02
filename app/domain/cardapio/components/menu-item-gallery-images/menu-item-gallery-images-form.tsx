@@ -1,13 +1,14 @@
 import { jsonStringify } from "~/utils/json-helper";
 import { MenuItemWithAssociations } from "../../menu-item.prisma.entity.server";
 import { Check } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CloudinaryUploadWidget } from "~/lib/cloudinary";
 import { Button } from "~/components/ui/button";
 import { Separator } from "~/components/ui/separator";
 import { Form } from "@remix-run/react";
 import SubmitButton from "~/components/primitives/submit-button/submit-button";
 import { cn } from "~/lib/utils";
+import { image } from "@cloudinary/url-gen/qualifiers/source";
 
 interface MenuItemGalleryImagesProps {
   item?: MenuItemWithAssociations;
@@ -19,43 +20,51 @@ export default function MenuItemGalleryImagesForm({ item, images }: MenuItemGall
   const [imagesUploaded, setImagesUploaded] = useState<MenuItemWithAssociations["MenuItemGalleryImage"]>([]);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
+
+
+
   return (
     <>
 
       <div className="flex flex-col gap-4 w-full border py-2 px-4 rounded-lg
       md:grid md:grid-cols-8 md:gap-y-0 md:gap-x-4">
 
-        <div className="md:col-span-5  flex items-center gap-2">
+        <div className="md:col-span-5  flex items-start gap-2">
           {
             images.map((image, index) => {
               return (
-                <div key={image.id} className="flex flex-col gap-1 justify-center items-center relative">
-                  <div className="w-16 h-16 bg-muted rounded-lg bg-center bg-no-repeat bg-cover"
-                    style={{ backgroundImage: `url(${image.thumbnailUrl || ""})` }}></div>
-                  <span className="text-[10px] text-muted-foreground">
-                    {image.displayName || image.originalFileName}
-                  </span>
-                  {
-                    image.isPrimary && (
+                <div key={image.id} className="flex flex-col items-center justify-center gap-1">
 
-                      <div className="absolute top-1 right-1 bg-black w-5 h-5 p-[.15rem] rounded-full flex items-center justify-center cursor-pointer">
-                        <Check color="white" />
-                      </div>
+                  <div className="flex flex-col gap-x-4 justify-center items-center relative">
 
-                    )
-                  }
-                  <Form method="post">
-                    <input type="hidden" name="imageId" value={image.id} />
-                    <input type="hidden" name="itemId" value={item?.id} />
-                    <button
-                      type="submit"
-                      name="_action"
-                      value="menu-item-gallery-images-delete"
-                      className="absolute top-1 left-1 bg-red-500 w-4 h-4 p-[.15rem] rounded-full flex items-center justify-center cursor-pointer"
-                      title="Remover Imagem">
-                      <span className="text-white text-[11px] font-semibold">X</span>
-                    </button>
-                  </Form>
+                    <div className="w-16 h-16 bg-muted rounded-lg bg-center bg-no-repeat bg-cover"
+                      style={{ backgroundImage: `url(${image.thumbnailUrl || ""})` }}></div>
+                    <span className="text-[10px] text-muted-foreground">
+                      {image.displayName || image.originalFileName}
+                    </span>
+                    {
+                      image.isPrimary && (
+
+                        <div className="absolute top-1 right-1 bg-black w-5 h-5 p-[.15rem] rounded-full flex items-center justify-center cursor-pointer">
+                          <Check color="white" />
+                        </div>
+
+                      )
+                    }
+                    <Form method="post">
+                      <input type="hidden" name="imageId" value={image.id} />
+                      <input type="hidden" name="itemId" value={item?.id} />
+                      <button
+                        type="submit"
+                        name="_action"
+                        value="menu-item-gallery-images-delete"
+                        className="absolute top-1 left-1 bg-red-500 w-4 h-4 p-[.15rem] rounded-full flex items-center justify-center cursor-pointer"
+                        title="Remover Imagem">
+                        <span className="text-white text-[11px] font-semibold">X</span>
+                      </button>
+                    </Form>
+
+                  </div>
                   <Form method="post">
                     <input type="hidden" name="imageId" value={image.id} />
                     <input type="hidden" name="itemId" value={item?.id} />
@@ -65,7 +74,7 @@ export default function MenuItemGalleryImagesForm({ item, images }: MenuItemGall
                       value="menu-item-gallery-images-set-primary"
                       className={
                         cn(
-                          "absolute bottom-1 bg-blue-500 rounded-md px-2 py-1 flex items-center justify-center cursor-pointer left-1/2 -translate-x-1/2",
+                          "bg-blue-500 rounded-md px-2 py-1 flex items-center justify-center cursor-pointer",
                           image.isPrimary ? "bg-blue-600 cursor-not-allowed" : "",
                           "hover:bg-blue-600 transition-colors duration-200",
                           image.isPrimary ? "hidden" : "block"
@@ -86,9 +95,9 @@ export default function MenuItemGalleryImagesForm({ item, images }: MenuItemGall
         <Separator orientation="vertical" className="hidden md:h-12 md:block md:col-span-1" />
         <div className="md:col-span-2 flex gap-4 items-center">
           <ImageUploader
-
             setImagesUploaded={setImagesUploaded}
             setUploadError={setUploadError}
+
           />
         </div>
       </div>
@@ -131,6 +140,7 @@ export default function MenuItemGalleryImagesForm({ item, images }: MenuItemGall
 interface ImageUploaderProps {
   setImagesUploaded?: (images: MenuItemWithAssociations["MenuItemGalleryImage"]) => void;
   setUploadError?: (error: string) => void;
+  disabled?: boolean;
 }
 
 /**
@@ -139,6 +149,7 @@ interface ImageUploaderProps {
 export function ImageUploader({
   setImagesUploaded = (images: MenuItemWithAssociations["MenuItemGalleryImage"]) => console.log(images),
   setUploadError = (error: string) => console.error(error),
+  disabled = false
 }: ImageUploaderProps) {
 
   // @ts-ignore
@@ -173,8 +184,6 @@ export function ImageUploader({
       } as unknown as MenuItemWithAssociations["MenuItemGalleryImage"];
     });
 
-    console.log({ uploadInfoFiles })
-
     setImagesUploaded(uploadInfoFiles);
 
   }
@@ -191,7 +200,10 @@ export function ImageUploader({
           return <Button
             variant={"outline"}
             onClick={open}
-            className="uppercase font-body tracking-wider font-semibold text-xs">
+            className="uppercase font-body tracking-wider font-semibold text-xs"
+            disabled={disabled}
+          >
+
             Upload Image
           </Button>;
         }
