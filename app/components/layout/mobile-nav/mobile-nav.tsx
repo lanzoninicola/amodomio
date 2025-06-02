@@ -3,7 +3,7 @@ import React from "react"
 import { Button } from "~/components/ui/button"
 import { ScrollArea } from "~/components/ui/scroll-area"
 import { Sheet, SheetContent, SheetTrigger } from "~/components/ui/sheet"
-import { ADMIN_WEBSITE_NAVIGATION_ITEMS } from "~/domain/website-navigation/public/public-website.nav-links"
+import ADMIN_WEBSITE_NAVIGATION_ITEMS from "~/domain/website-navigation/admin/admin-website.nav-links"
 import { cn } from "~/lib/utils"
 
 
@@ -76,7 +76,7 @@ export function WebsiteNavigation() {
                     <div className="flex flex-col space-y-2">
                         {ADMIN_WEBSITE_NAVIGATION_ITEMS.sidebarNav.map((item, index) => (
                             <div key={index} className="flex flex-col space-y-3 pt-6">
-                                <h4 className="font-medium font-semibold">{item.title}</h4>
+                                <h4 className="text-medium font-semibold">{item.title}</h4>
                                 {item?.items?.length &&
                                     item.items.map((item) => (
                                         <React.Fragment key={item.href}>
