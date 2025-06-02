@@ -1,5 +1,5 @@
 import { Category, Prisma } from "@prisma/client";
-import { LoaderFunctionArgs, MetaFunction, redirect } from "@remix-run/node";
+import { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { Await, defer, useActionData, useLoaderData } from "@remix-run/react";
 import { Suspense } from "react";
 import Loading from "~/components/loading/loading";
@@ -10,10 +10,10 @@ import { LoggedUser } from "~/domain/auth/types.server";
 import MenuItemForm from "~/domain/cardapio/components/menu-item-form/menu-item-form";
 import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { categoryPrismaEntity } from "~/domain/category/category.entity.server";
+import prismaClient from "~/lib/prisma/client.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { badRequest, ok } from "~/utils/http-response.server";
-import { jsonParse, jsonStringify } from "~/utils/json-helper";
-import tryit from "~/utils/try-it";
+import { jsonParse } from "~/utils/json-helper";
 
 export const meta: MetaFunction<typeof loader> = ({ data }) => {
     // @ts-ignore
@@ -35,11 +35,16 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
     const itemQryResult = prismaIt(menuItemPrismaEntity.findById(itemId));
     const categoriesQryResult = prismaIt(categoryPrismaEntity.findAll());
-
+    const groupsQryResult = prismaIt(prismaClient.menuItemGroup.findMany({
+        where: {
+            deletedAt: null
+        }
+    }))
 
     const data = Promise.all([
         itemQryResult,
         categoriesQryResult,
+        groupsQryResult,
         loggedUser
     ]);
 
@@ -50,12 +55,21 @@ export async function action({ request }: LoaderFunctionArgs) {
 
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);
-    // console.log({ action: _action, values })
+
 
     if (_action === "menu-item-update") {
 
         const category: Category = jsonParse(values.category as string)
-        const imageInfo: MenuItemWithAssociations["MenuItemImage"] = jsonParse(values.imageInfo as string)
+        const group = jsonParse(values.group as string)
+
+        if (group && !group.id) {
+            return badRequest("Grupo não encontrado")
+        }
+
+        if (!category || !category.id) {
+            return badRequest("Categoria não encontrada")
+        }
+
 
 
         let menuItem: Prisma.MenuItemCreateInput = {
@@ -72,30 +86,11 @@ export async function action({ request }: LoaderFunctionArgs) {
                     id: category.id
                 }
             },
-
-
-        }
-
-        if (!imageInfo?.id) {
-            menuItem = {
-                ...menuItem,
-                MenuItemImage: {
-                    create: {
-                        ...imageInfo
-                    }
+            MenuItemGroup: {
+                connect: {
+                    id: group?.id || ""
                 }
-            }
-        }
-
-        if (imageInfo?.id) {
-            menuItem = {
-                ...menuItem,
-                MenuItemImage: {
-                    connect: {
-                        id: imageInfo?.id
-                    }
-                }
-            }
+            },
         }
 
         const [err, result] = await prismaIt(menuItemPrismaEntity.update(values.id as string, menuItem))
@@ -135,7 +130,6 @@ export async function action({ request }: LoaderFunctionArgs) {
     }
 
 
-
     return null
 }
 
@@ -153,6 +147,7 @@ export default function SingleMenuItemMain() {
         toast({
             title: "Erro",
             description: actionData.message,
+            variant: "destructive",
         });
     }
 
@@ -170,9 +165,10 @@ export default function SingleMenuItemMain() {
             <Suspense fallback={<Loading />}>
                 <Await resolve={data}>
                     {
-                        ([itemQryResult, categoriesQryResult, loggedUser]) => {
+                        ([itemQryResult, categoriesQryResult, groupsQryResult, loggedUser]) => {
 
-                            const err = itemQryResult[0] || categoriesQryResult[0]
+                            const err = itemQryResult[0] || categoriesQryResult[0] || groupsQryResult[0];
+
                             if (err) {
                                 return (
                                     <Alert variant={"destructive"} >
@@ -184,7 +180,13 @@ export default function SingleMenuItemMain() {
 
 
                             return (
-                                <MenuItemForm action="menu-item-update" item={itemQryResult[1]} categories={categoriesQryResult[1]} loggedUser={loggedUser} />
+
+                                <MenuItemForm
+                                    action="menu-item-update" item={itemQryResult[1]}
+                                    categories={categoriesQryResult[1]}
+                                    groups={groupsQryResult[1]}
+                                    loggedUser={loggedUser}
+                                />
                             )
                         }
                     }

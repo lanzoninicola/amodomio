@@ -2,6 +2,8 @@ import {
   Category,
   MenuItem,
   MenuItemCostVariation,
+  MenuItemGalleryImage,
+  MenuItemGroup,
   MenuItemImage,
   MenuItemLike,
   MenuItemNote,
@@ -45,7 +47,9 @@ export interface MenuItemWithAssociations extends MenuItem {
   MenuItemTag: MenuItemTag[];
   MenuItemShare: MenuItemShare[];
   MenuItemImage: MenuItemImage | null; // Handle cases where image may not exist
+  MenuItemGalleryImage: MenuItemGalleryImage[]; // Array of gallery images
   MenuItemNote: MenuItemNote[];
+  MenuItemGroup: MenuItemGroup;
   likes: {
     amount: number; // Number of likes
   };
@@ -153,6 +157,8 @@ export class MenuItemPrismaEntity {
         },
         MenuItemShare: true,
         MenuItemImage: true,
+        MenuItemGalleryImage: true,
+        MenuItemGroup: true,
       },
     });
 
@@ -396,8 +402,11 @@ export class MenuItemPrismaEntity {
         },
         MenuItemShare: true,
         MenuItemImage: true,
+        MenuItemGalleryImage: true,
+        MenuItemNote: true,
         MenuItemCostVariation: true,
         MenuItemSellingPriceVariation: true,
+        MenuItemGroup: true,
       },
     });
 
@@ -527,6 +536,17 @@ export class MenuItemPrismaEntity {
       // if (lancamentoFuturoTag?.id) {
       //   this.associateTag(nextItem.id, lancamentoFuturoTag);
       // }
+    }
+
+    if (nextItem.MenuItemGroup) {
+      // If the item belongs to a group, ensure the group exists
+      const group = await this.client.menuItemGroup.findFirst({
+        where: { name: "Pizzas Salgadas" },
+      });
+
+      nextItem.MenuItemGroup = {
+        connect: { id: group.id },
+      };
     }
 
     await this.cacheManager.invalidate();

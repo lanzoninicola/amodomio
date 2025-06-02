@@ -65,11 +65,12 @@ export default function CloudinaryUploadWidget({ children, onUpload, presetName 
         return cloudinary.createUploadWidget(
             options,
             function (error, result) {
+
                 // The callback is a bit more chatty than failed or success so
                 // only trigger when one of those are the case. You can additionally
                 // create a separate handler such as onEvent and trigger it on
                 // ever occurrence
-                if ((error || result.event === 'success') && typeof onUpload === 'function') {
+                if ((error || result.event === 'success' || result.event === 'queues-end') && typeof onUpload === 'function') {
                     onUpload(error, result, widget);
                 }
             }
