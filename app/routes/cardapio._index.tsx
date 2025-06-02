@@ -151,7 +151,7 @@ export default function CardapioWebIndex() {
                                 {/** @ts-ignore */}
                                 <CardapioItemListDestaque items={items} title="Sugestões do chef" tagFilter="em-destaque" />
                                 {/** @ts-ignore */}
-                                <CardapioItemListDestaque items={items} title="mais vendidos" tagFilter="mais-vendido" carouselDelay={2100} />
+                                <CardapioItemListDestaque items={items} title="Mais vendidos" tagFilter="mais-vendido" carouselDelay={2100} />
 
                             </section>
                         )
@@ -305,7 +305,7 @@ const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) =>
                     )
                 }>
                     <div className="flex flex-col gap-0 mb-1">
-                        <h3 className="font-body-website text-xl tracking-wider font-semibold uppercase">{item.name}</h3>
+                        <h3 className="font-neue text-xl tracking-wider font-semibold uppercase">{item.name}</h3>
                         <div className="flex flex-col gap-2">
                             {bestSeller && <AwardBadge>A mais desejada</AwardBadge>}
                             {bestMonthlySeller && <AwardBadge>Mais vendida do mes</AwardBadge>}
@@ -367,7 +367,7 @@ const CardapioItemFullImage = React.forwardRef(({ item }: CardapioItemFullImageP
                             )
                         }>
                             <div className="flex flex-col gap-0">
-                                <h3 className="font-body-website text-xl tracking-wider font-semibold uppercase">{item.name}</h3>
+                                <h3 className="font-urw text-xl">{item.name}</h3>
                                 <div className="flex flex-col gap-2">
                                     {bestSeller && <AwardBadge>A mais desejada</AwardBadge>}
                                     {bestMonthlySeller && <AwardBadge>Mais vendida do mes</AwardBadge>}
@@ -377,7 +377,7 @@ const CardapioItemFullImage = React.forwardRef(({ item }: CardapioItemFullImageP
                             {italyProduct && <ItalyIngredientsStatement cnText="text-white" />}
 
                             <div className="flex flex-col gap-0 ">
-                                <p className="leading-snug text-[15px] my-2 ">{capitalize(item.ingredients)}</p>
+                                <p className="font-neue leading-tight text-[15px] my-2 tracking-wide">{capitalize(item.ingredients)}</p>
                                 <CardapioItemPrice prices={item?.priceVariations} cnLabel="text-white" cnValue="text-white font-semibold" showValuta={false} />
                             </div>
 
@@ -402,7 +402,7 @@ const CardapioItemFullImage = React.forwardRef(({ item }: CardapioItemFullImageP
         //             )
         //         }>
         //             <div className="flex flex-col gap-0 mb-1">
-        //                 <h3 className="font-body-website text-xl tracking-wider font-semibold uppercase">{item.name}</h3>
+        //                 <h3 className="font-neue text-xl tracking-wider font-semibold uppercase">{item.name}</h3>
         //                 <div className="flex flex-col gap-2">
         //                     {bestSeller && <AwardBadge>A mais desejada</AwardBadge>}
         //                     {bestMonthlySeller && <AwardBadge>Mais vendida do mes</AwardBadge>}
@@ -450,7 +450,7 @@ function CardapioItemListDestaque({ title, items, tagFilter, carouselDelay = 200
 
     return (
         <div className="rounded-md p-2">
-            <h3 className="font-semibold text-2xl uppercase mb-4 font-body-website tracking-wider">{title}</h3>
+            <h3 className="font-medium text-xl tracking-tight mb-2 font-neue">{title}</h3>
             {/* <Carousel>
                 <CarouselContent className="-ml-2 md:-ml-4">
                     <CarouselItem className="pl-2 md:pl-4">...</CarouselItem>
@@ -489,7 +489,7 @@ function CardapioItemListDestaque({ title, items, tagFilter, carouselDelay = 200
                                             />
 
                                             <div className="absolute bottom-2 w-full">
-                                                <p className=" ml-3 font-body-website font-semibold tracking-widest uppercase text-white">{i.name}</p>
+                                                <p className=" ml-3 font-urw text-sm text-white">{i.name}</p>
                                             </div>
 
                                         </div>

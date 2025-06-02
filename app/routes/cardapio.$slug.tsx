@@ -47,7 +47,7 @@ export default function SingleCardapioItem() {
           if (err) {
 
             return <div className="grid place-items-center w-screen h-screen">
-              <h1 className="text-2xl font-body-website text-brand-blue font-bold">Nenhum item encontrado</h1>
+              <h1 className="text-2xl font-neue text-brand-blue font-bold">Nenhum item encontrado</h1>
             </div>
           }
 
@@ -72,7 +72,7 @@ export default function SingleCardapioItem() {
                 placeholderIcon={true}
                 cnPlaceholderIcon="w-[100px]"
                 placeholderText="Imagem ainda não disponível"
-                cnPlaceholderText="font-body-website uppercase font-semibold tracking-wider mt-2"
+                cnPlaceholderText="font-neue uppercase font-semibold tracking-wider mt-2"
               />
               {/* Overlay de gradiente preto */}
               <div className="absolute inset-0 bg-gradient-to-t from-black via-black/10 to-transparent" />
@@ -80,8 +80,8 @@ export default function SingleCardapioItem() {
               {/* Conteúdo de texto fixo no fundo */}
               <div className="absolute bottom-0 w-full px-6 pb-8 text-white z-10">
 
-                <h1 className="font-body-website text-2xl uppercase font-semibold tracking-wider">{itemName}</h1>
-                <p className="leading-snug text-[15px] my-2">{itemIngredients}</p>
+                <h1 className=" font-urw text-2xl font-semibold ">{itemName}</h1>
+                <p className="font-neue leading-snug tracking-wider text-[15px] my-2">{itemIngredients}</p>
                 <Separator className="my-2 bg-white/20" />
                 <CardapioItemPrice prices={item?.priceVariations || []} cnLabel="text-white" cnValue="text-white" showValuta={false} />
               </div>

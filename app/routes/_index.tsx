@@ -136,7 +136,7 @@ function HomePageVideoBackground() {
 //                     <header>
 //                         <WebsiteCardHeader />
 //                         <div className="p-4 ">
-//                             <p className="font-body-website leading-tight max-w-prose text-3xl ">A autentica pizza italiana<br /> em Pato Branco feita <br /> das mãos de um italiano.</p>
+//                             <p className="font-neue leading-tight max-w-prose text-3xl ">A autentica pizza italiana<br /> em Pato Branco feita <br /> das mãos de um italiano.</p>
 //                         </div>
 //                     </header>
 //                     <div className="bg-hero bg-center bg-cover bg-no-repeat"></div>
@@ -154,7 +154,7 @@ function HomePageVideoBackground() {
 //                         </WebsiteCardHeader>
 
 //                         <div className="p-4 ">
-//                             <p className="font-body-website leading-tight max-w-prose text-3xl ">A autentica pizza italiana<br /> em Pato Branco feita <br /> das mãos de um italiano.</p>
+//                             <p className="font-neue leading-tight max-w-prose text-3xl ">A autentica pizza italiana<br /> em Pato Branco feita <br /> das mãos de um italiano.</p>
 //                         </div>
 
 //                         <WebsiteCardFooter />
@@ -177,7 +177,7 @@ function WebsiteCardHeader({ children }: WebsiteCardHeaderProps) {
     return (
 
         <>
-            <div className="flex justify-between items-center font-body-website p-4">
+            <div className="flex justify-between items-center font-neue p-4">
                 <div className="-py-3 col-span-2">
                     <Logo color="black" className="w-[90px] h-[30px] md:w-[150px] md:h-[50px]" tagline={false} />
                 </div>
@@ -202,7 +202,7 @@ function WebsiteCardFooter() {
             <div className="px-4 w-full">
                 {/* <ExternalLink to="https://app.mogomenu.com.br/amodomio"
                     ariaLabel="Cardápio digital pizzaria A Modo Mio"
-                    className="grid place-items-center font-body-website text-lg rounded-xl bg-brand-green py-1"
+                    className="grid place-items-center font-neue text-lg rounded-xl bg-brand-green py-1"
                 >
                     <span className="uppercase tracking-wide font-semibold">Fazer pedido</span>
                 </ExternalLink> */}
@@ -219,7 +219,7 @@ function WebsiteActionBar() {
 
 
     return (
-        <div className="grid grid-cols-4 font-body-website">
+        <div className="grid grid-cols-4 font-neue">
 
             <WhatsappExternalLink phoneNumber=""
                 ariaLabel="Envia uma mensagem com WhatsApp"

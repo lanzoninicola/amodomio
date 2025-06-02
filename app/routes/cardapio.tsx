@@ -114,7 +114,7 @@ function CardapioHeader() {
                 <div className="grid grid-cols-3 items-center w-full">
                     {/* <div className="flex gap-1 items-center" onClick={() => setShowSearch(!showSearch)}>
                         <HamburgerMenuIcon className="w-6 h-6" />
-                        <span className="font-body-website text-[10px] font-semibold  uppercase">Menu</span>
+                        <span className="font-neue text-[10px] font-semibold  uppercase">Menu</span>
                     </div> */}
 
                     <WebsiteNavigationSidebar
@@ -122,17 +122,17 @@ function CardapioHeader() {
                         navigationLinks={PUBLIC_WEBSITE_NAVIGATION_ITEMS}
                         buttonTrigger={{
                             label: "",
-                            classNameLabel: "block font-body-website text-[10px] font-semibold uppercase",
+                            classNameLabel: "block font-neue text-[10px] font-semibold uppercase",
                             classNameButton: "justify-start w-full h-full text-black bg-transparent hover:bg-transparent hover:text-black px-0",
                         }}
-                        cnLink="font-body-website text-xl uppercase tracking-widest"
+                        cnLink="font-neue text-xl uppercase tracking-widest"
 
                     >
-                        <div className="flex flex-col justify-center mb-2 font-body-website">
+                        <div className="flex flex-col justify-center mb-2 font-neue">
                             <p className=" font-semibold text-xl leading-relaxed uppercase tracking-wide">Hórarios de funcionamento</p>
                             <div className="flex flex-col justify-center mb-4">
-                                <p className="text-muted-foreground font-body-website text-xl">Quarta - Domingo</p>
-                                <p className="text-muted-foreground font-body-website text-xl">18:00 - 22:00</p>
+                                <p className="text-muted-foreground font-neue text-xl">Quarta - Domingo</p>
+                                <p className="text-muted-foreground font-neue text-xl">18:00 - 22:00</p>
                             </div>
                         </div>
 
@@ -151,7 +151,7 @@ function CardapioHeader() {
                     <Link to={'buscar'} className="flex justify-end">
                         <div className="flex justify-end items-center cursor-pointer" onClick={() => setShowSearch(!showSearch)}>
                             <SearchIcon color={"black"} />
-                            {/* <span className="font-body-website text-[10px] font-semibold  uppercase text-brand-blue">Pesquisar</span> */}
+                            {/* <span className="font-neue text-[10px] font-semibold  uppercase text-brand-blue">Pesquisar</span> */}
                         </div>
                     </Link>
                 </div>
@@ -163,7 +163,7 @@ function CardapioHeader() {
                 <div className="flex items-center gap-2 justify-center">
                     {/* @ts-ignore */}
                     <ItalyFlag className="w-4 h-4 md:w-6 md:h-6" />
-                    <p className="font-body-website text-[15px] uppercase tracking-wider md:text-lg">
+                    <p className="font-neue text-[15px] uppercase tracking-wider md:text-lg">
                         Todas as nossas pizzas são preparadas com farinha e molho de tomate importados da Itália
                     </p>
                 </div>
@@ -230,12 +230,12 @@ function CompanyInfo() {
                 </div>
             </div>
 
-            <div className="flex flex-col font-body-website items-center">
-                <h2 className="font-semibold text-2xl tracking-wide uppercase">A Modo Mio | Pizzeria Italiana</h2>
-                <h3 className="text-muted-foreground text-xl uppercase">Pizza Al Taglio & Delivery</h3>
+            <div className="flex flex-col font-neue items-center">
+                <h2 className="font-semibold text-xl tracking-wide uppercase">A Modo Mio | Pizzeria Italiana</h2>
+                <h3 className="text-muted-foreground text-sm tracking-wider uppercase">Pizza Al Taglio & Delivery</h3>
             </div>
 
-            <div className="text-lg text-muted-foreground mb-2 font-body-website">
+            <div className="text-sm  text-muted-foreground mb-2 font-neue">
                 <p className="text-center">Rua Arariboia 64 - Pato Branco</p>
             </div>
 
@@ -325,7 +325,7 @@ function CardapioSizesDialog() {
                         )
                     }
                 />
-                <span className="font-body-website tracking-wider font-semibold row-span-1">
+                <span className="font-neue tracking-wider font-semibold row-span-1">
                     {
                         size === "individual" ? "Individual" :
                             size === "medio" ? "Médio" :
@@ -340,12 +340,12 @@ function CardapioSizesDialog() {
         <CardapioFooterMenuItemDialog triggerComponent={
             <div className="flex flex-col gap-0 justify-center items-center">
                 <Proportions className="col-span-1 md:col-span-2" />
-                <span className="font-body-website tracking-widest text-sm">Tamanhos</span>
+                <span className="font-neue tracking-widest text-sm">Tamanhos</span>
             </div>}
         >
             <div className="h-[550px] overflow-auto py-4">
                 <div className="mb-6">
-                    <h3 className="font-semibold text-2xl uppercase font-body-website tracking-wider">
+                    <h3 className="font-semibold text-2xl uppercase font-neue tracking-wider">
                         Tamanhos disponiveis
                     </h3>
                     <span className="text-sm">Seleciona o tamanho para visualizar os detalhes</span>
@@ -360,7 +360,7 @@ function CardapioSizesDialog() {
                 <Separator className="my-6" />
 
                 <div className="flex flex-col justify-center gap-y-4">
-                    <h4 className="font-body-website tracking-widest font-semibold text-lg uppercase text-center mb-4">
+                    <h4 className="font-neue tracking-widest font-semibold text-lg uppercase text-center mb-4">
                         Tamanho {
                             currentSize === "individual" ? "Individual" :
                                 currentSize === "medio" ? "Médio" :
