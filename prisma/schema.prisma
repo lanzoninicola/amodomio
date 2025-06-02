@@ -205,6 +205,7 @@ model MenuItem {
   MenuItemGroup                      MenuItemGroup?                       @relation(fields: [menuItemGroupId], references: [id])
   menuItemGroupId                    String?                              @map("menu_item_group_id")
   MenuItemSellingPriceVariationAudit MenuItemSellingPriceVariationAudit[]
+  MenuItemGalleryImage               MenuItemGalleryImage[]
 
   @@map("menu_items")
 }
@@ -227,6 +228,25 @@ model MenuItemImage {
   MenuItem         MenuItem[]
 
   @@map("menu_items_image")
+}
+
+model MenuItemGalleryImage {
+  id               String   @id @default(uuid())
+  menuItemId       String   @map("menu_item_id")
+  menuItem         MenuItem @relation(fields: [menuItemId], references: [id])
+  secureUrl        String?  @map("secure_url")
+  assetId          String?  @map("asset_id")
+  assetFolder      String?  @map("asset_folder")
+  originalFileName String?  @map("original_file_name")
+  displayName      String?  @map("display_name")
+  height           Float?   @map("height")
+  width            Float?   @map("width")
+  thumbnailUrl     String?  @map("thumbnail_url")
+  format           String?  @map("format")
+  publicId         String?  @map("public_id")
+  isPrimary        Boolean  @default(false) /// Para destacar uma imagem principal
+
+  @@map("menu_item_gallery_images")
 }
 
 /// to remove  DO NOT USE

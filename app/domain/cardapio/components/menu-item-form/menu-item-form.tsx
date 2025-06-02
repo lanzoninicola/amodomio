@@ -1,21 +1,18 @@
-import { Category } from "@prisma/client"
+import { Category, MenuItemGroup } from "@prisma/client"
 import { Form } from "@remix-run/react"
 import SubmitButton from "~/components/primitives/submit-button/submit-button"
 import { Input } from "~/components/ui/input"
 import { Separator } from "~/components/ui/separator"
-import { Switch } from "~/components/ui/switch"
 import formatStringList from "~/utils/format-string-list"
 import { cn } from "~/lib/utils"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select"
 import { DeleteItemButton } from "~/components/primitives/table-list"
 import { Label } from "~/components/ui/label"
-import { ChangeEvent, useRef, useState } from "react"
+import { useRef, useState } from "react"
 import Fieldset from "~/components/ui/fieldset"
 import { Textarea } from "~/components/ui/textarea"
 import { MenuItemWithAssociations } from "../../menu-item.prisma.entity.server"
 import useSaveShortcut from "~/hooks/use-save-shortcut.hook"
-import { Button } from "~/components/ui/button"
-import { CloudinaryImageInfo, CloudinaryUploadWidget, CloudinaryUtils } from "~/lib/cloudinary"
 import { jsonStringify } from "~/utils/json-helper"
 import MenuItemSwitchVisibility from "../menu-item-switch-visibility/menu-item-switch-visibility"
 import { Alert } from "~/components/ui/alert"
@@ -29,13 +26,15 @@ export type MenuItemFormAction = "menu-item-create" | "menu-item-update"
 interface MenuItemFormProps {
     item?: MenuItemWithAssociations
     categories?: Category[]
+    groups: MenuItemGroup[]
     action: MenuItemFormAction
     className?: string
     loggedUser?: LoggedUser
 }
 
-export default function MenuItemForm({ item, action, className, categories, loggedUser }: MenuItemFormProps) {
+export default function MenuItemForm({ item, action, className, categories, groups, loggedUser }: MenuItemFormProps) {
     const [currentBasePrice, setCurrentBasePrice] = useState(item?.basePriceAmount || 0)
+
 
     const submitButtonRef = useRef<any>()
     useSaveShortcut({ callback: submitForm })
@@ -146,8 +145,31 @@ export default function MenuItemForm({ item, action, className, categories, logg
 
                     </div>
 
+
+
+                </section>
+
+                <Separator className="my-4" />
+
+                <section className="flex flex-col gap-2 md:grid md:grid-cols-2">
+
+                    <Select name="group" defaultValue={JSON.stringify(item?.MenuItemGroup)} >
+                        <SelectTrigger className="text-xs uppercase tracking-wide" >
+                            <SelectValue placeholder="Grupo" />
+                        </SelectTrigger>
+                        <SelectContent id="group" >
+                            <SelectGroup >
+                                {groups && groups.map(g => {
+                                    return (
+                                        <SelectItem key={g.id} value={JSON.stringify(g)} className="text-lg">{g.name}</SelectItem>
+                                    )
+                                })}
+                            </SelectGroup>
+                        </SelectContent>
+                    </Select>
+
                     <Select name="category" defaultValue={JSON.stringify(item?.Category)} >
-                        <SelectTrigger className="text-xs col-span-2 uppercase tracking-wide" >
+                        <SelectTrigger className="text-xs  uppercase tracking-wide" >
                             <SelectValue placeholder="Categoria" />
                         </SelectTrigger>
                         <SelectContent id="category" >
@@ -161,32 +183,14 @@ export default function MenuItemForm({ item, action, className, categories, logg
                         </SelectContent>
                     </Select>
 
+
+
+
                 </section>
 
                 <Separator className="my-4" />
 
-
-                <div className="flex flex-col gap-2">
-                    <Label htmlFor="imageFile" className="font-semibold text-sm " >Imagem</Label>
-                    <div className="grid grid-cols-8 items-center gap-x-4 w-full   ">
-                        <div className="col-span-2 flex gap-4 items-center">
-                            <ImageUploader imageInfo={item?.MenuItemImage} />
-                        </div>
-                        <div className="col-span-6">
-                            <div className="border p-4 rounded-lg ">
-                                <div className="flex flex-col justify-center gap-2">
-                                    <div className="w-24 h-24 bg-muted rounded-lg bg-center bg-no-repeat bg-cover"
-                                        style={{ backgroundImage: `url(${item?.MenuItemImage?.thumbnailUrl || ""})` }}></div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                </div>
-
                 <section className="flex flex-col">
-
-
                     <Fieldset className="grid grid-cols-4 items-center">
                         <Label htmlFor="mogoId" className="font-semibold text-sm col-span-1">Mogo ID</Label>
                         <Input type="text" id="mogoId" name="mogoId"
@@ -228,60 +232,13 @@ export default function MenuItemForm({ item, action, className, categories, logg
                     <input type="hidden" name="loggedUser" value={jsonStringify(loggedUser)} />
                 </div>
             </Form>
+
         </div>
 
     )
 }
 
 
-
-export function ImageUploader({ imageInfo }: ImageUploaderProps) {
-    const [info, updateInfo] = useState<MenuItemWithAssociations["MenuItemImage"] | undefined>(imageInfo);
-    const [error, updateError] = useState();
-
-    // @ts-ignore
-    function handleOnUpload(error, result, widget) {
-        if (error) {
-            updateError(error);
-            widget.close({
-                quiet: true,
-            });
-            return;
-        }
-
-        const info = result?.info
-
-        updateInfo({
-            id: info?.id ?? null,
-            secureUrl: info.secure_url,
-            assetFolder: info.asset_folder,
-            originalFileName: info.original_filename,
-            displayName: info.display_name,
-            height: info.height,
-            width: info.width,
-            thumbnailUrl: info.thumbnail_url,
-            format: info.format,
-            publicId: info.public_id
-        });
-
-    }
-
-    return (
-        <>
-            <input type="hidden" id="imageInfo" name="imageInfo" defaultValue={jsonStringify(info ?? imageInfo)} />
-
-            <CloudinaryUploadWidget presetName="admin-cardapio" onUpload={handleOnUpload}>
-
-                {
-                    // @ts-ignore
-                    ({ open }) => {
-                        return <Button onClick={open}>Upload Image</Button>;
-                    }
-                }
-            </CloudinaryUploadWidget>
-        </>
-    )
-}
 
 
 

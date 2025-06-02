@@ -1,16 +1,5 @@
-import { LoaderFunctionArgs, defer } from "@remix-run/node";
-import { Await, Outlet, useLoaderData, useLocation } from "@remix-run/react";
-import { Suspense } from "react";
-import OptionTab from "~/components/layout/option-tab/option-tab";
-import Loading from "~/components/loading/loading";
+import { Outlet, useLocation } from "@remix-run/react";
 import OptionLinkTab from "~/components/option-link-tab/option-link-tab";
-import Toooltip from "~/components/tooltip/tooltip";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "~/components/ui/accordion";
-import { Tooltip } from "~/components/ui/tooltip";
-import { authenticator } from "~/domain/auth/google.server";
-import { MenuItemSellingPriceHandler, menuItemSellingPriceHandler } from "~/domain/cardapio/menu-item-selling-price-handler.server";
-import { cn } from "~/lib/utils";
-import formatDecimalPlaces from "~/utils/format-decimal-places";
 
 
 

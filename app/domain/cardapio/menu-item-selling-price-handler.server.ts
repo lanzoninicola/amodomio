@@ -249,7 +249,7 @@ export class MenuItemSellingPriceHandler {
     const groupedMap = new Map<string, GroupedMenu>();
 
     for (const item of data) {
-      const groupId = item.group.id;
+      const groupId = item.group?.id || "ungrouped";
 
       if (!groupedMap.has(groupId)) {
         groupedMap.set(groupId, {

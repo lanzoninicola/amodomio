@@ -51,7 +51,7 @@ export default function SingleCardapioItem() {
             </div>
           }
 
-          const itemImageUrl = item?.imageTransformedURL
+          const itemImageUrl = item?.MenuItemGalleryImage?.[0]?.secureUrl
           const itemImagePlaceholder = item?.imagePlaceholderURL
           const itemName = item?.name
           const itemIngredients = item?.ingredients

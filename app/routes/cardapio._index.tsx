@@ -347,11 +347,13 @@ const CardapioItemFullImage = React.forwardRef(({ item }: CardapioItemFullImageP
     const bestMonthlySeller = item.tags?.all.some(t => t.toLocaleLowerCase() === "mais-vendido-mes")
     const bestSeller = item.tags?.all.some(t => t.toLocaleLowerCase() === "mais-vendido")
 
+    const featuredImage = item.MenuItemGalleryImage.filter(img => img.isPrimary)[0];
+
     return (
         <li className="snap-start border-b py-[0.15rem]" id={item.id} ref={ref}>
             <div className="relative h-[350px]">
                 <CardapioItemImageSingle
-                    src={item.imageTransformedURL || ""}
+                    src={featuredImage?.secureUrl || ""}
                     placeholder={item.imagePlaceholderURL || ""}
                     placeholderIcon={false}
 
@@ -467,31 +469,35 @@ function CardapioItemListDestaque({ title, items, tagFilter, carouselDelay = 200
 
                     {
                         // @ts-ignore
-                        items.filter(i => i.tags?.all.some(t => t === tagFilter)).slice(0, 4).map(i => (
+                        items.filter(i => i.tags?.all.some(t => t === tagFilter)).slice(0, 4).map((i: MenuItemWithAssociations) => {
 
-                            <CarouselItem key={i.id} className="basis-1/2 md:basis-1/3" data-element="carousel-item">
-                                <Link to={`/cardapio/${i.slug}`} className="w-full">
+                            const featuredImage = i.MenuItemGalleryImage.filter(img => img.isPrimary)[0];
 
-                                    <div className="relative grid place-items-center rounded-md bg-slate-50 h-[112px]">
-                                        <CardapioItemImageSingle
-                                            src={i.imageTransformedURL || ""}
-                                            placeholder={i.imagePlaceholderURL || ""}
+                            return (
+                                <CarouselItem key={i.id} className="basis-1/2 md:basis-1/3" data-element="carousel-item">
+                                    <Link to={`/cardapio/${i.slug}`} className="w-full">
 
-                                            placeholderIcon={true}
+                                        <div className="relative grid place-items-center rounded-md bg-slate-50 h-[112px]">
+                                            <CardapioItemImageSingle
+                                                src={featuredImage?.secureUrl || ""}
+                                                placeholder={i.imagePlaceholderURL || ""}
 
-                                            // placeholderText="Imagem não disponível"
-                                            cnContainer="h-full w-full rounded-md"
-                                        />
+                                                placeholderIcon={true}
 
-                                        <div className="absolute bottom-2 w-full">
-                                            <p className=" ml-3 font-body-website font-semibold tracking-widest uppercase text-white">{i.name}</p>
+                                                // placeholderText="Imagem não disponível"
+                                                cnContainer="h-full w-full rounded-md"
+                                            />
+
+                                            <div className="absolute bottom-2 w-full">
+                                                <p className=" ml-3 font-body-website font-semibold tracking-widest uppercase text-white">{i.name}</p>
+                                            </div>
+
                                         </div>
+                                    </Link>
+                                </CarouselItem>
+                            )
 
-                                    </div>
-                                </Link>
-                            </CarouselItem>
-
-                        ))}
+                        })}
                 </CarouselContent>
             </Carousel>
         </div>

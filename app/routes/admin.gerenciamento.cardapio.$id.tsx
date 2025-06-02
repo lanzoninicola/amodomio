@@ -1,15 +1,11 @@
-import { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
-import { Outlet, useLoaderData, useLocation, useParams, useSearchParams } from "@remix-run/react";
+import { Outlet, useLocation } from "@remix-run/react";
 import { Separator } from "~/components/ui/separator";
-import { toast } from "~/components/ui/use-toast";
 import MenuItemNavLink from "~/domain/cardapio/components/menu-item-nav-link/menu-item-nav-link";
-import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
-import { prismaIt } from "~/lib/prisma/prisma-it.server";
-import { badRequest, ok, serverError } from "~/utils/http-response.server";
-import { lastUrlSegment, urlAt } from "~/utils/url";
+import { lastUrlSegment } from "~/utils/url";
 
 const menuItemNavigation = [
     { name: 'Principal', href: 'main' },
+    { name: 'Galeria', href: 'images' },
     { name: 'Venda', href: 'venda/prices' },
     { name: 'Tags', href: 'tags' },
     { name: 'Custos', href: 'costs' }

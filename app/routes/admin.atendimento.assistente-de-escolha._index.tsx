@@ -92,7 +92,7 @@ export default function AdminAtendimentoDAssistenteDeEscolhaMain() {
           return (
             <div>
               {itemsWithMarkupByGroup.map(grouped => (
-                <div key={grouped.group.id} className="mb-4">
+                <div key={grouped.group.name} className="mb-4">
                   {/* Accordion title */}
 
                   <Accordion type="single" collapsible className="border rounded-md">
