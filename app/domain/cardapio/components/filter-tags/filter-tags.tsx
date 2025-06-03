@@ -45,7 +45,7 @@ export default function FiltersTags({ tags, showBanner = false }: { tags: Tag[],
                         {tagsWithTodos.map((tag) => (
                             <li key={tag.id} className="ml-3">
                                 <Link to={linkUrl(tag)}
-                                    className="text-[12px] font-medium tracking-widest font-neue uppercase text-muted-foreground">
+                                    className="text-[13px] font-medium tracking-widest font-neue uppercase text-muted-foreground">
                                     <BadgeTag tag={tag}
                                         classNameLabel={
                                             cn(

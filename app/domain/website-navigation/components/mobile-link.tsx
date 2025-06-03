@@ -1,4 +1,5 @@
 import { Link, LinkProps } from "@remix-run/react"
+import { cn } from "~/lib/utils"
 
 interface MobileLinkProps extends LinkProps {
   onOpenChange?: (open: boolean) => void
