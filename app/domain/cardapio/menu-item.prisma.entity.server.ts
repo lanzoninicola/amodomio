@@ -8,7 +8,10 @@ import {
   MenuItemLike,
   MenuItemNote,
   MenuItemPriceVariation,
+  MenuItemSellingChannel,
+  MenuItemSellingPriceVariation,
   MenuItemShare,
+  MenuItemSize,
   MenuItemTag,
   Prisma,
   Tag,
@@ -30,38 +33,43 @@ import {
   menuItemSizePrismaEntity,
 } from "./menu-item-size.entity.server";
 import { menuItemSellingPriceUtilityEntity } from "./menu-item-selling-price-utility.entity";
-import { menuItemSellingChannelPrismaEntity } from "./menu-item-selling-channel.entity.server";
+import {
+  menuItemSellingChannelPrismaEntity,
+  SellingChannelKey,
+} from "./menu-item-selling-channel.entity.server";
 import { slugifyString } from "~/utils/slugify";
 
 export interface MenuItemWithAssociations extends MenuItem {
   priceVariations: MenuItemPriceVariation[];
-  costVariations: MenuItemCostVariation[];
   categoryId: string;
   Category: Category;
   tags: {
-    all: Tag["name"][]; // Array of all tag names
-    public: Tag["name"][]; // Array of public tag names
-    models: Tag[]; // Array of full tag objects
+    all: string[]; // Todos os nomes de tags
+    public: string[]; // Somente nomes de tags públicas
+    models: Tag[]; // Objetos completos das tags
   };
   MenuItemLike: MenuItemLike[];
-  MenuItemTag: MenuItemTag[];
   MenuItemShare: MenuItemShare[];
-  MenuItemImage: MenuItemImage | null; // Handle cases where image may not exist
-  MenuItemGalleryImage: MenuItemGalleryImage[]; // Array of gallery images
-  MenuItemNote: MenuItemNote[];
+  MenuItemImage: MenuItemImage | null;
+  MenuItemGalleryImage: MenuItemGalleryImage[];
   MenuItemGroup: MenuItemGroup;
+  MenuItemSellingPriceVariation: MenuItemSellingPriceVariation &
+    {
+      MenuItemSellingChannel: MenuItemSellingChannel;
+      MenuItemSize: MenuItemSize;
+    }[];
   likes: {
-    amount: number; // Number of likes
+    amount: number;
   };
-  shares: number; // Number of shares
-  imageTransformedURL: string; // Transformed image URL from Cloudinary
-  imagePlaceholderURL: string; // Placeholder image URL from Cloudinary
+  shares: number;
+  imageTransformedURL: string;
+  imagePlaceholderURL: string;
   meta: {
-    isItalyProduct: boolean; // Whether the product is marked as an Italy product
-    isBestSeller: boolean; // Whether the product is marked as a best seller
-    isMonthlySpecial: boolean; // Whether the product is marked as a monthly special
-    isMonthlyBestSeller: boolean; // Whether the product is marked as a monthly best seller
-    isChefSpecial: boolean; // Whether the product is marked as a chef special
+    isItalyProduct: boolean;
+    isBestSeller: boolean;
+    isMonthlyBestSeller: boolean;
+    isChefSpecial: boolean;
+    isMonthlySpecial: boolean;
   };
 }
 
@@ -72,6 +80,7 @@ export interface MenuItemEntityFindAllProps {
     direction?: "asc" | "desc";
   };
   mock?: boolean;
+  sellingChannelKey?: SellingChannelKey; // Key of the selling channel to filter by
 }
 
 interface FindManyWithSellPriceVariationsProps
@@ -122,7 +131,11 @@ export class MenuItemPrismaEntity {
   }
 
   async findAll(
-    params: MenuItemEntityFindAllProps = {},
+    params: MenuItemEntityFindAllProps = {
+      where: {},
+      mock: false,
+      sellingChannelKey: "cardapio", // Default selling channel key
+    },
     options = {
       imageTransform: false,
       imageScaleWidth: 1280,
@@ -159,6 +172,20 @@ export class MenuItemPrismaEntity {
         MenuItemImage: true,
         MenuItemGalleryImage: true,
         MenuItemGroup: true,
+        MenuItemSellingPriceVariation: {
+          where: {
+            MenuItemSellingChannel: {
+              key: params.sellingChannelKey || "cardapio", // Default to 'cardapio'
+            },
+          },
+          orderBy: {
+            priceAmount: "asc",
+          },
+          include: {
+            MenuItemSellingChannel: true,
+            MenuItemSize: true,
+          },
+        },
       },
     });
 

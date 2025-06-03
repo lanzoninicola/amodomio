@@ -17,9 +17,11 @@ import { toast } from "~/components/ui/use-toast";
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from "~/components/ui/dialog";
 import { Button } from "~/components/ui/button";
 import { DialogTitle } from "@radix-ui/react-dialog";
-import { ExpandIcon } from "lucide-react";
+import { Car, ExpandIcon } from "lucide-react";
 import OptionTab from "~/components/layout/option-tab/option-tab";
 import MenuItemSwitchActivation from "~/domain/cardapio/components/menu-item-switch-activation.tsx/menu-item-switch-activation";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
+import { MenuItemSellingPriceVariation } from "@prisma/client";
 
 
 export const loader = async () => {
@@ -113,18 +115,97 @@ export default function AdminAtendimentoGerenciamentoSabores() {
 
   return (
     <Container className="md:max-w-none">
-      <div className="flex flex-col gap-4 mb-6">
-        <h1 className="text-xl font-bold leading-tight tracking-tighter md:text-lg lg:leading-[1.1]">
-          Gerençiamento sabores
-        </h1>
-      </div>
+
 
 
       <Suspense fallback={<Loading />}>
         <Await resolve={cardapioItems}>
           {(cardapioItems) => {
+
+            if (!cardapioItems || cardapioItems.length === 0) {
+              return (
+                <div className="flex flex-col gap-4 items-center">
+                  <h1 className="text-lg font-bold leading-tight tracking-tighter md:text-lg lg:leading-[1.1]">
+                    Nenhum sabor cadastrado
+                  </h1>
+                  <p className="text-sm text-muted-foreground">Cadastre um sabor para começar</p>
+                </div>
+              )
+            }
+
+
+
+
+            const [items] = useState<MenuItemWithAssociations[]>(cardapioItems) // original completo
+            const [filteredItems, setFilteredItems] = useState<MenuItemWithAssociations[]>(cardapioItems.filter(i => i.visible === true && i.active === true) || [])
+
+
+            const [visible, setVisible] = useState(false)
+            const [active, setActive] = useState(false)
+
+            const handleOptionVisibileItems = (state: boolean) => {
+              setFilteredItems(items.filter(item => item.visible === state && item.active === true))
+            }
+
+            const handleOptionActiveItems = (state: boolean) => {
+              setFilteredItems(items.filter(item => item.active === state))
+            }
+
+
             // @ts-ignore
-            return <CardapioItems cardapioItems={cardapioItems} />
+            return (
+              <div className="flex flex-col gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-8 gap-4 items-center">
+                  <h1 className="text-lg font-bold tracking-tighter md:text-lg col-span-2">
+                    Gerençiamento sabores
+                  </h1>
+                  <CardapioItemSearch items={items} setFilteredItems={setFilteredItems} />
+
+                  <Select
+                    onValueChange={(value) => {
+                      if (value === "active") handleOptionVisibileItems(true)
+                      else if (value === "paused") handleOptionVisibileItems(false)
+                      else if (value === "inactive") handleOptionActiveItems(false)
+                    }}
+                    defaultValue={"active"}
+                  >
+                    <SelectTrigger className="w-[200px] col-span-2">
+                      <SelectValue placeholder="Filtrar vendas" />
+                    </SelectTrigger>
+                    <SelectContent >
+                      <SelectItem value="active">Venda ativa</SelectItem>
+                      <SelectItem value="paused">Venda pausada</SelectItem>
+                      <SelectItem value="inactive">Inativos</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex flex-col items-center">
+
+                  <ul className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-4">
+                    {
+                      filteredItems.map(item => {
+                        return (
+                          <CardapioItem
+                            key={item.id}
+                            item={item}
+                            setVisible={setVisible}
+                            visible={visible}
+                            active={active}
+                            setActive={setActive}
+                          />
+
+                        )
+                      })
+                    }
+
+                  </ul>
+
+
+
+                </div>
+              </div>
+            )
           }}
         </Await>
       </Suspense>
@@ -133,115 +214,6 @@ export default function AdminAtendimentoGerenciamentoSabores() {
 }
 
 
-function CardapioItems({
-  cardapioItems }: {
-    cardapioItems: MenuItemWithAssociations[]
-  }
-) {
-  // const outletContext = useOutletContext<AdminOutletContext>()
-  // const initialItems = outletContext?.cardapioItems
-  const [items, setItems] = useState<MenuItemWithAssociations[]>(cardapioItems.filter(i => i.visible === true) || [])
-
-  const [search, setSearch] = useState("")
-
-  const handleSearch = (event: React.ChangeEvent<HTMLInputElement>) => {
-
-    const value = event.target.value
-
-    setSearch(value)
-
-    if (!value) return setItems(cardapioItems)
-
-    const searchedItems = cardapioItems
-      .filter(item => item.visible === true)
-      .filter(item => {
-
-        const tags = item?.tags?.public || []
-
-        return (
-          item.name?.toLowerCase().includes(value.toLowerCase())
-          || item.ingredients?.toLowerCase().includes(value.toLowerCase())
-          || item.description?.toLowerCase().includes(value.toLowerCase())
-          || (tags.filter(t => t?.toLowerCase().includes(value.toLowerCase())).length > 0)
-        )
-      })
-
-
-    setItems(searchedItems)
-
-  }
-
-  const [visible, setVisible] = useState(false)
-  const [active, setActive] = useState(false)
-
-  const [optVisibleItems, setOptVisibleItems] = useState<boolean | null>(true)
-  const [optActiveItems, setOptActiveItems] = useState<boolean | null>(null)
-
-  const handleOptionVisibileItems = (state: boolean) => {
-    setOptVisibleItems(state)
-    setOptActiveItems(null)
-    setItems(cardapioItems.filter(item => item.visible === state && item.active === true))
-  }
-  const handleOptionActiveItems = (state: boolean) => {
-    setOptActiveItems(state)
-    setOptVisibleItems(null)
-    setItems(cardapioItems.filter(item => item.active === state))
-  }
-
-
-  return (
-    <div className="flex flex-col items-center">
-
-      <div className="flex flex-col gap-4 items-center w-full mb-6">
-        <div className="bg-slate-50 w-full px-60 py-2 grid place-items-center rounded-sm">
-          <Input name="search" className="w-full py-4 text-lg bg-white " placeholder="Pesquisar no cardapio..." onChange={(e) => handleSearch(e)} value={search} />
-        </div>
-
-        <div className="flex flex-col md:flex-row gap-4 justify-between items-center w-full">
-          <div className="flex gap-4">
-            <span className="text-xs text-muted-foreground hover:underline cursor-pointer">Novidade</span>
-            <span className="text-xs text-muted-foreground hover:underline cursor-pointer">Vegetarianas</span>
-            <span className="text-xs text-muted-foreground hover:underline cursor-pointer">Carne</span>
-            <span className="text-xs text-muted-foreground hover:underline cursor-pointer">Doce</span>
-          </div>
-          <span className="text-xs text-muted-foreground ">Resultados: {items.length}</span>
-        </div>
-      </div>
-      <div className="flex gap-4 items-center">
-        <OptionTab label="Venda ativa" onClickFn={() => handleOptionVisibileItems(true)} highlightCondition={optVisibleItems === true && optActiveItems === null} />
-        <span>-</span>
-        <OptionTab label="Venda pausada" onClickFn={() => handleOptionVisibileItems(false)} highlightCondition={optVisibleItems === false && optActiveItems === null} />
-        <span>-</span>
-        <OptionTab label="Inativos" onClickFn={() => handleOptionActiveItems(false)} highlightCondition={optActiveItems === false && optVisibleItems === null} />
-
-      </div>
-      <Separator className="my-2 w-full" />
-
-
-      <ul className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4">
-        {
-          items.map(item => {
-            return (
-              <CardapioItem
-                key={item.id}
-                item={item}
-                setVisible={setVisible}
-                visible={visible}
-                active={active}
-                setActive={setActive}
-              />
-
-            )
-          })
-        }
-
-      </ul>
-
-
-
-    </div>
-  )
-}
 
 
 
@@ -292,25 +264,24 @@ function CardapioItem({ item, setVisible, visible, active, setActive, showExpand
 
       </div>
 
-      <ul className="grid grid-cols-2 items-end mb-2">
+      <ul className="grid grid-cols-3 items-end mb-2">
         {
-          item.priceVariations.map(pv => {
-            if (pv.amount <= 0) return
-
+          item.MenuItemSellingPriceVariation.filter(spv => spv.priceAmount > 0).map((spv) => {
             return (
-              <li className="flex flex-col" key={pv.id}>
-                <p className="text-xs text-left">{mapPriceVariationsLabel(pv.label)}: <span className="font-semibold">{pv.amount.toFixed(2)}</span></p>
+              <li className="flex flex-col" key={spv.id}>
+                <p className="text-xs text-left">{spv.MenuItemSize.nameAbbreviated}: <span className="font-semibold">{spv.priceAmount}</span></p>
               </li>
             )
           })
         }
       </ul>
+
       <p className="text-xs text-muted-foreground line-clamp-2 text-left">{item.ingredients}</p>
       <Separator className="my-3" />
 
-      <div className="flex justify-between">
-        <MenuItemSwitchActivation menuItem={item} active={active} setActive={setActive} cnLabel="text-[12px]" cnContainer="md:justify-start" />
-        <MenuItemSwitchVisibility menuItem={item} visible={visible} setVisible={setVisible} cnLabel="text-[12px]" />
+      <div className="flex justify-end">
+        {/* <MenuItemSwitchActivation menuItem={item} active={active} setActive={setActive} cnLabel="text-[12px]" cnContainer="md:justify-start" /> */}
+        <MenuItemSwitchVisibility menuItem={item} visible={visible} setVisible={setVisible} cnLabel="text-[12px]" cnContainer="justify-items-end" />
       </div>
     </div>
   )
@@ -349,5 +320,53 @@ function CardapioItemDialog({ children, triggerComponent }: CardapioItemDialogPr
       </DialogContent>
 
     </Dialog>
+  )
+}
+
+
+
+function CardapioItemSearch({
+  items,
+  setFilteredItems,
+}: {
+  items: MenuItemWithAssociations[],
+  setFilteredItems: React.Dispatch<React.SetStateAction<MenuItemWithAssociations[]>>
+}) {
+  const [search, setSearch] = useState("")
+
+  const handleSearch = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const value = event.target.value
+    setSearch(value)
+
+    if (!value) {
+      return setFilteredItems(items.filter(i => i.visible === true && i.active === true))
+    }
+
+    const searchedItems = items
+      .filter(item => item.visible === true && item.active === true)
+      .filter(item => {
+        const tags = item?.tags?.public || []
+
+        return (
+          item.name?.toLowerCase().includes(value.toLowerCase()) ||
+          item.ingredients?.toLowerCase().includes(value.toLowerCase()) ||
+          item.description?.toLowerCase().includes(value.toLowerCase()) ||
+          tags.some(t => t?.toLowerCase().includes(value.toLowerCase()))
+        )
+      })
+
+    setFilteredItems(searchedItems)
+  }
+
+  return (
+    <div className="flex flex-col gap-4 items-center w-full col-span-4">
+      <Input
+        name="search"
+        className="w-full py-4 text-lg bg-white"
+        placeholder="Pesquisar no cardápio..."
+        onChange={handleSearch}
+        value={search}
+      />
+    </div>
   )
 }
