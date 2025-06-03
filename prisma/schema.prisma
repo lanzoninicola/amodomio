@@ -385,6 +385,8 @@ model MenuItemSize {
   id                                 String                               @id @default(uuid())
   key                                String?                              @map("key")
   name                               String
+  nameAbbreviated                    String?                              @map("name_abbreviated") // <- nova coluna
+  description                        String?                              @map("description")
   sortOrderIndex                     Int                                  @default(0) @map("sort_order_index")
   createdAt                          DateTime                             @map("created_at")
   updatedAt                          DateTime                             @default(now()) @updatedAt @map("updated_at")
