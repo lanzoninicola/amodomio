@@ -676,3 +676,104 @@ model FinanceAccount {
 
   @@map("finance_accounts")
 }
+
+model HrJobFunction {
+  id          String         @id @default(uuid())
+  name        String
+  description String?
+  openings    HrJobOpening[]
+
+  @@map("hr_job_functions")
+}
+
+/// Vaga publicada
+model HrJobOpening {
+  id                          String                @id @default(uuid())
+  title                       String
+  isActive                    Boolean               @default(true) @map("is_active")
+  description                 String?               @map("description")
+  /// registrar a proposta que o consultor informa
+  financeProposalByConsultant String?               @map("finance_proposal_by_consultant")
+  // registrar a proposta efetevimante oferecida
+  financeProposalToOffer      String?               @map("finance_proposal_to_offer")
+  note                        String?
+  createdAt                   DateTime              @default(now()) @map("created_at")
+  form                        HrJobApplicationForm?
+  applications                HrJobApplication[]
+  function                    HrJobFunction         @relation(fields: [functionId], references: [id])
+  functionId                  String                @map("function_id")
+
+  @@map("hr_job_openings")
+}
+
+/// Formulário vinculado à vaga
+model HrJobApplicationForm {
+  id           String               @id @default(uuid())
+  jobOpening   HrJobOpening?        @relation(fields: [jobOpeningId], references: [id])
+  jobOpeningId String?              @unique @map("job_opening_id")
+  fields       HrApplicationField[]
+
+  @@map("hr_job_application_forms")
+}
+
+/// Campos definidos no formulário
+model HrApplicationField {
+  id       String               @id @default(uuid())
+  form     HrJobApplicationForm @relation(fields: [formId], references: [id])
+  formId   String               @map("form_id")
+  label    String
+  type     String // ex: text, textarea, select, etc.
+  required Boolean              @default(false)
+
+  @@map("hr_application_fields")
+}
+
+/// Candidatura de um candidato
+model HrJobApplication {
+  id            String                @id @default(uuid())
+  jobOpening    HrJobOpening          @relation(fields: [jobOpeningId], references: [id])
+  jobOpeningId  String                @map("job_opening_id")
+  answers       HrApplicationAnswer[]
+  status        String                @default("PENDING")
+  interview     HrInterview?
+  proposal      HrHiringProposal?
+  createdAt     DateTime              @default(now()) @map("created_at")
+  notesInternal String?               @map("notes_internal")
+
+  @@map("hr_job_applications")
+}
+
+/// Respostas individuais ao formulário
+model HrApplicationAnswer {
+  id            String           @id @default(uuid())
+  application   HrJobApplication @relation(fields: [applicationId], references: [id])
+  applicationId String           @map("application_id")
+  fieldLabel    String           @map("field_label")
+  answer        String
+
+  @@map("hr_application_answers")
+}
+
+/// Dados da entrevista
+model HrInterview {
+  id            String           @id @default(uuid())
+  application   HrJobApplication @relation(fields: [applicationId], references: [id])
+  applicationId String           @unique @map("application_id")
+  proposedDate  DateTime         @map("proposed_date")
+  confirmedDate DateTime?        @map("confirmed_date")
+  status        String           @default("PENDING")
+
+  @@map("hr_interviews")
+}
+
+/// Proposta enviada ao candidato
+model HrHiringProposal {
+  id            String           @id @default(uuid())
+  application   HrJobApplication @relation(fields: [applicationId], references: [id])
+  applicationId String           @unique @map("application_id")
+  status        String           @default("PENDING")
+  sentAt        DateTime?        @map("sent_at")
+  respondedAt   DateTime?        @map("responded_at")
+
+  @@map("hr_hiring_proposals")
+}
