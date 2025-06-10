@@ -1,7 +1,10 @@
+import { MenuItemSize } from "@prisma/client";
 import { LoaderFunctionArgs } from "@remix-run/node";
+import { cache } from "~/domain/cache/cache-manager.server";
+
 import { menuItemSizePrismaEntity } from "~/domain/cardapio/menu-item-size.entity.server";
 import { menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
-import { bairroEntity } from "~/domain/delivery/bairro.entity.server";
+import { bairroEntity, BairroWithFeeAndDistance } from "~/domain/delivery/bairro.entity.server";
 import { restApi } from "~/domain/rest-api/rest-api.entity.server";
 import { badRequest, ok } from "~/utils/http-response.server";
 
@@ -17,92 +20,16 @@ type MenuItemPriceSummary = {
   priceExpectedAmount: number;
 };
 
-const mockData: Record<string, MenuItemPriceSummary[]> = {
-  "pizza-small": [
-    {
-      menuItemId: "1",
-      name: "Margarita",
-      groupName: "Tradicional",
-      priceAmount: 25.0,
-      previousPriceAmount: 30.0,
-      discountPercentage: 16.67,
-      profitActualPerc: 20.0,
-      profitExpectedPerc: 25.0,
-      priceExpectedAmount: 30.0,
-    },
-    {
-      menuItemId: "2",
-      name: "Pepperoni",
-      groupName: "Tradicional",
-      priceAmount: 30.0,
-      previousPriceAmount: 35.0,
-      discountPercentage: 14.29,
-      profitActualPerc: 22.0,
-      profitExpectedPerc: 27.0,
-      priceExpectedAmount: 35.0,
-    },
-  ],
-  "pizza-medium": [
-    {
-      menuItemId: "1",
-      name: "Margarita",
-      groupName: "Tradicional",
-      priceAmount: 35.0,
-      previousPriceAmount: 40.0,
-      discountPercentage: 12.5,
-      profitActualPerc: 18.0,
-      profitExpectedPerc: 23.0,
-      priceExpectedAmount: 40.0,
-    },
-    {
-      menuItemId: "2",
-      name: "Pepperoni",
-      groupName: "Tradicional",
-      priceAmount: 40.0,
-      previousPriceAmount: 45.0,
-      discountPercentage: 11.11,
-      profitActualPerc: 19.0,
-      profitExpectedPerc: 24.0,
-      priceExpectedAmount: 45.0,
-    },
-  ],
-  "pizza-bigger": [
-    {
-      menuItemId: "1",
-      name: "Margarita",
-      groupName: "Tradicional",
-      priceAmount: 45.0,
-      previousPriceAmount: 50.0,
-      discountPercentage: 10.0,
-      profitActualPerc: 16.0,
-      profitExpectedPerc: 21.0,
-      priceExpectedAmount: 50.0,
-    },
-    {
-      menuItemId: "2",
-      name: "Pepperoni",
-      groupName: "Tradicional",
-      priceAmount: 50.0,
-      previousPriceAmount: 55.0,
-      discountPercentage: 9.09,
-      profitActualPerc: 16.0,
-      profitExpectedPerc: 21.0,
-      priceExpectedAmount: 50.0,
-    },
-  ],
-}
+
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const { success, retryIn } = await restApi.rateLimitCheck(request);
 
   if (!success) {
     const seconds = retryIn ? Math.ceil(retryIn / 1000) : 60;
-
     return new Response("Too many requests", {
       status: 429,
-      headers: {
-        "Retry-After": String(seconds),
-      },
+      headers: { "Retry-After": String(seconds) },
     });
   }
 
@@ -112,29 +39,36 @@ export async function loader({ request }: LoaderFunctionArgs) {
     return badRequest(authResp.message);
   }
 
+  const mapKey = "menu-item-price-summary";
+  const sizesKey = "menu-item-sizes";
+  const bairrosKey = "delivery-bairros";
 
-  // Here you would typically fetch or process the menu item selling prices
-  // For demonstration, we return a static message
+  const cachedMap = cache.get<Record<string, MenuItemPriceSummary[]>>(mapKey);
+  const cachedSizes = cache.get<MenuItemSize[]>(sizesKey);
+  const cachedBairros = cache.get<BairroWithFeeAndDistance[]>(bairrosKey);
 
+  // Se tudo estiver em cache, retorna direto
+  if (cachedMap && cachedSizes && cachedBairros) {
+    return ok({
+      options: cachedMap,
+      sizes: cachedSizes.filter(size => size.key !== "pizza-slice"),
+      bairros: cachedBairros,
+    });
+  }
+
+  // Processa apenas o que não está em cache
   const items = await menuItemPrismaEntity.findManyWithSellPriceVariations(
-    {
-      where: {
-        active: true,
-
-      }
-    },
+    { where: { active: true } },
     "cardapio",
-    {
-      includeAuditRecords: false,
-    }
-  )
+    { includeAuditRecords: false }
+  );
 
   const map: Record<string, MenuItemPriceSummary[]> = {};
 
   for (const item of items) {
     for (const variation of item.sellPriceVariations) {
       const sizeKey = variation.sizeKey;
-      if (!sizeKey) continue; // ignora variações sem chave de tamanho
+      if (!sizeKey) continue;
 
       const entry: MenuItemPriceSummary = {
         menuItemId: item.menuItemId,
@@ -148,25 +82,24 @@ export async function loader({ request }: LoaderFunctionArgs) {
         priceExpectedAmount: variation.priceExpectedAmount,
       };
 
-      if (!map[sizeKey]) {
-        map[sizeKey] = [];
-      }
-
+      if (!map[sizeKey]) map[sizeKey] = [];
       map[sizeKey].push(entry);
     }
   }
 
-  delete map["pizza-slice"]; // Remove "pizza-slice" if it exists
+  delete map["pizza-slice"];
 
-  const sizes = await menuItemSizePrismaEntity.findAll()
+  const sizesRaw = cachedSizes ?? await menuItemSizePrismaEntity.findAll();
+  const bairros = cachedBairros ?? await bairroEntity.findManyWithFees();
 
-  const bairros = await bairroEntity.findManyWithFees()
+  // Armazena em cache
+  cache.set(mapKey, map);
+  if (!cachedSizes) cache.set(sizesKey, sizesRaw);
+  if (!cachedBairros) cache.set(bairrosKey, bairros);
 
   return ok({
     options: map,
-    sizes: sizes.filter(size => size.key !== "pizza-slice"),
-    bairros
-
+    sizes: sizesRaw.filter(size => size.key !== "pizza-slice"),
+    bairros,
   });
-
 }
