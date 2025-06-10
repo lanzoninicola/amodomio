@@ -6,6 +6,7 @@ import { menuItemSizePrismaEntity } from "~/domain/cardapio/menu-item-size.entit
 import { menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { bairroEntity, BairroWithFeeAndDistance } from "~/domain/delivery/bairro.entity.server";
 import { restApi } from "~/domain/rest-api/rest-api.entity.server";
+import getSearchParam from "~/utils/get-search-param";
 import { badRequest, ok } from "~/utils/http-response.server";
 
 type MenuItemPriceSummary = {
@@ -21,8 +22,7 @@ type MenuItemPriceSummary = {
 };
 
 
-
-export async function loader({ request }: LoaderFunctionArgs) {
+export async function loader({ request, params }: LoaderFunctionArgs) {
   const { success, retryIn } = await restApi.rateLimitCheck(request);
 
   if (!success) {
@@ -31,6 +31,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
       status: 429,
       headers: { "Retry-After": String(seconds) },
     });
+  }
+
+  const invalidateCacheSearchParam = getSearchParam({ request, paramName: "invalidate-cache" })
+
+  if (invalidateCacheSearchParam === "true") {
+    cache.invalidate();
   }
 
   const apiKey = request.headers.get("x-api-key");
@@ -53,6 +59,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
       options: cachedMap,
       sizes: cachedSizes.filter(size => size.key !== "pizza-slice"),
       bairros: cachedBairros,
+    }, {
+      cors: true,
+      corsOrigin: "*",
     });
   }
 
@@ -101,5 +110,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
     options: map,
     sizes: sizesRaw.filter(size => size.key !== "pizza-slice"),
     bairros,
+  }, {
+    cors: true,
+    corsOrigin: "*",
   });
 }
