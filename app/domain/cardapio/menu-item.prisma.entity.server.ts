@@ -10,6 +10,7 @@ import {
   MenuItemPriceVariation,
   MenuItemSellingChannel,
   MenuItemSellingPriceVariation,
+  MenuItemSellingPriceVariationAudit,
   MenuItemShare,
   MenuItemSize,
   MenuItemTag,
@@ -332,7 +333,9 @@ export class MenuItemPrismaEntity {
   }
 
   async findManyWithSellPriceVariations(
-    params: MenuItemEntityFindAllProps = {}
+    params: MenuItemEntityFindAllProps,
+    sellingChannelKey?: string,
+    options?: { includeAuditRecords?: boolean }
   ): Promise<MenuItemWithSellPriceVariations[]> {
     const allMenuItems = await this.client.menuItem.findMany({
       where: params?.where,
@@ -344,7 +347,6 @@ export class MenuItemPrismaEntity {
           },
         },
         MenuItemGroup: true,
-        MenuItemSellingPriceVariationAudit: true,
       },
       orderBy: { sortOrderIndex: "asc" },
     });
@@ -353,44 +355,78 @@ export class MenuItemPrismaEntity {
       orderBy: { sortOrderIndex: "asc" },
     });
 
-    // array of medium size cost variations for all items
+    // 🔎 Audits carregados somente se solicitado
+    let auditMap = new Map<string, MenuItemSellingPriceVariationAudit[]>();
+
+    if (options?.includeAuditRecords) {
+      let audits: MenuItemSellingPriceVariationAudit[] = [];
+
+      if (sellingChannelKey) {
+        const channel = await this.client.menuItemSellingChannel.findFirst({
+          where: { key: sellingChannelKey },
+          select: { id: true },
+        });
+
+        const channelId = channel?.id;
+
+        if (channelId) {
+          audits =
+            await this.client.menuItemSellingPriceVariationAudit.findMany({
+              where: {
+                menuItemSellingChannelId: channelId,
+              },
+            });
+        }
+      } else {
+        audits = await this.client.menuItemSellingPriceVariationAudit.findMany(
+          {}
+        );
+      }
+
+      for (const audit of audits) {
+        const key = `${audit.menuItemId}-${audit.menuItemSellingChannelId}-${audit.menuItemSizeId}`;
+        if (!auditMap.has(key)) auditMap.set(key, []);
+        auditMap.get(key)!.push(audit);
+      }
+    }
+
     return allMenuItems.map((item) => {
       const sellPriceVariations = sizes
-        .sort((a, b) => a.sortOrderIndex - b.sortOrderIndex)
         .map((size) => {
           const variation = item.MenuItemSellingPriceVariation?.find(
-            (cv) => cv.menuItemSizeId === size.id
+            (cv) =>
+              cv.menuItemSizeId === size.id &&
+              (!sellingChannelKey ||
+                cv.MenuItemSellingChannel?.key === sellingChannelKey)
           );
 
-          const variationAuditRecords =
-            item.MenuItemSellingPriceVariationAudit.filter(
-              (audit) =>
-                audit.menuItemId === item.id &&
-                audit.menuItemSellingChannelId ===
-                  variation?.menuItemSellingChannelId &&
-                audit.menuItemSizeId === variation?.menuItemSizeId
-            );
+          if (!variation) return null;
+
+          const auditKey = `${item.id}-${variation.menuItemSellingChannelId}-${variation.menuItemSizeId}`;
+          const variationAuditRecords = options?.includeAuditRecords
+            ? auditMap.get(auditKey) ?? []
+            : [];
 
           return {
-            menuItemSellPriceVariationId: variation?.id,
-            sizeId: variation?.MenuItemSize?.id,
-            sizeKey: variation?.MenuItemSize?.key,
-            sizeName: variation?.MenuItemSize?.name,
-            channelId: variation?.MenuItemSellingChannel?.id,
-            channelKey: variation?.MenuItemSellingChannel?.key,
-            channelName: variation?.MenuItemSellingChannel?.name,
-            priceAmount: variation?.priceAmount ?? 0,
-            profitActualPerc: variation?.profitActualPerc ?? 0,
-            priceExpectedAmount: variation?.priceExpectedAmount ?? 0,
-            profitExpectedPerc: variation?.profitExpectedPerc ?? 0,
-            updatedBy: variation?.updatedBy,
-            updatedAt: variation?.updatedAt,
-            previousPriceAmount: variation?.previousPriceAmount ?? 0,
-            discountPercentage: variation?.discountPercentage ?? 0,
-            lastAuditRecord:
-              variationAuditRecords[variationAuditRecords.length - 1] ?? null,
+            menuItemSellPriceVariationId: variation.id,
+            sizeId: variation.MenuItemSize?.id!,
+            sizeKey: variation.MenuItemSize?.key ?? null,
+            sizeName: variation.MenuItemSize?.name!,
+            channelId: variation.MenuItemSellingChannel?.id ?? null,
+            channelKey: variation.MenuItemSellingChannel?.key ?? null,
+            channelName: variation.MenuItemSellingChannel?.name ?? "",
+            priceAmount: variation.priceAmount ?? 0,
+            profitActualPerc: variation.profitActualPerc ?? 0,
+            priceExpectedAmount: variation.priceExpectedAmount ?? 0,
+            profitExpectedPerc: variation.profitExpectedPerc ?? 0,
+            updatedBy: variation.updatedBy,
+            updatedAt: variation.updatedAt,
+            previousPriceAmount: variation.previousPriceAmount ?? 0,
+            discountPercentage: variation.discountPercentage ?? 0,
+            lastAuditRecord: variationAuditRecords.at(-1) ?? null,
           };
-        });
+        })
+        .filter(Boolean);
 
       return {
         menuItemId: item.id,

@@ -393,6 +393,7 @@ model MenuItemSize {
   pizzaDoughCostAmount               Float                                @default(0) @map("pizza_dough_cost_amount")
   packagingCostAmount                Float                                @default(0) @map("packaging_cost_amount")
   visible                            Boolean                              @default(true)
+  maxToppingsAmount                  Float                                @default(0) @map("max_toppings_amount")
   MenuItemPriceVariation             MenuItemPriceVariation[]
   MenuItemSellingPriceVariation      MenuItemSellingPriceVariation[]
   MenuItemCostVariation              MenuItemCostVariation[]
@@ -776,4 +777,62 @@ model HrHiringProposal {
   respondedAt   DateTime?        @map("responded_at")
 
   @@map("hr_hiring_proposals")
+}
+
+model Bairro {
+  id        String   @id @default(uuid())
+  name      String
+  city      String
+  state     String
+  zipCode   String?  @map("zip_code")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  distances    DistanceToPizzeria[]
+  deliveryFees DeliveryFee[]
+}
+
+model PizzeriaLocation {
+  id          String   @id @default(uuid())
+  name        String
+  address     String
+  city        String
+  state       String
+  zipCode     String?  @map("zip_code")
+  phoneNumber String?  @map("phone_number")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  distances    DistanceToPizzeria[]
+  deliveryFees DeliveryFee[]
+}
+
+model DistanceToPizzeria {
+  id                 String   @id @default(uuid())
+  bairroId           String   @map("bairro_id")
+  pizzeriaLocationId String   @map("pizzeria_location_id")
+  distanceInKm       Float    @map("distance_in_km")
+  estimatedTimeInMin Int?     @map("estimated_time_in_min")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  bairro           Bairro           @relation(fields: [bairroId], references: [id])
+  pizzeriaLocation PizzeriaLocation @relation(fields: [pizzeriaLocationId], references: [id])
+
+  @@unique([bairroId, pizzeriaLocationId])
+  @@map("distance_to_pizzeria")
+}
+
+model DeliveryFee {
+  id                 String   @id @default(uuid())
+  bairroId           String   @map("bairro_id")
+  pizzeriaLocationId String   @map("pizzeria_location_id")
+  amount             Float
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  bairro           Bairro           @relation(fields: [bairroId], references: [id])
+  pizzeriaLocation PizzeriaLocation @relation(fields: [pizzeriaLocationId], references: [id])
+
+  @@unique([bairroId, pizzeriaLocationId])
+  @@map("delivery_fee")
 }
