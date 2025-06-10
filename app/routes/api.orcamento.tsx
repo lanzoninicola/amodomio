@@ -1,6 +1,4 @@
-import { name } from "@cloudinary/url-gen/actions/namedTransformation";
 import { LoaderFunctionArgs } from "@remix-run/node";
-import { mock } from "node:test";
 import { menuItemSizePrismaEntity } from "~/domain/cardapio/menu-item-size.entity.server";
 import { menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { bairroEntity } from "~/domain/delivery/bairro.entity.server";
@@ -150,8 +148,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
       map[sizeKey].push(entry);
     }
   }
-
-
 
   delete map["pizza-slice"]; // Remove "pizza-slice" if it exists
 
