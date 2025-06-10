@@ -184,8 +184,20 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
       ],
     },
     {
-      title: "HR",
+      title: "RH",
       items: [
+        {
+          title: "Lista de vagas",
+          href: "/admin/hr/job-openings",
+          items: [],
+          disabled: false,
+        },
+        {
+          title: "Lista de candidaturas recebidas",
+          href: "/admin/hr/applications",
+          items: [],
+          disabled: false,
+        },
         {
           title: "Analise candidatos 'Auxiliar Cozinha'",
           href: "/admin/hr/analise/auxiliar-cozinha",

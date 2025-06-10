@@ -110,15 +110,16 @@ export const links: LinksFunction = () => [
 
 ];
 
-interface EnvironmentVariables {
+export interface EnvironmentVariables {
 
-  GTM_ID: string
-  CLOUDINARY_CLOUD_NAME: string
-  STORE_OPENING_CONFIG: {
+  GTM_ID?: string
+  CLOUDINARY_CLOUD_NAME?: string
+  STORE_OPENING_CONFIG?: {
     OPENING_DAYS: number[]
     OPENING_HOUR: number
     CLOSING_HOUR: number
   }
+  REST_API_SECRET_KEY?: string
 }
 
 
