@@ -790,6 +790,8 @@ model Bairro {
 
   distances    DistanceToPizzeria[]
   deliveryFees DeliveryFee[]
+
+  @@map("bairros")
 }
 
 model PizzeriaLocation {
@@ -803,8 +805,12 @@ model PizzeriaLocation {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
+  mainLocation Boolean @default(false) @map("main_location")
+
   distances    DistanceToPizzeria[]
   deliveryFees DeliveryFee[]
+
+  @@map("pizzeria_locations")
 }
 
 model DistanceToPizzeria {
@@ -834,5 +840,5 @@ model DeliveryFee {
   pizzeriaLocation PizzeriaLocation @relation(fields: [pizzeriaLocationId], references: [id])
 
   @@unique([bairroId, pizzeriaLocationId])
-  @@map("delivery_fee")
+  @@map("delivery_fees")
 }

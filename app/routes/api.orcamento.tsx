@@ -3,6 +3,7 @@ import { LoaderFunctionArgs } from "@remix-run/node";
 import { mock } from "node:test";
 import { menuItemSizePrismaEntity } from "~/domain/cardapio/menu-item-size.entity.server";
 import { menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
+import { bairroEntity } from "~/domain/delivery/bairro.entity.server";
 import { restApi } from "~/domain/rest-api/rest-api.entity.server";
 import { badRequest, ok } from "~/utils/http-response.server";
 
@@ -156,9 +157,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const sizes = await menuItemSizePrismaEntity.findAll()
 
+  const bairros = await bairroEntity.findManyWithFees()
+
   return ok({
     options: map,
-    sizes: sizes.filter(size => size.key !== "pizza-slice")
+    sizes: sizes.filter(size => size.key !== "pizza-slice"),
+    bairros
 
   });
 
