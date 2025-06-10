@@ -36,3 +36,5 @@ export class CacheManager {
     this.cache.del(key);
   }
 }
+
+export const cache = new CacheManager(110, 30);
