@@ -46,8 +46,13 @@ class BairroEntity {
     this.client = client;
   }
 
+  /**
+   * Pode existir multiple sedi da pizzeria, só uma é a principal
+   *
+   * @returns a sede principal
+   */
   async mainLocation() {
-    return this.client.pizzeriaLocation.findFirst({
+    return await this.client.pizzeriaLocation.findFirst({
       where: { mainLocation: true },
     });
   }

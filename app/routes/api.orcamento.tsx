@@ -93,15 +93,22 @@ const mockData: Record<string, MenuItemPriceSummary[]> = {
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {
+  const { success, retryIn } = await restApi.rateLimitCheck(request);
+
+  if (!success) {
+    const seconds = retryIn ? Math.ceil(retryIn / 1000) : 60;
+
+    return new Response("Too many requests", {
+      status: 429,
+      headers: {
+        "Retry-After": String(seconds),
+      },
+    });
+  }
 
   const apiKey = request.headers.get("x-api-key");
-
   const authResp = restApi.authorize(apiKey);
-
-
   if (authResp.status >= 399) {
-
-    console.log({ authResp })
     return badRequest(authResp.message);
   }
 
