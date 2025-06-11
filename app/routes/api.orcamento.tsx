@@ -7,7 +7,7 @@ import { menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.
 import { bairroEntity, BairroWithFeeAndDistance } from "~/domain/delivery/bairro.entity.server";
 import { restApi } from "~/domain/rest-api/rest-api.entity.server";
 import getSearchParam from "~/utils/get-search-param";
-import { badRequest, ok } from "~/utils/http-response.server";
+import { badRequest, noContent, ok } from "~/utils/http-response.server";
 
 type MenuItemPriceSummary = {
   menuItemId: string;
@@ -23,6 +23,13 @@ type MenuItemPriceSummary = {
 
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
+  if (request.method === "OPTIONS") {
+    return noContent(undefined, {
+      cors: true,
+      corsOrigin: "*"
+    });
+  }
+
   const { success, retryIn } = await restApi.rateLimitCheck(request);
 
   if (!success) {
