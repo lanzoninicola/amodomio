@@ -12,6 +12,7 @@ import { badRequest, noContent, ok } from "~/utils/http-response.server";
 type MenuItemPriceSummary = {
   menuItemId: string;
   name: string;
+  ingredients: string;
   groupName?: string;
   priceAmount: number;
   previousPriceAmount: number;
@@ -89,6 +90,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       const entry: MenuItemPriceSummary = {
         menuItemId: item.menuItemId,
         name: item.name,
+        ingredients: item.ingredients || "",
         groupName: item.group?.name ?? undefined,
         priceAmount: variation.priceAmount,
         previousPriceAmount: variation.previousPriceAmount,
