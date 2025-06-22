@@ -6,7 +6,7 @@ import { Input } from "~/components/ui/input";
 import { mapPriceVariationsLabel } from "~/domain/cardapio/fn.utils";
 import CopyButton from "~/components/primitives/copy-button/copy-button";
 import Loading from "~/components/loading/loading";
-import MenuItemSwitchVisibility from "~/domain/cardapio/components/menu-item-switch-visibility/menu-item-switch-visibility";
+import MenuItemSwitchVisibilitySubmit from "~/domain/cardapio/components/menu-item-switch-visibility/menu-item-switch-visibility-submit";
 import { LoaderFunctionArgs } from "@remix-run/node";
 import { badRequest, ok } from "~/utils/http-response.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
@@ -19,7 +19,7 @@ import { Button } from "~/components/ui/button";
 import { DialogTitle } from "@radix-ui/react-dialog";
 import { ExpandIcon } from "lucide-react";
 import OptionTab from "~/components/layout/option-tab/option-tab";
-import MenuItemSwitchActivation from "~/domain/cardapio/components/menu-item-switch-activation.tsx/menu-item-switch-activation";
+import MenuItemSwitchActivationSubmit from "~/domain/cardapio/components/menu-item-switch-activation.tsx/menu-item-switch-activation-submit";
 
 
 export const loader = async () => {

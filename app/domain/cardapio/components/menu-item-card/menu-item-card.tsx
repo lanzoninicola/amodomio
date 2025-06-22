@@ -12,8 +12,8 @@ import MenuItemPriceVariationUtility from "../../menu-item-price-variations-util
 import randomReactKey from "~/utils/random-react-key"
 import { cn } from "~/lib/utils"
 import useFormSubmissionnState from "~/hooks/useFormSubmissionState"
-import MenuItemSwitchVisibility from "../menu-item-switch-visibility/menu-item-switch-visibility"
-import MenuItemSwitchActivation from "../menu-item-switch-activation.tsx/menu-item-switch-activation"
+import MenuItemSwitchVisibilitySubmit from "../menu-item-switch-visibility/menu-item-switch-visibility-submit"
+import MenuItemSwitchActivationSubmit from "../menu-item-switch-activation.tsx/menu-item-switch-activation-submit"
 import MenuItemSwitchUpcomingSubmit from "../menu-item-switch-upcoming/menu-item-switch-upcoming-submit"
 
 
@@ -77,8 +77,8 @@ export default function MenuItemCard({ item, dragAndDrop }: MenuItemCardProps) {
 
                     <div className="flex gap-4 col-span-5">
                         <MenuItemSwitchUpcomingSubmit menuItem={item} cnLabel="leading-[1.2]" />
-                        <MenuItemSwitchActivation menuItem={item} cnContainer="md:justify-start" />
-                        <MenuItemSwitchVisibility menuItem={item} />
+                        <MenuItemSwitchActivationSubmit menuItem={item} cnContainer="md:justify-start" />
+                        <MenuItemSwitchVisibilitySubmit menuItem={item} />
                     </div>
 
                     <div className="col-span-1 flex justify-end">

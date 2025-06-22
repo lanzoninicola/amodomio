@@ -14,7 +14,7 @@ interface MenuItemSwitchActivationProps {
     cnContainer?: string
 }
 
-export default function MenuItemSwitchActivation({
+export default function MenuItemSwitchActivationSubmit({
     menuItem,
     showStatus = true,
     cnLabel,

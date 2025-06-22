@@ -14,7 +14,7 @@ interface MenuItemSwitchVisibilityProps {
     cnSubLabel?: string
 }
 
-export default function MenuItemSwitchVisibility({ menuItem, cnContainer, showStatus = true, cnLabel, cnSubLabel }: MenuItemSwitchVisibilityProps) {
+export default function MenuItemSwitchVisibilitySubmit({ menuItem, cnContainer, showStatus = true, cnLabel, cnSubLabel }: MenuItemSwitchVisibilityProps) {
     const submitBtnRef = React.useRef<HTMLButtonElement>(null)
 
     function handleVisibility() {

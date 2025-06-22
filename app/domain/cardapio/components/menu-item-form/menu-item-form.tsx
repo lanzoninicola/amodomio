@@ -14,7 +14,7 @@ import { Textarea } from "~/components/ui/textarea"
 import { MenuItemWithAssociations } from "../../menu-item.prisma.entity.server"
 import useSaveShortcut from "~/hooks/use-save-shortcut.hook"
 import { jsonStringify } from "~/utils/json-helper"
-import MenuItemSwitchVisibility from "../menu-item-switch-visibility/menu-item-switch-visibility"
+import MenuItemSwitchVisibilitySubmit from "../menu-item-switch-visibility/menu-item-switch-visibility-submit"
 import { Alert } from "~/components/ui/alert"
 import { AlertCircle } from "lucide-react"
 import { LoggedUser } from "~/domain/auth/types.server"
@@ -92,7 +92,7 @@ export default function MenuItemForm({ item, action, className, categories, grou
                         cnSubLabel="text-xs"
                     />
 
-                    <MenuItemSwitchVisibility
+                    <MenuItemSwitchVisibilitySubmit
                         menuItem={item}
                         visible={item?.visible || false}
                         setVisible={() => { }}
