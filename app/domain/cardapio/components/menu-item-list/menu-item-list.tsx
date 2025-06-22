@@ -16,6 +16,8 @@ interface MenuItemListProps {
 
 export type OveredPoint = "none" | "top" | "bottom"
 
+type MenuItemVisibilityFilterOption = "active" | "lancamento-futuro" | "venda-pausada" | "inactive"
+
 export default function MenuItemList({ initialItems }: MenuItemListProps) {
 
     if (!initialItems || initialItems.length === 0) {
@@ -67,28 +69,33 @@ export default function MenuItemList({ initialItems }: MenuItemListProps) {
         );
     };
 
-    const [optVisibleItems, setOptVisibleItems] = useState<boolean | null>(true)
-    const [optActiveItems, setOptActiveItems] = useState<boolean | null>(null)
-    const [optUpcomingItems, setOptUpcomingItems] = useState<boolean | null>(null)
+    const [currentFilter, setCurrentFilter] = useState<MenuItemVisibilityFilterOption | null>("active")
 
-    const handleOptionVisibileItems = (state: boolean) => {
-        setOptVisibleItems(state)
-        setOptActiveItems(null)
-        setOptUpcomingItems(null)
-        setItems(initialItems.filter(item => item.visible === state && item.active === true))
-    }
-    const handleOptionActiveItems = (state: boolean) => {
-        setOptActiveItems(state)
-        setOptVisibleItems(null)
-        setOptUpcomingItems(null)
-        setItems(initialItems.filter(item => item.active === state))
-    }
+    // const [optVisibleItems, setOptVisibleItems] = useState<boolean | null>(true)
+    // const [optActiveItems, setOptActiveItems] = useState<boolean | null>(null)
+    // const [optUpcomingItems, setOptUpcomingItems] = useState<boolean | null>(null)
 
-    const handleOptionUpcomingItems = (state: boolean) => {
-        setOptUpcomingItems(state)
-        setOptVisibleItems(null)
-        setOptActiveItems(null)
-        setItems(initialItems.filter(item => item.tags?.all?.includes("futuro-lançamento") === state))
+    const handleVisibilityFilter = (option: MenuItemVisibilityFilterOption) => {
+
+        if (option === "active") {
+            setCurrentFilter("active")
+            setItems(initialItems.filter(item => item.active === true))
+        }
+
+        if (option === "inactive") {
+            setCurrentFilter("inactive")
+            setItems(initialItems.filter(item => item.active === false))
+        }
+
+        if (option === "lancamento-futuro") {
+            setCurrentFilter("lancamento-futuro")
+            setItems(initialItems.filter(item => item.active === true && item.upcoming === true))
+        }
+
+        if (option === "venda-pausada") {
+            setCurrentFilter("venda-pausada")
+            setItems(initialItems.filter(item => item.active === true && item.visible === false && item.upcoming === false))
+        }
     }
 
 
@@ -106,10 +113,10 @@ export default function MenuItemList({ initialItems }: MenuItemListProps) {
                 </div>
             </div>
             <div className="grid grid-cols-2 gap-4 md:flex   md:gap-4 items-center justify-center">
-                <OptionTab label="Venda ativa" onClickFn={() => handleOptionVisibileItems(true)} highlightCondition={optVisibleItems === true && optActiveItems === null} />
-                <OptionTab label="Lançamento futuro" onClickFn={() => handleOptionUpcomingItems(true)} highlightCondition={optUpcomingItems === true} />
-                <OptionTab label="Venda pausada" onClickFn={() => handleOptionVisibileItems(false)} highlightCondition={optVisibleItems === false && optActiveItems === null} />
-                <OptionTab label="Inativos" onClickFn={() => handleOptionActiveItems(false)} highlightCondition={optActiveItems === false && optVisibleItems === null} />
+                <OptionTab label="Venda ativa" onClickFn={() => handleVisibilityFilter("active")} highlightCondition={currentFilter === "active"} />
+                <OptionTab label="Lançamento futuro" onClickFn={() => handleVisibilityFilter("lancamento-futuro")} highlightCondition={currentFilter === "lancamento-futuro"} />
+                <OptionTab label="Venda pausada" onClickFn={() => handleVisibilityFilter("venda-pausada")} highlightCondition={currentFilter === "venda-pausada"} />
+                <OptionTab label="Inativos" onClickFn={() => handleVisibilityFilter("inactive")} highlightCondition={currentFilter === "inactive"} />
             </div>
             <Separator className="my-4" />
             <ul className="flex flex-col gap-y-4">

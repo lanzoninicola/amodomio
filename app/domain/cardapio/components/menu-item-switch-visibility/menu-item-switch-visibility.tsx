@@ -8,21 +8,16 @@ import { cn } from "~/lib/utils"
 
 interface MenuItemSwitchVisibilityProps {
     menuItem: MenuItemWithAssociations | undefined,
-    visible: boolean,
-    setVisible: React.Dispatch<React.SetStateAction<boolean>>
     showStatus?: boolean
     cnContainer?: string
     cnLabel?: string
     cnSubLabel?: string
 }
 
-export default function MenuItemSwitchVisibility({ menuItem, visible, setVisible, cnContainer, showStatus = true, cnLabel, cnSubLabel }: MenuItemSwitchVisibilityProps) {
+export default function MenuItemSwitchVisibility({ menuItem, cnContainer, showStatus = true, cnLabel, cnSubLabel }: MenuItemSwitchVisibilityProps) {
     const submitBtnRef = React.useRef<HTMLButtonElement>(null)
 
     function handleVisibility() {
-
-        setVisible(!visible)
-
         if (submitBtnRef.current) {
             submitBtnRef.current.click()
         }

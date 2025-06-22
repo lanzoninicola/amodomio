@@ -14,6 +14,7 @@ import { cn } from "~/lib/utils"
 import useFormSubmissionnState from "~/hooks/useFormSubmissionState"
 import MenuItemSwitchVisibility from "../menu-item-switch-visibility/menu-item-switch-visibility"
 import MenuItemSwitchActivation from "../menu-item-switch-activation.tsx/menu-item-switch-activation"
+import MenuItemSwitchUpcomingSubmit from "../menu-item-switch-upcoming/menu-item-switch-upcoming-submit"
 
 
 interface MenuItemCardProps {
@@ -32,20 +33,7 @@ export default function MenuItemCard({ item, dragAndDrop }: MenuItemCardProps) {
     // const [searchParams, setSearchParams] = useSearchParams()
     // const action = searchParams.get("_action")
 
-    const [visible, setVisible] = useState(false)
-    const [active, setActive] = useState(false)
-    const submitBtnRef = React.useRef<HTMLButtonElement>(null)
-
     const featuredImage = item?.MenuItemGalleryImage?.find(img => img.isPrimary)
-
-    function handleVisibility() {
-
-        setVisible(!visible)
-
-        if (submitBtnRef.current) {
-            submitBtnRef.current.click()
-        }
-    }
 
     function copyItemId() {
         navigator.clipboard.writeText(item.id)
@@ -88,18 +76,9 @@ export default function MenuItemCard({ item, dragAndDrop }: MenuItemCardProps) {
                     </div>
 
                     <div className="flex gap-4 col-span-5">
-                        <MenuItemSwitchActivation
-                            menuItem={item}
-                            setActive={setActive}
-                            active={active}
-                            cnContainer="md:justify-start"
-                        />
-                        <MenuItemSwitchVisibility
-                            menuItem={item}
-                            setVisible={setVisible}
-                            visible={visible}
-                        />
-
+                        <MenuItemSwitchUpcomingSubmit menuItem={item} cnLabel="leading-[1.2]" />
+                        <MenuItemSwitchActivation menuItem={item} cnContainer="md:justify-start" />
+                        <MenuItemSwitchVisibility menuItem={item} />
                     </div>
 
                     <div className="col-span-1 flex justify-end">

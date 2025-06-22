@@ -52,8 +52,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
     })
 
 
-
-
     const tags = tagPrismaEntity.findAll({
         public: true
     })

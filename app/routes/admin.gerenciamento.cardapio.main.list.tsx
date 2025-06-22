@@ -84,6 +84,58 @@ export async function action({ request }: LoaderFunctionArgs) {
         return ok(returnedMessage);
     }
 
+    if (_action === "menu-item-activation-change") {
+        const id = values?.id as string
+
+        const [errItem, item] = await prismaIt(menuItemPrismaEntity.findById(id));
+
+        if (errItem) {
+            return badRequest(errItem)
+        }
+
+        if (!item) {
+            return badRequest("Item não encontrado")
+        }
+
+        const [err, result] = await tryit(menuItemPrismaEntity.update(id, {
+            active: !item.active
+        }))
+
+        if (err) {
+            return badRequest(err)
+        }
+
+        const returnedMessage = !item.active === true ? `O sabor "${item.name}" foi disativado` : `Nenhuma ação foi concluida`;
+
+        return ok(returnedMessage);
+    }
+
+    if (_action === "menu-item-upcoming-change") {
+        const id = values?.id as string
+
+        const [errItem, item] = await prismaIt(menuItemPrismaEntity.findById(id));
+
+        if (errItem) {
+            return badRequest(errItem)
+        }
+
+        if (!item) {
+            return badRequest("Item não encontrado")
+        }
+
+        const [err, result] = await tryit(menuItemPrismaEntity.update(id, {
+            upcoming: !item.upcoming
+        }))
+
+        if (err) {
+            return badRequest(err)
+        }
+
+        const returnedMessage = !item.upcoming === true ? `O sabor "\${item.name}" é um futuro lançamento` : `Nenhuma ação foi concluida`;
+
+        return ok(returnedMessage);
+    }
+
     return null
 }
 

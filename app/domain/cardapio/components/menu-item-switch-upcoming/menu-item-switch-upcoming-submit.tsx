@@ -8,8 +8,6 @@ import { cn } from "~/lib/utils"
 
 interface MenuItemSwitchUpcomingSubmitProps {
   menuItem: MenuItemWithAssociations | undefined,
-  upcoming: boolean,
-  setVisible: React.Dispatch<React.SetStateAction<boolean>>
   cnContainer?: string
   cnLabel?: string
   cnSubLabel?: string
@@ -19,12 +17,10 @@ interface MenuItemSwitchUpcomingSubmitProps {
  *  NOTE: To work properly, this component need an action handler in the route that uses it.
  */
 
-export default function MenuItemSwitchUpcomingSubmit({ menuItem, upcoming, cnContainer, setVisible, cnLabel }: MenuItemSwitchUpcomingSubmitProps) {
+export default function MenuItemSwitchUpcomingSubmit({ menuItem, cnContainer, cnLabel }: MenuItemSwitchUpcomingSubmitProps) {
   const submitBtnRef = React.useRef<HTMLButtonElement>(null)
 
   function handleUpcoming() {
-
-    setVisible(!upcoming)
 
     if (submitBtnRef.current) {
       submitBtnRef.current.click()

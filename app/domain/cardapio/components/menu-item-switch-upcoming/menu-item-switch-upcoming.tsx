@@ -13,7 +13,7 @@ interface MenuItemSwitchUpcomingProps {
   cnSubLabel?: string
 }
 
-export default function MenuItemSwitchUpcomingSubmit({ upcoming, cnContainer, cnLabel }: MenuItemSwitchUpcomingProps) {
+export default function MenuItemSwitchUpcoming({ upcoming, cnContainer, cnLabel, cnSubLabel }: MenuItemSwitchUpcomingProps) {
   return (
     <div className={
       cn(

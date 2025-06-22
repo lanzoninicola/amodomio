@@ -8,8 +8,6 @@ import { cn } from "~/lib/utils"
 
 interface MenuItemSwitchActivationProps {
     menuItem: MenuItemWithAssociations | undefined,
-    active: boolean,
-    setActive: React.Dispatch<React.SetStateAction<boolean>>
     showStatus?: boolean
     cnLabel?: string
     cnSubLabel?: string
@@ -18,7 +16,6 @@ interface MenuItemSwitchActivationProps {
 
 export default function MenuItemSwitchActivation({
     menuItem,
-    active, setActive,
     showStatus = true,
     cnLabel,
     cnSubLabel,
@@ -28,8 +25,6 @@ export default function MenuItemSwitchActivation({
     const submitBtnRef = React.useRef<HTMLButtonElement>(null)
 
     function handleActivation() {
-
-        setActive(!active)
 
         if (submitBtnRef.current) {
             submitBtnRef.current.click()
