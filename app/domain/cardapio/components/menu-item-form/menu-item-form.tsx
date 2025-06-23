@@ -18,7 +18,8 @@ import MenuItemSwitchVisibilitySubmit from "../menu-item-switch-visibility/menu-
 import { Alert } from "~/components/ui/alert"
 import { AlertCircle } from "lucide-react"
 import { LoggedUser } from "~/domain/auth/types.server"
-import MenuItemSwitchUpcoming from "../menu-item-switch-upcoming/menu-item-switch-upcoming"
+import MenuItemSwitchUpcomingSubmit from "../menu-item-switch-upcoming/menu-item-switch-upcoming-submit"
+import MenuItemSwitchActivationSubmit from "../menu-item-switch-activation.tsx/menu-item-switch-activation-submit"
 
 
 export type MenuItemFormAction = "menu-item-create" | "menu-item-update"
@@ -73,6 +74,40 @@ export default function MenuItemForm({ item, action, className, categories, grou
                 )
             }
 
+            <section className="flex flex-col gap-4 md:grid md:grid-cols-8 md:gap-x-6 md:items-center">
+
+                <span className="mb-4 md:mb-0 md:col-span-2 leading-tight text-sm font-semibold">Configurações de venda</span>
+
+                <div className="flex flex-col gap-4 md:grid md:grid-cols-9 md:col-span-6">
+
+
+                    <MenuItemSwitchVisibilitySubmit
+                        menuItem={item}
+                        cnContainer="col-span-3"
+                        cnLabel="text-sm"
+                        cnSubLabel="text-xs"
+                    />
+
+                    <MenuItemSwitchActivationSubmit
+                        menuItem={item}
+                        cnContainer="col-span-3"
+                        cnLabel="text-sm"
+                        cnSubLabel="text-xs"
+                    />
+
+                    <MenuItemSwitchUpcomingSubmit
+                        menuItem={item}
+                        cnContainer="col-span-3"
+                        cnLabel="text-sm"
+                        cnSubLabel="text-xs"
+                    />
+
+
+                </div>
+            </section>
+
+            <Separator className="my-6" />
+
             <Form method="post" className={cn(
                 className,
                 item?.active === false && "opacity-50 pointer-events-none",
@@ -80,46 +115,32 @@ export default function MenuItemForm({ item, action, className, categories, grou
 
                 <input type="hidden" name="id" value={item?.id} />
 
-                <section className="flex flex-col gap-4 md:grid md:grid-cols-8 md:gap-x-4 items-center w-full ">
+                <section className="flex flex-col gap-4 md:grid md:grid-cols-8 md:gap-x-4 md:items-start items-center w-full ">
+                    <input type="hidden" name="id" value={item?.id || ""} />
                     <Input type="text" name="name" defaultValue={item?.name}
                         placeholder="Nome da pizza"
                         className="font-semibold tracking-tight col-span-3" />
-                    <MenuItemSwitchUpcoming
-                        upcoming={item?.upcoming || false}
-                        setVisible={() => { }}
-                        cnContainer="col-span-2"
-                        cnLabel="text-sm"
-                        cnSubLabel="text-xs"
-                    />
 
-                    <MenuItemSwitchVisibilitySubmit
-                        menuItem={item}
-                        visible={item?.visible || false}
-                        setVisible={() => { }}
-                        cnContainer="col-span-2"
-                        cnLabel="text-sm"
-                        cnSubLabel="text-xs"
-                    />
-
+                    <Fieldset className="col-span-5">
+                        <Textarea name="ingredients"
+                            placeholder="Ingredientes"
+                            defaultValue={formatStringList(item?.ingredients, { firstLetterCapitalized: true })}
+                            className={cn(
+                                "text-sm",
+                                action === "menu-item-create" && "border",
+                                // action === "menu-item-update" && "border-none focus:px-2 p-0"
+                            )} />
+                    </Fieldset>
                 </section>
 
 
-                <Separator className="my-8" />
+                <Separator className="my-6" />
 
                 <section className="md:grid md:grid-cols-8 justify-between gap-x-2">
                     <div className="flex flex-col col-span-4">
-                        <input type="hidden" name="id" value={item?.id || ""} />
 
-                        <Fieldset>
-                            <Textarea name="ingredients"
-                                placeholder="Ingredientes"
-                                defaultValue={formatStringList(item?.ingredients, { firstLetterCapitalized: true })}
-                                className={cn(
-                                    "text-sm col-span-4",
-                                    action === "menu-item-create" && "border",
-                                    // action === "menu-item-update" && "border-none focus:px-2 p-0"
-                                )} />
-                        </Fieldset>
+
+
 
                         <Fieldset className="grid grid-cols-4 items-center" >
                             <div className="flex flex-col gap-0">
@@ -149,7 +170,7 @@ export default function MenuItemForm({ item, action, className, categories, grou
 
                 </section>
 
-                <Separator className="my-4" />
+                <Separator className="my-6" />
 
                 <section className="flex flex-col gap-2 md:grid md:grid-cols-2">
 
@@ -188,7 +209,7 @@ export default function MenuItemForm({ item, action, className, categories, grou
 
                 </section>
 
-                <Separator className="my-4" />
+                <Separator className="my-6" />
 
                 <section className="flex flex-col">
                     <Fieldset className="grid grid-cols-4 items-center">
@@ -226,9 +247,9 @@ export default function MenuItemForm({ item, action, className, categories, grou
                 <div className="flex gap-4 justify-end">
 
                     <SubmitButton ref={submitButtonRef} actionName={action} labelClassName="text-xs" variant={"outline"} tabIndex={0} iconColor="black" />
-                    {action === "menu-item-update" && (
+                    {/* {action === "menu-item-update" && (
                         <DeleteItemButton actionName="menu-item-soft-delete" label="Inativar" />
-                    )}
+                    )} */}
                     <input type="hidden" name="loggedUser" value={jsonStringify(loggedUser)} />
                 </div>
             </Form>

@@ -56,7 +56,7 @@ export default function MenuItemCard({ item, dragAndDrop }: MenuItemCardProps) {
 
         <div className="p-4 rounded-md border border-gray-200 bg-white w-full">
             <div className="flex flex-col gap-2">
-                <section className="flex flex-col gap-2 md:grid md:grid-cols-12 md:items-center w-full">
+                <section className="flex flex-col gap-2 md:grid md:grid-cols-12 md:items-center md:gap-0 w-full">
 
                     <div className="hidden md:block w-16 h-16 bg-muted rounded-lg bg-center bg-no-repeat bg-cover col-span-1">
                         {featuredImage?.thumbnailUrl ?
@@ -65,7 +65,7 @@ export default function MenuItemCard({ item, dragAndDrop }: MenuItemCardProps) {
                             <div className="w-full h-full bg-muted rounded-lg" />
                         }
                     </div>
-                    <div className="flex items-center col-span-5 gap-2">
+                    <div className="flex items-center col-span-3 gap-2">
                         <div className="flex flex-col gap-0">
                             <h4 className="text-lg font-bold tracking-tight leading-9 md:leading-7">
                                 {item.name}
@@ -75,7 +75,7 @@ export default function MenuItemCard({ item, dragAndDrop }: MenuItemCardProps) {
                         </div>
                     </div>
 
-                    <div className="flex gap-4 col-span-5">
+                    <div className="flex gap-4 col-span-7">
                         <MenuItemSwitchUpcomingSubmit menuItem={item} cnLabel="leading-[1.2]" />
                         <MenuItemSwitchActivationSubmit menuItem={item} cnContainer="md:justify-start" />
                         <MenuItemSwitchVisibilitySubmit menuItem={item} />

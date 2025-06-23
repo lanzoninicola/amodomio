@@ -6,6 +6,7 @@ import Loading from "~/components/loading/loading";
 import { toast } from "~/components/ui/use-toast";
 import MenuItemList from "~/domain/cardapio/components/menu-item-list/menu-item-list";
 import { menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
+import prismaClient from "~/lib/prisma/client.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { badRequest, ok } from "~/utils/http-response.server";
 import tryit from "~/utils/try-it";
@@ -26,9 +27,20 @@ export async function loader({ request }: LoaderFunctionArgs) {
     })
     // const tags = menuItemTagPrismaEntity.findAll()
     // const sizeVariations = prismaClient.menuItemSize.findMany()
+    const menuItemGroups = prismaClient.menuItemGroup.findMany({
+        where: {
+            deletedAt: null
+        }
+    })
+
+    const menuItemCategories = prismaClient.category.findMany({
+        where: {
+            type: "menu"
+        }
+    })
 
     // const data = Promise.all([categories, listFlat, tags, sizeVariations]);
-    const data = Promise.all([listFlat]);
+    const data = Promise.all([listFlat, menuItemGroups, menuItemCategories]);
 
     return defer({ data });
 }
@@ -171,13 +183,20 @@ export default function AdminGerenciamentoCardapioMainListLayout() {
             </div>
         }>
             <Await resolve={data}>
-                {([listFlat]) => {
+                {([listFlat, menuItemGroups, menuItemCategories]) => {
 
 
 
                     return (
-                        // @ts-ignore
-                        <MenuItemList initialItems={listFlat} />
+
+                        <MenuItemList
+                            // @ts-ignore
+                            initialItems={listFlat}
+                            // @ts-ignore
+                            groups={menuItemGroups}
+                            // @ts-ignore
+                            categories={menuItemCategories}
+                        />
                     )
 
                 }}
