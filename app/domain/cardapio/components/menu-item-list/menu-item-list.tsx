@@ -22,7 +22,7 @@ export type OveredPoint = "none" | "top" | "bottom"
 export default function MenuItemList({ items, setItems }: MenuItemListProps) {
 
     if (!items || items.length === 0) {
-        return <NoRecordsFound text="Nenhum item encontrado" />
+        return <NoRecordsFound text="Nenhum item encontrado" cnClassName="mt-12" />
     }
 
     const [dragEnable, setDragEnabled] = useState(false)

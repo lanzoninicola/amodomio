@@ -77,8 +77,8 @@ export default function MenuItemCard({ item, dragAndDrop }: MenuItemCardProps) {
 
                     <div className="flex gap-4 col-span-7">
                         <MenuItemSwitchUpcomingSubmit menuItem={item} cnLabel="leading-[1.2]" />
-                        <MenuItemSwitchActivationSubmit menuItem={item} cnContainer="md:justify-start" />
                         <MenuItemSwitchVisibilitySubmit menuItem={item} />
+                        <MenuItemSwitchActivationSubmit menuItem={item} cnContainer="md:justify-start" />
                     </div>
 
                     <div className="col-span-1 flex justify-end">

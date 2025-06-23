@@ -1,7 +1,7 @@
 import { MenuItem, MenuItemGroup } from "@prisma/client";
 import { LoaderFunctionArgs } from "@remix-run/node";
 import { Await, defer, useActionData, useLoaderData } from "@remix-run/react";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Loading from "~/components/loading/loading";
 import { Input } from "~/components/ui/input";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
@@ -160,30 +160,24 @@ type MenuItemVisibilityFilterOption = "active" | "lancamento-futuro" | "venda-pa
 
 export default function AdminGerenciamentoCardapioMainListLayout() {
 
-    const {
-        data,
-    } = useLoaderData<typeof loader>();
-
-    const actionData = useActionData<typeof action>()
+    const { data } = useLoaderData<typeof loader>();
+    const actionData = useActionData<typeof action>();
 
     if (actionData && actionData.status !== 200) {
         toast({
             title: "Erro",
             description: actionData.message,
-        })
+        });
     }
 
     if (actionData && actionData.status === 200) {
         toast({
             title: "OK",
-            description: actionData.message
-        })
+            description: actionData.message,
+        });
     }
 
     return (
-
-
-
         <Suspense fallback={
             <div className="flex justify-center items-center h-[150px]">
                 <Loading color="black" />
@@ -192,87 +186,112 @@ export default function AdminGerenciamentoCardapioMainListLayout() {
             <Await resolve={data}>
                 {([listFlat, menuItemGroups, menuItemCategories]) => {
 
+                    const [items, setItems] = useState<any[]>([]);
+                    const [search, setSearch] = useState("");
+                    const [currentGroup, setCurrentGroup] = useState<MenuItemGroup["key"] | null>(null);
+                    const [currentFilter, setCurrentFilter] = useState<MenuItemVisibilityFilterOption | null>("active");
 
-                    const [items, setItems] = useState<any[]>(listFlat.filter(i => i.visible === true && i.active === true));
-                    const [search, setSearch] = useState("")
+
+
+                    // 🔥 Função que combina todos os filtros
+                    const applyFilters = (
+                        groupKey: MenuItemGroup["key"] | null,
+                        visibility: MenuItemVisibilityFilterOption | null,
+                        searchValue: string
+                    ) => {
+                        let filtered = listFlat;
+
+                        // Filtro por grupo
+                        if (groupKey) {
+                            filtered = filtered.filter(item => item.MenuItemGroup?.key === groupKey);
+                        }
+
+
+
+                        // Filtro por visibilidade
+                        if (visibility === "active") {
+                            filtered = filtered.filter(item => item.active === true && item.upcoming === false);
+                        }
+                        if (visibility === "inactive") {
+                            filtered = filtered.filter(item => item.active === false);
+                        }
+                        if (visibility === "lancamento-futuro") {
+                            filtered = filtered.filter(item => item.active === true && item.upcoming === true);
+                        }
+                        if (visibility === "venda-pausada") {
+                            filtered = filtered.filter(item => item.active === true && item.visible === false && item.upcoming === false);
+                        }
+
+                        // Filtro por busca
+                        if (searchValue) {
+                            filtered = filtered.filter(item =>
+                                item.name?.toLowerCase().includes(searchValue.toLowerCase()) ||
+                                item.ingredients?.toLowerCase().includes(searchValue.toLowerCase())
+                            );
+                        }
+
+                        setItems(filtered);
+                    };
+
+                    // Handlers
+                    const handleGroupChange = (groupKey: MenuItemGroup["key"] | null) => {
+                        setCurrentGroup(groupKey);
+                        applyFilters(groupKey, currentFilter, search);
+                    };
+
+                    const handleVisibilityChange = (visibility: MenuItemVisibilityFilterOption) => {
+                        setCurrentFilter(visibility);
+                        applyFilters(currentGroup, visibility, search);
+                    };
 
                     const handleSearch = (event: React.ChangeEvent<HTMLInputElement>) => {
-                        const value = event.target.value
-                        setSearch(value)
-                        if (!value) return setItems(listFlat)
-                        const searchedItems = listFlat
-                            .filter(item => item.name?.toLowerCase().includes(value.toLowerCase()) || item.ingredients?.toLowerCase().includes(value.toLowerCase()))
-                        setItems(searchedItems)
-                    }
+                        const value = event.target.value;
+                        setSearch(value);
+                        applyFilters(currentGroup, currentFilter, value);
+                    };
 
-                    const [currentFilter, setCurrentFilter] = useState<MenuItemVisibilityFilterOption | null>("active")
+                    // Primeira renderização
+                    useEffect(() => {
+                        applyFilters(currentGroup, currentFilter, search);
+                    }, []);
 
-                    const onChangeVisibilityFilter = (option: MenuItemVisibilityFilterOption) => {
-
-                        if (option === "active") {
-                            setCurrentFilter("active")
-                            setItems(items.filter(item => item.active === true))
-                        }
-
-                        if (option === "inactive") {
-                            setCurrentFilter("inactive")
-                            setItems(items.filter(item => item.active === false))
-                        }
-
-                        if (option === "lancamento-futuro") {
-                            setCurrentFilter("lancamento-futuro")
-                            setItems(items.filter(item => item.active === true && item.upcoming === true))
-                        }
-
-                        if (option === "venda-pausada") {
-                            setCurrentFilter("venda-pausada")
-                            setItems(items.filter(item => item.active === true && item.visible === false && item.upcoming === false))
-                        }
-                    }
-
-                    const [currentGroup, setCurrentGroup] = useState<MenuItemGroup["key"]>("pizza-salgadas")
-
-                    const onChangeMenuItemGroup = (groupKey: MenuItemGroup["key"]) => {
-                        setCurrentGroup(groupKey)
-                        setItems(listFlat.filter(i => i.MenuItemGroup?.key === groupKey))
-                    }
+                    useEffect(() => {
+                        applyFilters(currentGroup, currentFilter, search);
+                    }, [currentGroup, currentFilter]);
 
                     return (
                         <div className="flex flex-col">
                             <div className="flex flex-col gap-4 md:grid md:grid-cols-8 md:gap-x-4 md:items-center">
+
+                                {/* Select de Grupo */}
                                 <Select name="group"
                                     onValueChange={(value) => {
-                                        const groupParsed = jsonParse(value)
-                                        setItems(listFlat.filter(i => {
-                                            if (i.MenuItemGroup === null) return true
-                                            return i.MenuItemGroup.key === groupParsed.key
-                                        }))
+                                        const parsed = value ? jsonParse(value) : null;
+                                        handleGroupChange(parsed?.key || null);
                                     }}
                                 >
                                     <SelectTrigger className="w-full md:col-span-2">
                                         <SelectValue placeholder="Selecionar grupo..." />
                                     </SelectTrigger>
-                                    <SelectContent id="group" >
-                                        <SelectGroup >
-                                            {menuItemGroups.map(g => {
-                                                return (
-                                                    <SelectItem key={g.id} value={JSON.stringify(g)} className="text-lg">{g.name}</SelectItem>
-                                                )
-                                            })}
-                                        </SelectGroup>
+                                    <SelectContent>
+                                        <SelectItem value="">Todos os grupos</SelectItem>
+                                        {menuItemGroups.sort((a, b) => a.sortOrderIndex - b.sortOrderIndex).map(g => (
+                                            <SelectItem key={g.id} value={JSON.stringify(g)}>
+                                                {g.name}
+                                            </SelectItem>
+                                        ))}
                                     </SelectContent>
                                 </Select>
 
+                                {/* Select de Visibilidade */}
                                 <Select
-                                    onValueChange={(value) => {
-                                        onChangeVisibilityFilter(value as MenuItemVisibilityFilterOption)
-                                    }}
+                                    onValueChange={(value) => handleVisibilityChange(value as MenuItemVisibilityFilterOption)}
                                     defaultValue={"active"}
                                 >
                                     <SelectTrigger className="w-full md:col-span-2">
                                         <SelectValue placeholder="Filtrar vendas" />
                                     </SelectTrigger>
-                                    <SelectContent >
+                                    <SelectContent>
                                         <SelectItem value="active">Venda ativa</SelectItem>
                                         <SelectItem value="lancamento-futuro">Lançamento futuro</SelectItem>
                                         <SelectItem value="venda-pausada">Venda pausada</SelectItem>
@@ -280,14 +299,19 @@ export default function AdminGerenciamentoCardapioMainListLayout() {
                                     </SelectContent>
                                 </Select>
 
-
-                                <div className="items-center col-span-5 md:col-span-4" >
-                                    <Input name="search" className="w-full" placeholder="Pesquisar..." onChange={(e) => handleSearch(e)} value={search} />
+                                {/* Campo de busca */}
+                                <div className="items-center col-span-5 md:col-span-4">
+                                    <Input
+                                        name="search"
+                                        className="w-full"
+                                        placeholder="Pesquisar..."
+                                        onChange={handleSearch}
+                                        value={search}
+                                    />
                                 </div>
-
-
                             </div>
 
+                            {/* Lista dos itens */}
                             <MenuItemList
                                 // @ts-ignore
                                 items={items}
@@ -297,10 +321,9 @@ export default function AdminGerenciamentoCardapioMainListLayout() {
                                 categories={menuItemCategories}
                             />
                         </div>
-                    )
-
+                    );
                 }}
             </Await>
         </Suspense>
-    )
+    );
 }
