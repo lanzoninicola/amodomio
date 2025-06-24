@@ -130,13 +130,8 @@ export default function AdminGerenciamentoCardapioSellPriceManagement() {
       </div>
 
 
-      <Alert variant={"destructive"} className="mb-1">
-        <Terminal className="h-4 w-4" />
-        <AlertTitle>Atenção</AlertTitle>
-        <AlertDescription>
-          Usar o ponto como delimitador dos decimais
-        </AlertDescription>
-      </Alert>
+
+
 
 
       <div className="grid grid-cols-3 gap-x-2 items-center">

@@ -18,7 +18,7 @@ export default function AdminGerenciamentoCardapioMainListLayout() {
             <Link to={href}
                 className="flex flex-col gap-1 items-center hover:bg-slate-200 p-1 rounded-md">
                 {children}
-                <span className="text-[11px] font-semibold leading-[1.15] text-center">{label}</span>
+                <span className="text-[10px] font-semibold leading-[1.15] text-center">{label}</span>
             </Link>
         )
     }
@@ -26,7 +26,6 @@ export default function AdminGerenciamentoCardapioMainListLayout() {
 
     return (
         <div className="flex flex-col">
-            <Separator className="my-2" />
             <div className="flex gap-2 md:grid md:grid-cols-12">
                 <PageMenu href="/admin/gerenciamento/cardapio/new" label="Novo item">
                     <SquarePlus size={16} />

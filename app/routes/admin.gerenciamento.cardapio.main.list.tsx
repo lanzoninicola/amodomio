@@ -129,6 +129,8 @@ export async function action({ request }: LoaderFunctionArgs) {
     if (_action === "menu-item-upcoming-change") {
         const id = values?.id as string
 
+
+
         const [errItem, item] = await prismaIt(menuItemPrismaEntity.findById(id));
 
         if (errItem) {
@@ -156,7 +158,7 @@ export async function action({ request }: LoaderFunctionArgs) {
     return null
 }
 
-type MenuItemVisibilityFilterOption = "active" | "lancamento-futuro" | "venda-pausada" | "inactive"
+export type MenuItemVisibilityFilterOption = "active" | "lancamento-futuro" | "venda-pausada" | "inactive"
 
 export default function AdminGerenciamentoCardapioMainListLayout() {
 
@@ -191,7 +193,7 @@ export default function AdminGerenciamentoCardapioMainListLayout() {
                     const [currentGroup, setCurrentGroup] = useState<MenuItemGroup["key"] | null>(null);
                     const [currentFilter, setCurrentFilter] = useState<MenuItemVisibilityFilterOption | null>("active");
 
-
+                    const [dragEnable, setDragEnabled] = useState(false)
 
                     // 🔥 Função que combina todos os filtros
                     const applyFilters = (
@@ -300,7 +302,7 @@ export default function AdminGerenciamentoCardapioMainListLayout() {
                                 </Select>
 
                                 {/* Campo de busca */}
-                                <div className="items-center col-span-5 md:col-span-4">
+                                <div className="items-center col-span-5 md:col-span-3">
                                     <Input
                                         name="search"
                                         className="w-full"
@@ -309,6 +311,12 @@ export default function AdminGerenciamentoCardapioMainListLayout() {
                                         value={search}
                                     />
                                 </div>
+
+                                {/* Ordenamento */}
+                                <p className="text-sm cursor-pointer hover:underline text-muted-foreground leading-tight md:col-span-1"
+                                    onClick={() => setDragEnabled(!dragEnable)}
+                                >{dragEnable === true ? 'Desabilitar ordernamento' : 'Abilitar ordenamento'}</p>
+
                             </div>
 
                             {/* Lista dos itens */}
@@ -319,6 +327,7 @@ export default function AdminGerenciamentoCardapioMainListLayout() {
                                 groups={menuItemGroups}
                                 // @ts-ignore
                                 categories={menuItemCategories}
+                                dragEnable={dragEnable}
                             />
                         </div>
                     );

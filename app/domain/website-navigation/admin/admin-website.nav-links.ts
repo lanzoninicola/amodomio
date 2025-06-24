@@ -70,7 +70,7 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
           disabled: false,
         },
         {
-          title: "Custos Itens",
+          title: "Custo Ficha Tecnica",
           href: "/admin/gerenciamento/cardapio/cost-management",
           items: [],
           disabled: false,
