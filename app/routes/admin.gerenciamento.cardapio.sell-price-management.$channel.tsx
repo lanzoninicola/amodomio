@@ -26,6 +26,7 @@ import { MenuItemVisibilityFilterOption } from "./admin.gerenciamento.cardapio.m
 import { Category } from "~/domain/category/category.model.server";
 import { jsonParse } from "~/utils/json-helper";
 import { LoggedUser } from "~/domain/auth/types.server";
+import { menuItemSizePrismaEntity } from "~/domain/cardapio/menu-item-size.entity.server";
 
 type SortOrderType = "default" | "alphabetical-asc" | "alphabetical-desc" | "price-asc" | "price-desc";
 
@@ -62,13 +63,16 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     }
   })
 
+  const sizes = menuItemSizePrismaEntity.findAll()
+
   const returnedData = Promise.all([
     menuItemsWithSellPriceVariations,
     user,
     dnaEmpresaSettings,
     sellingChannel,
     menuItemGroups,
-    menuItemCategories
+    menuItemCategories,
+    sizes
   ]);
 
   return defer({
@@ -209,12 +213,10 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
       <Suspense fallback={<Loading />}>
         <Await resolve={returnedData}>
           {/* @ts-ignore */}
-          {([menuItemsWithSellPriceVariations, user, dnaEmpresaSettings, sellingChannel, groups, categories]) => {
+          {([menuItemsWithSellPriceVariations, user, dnaEmpresaSettings, sellingChannel, groups, categories, sizes]) => {
 
             {/* @ts-ignore */ }
             const [items, setItems] = useState<MenuItemsWithSellPriceVariations[]>(menuItemsWithSellPriceVariations || [])
-
-
 
 
             return (
@@ -227,7 +229,7 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
                   onItemsChange={(filtered) => setItems(filtered)}
                 />
 
-                <Outlet context={{ items, sellingChannel, user }} />
+                <Outlet context={{ items, sellingChannel, user, sizes }} />
               </div>
             )
 
@@ -288,7 +290,7 @@ export function FiltersPanel({
 
     if (groupKey) filtered = filtered.filter(i => i.group?.key === groupKey);
     if (category) filtered = filtered.filter(i => i.category?.id === category.id);
-    if (visibility === "active") filtered = filtered.filter(i => i.active === true);
+    if (visibility === "active") filtered = filtered.filter(i => i.visible === true);
     if (visibility === "venda-pausada") filtered = filtered.filter(i => i.active && !i.visible);
     if (searchValue) {
       filtered = filtered.filter(i =>
@@ -315,7 +317,7 @@ export function FiltersPanel({
           applyFilters(key, currentCategory, currentFilter, search);
         }}
       >
-        <SelectTrigger className="w-full md:col-span-1">
+        <SelectTrigger className="w-full md:col-span-1 bg-white">
           <SelectValue placeholder="Grupo" />
         </SelectTrigger>
         <SelectContent>
@@ -337,7 +339,7 @@ export function FiltersPanel({
         }}
         disabled={currentGroup === null}
       >
-        <SelectTrigger className="w-full md:col-span-1">
+        <SelectTrigger className="w-full md:col-span-1 bg-white">
           <SelectValue placeholder="Categoria" />
         </SelectTrigger>
         <SelectContent>

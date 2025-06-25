@@ -144,7 +144,7 @@ export default function AdminGerenciamentoCardapioSellPriceManagement() {
                   (channel: MenuItemSellingChannel) => {
                     return (
                       <Tab
-                        to={`/admin/gerenciamento/cardapio/sell-price-management/${channel.key}`}
+                        to={`/admin/gerenciamento/cardapio/sell-price-management/${channel.key}/list`}
                         key={channel.key}
                         channelKey={channel.key}
                         label={channel.name}
