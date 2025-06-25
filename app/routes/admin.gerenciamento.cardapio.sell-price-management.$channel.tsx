@@ -214,226 +214,19 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
             {/* @ts-ignore */ }
             const [items, setItems] = useState<MenuItemsWithSellPriceVariations[]>(menuItemsWithSellPriceVariations || [])
 
-            const [search, setSearch] = useState("");
-            const [currentGroup, setCurrentGroup] = useState<MenuItemGroup["key"] | null>(null);
-            const [currentCategory, setCurrentCategory] = useState<Category | null>(null)
-            const [currentFilter, setCurrentFilter] = useState<MenuItemVisibilityFilterOption | null>("active");
 
-            // 🔥 Função que combina todos os filtros
-            const applyFilters = (
-              groupKey: MenuItemGroup["key"] | null,
-              category: Category | null,
-              visibility: MenuItemVisibilityFilterOption | null,
-              searchValue: string
-            ) => {
-
-              console.log({ groupKey, category, visibility, searchValue })
-              let filtered = items;
-
-              // Filtro por grupo
-              if (groupKey) {
-                filtered = filtered.filter(item => item.group?.key === groupKey);
-              }
-
-              // Filtro por categoria
-              if (category) {
-                filtered = filtered.filter(i => i.category?.id === category?.id);
-              }
-
-              // Filtro por visibilidade
-              if (visibility === "active") {
-                filtered = filtered.filter(item => item.active === true);
-              }
-              if (visibility === "venda-pausada") {
-                filtered = filtered.filter(item => item.active === true && item.visible === false);
-              }
-
-              // Filtro por busca
-              if (searchValue) {
-                filtered = filtered.filter(item =>
-                  item.name?.toLowerCase().includes(searchValue.toLowerCase()) ||
-                  item.ingredients?.toLowerCase().includes(searchValue.toLowerCase())
-                );
-              }
-
-              setItems(filtered);
-            };
-
-            const handleVisibilityChange = (visibility: MenuItemVisibilityFilterOption) => {
-              setCurrentFilter(visibility);
-              applyFilters(currentGroup, currentCategory, visibility, search);
-            };
-
-            const handleSearch = (event: React.ChangeEvent<HTMLInputElement>) => {
-              const value = event.target.value;
-              setSearch(value);
-              applyFilters(currentGroup, currentCategory, currentFilter, value);
-            };
-
-
-            const [sortOrderType, setSortOrderType] = useState<SortOrderType>("default")
-
-            const handleSort = (type: SortOrderType) => {
-              setSortOrderType(type)
-
-              let sortedItems: MenuItemWithSellPriceVariations[] = []
-
-              switch (type) {
-                case "alphabetical-asc":
-                  sortedItems = [...items].sort((a, b) => a.name.localeCompare(b.name))
-                  break;
-                case "alphabetical-desc":
-                  sortedItems = [...items].sort((a, b) => b.name.localeCompare(a.name))
-                  break;
-                case "price-asc":
-                  sortedItems = [...items].sort((a, b) => {
-
-                    const predicateFn = (record: SellPriceVariation) => record.sizeKey === "pizza-medium"
-                    const aPrice = a.sellPriceVariations.find(predicateFn)?.priceAmount || 0;
-                    const bPrice = b.sellPriceVariations.find(predicateFn)?.priceAmount || 0
-                    return aPrice - bPrice;
-                  });
-                  break;
-                case "price-desc":
-                  sortedItems = [...items].sort((a, b) => {
-                    const predicateFn = (record: SellPriceVariation) => record.sizeKey === "pizza-medium"
-                    const aPrice = a.sellPriceVariations.find(predicateFn)?.priceAmount || 0;
-                    const bPrice = b.sellPriceVariations.find(predicateFn)?.priceAmount || 0
-                    return bPrice - aPrice;
-                  });
-                  break;
-                case "default":
-                  sortedItems = menuItemsWithSellPriceVariations
-                  break;
-                default:
-                  break;
-              }
-
-              setItems(sortedItems)
-            }
-
-            // Handlers
-            const handleGroupChange = (groupKey: MenuItemGroup["key"] | null) => {
-              setCurrentGroup(groupKey);
-              applyFilters(groupKey, currentCategory, currentFilter, search);
-            };
-
-            const handleCategoryChange = (category: Category | null) => {
-              setCurrentCategory(category);
-              applyFilters(currentGroup, currentCategory, currentFilter, search);
-            };
-
-            // Primeira renderização
-            useEffect(() => {
-              applyFilters(currentGroup, currentCategory, currentFilter, search);
-            }, []);
 
 
             return (
               <div className="flex flex-col">
 
-                <div className="grid grid-cols-8 gap-4 items-center bg-slate-50 py-2 px-4 mb-4">
+                <FiltersPanel
+                  initialItems={menuItemsWithSellPriceVariations}
+                  groups={groups}
+                  categories={categories}
+                  onItemsChange={(filtered) => setItems(filtered)}
+                />
 
-                  {/* Select de grupo */}
-                  <Select name="group"
-                    onValueChange={(value) => {
-                      const parsed = value ? jsonParse(value) : null;
-                      handleGroupChange(parsed?.key || null);
-                    }}
-                  >
-                    <SelectTrigger className="w-full md:col-span-1">
-                      <SelectValue placeholder="Grupo" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="">Todos os grupos</SelectItem>
-                      {groups.sort((a, b) => a.sortOrderIndex - b.sortOrderIndex).map(g => (
-                        <SelectItem key={g.id} value={JSON.stringify(g)}>
-                          {g.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-
-
-                  {/* Select de categorias */}
-                  <Select name="category"
-                    onValueChange={(value) => {
-                      handleCategoryChange(jsonParse(value) || null);
-                    }}
-                    disabled={currentGroup === null}
-                  >
-                    <SelectTrigger className="w-full md:col-span-1">
-                      <SelectValue placeholder="Categoria" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="">Todas as categorias</SelectItem>
-                      {categories.map(c => (
-                        <SelectItem key={c.id} value={JSON.stringify(c)}>
-                          {c.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-
-
-                  {/* Select de Visibilidade */}
-                  <Select
-                    onValueChange={(value) => handleVisibilityChange(value as MenuItemVisibilityFilterOption)}
-                    defaultValue={"active"}
-                  >
-                    <SelectTrigger className="w-full bg-white md:col-span-1">
-                      <SelectValue placeholder="Filtrar vendas" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="active">Venda ativa</SelectItem>
-                      <SelectItem value="venda-pausada">Venda pausada</SelectItem>
-                    </SelectContent>
-                  </Select>
-
-                  <div className="grid place-items-center rounded-sm col-span-4">
-                    <Input name="search" className="w-full py-4 text-lg bg-white " placeholder="Pesquisar o sabor..." onChange={(e) => handleSearch(e)} value={search} />
-                  </div>
-
-                  <AlertsCostsAndSellPrice items={items} cnContainer="col-span-1 flex justify-end w-full" />
-                </div>
-
-                <div className="flex flex-row gap-x-4  items-center justify-end col-span-7 mb-4">
-                  <span className="text-xs">Ordenamento:</span>
-                  <div className="flex flex-row gap-x-4 ">
-
-                    <SortOrderOption
-                      label="Padrão"
-                      sortOrderType="default"
-                      handleSort={handleSort}
-                    />
-                    <Separator orientation="vertical" className="h-4" />
-
-
-                    <SortOrderOption
-                      label="A-Z"
-                      sortOrderType="alphabetical-asc"
-                      handleSort={handleSort}
-                    />
-                    <SortOrderOption
-                      label="Z-A"
-                      sortOrderType="alphabetical-desc"
-                      handleSort={handleSort}
-                    />
-
-                    <Separator orientation="vertical" className="h-4" />
-
-                    <SortOrderOption
-                      label="Preço crescente (Tamanho Medio)"
-                      sortOrderType="price-asc"
-                      handleSort={handleSort}
-                    />
-                    <SortOrderOption
-                      label="Preço decrescente (Tamanho Medio)"
-                      sortOrderType="price-desc"
-                      handleSort={handleSort}
-                    />
-                  </div>
-                </div>
                 <Outlet context={{ items, sellingChannel, user }} />
               </div>
             )
@@ -464,5 +257,131 @@ const SortOrderOption = ({
     >
       {label}
     </span>
+  );
+}
+
+interface FiltersPanelProps {
+  initialItems: MenuItemWithSellPriceVariations[];
+  groups: MenuItemGroup[];
+  categories: Category[];
+  onItemsChange: (filteredItems: MenuItemWithSellPriceVariations[]) => void;
+}
+
+export function FiltersPanel({
+  initialItems,
+  groups,
+  categories,
+  onItemsChange,
+}: FiltersPanelProps) {
+  const [search, setSearch] = useState("");
+  const [currentGroup, setCurrentGroup] = useState<MenuItemGroup["key"] | null>(null);
+  const [currentCategory, setCurrentCategory] = useState<Category | null>(null);
+  const [currentFilter, setCurrentFilter] = useState<MenuItemVisibilityFilterOption | null>("active");
+
+  const applyFilters = (
+    groupKey: MenuItemGroup["key"] | null,
+    category: Category | null,
+    visibility: MenuItemVisibilityFilterOption | null,
+    searchValue: string
+  ) => {
+    let filtered = [...initialItems];
+
+    if (groupKey) filtered = filtered.filter(i => i.group?.key === groupKey);
+    if (category) filtered = filtered.filter(i => i.category?.id === category.id);
+    if (visibility === "active") filtered = filtered.filter(i => i.active === true);
+    if (visibility === "venda-pausada") filtered = filtered.filter(i => i.active && !i.visible);
+    if (searchValue) {
+      filtered = filtered.filter(i =>
+        i.name?.toLowerCase().includes(searchValue.toLowerCase()) ||
+        i.ingredients?.toLowerCase().includes(searchValue.toLowerCase())
+      );
+    }
+
+    onItemsChange(filtered);
+  };
+
+  useEffect(() => {
+    applyFilters(currentGroup, currentCategory, currentFilter, search);
+  }, []);
+
+  return (
+    <div className="grid grid-cols-8 gap-4 items-center bg-slate-50 py-2 px-4 mb-4">
+      <Select
+        name="group"
+        onValueChange={(value) => {
+          const parsed = value ? jsonParse(value) : null;
+          const key = parsed?.key || null;
+          setCurrentGroup(key);
+          applyFilters(key, currentCategory, currentFilter, search);
+        }}
+      >
+        <SelectTrigger className="w-full md:col-span-1">
+          <SelectValue placeholder="Grupo" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="">Todos os grupos</SelectItem>
+          {groups.sort((a, b) => a.sortOrderIndex - b.sortOrderIndex).map((g) => (
+            <SelectItem key={g.id} value={JSON.stringify(g)}>
+              {g.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      <Select
+        name="category"
+        onValueChange={(value) => {
+          const parsed = jsonParse(value);
+          setCurrentCategory(parsed);
+          applyFilters(currentGroup, parsed, currentFilter, search);
+        }}
+        disabled={currentGroup === null}
+      >
+        <SelectTrigger className="w-full md:col-span-1">
+          <SelectValue placeholder="Categoria" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="">Todas as categorias</SelectItem>
+          {categories.map((c) => (
+            <SelectItem key={c.id} value={JSON.stringify(c)}>
+              {c.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      <Select
+        onValueChange={(value) => {
+          const v = value as MenuItemVisibilityFilterOption;
+          setCurrentFilter(v);
+          applyFilters(currentGroup, currentCategory, v, search);
+        }}
+        defaultValue={"active"}
+      >
+        <SelectTrigger className="w-full bg-white md:col-span-1">
+          <SelectValue placeholder="Filtrar vendas" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="active">Venda ativa</SelectItem>
+          <SelectItem value="venda-pausada">Venda pausada</SelectItem>
+        </SelectContent>
+      </Select>
+
+      <div className="grid place-items-center rounded-sm col-span-4">
+        <Input
+          name="search"
+          className="w-full py-4 text-lg bg-white"
+          placeholder="Pesquisar o sabor..."
+          onChange={(e) => {
+            const value = e.target.value;
+            setSearch(value);
+            applyFilters(currentGroup, currentCategory, currentFilter, value);
+          }}
+          value={search}
+        />
+      </div>
+
+      {/* <AlertsCostsAndSellPrice itemsCount={initialItems.length} cnContainer="col-span-1 flex justify-end w-full" /> */}
+    </div>
   );
 }
