@@ -35,7 +35,7 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
 
   const PriceInfo = ({ priceAmount, breakEvenAmount, profitPerc, sizeName }: { priceAmount: number, breakEvenAmount: number, profitPerc: number, sizeName: Size["name"] }) => {
 
-    const OtherChars = ({ children }: { children: React.ReactNode }) => {
+    const OtherChars = ({ children, ...props }: { children: React.ReactNode }) => {
       return (
         <span className="text-[12px] font-mono text-muted-foreground">{children}</span>
       )
@@ -49,7 +49,7 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
           <div className="flex items-center">
             <OtherChars>{`(`}</OtherChars>
             <BreakEvenAmount amount={breakEvenAmount} />
-            <OtherChars>{`-`}</OtherChars>
+            <OtherChars>{`|`}</OtherChars>
             <ProfitPerc profitPerc={profitPerc} />
             <OtherChars>{`)`}</OtherChars>
           </div>

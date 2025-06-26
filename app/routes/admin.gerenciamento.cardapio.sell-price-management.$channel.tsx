@@ -29,7 +29,7 @@ import { LoggedUser } from "~/domain/auth/types.server";
 import { menuItemSizePrismaEntity } from "~/domain/cardapio/menu-item-size.entity.server";
 import { MenuItemsFilters } from "~/domain/cardapio/components/menu-items-filters/menu-items-filters";
 
-type SortOrderType = "default" | "alphabetical-asc" | "alphabetical-desc" | "price-asc" | "price-desc";
+type SortOrderType = "default" | "alphabetical-asc" | "alphabetical-desc" | "price-asc" | "price-desc" | "profit-asc" | "profit-desc";
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const sellingChannelKey = params.channel as string;
@@ -219,6 +219,63 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
             {/* @ts-ignore */ }
             const [items, setItems] = useState<MenuItemsWithSellPriceVariations[]>(menuItemsWithSellPriceVariations || [])
 
+            const [sortOrderType, setSortOrderType] = useState<SortOrderType>("default")
+
+            const handleSort = (type: SortOrderType) => {
+              setSortOrderType(type)
+
+              let sortedItems: MenuItemWithSellPriceVariations[] = []
+
+              switch (type) {
+                case "alphabetical-asc":
+                  sortedItems = [...items].sort((a, b) => a.name.localeCompare(b.name))
+                  break;
+                case "alphabetical-desc":
+                  sortedItems = [...items].sort((a, b) => b.name.localeCompare(a.name))
+                  break;
+                case "price-asc":
+                  sortedItems = [...items].sort((a, b) => {
+
+                    const predicateFn = (record: SellPriceVariation) => record.sizeKey === "pizza-medium"
+                    const aPrice = a.sellPriceVariations.find(predicateFn)?.priceAmount || 0;
+                    const bPrice = b.sellPriceVariations.find(predicateFn)?.priceAmount || 0
+                    return aPrice - bPrice;
+                  });
+                  break;
+                case "price-desc":
+                  sortedItems = [...items].sort((a, b) => {
+                    const predicateFn = (record: SellPriceVariation) => record.sizeKey === "pizza-medium"
+                    const aPrice = a.sellPriceVariations.find(predicateFn)?.priceAmount || 0;
+                    const bPrice = b.sellPriceVariations.find(predicateFn)?.priceAmount || 0
+                    return bPrice - aPrice;
+                  });
+                  break;
+                case "profit-asc":
+                  sortedItems = [...items].sort((a, b) => {
+                    const predicateFn = (record: SellPriceVariation) => record.sizeKey === "pizza-medium"
+                    const aPrice = a.sellPriceVariations.find(predicateFn)?.profitActualPerc || 0;
+                    const bPrice = b.sellPriceVariations.find(predicateFn)?.profitActualPerc || 0
+                    return aPrice - bPrice;
+                  });
+                  break;
+                case "profit-desc":
+                  sortedItems = [...items].sort((a, b) => {
+                    const predicateFn = (record: SellPriceVariation) => record.sizeKey === "pizza-medium"
+                    const aPrice = a.sellPriceVariations.find(predicateFn)?.profitActualPerc || 0;
+                    const bPrice = b.sellPriceVariations.find(predicateFn)?.profitActualPerc || 0
+                    return bPrice - aPrice;
+                  });
+                  break;
+                case "default":
+                  sortedItems = items
+                  break;
+                default:
+                  break;
+              }
+
+              setItems(sortedItems)
+            }
+
 
             return (
               <div className="flex flex-col">
@@ -232,6 +289,57 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
                     cnContainer="col-span-7"
                   />
                   <AlertsCostsAndSellPrice items={items} cnContainer="col-span-1 flex justify-center md:justify-end w-full col-span-1" />
+                </div>
+
+                <div className="flex flex-row gap-x-4  items-center justify-end col-span-7 mb-4">
+                  <span className="text-xs">Ordenamento:</span>
+                  <div className="flex flex-row gap-x-4 ">
+
+                    <SortOrderOption
+                      label="Padrão"
+                      sortOrderType="default"
+                      handleSort={handleSort}
+                    />
+                    <Separator orientation="vertical" className="h-4" />
+
+
+                    <SortOrderOption
+                      label="A-Z"
+                      sortOrderType="alphabetical-asc"
+                      handleSort={handleSort}
+                    />
+                    <SortOrderOption
+                      label="Z-A"
+                      sortOrderType="alphabetical-desc"
+                      handleSort={handleSort}
+                    />
+
+                    <Separator orientation="vertical" className="h-4" />
+
+                    <SortOrderOption
+                      label="Preço crescente (Tamanho Medio)"
+                      sortOrderType="price-asc"
+                      handleSort={handleSort}
+                    />
+                    <SortOrderOption
+                      label="Preço decrescente (Tamanho Medio)"
+                      sortOrderType="price-desc"
+                      handleSort={handleSort}
+                    />
+
+                    <Separator orientation="vertical" className="h-4" />
+
+                    <SortOrderOption
+                      label="Profito crescente (Tamanho Medio)"
+                      sortOrderType="profit-asc"
+                      handleSort={handleSort}
+                    />
+                    <SortOrderOption
+                      label="Profito decrescente (Tamanho Medio)"
+                      sortOrderType="profit-desc"
+                      handleSort={handleSort}
+                    />
+                  </div>
                 </div>
 
 
