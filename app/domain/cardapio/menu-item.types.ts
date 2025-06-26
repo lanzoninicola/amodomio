@@ -4,6 +4,7 @@ import {
 } from "@prisma/client";
 import { ComputedSellingPriceBreakdown } from "./menu-item-selling-price-utility.entity";
 import { PizzaSizeKey } from "./menu-item-size.entity.server";
+import { Category } from "../category/category.model.server";
 
 // para custos
 export interface MenuItemWithCostVariations {
@@ -56,6 +57,7 @@ export interface SellPriceVariation {
 export interface MenuItemWithSellPriceVariations {
   menuItemId: string;
   group: MenuItemGroup;
+  category: Category;
   name: string;
   ingredients?: string;
   visible: boolean;

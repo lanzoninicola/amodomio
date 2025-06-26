@@ -330,7 +330,7 @@ export class MenuItemPrismaEntity {
   }
 
   async findManyWithSellPriceVariations(
-    params: MenuItemEntityFindAllProps,
+    params?: MenuItemEntityFindAllProps,
     sellingChannelKey?: string,
     options?: { includeAuditRecords?: boolean }
   ): Promise<MenuItemWithSellPriceVariations[]> {
@@ -344,6 +344,7 @@ export class MenuItemPrismaEntity {
           },
         },
         MenuItemGroup: true,
+        Category: true,
       },
       orderBy: { sortOrderIndex: "asc" },
     });
@@ -428,6 +429,7 @@ export class MenuItemPrismaEntity {
       return {
         menuItemId: item.id,
         group: item.MenuItemGroup,
+        category: item.Category,
         name: item.name,
         ingredients: item.ingredients,
         visible: item.visible,

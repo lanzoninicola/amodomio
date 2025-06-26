@@ -18,7 +18,7 @@ export default function AdminGerenciamentoCardapioMainListLayout() {
             <Link to={href}
                 className="flex flex-col gap-1 items-center hover:bg-slate-200 p-1 rounded-md">
                 {children}
-                <span className="text-[11px] font-semibold leading-[1.15] text-center">{label}</span>
+                <span className="text-[10px] font-semibold leading-[1.15] text-center">{label}</span>
             </Link>
         )
     }
@@ -26,21 +26,20 @@ export default function AdminGerenciamentoCardapioMainListLayout() {
 
     return (
         <div className="flex flex-col">
-            <Separator className="mb-4" />
             <div className="flex gap-2 md:grid md:grid-cols-12">
                 <PageMenu href="/admin/gerenciamento/cardapio/new" label="Novo item">
-                    <SquarePlus size={20} />
+                    <SquarePlus size={16} />
                 </PageMenu>
                 <PageMenu href="/admin/gerenciamento/cardapio/export-wall" label="Imprimir">
-                    <Printer size={20} />
+                    <Printer size={16} />
                 </PageMenu>
                 <PageMenu href="/admin/gerenciamento/cardapio/export" label="Exportar" >
-                    <CircleArrowOutUpRight size={20} />
+                    <CircleArrowOutUpRight size={16} />
                 </PageMenu>
 
 
             </div>
-            <Separator className="my-4" />
+            <Separator className="my-2" />
             <div className="grid grid-cols-2 gap-x-4 mb-4">
                 <Link to="/admin/gerenciamento/cardapio/main/list"
                     className="hover:bg-muted my-4"

@@ -1,15 +1,13 @@
 
 import { ActionFunctionArgs, LoaderFunctionArgs, } from "@remix-run/node";
 import { Await, useLoaderData, defer, Form, useActionData } from "@remix-run/react";
-import { AlertCircleIcon, AlertTriangleIcon, InfoIcon, SearchIcon } from "lucide-react";
-import { Suspense, useState } from "react";
-import OptionTab from "~/components/layout/option-tab/option-tab";
+import { AlertCircleIcon } from "lucide-react";
+import { Suspense, useEffect, useState } from "react";
 import Loading from "~/components/loading/loading";
 import { NumericInput } from "~/components/numeric-input/numeric-input";
 import SubmitButton from "~/components/primitives/submit-button/submit-button";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "~/components/ui/accordion";
 import { Input } from "~/components/ui/input";
-import { Separator } from "~/components/ui/separator";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { toast } from "~/components/ui/use-toast";
 import { authenticator } from "~/domain/auth/google.server";
 import AlertsCostsAndSellPrice from "~/domain/cardapio/components/alerts-cost-and-sell-price/alerts-cost-and-sell-price";
@@ -23,6 +21,7 @@ import { badRequest, ok } from "~/utils/http-response.server";
 import parserFormDataEntryToNumber from "~/utils/parse-form-data-entry-to-number";
 import randomReactKey from "~/utils/random-react-key";
 import createUUID from "~/utils/uuid";
+import { MenuItemVisibilityFilterOption } from "./admin.gerenciamento.cardapio.main.list";
 
 
 
@@ -187,23 +186,29 @@ export default function AdminGerenciamentoCardapioCostManagementIndex() {
                     {([menuItemsWithCostVariationsAndRecommended, user]) => {
 
                         {/* @ts-ignore */ }
-                        const [items, setItems] = useState<MenuItemWithCostVariations[]>(menuItemsWithCostVariationsAndRecommended.filter(item => item.visible === true && item.active === true) || [])
+                        const [items, setItems] = useState<MenuItemWithCostVariations[]>(menuItemsWithCostVariationsAndRecommended || [])
 
-                        const [optVisibleItems, setOptVisibleItems] = useState<boolean | null>(true)
-                        const [optActiveItems, setOptActiveItems] = useState<boolean | null>(null)
+                        const [currentFilter, setCurrentFilter] = useState<MenuItemVisibilityFilterOption | null>("active");
+                        const applyFilters = (
+                            visibility: MenuItemVisibilityFilterOption | null,
+                        ) => {
+                            let filtered = items;
 
-                        const handleOptionVisibileItems = (state: boolean) => {
-                            setOptVisibleItems(state)
-                            setOptActiveItems(null)
-                            // @ts-ignore
-                            setItems(menuItemsWithCostVariationsAndRecommended.filter(item => item.visible === state && item.active === true))
-                        }
-                        const handleOptionActiveItems = (state: boolean) => {
-                            setOptActiveItems(state)
-                            setOptVisibleItems(null)
-                            // @ts-ignore
-                            setItems(menuItemsWithCostVariationsAndRecommended.filter(item => item.active === state))
-                        }
+                            // Filtro por visibilidade
+                            if (visibility === "active") {
+                                filtered = filtered.filter(item => item.active === true);
+                            }
+                            if (visibility === "venda-pausada") {
+                                filtered = filtered.filter(item => item.active === true && item.visible === false);
+                            }
+                            setItems(filtered);
+                        };
+
+                        const handleVisibilityChange = (visibility: MenuItemVisibilityFilterOption) => {
+                            setCurrentFilter(visibility);
+                            applyFilters(visibility);
+                        };
+
 
                         const [search, setSearch] = useState("")
 
@@ -229,23 +234,34 @@ export default function AdminGerenciamentoCardapioCostManagementIndex() {
                             setItems(searchedItems)
                         }
 
+                        // Primeira renderização
+                        useEffect(() => {
+                            applyFilters(currentFilter);
+                        }, []);
 
                         return (
                             <div className="flex flex-col">
-                                <div className="flex gap-4 items-center justify-center">
-                                    <OptionTab label="Venda ativa" onClickFn={() => handleOptionVisibileItems(true)} state={true} highlightCondition={optVisibleItems === true && optActiveItems === null} />
-                                    <span>-</span>
-                                    <OptionTab label="Venda pausada" onClickFn={() => handleOptionVisibileItems(false)} state={false} highlightCondition={optVisibleItems === false && optActiveItems === null} />
-                                    <span>-</span>
-                                    <OptionTab label="Inativos" onClickFn={() => handleOptionActiveItems(false)} state={false} highlightCondition={optActiveItems === false && optVisibleItems === null} />
 
-                                </div>
-                                <Separator className="my-4" />
+                                <div className="grid grid-cols-8 gap-4 items-center bg-slate-50 py-2 px-4 mb-4">
+                                    {/* Select de Visibilidade */}
+                                    <Select
+                                        onValueChange={(value) => handleVisibilityChange(value as MenuItemVisibilityFilterOption)}
+                                        defaultValue={"active"}
+                                    >
+                                        <SelectTrigger className="w-full bg-white md:col-span-2">
+                                            <SelectValue placeholder="Filtrar vendas" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="active">Venda ativa</SelectItem>
+                                            <SelectItem value="venda-pausada">Venda pausada</SelectItem>
+                                        </SelectContent>
+                                    </Select>
 
-                                <AlertsCostsAndSellPrice items={items} />
+                                    <div className="grid place-items-center rounded-sm col-span-5">
+                                        <Input name="search" className="w-full py-4 text-lg bg-white " placeholder="Pesquisar o sabor..." onChange={(e) => handleSearch(e)} value={search} />
+                                    </div>
 
-                                <div className="bg-slate-50 px-60 py-2 grid place-items-center mb-4 rounded-sm">
-                                    <Input name="search" className="w-full py-4 text-lg bg-white " placeholder="Pesquisar o sabor..." onChange={(e) => handleSearch(e)} value={search} />
+                                    <AlertsCostsAndSellPrice items={items} cnContainer="col-span-1 flex justify-end w-full" />
                                 </div>
 
                                 <div className="h-[500px] overflow-y-scroll">
@@ -350,21 +366,36 @@ export default function AdminGerenciamentoCardapioCostManagementIndex() {
                                                                                                     </div>
 
                                                                                                 </div>
-                                                                                                <SubmitButton
-                                                                                                    variant={"outline"}
-                                                                                                    actionName="menu-item-cost-variation-upsert-from-medium"
-                                                                                                    tabIndex={0}
-                                                                                                    cnContainer={
+                                                                                                <div className="flex flex-col gap-2">
+                                                                                                    <SubmitButton
+                                                                                                        actionName="menu-item-cost-variation-upsert-from-medium"
+                                                                                                        tabIndex={0}
+                                                                                                        cnContainer={
+                                                                                                            cn(
+                                                                                                                "md:max-w-none bg-blue-500",
+                                                                                                                record.sizeKey !== "pizza-medium" && "hidden"
+                                                                                                            )
+                                                                                                        }
+                                                                                                        cnLabel="text-[11px] tracking-widest text-white uppercase leading-[1.15] "
+                                                                                                        iconColor="white"
+                                                                                                        idleText="Recalcular outros tamanhos"
+                                                                                                        loadingText="Recalculando..."
+
+                                                                                                        disabled={record.sizeKey !== "pizza-medium" ||
+                                                                                                            (record.costAmount === 0 || record.costAmount === null)
+                                                                                                        }
+                                                                                                    />
+                                                                                                    <span className={
                                                                                                         cn(
-                                                                                                            "md:max-w-none",
-                                                                                                            record.sizeKey !== "pizza-medium" && "hidden"
+                                                                                                            "text-[11px] text-muted-foreground font-semibold text-blue-500 leading-[1.2]",
+                                                                                                            record.sizeKey !== "pizza-medium" && "hidden",
+                                                                                                            record.sizeKey !== "pizza-medium" ||
+                                                                                                            (record.costAmount !== 0 || record.costAmount !== null) && "hidden",
                                                                                                         )
-                                                                                                    }
-                                                                                                    cnLabel="text-[11px] tracking-widest text-black uppercase leading-[1.15] "
-                                                                                                    iconColor="black"
-                                                                                                    idleText="Recalcular outros tamanhos"
-                                                                                                    loadingText="Recalculando..."
-                                                                                                />
+                                                                                                    }>
+                                                                                                        Para calcular o custo dos outros tamanhos inserir o custo do tamanho médio.
+                                                                                                    </span>
+                                                                                                </div>
                                                                                             </div>
                                                                                             {(record?.costAmount ?? 0) === 0 && (
                                                                                                 <div className="flex gap-2 items-center mt-2">

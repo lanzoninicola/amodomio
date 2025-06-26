@@ -14,10 +14,10 @@ import { Separator } from "~/components/ui/separator"
 import Loading from "~/components/loading/loading"
 import { cn } from "~/lib/utils"
 import { Input } from "~/components/ui/input"
-import MenuItemSwitchVisibility from "~/domain/cardapio/components/menu-item-switch-visibility/menu-item-switch-visibility"
+import MenuItemSwitchVisibilitySubmit from "~/domain/cardapio/components/menu-item-switch-visibility/menu-item-switch-visibility-submit"
 import { menuItemPriceVariationsEntity } from "~/domain/cardapio/menu-item-price-variations.prisma.entity.server"
 import { Menu } from "lucide-react"
-import MenuItemSwitchActivation from "~/domain/cardapio/components/menu-item-switch-activation.tsx/menu-item-switch-activation"
+import MenuItemSwitchActivationSubmit from "~/domain/cardapio/components/menu-item-switch-activation.tsx/menu-item-switch-activation-submit"
 import OptionTab from "~/components/layout/option-tab/option-tab"
 
 
@@ -389,8 +389,8 @@ function MenuItemListSliced({ categoryItems, loggedUser }: MenuItemListSlicedPro
                             </Link>
 
                             <div className="flex gap-4 col-span-4">
-                                <MenuItemSwitchVisibility menuItem={menuItem} visible={visible} setVisible={setVisible} />
-                                <MenuItemSwitchActivation menuItem={menuItem} active={active} setActive={setActive} />
+                                <MenuItemSwitchVisibilitySubmit menuItem={menuItem} visible={visible} setVisible={setVisible} />
+                                <MenuItemSwitchActivationSubmit menuItem={menuItem} active={active} setActive={setActive} />
                             </div>
 
 

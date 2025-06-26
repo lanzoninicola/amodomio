@@ -123,20 +123,22 @@ export class MenuItemSellingPriceHandler {
 
       let itemSellPriceVariationWarnings: Warning[] = [];
 
-      const warnings = this.handleSellPriceWarnings({
-        itemName: item.name,
-        sizeName: size.name,
-        channelName: channel.name,
-        computedPrice:
-          computedSellingPriceBreakdown.minimumPrice.priceAmount.withProfit,
-        actualPrice: variation?.priceAmount ?? 0,
-      });
+      if (item.active === true && item.visible === true) {
+        const warnings = this.handleSellPriceWarnings({
+          itemName: item.name,
+          sizeName: size.name,
+          channelName: channel.name,
+          computedPrice:
+            computedSellingPriceBreakdown.minimumPrice.priceAmount.withProfit,
+          actualPrice: variation?.priceAmount ?? 0,
+        });
 
-      if (warnings) {
-        itemSellPriceVariationWarnings = [
-          ...itemSellPriceVariationWarnings,
-          ...warnings,
-        ];
+        if (warnings) {
+          itemSellPriceVariationWarnings = [
+            ...itemSellPriceVariationWarnings,
+            ...warnings,
+          ];
+        }
       }
 
       return {
@@ -185,6 +187,7 @@ export class MenuItemSellingPriceHandler {
         return {
           menuItemId: item.menuItemId,
           group: item.group,
+          category: item.category,
           name: item.name,
           ingredients: item.ingredients,
           visible: item.visible,

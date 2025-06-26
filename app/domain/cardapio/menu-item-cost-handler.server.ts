@@ -102,16 +102,20 @@ class MenuItemCostHandler {
               itemReferenceCost?.costAmount ?? 0
             );
 
-          const warningsReturned = this.handleWarnings({
-            costAmount: variation?.costAmount ?? 0,
-            previousCostAmount: variation?.previousCostAmount ?? 0,
-            recommendedCostAmount,
-            itemName: item.name,
-            sizeName: size.name,
-          });
+          let warningsReturned = [];
 
-          if (warningsReturned) {
-            itemWarnings = [...itemWarnings, ...warningsReturned];
+          if (item.active === true && item.visible === true) {
+            warningsReturned = this.handleWarnings({
+              costAmount: variation?.costAmount ?? 0,
+              previousCostAmount: variation?.previousCostAmount ?? 0,
+              recommendedCostAmount,
+              itemName: item.name,
+              sizeName: size.name,
+            });
+
+            if (warningsReturned) {
+              itemWarnings = [...itemWarnings, ...warningsReturned];
+            }
           }
 
           return {
@@ -175,16 +179,20 @@ class MenuItemCostHandler {
             itemReferenceCost?.costAmount ?? 0
           );
 
-        const warningsReturned = this.handleWarnings({
-          costAmount: variation?.costAmount ?? 0,
-          previousCostAmount: variation?.previousCostAmount ?? 0,
-          recommendedCostAmount,
-          itemName: item.name,
-          sizeName: size.name,
-        });
+        let warningsReturned = [];
 
-        if (warningsReturned) {
-          itemWarnings = [...itemWarnings, ...warningsReturned];
+        if (item.active === true && item.visible === true) {
+          warningsReturned = this.handleWarnings({
+            costAmount: variation?.costAmount ?? 0,
+            previousCostAmount: variation?.previousCostAmount ?? 0,
+            recommendedCostAmount,
+            itemName: item.name,
+            sizeName: size.name,
+          });
+
+          if (warningsReturned) {
+            itemWarnings = [...itemWarnings, ...warningsReturned];
+          }
         }
 
         return {

@@ -158,6 +158,7 @@ model GroceryListItem {
 
 model MenuItemGroup {
   id             String    @id @default(uuid())
+  key            String
   name           String
   description    String
   /// sortOrder should be 1000 for the first group, 2000 for the second, etc
