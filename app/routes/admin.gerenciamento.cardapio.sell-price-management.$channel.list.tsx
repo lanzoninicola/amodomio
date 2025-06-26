@@ -7,6 +7,7 @@ import formatDecimalPlaces from "~/utils/format-decimal-places";
 import randomReactKey from "~/utils/random-react-key";
 import { AdminGerenciamentoCardapioSellPriceManagementSingleChannelOutletContext } from "./admin.gerenciamento.cardapio.sell-price-management.$channel";
 import { sl } from "date-fns/locale";
+import { Size } from "~/domain/size/size.model.server";
 
 export default function AdminGerenciamentoCardapioSellPriceManagementSingleChannelList() {
   const { items, sellingChannel, user, sizes } = useOutletContext<AdminGerenciamentoCardapioSellPriceManagementSingleChannelOutletContext>()
@@ -32,7 +33,7 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
     )
   }
 
-  const PriceInfo = ({ priceAmount, breakEvenAmount, profitPerc }: { priceAmount: number, breakEvenAmount: number, profitPerc: number }) => {
+  const PriceInfo = ({ priceAmount, breakEvenAmount, profitPerc, sizeName }: { priceAmount: number, breakEvenAmount: number, profitPerc: number, sizeName: Size["name"] }) => {
 
     const OtherChars = ({ children }: { children: React.ReactNode }) => {
       return (
@@ -41,22 +42,25 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
     }
 
     return (
-      <div className="grid grid-cols-2 w-full gap-x-2" >
-        <p className="text-sm font-mono text-right">{formatDecimalPlaces(priceAmount)}</p>
-        <div className="flex items-center">
-          <OtherChars>{`(`}</OtherChars>
-          <BreakEvenAmount amount={breakEvenAmount} />
-          <OtherChars>{`-`}</OtherChars>
-          <ProfitPerc profitPerc={profitPerc} />
-          <OtherChars>{`)`}</OtherChars>
+      <div className="flex flex-col w-full" >
+        <span className="uppercase text-center md:hidden text-[11px] font-semibold">{sizeName}</span>
+        <div className="flex flex-row gap-1 items-center md:grid md:grid-cols-2 md:gap-x-2">
+          <p className="text-sm font-mono text-center md:text-right ">{formatDecimalPlaces(priceAmount)}</p>
+          <div className="flex items-center">
+            <OtherChars>{`(`}</OtherChars>
+            <BreakEvenAmount amount={breakEvenAmount} />
+            <OtherChars>{`-`}</OtherChars>
+            <ProfitPerc profitPerc={profitPerc} />
+            <OtherChars>{`)`}</OtherChars>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="h-[500px] overflow-y-scroll">
-      <ul className="grid grid-cols-5 mb-4 gap-x-2">
+    <div className="md:h-[500px] overflow-y-scroll">
+      <ul className="hidden md:grid md:grid-cols-5 md:mb-4 md:gap-x-2">
         <li className="text-[11px] uppercase flex items-center">Sabor</li>
         {sizes.map(s => (
           <li key={s.id} className="flex flex-col items-center gap-[2px] text-[11px] uppercase">
@@ -68,20 +72,21 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
       <ul className="flex flex-col gap-2">
         {items.map((menuItem: MenuItemWithSellPriceVariations) => (
           <>
-            <li key={menuItem.menuItemId} className="grid grid-cols-5 gap-x-4 items-start">
+            <li key={menuItem.menuItemId} className="flex flex-col w-full  items-center md:grid md:grid-cols-5 gap-x-4 md:items-start">
               {/* Coluna 1: Nome do item */}
-              <span className="text-sm">{menuItem.name}</span>
+              <span className="text-sm mb-2 md:mb-0">{menuItem.name}</span>
 
               {/* Colunas 2 a 5: Preço por tamanho */}
               {menuItem.sellPriceVariations.map((record, i) => {
                 const minimumPriceAmountWithoutProfit = record.computedSellingPriceBreakdown?.minimumPrice?.priceAmount.breakEven ?? 0
 
                 return (
-                  <div key={record.id ?? i} className="flex flex-col items-center text-xs">
+                  <div key={record.id ?? i} className="flex flex-col items-center text-xs mb-2 md:mb-0">
                     <PriceInfo
                       priceAmount={record.priceAmount}
                       breakEvenAmount={minimumPriceAmountWithoutProfit}
                       profitPerc={record?.profitActualPerc ?? 0}
+                      sizeName={record.sizeName}
                     />
 
                     {(record.computedSellingPriceBreakdown?.custoFichaTecnica ?? 0) === 0 && (

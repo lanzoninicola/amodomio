@@ -60,21 +60,22 @@ export default function AlertsCostsAndSellPrice({ items, cnContainer }: AlertsCo
   return (
     <>
       <Dialog>
-        <DialogTrigger asChild className={
-          cn(
-            "w-full",
-            cnContainer
-          )
-        }>
-          <button className="relative w-max pr-2 py-1">
-            <CircleAlert className="text-red-500" />
-            <div className="absolute top-0 right-0 rounded-full bg-red-500 w-[18px] h-[18px] p-0 grid place-items-center">
-              <p className="text-[10px] font-semibold text-white m-o p-0 leading-none">
-                {warnings.length}
-              </p>
-            </div>
-
-          </button>
+        <DialogTrigger asChild >
+          <div className={
+            cn(
+              "w-full",
+              cnContainer
+            )
+          }>
+            <button className="relative w-max pr-2 py-1">
+              <CircleAlert className="text-red-500" />
+              <div className="absolute top-0 right-0 rounded-full bg-red-500 w-[18px] h-[18px] p-0 grid place-items-center">
+                <p className="text-[10px] font-semibold text-white m-o p-0 leading-none">
+                  {warnings.length}
+                </p>
+              </div>
+            </button>
+          </div>
         </DialogTrigger>
         <DialogContent className="p-8 bg-white border-none">
 
@@ -95,7 +96,7 @@ export default function AlertsCostsAndSellPrice({ items, cnContainer }: AlertsCo
             ))}
           </ul>
         </DialogContent>
-      </Dialog>
+      </Dialog >
       {/* <Accordion
         type="single"
         collapsible
