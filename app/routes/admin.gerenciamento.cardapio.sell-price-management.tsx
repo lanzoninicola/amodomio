@@ -16,13 +16,6 @@ import Loading from "~/components/loading/loading";
 import { MenuItemSellingChannel } from "@prisma/client";
 import SubmitButton from "~/components/primitives/submit-button/submit-button";
 
-interface TabProps {
-  to: string;
-  cnContainer?: string;
-  label: string;
-  channelKey: string;
-  children?: React.ReactNode;
-}
 
 export async function loader({ request }: LoaderFunctionArgs) {
 
@@ -88,33 +81,15 @@ export default function AdminGerenciamentoCardapioSellPriceManagement() {
 
   const [isPending, startTransition] = useTransition()
 
+  const [showProfitSettings, setShowProfitSettings] = useState(false)
 
 
-  const Tab = ({ to, cnContainer, channelKey, label, children }: TabProps) => {
-    return (
-      <div className={
-        cn(
-          "hover:bg-muted flex flex-col border rounded-md p-2 my-4",
-          activeTab === channelKey && "bg-slate-200",
-          cnContainer
-        )
-      }>
-        <Link to={to}>
-          <div className="flex items-center gap-2 justify-center py-1">
-            <Option size={14} />
-            <span className="text-[14px]  uppercase tracking-wider font-semibold">{label}</span>
-          </div>
-        </Link>
-        {children}
-      </div>
-    )
-  }
 
 
   return (
     <div className="flex flex-col">
       <div className="flex justify-between items-center mb-2">
-        <h2 className="mb-2">Gerenciamento Preços de Vendas Itens</h2>
+        <h2 >Gerenciamento Preços de Vendas Itens</h2>
 
         <div>
 
@@ -130,10 +105,6 @@ export default function AdminGerenciamentoCardapioSellPriceManagement() {
       </div>
 
 
-
-
-
-
       <div className="grid grid-cols-3 gap-x-2 items-center">
 
         <Suspense fallback={<Loading />}>
@@ -143,34 +114,55 @@ export default function AdminGerenciamentoCardapioSellPriceManagement() {
                 return sellingChannel.map(
                   (channel: MenuItemSellingChannel) => {
                     return (
-                      <Tab
-                        to={`/admin/gerenciamento/cardapio/sell-price-management/${channel.key}/list`}
-                        key={channel.key}
-                        channelKey={channel.key}
-                        label={channel.name}
-                      >
-
-
-                        <Form method="post" className="flex justify-center gap-4 items-center ">
-                          <input type="hidden" name="channelKey" defaultValue={channel.key} />
-                          <span className="text-muted-foreground text-[11px]">
-                            Profito Desejado (%)
-                          </span>
-                          <NumericInput name="targetMarginPerc" defaultValue={channel.targetMarginPerc} className="w-16" />
-                          {actionData?.errors?.targetMarginPerc && (
-                            <span className="text-red-500 text-xs">
-                              {actionData.errors.targetMarginPerc}
-                            </span>
-                          )}
-                          <SubmitButton
-                            actionName="selling-channel-target-margin-perc-update"
-                            disabled={isPending === true}
-                            onlyIcon={true}
+                      <div className={
+                        cn(
+                          "hover:bg-muted flex flex-col border rounded-md p-2 my-4",
+                          activeTab === channel.key && "bg-slate-200",
+                        )
+                      }>
+                        <div className="flex items-center justify-center gap-4 mb-2">
+                          <h2 className="font-semibold text-center ">{channel.name}</h2>
+                          <button onClick={() => setShowProfitSettings(!showProfitSettings)}
+                            className="flex items-center gap-x-1 text-[9px] uppercase tracking-wider text-center rounded-md p-1
+                          hover:bg-blue-300"
                           >
-                            {isPending === true ? "Salvando..." : "Salvar"}
-                          </SubmitButton>
-                        </Form>
-                      </Tab>
+                            <Settings size={16} />
+                            <span className="">Profito desejado</span>
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-2 ">
+                          <Link to={`/admin/gerenciamento/cardapio/sell-price-management/${channel.key}/list`}>
+                            <p className="text-[11px] uppercase font-semibold tracking-wider text-center
+                            hover:underline">Tabela preços</p>
+                          </Link>
+                          <Link to={`/admin/gerenciamento/cardapio/sell-price-management/${channel.key}/edit`}>
+                            <p className="text-[11px] uppercase font-semibold tracking-wider text-center
+                            hover:underline">Editar preços</p>
+                          </Link>
+                        </div>
+
+                        {showProfitSettings && (
+                          <Form method="post" className="flex justify-center gap-4 items-center mt-4 bg-white p-2 rounded-md">
+                            <input type="hidden" name="channelKey" defaultValue={channel.key} />
+                            <span className="text-muted-foreground text-[11px]">
+                              Profito Desejado (%)
+                            </span>
+                            <NumericInput name="targetMarginPerc" defaultValue={channel.targetMarginPerc} className="w-16 " />
+                            {actionData?.errors?.targetMarginPerc && (
+                              <span className="text-red-500 text-xs">
+                                {actionData.errors.targetMarginPerc}
+                              </span>
+                            )}
+                            <SubmitButton
+                              actionName="selling-channel-target-margin-perc-update"
+                              disabled={isPending === true}
+                              onlyIcon={true}
+                            >
+                              {isPending === true ? "Salvando..." : "Salvar"}
+                            </SubmitButton>
+                          </Form>
+                        )}
+                      </div>
                     )
                   }
                 )
