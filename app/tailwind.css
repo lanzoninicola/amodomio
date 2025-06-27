@@ -1,3 +1,7 @@
+@import "swiper/css";
+@import "swiper/css/pagination";
+@import "swiper/css/navigation";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -296,7 +300,8 @@
 
   @font-face {
     font-family: "NeueHaasDisplay";
-    src: url("/fonts/NeueHaasDisplay/NeueHaasDisplayLight.ttf") format("truetype");
+    src: url("/fonts/NeueHaasDisplay/NeueHaasDisplayLight.ttf")
+      format("truetype");
     font-weight: 300;
     font-style: normal;
     font-display: swap;
@@ -304,7 +309,8 @@
 
   @font-face {
     font-family: "NeueHaasDisplay";
-    src: url("/fonts/NeueHaasDisplay/NeueHaasDisplayXXThin.ttf") format("truetype");
+    src: url("/fonts/NeueHaasDisplay/NeueHaasDisplayXXThin.ttf")
+      format("truetype");
     font-weight: 100;
     font-style: normal;
     font-display: swap;
@@ -312,7 +318,8 @@
 
   @font-face {
     font-family: "NeueHaasDisplay";
-    src: url("/fonts/NeueHaasDisplay/NeueHaasDisplayXThin.ttf") format("truetype");
+    src: url("/fonts/NeueHaasDisplay/NeueHaasDisplayXThin.ttf")
+      format("truetype");
     font-weight: 150;
     font-style: normal;
     font-display: swap;
@@ -320,7 +327,8 @@
 
   @font-face {
     font-family: "NeueHaasDisplay";
-    src: url("/fonts/NeueHaasDisplay/NeueHaasDisplayThin.ttf") format("truetype");
+    src: url("/fonts/NeueHaasDisplay/NeueHaasDisplayThin.ttf")
+      format("truetype");
     font-weight: 200;
     font-style: normal;
     font-display: swap;
@@ -328,7 +336,8 @@
 
   @font-face {
     font-family: "NeueHaasDisplay";
-    src: url("/fonts/NeueHaasDisplay/NeueHaasDisplayRoman.ttf") format("truetype");
+    src: url("/fonts/NeueHaasDisplay/NeueHaasDisplayRoman.ttf")
+      format("truetype");
     font-weight: 400;
     font-style: normal;
     font-display: swap;
@@ -336,7 +345,8 @@
 
   @font-face {
     font-family: "NeueHaasDisplay";
-    src: url("/fonts/NeueHaasDisplay/NeueHaasDisplayMediu.ttf") format("truetype");
+    src: url("/fonts/NeueHaasDisplay/NeueHaasDisplayMediu.ttf")
+      format("truetype");
     font-weight: 500;
     font-style: normal;
     font-display: swap;
@@ -344,7 +354,8 @@
 
   @font-face {
     font-family: "NeueHaasDisplay";
-    src: url("/fonts/NeueHaasDisplay/NeueHaasDisplayBold.ttf") format("truetype");
+    src: url("/fonts/NeueHaasDisplay/NeueHaasDisplayBold.ttf")
+      format("truetype");
     font-weight: 700;
     font-style: normal;
     font-display: swap;
@@ -352,7 +363,8 @@
 
   @font-face {
     font-family: "NeueHaasDisplay";
-    src: url("/fonts/NeueHaasDisplay/NeueHaasDisplayBlack.ttf") format("truetype");
+    src: url("/fonts/NeueHaasDisplay/NeueHaasDisplayBlack.ttf")
+      format("truetype");
     font-weight: 900;
     font-style: normal;
     font-display: swap;

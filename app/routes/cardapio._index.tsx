@@ -19,6 +19,7 @@ import CardapioItemPrice from "~/domain/cardapio/components/cardapio-item-price/
 import { Carousel, CarouselContent, CarouselItem } from "~/components/ui/carousel";
 import Autoplay from "embla-carousel-autoplay";
 import CardapioItemImageSingle from "~/domain/cardapio/components/cardapio-item-image-single/cardapio-item-image-single";
+import { SwiperCarousel } from "~/components/swiper-carousel/swiper-carousel";
 
 
 export const headers: HeadersFunction = () => ({
@@ -131,6 +132,8 @@ export async function action({ request }: LoaderFunctionArgs) {
 export default function CardapioWebIndex() {
     const { items, tags } = useLoaderData<typeof loader>()
 
+
+
     return (
 
         <section className="flex flex-col mb-24" data-element="cardapio-index">
@@ -142,8 +145,14 @@ export default function CardapioWebIndex() {
 
                     {(items) => {
 
+                        const featuredImagesUrls = items.map(i => i.MenuItemGalleryImage.filter(img => img.isPrimary)[0])
+                            .slice(0, 10).map(i => i?.secureUrl || "")
+
+
                         return (
                             <section className="flex flex-col gap-4 mx-2 md:grid md:grid-cols-2">
+
+                                <SwiperCarousel slides={featuredImagesUrls || []} />
 
 
                                 {/** @ts-ignore */}
