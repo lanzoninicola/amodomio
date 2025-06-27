@@ -1,30 +1,18 @@
-import { MenuItemGroup, MenuItemSellingChannel, MenuItemSellingPriceVariationAudit } from "@prisma/client";
-import { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
+import { MenuItemSellingChannel } from "@prisma/client";
+import { LoaderFunctionArgs } from "@remix-run/node";
 import { Await, useLoaderData, defer, useActionData, Outlet } from "@remix-run/react";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useState } from "react";
 import Loading from "~/components/loading/loading";
-import { Button } from "~/components/ui/button";
-import { Dialog, DialogClose, DialogContent, DialogTrigger } from "~/components/ui/dialog";
-import { Input } from "~/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { Separator } from "~/components/ui/separator";
 import { toast } from "~/components/ui/use-toast";
 import { authenticator } from "~/domain/auth/google.server";
 import AlertsCostsAndSellPrice from "~/domain/cardapio/components/alerts-cost-and-sell-price/alerts-cost-and-sell-price";
 import { menuItemSellingPriceHandler } from "~/domain/cardapio/menu-item-selling-price-handler.server";
 
-import { ComputedSellingPriceBreakdown, menuItemSellingPriceUtilityEntity } from "~/domain/cardapio/menu-item-selling-price-utility.entity";
-import { MenuItemSellingPriceVariationUpsertParams, menuItemSellingPriceVariationPrismaEntity } from "~/domain/cardapio/menu-item-selling-price-variation.entity.server";
 import { MenuItemWithSellPriceVariations, SellPriceVariation } from "~/domain/cardapio/menu-item.types";
 import prismaClient from "~/lib/prisma/client.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
-import { cn } from "~/lib/utils";
-import { badRequest, ok } from "~/utils/http-response.server";
-import toFixedNumber from "~/utils/to-fixed-number";
-import createUUID from "~/utils/uuid";
-import { MenuItemVisibilityFilterOption } from "./admin.gerenciamento.cardapio.main.list";
-import { Category } from "~/domain/category/category.model.server";
-import { jsonParse } from "~/utils/json-helper";
+import { badRequest } from "~/utils/http-response.server";
 import { LoggedUser } from "~/domain/auth/types.server";
 import { menuItemSizePrismaEntity } from "~/domain/cardapio/menu-item-size.entity.server";
 import { MenuItemsFilters } from "~/domain/cardapio/components/menu-items-filters/menu-items-filters";
@@ -81,107 +69,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   })
 }
 
-export async function action({ request }: ActionFunctionArgs) {
 
-  let formData = await request.formData();
-  const { _action, ...values } = Object.fromEntries(formData);
-
-
-
-  if (_action === "upsert-by-user-input") {
-
-    const menuItemSellPriceVariationId = values?.menuItemSellPriceVariationId as string
-    const menuItemSellingChannelId = values?.menuItemSellingChannelId as string
-    const menuItemSizeId = values?.menuItemSizeId as string
-    const menuItemId = values?.menuItemId as string
-    const priceAmount = toFixedNumber(values?.priceAmount, 2) || 0
-
-    const recipeCostAmount = toFixedNumber(values?.recipeCostAmount, 2) || 0
-    const packagingCostAmount = toFixedNumber(values?.packagingCostAmount, 2) || 0
-    const doughCostAmount = toFixedNumber(values?.doughCostAmount, 2) || 0
-    const wasteCostAmount = toFixedNumber(values?.wasteCostAmount, 2) || 0
-    const sellingPriceExpectedAmount = toFixedNumber(values?.sellingPriceExpectedAmount, 2) || 0
-    const profitExpectedPerc = toFixedNumber(values?.profitExpectedPerc, 2) || 0
-
-    // at the moment we are not using the discount percentage
-    const discountPercentage = isNaN(Number(values?.discountPercentage)) ? 0 : Number(values?.discountPercentage)
-
-    // at the moment we are not using the showOnCardapioAt
-    const showOnCardapio = values?.showOnCardapio === "on" ? true : false
-
-    const updatedBy = values?.updatedBy as string
-
-    const dnaPerc = (await menuItemSellingPriceUtilityEntity.getSellingPriceConfig()).dnaPercentage || 0
-    const profitActualPerc = menuItemSellingPriceUtilityEntity.calculateProfitPercFromSellingPrice(
-      priceAmount,
-      {
-        fichaTecnicaCostAmount: recipeCostAmount,
-        packagingCostAmount,
-        doughCostAmount,
-        wasteCostAmount,
-      },
-      dnaPerc
-    )
-
-    const nextPrice: MenuItemSellingPriceVariationUpsertParams = {
-      menuItemId,
-      menuItemSellingChannelId,
-      menuItemSizeId,
-      priceAmount: priceAmount,
-      priceExpectedAmount: sellingPriceExpectedAmount,
-      profitActualPerc,
-      profitExpectedPerc,
-      discountPercentage,
-      showOnCardapio,
-      updatedBy,
-      showOnCardapioAt: null,
-    }
-
-    const [err, result] = await prismaIt(menuItemSellingPriceVariationPrismaEntity.upsert(menuItemSellPriceVariationId, nextPrice))
-
-    if (!result) {
-      return badRequest(`Não foi possível atualizar o preço de venda`)
-    }
-
-    // start audit
-    // in the future we should move this inside the class that handle the mutation of selling price for the item
-    const nextPriceAudit: MenuItemSellingPriceVariationAudit = {
-      id: createUUID(),
-      menuItemId,
-      menuItemSellingChannelId,
-      menuItemSizeId,
-      doughCostAmount,
-      packagingCostAmount,
-      recipeCostAmount,
-      wasteCostAmount,
-      sellingPriceExpectedAmount,
-      profitExpectedPerc,
-      sellingPriceActualAmount: priceAmount,
-      profitActualPerc,
-      dnaPerc,
-      updatedBy,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-
-    }
-
-    const [errAudit, auditResult] = await prismaIt(prismaClient.menuItemSellingPriceVariationAudit.create({
-      data: nextPriceAudit
-    }))
-
-    if (err || errAudit) {
-      return badRequest(err || errAudit || `Não foi possível atualizar o preço de venda`)
-    }
-
-    return ok(`O preço de venda foi atualizado com sucesso`)
-  }
-
-
-
-
-
-  return ok("Elemento atualizado com successo")
-}
 export interface AdminGerenciamentoCardapioSellPriceManagementSingleChannelOutletContext {
   items: MenuItemWithSellPriceVariations[]
   sellingChannel: MenuItemSellingChannel
@@ -191,22 +79,7 @@ export interface AdminGerenciamentoCardapioSellPriceManagementSingleChannelOutle
 export default function AdminGerenciamentoCardapioSellPriceManagementSingleChannelOutlet() {
 
   const { returnedData } = useLoaderData<typeof loader>();
-  const actionData = useActionData<typeof action>();
 
-
-  if (actionData && actionData.status > 399) {
-    toast({
-      title: "Erro",
-      description: actionData.message,
-    });
-  }
-
-  if (actionData && actionData.status === 200) {
-    toast({
-      title: "Ok",
-      description: actionData.message,
-    });
-  }
 
   return (
     <div className="flex flex-col gap-4">
