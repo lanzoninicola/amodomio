@@ -71,8 +71,8 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
       </ul>
       <ul className="flex flex-col gap-2">
         {items.map((menuItem: MenuItemWithSellPriceVariations) => (
-          <>
-            <li key={menuItem.menuItemId} className="flex flex-col w-full  items-center md:grid md:grid-cols-5 gap-x-4 md:items-start">
+          <li key={menuItem.menuItemId}>
+            <div className="flex flex-col w-full  items-center md:grid md:grid-cols-5 gap-x-4 md:items-start">
               {/* Coluna 1: Nome do item */}
               <span className="text-sm mb-2 md:mb-0">{menuItem.name}</span>
 
@@ -101,9 +101,9 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
                 )
               })}
 
-            </li>
+            </div>
             <Separator className="mb-3" />
-          </>
+          </li>
         ))}
       </ul>
     </div>

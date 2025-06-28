@@ -1,4 +1,4 @@
-import { Form, useOutletContext } from "@remix-run/react";
+import { Form, useActionData, useOutletContext } from "@remix-run/react";
 import { AlertCircleIcon } from "lucide-react";
 import { NumericInput } from "~/components/numeric-input/numeric-input";
 import SubmitButton from "~/components/primitives/submit-button/submit-button";
@@ -12,9 +12,134 @@ import { AdminGerenciamentoCardapioSellPriceManagementSingleChannelOutletContext
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from "~/components/ui/dialog";
 import { Button } from "~/components/ui/button";
 import { ComputedSellingPriceBreakdown } from "~/domain/cardapio/menu-item-selling-price-utility.entity";
+import { MenuItemSellingPriceVariationAudit } from "@prisma/client";
+import { ActionFunctionArgs } from "@remix-run/node";
+
+import { menuItemSellingPriceUtilityEntity } from "~/domain/cardapio/menu-item-selling-price-utility.entity";
+import { MenuItemSellingPriceVariationUpsertParams, menuItemSellingPriceVariationPrismaEntity } from "~/domain/cardapio/menu-item-selling-price-variation.entity.server";
+import prismaClient from "~/lib/prisma/client.server";
+import { prismaIt } from "~/lib/prisma/prisma-it.server";
+import { badRequest, ok } from "~/utils/http-response.server";
+import toFixedNumber from "~/utils/to-fixed-number";
+import createUUID from "~/utils/uuid";
+import { toast } from "~/components/ui/use-toast";
+
+export async function action({ request }: ActionFunctionArgs) {
+
+  let formData = await request.formData();
+  const { _action, ...values } = Object.fromEntries(formData);
+
+
+
+  if (_action === "upsert-by-user-input") {
+
+    const menuItemSellPriceVariationId = values?.menuItemSellPriceVariationId as string
+    const menuItemSellingChannelId = values?.menuItemSellingChannelId as string
+    const menuItemSizeId = values?.menuItemSizeId as string
+    const menuItemId = values?.menuItemId as string
+    const priceAmount = toFixedNumber(values?.priceAmount, 2) || 0
+
+    const recipeCostAmount = toFixedNumber(values?.recipeCostAmount, 2) || 0
+    const packagingCostAmount = toFixedNumber(values?.packagingCostAmount, 2) || 0
+    const doughCostAmount = toFixedNumber(values?.doughCostAmount, 2) || 0
+    const wasteCostAmount = toFixedNumber(values?.wasteCostAmount, 2) || 0
+    const sellingPriceExpectedAmount = toFixedNumber(values?.sellingPriceExpectedAmount, 2) || 0
+    const profitExpectedPerc = toFixedNumber(values?.profitExpectedPerc, 2) || 0
+
+    // at the moment we are not using the discount percentage
+    const discountPercentage = isNaN(Number(values?.discountPercentage)) ? 0 : Number(values?.discountPercentage)
+
+    // at the moment we are not using the showOnCardapioAt
+    const showOnCardapio = values?.showOnCardapio === "on" ? true : false
+
+    const updatedBy = values?.updatedBy as string
+
+    const dnaPerc = (await menuItemSellingPriceUtilityEntity.getSellingPriceConfig()).dnaPercentage || 0
+    const profitActualPerc = menuItemSellingPriceUtilityEntity.calculateProfitPercFromSellingPrice(
+      priceAmount,
+      {
+        fichaTecnicaCostAmount: recipeCostAmount,
+        packagingCostAmount,
+        doughCostAmount,
+        wasteCostAmount,
+      },
+      dnaPerc
+    )
+
+    const nextPrice: MenuItemSellingPriceVariationUpsertParams = {
+      menuItemId,
+      menuItemSellingChannelId,
+      menuItemSizeId,
+      priceAmount: priceAmount,
+      priceExpectedAmount: sellingPriceExpectedAmount,
+      profitActualPerc,
+      profitExpectedPerc,
+      discountPercentage,
+      showOnCardapio,
+      updatedBy,
+      showOnCardapioAt: null,
+    }
+
+    const [err, result] = await prismaIt(menuItemSellingPriceVariationPrismaEntity.upsert(menuItemSellPriceVariationId, nextPrice))
+
+    if (!result) {
+      return badRequest(`Não foi possível atualizar o preço de venda`)
+    }
+
+    // start audit
+    // in the future we should move this inside the class that handle the mutation of selling price for the item
+    const nextPriceAudit: MenuItemSellingPriceVariationAudit = {
+      id: createUUID(),
+      menuItemId,
+      menuItemSellingChannelId,
+      menuItemSizeId,
+      doughCostAmount,
+      packagingCostAmount,
+      recipeCostAmount,
+      wasteCostAmount,
+      sellingPriceExpectedAmount,
+      profitExpectedPerc,
+      sellingPriceActualAmount: priceAmount,
+      profitActualPerc,
+      dnaPerc,
+      updatedBy,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+
+    }
+
+    const [errAudit, auditResult] = await prismaIt(prismaClient.menuItemSellingPriceVariationAudit.create({
+      data: nextPriceAudit
+    }))
+
+    if (err || errAudit) {
+      return badRequest(err || errAudit || `Não foi possível atualizar o preço de venda`)
+    }
+
+    return ok(`O preço de venda foi atualizado com sucesso`)
+  }
+
+  return ok("Elemento atualizado com successo")
+}
 
 export default function AdminGerenciamentoCardapioSellPriceManagementSingleChannelEdit() {
   const { items, sellingChannel, user } = useOutletContext<AdminGerenciamentoCardapioSellPriceManagementSingleChannelOutletContext>()
+  const actionData = useActionData<typeof action>();
+
+
+  if (actionData && actionData.status > 399) {
+    toast({
+      title: "Erro",
+      description: actionData.message,
+    });
+  }
+
+  if (actionData && actionData.status === 200) {
+    toast({
+      title: "Ok",
+      description: actionData.message,
+    });
+  }
 
   return (
     <div className="h-[500px] overflow-y-scroll">
@@ -27,80 +152,56 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
               <li key={menuItem.menuItemId}>
 
                 <Accordion type="single" collapsible className="border rounded-md px-4 py-2 mb-4">
-                  <AccordionItem value="item-1">
+                  <AccordionItem value="item-1" className="border-none">
                     <div className="flex flex-col w-full">
                       <AccordionTrigger>
-                        <h3 className="text-md font-semibold">{menuItem.name} ({sellingChannel.name})</h3>
-                      </AccordionTrigger>
-                      <ul className="grid grid-cols-5 mb-4 gap-x-2">
-                        {menuItem.sellPriceVariations.map((record) => {
 
-                          const minimumPriceAmountWithProfit = record.computedSellingPriceBreakdown?.minimumPrice?.priceAmount.withProfit ?? 0
-                          const minimumPriceAmountWithoutProfit = record.computedSellingPriceBreakdown?.minimumPrice?.priceAmount.breakEven ?? 0
 
-                          return (
-                            <li key={randomReactKey()} >
+                        <ul className="grid grid-cols-5 mb-4 gap-x-2 w-full">
+                          <li className="text-left text-md font-semibold col-span-1">{menuItem.name} ({sellingChannel.name})</li>
+                          {menuItem.sellPriceVariations.map((record) => {
 
-                              <div className="flex flex-col justify-center">
-                                <p className="text-[11px] uppercase text-center ">{record.sizeName}</p>
+                            const minimumPriceAmountWithProfit = record.computedSellingPriceBreakdown?.minimumPrice?.priceAmount.withProfit ?? 0
+                            const minimumPriceAmountWithoutProfit = record.computedSellingPriceBreakdown?.minimumPrice?.priceAmount.breakEven ?? 0
 
-                                <div className="flex flex-col gap-0">
-                                  <div className="grid grid-cols-2 gap-2 justify-center">
-                                    <div className="flex flex-col text-center">
-                                      <p className="text-[11px] text-muted-foreground">Valor de venda:</p>
-                                      <p className={
-                                        cn(
-                                          "text-[12px] font-mono",
-                                          record.priceAmount > 0 && minimumPriceAmountWithProfit > record.priceAmount && 'bg-orange-200',
-                                          record.priceAmount > 0 && minimumPriceAmountWithoutProfit > record.priceAmount && 'bg-red-400',
-                                        )
-                                      }
-                                      >{formatDecimalPlaces(record.priceAmount)}</p>
-                                    </div>
-                                    <div className="flex flex-col gap-1">
-                                      <div className="flex flex-col text-center">
-                                        {/* <p className="text-[11px] text-muted-foreground">Valor recomendado:</p> */}
+                            return (
+                              <li key={randomReactKey()} >
 
-                                        <p className="text-[11px] text-muted-foreground">Break-even:</p>
-                                        <p className="text-[12px] font-mono">{formatDecimalPlaces(minimumPriceAmountWithoutProfit)}</p>
-                                      </div>
-                                      <div className="flex flex-col text-center">
-                                        {/* <p className="text-[11px] text-muted-foreground">Valor recomendado:</p> */}
+                                <div className="flex flex-col justify-center">
+                                  <p className="text-[11px] uppercase text-center ">{record.sizeName}</p>
 
-                                        <MinimumSellPriceLabelDialog computedSellingPriceBreakdown={record.computedSellingPriceBreakdown} />
-                                        <p className="text-[12px] font-mono">{formatDecimalPlaces(minimumPriceAmountWithProfit)}</p>
-                                      </div>
-                                    </div>
-                                  </div>
-                                  <Separator className="my-2 px-4" />
-                                  <div className="flex justify-center">
-                                    <span className={
+
+
+                                  <div className="flex flex-col text-center">
+                                    <p className={
                                       cn(
-                                        "text-xs text-muted-foreground",
-                                        record.profitActualPerc > 10 && record.profitActualPerc < sellingChannel.targetMarginPerc && "text-orange-500 font-semibold",
-                                        record.profitActualPerc > 0 && record.profitActualPerc < 10 && "text-red-500 font-semibold",
-                                        record.profitActualPerc >= sellingChannel.targetMarginPerc && "text-green-500 font-semibold",
-                                        record.profitActualPerc < 0 && "text-red-500 font-semibold"
+                                        "text-[12px] font-mono",
+                                        record.priceAmount > 0 && minimumPriceAmountWithProfit > record.priceAmount && 'bg-orange-200',
+                                        record.priceAmount > 0 && minimumPriceAmountWithoutProfit > record.priceAmount && 'bg-red-400',
                                       )
-                                    }>Profitto real: {record?.profitActualPerc ?? 0}%</span>
+                                    }
+                                    >R$ {formatDecimalPlaces(record.priceAmount)}</p>
                                   </div>
+
+
+
+
+
+                                  {(record.computedSellingPriceBreakdown?.custoFichaTecnica ?? 0) === 0 && (
+                                    <div className="flex gap-2 items-center mt-2">
+                                      <AlertCircleIcon className="h-4 w-4 text-red-500" />
+                                      <span className="text-red-500 text-xs font font-semibold">Custo ficha tecnica não definido</span>
+                                    </div>
+                                  )}
                                 </div>
-
-                                {(record.computedSellingPriceBreakdown?.custoFichaTecnica ?? 0) === 0 && (
-                                  <div className="flex gap-2 items-center mt-2">
-                                    <AlertCircleIcon className="h-4 w-4 text-red-500" />
-                                    <span className="text-red-500 text-xs font font-semibold">Custo ficha tecnica não definido</span>
-                                  </div>
-                                )}
-                              </div>
-                            </li>
-                          )
-                        })}
-                      </ul>
+                              </li>
+                            )
+                          })}
+                        </ul>
+                      </AccordionTrigger>
                     </div>
-                    <AccordionContent>
 
-                      <Separator className="my-4" />
+                    <AccordionContent>
 
                       <ul className="grid grid-cols-5 gap-x-1">
                         {menuItem.sellPriceVariations.map((record) => (
@@ -229,10 +330,9 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
     </div>
   )
 
-} interface MinimumPriceLabelDialogProps {
-  computedSellingPriceBreakdown: ComputedSellingPriceBreakdown | undefined | null
-
 }
+
+
 
 function MinimumSellPriceLabelDialog({ computedSellingPriceBreakdown }: MinimumPriceLabelDialogProps
 ) {
