@@ -39,29 +39,29 @@ import { slugifyString } from "~/utils/slugify";
 
 export interface MenuItemWithAssociations extends MenuItem {
   priceVariations: MenuItemPriceVariation[];
-  categoryId: string;
   Category: Category;
   tags: {
-    all: string[]; // Todos os nomes de tags
-    public: string[]; // Somente nomes de tags públicas
-    models: Tag[]; // Objetos completos das tags
+    all: string[];
+    public: string[];
+    models: Tag[];
   };
   MenuItemLike: MenuItemLike[];
   MenuItemShare: MenuItemShare[];
   MenuItemImage: MenuItemImage | null;
   MenuItemGalleryImage: MenuItemGalleryImage[];
   MenuItemGroup: MenuItemGroup;
-  MenuItemSellingPriceVariation: MenuItemSellingPriceVariation &
-    {
+  MenuItemSellingPriceVariation: Array<
+    MenuItemSellingPriceVariation & {
       MenuItemSellingChannel: MenuItemSellingChannel;
       MenuItemSize: MenuItemSize;
-    }[];
+    }
+  >;
   likes: {
     amount: number;
   };
   shares: number;
   imageTransformedURL: string;
-  imagePlaceholderURL: string;
+  imagePlaceholderURL?: string; // Opcional se for implementado
   meta: {
     isItalyProduct: boolean;
     isBestSeller: boolean;
@@ -79,19 +79,6 @@ export interface MenuItemEntityFindAllProps {
   };
   mock?: boolean;
   sellingChannelKey?: SellingChannelKey; // Key of the selling channel to filter by
-}
-
-interface FindManyWithSellPriceVariationsProps
-  extends MenuItemEntityFindAllProps {
-  channelKey?: string;
-  sizeKey?: string;
-  includeMinimumPrice?: boolean;
-}
-
-interface FindManyWithSellPriceVariationsProps {
-  where?: any; // Substitua por tipo gerado do Prisma se possível
-  sizeKey?: string;
-  channelKey?: string;
 }
 
 interface MenuItemEntityProps extends PrismaEntityProps {

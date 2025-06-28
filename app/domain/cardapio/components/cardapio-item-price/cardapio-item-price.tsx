@@ -3,7 +3,7 @@ import { cn } from "~/lib/utils"
 import { MenuItemWithAssociations } from "../../menu-item.prisma.entity.server"
 
 interface CardapioItemPriceProps {
-    prices: MenuItemWithAssociations["priceVariations"]
+    prices: MenuItemWithAssociations["MenuItemSellingPriceVariation"]
     showValuta?: boolean
     cnLabel?: string
     cnValue?: string
