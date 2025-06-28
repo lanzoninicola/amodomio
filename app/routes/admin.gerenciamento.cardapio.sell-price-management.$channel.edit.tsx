@@ -152,80 +152,56 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
               <li key={menuItem.menuItemId}>
 
                 <Accordion type="single" collapsible className="border rounded-md px-4 py-2 mb-4">
-                  <AccordionItem value="item-1">
+                  <AccordionItem value="item-1" className="border-none">
                     <div className="flex flex-col w-full">
                       <AccordionTrigger>
-                        <h3 className="text-md font-semibold">{menuItem.name} ({sellingChannel.name})</h3>
-                      </AccordionTrigger>
-                      <ul className="grid grid-cols-5 mb-4 gap-x-2">
-                        {menuItem.sellPriceVariations.map((record) => {
 
-                          const minimumPriceAmountWithProfit = record.computedSellingPriceBreakdown?.minimumPrice?.priceAmount.withProfit ?? 0
-                          const minimumPriceAmountWithoutProfit = record.computedSellingPriceBreakdown?.minimumPrice?.priceAmount.breakEven ?? 0
 
-                          return (
-                            <li key={randomReactKey()} >
+                        <ul className="grid grid-cols-5 mb-4 gap-x-2 w-full">
+                          <li className="text-left text-md font-semibold col-span-1">{menuItem.name} ({sellingChannel.name})</li>
+                          {menuItem.sellPriceVariations.map((record) => {
 
-                              <div className="flex flex-col justify-center">
-                                <p className="text-[11px] uppercase text-center ">{record.sizeName}</p>
+                            const minimumPriceAmountWithProfit = record.computedSellingPriceBreakdown?.minimumPrice?.priceAmount.withProfit ?? 0
+                            const minimumPriceAmountWithoutProfit = record.computedSellingPriceBreakdown?.minimumPrice?.priceAmount.breakEven ?? 0
 
-                                <div className="flex flex-col gap-0">
-                                  <div className="grid grid-cols-2 gap-2 justify-center">
-                                    <div className="flex flex-col text-center">
-                                      <p className="text-[11px] text-muted-foreground">Valor de venda:</p>
-                                      <p className={
-                                        cn(
-                                          "text-[12px] font-mono",
-                                          record.priceAmount > 0 && minimumPriceAmountWithProfit > record.priceAmount && 'bg-orange-200',
-                                          record.priceAmount > 0 && minimumPriceAmountWithoutProfit > record.priceAmount && 'bg-red-400',
-                                        )
-                                      }
-                                      >{formatDecimalPlaces(record.priceAmount)}</p>
-                                    </div>
-                                    <div className="flex flex-col gap-1">
-                                      <div className="flex flex-col text-center">
-                                        {/* <p className="text-[11px] text-muted-foreground">Valor recomendado:</p> */}
+                            return (
+                              <li key={randomReactKey()} >
 
-                                        <p className="text-[11px] text-muted-foreground">Break-even:</p>
-                                        <p className="text-[12px] font-mono">{formatDecimalPlaces(minimumPriceAmountWithoutProfit)}</p>
-                                      </div>
-                                      <div className="flex flex-col text-center">
-                                        {/* <p className="text-[11px] text-muted-foreground">Valor recomendado:</p> */}
+                                <div className="flex flex-col justify-center">
+                                  <p className="text-[11px] uppercase text-center ">{record.sizeName}</p>
 
-                                        <MinimumSellPriceLabelDialog computedSellingPriceBreakdown={record.computedSellingPriceBreakdown} />
-                                        <p className="text-[12px] font-mono">{formatDecimalPlaces(minimumPriceAmountWithProfit)}</p>
-                                      </div>
-                                    </div>
-                                  </div>
-                                  <Separator className="my-2 px-4" />
-                                  <div className="flex justify-center">
-                                    <span className={
+
+
+                                  <div className="flex flex-col text-center">
+                                    <p className={
                                       cn(
-                                        "text-xs text-muted-foreground",
-                                        record.profitActualPerc > 10 && record.profitActualPerc < sellingChannel.targetMarginPerc && "text-orange-500 font-semibold",
-                                        record.profitActualPerc > 0 && record.profitActualPerc < 10 && "text-red-500 font-semibold",
-                                        record.profitActualPerc >= sellingChannel.targetMarginPerc && "text-green-500 font-semibold",
-                                        record.profitActualPerc < 0 && "text-red-500 font-semibold"
+                                        "text-[12px] font-mono",
+                                        record.priceAmount > 0 && minimumPriceAmountWithProfit > record.priceAmount && 'bg-orange-200',
+                                        record.priceAmount > 0 && minimumPriceAmountWithoutProfit > record.priceAmount && 'bg-red-400',
                                       )
-                                    }>Profitto real: {record?.profitActualPerc ?? 0}%</span>
+                                    }
+                                    >R$ {formatDecimalPlaces(record.priceAmount)}</p>
                                   </div>
+
+
+
+
+
+                                  {(record.computedSellingPriceBreakdown?.custoFichaTecnica ?? 0) === 0 && (
+                                    <div className="flex gap-2 items-center mt-2">
+                                      <AlertCircleIcon className="h-4 w-4 text-red-500" />
+                                      <span className="text-red-500 text-xs font font-semibold">Custo ficha tecnica não definido</span>
+                                    </div>
+                                  )}
                                 </div>
-
-                                {(record.computedSellingPriceBreakdown?.custoFichaTecnica ?? 0) === 0 && (
-                                  <div className="flex gap-2 items-center mt-2">
-                                    <AlertCircleIcon className="h-4 w-4 text-red-500" />
-                                    <span className="text-red-500 text-xs font font-semibold">Custo ficha tecnica não definido</span>
-                                  </div>
-                                )}
-                              </div>
-                            </li>
-                          )
-                        })}
-                      </ul>
+                              </li>
+                            )
+                          })}
+                        </ul>
+                      </AccordionTrigger>
                     </div>
-                    <AccordionContent>
 
-                      <Separator className="my-4" />
+                    <AccordionContent>
 
                       <ul className="grid grid-cols-5 gap-x-1">
                         {menuItem.sellPriceVariations.map((record) => (
@@ -357,10 +333,6 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
 }
 
 
-interface MinimumPriceLabelDialogProps {
-  computedSellingPriceBreakdown: ComputedSellingPriceBreakdown | undefined | null
-
-}
 
 function MinimumSellPriceLabelDialog({ computedSellingPriceBreakdown }: MinimumPriceLabelDialogProps
 ) {
