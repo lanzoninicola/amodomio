@@ -9,52 +9,53 @@ interface CardapioItemPriceProps {
     cnValue?: string
 }
 
-export default function CardapioItemPrice({ prices = [], cnLabel, cnValue, showValuta = true }: CardapioItemPriceProps) {
+export default function CardapioItemPrice({ prices, cnLabel, cnValue, showValuta = true }: CardapioItemPriceProps) {
 
-    const visiblePrices = prices.filter(p => p.showOnCardapio === true) || []
-    const lastIndex = visiblePrices.length - 1
-    const colsNumber = visiblePrices.length
+    const lastIndex = prices.length - 1
+    const colsNumber = prices.length
 
     return (
         <div className={
             cn(
-                "grid gap-x-2",
+                "grid gap-x-6",
                 isNaN(colsNumber) ? "grid-cols-3" : `grid-cols-${colsNumber}`
             )
         }>
             {
-                visiblePrices.map((p, idx) => {
+                prices.filter(p => p.showOnCardapio === true)
+                    .sort((a, b) => a.MenuItemSize.sortOrderIndex - b.MenuItemSize.sortOrderIndex)
+                    .map((p, idx) => {
 
-                    return (
+                        return (
 
-                        <div key={p.id} className={
-                            cn(
-                                "flex items-center gap-2",
-                                lastIndex === idx && "order-last"
-
-                            )
-
-                        }>
-                            <span className={
+                            <div key={p.id} className={
                                 cn(
-                                    "uppercase text-[12px] text-muted-foreground",
-                                    cnLabel
+                                    "flex items-center gap-2",
+                                    lastIndex === idx && "order-last"
+
                                 )
-                            }>{p?.label}</span>
-                            <div className={
-                                cn(
-                                    "flex items-center gap-[2px] text-muted-foreground",
-                                    cnValue
-                                )
+
                             }>
-                                {showValuta && <span className="text-[12px]">R$</span>}
-                                <span className="text-[13px]">{p?.amount}</span>
+                                <span className={
+                                    cn(
+                                        "uppercase text-[12px] text-muted-foreground leading-[1.1]",
+                                        cnLabel
+                                    )
+                                }>{p?.MenuItemSize?.name}</span>
+                                <div className={
+                                    cn(
+                                        "flex items-center gap-[2px] text-muted-foreground",
+                                        cnValue
+                                    )
+                                }>
+                                    {showValuta && <span className="text-[12px]">R$</span>}
+                                    <span className="text-[13px]">{p?.priceAmount}</span>
+                                </div>
                             </div>
-                        </div>
-                    )
+                        )
 
 
-                })
+                    })
             }
 
         </div>

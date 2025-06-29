@@ -12,6 +12,7 @@ import { cn } from "~/lib/utils";
 export default function CardapioItemActionBar({ item }: { item: MenuItemWithAssociations }) {
     const [likeIt, setLikeIt] = useState(false)
     const [likesAmount, setLikesAmount] = useState(item.likes?.amount || 0)
+    const [sharesAmount, setSharesAmount] = useState(item.shares?.amount || 0)
 
     const fetcher = useFetcher();
 
@@ -65,16 +66,19 @@ export default function CardapioItemActionBar({ item }: { item: MenuItemWithAsso
                     phoneNumber="46991272525"
                     ariaLabel="Envia uma mensagem com WhatsApp"
                     message={"Olá, gostaria fazer um pedido"}
-                    className="flex flex-col gap-1 items-center cursor-pointer p-2 active:bg-black/50"
+                    className="flex flex-col gap-1 items-center cursor-pointer p-1 active:bg-black/50"
                 >
                     <WhatsAppIcon color="white" />
                 </WhatsappExternalLink>
-                <div className="flex flex-col gap-4 items-center">
+                <div className="flex flex-col gap-2 items-center">
 
-                    <div className="flex flex-col gap-1 cursor-pointer p-2 active:bg-black/50 " onClick={shareIt}>
+                    <div className="flex flex-col gap-1 cursor-pointer p-1 active:bg-black/50 " onClick={shareIt}>
                         <Share2 color="white" />
+                        <span className="text-lg text-center font-neue tracking-widest font-semibold uppercase text-white">
+                            {sharesAmount > 0 && `${sharesAmount}`}
+                        </span>
                     </div>
-                    <div className="flex flex-col gap-1 cursor-pointer p-2 active:bg-black/50" onClick={likingIt}>
+                    <div className="flex flex-col items-center gap-1 cursor-pointer p-1 active:bg-black/50" onClick={likingIt}>
                         <Heart
                             className={cn(
                                 "stroke-white",

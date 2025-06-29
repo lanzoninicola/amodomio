@@ -5,7 +5,7 @@ import {
   menuItemSizePrismaEntity,
 } from "./menu-item-size.entity.server";
 import { MenuItemWithCostVariations, Warning } from "./menu-item.types";
-import { MenuItemEntityFindAllProps } from "./menu-item.prisma.entity.server";
+import { MenuItemEntityFindAllParams } from "./menu-item.prisma.entity.server";
 import { MenuItemCostVariationUtility } from "./menu-item-cost-variation-utility.entity.server";
 
 interface HandleWarningsFnParams {
@@ -38,7 +38,7 @@ class MenuItemCostHandler {
   }
 
   async loadAll(
-    params: MenuItemEntityFindAllProps = {}
+    params: MenuItemEntityFindAllParams = {}
   ): Promise<MenuItemWithCostVariations[]> {
     const allMenuItems = await this.client.menuItem.findMany({
       where: params?.where,

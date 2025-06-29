@@ -82,8 +82,8 @@ export default function SingleCardapioItem() {
 
                 <h1 className=" font-urw text-2xl font-semibold ">{itemName}</h1>
                 <p className="font-neue leading-snug tracking-wider text-[15px] my-2">{itemIngredients}</p>
-                <Separator className="my-2 bg-white/20" />
-                <CardapioItemPrice prices={item?.priceVariations || []} cnLabel="text-white" cnValue="text-white" showValuta={false} />
+                <Separator className="my-6 bg-white/20" />
+                <CardapioItemPrice prices={item?.MenuItemSellingPriceVariation || []} cnLabel="text-white" cnValue="text-white" showValuta={false} />
               </div>
             </>
 
