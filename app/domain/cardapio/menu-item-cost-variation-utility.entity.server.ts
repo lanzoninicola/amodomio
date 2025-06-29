@@ -13,7 +13,7 @@ export class MenuItemCostVariationUtility {
     refCostAmount: number
   ): number {
     switch (size) {
-      case "pizza-small":
+      case "pizza-individual":
         return refCostAmount * 0.5;
       case "pizza-medium":
         return refCostAmount;
@@ -38,7 +38,7 @@ export class MenuItemCostVariationUtility {
     refCostAmount: number
   ): Record<PizzaSizeKey, number> {
     return {
-      "pizza-small": refCostAmount * 0.5,
+      "pizza-individual": refCostAmount * 0.5,
       "pizza-medium": refCostAmount,
       "pizza-big": refCostAmount * 1.25,
       "pizza-bigger": refCostAmount * 2,

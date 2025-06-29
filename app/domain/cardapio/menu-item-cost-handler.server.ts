@@ -57,7 +57,7 @@ class MenuItemCostHandler {
         case "pizza-slice":
           newSortOrderIndex = 1;
           break;
-        case "pizza-small":
+        case "pizza-individual":
           newSortOrderIndex = 2;
           break;
         case "pizza-medium":
