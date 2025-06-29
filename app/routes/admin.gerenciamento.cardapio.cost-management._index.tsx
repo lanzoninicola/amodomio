@@ -291,7 +291,7 @@ export default function AdminGerenciamentoCardapioCostManagementIndex() {
                                                             </Form>
                                                         </div>
 
-                                                        <ul className="grid grid-cols-4 gap-x-1">
+                                                        <ul className="grid grid-cols-5 gap-x-1">
                                                             {menuItem.costVariations.map((record) => (
                                                                 <section key={randomReactKey()} className="mb-8">
 

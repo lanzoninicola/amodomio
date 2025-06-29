@@ -157,7 +157,7 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
                       <AccordionTrigger>
 
 
-                        <ul className="grid grid-cols-5 mb-4 gap-x-2 w-full">
+                        <ul className="grid grid-cols-6 mb-4 gap-x-2 w-full">
                           <li className="text-left text-md font-semibold col-span-1">{menuItem.name} ({sellingChannel.name})</li>
                           {menuItem.sellPriceVariations.map((record) => {
 
@@ -187,12 +187,7 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
 
 
 
-                                  {(record.computedSellingPriceBreakdown?.custoFichaTecnica ?? 0) === 0 && (
-                                    <div className="flex gap-2 items-center mt-2">
-                                      <AlertCircleIcon className="h-4 w-4 text-red-500" />
-                                      <span className="text-red-500 text-xs font font-semibold">Custo ficha tecnica não definido</span>
-                                    </div>
-                                  )}
+
                                 </div>
                               </li>
                             )
@@ -206,7 +201,7 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
                       <ul className="grid grid-cols-5 gap-x-1">
                         {menuItem.sellPriceVariations.map((record) => (
 
-                          <section key={randomReactKey()} className="mb-8">
+                          <section key={randomReactKey()} className="mb-6">
 
                             <ul className="flex gap-6">
                               <li key={record.sizeId} className={
@@ -291,6 +286,13 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
                                         <span className="text-xs text-muted-foreground">Preço anterior: {record.previousPriceAmount}</span>
                                       </div>
                                     </div>
+
+                                    {(record.computedSellingPriceBreakdown?.custoFichaTecnica ?? 0) === 0 && (
+                                      <div className="flex gap-2 items-center mt-2">
+                                        <AlertCircleIcon className="h-4 w-4 text-red-500" />
+                                        <span className="text-red-500 text-xs font font-semibold">Custo ficha tecnica não definido</span>
+                                      </div>
+                                    )}
 
 
                                   </Form>

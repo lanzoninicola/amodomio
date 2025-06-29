@@ -15,6 +15,8 @@ export class MenuItemCostVariationUtility {
     switch (size) {
       case "pizza-individual":
         return refCostAmount * 0.5;
+      case "pizza-small":
+        return refCostAmount * 99;
       case "pizza-medium":
         return refCostAmount;
       case "pizza-big":
