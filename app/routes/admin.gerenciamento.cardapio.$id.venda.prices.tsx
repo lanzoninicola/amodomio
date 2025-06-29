@@ -109,24 +109,25 @@ export default function SingleMenuItemVendaPrice() {
 
     return (
 
-        <div className="flex flex-col">
-            <div className="flex flex-col gap-4">
-                <div className="grid grid-cols-8 items-center">
-                    <span className="text-xs uppercase tracking-wider col-span-1 font-semibold text-muted-foreground ">Sabor</span>
-                    <span className="text-sm text-right font-semibold">{item.name}</span>
-                </div>
-                <div className="grid grid-cols-8 items-center">
-                    <span className="text-xs uppercase tracking-wider col-span-1 font-semibold text-muted-foreground">Preço Base</span>
-                    <span className="text-sm text-right font-semibold">{item.basePriceAmount}</span>
-                </div>
-            </div>
-            <Separator className="my-8" />
-            <div className="flex flex-col gap-4">
-                {priceVariations.map((pv: MenuItemPriceVariation) => <MenuItemPriceVariationForm
-                    key={pv.id} price={pv} action={formAction} loggedUser={loggedUser}
-                    basePrice={currentBasePrice} />
-                )}
-            </div>
-        </div>
+        <div>refattorar</div>
+        // <div className="flex flex-col">
+        //     <div className="flex flex-col gap-4">
+        //         <div className="grid grid-cols-8 items-center">
+        //             <span className="text-xs uppercase tracking-wider col-span-1 font-semibold text-muted-foreground ">Sabor</span>
+        //             <span className="text-sm text-right font-semibold">{item.name}</span>
+        //         </div>
+        //         <div className="grid grid-cols-8 items-center">
+        //             <span className="text-xs uppercase tracking-wider col-span-1 font-semibold text-muted-foreground">Preço Base</span>
+        //             <span className="text-sm text-right font-semibold">{item.basePriceAmount}</span>
+        //         </div>
+        //     </div>
+        //     <Separator className="my-8" />
+        //     <div className="flex flex-col gap-4">
+        //         {priceVariations.map((pv: MenuItemPriceVariation) => <MenuItemPriceVariationForm
+        //             key={pv.id} price={pv} action={formAction} loggedUser={loggedUser}
+        //             basePrice={currentBasePrice} />
+        //         )}
+        //     </div>
+        // </div>
     )
 }
