@@ -305,14 +305,17 @@ const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) =>
                     )
                 }>
                     <div className="flex flex-col gap-0 mb-1">
-                        <h3 className="font-neue text-xl tracking-wider font-semibold uppercase">{item.name}</h3>
+                        <div className="flex items-center gap-2">
+                            <h3 className="font-neue text-xl tracking-wider font-semibold uppercase">{item.name}</h3>
+                            {italyProduct && <ItalyIngredientsStatement showText={false} />}
+                        </div>
                         <div className="flex flex-col gap-2">
                             {bestSeller && <AwardBadge>A mais desejada</AwardBadge>}
                             {bestMonthlySeller && <AwardBadge>Mais vendida do mes</AwardBadge>}
                         </div>
                     </div>
 
-                    {italyProduct && <ItalyIngredientsStatement />}
+
                     <p className="leading-snug text-[15px] my-2">{capitalize(item.ingredients)}</p>
                     <CardapioItemPrice prices={item?.MenuItemSellingPriceVariation} cnLabel="text-black" showValuta={false} />
                     <CardapioItemActionBar item={item} />
@@ -367,14 +370,17 @@ const CardapioItemFullImage = React.forwardRef(({ item }: CardapioItemFullImageP
                             )
                         }>
                             <div className="flex flex-col gap-0">
-                                <h3 className="font-urw text-xl">{item.name}</h3>
+                                <div className="flex items-center gap-2">
+                                    {italyProduct && <ItalyIngredientsStatement showText={false} />}
+                                    <h3 className="font-urw text-xl">{item.name}</h3>
+                                </div>
+
                                 <div className="flex flex-col gap-2">
                                     {bestSeller && <AwardBadge>A mais desejada</AwardBadge>}
                                     {bestMonthlySeller && <AwardBadge>Mais vendida do mes</AwardBadge>}
                                 </div>
                             </div>
 
-                            {italyProduct && <ItalyIngredientsStatement cnText="text-white" />}
 
                             <div className="flex flex-col gap-0 ">
                                 <p className="font-neue leading-tight text-[15px] mt-1 mb-4 tracking-wide">{capitalize(item.ingredients)}</p>

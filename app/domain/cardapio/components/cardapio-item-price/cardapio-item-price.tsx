@@ -30,7 +30,7 @@ export default function CardapioItemPrice({ prices, cnLabel, cnValue, showValuta
 
                             <div key={p.id} className={
                                 cn(
-                                    "flex items-center gap-2",
+                                    "flex flex-col items-center gap-1",
                                     lastIndex === idx && "order-last"
 
                                 )
@@ -41,10 +41,10 @@ export default function CardapioItemPrice({ prices, cnLabel, cnValue, showValuta
                                         "uppercase text-[12px] text-muted-foreground leading-[1.1]",
                                         cnLabel
                                     )
-                                }>{p?.MenuItemSize?.name}</span>
+                                }>{p?.MenuItemSize?.shortDescription}</span>
                                 <div className={
                                     cn(
-                                        "flex items-center gap-[2px] text-muted-foreground",
+                                        "flex items-end gap-[2px] text-muted-foreground",
                                         cnValue
                                     )
                                 }>
