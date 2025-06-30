@@ -148,11 +148,16 @@ export default function CardapioWebIndex() {
                         const featuredImagesUrls = items.map(i => i.MenuItemGalleryImage.filter(img => img.isPrimary)[0])
                             .slice(0, 10).map(i => i?.secureUrl || "")
 
+                        const imageUrls = Array.from({ length: 7 }, (_, i) => `/images/criacoes-inverno/criacoes-inverno-0${i + 1}.png`);
+
+
 
                         return (
                             <section className="flex flex-col gap-4 mx-2 md:grid md:grid-cols-2">
 
-                                <SwiperCarousel slides={featuredImagesUrls || []} />
+                                <SwiperCarousel slides={imageUrls || []} />
+
+                                <Separator className="my-4" />
 
 
                                 {/** @ts-ignore */}
