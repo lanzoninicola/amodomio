@@ -33,7 +33,8 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
     )
   }
 
-  const PriceInfo = ({ priceAmount, breakEvenAmount, profitPerc, sizeName }: { priceAmount: number, breakEvenAmount: number, profitPerc: number, sizeName: Size["name"] }) => {
+  const PriceInfo = ({ priceAmount, breakEvenAmount, profitPerc, sizeName, cnContainer }:
+    { priceAmount: number, breakEvenAmount: number, profitPerc: number, sizeName: Size["name"], cnContainer: string }) => {
 
     const OtherChars = ({ children, ...props }: { children: React.ReactNode }) => {
       return (
@@ -42,7 +43,7 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
     }
 
     return (
-      <div className="flex flex-col w-full" >
+      <div className={cn("flex flex-col w-full", cnContainer)} >
         <span className="uppercase text-center md:hidden text-[11px] font-semibold">{sizeName}</span>
         <div className="flex flex-row gap-1 items-center md:grid md:grid-cols-2 md:gap-x-2">
           <p className="text-sm font-mono text-center md:text-right ">{formatDecimalPlaces(priceAmount)}</p>
@@ -60,49 +61,59 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
 
   return (
     <div className="md:h-[500px] overflow-y-scroll">
-      <ul className="hidden md:grid md:grid-cols-5 md:mb-4 md:gap-x-2">
+      <ul className="hidden md:grid md:grid-cols-6 md:mb-4 md:gap-x-2">
         <li className="text-[11px] uppercase flex items-center">Sabor</li>
-        {sizes.map(s => (
-          <li key={s.id} className="flex flex-col items-center gap-[2px] text-[11px] uppercase">
-            <span>{s.name}</span>
+        {sizes.map((s, i) => (
+          <li key={s.id} className={cn("flex flex-col items-center gap-[2px] text-[11px] uppercase",
+            i % 2 === 0 && "border-x"
+          )}>
+            <span className="font-semibold">{s.name}</span>
             <span className="text-muted-foreground">R$ VV (BE - PR)</span>
           </li>
         ))}
       </ul>
+      <Separator className="my-1" />
+      <Separator className="mb-6" />
       <ul className="flex flex-col gap-2">
         {items.map((menuItem: MenuItemWithSellPriceVariations) => (
-          <li key={menuItem.menuItemId}>
-            <div className="flex flex-col w-full  items-center md:grid md:grid-cols-5 gap-x-4 md:items-start">
+          <li key={menuItem.menuItemId} className="px-1 py-2 hover:bg-blue-100 hover:font-semibold">
+            <div className="flex flex-col w-full  items-center md:grid md:grid-cols-6 gap-x-4 md:items-start">
               {/* Coluna 1: Nome do item */}
-              <span className="text-sm mb-2 md:mb-0">{menuItem.name}</span>
+              <span className="text-xs mb-2 md:mb-0 uppercase ">{menuItem.name}</span>
 
               {/* Colunas 2 a 5: Preço por tamanho */}
               {menuItem.sellPriceVariations.map((record, i) => {
                 const minimumPriceAmountWithoutProfit = record.computedSellingPriceBreakdown?.minimumPrice?.priceAmount.breakEven ?? 0
 
                 return (
-                  <div key={record.id ?? i} className="flex flex-col items-center text-xs mb-2 md:mb-0">
+                  <div key={record.id ?? i} className={
+                    cn(
+                      "flex flex-col items-center text-xs mb-2 md:mb-0",
+
+                    )
+                  }>
                     <PriceInfo
                       priceAmount={record.priceAmount}
                       breakEvenAmount={minimumPriceAmountWithoutProfit}
                       profitPerc={record?.profitActualPerc ?? 0}
                       sizeName={record.sizeName}
+                      cnContainer={cn(i % 2 === 0 && "border-x")}
                     />
 
-                    {(record.computedSellingPriceBreakdown?.custoFichaTecnica ?? 0) === 0 && (
+                    {/* {(record.computedSellingPriceBreakdown?.custoFichaTecnica ?? 0) === 0 && (
                       <div className="flex items-center mt-1 gap-1">
                         <AlertCircleIcon className="h-4 w-4 text-red-500" />
                         <span className="text-red-500 text-[10px] font-semibold leading-tight">
                           Custo não definido
                         </span>
                       </div>
-                    )}
+                    )} */}
                   </div>
                 )
               })}
 
             </div>
-            <Separator className="mb-3" />
+            {/* <Separator /> */}
           </li>
         ))}
       </ul>
