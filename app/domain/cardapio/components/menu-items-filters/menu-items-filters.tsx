@@ -3,19 +3,19 @@ import { useEffect, useState } from "react";
 import { Input } from "~/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 
-import { MenuItemWithSellPriceVariations } from "~/domain/cardapio/menu-item.types";
+import { MenuItemWithCostVariations, MenuItemWithSellPriceVariations } from "~/domain/cardapio/menu-item.types";
 import { cn } from "~/lib/utils";
-import { MenuItemVisibilityFilterOption } from "./admin.gerenciamento.cardapio.main.list";
 import { Category } from "~/domain/category/category.model.server";
 import { jsonParse } from "~/utils/json-helper";
+import { MenuItemVisibilityFilterOption } from "~/routes/admin.gerenciamento.cardapio.main.list";
 
 
 interface MenuItemsFiltersProps {
-  initialItems: MenuItemWithSellPriceVariations[];
+  initialItems: MenuItemWithSellPriceVariations[] | MenuItemWithCostVariations[];
   groups: MenuItemGroup[];
   categories: Category[];
   cnContainer?: string
-  onItemsChange: (filteredItems: MenuItemWithSellPriceVariations[]) => void;
+  onItemsChange: (filteredItems: MenuItemWithSellPriceVariations[] | MenuItemWithCostVariations[]) => void;
 }
 
 export function MenuItemsFilters({
