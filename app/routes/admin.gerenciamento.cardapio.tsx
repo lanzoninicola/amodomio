@@ -1,6 +1,6 @@
 import { MenuItemTag } from "@prisma/client";
 import { Link, Outlet, MetaFunction, useLocation } from "@remix-run/react";
-import { CircleArrowOutUpRight, Printer, SquarePlus } from "lucide-react";
+import { ChevronRight, CircleArrowOutUpRight, Printer, SquarePlus } from "lucide-react";
 import Container from "~/components/layout/container/container";
 import { Separator } from "~/components/ui/separator";
 import MenuItemNavLink from "~/domain/cardapio/components/menu-item-nav-link/menu-item-nav-link";
@@ -91,64 +91,24 @@ export default function AdminCardapioOutlet() {
 
 
 
-        <Container className="mb-24">
+        <Container className="mb-24" fullWidth={true} >
             <div className={
                 cn(
-                    "flex flex-col",
+                    "flex flex-col mb-4",
                     isExportPage && "hidden",
                 )
             }>
 
-                <div className="w-full p-6 bg-muted mb-8 rounded-lg" >
-                    <div className="flex justify-between mb-4 items-center">
-                        <h1 className="font-bold text-xl mb-1">Cardapio</h1>
-
-                        <Link to="/admin/gerenciamento/cardapio/main" >
-                            <span className="text-[12px] underline uppercase tracking-wider">Voltar para a lista</span>
-                        </Link>
+                <div className="flex justify-between items-center">
+                    <div className="flex items-center">
+                        <ChevronRight size={14} />
+                        <h1 className="font-semibold text-sm text-muted-foreground">Gerenciamento Cardápio</h1>
                     </div>
-                    <Separator className="my-1" />
-                    <div className="flex gap-2 md:grid md:grid-cols-12">
-                        <Link to="new"
-                            className="flex flex-col gap-1 items-center hover:bg-muted-foreground p-1 rounded-md">
-                            <SquarePlus size={16} />
-                            <span className="text-[11px] font-semibold leading-[1.15] text-center">Novo item</span>
-                        </Link>
 
-                        <Link to="/admin/gerenciamento/cardapio/export-wall"
-                            className="flex flex-col gap-1 items-center hover:bg-muted-foreground p-1 rounded-md">
-                            <Printer size={16} />
-                            <span className="text-[11px] font-semibold leading-[1.15] text-center">Imprimir</span>
-                        </Link>
-                        <Link to="/admin/gerenciamento/cardapio/export"
-                            className="flex flex-col gap-1 items-center hover:bg-muted-foreground p-1 rounded-md">
-                            <CircleArrowOutUpRight size={16} />
-                            <span className="text-[11px] font-semibold leading-[1.15] text-center">Exportar</span>
-                        </Link>
-                    </div>
-                    <Separator className="my-1" />
+                    <Link to="/admin/gerenciamento/cardapio/main/list" >
+                        <span className="text-[12px] underline uppercase tracking-wider">Voltar para a lista</span>
+                    </Link>
                 </div>
-
-                <div className="flex flex-col gap-6 mb-4">
-                    {/** @ts-ignore */}
-                    {/* <CardapioAdminStats listGroupedByCategory={listGroupedByCategory} /> */}
-
-                    <div className="flex gap-4 items-center">
-                        <MenuItemNavLink to={"main"} isActive={activeTab === "main"}>
-                            <span>Itens</span>
-                        </MenuItemNavLink>
-                        <MenuItemNavLink to={"cost-management"} isActive={activeTab === "cost-management"}>
-                            Gerenciamento custos
-                        </MenuItemNavLink>
-
-                        <MenuItemNavLink to={"sell-price-management"} isActive={activeTab === "sell-price-management"}>
-                            Gerenciamento preço de venda
-                        </MenuItemNavLink>
-
-                    </div>
-                </div>
-
-                <Separator className="mb-4" />
 
             </div>
 

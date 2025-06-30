@@ -42,7 +42,7 @@ export default function CardapioItemDialog({ item, children, triggerComponent }:
                     </div>
                     <div className="p-4">
                         <div className="flex flex-col gap-0 mb-2">
-                            <h3 className="font-body-website text-2xl tracking-wider font-semibold uppercase">{item.name}</h3>
+                            <h3 className="font-neue text-2xl tracking-wider font-semibold uppercase">{item.name}</h3>
                             <div className="flex flex-col gap-2">
                                 {bestSeller && <AwardBadge>A mais desejada</AwardBadge>}
                                 {bestMonthlySeller && <AwardBadge>Mais vendida do mes</AwardBadge>}
@@ -54,7 +54,7 @@ export default function CardapioItemDialog({ item, children, triggerComponent }:
 
                         <p className="leading-snug text-[15px] mb-6">{capitalize(item.ingredients)}</p>
 
-                        <CardapioItemPrice prices={item?.priceVariations} cnLabel="text-black items-start" showValuta={false} />
+                        <CardapioItemPrice prices={item?.MenuItemSellingPriceVariation} cnLabel="text-black items-start" showValuta={false} />
                     </div>
                     {children}
                     <DialogClose asChild>

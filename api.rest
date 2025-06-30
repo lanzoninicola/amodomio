@@ -12,3 +12,11 @@ Content-type: application/json
     "value": "cucu",
     "secret": "fOD19KP7zZaloS3nMyux3qqI8ABihL3c"
 }
+
+###
+GET http://localhost:3000/api/orcamento
+x-api-key: 3PjN!u9g@r5XzE1fQw7H
+
+###
+GET https://www.amodomio.com.br/api/orcamento
+x-api-key: 3PjN!u9g@r5XzE1fQw7H

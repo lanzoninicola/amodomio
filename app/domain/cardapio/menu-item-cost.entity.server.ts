@@ -2,24 +2,17 @@ import { Prisma } from "@prisma/client";
 import prismaClient from "~/lib/prisma/client.server";
 import { PrismaEntityProps } from "~/lib/prisma/types.server";
 
-export type MenuItemPizzaSizeVariationSlug =
-  | "pizza-small"
-  | "pizza-medium"
-  | "pizza-big"
-  | "pizza-bigger";
-
+/**
+ * DO NOT USE
+ *
+ * // deprecated
+ * // This entity is deprecated and will be removed in the future.
+ * @deprecated
+ */
 class MenuItemCostPrismaEntity {
   client;
   constructor({ client }: PrismaEntityProps) {
     this.client = client;
-  }
-
-  async findSizeConfigBySlug(slug: MenuItemPizzaSizeVariationSlug) {
-    return await this.client.menuItemSize.findFirst({
-      where: {
-        slug: slug,
-      },
-    });
   }
 
   async updateSizeConfig(
@@ -59,21 +52,21 @@ class MenuItemCostPrismaEntity {
   }
 
   async findItemsCostBySize(
-    size: MenuItemPizzaSizeVariationSlug,
-    refSize: MenuItemPizzaSizeVariationSlug = "pizza-medium"
+    sizeId: string,
+    refSizeKey: string = "pizza-medium"
   ) {
     const [refCosts, sizeCosts] = await Promise.all([
       this.client.menuItemCostVariation.findMany({
-        where: { MenuItemSize: { is: { slug: refSize } } },
+        where: { MenuItemSize: { is: { id: sizeId } } },
       }),
       this.client.menuItemCostVariation.findMany({
-        where: { MenuItemSize: { is: { slug: size } } },
+        where: { MenuItemSize: { is: { key: refSizeKey } } },
       }),
     ]);
 
     // Create a map of refCosts by ID for quick lookup of suggestedRecipeCost
     const refCostsMap = new Map(
-      refCosts.map((ref) => [ref.menuItemId, ref.recipeCostAmount])
+      refCosts.map((ref) => [ref.menuItemId, ref.costAmount])
     );
 
     // Map over sizeCosts, using refCosts only for suggestedRecipeCost

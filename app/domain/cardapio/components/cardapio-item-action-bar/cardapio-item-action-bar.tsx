@@ -7,6 +7,113 @@ import WhatsappExternalLink from "~/components/primitives/whatsapp/whatsapp-exte
 import WhatsAppIcon from "~/components/primitives/whatsapp/whatsapp-icon";
 import { cn } from "~/lib/utils";
 
+
+
+export default function CardapioItemActionBar({ item }: { item: MenuItemWithAssociations }) {
+    const [likeIt, setLikeIt] = useState(false)
+    const [likesAmount, setLikesAmount] = useState(item.likes?.amount || 0)
+    const [sharesAmount, setSharesAmount] = useState(item.shares?.amount || 0)
+
+    const fetcher = useFetcher();
+
+    const likingIt = () => {
+
+        setLikeIt(true)
+        setLikesAmount(likesAmount + 1)
+
+        fetcher.submit(
+            {
+                action: "menu-item-like-it",
+                itemId: item.id,
+                likesAmount: String(1),
+            },
+            { method: 'post' }
+        );
+    };
+
+    const shareIt = () => {
+        if (!navigator?.share) {
+            console.log("Navegador não suporta o compartilhamento")
+            return
+        }
+
+        const text = `Essa pizza ${item.name} é a melhor pizza da cidade. Experimente...`
+        navigator.share({
+            title: item.name,
+            text,
+            url: `${GLOBAL_LINKS.cardapioPublic}/#${item.id}`
+        }).then(() => {
+
+            fetcher.submit(
+                {
+                    action: "menu-item-share-it",
+                    itemId: item.id,
+                },
+                { method: 'post' }
+            );
+
+        }).catch((error) => {
+        })
+    }
+
+
+
+
+    return (
+        <div className="flex flex-col gap-0 my-2 justify-end">
+            <div className="flex flex-col gap-4 justify-center font-neue">
+                <WhatsappExternalLink
+                    phoneNumber="46991272525"
+                    ariaLabel="Envia uma mensagem com WhatsApp"
+                    message={"Olá, gostaria fazer um pedido"}
+                    className="flex flex-col gap-1 items-center cursor-pointer p-1 active:bg-black/50"
+                >
+                    <WhatsAppIcon color="white" />
+                </WhatsappExternalLink>
+                <div className="flex flex-col gap-2 items-center">
+
+                    <div className="flex flex-col gap-1 cursor-pointer p-1 active:bg-black/50 " onClick={shareIt}>
+                        <Share2 color="white" />
+                        <span className="text-lg text-center font-neue tracking-widest font-semibold uppercase text-white">
+                            {sharesAmount > 0 && `${sharesAmount}`}
+                        </span>
+                    </div>
+                    <div className="flex flex-col items-center gap-1 cursor-pointer p-1 active:bg-black/50" onClick={likingIt}>
+                        <Heart
+                            className={cn(
+                                "stroke-white",
+                                likeIt ? "fill-red-500" : "fill-none",
+                                likeIt ? "stroke-red-500" : "stroke-white",
+                                item.likes?.amount && item.likes?.amount > 0 ? "stroke-red-500" : "stroke-white"
+                            )}
+                        />
+                        <span className="text-lg text-center font-neue tracking-widest font-semibold uppercase text-red-500">
+                            {likesAmount > 0 && `${likesAmount}`}
+
+                        </span>
+                    </div>
+                </div>
+
+
+            </div>
+            {/* {likesAmount === 0 && (
+                <div className="flex items-center gap-1">
+                    <span className="text-sm font-neue tracking-widest font-semibold uppercase">Seja o primeiro! Curte com </span>
+                    <Heart size={14} />
+                </div>
+            )} */}
+
+            {/* <span className="text-sm font-neue tracking-widest font-semibold uppercase pl-1 text-red-500">
+                {likesAmount > 0 && `${likesAmount} curtidas`}
+
+            </span> */}
+        </div>
+    );
+}
+
+/**
+ *
+ * Barra horizontal
 export default function CardapioItemActionBar({ item }: { item: MenuItemWithAssociations }) {
     const [likeIt, setLikeIt] = useState(false)
     const [likesAmount, setLikesAmount] = useState(item.likes?.amount || 0)
@@ -58,7 +165,7 @@ export default function CardapioItemActionBar({ item }: { item: MenuItemWithAsso
 
     return (
         <div className="flex flex-col gap-0 my-2">
-            <div className="grid grid-cols-2 font-body-website">
+            <div className="grid grid-cols-2 font-neue">
                 <div className="flex items-center">
                     <div className="flex flex-col gap-1 cursor-pointer p-2 active:bg-black/50" onClick={likingIt}>
                         <Heart
@@ -85,15 +192,17 @@ export default function CardapioItemActionBar({ item }: { item: MenuItemWithAsso
             </div>
             {likesAmount === 0 && (
                 <div className="flex items-center gap-1">
-                    <span className="text-sm font-body-website tracking-widest font-semibold uppercase">Seja o primeiro! Curte com </span>
+                    <span className="text-sm font-neue tracking-widest font-semibold uppercase">Seja o primeiro! Curte com </span>
                     <Heart size={14} />
                 </div>
             )}
 
-            <span className="text-sm font-body-website tracking-widest font-semibold uppercase pl-1 text-red-500">
+            <span className="text-sm font-neue tracking-widest font-semibold uppercase pl-1 text-red-500">
                 {likesAmount > 0 && `${likesAmount} curtidas`}
 
             </span>
         </div>
     );
 }
+
+ */

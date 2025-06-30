@@ -15,12 +15,11 @@ import { cn } from "~/lib/utils";
 import capitalize from "~/utils/capitalize";
 import AwardBadge from "~/components/award-badge/award-badge";
 import { Separator } from "~/components/ui/separator";
-import CardapioItemDialog from "~/domain/cardapio/components/cardapio-item-dialog/cardapio-item-dialog";
 import CardapioItemPrice from "~/domain/cardapio/components/cardapio-item-price/cardapio-item-price";
-import CardapioItemImage from "~/domain/cardapio/components/cardapio-item-image/cardapio-item-image";
-import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "~/components/ui/carousel";
-import Autoplay from "embla-carousel-autoplay"
+import { Carousel, CarouselContent, CarouselItem } from "~/components/ui/carousel";
+import Autoplay from "embla-carousel-autoplay";
 import CardapioItemImageSingle from "~/domain/cardapio/components/cardapio-item-image-single/cardapio-item-image-single";
+import { SwiperCarousel } from "~/components/swiper-carousel/swiper-carousel";
 
 
 export const headers: HeadersFunction = () => ({
@@ -50,10 +49,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
         // mock: env === "development"
     }, {
         imageTransform: true,
-        imageScaleWidth: 375
+        imageScaleWidth: 375,
     })
-
-
 
 
     const tags = tagPrismaEntity.findAll({
@@ -135,6 +132,8 @@ export async function action({ request }: LoaderFunctionArgs) {
 export default function CardapioWebIndex() {
     const { items, tags } = useLoaderData<typeof loader>()
 
+
+
     return (
 
         <section className="flex flex-col mb-24" data-element="cardapio-index">
@@ -146,14 +145,25 @@ export default function CardapioWebIndex() {
 
                     {(items) => {
 
+                        const featuredImagesUrls = items.map(i => i.MenuItemGalleryImage.filter(img => img.isPrimary)[0])
+                            .slice(0, 10).map(i => i?.secureUrl || "")
+
+                        const imageUrls = Array.from({ length: 7 }, (_, i) => `/images/criacoes-inverno/criacoes-inverno-0${i + 1}.png`);
+
+
+
                         return (
                             <section className="flex flex-col gap-4 mx-2 md:grid md:grid-cols-2">
+
+                                <SwiperCarousel slides={imageUrls || []} />
+
+                                <Separator className="my-4" />
 
 
                                 {/** @ts-ignore */}
                                 <CardapioItemListDestaque items={items} title="Sugestões do chef" tagFilter="em-destaque" />
                                 {/** @ts-ignore */}
-                                <CardapioItemListDestaque items={items} title="mais vendidos" tagFilter="mais-vendido" carouselDelay={2100} />
+                                <CardapioItemListDestaque items={items} title="Mais vendidos" tagFilter="mais-vendido" carouselDelay={2100} />
 
                             </section>
                         )
@@ -269,8 +279,8 @@ const CardapioItemList = ({ allItems }: { allItems: MenuItemWithAssociations[] }
                     {items.map((item, index) => {
                         const isLastItem = items.length === index + 1;
                         return (
-                            <Link to={`/cardapio/${item.id}`} key={item.id} className="w-full">
-                                <CardapioItem
+                            <Link to={`/cardapio/${item.slug}`} key={item.id} className="w-full">
+                                <CardapioItemFullImage
                                     ref={isLastItem ? lastItemRef : null}
                                     key={item.id}
                                     item={item}
@@ -307,22 +317,32 @@ const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) =>
                     )
                 }>
                     <div className="flex flex-col gap-0 mb-1">
-                        <h3 className="font-body-website text-xl tracking-wider font-semibold uppercase">{item.name}</h3>
+                        <div className="flex items-center gap-2">
+                            <h3 className="font-neue text-xl tracking-wider font-semibold uppercase">{item.name}</h3>
+                            {italyProduct && <ItalyIngredientsStatement showText={false} />}
+                        </div>
                         <div className="flex flex-col gap-2">
                             {bestSeller && <AwardBadge>A mais desejada</AwardBadge>}
                             {bestMonthlySeller && <AwardBadge>Mais vendida do mes</AwardBadge>}
                         </div>
                     </div>
 
-                    {italyProduct && <ItalyIngredientsStatement />}
+
                     <p className="leading-snug text-[15px] my-2">{capitalize(item.ingredients)}</p>
-                    <CardapioItemPrice prices={item?.priceVariations} cnLabel="text-black" showValuta={false} />
+                    <CardapioItemPrice prices={item?.MenuItemSellingPriceVariation} cnLabel="text-black" showValuta={false} />
                     <CardapioItemActionBar item={item} />
                 </div>
-                <CardapioItemImage imageURL={item.imageTransformedURL}
+                {/* <CardapioItemImage imageURL={item.imageTransformedURL}
                     cnClassName="col-span-3 h-[120px] rounded-lg overflow-hidden"
                     placeholderImage={true}
                     cnImage={"bg-left"}
+                /> */}
+                <CardapioItemImageSingle
+                    src={item.imageTransformedURL || ""}
+                    placeholder={item.imagePlaceholderURL || ""}
+                    placeholderIcon={true}
+                    enableOverlay={false}
+                    cnContainer="col-span-3 h-[120px] rounded-lg overflow-hidden"
                 />
 
             </div>
@@ -333,6 +353,63 @@ const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) =>
     )
 })
 
+interface CardapioItemFullImageProps {
+    item: MenuItemWithAssociations;
+}
+
+const CardapioItemFullImage = React.forwardRef(({ item }: CardapioItemFullImageProps, ref: any) => {
+    const italyProduct = item.tags?.public.some(t => t.toLocaleLowerCase() === "produtos-italianos")
+    const bestMonthlySeller = item.tags?.all.some(t => t.toLocaleLowerCase() === "mais-vendido-mes")
+    const bestSeller = item.tags?.all.some(t => t.toLocaleLowerCase() === "mais-vendido")
+
+    const featuredImage = item.MenuItemGalleryImage.filter(img => img.isPrimary)[0];
+
+    return (
+        <li className="snap-start border-b py-[0.15rem]" id={item.id} ref={ref}>
+            <div className="relative h-[350px]">
+                <CardapioItemImageSingle
+                    src={featuredImage?.secureUrl || ""}
+                    placeholder={item.imagePlaceholderURL || ""}
+                    placeholderIcon={false}
+
+                    cnContainer="w-full h-full"
+                />
+                <div className="absolute inset-0" >
+                    <div className="grid grid-cols-8 h-full">
+                        <div className={
+                            cn(
+                                "flex flex-col mb-2 px-4 text-white col-span-7 justify-end",
+                            )
+                        }>
+                            <div className="flex flex-col gap-0">
+                                <div className="flex items-center gap-2">
+                                    {italyProduct && <ItalyIngredientsStatement showText={false} />}
+                                    <h3 className="font-urw text-xl">{item.name}</h3>
+                                </div>
+
+                                <div className="flex flex-col gap-2">
+                                    {bestSeller && <AwardBadge>A mais desejada</AwardBadge>}
+                                    {bestMonthlySeller && <AwardBadge>Mais vendida do mes</AwardBadge>}
+                                </div>
+                            </div>
+
+
+                            <div className="flex flex-col gap-0 ">
+                                <p className="font-neue leading-tight text-[15px] mt-1 mb-4 tracking-wide">{capitalize(item.ingredients)}</p>
+                                <CardapioItemPrice prices={item?.MenuItemSellingPriceVariation} cnLabel="text-white" cnValue="text-white font-semibold" showValuta={false} />
+                            </div>
+
+                        </div>
+                        <CardapioItemActionBar item={item} />
+                    </div>
+
+                </div>
+            </div>
+
+        </li>
+
+    )
+})
 
 
 
@@ -349,7 +426,7 @@ function CardapioItemListDestaque({ title, items, tagFilter, carouselDelay = 200
 
     return (
         <div className="rounded-md p-2">
-            <h3 className="font-semibold text-2xl uppercase mb-4 font-body-website tracking-wider">{title}</h3>
+            <h3 className="font-medium text-xl tracking-tight mb-2 font-neue">{title}</h3>
             {/* <Carousel>
                 <CarouselContent className="-ml-2 md:-ml-4">
                     <CarouselItem className="pl-2 md:pl-4">...</CarouselItem>
@@ -368,31 +445,35 @@ function CardapioItemListDestaque({ title, items, tagFilter, carouselDelay = 200
 
                     {
                         // @ts-ignore
-                        items.filter(i => i.tags?.all.some(t => t === tagFilter)).slice(0, 4).map(i => (
+                        items.filter(i => i.tags?.all.some(t => t === tagFilter)).slice(0, 4).map((i: MenuItemWithAssociations) => {
 
-                            <CarouselItem key={i.id} className="basis-1/2 md:basis-1/3" data-element="carousel-item">
-                                <Link to={`/cardapio/${i.id}`} className="w-full">
+                            const featuredImage = i.MenuItemGalleryImage.filter(img => img.isPrimary)[0];
 
-                                    <div className="relative grid place-items-center rounded-md bg-slate-50 h-[112px]">
-                                        <CardapioItemImageSingle
-                                            src={i.imageTransformedURL || ""}
-                                            placeholder={i.imagePlaceholderURL || ""}
+                            return (
+                                <CarouselItem key={i.id} className="basis-1/2 md:basis-1/3" data-element="carousel-item">
+                                    <Link to={`/cardapio/${i.slug}`} className="w-full">
 
-                                            placeholderIcon={true}
+                                        <div className="relative grid place-items-center rounded-md bg-slate-50 h-[112px]">
+                                            <CardapioItemImageSingle
+                                                src={featuredImage?.secureUrl || ""}
+                                                placeholder={i.imagePlaceholderURL || ""}
 
-                                            // placeholderText="Imagem não disponível"
-                                            cnContainer="h-full w-full rounded-md"
-                                        />
+                                                placeholderIcon={true}
 
-                                        <div className="absolute bottom-2 w-full">
-                                            <p className=" ml-3 font-body-website font-semibold tracking-widest uppercase text-white">{i.name}</p>
+                                                // placeholderText="Imagem não disponível"
+                                                cnContainer="h-full w-full rounded-md"
+                                            />
+
+                                            <div className="absolute bottom-2 w-full">
+                                                <p className=" ml-3 font-urw text-sm text-white">{i.name}</p>
+                                            </div>
+
                                         </div>
+                                    </Link>
+                                </CarouselItem>
+                            )
 
-                                    </div>
-                                </Link>
-                            </CarouselItem>
-
-                        ))}
+                        })}
                 </CarouselContent>
             </Carousel>
         </div>

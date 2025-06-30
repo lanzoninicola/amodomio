@@ -1,9 +1,13 @@
 import { json } from "@remix-run/node";
 
-type LoaderOrActionReturnType = Record<string, any> | string | undefined;
+type LoaderOrActionReturnData = Record<string, any> | string | undefined;
 
 interface HttpResponseOptions {
   throwIt?: boolean;
+  cors?: boolean;
+  corsOrigin?: string;
+  corsAllowHeaders?: string[];
+  corsAllowMethods?: string[];
 }
 
 export interface HttpResponse {
@@ -14,150 +18,154 @@ export interface HttpResponse {
 }
 
 export function notFound(
-  loaderOrActionReturnData?: LoaderOrActionReturnType,
-  options = { throwIt: false }
-): HttpResponse {
+  data?: LoaderOrActionReturnData,
+  options?: HttpResponseOptions
+) {
   const response = formatResponse(
     { status: 404, fallbackMessage: "Não encontrado" },
-    loaderOrActionReturnData
+    data
   );
-
   return doResponse(response, options);
 }
 
 export function badRequest(
-  loaderOrActionReturnData?: LoaderOrActionReturnType,
-  options = { throwIt: false }
-): HttpResponse | void {
+  data?: LoaderOrActionReturnData,
+  options?: HttpResponseOptions
+) {
   const response = formatResponse(
     { status: 400, fallbackMessage: "Requisição inválida" },
-    loaderOrActionReturnData
+    data
   );
-
   return doResponse(response, options);
 }
 
 export function unauthorized(
-  loaderOrActionReturnData?: LoaderOrActionReturnType,
-  options = { throwIt: false }
+  data?: LoaderOrActionReturnData,
+  options?: HttpResponseOptions
 ) {
   const response = formatResponse(
     { status: 401, fallbackMessage: "Não autorizado" },
-    loaderOrActionReturnData
+    data
   );
-
   return doResponse(response, options);
 }
 
 export function forbidden(
-  loaderOrActionReturnData?: LoaderOrActionReturnType,
-  options = { throwIt: false }
+  data?: LoaderOrActionReturnData,
+  options?: HttpResponseOptions
 ) {
   const response = formatResponse(
-    { status: 403, fallbackMessage: "Requisição inválida" },
-    loaderOrActionReturnData
+    { status: 403, fallbackMessage: "Proibido" },
+    data
   );
-
   return doResponse(response, options);
 }
 
-export function serverError(error: Error | any, options = { throwIt: false }) {
-  if (error instanceof Error) {
-    const response = formatResponse(
-      { status: 500, fallbackMessage: "Erro interno do servidor" },
-      {
-        message: error.message,
-        payload: error.stack,
-      }
-    );
-
-    return doResponse(response, options);
-  }
-
+export function serverError(error: Error | any, options?: HttpResponseOptions) {
   const response = formatResponse(
     { status: 500, fallbackMessage: "Erro interno do servidor" },
-    { message: error }
+    error instanceof Error
+      ? { message: error.message, payload: error.stack }
+      : { message: error }
   );
 
   return doResponse(response, options);
 }
 
-export function ok(loaderOrActionReturnData?: LoaderOrActionReturnType) {
-  const response = formatResponse(
-    { status: 200, fallbackMessage: "Ok" },
-    loaderOrActionReturnData
-  );
-
-  return doResponse(response);
+/**
+ *
+ * @param data
+ * @param options
+ * @returns
+ *
+ * return ok({ message: "Dados públicos" }, {
+  cors: true,
+  corsOrigin: "chrome-extension://iijdfmmdkbindnkfhankpnjhjnppkmad",
+  corsAllowHeaders: ["Content-Type", "x-api-key", "Authorization"],
+  corsAllowMethods: ["GET", "OPTIONS"]
+});
+ */
+export function ok(
+  data?: LoaderOrActionReturnData,
+  options?: HttpResponseOptions
+) {
+  const response = formatResponse({ status: 200, fallbackMessage: "Ok" }, data);
+  return doResponse(response, options);
 }
 
-export function created(loaderOrActionReturnData?: LoaderOrActionReturnType) {
+export function created(
+  data?: LoaderOrActionReturnData,
+  options?: HttpResponseOptions
+) {
   const response = formatResponse(
     { status: 201, fallbackMessage: "Recurso criado" },
-    loaderOrActionReturnData
+    data
   );
-
-  return doResponse(response);
+  return doResponse(response, options);
 }
 
-export function noContent(loaderOrActionReturnData?: LoaderOrActionReturnType) {
+export function noContent(
+  data?: LoaderOrActionReturnData,
+  options?: HttpResponseOptions
+) {
   const response = formatResponse(
     { status: 204, fallbackMessage: "Nenhum conteúdo" },
-    loaderOrActionReturnData
+    data
   );
-
-  return doResponse(response);
+  return doResponse(response, options);
 }
 
-function doResponse(
-  response: HttpResponse,
-  options: HttpResponseOptions = {
-    throwIt: false,
-  }
-) {
+function doResponse(response: HttpResponse, options: HttpResponseOptions = {}) {
   if (options.throwIt) {
     throw new Error(response.message);
   }
 
+  const headers = new Headers();
+
+  if (options.cors) {
+    headers.set("Access-Control-Allow-Origin", options.corsOrigin ?? "*");
+    headers.set(
+      "Access-Control-Allow-Headers",
+      (options.corsAllowHeaders ?? ["Content-Type", "x-api-key"]).join(",")
+    );
+    headers.set(
+      "Access-Control-Allow-Methods",
+      (options.corsAllowMethods ?? ["GET", "POST", "OPTIONS"]).join(",")
+    );
+  }
+
   return json(response, {
     status: response.status,
+    headers,
   });
 }
 
 function formatResponse(
   defaultResponse: { status: number; fallbackMessage: string },
-  loaderOrActionReturnData: LoaderOrActionReturnType
+  data: LoaderOrActionReturnData
 ): HttpResponse {
-  // the loader or action returned a string (no payload in the response only a message)
-  if (typeof loaderOrActionReturnData === "string") {
+  if (typeof data === "string") {
     return {
       status: defaultResponse.status,
-      message: loaderOrActionReturnData,
+      message: data,
     };
   }
 
-  // the loader or action returned an object with a message and a payload
   const response: HttpResponse = {
     status: defaultResponse.status,
     message: defaultResponse.fallbackMessage,
   };
 
-  if (loaderOrActionReturnData?.message) {
-    response.message = loaderOrActionReturnData.message;
+  if (data?.message) {
+    response.message = data.message;
   }
 
-  if (loaderOrActionReturnData?.payload) {
-    response.payload = loaderOrActionReturnData.payload;
+  if (data?.payload !== undefined) {
+    response.payload = data.payload;
+  } else if (typeof data === "object") {
+    response.payload = { ...data };
+    if (data?.message) delete response.payload.message;
   }
 
-  if (loaderOrActionReturnData?.payload === undefined) {
-    response.payload = loaderOrActionReturnData;
-
-    if (loaderOrActionReturnData?.message) {
-      delete response.payload.message;
-    }
-  }
-
-  // return json(response, { status: response.status });
   return response;
 }

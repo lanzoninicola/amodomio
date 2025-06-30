@@ -124,7 +124,7 @@ export default function CardapioWebIndex() {
             <div className="flex h-full w-full items-center justify-center p-8">
                 <div className="flex flex-col gap-6 justify-center items-center">
                     <img src="/images/empty-cardapio.webp" className="mx-auto w-[136px]" alt="Nenhum item encontrado" />
-                    <h1 className="font-body-website text-sm md:text-lg font-semibold text-muted-foreground">Nenhum item encontrado</h1>
+                    <h1 className="font-neue text-sm md:text-lg font-semibold text-muted-foreground">Nenhum item encontrado</h1>
                 </div>
             </div>
         );
@@ -159,8 +159,8 @@ const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) =>
             </div>
         </div>
         <div className="flex flex-col px-4 mb-2">
-            <h3 className="font-body-website text-sm font-semibold uppercase mb-2">{item.name}</h3>
-            <p className="font-body-website leading-tight">{item.ingredients}</p>
+            <h3 className="font-neue text-sm font-semibold uppercase mb-2">{item.name}</h3>
+            <p className="font-neue leading-tight">{item.ingredients}</p>
         </div>
         <CardapioItemActionBar item={item} />
         <Separator className="my-4" />
@@ -232,9 +232,9 @@ function CardapioItemPrice({ prices }: CardapioItemPriceProps) {
                     return (
 
                         <div key={p.id} className="flex flex-col items-center text-white ">
-                            <span className="font-body-website uppercase text-[14px]">{p?.label}</span>
+                            <span className="font-neue uppercase text-[14px]">{p?.label}</span>
                             <Separator orientation="horizontal" className="my-1" />
-                            <div className="flex items-start gap-[2px] font-body-website font-semibold">
+                            <div className="flex items-start gap-[2px] font-neue font-semibold">
                                 <span className="text-[13px]">R$</span>
                                 <span className="text-[15px]">{p?.amount}</span>
                             </div>
@@ -300,7 +300,7 @@ function CardapioItemActionBar({ item }: { item: MenuItemWithAssociations }) {
 
     return (
         <div className="flex flex-col gap-0">
-            <div className="grid grid-cols-2 font-body-website px-4 mb-1">
+            <div className="grid grid-cols-2 font-neue px-4 mb-1">
                 <div className="flex items-center">
                     <div className="flex flex-col gap-1 cursor-pointer p-2 active:bg-brand-blue/50" onClick={likingIt}>
                         <Heart
@@ -327,12 +327,12 @@ function CardapioItemActionBar({ item }: { item: MenuItemWithAssociations }) {
             </div>
             {likesAmount === 0 && (
                 <div className="flex items-center gap-1">
-                    <span className="text-sm font-body-website tracking-tight pl-4">Seja o primeiro! Curte com </span>
+                    <span className="text-sm font-neue tracking-tight pl-4">Seja o primeiro! Curte com </span>
                     <Heart size={14} />
                 </div>
             )}
 
-            <span className="text-xs font-semibold font-body-website tracking-tight px-4 text-red-500">
+            <span className="text-xs font-semibold font-neue tracking-tight px-4 text-red-500">
                 {likesAmount > 0 && `${likesAmount} curtidas`}
 
             </span>

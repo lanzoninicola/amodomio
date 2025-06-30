@@ -12,6 +12,9 @@ import MenuItemPriceVariationUtility from "../../menu-item-price-variations-util
 import randomReactKey from "~/utils/random-react-key"
 import { cn } from "~/lib/utils"
 import useFormSubmissionnState from "~/hooks/useFormSubmissionState"
+import MenuItemSwitchVisibilitySubmit from "../menu-item-switch-visibility/menu-item-switch-visibility-submit"
+import MenuItemSwitchActivationSubmit from "../menu-item-switch-activation.tsx/menu-item-switch-activation-submit"
+import MenuItemSwitchUpcomingSubmit from "../menu-item-switch-upcoming/menu-item-switch-upcoming-submit"
 
 
 interface MenuItemCardProps {
@@ -30,17 +33,7 @@ export default function MenuItemCard({ item, dragAndDrop }: MenuItemCardProps) {
     // const [searchParams, setSearchParams] = useSearchParams()
     // const action = searchParams.get("_action")
 
-    const [visible, setVisible] = useState(false)
-    const submitBtnRef = React.useRef<HTMLButtonElement>(null)
-
-    function handleVisibility() {
-
-        setVisible(!visible)
-
-        if (submitBtnRef.current) {
-            submitBtnRef.current.click()
-        }
-    }
+    const featuredImage = item?.MenuItemGalleryImage?.find(img => img.isPrimary)
 
     function copyItemId() {
         navigator.clipboard.writeText(item.id)
@@ -50,50 +43,46 @@ export default function MenuItemCard({ item, dragAndDrop }: MenuItemCardProps) {
         })
     }
 
+    function copyIngredients() {
+        navigator.clipboard.writeText(item.ingredients)
+
+        toast({
+            title: "Ingredientes copiados",
+        })
+    }
+
 
     return (
 
         <div className="p-4 rounded-md border border-gray-200 bg-white w-full">
             <div className="flex flex-col gap-2">
-                <section className="grid grid-cols-12 items-center w-full">
+                <section className="flex flex-col gap-2 md:grid md:grid-cols-12 md:items-center md:gap-0 w-full">
 
-                    <div className="w-16 h-16 bg-muted rounded-lg bg-center bg-no-repeat bg-cover col-span-1">
-                        {item?.MenuItemImage?.thumbnailUrl ?
-                            <img src={item?.MenuItemImage?.thumbnailUrl} alt={`Imagem so sabor ${item?.name}`} className="w-full h-full object-cover rounded-lg" />
+                    <div className="hidden md:block w-16 h-16 bg-muted rounded-lg bg-center bg-no-repeat bg-cover col-span-1">
+                        {featuredImage?.thumbnailUrl ?
+                            <img src={featuredImage?.thumbnailUrl} alt={`Imagem so sabor ${item?.name}`} className="w-full h-full object-cover rounded-lg" />
                             :
                             <div className="w-full h-full bg-muted rounded-lg" />
                         }
                     </div>
                     <div className="flex items-center col-span-3 gap-2">
                         <div className="flex flex-col gap-0">
-                            <h4 className="text-lg font-bold tracking-tight">
+                            <h4 className="text-lg font-bold tracking-tight leading-9 md:leading-7">
                                 {item.name}
                             </h4>
-                            <span className="text-[10px] text-muted-foreground cursor-pointer" onClick={copyItemId}>{item.id}</span>
+                            {/* <span className="text-[10px] text-muted-foreground cursor-pointer" onClick={copyItemId}>{item.id}</span> */}
+                            <span className="text-[12px] md:text-[10px] leading-tight text-muted-foreground cursor-pointer max-w-[350px]" onClick={copyIngredients}>{item.ingredients}</span>
                         </div>
                     </div>
-                    <div className="grid grid-cols-5 col-span-4 gap-x-2">
-                        <div className="flex flex-col justify-start items-center  gap-1 mr-2">
-                            <span className="text-[9px] text-muted-foreground uppercase tracking-wider">Base</span>
-                            <input type="text" name="price" defaultValue={item.basePriceAmount.toFixed(2)}
-                                className="border-none outline-none w-full text-[0.75rem] text-center bg-muted rounded-sm" />
-                        </div>
-                        <PriceVariationsInCard item={item} />
-                    </div>
 
-                    <div className="mt-2 col-span-3">
-                        <Form method="post" className="flex justify-between md:justify-end gap-4 w-full items-center ">
-
-                            <span className="font-semibold text-sm">Públicar no cardápio</span>
-                            <Switch defaultChecked={item?.visible || false} onCheckedChange={handleVisibility} />
-                            <input type="hidden" name="id" value={item?.id} />
-                            <button ref={submitBtnRef} className="hidden" type="submit" value={"menu-item-visibility-change"} name="_action" />
-
-                        </Form>
+                    <div className="flex gap-4 col-span-7">
+                        <MenuItemSwitchUpcomingSubmit menuItem={item} cnLabel="leading-[1.2]" />
+                        <MenuItemSwitchVisibilitySubmit menuItem={item} />
+                        <MenuItemSwitchActivationSubmit menuItem={item} cnContainer="md:justify-start" />
                     </div>
 
                     <div className="col-span-1 flex justify-end">
-                        <Link to={`${item?.id}/main`} className="hover:bg-muted rounded-full p-1">
+                        <Link to={`/admin/gerenciamento/cardapio/${item?.id}/main`} className="hover:bg-muted rounded-full p-1">
                             <ChevronRight />
                         </Link>
                     </div>

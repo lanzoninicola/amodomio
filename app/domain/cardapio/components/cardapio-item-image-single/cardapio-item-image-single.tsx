@@ -11,6 +11,7 @@ type Props = {
     placeholderText?: string;
     cnPlaceholderText?: string;
     cnContainer?: string;
+    enableOverlay?: boolean;
 };
 
 export default function CardapioItemImageSingle({
@@ -22,7 +23,8 @@ export default function CardapioItemImageSingle({
     cnPlaceholderIcon,
     placeholderText,
     cnPlaceholderText,
-    cnContainer
+    cnContainer,
+    enableOverlay = true,
 }: Props) {
     const [loaded, setLoaded] = useState(false);
     const imgRef = useRef<HTMLImageElement>(null);
@@ -57,18 +59,18 @@ export default function CardapioItemImageSingle({
                     )}
                 />
             ) : (
-                <div className="absolute inset-0 bg-gray-700">
+                <div className="absolute inset-0 bg-gray-900" data-element="image-placeholder">
                     <div className="w-full h-full grid place-items-center">
-                        <div className="flex flex-col justify-center gap-1">
+                        <div className="flex flex-col justify-center">
                             {placeholderIcon && (
                                 <img
                                     src="/images/cardapio-web-app/pizza-placeholder-grey-sm.png"
                                     alt="Placeholder icon"
-                                    className={cn("w-[50px] mx-auto", cnPlaceholderIcon)}
+                                    className={cn("w-[50px] mx-auto mb-4", cnPlaceholderIcon)}
                                 />
                             )}
                             {placeholderText && (
-                                <p className={cn("text-white text-center", cnPlaceholderText)}>
+                                <p className={cn("text-white text-center", cnPlaceholderText)} data-element="item-image-placeholder-text">
                                     {placeholderText}
                                 </p>
                             )}
@@ -78,7 +80,9 @@ export default function CardapioItemImageSingle({
             )}
 
             {/* Overlay */}
-            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/10 to-transparent" />
+            {enableOverlay && (
+                <div className="absolute inset-0 bg-gradient-to-t from-black via-black/10 to-transparent" />
+            )}
         </div>
     );
 }

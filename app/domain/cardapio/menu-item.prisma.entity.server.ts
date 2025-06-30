@@ -1,15 +1,16 @@
 import {
   Category,
   MenuItem,
-  MenuItemCostVariation,
+  MenuItemGalleryImage,
+  MenuItemGroup,
   MenuItemImage,
   MenuItemLike,
-  MenuItemNote,
   MenuItemPriceVariation,
+  MenuItemSellingChannel,
   MenuItemSellingPriceVariation,
-  MenuItemSellingVariation,
+  MenuItemSellingPriceVariationAudit,
   MenuItemShare,
-  MenuItemTag,
+  MenuItemSize,
   Prisma,
   Tag,
 } from "@prisma/client";
@@ -18,124 +19,132 @@ import { PrismaEntityProps } from "~/lib/prisma/types.server";
 import { menuItemTagPrismaEntity } from "./menu-item-tags.prisma.entity.server";
 import MenuItemPriceVariationUtility from "./menu-item-price-variations-utility";
 import { v4 as uuidv4 } from "uuid";
-import NodeCache from "node-cache";
 import { CloudinaryUtils } from "~/lib/cloudinary";
+import {
+  MenuItemWithCostVariations,
+  MenuItemWithSellPriceVariations,
+} from "./menu-item.types";
+import { menuItemCostVariationPrismaEntity } from "./menu-item-cost-variation.entity.server";
+import { CacheManager } from "../cache/cache-manager.server";
+import {
+  PizzaSizeKey,
+  menuItemSizePrismaEntity,
+} from "./menu-item-size.entity.server";
+import { menuItemSellingPriceUtilityEntity } from "./menu-item-selling-price-utility.entity";
+import {
+  menuItemSellingChannelPrismaEntity,
+  SellingChannelKey,
+} from "./menu-item-selling-channel.entity.server";
+import { slugifyString } from "~/utils/slugify";
 
 export interface MenuItemWithAssociations extends MenuItem {
   priceVariations: MenuItemPriceVariation[];
-  costVariations: MenuItemCostVariation[];
-  categoryId: string;
   Category: Category;
   tags: {
-    all: Tag["name"][]; // Array of all tag names
-    public: Tag["name"][]; // Array of public tag names
-    models: Tag[]; // Array of full tag objects
+    all: string[];
+    public: string[];
+    models: Tag[];
   };
   MenuItemLike: MenuItemLike[];
-  MenuItemTag: MenuItemTag[];
   MenuItemShare: MenuItemShare[];
-  MenuItemImage: MenuItemImage | null; // Handle cases where image may not exist
-  MenuItemNote: MenuItemNote[];
+  MenuItemImage: MenuItemImage | null;
+  MenuItemGalleryImage: MenuItemGalleryImage[];
+  MenuItemGroup: MenuItemGroup;
+  MenuItemSellingPriceVariation: Array<
+    MenuItemSellingPriceVariation & {
+      MenuItemSellingChannel: MenuItemSellingChannel;
+      MenuItemSize: MenuItemSize;
+    }
+  >;
   likes: {
-    amount: number; // Number of likes
+    amount: number;
   };
-  shares: number; // Number of shares
-  imageTransformedURL: string; // Transformed image URL from Cloudinary
-  imagePlaceholderURL: string; // Placeholder image URL from Cloudinary
+  shares: {
+    amount: number;
+  };
+  imageTransformedURL: string;
+  imagePlaceholderURL?: string; // Opcional se for implementado
   meta: {
-    isItalyProduct: boolean; // Whether the product is marked as an Italy product
-    isBestSeller: boolean; // Whether the product is marked as a best seller
-    isMonthlySpecial: boolean; // Whether the product is marked as a monthly special
-    isMonthlyBestSeller: boolean; // Whether the product is marked as a monthly best seller
-    isChefSpecial: boolean; // Whether the product is marked as a chef special
+    isItalyProduct: boolean;
+    isBestSeller: boolean;
+    isMonthlyBestSeller: boolean;
+    isChefSpecial: boolean;
+    isMonthlySpecial: boolean;
   };
 }
 
-export interface MenuItemWithCostVariation {
-  menuItemPriceVariationId: string | null;
-  variationId: string;
-  variationKey: string;
-  variationName: string;
-  sortOrder: number | null;
-  recipeCostAmount: number;
-  createdAt: Date;
-  updatedAt: Date;
-  updatedBy: string | null;
-  group: string;
-}
-
-export interface MenuItemWithGroupedCostVariations {
-  id: string;
-  name: string;
-  ingredients: string;
-  costVariations: {
-    group: string;
-    variations: MenuItemWithCostVariation[];
-  }[];
-}
-
-export interface MenuItemWithSellPriceVariation {
-  menuItemPriceVariationId: string | null;
-  variationId: string;
-  variationKey: string;
-  variationName: string;
-  sortOrder: number;
-  amount: number;
-  discountPercentage: number;
-  showOnCardapio: boolean;
-  showOnCardapioAt: Date | null;
-  createdAt: Date;
-  updatedAt: Date;
-  updatedBy: string | null;
-  latestAmount: number;
-  group: string;
-}
-
-export interface MenuItemWithGroupedSellPriceVariations {
-  id: string;
-  name: string;
-  ingredients: string;
-  priceVariations: {
-    group: string;
-    variations: MenuItemWithSellPriceVariation[];
-  }[];
-}
-
-interface MenuItemEntityFindAllProps {
+export interface MenuItemEntityFindAllParams {
   where?: Prisma.MenuItemWhereInput;
+  mock?: boolean;
+  sellingChannelKey?: SellingChannelKey; // Key of the selling channel to filter by
   option?: {
     sorted?: boolean;
     direction?: "asc" | "desc";
   };
-  mock?: boolean;
+}
+
+export interface MenuItemEntityFindAllOptions {
+  imageTransform?: boolean;
+  imageScaleWidth?: number;
+  sorted?: boolean;
+  direction?: "asc" | "desc";
+  cacheRevalidation?: boolean;
+}
+
+interface MenuItemEntityProps extends PrismaEntityProps {
+  menuItemCostVariation: typeof menuItemCostVariationPrismaEntity;
+  menuItemSellingPriceUtility: typeof menuItemSellingPriceUtilityEntity;
+  menuItemSize: typeof menuItemSizePrismaEntity;
+  menuItemSellingChannel: typeof menuItemSellingChannelPrismaEntity;
 }
 
 export class MenuItemPrismaEntity {
   client;
   // Simple in-memory cache
-  private cache: NodeCache;
+  private cacheManager: CacheManager;
 
-  constructor({ client }: PrismaEntityProps) {
+  menuItemCostVariation: typeof menuItemCostVariationPrismaEntity;
+
+  menuItemSellingChannel: typeof menuItemSellingChannelPrismaEntity;
+
+  menuItemSize: typeof menuItemSizePrismaEntity;
+
+  constructor({
+    client,
+    menuItemCostVariation,
+
+    menuItemSize,
+    menuItemSellingChannel,
+  }: MenuItemEntityProps) {
     this.client = client;
-    this.cache = new NodeCache({ stdTTL: 60, checkperiod: 30 });
+    this.cacheManager = new CacheManager();
+
+    this.menuItemCostVariation = menuItemCostVariation;
+
+    this.menuItemSize = menuItemSize;
+    this.menuItemSellingChannel = menuItemSellingChannel;
   }
 
   async findAll(
-    params: MenuItemEntityFindAllProps = {},
-    options = {
+    params: MenuItemEntityFindAllParams = {
+      where: {},
+      mock: false,
+      sellingChannelKey: "cardapio", // Default selling channel key
+    },
+    options: MenuItemEntityFindAllOptions = {
       imageTransform: false,
       imageScaleWidth: 1280,
+      cacheRevalidation: false,
     }
   ) {
-    const cacheKey = `findAll:${JSON.stringify(params)}`;
-    let result = this.cache.get<MenuItemWithAssociations[]>(cacheKey);
+    const cacheKey = `MenuItemPrismaEntity.findAll:${JSON.stringify(params)}`;
+    let result = this.cacheManager.get<MenuItemWithAssociations[]>(cacheKey);
 
-    if (result) {
-      console.log("cache hit", cacheKey);
+    const shouldUseCache = result && options?.cacheRevalidation === false;
+
+    if (shouldUseCache) {
       return result;
     }
-
-    console.log("cache miss", cacheKey);
 
     if (params?.mock) {
       // fake to remove TS error. need to be fixed
@@ -145,7 +154,6 @@ export class MenuItemPrismaEntity {
     const recordsFounded = await this.client.menuItem.findMany({
       where: params?.where,
       include: {
-        priceVariations: true,
         Category: true,
         tags: {
           include: {
@@ -159,6 +167,22 @@ export class MenuItemPrismaEntity {
         },
         MenuItemShare: true,
         MenuItemImage: true,
+        MenuItemGalleryImage: true,
+        MenuItemGroup: true,
+        MenuItemSellingPriceVariation: {
+          where: {
+            MenuItemSellingChannel: {
+              key: params.sellingChannelKey || "cardapio", // Default to 'cardapio'
+            },
+          },
+          orderBy: {
+            priceAmount: "asc",
+          },
+          include: {
+            MenuItemSellingChannel: true,
+            MenuItemSize: true,
+          },
+        },
       },
     });
 
@@ -176,7 +200,7 @@ export class MenuItemPrismaEntity {
         models: r.tags.map((t) => t.Tag),
       },
       likes: { amount: r.MenuItemLike.length },
-      shares: r.MenuItemShare.length,
+      shares: { amount: r.MenuItemShare.length },
       meta: {
         isItalyProduct: r.tags.some(
           (t) => t.Tag?.name.toLowerCase() === "produtos-italiano"
@@ -203,14 +227,13 @@ export class MenuItemPrismaEntity {
         })
       : [...records];
 
-    this.cache.set(cacheKey, returnedRecords);
-    console.log("cache set", cacheKey);
+    this.cacheManager.set(cacheKey, returnedRecords);
 
     return returnedRecords;
   }
 
   async findAllGroupedByCategory(
-    params: MenuItemEntityFindAllProps = {},
+    params: MenuItemEntityFindAllParams = {},
     options = {
       imageTransform: false,
       imageScaleWidth: 1280,
@@ -245,117 +268,193 @@ export class MenuItemPrismaEntity {
   /**
    * Find all menu items with cost associated to each size
    */
-  async findAllWithCostVariations(
-    params: MenuItemEntityFindAllProps = {},
-    options = {
-      imageTransform: false,
-      imageScaleWidth: 1280,
-    }
-  ): Promise<MenuItemWithGroupedCostVariations[]> {
+  async findManyWithCostVariations(
+    params: MenuItemEntityFindAllParams = {}
+  ): Promise<MenuItemWithCostVariations[]> {
     const allMenuItems = await this.client.menuItem.findMany({
       where: params?.where,
       include: {
-        priceVariations: true,
+        MenuItemCostVariation: true,
       },
+      orderBy: { sortOrderIndex: "asc" },
     });
 
-    const variations = await this.client.menuItemVariation.findMany();
+    const sizes = await this.client.menuItemSize.findMany({
+      orderBy: { sortOrderIndex: "asc" },
+    });
 
+    // array of medium size cost variations for all items
     return allMenuItems.map((item) => {
-      const mapped = variations.map((v) => this.mapVariation(item, v));
-      const grouped = this.groupAndSortVariations(mapped);
+      const costVariations = sizes
+        .sort((a, b) => a.sortOrderIndex - b.sortOrderIndex)
+        .map((size) => {
+          const variation = item.MenuItemCostVariation?.find(
+            (cv) => cv.menuItemSizeId === size.id
+          );
+
+          let sizeKey: PizzaSizeKey = "pizza-medium"; // Default size key
+          sizeKey = size.key as PizzaSizeKey;
+
+          return {
+            menuItemCostVariationId: variation?.id,
+            sizeId: size.id,
+            sizeKey,
+            sizeName: size.name,
+            costAmount: variation?.costAmount ?? 0,
+            updatedBy: variation?.updatedBy,
+            updatedAt: variation?.updatedAt,
+            previousCostAmount: variation?.previousCostAmount ?? 0,
+          };
+        });
 
       return {
-        id: item.id,
+        menuItemId: item.id,
         name: item.name,
         ingredients: item.ingredients,
-        costVariations: grouped,
+        visible: item.visible,
+        active: item.active,
+        costVariations,
       };
     });
   }
 
-  async findAllWithPriceVariations(
-    params: MenuItemEntityFindAllProps = {},
-    options = {
-      imageTransform: false,
-      imageScaleWidth: 1280,
-    }
-  ): Promise<MenuItemWithGroupedSellPriceVariations[]> {
+  async findOneWithCostVariations(id: MenuItem["id"]) {
+    const result = await this.findManyWithCostVariations({
+      where: { id },
+    });
+
+    return result[0];
+  }
+
+  async findWithCostVariationsByItem(
+    menuItemId: string
+  ): Promise<MenuItemWithCostVariations | null> {
+    const costVariations = await this.findManyWithCostVariations({
+      where: { id: menuItemId },
+    });
+
+    return costVariations[0];
+  }
+
+  async findManyWithSellPriceVariations(
+    params?: MenuItemEntityFindAllParams,
+    sellingChannelKey?: string,
+    options?: { includeAuditRecords?: boolean }
+  ): Promise<MenuItemWithSellPriceVariations[]> {
     const allMenuItems = await this.client.menuItem.findMany({
       where: params?.where,
       include: {
-        priceVariations: true,
+        MenuItemSellingPriceVariation: {
+          include: {
+            MenuItemSellingChannel: true,
+            MenuItemSize: true,
+          },
+        },
+        MenuItemGroup: true,
+        Category: true,
       },
+      orderBy: { sortOrderIndex: "asc" },
     });
 
-    console.log({ allMenuItems });
-
-    const variations = await this.client.menuItemVariation.findMany();
-
-    return allMenuItems.map((item) => {
-      const mapped = variations.map((v) => this.mapVariation(item, v));
-      const grouped = this.groupAndSortVariations(mapped);
-
-      return {
-        id: item.id,
-        name: item.name,
-        ingredients: item.ingredients,
-        priceVariations: grouped,
-      };
+    const sizes = await this.client.menuItemSize.findMany({
+      orderBy: { sortOrderIndex: "asc" },
     });
-  }
 
-  mapVariation(
-    item: MenuItemWithAssociations,
-    variation: MenuItemSellingVariation
-  ): MenuItemWithSellPriceVariation {
-    const record = item.priceVariations.find(
-      (pv) => pv.menuItemVariationId === variation.id
-    );
+    // 🔎 Audits carregados somente se solicitado
+    let auditMap = new Map<string, MenuItemSellingPriceVariationAudit[]>();
 
-    const [group] = variation.key.split("@") || ["default"];
+    if (options?.includeAuditRecords) {
+      let audits: MenuItemSellingPriceVariationAudit[] = [];
 
-    return {
-      menuItemPriceVariationId: record?.id || null,
-      variationId: variation.id,
-      variationKey: variation.key,
-      variationName: variation.name,
-      sortOrder: variation.sortOrderIndex ?? 0,
-      amount: record?.amount ?? 0,
-      discountPercentage: record?.discountPercentage ?? 0,
-      showOnCardapio: record?.showOnCardapio ?? true,
-      showOnCardapioAt: record?.showOnCardapioAt ?? null,
-      createdAt: record?.createdAt ?? new Date(),
-      updatedAt: record?.updatedAt ?? new Date(),
-      updatedBy: record?.updatedBy ?? null,
-      latestAmount: record?.latestAmount ?? 0,
-      group,
-    };
-  }
+      if (sellingChannelKey) {
+        const channel = await this.client.menuItemSellingChannel.findFirst({
+          where: { key: sellingChannelKey },
+          select: { id: true },
+        });
 
-  groupAndSortVariations(mappedVariations: MenuItemWithSellPriceVariation[]): {
-    group: string;
-    variations: MenuItemWithSellPriceVariation[];
-  }[] {
-    const grouped = new Map();
+        const channelId = channel?.id;
 
-    for (const v of mappedVariations) {
-      if (!grouped.has(v.group)) {
-        grouped.set(v.group, []);
+        if (channelId) {
+          audits =
+            await this.client.menuItemSellingPriceVariationAudit.findMany({
+              where: {
+                menuItemSellingChannelId: channelId,
+              },
+            });
+        }
+      } else {
+        audits = await this.client.menuItemSellingPriceVariationAudit.findMany(
+          {}
+        );
       }
-      grouped.get(v.group).push(v);
+
+      for (const audit of audits) {
+        const key = `${audit.menuItemId}-${audit.menuItemSellingChannelId}-${audit.menuItemSizeId}`;
+        if (!auditMap.has(key)) auditMap.set(key, []);
+        auditMap.get(key)!.push(audit);
+      }
     }
 
-    return Array.from(grouped.entries()).map(([group, variations]) => ({
-      group,
-      variations: variations.sort(
-        (
-          a: MenuItemWithSellPriceVariation["sortOrder"],
-          b: MenuItemWithSellPriceVariation["sortOrder"]
-        ) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)
-      ),
-    }));
+    return allMenuItems.map((item) => {
+      const sellPriceVariations = sizes
+        .map((size) => {
+          const variation = item.MenuItemSellingPriceVariation?.find(
+            (cv) =>
+              cv.menuItemSizeId === size.id &&
+              (!sellingChannelKey ||
+                cv.MenuItemSellingChannel?.key === sellingChannelKey)
+          );
+
+          if (!variation) return null;
+
+          const auditKey = `${item.id}-${variation.menuItemSellingChannelId}-${variation.menuItemSizeId}`;
+          const variationAuditRecords = options?.includeAuditRecords
+            ? auditMap.get(auditKey) ?? []
+            : [];
+
+          return {
+            menuItemSellPriceVariationId: variation.id,
+            sizeId: variation.MenuItemSize?.id!,
+            sizeKey: variation.MenuItemSize?.key ?? null,
+            sizeName: variation.MenuItemSize?.name!,
+            channelId: variation.MenuItemSellingChannel?.id ?? null,
+            channelKey: variation.MenuItemSellingChannel?.key ?? null,
+            channelName: variation.MenuItemSellingChannel?.name ?? "",
+            priceAmount: variation.priceAmount ?? 0,
+            profitActualPerc: variation.profitActualPerc ?? 0,
+            priceExpectedAmount: variation.priceExpectedAmount ?? 0,
+            profitExpectedPerc: variation.profitExpectedPerc ?? 0,
+            updatedBy: variation.updatedBy,
+            updatedAt: variation.updatedAt,
+            previousPriceAmount: variation.previousPriceAmount ?? 0,
+            discountPercentage: variation.discountPercentage ?? 0,
+            lastAuditRecord: variationAuditRecords.at(-1) ?? null,
+          };
+        })
+        .filter(Boolean);
+
+      return {
+        menuItemId: item.id,
+        group: item.MenuItemGroup,
+        category: item.Category,
+        name: item.name,
+        ingredients: item.ingredients,
+        visible: item.visible,
+        active: item.active,
+        sellPriceVariations,
+      };
+    });
   }
+
+  async findOneWithSellPriceVariations(id: MenuItem["id"]) {
+    const result = await this.findManyWithSellPriceVariations({
+      where: { id },
+    });
+
+    return result[0];
+  }
+
+  async findManyWithCostAndSellPriceVariations() {}
 
   async findById(
     id: string,
@@ -380,8 +479,11 @@ export class MenuItemPrismaEntity {
         },
         MenuItemShare: true,
         MenuItemImage: true,
+        MenuItemGalleryImage: true,
+        MenuItemNote: true,
         MenuItemCostVariation: true,
         MenuItemSellingPriceVariation: true,
+        MenuItemGroup: true,
       },
     });
 
@@ -414,13 +516,75 @@ export class MenuItemPrismaEntity {
       likes: {
         amount: item.MenuItemLike.length,
       },
-      shares: item.MenuItemShare.length,
+      shares: {
+        amount: item.MenuItemShare.length,
+      },
+    };
+  }
+
+  async findBySlug(
+    slug: string,
+    options = {
+      imageScaleWidth: 1280,
+    }
+  ) {
+    const item = await this.client.menuItem.findFirst({
+      where: { slug },
+      include: {
+        Category: true,
+        tags: {
+          include: {
+            Tag: true,
+          },
+        },
+        MenuItemLike: {
+          where: {
+            deletedAt: null,
+          },
+        },
+        MenuItemShare: true,
+        MenuItemGalleryImage: true,
+        MenuItemSellingPriceVariation: {
+          include: {
+            MenuItemSellingChannel: true,
+            MenuItemSize: true,
+          },
+        },
+      },
+    });
+
+    if (!item) {
+      return null;
+    }
+
+    return {
+      ...item,
+      imageTransformedURL: CloudinaryUtils.scaleWidth(
+        item.MenuItemImage?.publicId || "",
+        {
+          width: options.imageScaleWidth,
+        }
+      ),
+      imagePlaceholderURL: CloudinaryUtils.scaleWidth(
+        item.MenuItemImage?.publicId || "",
+        { width: 20, quality: 1, blur: 1000 }
+      ),
+      tags: {
+        all: item.tags.map((t) => t.Tag?.name),
+        public: item.tags
+          .filter((t) => t.Tag?.public === true)
+          .map((t) => t.Tag?.name),
+        models: item.tags.map((t) => t.Tag),
+      },
+      likes: { amount: item.MenuItemLike.length },
+      shares: {
+        amount: item.MenuItemShare.length,
+      },
     };
   }
 
   async create(data: Prisma.MenuItemCreateInput) {
     const newId = uuidv4();
-    data.id = newId;
 
     const priceVariations =
       MenuItemPriceVariationUtility.calculatePriceVariations(
@@ -442,10 +606,36 @@ export class MenuItemPrismaEntity {
 
     const nextItem = {
       ...data,
+      id: newId,
       sortOrderIndex: lastsortOrderIndex + 1,
+      slug: slugifyString(data.name),
     };
 
-    await this.invalidateCache();
+    if (nextItem.upcoming === true) {
+      // se lançamento futuro, não exibir
+      nextItem.visible = false;
+
+      // const lancamentoFuturoTag = await this.client.tag.findFirst({
+      //   where: { name: "futuro-lancamento" },
+      // });
+
+      // if (lancamentoFuturoTag?.id) {
+      //   this.associateTag(nextItem.id, lancamentoFuturoTag);
+      // }
+    }
+
+    if (nextItem.MenuItemGroup) {
+      // If the item belongs to a group, ensure the group exists
+      const group = await this.client.menuItemGroup.findFirst({
+        where: { name: "Pizzas Salgadas" },
+      });
+
+      nextItem.MenuItemGroup = {
+        connect: { id: group.id },
+      };
+    }
+
+    await this.cacheManager.invalidate();
 
     return await this.client.menuItem.create({ data: nextItem });
   }
@@ -455,32 +645,23 @@ export class MenuItemPrismaEntity {
       data.updatedAt = new Date().toISOString();
     }
 
-    await this.invalidateCache();
+    await this.cacheManager.invalidate();
+
+    data.slug = slugifyString(data.name as string);
 
     return await this.client.menuItem.update({ where: { id }, data });
   }
 
-  async softDelete(id: string, deletedBy: string = "undefined") {
-    await this.invalidateCache();
-
-    return await this.client.menuItem.update({
-      where: { id },
-      data: {
-        active: false,
-        deletedAt: new Date().toISOString(),
-        deletedBy: deletedBy,
-      },
-    });
-  }
+  async softDelete(id: string, deletedBy: string = "undefined") {}
 
   async delete(id: string) {
-    await this.invalidateCache();
+    await this.cacheManager.invalidate();
 
     return await this.client.menuItem.delete({ where: { id } });
   }
 
   async associateTag(itemId: string, tag: Tag) {
-    await this.invalidateCache();
+    await this.cacheManager.invalidate();
 
     return await menuItemTagPrismaEntity.create({
       createdAt: new Date().toISOString(),
@@ -514,7 +695,7 @@ export class MenuItemPrismaEntity {
   }
 
   async removeTag(itemId: string, tagId: string) {
-    await this.invalidateCache();
+    await this.cacheManager.invalidate();
 
     const tag = await this.client.menuItemTag.findFirst({
       where: {
@@ -545,414 +726,14 @@ export class MenuItemPrismaEntity {
       },
     });
   }
-
-  async invalidateCache() {
-    this.cache.flushAll(); // Simple example to clear the entire cache
-    console.log("Cache invalidated");
-  }
 }
 
 const menuItemPrismaEntity = new MenuItemPrismaEntity({
   client: prismaClient,
+  menuItemCostVariation: menuItemCostVariationPrismaEntity,
+  menuItemSellingPriceUtility: menuItemSellingPriceUtilityEntity,
+  menuItemSize: menuItemSizePrismaEntity,
+  menuItemSellingChannel: menuItemSellingChannelPrismaEntity,
 });
 
 export { menuItemPrismaEntity };
-
-/**
-
- {
-   "id":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-   "name":"Margherita",
-   "description":"",
-   "ingredients":"Molho de tomate, muçarela, manjericão fresco, azeite de oliva aromatizado com manjericão",
-   "categoryId":"fc38088c-09ba-4d87-bbd1-4313251955d2",
-   "basePriceAmount":69.9,
-   "visible":true,
-   "mogoId":"1",
-   "createdAt":"2025-01-18T18:36:48.996Z",
-   "updatedAt":"2025-01-18T18:36:48.996Z",
-   "sortOrderIndex":0,
-   "notesPublic":"",
-   "imageId":"4d7574ac-010b-49cf-9804-adf7920b68df",
-   "priceVariations":[
-      {
-         "id":"148f66ca-5496-4d3c-9957-5bafba516d1b",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "menuItemSizeId":null,
-         "label":"fatia",
-         "basePrice":69.9,
-         "amount":0,
-         "discountPercentage":0,
-         "showOnCardapio":false,
-         "showOnCardapioAt":null,
-         "createdAt":"2024-07-21T15:48:18.028Z",
-         "updatedAt":"2024-07-21T15:48:18.028Z",
-         "updatedBy":null,
-         "latestAmount":0
-      },
-      {
-         "id":"58f671af-ef4a-41d6-8a9f-a17095bfc4da",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "menuItemSizeId":null,
-         "label":"individual",
-         "basePrice":69.9,
-         "amount":0,
-         "discountPercentage":0,
-         "showOnCardapio":false,
-         "showOnCardapioAt":null,
-         "createdAt":"2024-07-21T15:48:18.028Z",
-         "updatedAt":"2024-07-21T15:48:18.028Z",
-         "updatedBy":null,
-         "latestAmount":0
-      },
-      {
-         "id":"ea5b4efd-e562-4dd5-9f67-5fbdaada9bac",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "menuItemSizeId":null,
-         "label":"familia",
-         "basePrice":69.9,
-         "amount":159.9,
-         "discountPercentage":0,
-         "showOnCardapio":true,
-         "showOnCardapioAt":null,
-         "createdAt":"2024-07-21T15:48:18.028Z",
-         "updatedAt":"2024-10-09T14:26:31.499Z",
-         "updatedBy":null,
-         "latestAmount":0
-      },
-      {
-         "id":"1faa2aca-c2f0-4e40-ad1b-b008372666ad",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "menuItemSizeId":null,
-         "label":"media",
-         "basePrice":69.9,
-         "amount":79.9,
-         "discountPercentage":0,
-         "showOnCardapio":true,
-         "showOnCardapioAt":null,
-         "createdAt":"2024-07-21T15:48:18.028Z",
-         "updatedAt":"2024-10-09T14:26:23.595Z",
-         "updatedBy":null,
-         "latestAmount":0
-      }
-   ],
-   "costVariations":[
-      {
-         "id":"0617a1e1-6ece-44d5-92ac-0cadd542419c",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "menuItemSizeId":"04da4a27-6e0d-46d1-a058-5d2beceaa4c3",
-         "recipeCostAmount":2,
-         "createdAt":"2024-11-09T18:54:51.635Z",
-         "updatedAt":"2024-11-09T18:54:51.635Z",
-         "updatedBy":"admin",
-         "MenuItemSize":{
-            "id":"04da4a27-6e0d-46d1-a058-5d2beceaa4c3",
-            "name":"Tamanho Individual",
-            "group":"pizza",
-            "costBase":6.84,
-            "slug":"pizza-small",
-            "costScalingFactor":0.75,
-            "sortOrderIndex":0,
-            "createdAt":"2024-11-08T17:30:25.281Z",
-            "updatedAt":"2024-11-08T17:30:25.281Z"
-         }
-      },
-      {
-         "id":"64ec5817-f226-4c02-917c-666a8cb92bf0",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "menuItemSizeId":"70f05239-565a-4cec-9716-4048e5417f66",
-         "recipeCostAmount":11.1,
-         "createdAt":"2024-11-15T16:04:00.355Z",
-         "updatedAt":"2024-11-15T16:04:00.355Z",
-         "updatedBy":"admin",
-         "MenuItemSize":{
-            "id":"70f05239-565a-4cec-9716-4048e5417f66",
-            "name":"Tamanho Medio",
-            "group":"pizza",
-            "costBase":8.86,
-            "slug":"pizza-medium",
-            "costScalingFactor":1,
-            "sortOrderIndex":1,
-            "createdAt":"2024-11-08T17:30:25.281Z",
-            "updatedAt":"2024-11-08T17:30:25.281Z"
-         }
-      }
-   ],
-   "Category":{
-      "id":"fc38088c-09ba-4d87-bbd1-4313251955d2",
-      "name":"Sabor Italiano",
-      "sortOrder":1000,
-      "type":"cardapio",
-      "createdAt":"2024-07-21T00:00:00.000Z",
-      "updatedAt":"2024-07-21T14:49:22.321Z"
-   },
-   "tags":{
-      "all":[
-         "vegetariana"
-      ],
-      "public":[
-         "vegetariana"
-      ],
-      "models":[
-         {
-            "id":"fbf538f9-1a46-4aeb-84ad-a21d39908a3d",
-            "name":"vegetariana",
-            "public":true,
-            "colorHEX":"#aec355",
-            "deletedAt":null,
-            "createdAt":"2024-08-03T00:00:00.000Z",
-            "updatedAt":"2024-08-03T16:37:50.540Z"
-         }
-      ]
-   },
-   "MenuItemLike":[
-      {
-         "id":"4877d544-47fe-4b30-8c7a-34e9a0e89164",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "sessionId":null,
-         "amount":1,
-         "createdAt":"2024-08-04T15:50:40.583Z",
-         "updatedAt":"2024-08-04T15:50:40.772Z",
-         "deletedAt":null
-      },
-      {
-         "id":"6b3b53bb-8e70-4850-9ece-9685717a5e52",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "sessionId":null,
-         "amount":1,
-         "createdAt":"2024-08-04T15:50:40.758Z",
-         "updatedAt":"2024-08-04T15:50:41.010Z",
-         "deletedAt":null
-      },
-      {
-         "id":"d8dfb94c-4545-45a7-a880-ca99c6ded3de",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "sessionId":null,
-         "amount":1,
-         "createdAt":"2024-08-04T15:50:40.924Z",
-         "updatedAt":"2024-08-04T15:50:41.105Z",
-         "deletedAt":null
-      },
-      {
-         "id":"747bc0da-0285-4cb3-96b7-de61701ece5f",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "sessionId":null,
-         "amount":1,
-         "createdAt":"2024-08-04T15:50:41.056Z",
-         "updatedAt":"2024-08-04T15:50:41.224Z",
-         "deletedAt":null
-      },
-      {
-         "id":"87c906c6-ca55-4b24-b0b9-14866bd47100",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "sessionId":null,
-         "amount":1,
-         "createdAt":"2024-08-04T15:50:41.223Z",
-         "updatedAt":"2024-08-04T15:50:41.383Z",
-         "deletedAt":null
-      },
-      {
-         "id":"bfadaefd-3bc4-46c6-88da-6cdb94261bfa",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "sessionId":null,
-         "amount":1,
-         "createdAt":"2024-08-05T16:50:55.420Z",
-         "updatedAt":"2024-08-05T16:50:56.066Z",
-         "deletedAt":null
-      },
-      {
-         "id":"b3c7ff51-05b2-417a-bf62-ed17e3bb7d7b",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "sessionId":null,
-         "amount":1,
-         "createdAt":"2024-08-13T13:54:41.687Z",
-         "updatedAt":"2024-08-13T13:54:42.364Z",
-         "deletedAt":null
-      },
-      {
-         "id":"1839241d-3c2b-4c56-81f9-126a4e4f3fc1",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "sessionId":null,
-         "amount":1,
-         "createdAt":"2024-08-13T13:54:47.583Z",
-         "updatedAt":"2024-08-13T13:54:48.324Z",
-         "deletedAt":null
-      },
-      {
-         "id":"c0842a0a-8b65-4a7d-a352-945795d0779e",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "sessionId":null,
-         "amount":1,
-         "createdAt":"2024-10-31T19:59:41.739Z",
-         "updatedAt":"2024-10-31T19:59:41.744Z",
-         "deletedAt":null
-      },
-      {
-         "id":"6f5d29e0-88f2-4228-bc39-a7bed785fdb4",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "sessionId":null,
-         "amount":1,
-         "createdAt":"2024-10-31T19:59:42.579Z",
-         "updatedAt":"2024-10-31T19:59:42.580Z",
-         "deletedAt":null
-      },
-      {
-         "id":"43afb7ce-94f5-42b5-b5d4-97a183135810",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "sessionId":null,
-         "amount":1,
-         "createdAt":"2024-10-31T19:59:43.601Z",
-         "updatedAt":"2024-10-31T19:59:43.791Z",
-         "deletedAt":null
-      },
-      {
-         "id":"d99b54bb-f1a8-47fd-88ab-50d3b0914c5d",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "sessionId":null,
-         "amount":1,
-         "createdAt":"2024-10-31T19:59:45.601Z",
-         "updatedAt":"2024-10-31T19:59:45.897Z",
-         "deletedAt":null
-      },
-      {
-         "id":"8b8dd458-7259-4290-b6fb-da06ddbcba54",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "sessionId":null,
-         "amount":1,
-         "createdAt":"2024-11-25T18:24:58.777Z",
-         "updatedAt":"2024-11-25T18:24:58.779Z",
-         "deletedAt":null
-      },
-      {
-         "id":"005ec9ef-a6f2-4980-b64f-c4269489e478",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "sessionId":null,
-         "amount":1,
-         "createdAt":"2024-11-25T18:25:01.804Z",
-         "updatedAt":"2024-11-25T18:25:01.806Z",
-         "deletedAt":null
-      },
-      {
-         "id":"07344457-c0ee-4b32-8a7c-4da033d96cc0",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "sessionId":null,
-         "amount":1,
-         "createdAt":"2024-11-25T18:25:03.963Z",
-         "updatedAt":"2024-11-25T18:25:03.965Z",
-         "deletedAt":null
-      },
-      {
-         "id":"c8e3092c-3ee4-479a-a6dc-74135bff5918",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "sessionId":null,
-         "amount":1,
-         "createdAt":"2024-12-06T22:26:33.331Z",
-         "updatedAt":"2024-12-06T22:26:33.332Z",
-         "deletedAt":null
-      },
-      {
-         "id":"dbf5d147-45b9-4e92-9c1c-42cf709b151e",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "sessionId":null,
-         "amount":1,
-         "createdAt":"2024-12-17T21:31:05.036Z",
-         "updatedAt":"2024-12-17T21:31:05.038Z",
-         "deletedAt":null
-      },
-      {
-         "id":"86efc6d0-cecb-45e7-b873-592ddbdfaa24",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "sessionId":null,
-         "amount":1,
-         "createdAt":"2024-12-21T23:38:48.038Z",
-         "updatedAt":"2024-12-21T23:38:48.040Z",
-         "deletedAt":null
-      },
-      {
-         "id":"9f9345b0-37ed-4ff5-8d64-1ab14ea50560",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "sessionId":null,
-         "amount":1,
-         "createdAt":"2025-01-19T20:38:08.728Z",
-         "updatedAt":"2025-01-19T20:38:08.840Z",
-         "deletedAt":null
-      }
-   ],
-   "MenuItemShare":[
-      {
-         "id":"2aa76bde-1627-4bb5-ae90-bcb80ff1707b",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "sessionId":null,
-         "createdAt":"2024-08-04T17:05:38.074Z",
-         "updatedAt":"2024-08-04T17:05:38.751Z"
-      },
-      {
-         "id":"40128d07-fcb0-456c-90d7-9e3ef88f1da9",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "sessionId":null,
-         "createdAt":"2024-08-04T17:09:50.817Z",
-         "updatedAt":"2024-08-04T17:09:51.555Z"
-      },
-      {
-         "id":"97ceb1ca-4bbf-4854-9c58-c0c4c115e316",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "sessionId":null,
-         "createdAt":"2024-08-04T17:54:27.928Z",
-         "updatedAt":"2024-08-04T17:54:28.854Z"
-      },
-      {
-         "id":"27a64eb9-6c17-41bf-8637-d2b755c93097",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "sessionId":null,
-         "createdAt":"2024-09-15T23:33:11.880Z",
-         "updatedAt":"2024-09-15T23:33:11.882Z"
-      },
-      {
-         "id":"4f61494a-8f00-4b3a-82da-24878d56b3e3",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "sessionId":null,
-         "createdAt":"2024-11-06T16:30:18.994Z",
-         "updatedAt":"2024-11-06T16:30:19.012Z"
-      },
-      {
-         "id":"52f49b2c-1be6-4211-abb5-5f73d10d1757",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "sessionId":null,
-         "createdAt":"2024-11-16T21:21:43.216Z",
-         "updatedAt":"2024-11-16T21:21:43.503Z"
-      },
-      {
-         "id":"47b0fee4-1445-4098-ad48-c8b0599d0281",
-         "menuItemId":"bfde8bed-3f77-4d82-b836-c3d53969d87c",
-         "sessionId":null,
-         "createdAt":"2024-11-18T19:09:12.766Z",
-         "updatedAt":"2024-11-18T19:09:12.776Z"
-      }
-   ],
-   "MenuItemImage":{
-      "id":"4d7574ac-010b-49cf-9804-adf7920b68df",
-      "secureUrl":"https://res.cloudinary.com/dy8gw8ahl/image/upload/v1723220649/py5qmavfq71ovzovhobf.jpg",
-      "assetFolder":"cardapio",
-      "originalFileName":"margherita",
-      "displayName":"margherita",
-      "height":792,
-      "width":1190,
-      "thumbnailUrl":"https://res.cloudinary.com/dy8gw8ahl/image/upload/c_limit,h_60,w_90/v1723220649/py5qmavfq71ovzovhobf.jpg",
-      "format":"jpg",
-      "publicId":"py5qmavfq71ovzovhobf"
-   },
-   "imageTransformedURL":"https://res.cloudinary.com/dy8gw8ahl/image/upload/f_auto/c_scale,w_1280/py5qmavfq71ovzovhobf?_a=DATAfRDeZAA0",
-   "likes":{
-      "amount":19
-   },
-   "shares":7,
-   "meta":{
-      "isItalyProduct":false,
-      "isBestSeller":false,
-      "isMonthlyBestSeller":false,
-      "isChefSpecial":false,
-      "isMonthlySpecial":false
-   }
-}
-
- */

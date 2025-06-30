@@ -1,4 +1,5 @@
 import { Bird } from "lucide-react";
+import { cn } from "~/lib/utils";
 
 
 
@@ -6,11 +7,18 @@ interface NoRecordsFoundProps {
     text: string
     additionalInfo?: string
     clazzName?: string
+    cnClassName?: string
 }
 
-export default function NoRecordsFound({ text, additionalInfo, clazzName, }: NoRecordsFoundProps) {
+export default function NoRecordsFound({ text, additionalInfo, clazzName, cnClassName }: NoRecordsFoundProps) {
     return (
-        <div className={`grid place-items-center m-4 ${clazzName}`}>
+        <div className={
+            cn(
+                "grid place-items-center m-4",
+                clazzName,
+                cnClassName
+            )
+        }>
             <div className="flex flex-col items-center justify-center gap-4">
                 <Bird size={64} strokeWidth={"1px"} className="hover:rotate-6" />
                 <div className="flex flex-col items-center justify-center">

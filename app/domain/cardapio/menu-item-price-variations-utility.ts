@@ -2,6 +2,9 @@ import { MenuItemPriceVariation } from "@prisma/client";
 import { MenuItemWithAssociations } from "./menu-item.prisma.entity.server";
 import { v4 as uuidv4 } from "uuid";
 
+/**
+ * @deprecated
+ */
 export default class MenuItemPriceVariationUtility {
   static getPricesOptions() {
     return [

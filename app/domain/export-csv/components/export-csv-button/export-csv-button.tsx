@@ -3,13 +3,14 @@ import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
 
 interface ExportCsvButtonProps {
+    rootUrl: string
     cnContainer?: string;
     children?: React.ReactNode;
     context: string;
 }
-export default function ExportCsvButton({ cnContainer, children, context }: ExportCsvButtonProps) {
+export default function ExportCsvButton({ rootUrl, cnContainer, children, context }: ExportCsvButtonProps) {
     return (
-        <Link to={`/admin/gerenciamento/cardapio/export?format=csv&context=${context}`} download>
+        <Link to={`${rootUrl}?format=csv&context=${context}`} download>
             <Button className={
                 cn(
                     "transition-colors duration-200",

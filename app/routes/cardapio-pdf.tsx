@@ -228,7 +228,7 @@ function ActionBar() {
 
 
     return (
-        <div className="grid grid-cols-3 font-body-website bg-slate-300 py-1 px-4">
+        <div className="grid grid-cols-3 font-neue bg-slate-300 py-1 px-4">
 
 
             <WhatsappExternalLink phoneNumber="46991272525"

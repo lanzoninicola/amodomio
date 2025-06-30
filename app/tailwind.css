@@ -1,3 +1,7 @@
+@import "swiper/css";
+@import "swiper/css/pagination";
+@import "swiper/css/navigation";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -58,6 +62,19 @@
     --font-gayathri: Gayathri;
 
     --font-accent: GrapeNuts;
+
+    --font-urw: URWClarendonT;
+
+    --font-neue: NeueHaasDisplay;
+
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
   }
 
   .dark {
@@ -89,6 +106,15 @@
     --destructive-foreground: 0 85.7% 97.3%;
 
     --ring: 217.2 32.6% 17.5%;
+
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
   }
 }
 
@@ -251,6 +277,94 @@
   @font-face {
     font-family: "Rubik";
     src: url("/fonts/Rubik-Black.ttf") format("truetype");
+    font-weight: 900;
+    font-style: normal;
+    font-display: swap;
+  }
+
+  @font-face {
+    font-family: "URWClarendonT";
+    src: url("/fonts/URW/39692_URWClarendonTBold.ttf") format("truetype");
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+  }
+
+  @font-face {
+    font-family: "URWClarendonT";
+    src: url("/fonts/URW/39694_URWClarendonT.ttf") format("truetype");
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+  }
+
+  @font-face {
+    font-family: "NeueHaasDisplay";
+    src: url("/fonts/NeueHaasDisplay/NeueHaasDisplayLight.ttf")
+      format("truetype");
+    font-weight: 300;
+    font-style: normal;
+    font-display: swap;
+  }
+
+  @font-face {
+    font-family: "NeueHaasDisplay";
+    src: url("/fonts/NeueHaasDisplay/NeueHaasDisplayXXThin.ttf")
+      format("truetype");
+    font-weight: 100;
+    font-style: normal;
+    font-display: swap;
+  }
+
+  @font-face {
+    font-family: "NeueHaasDisplay";
+    src: url("/fonts/NeueHaasDisplay/NeueHaasDisplayXThin.ttf")
+      format("truetype");
+    font-weight: 150;
+    font-style: normal;
+    font-display: swap;
+  }
+
+  @font-face {
+    font-family: "NeueHaasDisplay";
+    src: url("/fonts/NeueHaasDisplay/NeueHaasDisplayThin.ttf")
+      format("truetype");
+    font-weight: 200;
+    font-style: normal;
+    font-display: swap;
+  }
+
+  @font-face {
+    font-family: "NeueHaasDisplay";
+    src: url("/fonts/NeueHaasDisplay/NeueHaasDisplayRoman.ttf")
+      format("truetype");
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+  }
+
+  @font-face {
+    font-family: "NeueHaasDisplay";
+    src: url("/fonts/NeueHaasDisplay/NeueHaasDisplayMediu.ttf")
+      format("truetype");
+    font-weight: 500;
+    font-style: normal;
+    font-display: swap;
+  }
+
+  @font-face {
+    font-family: "NeueHaasDisplay";
+    src: url("/fonts/NeueHaasDisplay/NeueHaasDisplayBold.ttf")
+      format("truetype");
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+  }
+
+  @font-face {
+    font-family: "NeueHaasDisplay";
+    src: url("/fonts/NeueHaasDisplay/NeueHaasDisplayBlack.ttf")
+      format("truetype");
     font-weight: 900;
     font-style: normal;
     font-display: swap;

@@ -8,7 +8,8 @@ type NumericInputProps = ComponentPropsWithoutRef<typeof Input> & {
 };
 
 export function NumericInput({ decimalScale = 2, ...props }: NumericInputProps) {
-    const [value, setValue] = useState('');
+    const [valueInput, setValueInput] = useState('');
+    const [valueFormatted, setValueFormatted] = useState('');
 
     const formatToDecimal = (input: string) => {
         const numeric = input.replace(/\D/g, '');
@@ -24,24 +25,35 @@ export function NumericInput({ decimalScale = 2, ...props }: NumericInputProps) 
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const raw = e.target.value;
+        setValueInput(raw);
         const formatted = formatToDecimal(raw);
-        setValue(formatted);
-
+        setValueFormatted(formatted);
         props.onChange?.(e);
     };
 
 
     return (
-        <Input
-            {...props}
-            onChange={handleChange}
-            inputMode="numeric"
-            placeholder={props.placeholder ?? `0,${'0'.repeat(decimalScale)}`}
-            className={cn(
-                `text-right font-mono ${props.className ?? ''}`,
-                props.className,
+        <div className="flex flex-col gap-1">
+            <Input
+                {...props}
+                onChange={handleChange}
+                inputMode="numeric"
+                placeholder={props.placeholder ?? `0,${'0'.repeat(decimalScale)}`}
+                className={cn(
+                    `text-right font-mono ${props.className ?? ''}`,
+                    props.className,
+                    props.readOnly && 'cursor-not-allowed border-none outline-none ',
+                    valueInput.includes(",") && "border-red-500 focus-visible:ring-red-500"
 
-            )}
-        />
+                )}
+            />
+            {
+                valueInput.includes(",") && (
+                    <span className="text-[11px] text-red-500 font-semibold">
+                        {`Usar ponto (.) não a vírgula (,)`}
+                    </span>
+                )
+            }
+        </div>
     );
 }

@@ -22,6 +22,7 @@ import ExternalLink from "./components/primitives/external-link/external-link";
 import { cn } from "./lib/utils";
 import { ArrowRight } from "lucide-react";
 import Logo from "./components/primitives/logo/logo";
+import MicrosoftClarityScriptTag from "./components/primitives/ms-clarity/ms-clarity-script";
 
 export const meta: MetaFunction = () => {
   return [
@@ -115,15 +116,17 @@ export const links: LinksFunction = () => [
 
 ];
 
-interface EnvironmentVariables {
+export interface EnvironmentVariables {
 
-  GTM_ID: string
-  CLOUDINARY_CLOUD_NAME: string
-  STORE_OPENING_CONFIG: {
+  MODE: "development" | "production"
+  GTM_ID?: string
+  CLOUDINARY_CLOUD_NAME?: string
+  STORE_OPENING_CONFIG?: {
     OPENING_DAYS: number[]
     OPENING_HOUR: number
     CLOSING_HOUR: number
   }
+  REST_API_SECRET_KEY?: string
 }
 
 
@@ -132,6 +135,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const env = import.meta.env
 
   const ENV: EnvironmentVariables = {
+    MODE: env.VITE_MODE ?? "development",
     GTM_ID: env.VITE_GOOGLE_TAG_MANAGER_ID ?? "",
     CLOUDINARY_CLOUD_NAME: env.VITE_CLOUDINARY_CLOUD_NAME ?? "",
     STORE_OPENING_CONFIG: {
@@ -160,6 +164,7 @@ export default function App() {
         <Meta />
         <Links />
         {ENV.GTM_ID !== "" && <GoogleTagManagerScriptTag id={ENV.GTM_ID} />}
+        {ENV.MODE === "production" && <MicrosoftClarityScriptTag />}
       </head>
       <body>
 

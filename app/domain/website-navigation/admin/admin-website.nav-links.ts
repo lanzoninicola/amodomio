@@ -1,16 +1,85 @@
 import GLOBAL_LINKS from "../global-links.constant";
 import { WebsiteNavigationLinks } from "../website-navigation.type";
+import { Shield } from "lucide-react";
 
 const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
   mainNav: [GLOBAL_LINKS.admin, GLOBAL_LINKS.website],
   sidebarNav: [
     {
-      title: "Gerenciamento",
+      title: "Iniçio",
+      items: [
+        {
+          title: "Pagina Inicial",
+          href: "/admin",
+          items: [],
+          disabled: false,
+          highlight: true,
+          icon: Shield,
+        },
+        {
+          title: "Website",
+          href: "/",
+          items: [],
+          disabled: true,
+        },
+      ],
+    },
+    {
+      title: "Atendimento",
+      items: [
+        {
+          title: "Gerenciamento Sabores",
+          href: "/admin/atendimento/gerenciamento-sabores",
+          items: [],
+          disabled: false,
+        },
+        {
+          title: "Assistente de Escolha",
+          href: "/admin/atendimento/assistente-de-escolha",
+          items: [],
+          disabled: false,
+        },
+
+        {
+          title: "Pedidos",
+          href: "/admin/daily-orders",
+          items: [],
+          disabled: false,
+        },
+        {
+          title: "Linha do tempo Pedidos",
+          href: "/admin/orders-delays-timeline-segmentation",
+          items: [],
+          disabled: true,
+        },
+        {
+          title: "Linha do tempo Entrega",
+          href: "/admin/orders-delivery-time-left",
+          items: [],
+          disabled: false,
+        },
+      ],
+    },
+    {
+      title: "Gerenciamento Cardápio",
       items: [
         {
           title: "Cardápio Delivery",
-          href: "/admin/gerenciamento/cardapio/main",
+          href: "/admin/gerenciamento/cardapio/main/list",
           items: [],
+          disabled: false,
+        },
+        {
+          title: "Custo Ficha Tecnica",
+          href: "/admin/gerenciamento/cardapio/cost-management",
+          items: [],
+          disabled: false,
+        },
+        {
+          title: "Preços de Venda",
+          href: "/admin/gerenciamento/cardapio/sell-price-management",
+          items: [],
+          disabled: false,
         },
         {
           title: "Cardápio Pizza Al Taglio",
@@ -24,6 +93,11 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
           items: [],
           disabled: false,
         },
+      ],
+    },
+    {
+      title: "Produção",
+      items: [
         {
           title: "Stock Massa",
           href: "/admin/gerenciamento/stock-massa-init",
@@ -86,35 +160,6 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
       ],
     },
     {
-      title: "Atendimento",
-      items: [
-        {
-          title: "Cardápio",
-          href: "/cardapio",
-          items: [],
-          disabled: true,
-        },
-        {
-          title: "Pedidos",
-          href: "/admin/daily-orders",
-          items: [],
-          disabled: false,
-        },
-        {
-          title: "Linha do tempo Pedidos",
-          href: "/admin/orders-delays-timeline-segmentation",
-          items: [],
-          disabled: true,
-        },
-        {
-          title: "Linha do tempo Entrega",
-          href: "/admin/orders-delivery-time-left",
-          items: [],
-          disabled: false,
-        },
-      ],
-    },
-    {
       title: "Cozinha",
       items: [
         {
@@ -139,8 +184,20 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
       ],
     },
     {
-      title: "HR",
+      title: "RH",
       items: [
+        {
+          title: "Lista de vagas",
+          href: "/admin/hr/job-openings",
+          items: [],
+          disabled: false,
+        },
+        {
+          title: "Lista de candidaturas recebidas",
+          href: "/admin/hr/applications",
+          items: [],
+          disabled: false,
+        },
         {
           title: "Analise candidatos 'Auxiliar Cozinha'",
           href: "/admin/hr/analise/auxiliar-cozinha",
@@ -151,13 +208,19 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
     },
     {
       title: "Administração",
-      disabled: true,
+      disabled: false,
       items: [
         {
           title: "Usuários",
           href: "/admin/users",
           items: [],
           disabled: true,
+        },
+        {
+          title: "Importador de dados",
+          href: "/admin/importer",
+          items: [],
+          disabled: false,
         },
       ],
     },
