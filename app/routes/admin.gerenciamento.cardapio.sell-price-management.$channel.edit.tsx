@@ -1,16 +1,12 @@
-import { Await, Form, useActionData, useLoaderData, useOutletContext } from "@remix-run/react";
+import { Await, Form, useActionData, useLoaderData } from "@remix-run/react";
 import { AlertCircleIcon } from "lucide-react";
 import { NumericInput } from "~/components/numeric-input/numeric-input";
 import SubmitButton from "~/components/primitives/submit-button/submit-button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "~/components/ui/accordion";
-import { Separator } from "~/components/ui/separator";
 import { MenuItemWithSellPriceVariations } from "~/domain/cardapio/menu-item.types";
 import { cn } from "~/lib/utils";
 import formatDecimalPlaces from "~/utils/format-decimal-places";
 import randomReactKey from "~/utils/random-react-key";
-import { AdminGerenciamentoCardapioSellPriceManagementSingleChannelOutletContext } from "./admin.gerenciamento.cardapio.sell-price-management.$channel";
-import { Dialog, DialogClose, DialogContent, DialogTrigger } from "~/components/ui/dialog";
-import { Button } from "~/components/ui/button";
 import { MenuItemSellingPriceVariationAudit } from "@prisma/client";
 import { ActionFunctionArgs } from "@remix-run/node";
 
@@ -29,11 +25,11 @@ import { authenticator } from "~/domain/auth/google.server";
 import { menuItemSellingPriceHandler } from "~/domain/cardapio/menu-item-selling-price-handler.server";
 
 import { menuItemSizePrismaEntity } from "~/domain/cardapio/menu-item-size.entity.server";
-import { Label } from "@radix-ui/react-label";
 import { Suspense, useState } from "react";
 import Loading from "~/components/loading/loading";
 import { MenuItemsFilters } from "~/domain/cardapio/components/menu-items-filters/menu-items-filters";
 import AlertsCostsAndSellPrice from "~/domain/cardapio/components/alerts-cost-and-sell-price/alerts-cost-and-sell-price";
+import MenuItemSellPriceForm from "~/domain/cardapio/components/menu-item-sell-price-form/menu-item-sell-price-form";
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const sellingChannelKey = params.channel as string;
@@ -313,75 +309,12 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
                                             </h4>
                                           </div>
 
-                                          <Form method="post" className="flex flex-col gap-1 justify-center items-center">
-                                            <div className="flex flex-col gap-2 mb-2">
-                                              <input type="hidden" name="menuItemId" value={menuItem.menuItemId} />
-                                              <input type="hidden" name="menuItemSellPriceVariationId" value={record.menuItemSellPriceVariationId ?? ""} />
-                                              <input type="hidden" name="menuItemSellingChannelId" value={currentSellingChannel.id ?? ""} />
-                                              <input type="hidden" name="menuItemSizeId" value={record.sizeId ?? ""} />
-                                              <input type="hidden" name="updatedBy" value={record.updatedBy || user?.email || ""} />
-                                              <input type="hidden" name="previousPriceAmount" value={record.previousPriceAmount} />
-
-                                              <input type="hidden" name="recipeCostAmount" value={record.computedSellingPriceBreakdown?.custoFichaTecnica ?? 0} />
-                                              <input type="hidden" name="packagingCostAmount" value={record.computedSellingPriceBreakdown?.packagingCostAmount ?? 0} />
-                                              <input type="hidden" name="doughCostAmount" value={record.computedSellingPriceBreakdown?.doughCostAmount ?? 0} />
-                                              <input type="hidden" name="wasteCostAmount" value={record.computedSellingPriceBreakdown?.wasteCost ?? 0} />
-                                              <input type="hidden" name="sellingPriceExpectedAmount" value={record.computedSellingPriceBreakdown?.minimumPrice.priceAmount.withProfit ?? 0} />
-                                              <input type="hidden" name="profitExpectedPerc" value={record.computedSellingPriceBreakdown?.channel.targetMarginPerc ?? 0} />
-
-                                              <div className="grid grid-cols-2 gap-2">
-
-                                                <div className="flex flex-col gap-1 items-center">
-                                                  <div className="flex flex-col gap-y-0">
-                                                    <span className="text-muted-foreground text-[11px]">Novo preço:</span>
-                                                    <NumericInput name="priceAmount" defaultValue={record.priceAmount} />
-                                                  </div>
-                                                  <SubmitButton
-                                                    actionName="upsert-by-user-input"
-                                                    tabIndex={0}
-                                                    variant={"outline"}
-                                                    cnContainer="md:py-0 hover:bg-slate-200 "
-                                                    cnLabel="text-[11px] tracking-widest text-black uppercase"
-                                                    iconColor="black"
-                                                  />
-                                                </div>
-
-                                                <div className="flex flex-col gap-1 items-center">
-                                                  <div className="flex flex-col gap-y-0 ">
-                                                    <MinimumSellPriceLabelDialog computedSellingPriceBreakdown={record.computedSellingPriceBreakdown} />
-                                                    <NumericInput name="minimumPriceAmount" defaultValue={record.computedSellingPriceBreakdown?.minimumPrice.priceAmount.withProfit} readOnly className="bg-slate-100" />
-                                                  </div>
-                                                  {/* <SubmitButton
-                                          actionName="upsert-by-minimum-input"
-                                          tabIndex={0}
-                                          cnContainer="bg-white border w-full hover:bg-slate-200"
-                                          cnLabel="text-[11px] tracking-widest text-black uppercase leading-[1.15]"
-                                          hideIcon
-                                          idleText="Aceitar proposta"
-                                          loadingText="Aceitando..."
-                                        /> */}
-                                                </div>
-
-                                              </div>
-
-
-
-
-                                              <div className="flex flex-col gap-1">
-                                                <span className="text-xs">Preço atual: {record.priceAmount}</span>
-                                                <span className="text-xs text-muted-foreground">Preço anterior: {record.previousPriceAmount}</span>
-                                              </div>
-                                            </div>
-
-                                            {(record.computedSellingPriceBreakdown?.custoFichaTecnica ?? 0) === 0 && (
-                                              <div className="flex gap-2 items-center mt-2">
-                                                <AlertCircleIcon className="h-4 w-4 text-red-500" />
-                                                <span className="text-red-500 text-xs font font-semibold">Custo ficha tecnica não definido</span>
-                                              </div>
-                                            )}
-
-
-                                          </Form>
+                                          <MenuItemSellPriceForm
+                                            menuItemId={menuItem.menuItemId}
+                                            sellPriceVariation={record}
+                                            sellingChannel={currentSellingChannel}
+                                            user={user}
+                                          />
                                         </div>
                                       </li>
 
@@ -427,131 +360,6 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
 
 
 
-function MinimumSellPriceLabelDialog({ computedSellingPriceBreakdown }: MinimumPriceLabelDialogProps
-) {
 
-
-  const Amount = ({ children }: { children: React.ReactNode }) => {
-    return (
-      <span className="font-mono col-span-1">
-        {children}
-      </span>
-    )
-  }
-
-  const Label = ({ children, cnContainer }: { children: React.ReactNode, cnContainer?: string }) => {
-    return (
-      <span className={cn("text-sm col-span-3", cnContainer)}>
-        {children}
-      </span>
-    )
-  }
-
-  const cspb = { ...computedSellingPriceBreakdown }
-
-
-
-  return (
-    <Dialog>
-      <DialogTrigger asChild className="w-full">
-        <span className="text-muted-foreground text-[11px] cursor-pointer hover:underline">{`Val. rec. (lucro ${cspb.channel?.targetMarginPerc}%)`}</span>
-      </DialogTrigger>
-      <DialogContent>
-
-        <div className="flex flex-col">
-          <div className="flex flex-col gap-2">
-            <div className="grid grid-cols-4 items-center">
-              <Label>Custo Ficha Tecnica</Label>
-              <Amount>{cspb?.custoFichaTecnica ?? 0}</Amount>
-            </div>
-
-            <div className="grid grid-cols-4 items-center">
-              <Label>Desperdício</Label>
-              <Amount>{cspb?.wasteCost}</Amount>
-            </div>
-
-            <div className="grid grid-cols-4 items-center">
-              <Label>Custo Massa</Label>
-              <Amount>{cspb?.doughCostAmount}</Amount>
-            </div>
-
-
-            <div className="grid grid-cols-4 items-center">
-              <Label>Custo Embalagens</Label>
-              <Amount>{cspb?.packagingCostAmount}</Amount>
-            </div>
-
-
-            <Separator className="my-4" />
-
-            {
-              cspb?.channel?.isMarketplace && (
-                <>
-                  <Label>{`Custo Marketplace (${cspb?.channel?.name})`}</Label>
-                  <div className="grid grid-cols-4 items-center">
-                    <Label cnContainer="text-[12px]">Taxa mensal</Label>
-                    <Amount>{cspb?.channel?.feeAmount}</Amount>
-                  </div>
-                  <div className="grid grid-cols-4 items-center">
-                    <Label cnContainer="text-[12px]">Taxa transação </Label>
-                    <Amount>{cspb?.channel?.taxPerc}</Amount>
-                  </div>
-
-                  <div className="grid grid-cols-4 items-center">
-                    <Label cnContainer="text-[12px]">Taxa pagamento online</Label>
-                    <Amount>{cspb?.channel?.onlinePaymentTaxPerc}</Amount>
-                  </div>
-
-                  <Separator className="my-4" />
-                </>
-              )
-            }
-
-
-
-            <div className="grid grid-cols-4 items-center">
-              <Label cnContainer="font-semibold">Total Custo</Label>
-              <Amount>{
-                Number((cspb?.custoFichaTecnica ?? 0)
-                  + (cspb?.wasteCost ?? 0)
-                  + (cspb?.doughCostAmount ?? 0)
-                  + (cspb?.packagingCostAmount ?? 0)
-                  + (cspb?.channel?.taxPerc ?? 0)).toFixed(2)
-              }</Amount>
-            </div>
-
-            <Separator className="my-4" />
-
-            <div className="flex flex-col gap-2">
-              <Label cnContainer="font-semibold">{`Preço de venda minimo`}</Label>
-              <div className="grid grid-cols-4 items-center">
-                <span className="text-xs col-span-3">Sem profito (com cobertura custos fixos)</span>
-                <Amount>{Number(cspb?.minimumPrice?.priceAmount.breakEven ?? 0).toFixed(2)}</Amount>
-              </div>
-
-              <div className="grid grid-cols-4 items-center mb-2">
-                <span className="text-xs col-span-3">Com profito</span>
-                <Amount>{Number(cspb?.minimumPrice?.priceAmount.withProfit ?? 0).toFixed(2)}</Amount>
-              </div>
-
-              <span className="text-[12px] font-mono">{cspb?.minimumPrice?.formulaExplanation}</span>
-              <span className="text-[12px] font-mono">{cspb?.minimumPrice?.formulaExpression}</span>
-            </div>
-
-            <Separator className="my-4" />
-          </div>
-          <DialogClose asChild>
-            <div className="w-full px-4 py-6">
-              <Button type="button" variant="secondary" className="w-full" >
-                <span className=" tracking-wide font-semibold uppercase">Fechar</span>
-              </Button>
-            </div>
-
-          </DialogClose>
-        </div>
-      </DialogContent>
-    </Dialog >
-  )
-}
 
 

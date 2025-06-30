@@ -318,6 +318,14 @@ export class MenuItemPrismaEntity {
     });
   }
 
+  async findOneWithCostVariations(id: MenuItem["id"]) {
+    const result = await this.findManyWithCostVariations({
+      where: { id },
+    });
+
+    return result[0];
+  }
+
   async findWithCostVariationsByItem(
     menuItemId: string
   ): Promise<MenuItemWithCostVariations | null> {
@@ -436,6 +444,14 @@ export class MenuItemPrismaEntity {
         sellPriceVariations,
       };
     });
+  }
+
+  async findOneWithSellPriceVariations(id: MenuItem["id"]) {
+    const result = await this.findManyWithSellPriceVariations({
+      where: { id },
+    });
+
+    return result[0];
   }
 
   async findManyWithCostAndSellPriceVariations() {}
