@@ -388,6 +388,7 @@ model MenuItemSize {
   name                               String
   nameAbbreviated                    String?                              @map("name_abbreviated") // <- nova coluna
   description                        String?                              @map("description")
+  shortDescription                   String?                              @map("short_description")
   sortOrderIndex                     Int                                  @default(0) @map("sort_order_index")
   createdAt                          DateTime                             @map("created_at")
   updatedAt                          DateTime                             @default(now()) @updatedAt @map("updated_at")

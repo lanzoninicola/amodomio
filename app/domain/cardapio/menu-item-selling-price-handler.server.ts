@@ -205,6 +205,115 @@ export class MenuItemSellingPriceHandler {
     return results as LoadManyReturn<T>;
   }
 
+  async loadOne(
+    menuItemId: string,
+    params?: {
+      channelKey?: string;
+      sizeKey?: string;
+    }
+  ): Promise<MenuItemWithSellPriceVariations | null> {
+    const [item, itemWithCosts, sizes, channels, sellingPriceConfig] =
+      await Promise.all([
+        this.menuItemPrismaEntity.findOneWithSellPriceVariations(menuItemId),
+        this.menuItemPrismaEntity.findOneWithCostVariations(menuItemId),
+        this.menuItemSize.findAll(),
+        this.menuItemSellingChannel.findAll(),
+        this.menuItemSellingPriceUtility.getSellingPriceConfig(),
+      ]);
+
+    if (!item) return null;
+
+    const filterSizes = (size: MenuItemSize) =>
+      !params?.sizeKey || size.key === params.sizeKey;
+
+    const filterChannels = (channel: MenuItemSellingChannel) =>
+      !params?.channelKey || channel.key === params.channelKey;
+
+    const costBySizeKey: Record<string, number> = {};
+    itemWithCosts?.costVariations?.forEach((cv) => {
+      costBySizeKey[cv.sizeKey] = cv.costAmount;
+    });
+
+    const buildVariation = async (
+      size: MenuItemSize,
+      channel: MenuItemSellingChannel
+    ): Promise<SellPriceVariation> => {
+      const variation = item.sellPriceVariations?.find(
+        (spv) => spv.sizeId === size.id && spv.channelId === channel.id
+      );
+
+      const computedSellingPriceBreakdown =
+        await this.menuItemSellingPriceUtility.calculateSellingPriceByChannel(
+          channel,
+          costBySizeKey[size.key] ?? 0,
+          size,
+          sellingPriceConfig
+        );
+
+      const warnings: Warning[] = [];
+
+      if (item.active && item.visible && size.name !== "Fatia") {
+        warnings.push(
+          ...this.handleSellPriceWarnings({
+            itemName: item.name,
+            sizeName: size.name,
+            channelName: channel.name,
+            computedPrice:
+              computedSellingPriceBreakdown.minimumPrice.priceAmount.withProfit,
+            actualPrice: variation?.priceAmount ?? 0,
+          })
+        );
+      }
+
+      return {
+        menuItemSellPriceVariationId: variation?.menuItemSellPriceVariationId,
+        sizeId: size.id,
+        sizeKey: size.key as PizzaSizeKey,
+        sizeName: size.name,
+        channelId: channel.id,
+        channelKey: channel.key,
+        channelName: channel.name,
+        priceAmount: variation?.priceAmount ?? 0,
+        profitActualPerc: variation?.profitActualPerc ?? 0,
+        priceExpectedAmount: variation?.priceExpectedAmount ?? 0,
+        profitExpectedPerc: variation?.profitExpectedPerc ?? 0,
+        computedSellingPriceBreakdown,
+        discountPercentage: variation?.discountPercentage ?? 0,
+        updatedBy: variation?.updatedBy,
+        updatedAt: variation?.updatedAt,
+        previousPriceAmount: variation?.previousPriceAmount ?? 0,
+        lastAuditRecord: variation?.lastAuditRecord,
+        warnings,
+      };
+    };
+
+    const filteredSizes = sizes.filter(filterSizes);
+    const filteredChannels = channels.filter(filterChannels);
+
+    const variations = await Promise.all(
+      filteredSizes.flatMap((size) =>
+        filteredChannels.map((channel) => buildVariation(size, channel))
+      )
+    );
+
+    const warnings: Warning[] = [];
+    variations.forEach((v) => {
+      if (v.warnings) warnings.push(...v.warnings);
+    });
+
+    return {
+      menuItemId: item.menuItemId,
+      group: item.group,
+      category: item.category,
+      name: item.name,
+      ingredients: item.ingredients,
+      visible: item.visible,
+      active: item.active,
+      sellPriceVariations: variations,
+      warnings,
+    };
+  }
+
   private handleSellPriceWarnings({
     itemName,
     sizeName,

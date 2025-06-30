@@ -1,4 +1,4 @@
-import { MenuItem, MenuItemGroup } from "@prisma/client";
+import { MenuItemGroup } from "@prisma/client";
 import { LoaderFunctionArgs } from "@remix-run/node";
 import { Await, defer, useActionData, useLoaderData } from "@remix-run/react";
 import { Suspense, useEffect, useState } from "react";
