@@ -1,4 +1,4 @@
-import { Form, useActionData, useOutletContext } from "@remix-run/react";
+import { Await, Form, useActionData, useLoaderData, useOutletContext } from "@remix-run/react";
 import { AlertCircleIcon } from "lucide-react";
 import { NumericInput } from "~/components/numeric-input/numeric-input";
 import SubmitButton from "~/components/primitives/submit-button/submit-button";
@@ -11,7 +11,6 @@ import randomReactKey from "~/utils/random-react-key";
 import { AdminGerenciamentoCardapioSellPriceManagementSingleChannelOutletContext } from "./admin.gerenciamento.cardapio.sell-price-management.$channel";
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from "~/components/ui/dialog";
 import { Button } from "~/components/ui/button";
-import { ComputedSellingPriceBreakdown } from "~/domain/cardapio/menu-item-selling-price-utility.entity";
 import { MenuItemSellingPriceVariationAudit } from "@prisma/client";
 import { ActionFunctionArgs } from "@remix-run/node";
 
@@ -24,7 +23,66 @@ import toFixedNumber from "~/utils/to-fixed-number";
 import createUUID from "~/utils/uuid";
 import { toast } from "~/components/ui/use-toast";
 
+import { LoaderFunctionArgs } from "@remix-run/node";
+import { defer } from "@remix-run/react";
+import { authenticator } from "~/domain/auth/google.server";
+import { menuItemSellingPriceHandler } from "~/domain/cardapio/menu-item-selling-price-handler.server";
 
+import { menuItemSizePrismaEntity } from "~/domain/cardapio/menu-item-size.entity.server";
+import { Label } from "@radix-ui/react-label";
+import { Suspense, useState } from "react";
+import Loading from "~/components/loading/loading";
+import { MenuItemsFilters } from "~/domain/cardapio/components/menu-items-filters/menu-items-filters";
+import AlertsCostsAndSellPrice from "~/domain/cardapio/components/alerts-cost-and-sell-price/alerts-cost-and-sell-price";
+
+export async function loader({ request, params }: LoaderFunctionArgs) {
+  const sellingChannelKey = params.channel as string;
+  const currentSellingChannel = await prismaClient.menuItemSellingChannel.findFirst({
+    where: {
+      key: sellingChannelKey,
+    },
+  })
+
+
+  if (!currentSellingChannel) {
+    return badRequest(`Can not find selling channel with key ${sellingChannelKey}`)
+  }
+
+  const menuItemsWithSellPriceVariations = menuItemSellingPriceHandler.loadMany({
+    channelKey: currentSellingChannel.key,
+  })
+
+  const user = authenticator.isAuthenticated(request);
+
+
+  const menuItemGroups = prismaClient.menuItemGroup.findMany({
+    where: {
+      deletedAt: null,
+      visible: true
+    }
+  })
+
+  const menuItemCategories = prismaClient.category.findMany({
+    where: {
+      type: "menu"
+    }
+  })
+
+  const sizes = menuItemSizePrismaEntity.findAll()
+
+  const returnedData = Promise.all([
+    menuItemsWithSellPriceVariations,
+    user,
+    currentSellingChannel,
+    menuItemGroups,
+    menuItemCategories,
+    sizes
+  ]);
+
+  return defer({
+    returnedData
+  })
+}
 
 export async function action({ request }: ActionFunctionArgs) {
 
@@ -125,7 +183,7 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function AdminGerenciamentoCardapioSellPriceManagementSingleChannelEdit() {
-  const { items, sellingChannel, user } = useOutletContext<AdminGerenciamentoCardapioSellPriceManagementSingleChannelOutletContext>()
+  const { returnedData } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
 
 
@@ -144,130 +202,156 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
   }
 
   return (
-    <div className="h-[500px] overflow-y-scroll">
-      <ul>
-        {
-          // @ts-ignore
-          items.map((menuItem: MenuItemWithSellPriceVariations) => {
-
-            return (
-              <li key={menuItem.menuItemId}>
-
-                <Accordion type="single" collapsible className="border rounded-md px-4 py-2 mb-4">
-                  <AccordionItem value="item-1" className="border-none">
-                    <div className="flex flex-col w-full">
-                      <AccordionTrigger>
 
 
-                        <ul className="grid grid-cols-6 mb-4 gap-x-2 w-full">
-                          <li className="text-left text-md font-semibold col-span-1">{menuItem.name} ({sellingChannel.name})</li>
-                          {menuItem.sellPriceVariations.map((record) => {
+    <Suspense fallback={<Loading />}>
+      <Await resolve={returnedData}>
+        {/* @ts-ignore */}
+        {([menuItemsWithSellPriceVariations, user, currentSellingChannel, groups, categories, sizes]) => {
+          const [items, setItems] = useState<MenuItemWithSellPriceVariations[]>(menuItemsWithSellPriceVariations || [])
 
-                            const minimumPriceAmountWithProfit = record.computedSellingPriceBreakdown?.minimumPrice?.priceAmount.withProfit ?? 0
-                            const minimumPriceAmountWithoutProfit = record.computedSellingPriceBreakdown?.minimumPrice?.priceAmount.breakEven ?? 0
+          const [accordionItemOpened, setAccordionItemOpened] = useState<string | null>(null)
+          return (
 
-                            return (
-                              <li key={randomReactKey()} >
+            <div className="flex flex-col" >
+              <div className="flex flex-col gap-2 py-2 md:py-0 md:grid md:grid-cols-8 md:items-center mb-4 bg-slate-50 px-1">
+                <MenuItemsFilters
+                  initialItems={menuItemsWithSellPriceVariations}
+                  groups={groups}
+                  categories={categories}
+                  onItemsChange={(filtered) => setItems(filtered)}
+                  cnContainer="col-span-7"
+                />
+                <AlertsCostsAndSellPrice items={items} cnContainer="col-span-1 flex justify-center md:justify-end w-full col-span-1" />
+              </div>
+              <ul>
+                {
+                  // @ts-ignore
+                  items.map((menuItem: MenuItemWithSellPriceVariations) => {
 
-                                <div className="flex flex-col justify-center">
-                                  <p className="text-[11px] uppercase text-center ">{record.sizeName}</p>
+                    return (
+
+                      <li key={menuItem.menuItemId}>
+
+                        <Accordion type="single" collapsible className="border rounded-md px-4 py-2 mb-4   "
+                          onValueChange={setAccordionItemOpened}
+                        >
+                          <AccordionItem value={menuItem.menuItemId} className="border-none">
+                            <div className="flex flex-col w-full">
+                              <AccordionTrigger className="px-2 hover:no-underline hover:bg-blue-50 hover:rounded-md">
+
+
+                                <ul className="grid grid-cols-6 mb-4 gap-x-2 w-full">
+                                  <li className="text-left text-md font-semibold col-span-1">{menuItem.name} ({currentSellingChannel.name})</li>
+                                  {menuItem.sellPriceVariations.map((record) => {
+
+                                    const minimumPriceAmountWithProfit = record.computedSellingPriceBreakdown?.minimumPrice?.priceAmount.withProfit ?? 0
+                                    const minimumPriceAmountWithoutProfit = record.computedSellingPriceBreakdown?.minimumPrice?.priceAmount.breakEven ?? 0
+
+                                    return (
+                                      <li key={randomReactKey()}
+                                        className={cn(accordionItemOpened === menuItem.menuItemId ? "hidden" : "block")}
+                                      >
+
+                                        <div className="flex flex-col justify-center">
+                                          <p className="text-[11px] uppercase text-center ">{record.sizeName}</p>
 
 
 
-                                  <div className="flex flex-col text-center">
-                                    <p className={
-                                      cn(
-                                        "text-[12px] font-mono",
-                                        record.priceAmount > 0 && minimumPriceAmountWithProfit > record.priceAmount && 'bg-orange-200',
-                                        record.priceAmount > 0 && minimumPriceAmountWithoutProfit > record.priceAmount && 'bg-red-400',
-                                      )
-                                    }
-                                    >R$ {formatDecimalPlaces(record.priceAmount)}</p>
-                                  </div>
-
-
-
-
-
-
-                                </div>
-                              </li>
-                            )
-                          })}
-                        </ul>
-                      </AccordionTrigger>
-                    </div>
-
-                    <AccordionContent>
-
-                      <ul className="grid grid-cols-5 gap-x-1">
-                        {menuItem.sellPriceVariations.map((record) => (
-
-                          <section key={randomReactKey()} className="mb-6">
-
-                            <ul className="flex gap-6">
-                              <li key={record.sizeId} className={
-                                cn(
-                                  "p-2 rounded-md",
-                                )
-                              }>
-                                <div className="flex flex-col">
-                                  <div className={
-                                    cn(
-                                      "mb-2",
-                                      record.sizeKey === "pizza-medium" && "grid place-items-center bg-black",
-                                    )
-                                  }>
-
-                                    <h4 className={
-                                      cn(
-                                        "text-[12px] font-medium uppercase tracking-wider",
-                                        record.sizeKey === "pizza-medium" && "font-semibold text-white",
-                                      )
-                                    }>
-                                      {record.sizeName}
-                                    </h4>
-                                  </div>
-
-                                  <Form method="post" className="flex flex-col gap-1 justify-center items-center">
-                                    <div className="flex flex-col gap-2 mb-2">
-                                      <input type="hidden" name="menuItemId" value={menuItem.menuItemId} />
-                                      <input type="hidden" name="menuItemSellPriceVariationId" value={record.menuItemSellPriceVariationId ?? ""} />
-                                      <input type="hidden" name="menuItemSellingChannelId" value={sellingChannel.id ?? ""} />
-                                      <input type="hidden" name="menuItemSizeId" value={record.sizeId ?? ""} />
-                                      <input type="hidden" name="updatedBy" value={record.updatedBy || user?.email || ""} />
-                                      <input type="hidden" name="previousPriceAmount" value={record.previousPriceAmount} />
-
-                                      <input type="hidden" name="recipeCostAmount" value={record.computedSellingPriceBreakdown?.custoFichaTecnica ?? 0} />
-                                      <input type="hidden" name="packagingCostAmount" value={record.computedSellingPriceBreakdown?.packagingCostAmount ?? 0} />
-                                      <input type="hidden" name="doughCostAmount" value={record.computedSellingPriceBreakdown?.doughCostAmount ?? 0} />
-                                      <input type="hidden" name="wasteCostAmount" value={record.computedSellingPriceBreakdown?.wasteCost ?? 0} />
-                                      <input type="hidden" name="sellingPriceExpectedAmount" value={record.computedSellingPriceBreakdown?.minimumPrice.priceAmount.withProfit ?? 0} />
-                                      <input type="hidden" name="profitExpectedPerc" value={record.computedSellingPriceBreakdown?.channel.targetMarginPerc ?? 0} />
-
-                                      <div className="grid grid-cols-2 gap-2">
-
-                                        <div className="flex flex-col gap-1 items-center">
-                                          <div className="flex flex-col gap-y-0">
-                                            <span className="text-muted-foreground text-[11px]">Novo preço:</span>
-                                            <NumericInput name="priceAmount" defaultValue={record.priceAmount} />
+                                          <div className="flex flex-col text-center">
+                                            <p className={
+                                              cn(
+                                                "text-[12px] font-mono",
+                                                record.priceAmount > 0 && minimumPriceAmountWithProfit > record.priceAmount && 'bg-orange-200',
+                                                record.priceAmount > 0 && minimumPriceAmountWithoutProfit > record.priceAmount && 'bg-red-400',
+                                              )
+                                            }
+                                            >R$ {formatDecimalPlaces(record.priceAmount)}</p>
                                           </div>
-                                          <SubmitButton
-                                            actionName="upsert-by-user-input"
-                                            tabIndex={0}
-                                            variant={"outline"}
-                                            cnContainer="md:py-0 hover:bg-slate-200 "
-                                            cnLabel="text-[11px] tracking-widest text-black uppercase"
-                                            iconColor="black"
-                                          />
+
+
+
+
+
+
                                         </div>
+                                      </li>
+                                    )
+                                  })}
+                                </ul>
+                              </AccordionTrigger>
+                            </div>
 
-                                        <div className="flex flex-col gap-1 items-center">
-                                          <div className="flex flex-col gap-y-0 ">
-                                            <MinimumSellPriceLabelDialog computedSellingPriceBreakdown={record.computedSellingPriceBreakdown} />
-                                            <NumericInput name="minimumPriceAmount" defaultValue={record.computedSellingPriceBreakdown?.minimumPrice.priceAmount.withProfit} readOnly className="bg-slate-100" />
+                            <AccordionContent>
+
+                              <ul className="grid grid-cols-5 gap-x-1">
+                                {menuItem.sellPriceVariations.map((record) => (
+
+                                  <section key={randomReactKey()} className="mb-6">
+
+                                    <ul className="flex gap-6">
+                                      <li key={record.sizeId} className={
+                                        cn(
+                                          "p-2 rounded-md",
+                                        )
+                                      }>
+                                        <div className="flex flex-col">
+                                          <div className={
+                                            cn(
+                                              "mb-2",
+                                              record.sizeKey === "pizza-medium" && "grid place-items-center bg-black",
+                                            )
+                                          }>
+
+                                            <h4 className={
+                                              cn(
+                                                "text-[12px] font-medium uppercase tracking-wider",
+                                                record.sizeKey === "pizza-medium" && "font-semibold text-white",
+                                              )
+                                            }>
+                                              {record.sizeName}
+                                            </h4>
                                           </div>
-                                          {/* <SubmitButton
+
+                                          <Form method="post" className="flex flex-col gap-1 justify-center items-center">
+                                            <div className="flex flex-col gap-2 mb-2">
+                                              <input type="hidden" name="menuItemId" value={menuItem.menuItemId} />
+                                              <input type="hidden" name="menuItemSellPriceVariationId" value={record.menuItemSellPriceVariationId ?? ""} />
+                                              <input type="hidden" name="menuItemSellingChannelId" value={currentSellingChannel.id ?? ""} />
+                                              <input type="hidden" name="menuItemSizeId" value={record.sizeId ?? ""} />
+                                              <input type="hidden" name="updatedBy" value={record.updatedBy || user?.email || ""} />
+                                              <input type="hidden" name="previousPriceAmount" value={record.previousPriceAmount} />
+
+                                              <input type="hidden" name="recipeCostAmount" value={record.computedSellingPriceBreakdown?.custoFichaTecnica ?? 0} />
+                                              <input type="hidden" name="packagingCostAmount" value={record.computedSellingPriceBreakdown?.packagingCostAmount ?? 0} />
+                                              <input type="hidden" name="doughCostAmount" value={record.computedSellingPriceBreakdown?.doughCostAmount ?? 0} />
+                                              <input type="hidden" name="wasteCostAmount" value={record.computedSellingPriceBreakdown?.wasteCost ?? 0} />
+                                              <input type="hidden" name="sellingPriceExpectedAmount" value={record.computedSellingPriceBreakdown?.minimumPrice.priceAmount.withProfit ?? 0} />
+                                              <input type="hidden" name="profitExpectedPerc" value={record.computedSellingPriceBreakdown?.channel.targetMarginPerc ?? 0} />
+
+                                              <div className="grid grid-cols-2 gap-2">
+
+                                                <div className="flex flex-col gap-1 items-center">
+                                                  <div className="flex flex-col gap-y-0">
+                                                    <span className="text-muted-foreground text-[11px]">Novo preço:</span>
+                                                    <NumericInput name="priceAmount" defaultValue={record.priceAmount} />
+                                                  </div>
+                                                  <SubmitButton
+                                                    actionName="upsert-by-user-input"
+                                                    tabIndex={0}
+                                                    variant={"outline"}
+                                                    cnContainer="md:py-0 hover:bg-slate-200 "
+                                                    cnLabel="text-[11px] tracking-widest text-black uppercase"
+                                                    iconColor="black"
+                                                  />
+                                                </div>
+
+                                                <div className="flex flex-col gap-1 items-center">
+                                                  <div className="flex flex-col gap-y-0 ">
+                                                    <MinimumSellPriceLabelDialog computedSellingPriceBreakdown={record.computedSellingPriceBreakdown} />
+                                                    <NumericInput name="minimumPriceAmount" defaultValue={record.computedSellingPriceBreakdown?.minimumPrice.priceAmount.withProfit} readOnly className="bg-slate-100" />
+                                                  </div>
+                                                  {/* <SubmitButton
                                           actionName="upsert-by-minimum-input"
                                           tabIndex={0}
                                           cnContainer="bg-white border w-full hover:bg-slate-200"
@@ -276,38 +360,38 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
                                           idleText="Aceitar proposta"
                                           loadingText="Aceitando..."
                                         /> */}
+                                                </div>
+
+                                              </div>
+
+
+
+
+                                              <div className="flex flex-col gap-1">
+                                                <span className="text-xs">Preço atual: {record.priceAmount}</span>
+                                                <span className="text-xs text-muted-foreground">Preço anterior: {record.previousPriceAmount}</span>
+                                              </div>
+                                            </div>
+
+                                            {(record.computedSellingPriceBreakdown?.custoFichaTecnica ?? 0) === 0 && (
+                                              <div className="flex gap-2 items-center mt-2">
+                                                <AlertCircleIcon className="h-4 w-4 text-red-500" />
+                                                <span className="text-red-500 text-xs font font-semibold">Custo ficha tecnica não definido</span>
+                                              </div>
+                                            )}
+
+
+                                          </Form>
                                         </div>
+                                      </li>
 
-                                      </div>
+                                    </ul>
+                                  </section>
+                                ))}
 
+                              </ul>
 
-
-
-                                      <div className="flex flex-col gap-1">
-                                        <span className="text-xs">Preço atual: {record.priceAmount}</span>
-                                        <span className="text-xs text-muted-foreground">Preço anterior: {record.previousPriceAmount}</span>
-                                      </div>
-                                    </div>
-
-                                    {(record.computedSellingPriceBreakdown?.custoFichaTecnica ?? 0) === 0 && (
-                                      <div className="flex gap-2 items-center mt-2">
-                                        <AlertCircleIcon className="h-4 w-4 text-red-500" />
-                                        <span className="text-red-500 text-xs font font-semibold">Custo ficha tecnica não definido</span>
-                                      </div>
-                                    )}
-
-
-                                  </Form>
-                                </div>
-                              </li>
-
-                            </ul>
-                          </section>
-                        ))}
-
-                      </ul>
-
-                      {/* <Form method="post" className="flex gap-2">
+                              {/* <Form method="post" className="flex gap-2">
                       <input type="hidden" name="menuItemId" value={menuItem.menuItemId} />
                       <input type="hidden" name="updatedBy" value={user?.email || ""} />
                       <SubmitButton
@@ -321,17 +405,22 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
                       />
                     </Form> */}
 
-                    </AccordionContent>
-                  </AccordionItem>
-                </Accordion>
+                            </AccordionContent>
+                          </AccordionItem>
+                        </Accordion>
 
 
-              </li>
-            )
-          })
-        }
-      </ul>
-    </div>
+                      </li>
+                    )
+                  })
+                }
+              </ul>
+            </div>
+
+          )
+        }}
+      </Await>
+    </Suspense>
   )
 
 }
