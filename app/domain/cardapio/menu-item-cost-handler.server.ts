@@ -5,8 +5,10 @@ import {
   menuItemSizePrismaEntity,
 } from "./menu-item-size.entity.server";
 import { MenuItemWithCostVariations, Warning } from "./menu-item.types";
-import { MenuItemEntityFindAllProps } from "./menu-item.prisma.entity.server";
+import { MenuItemEntityFindAllParams } from "./menu-item.prisma.entity.server";
 import { MenuItemCostVariationUtility } from "./menu-item-cost-variation-utility.entity.server";
+import { group } from "console";
+import { PrismaClient } from "@prisma/client";
 
 interface HandleWarningsFnParams {
   costAmount: number;
@@ -19,7 +21,7 @@ interface HandleWarningsFnParams {
 class MenuItemCostHandler {
   pizzaSizeKeyRef: PizzaSizeKey = "pizza-medium";
 
-  client;
+  client: PrismaClient;
   menuItemCostVariation: typeof menuItemCostVariationPrismaEntity;
   menuItemSize: typeof menuItemSizePrismaEntity;
 
@@ -28,7 +30,7 @@ class MenuItemCostHandler {
     menuItemCostVariation,
     menuItemSize,
   }: {
-    client: any;
+    client: PrismaClient;
     menuItemCostVariation: typeof menuItemCostVariationPrismaEntity;
     menuItemSize: typeof menuItemSizePrismaEntity;
   }) {
@@ -38,12 +40,14 @@ class MenuItemCostHandler {
   }
 
   async loadAll(
-    params: MenuItemEntityFindAllProps = {}
+    params: MenuItemEntityFindAllParams = {}
   ): Promise<MenuItemWithCostVariations[]> {
     const allMenuItems = await this.client.menuItem.findMany({
       where: params?.where,
       include: {
         MenuItemCostVariation: true,
+        MenuItemGroup: true,
+        Category: true,
       },
       orderBy: { sortOrderIndex: "asc" },
     });
@@ -57,17 +61,20 @@ class MenuItemCostHandler {
         case "pizza-slice":
           newSortOrderIndex = 1;
           break;
-        case "pizza-small":
+        case "pizza-individual":
           newSortOrderIndex = 2;
+          break;
+        case "pizza-small":
+          newSortOrderIndex = 3;
           break;
         case "pizza-medium":
           newSortOrderIndex = 0;
           break;
         case "pizza-big":
-          newSortOrderIndex = 3;
+          newSortOrderIndex = 4;
           break;
         case "pizza-bigger":
-          newSortOrderIndex = 4;
+          newSortOrderIndex = 5;
           break;
       }
 
@@ -135,6 +142,8 @@ class MenuItemCostHandler {
         menuItemId: item.id,
         name: item.name,
         ingredients: item.ingredients,
+        group: item.MenuItemGroup,
+        category: item.Category,
         visible: item.visible,
         active: item.active,
         warnings: itemWarnings,

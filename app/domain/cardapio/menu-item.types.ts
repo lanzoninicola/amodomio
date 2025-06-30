@@ -11,6 +11,8 @@ export interface MenuItemWithCostVariations {
   menuItemId: string;
   name: string;
   ingredients: string;
+  group: MenuItemGroup;
+  category: Category;
   visible: boolean;
   active: boolean;
   costVariations: MenuItemCostVariationBySize[];

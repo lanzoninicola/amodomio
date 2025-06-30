@@ -6,6 +6,7 @@ import Loading from "~/components/loading/loading";
 import { Separator } from "~/components/ui/separator";
 import CardapioItemImageSingle from "~/domain/cardapio/components/cardapio-item-image-single/cardapio-item-image-single";
 import CardapioItemPrice from "~/domain/cardapio/components/cardapio-item-price/cardapio-item-price";
+import ItalyIngredientsStatement from "~/domain/cardapio/components/italy-ingredient-statement/italy-ingredient-statement";
 import { menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 
@@ -81,9 +82,10 @@ export default function SingleCardapioItem() {
               <div className="absolute bottom-0 w-full px-6 pb-8 text-white z-10">
 
                 <h1 className=" font-urw text-2xl font-semibold ">{itemName}</h1>
+                <ItalyIngredientsStatement cnText="text-white max-w-[250px]" />
                 <p className="font-neue leading-snug tracking-wider text-[15px] my-2">{itemIngredients}</p>
-                <Separator className="my-2 bg-white/20" />
-                <CardapioItemPrice prices={item?.priceVariations || []} cnLabel="text-white" cnValue="text-white" showValuta={false} />
+                <Separator className="my-4 bg-white/20" />
+                <CardapioItemPrice prices={item?.MenuItemSellingPriceVariation || []} cnLabel="text-white" cnValue="text-white" showValuta={false} />
               </div>
             </>
 

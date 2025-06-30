@@ -48,7 +48,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         // mock: env === "development"
     }, {
         imageTransform: true,
-        imageScaleWidth: 375
+        imageScaleWidth: 375,
     })
 
 
@@ -141,6 +141,8 @@ export default function CardapioWebIndex() {
                 <Await resolve={items}>
 
                     {(items) => {
+
+
 
                         return (
                             <section className="flex flex-col gap-4 mx-2 md:grid md:grid-cols-2">
@@ -303,16 +305,19 @@ const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) =>
                     )
                 }>
                     <div className="flex flex-col gap-0 mb-1">
-                        <h3 className="font-neue text-xl tracking-wider font-semibold uppercase">{item.name}</h3>
+                        <div className="flex items-center gap-2">
+                            <h3 className="font-neue text-xl tracking-wider font-semibold uppercase">{item.name}</h3>
+                            {italyProduct && <ItalyIngredientsStatement showText={false} />}
+                        </div>
                         <div className="flex flex-col gap-2">
                             {bestSeller && <AwardBadge>A mais desejada</AwardBadge>}
                             {bestMonthlySeller && <AwardBadge>Mais vendida do mes</AwardBadge>}
                         </div>
                     </div>
 
-                    {italyProduct && <ItalyIngredientsStatement />}
+
                     <p className="leading-snug text-[15px] my-2">{capitalize(item.ingredients)}</p>
-                    <CardapioItemPrice prices={item?.priceVariations} cnLabel="text-black" showValuta={false} />
+                    <CardapioItemPrice prices={item?.MenuItemSellingPriceVariation} cnLabel="text-black" showValuta={false} />
                     <CardapioItemActionBar item={item} />
                 </div>
                 {/* <CardapioItemImage imageURL={item.imageTransformedURL}
@@ -365,18 +370,21 @@ const CardapioItemFullImage = React.forwardRef(({ item }: CardapioItemFullImageP
                             )
                         }>
                             <div className="flex flex-col gap-0">
-                                <h3 className="font-urw text-xl">{item.name}</h3>
+                                <div className="flex items-center gap-2">
+                                    {italyProduct && <ItalyIngredientsStatement showText={false} />}
+                                    <h3 className="font-urw text-xl">{item.name}</h3>
+                                </div>
+
                                 <div className="flex flex-col gap-2">
                                     {bestSeller && <AwardBadge>A mais desejada</AwardBadge>}
                                     {bestMonthlySeller && <AwardBadge>Mais vendida do mes</AwardBadge>}
                                 </div>
                             </div>
 
-                            {italyProduct && <ItalyIngredientsStatement cnText="text-white" />}
 
                             <div className="flex flex-col gap-0 ">
-                                <p className="font-neue leading-tight text-[15px] my-2 tracking-wide">{capitalize(item.ingredients)}</p>
-                                <CardapioItemPrice prices={item?.priceVariations} cnLabel="text-white" cnValue="text-white font-semibold" showValuta={false} />
+                                <p className="font-neue leading-tight text-[15px] mt-1 mb-4 tracking-wide">{capitalize(item.ingredients)}</p>
+                                <CardapioItemPrice prices={item?.MenuItemSellingPriceVariation} cnLabel="text-white" cnValue="text-white font-semibold" showValuta={false} />
                             </div>
 
                         </div>
@@ -387,49 +395,7 @@ const CardapioItemFullImage = React.forwardRef(({ item }: CardapioItemFullImageP
             </div>
 
         </li>
-        // <li className="snap-start border-b py-2" id={item.id} ref={ref}>
-        //     {/* <CardapioItemDialog item={item} triggerComponent={
-        //     <CardapioItemImage item={item} />
-        // }> */}
 
-
-        //     <div className="grid grid-cols-8 min-h-[120px] mx-4 gap-x-4">
-        //         <div className={
-        //             cn(
-        //                 "flex flex-col mb-2 col-span-5",
-        //             )
-        //         }>
-        //             <div className="flex flex-col gap-0 mb-1">
-        //                 <h3 className="font-neue text-xl tracking-wider font-semibold uppercase">{item.name}</h3>
-        //                 <div className="flex flex-col gap-2">
-        //                     {bestSeller && <AwardBadge>A mais desejada</AwardBadge>}
-        //                     {bestMonthlySeller && <AwardBadge>Mais vendida do mes</AwardBadge>}
-        //                 </div>
-        //             </div>
-
-        //             {italyProduct && <ItalyIngredientsStatement />}
-        //             <p className="leading-snug text-[15px] my-2">{capitalize(item.ingredients)}</p>
-        //             <CardapioItemPrice prices={item?.priceVariations} cnLabel="text-black" showValuta={false} />
-        //             <CardapioItemActionBar item={item} />
-        //         </div>
-        //         {/* <CardapioItemImage imageURL={item.imageTransformedURL}
-        //             cnClassName="col-span-3 h-[120px] rounded-lg overflow-hidden"
-        //             placeholderImage={true}
-        //             cnImage={"bg-left"}
-        //         /> */}
-        //         <CardapioItemImageSingle
-        //             src={item.imageTransformedURL || ""}
-        //             placeholder={item.imagePlaceholderURL || ""}
-        //             placeholderIcon={true}
-        //             enableOverlay={false}
-        //             cnContainer="col-span-3 h-[120px] rounded-lg overflow-hidden"
-        //         />
-
-        //     </div>
-
-
-        //     {/* </CardapioItemDialog> */}
-        // </li>
     )
 })
 

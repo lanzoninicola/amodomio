@@ -39,29 +39,31 @@ import { slugifyString } from "~/utils/slugify";
 
 export interface MenuItemWithAssociations extends MenuItem {
   priceVariations: MenuItemPriceVariation[];
-  categoryId: string;
   Category: Category;
   tags: {
-    all: string[]; // Todos os nomes de tags
-    public: string[]; // Somente nomes de tags públicas
-    models: Tag[]; // Objetos completos das tags
+    all: string[];
+    public: string[];
+    models: Tag[];
   };
   MenuItemLike: MenuItemLike[];
   MenuItemShare: MenuItemShare[];
   MenuItemImage: MenuItemImage | null;
   MenuItemGalleryImage: MenuItemGalleryImage[];
   MenuItemGroup: MenuItemGroup;
-  MenuItemSellingPriceVariation: MenuItemSellingPriceVariation &
-    {
+  MenuItemSellingPriceVariation: Array<
+    MenuItemSellingPriceVariation & {
       MenuItemSellingChannel: MenuItemSellingChannel;
       MenuItemSize: MenuItemSize;
-    }[];
+    }
+  >;
   likes: {
     amount: number;
   };
-  shares: number;
+  shares: {
+    amount: number;
+  };
   imageTransformedURL: string;
-  imagePlaceholderURL: string;
+  imagePlaceholderURL?: string; // Opcional se for implementado
   meta: {
     isItalyProduct: boolean;
     isBestSeller: boolean;
@@ -71,27 +73,22 @@ export interface MenuItemWithAssociations extends MenuItem {
   };
 }
 
-export interface MenuItemEntityFindAllProps {
+export interface MenuItemEntityFindAllParams {
   where?: Prisma.MenuItemWhereInput;
+  mock?: boolean;
+  sellingChannelKey?: SellingChannelKey; // Key of the selling channel to filter by
   option?: {
     sorted?: boolean;
     direction?: "asc" | "desc";
   };
-  mock?: boolean;
-  sellingChannelKey?: SellingChannelKey; // Key of the selling channel to filter by
 }
 
-interface FindManyWithSellPriceVariationsProps
-  extends MenuItemEntityFindAllProps {
-  channelKey?: string;
-  sizeKey?: string;
-  includeMinimumPrice?: boolean;
-}
-
-interface FindManyWithSellPriceVariationsProps {
-  where?: any; // Substitua por tipo gerado do Prisma se possível
-  sizeKey?: string;
-  channelKey?: string;
+export interface MenuItemEntityFindAllOptions {
+  imageTransform?: boolean;
+  imageScaleWidth?: number;
+  sorted?: boolean;
+  direction?: "asc" | "desc";
+  cacheRevalidation?: boolean;
 }
 
 interface MenuItemEntityProps extends PrismaEntityProps {
@@ -129,20 +126,23 @@ export class MenuItemPrismaEntity {
   }
 
   async findAll(
-    params: MenuItemEntityFindAllProps = {
+    params: MenuItemEntityFindAllParams = {
       where: {},
       mock: false,
       sellingChannelKey: "cardapio", // Default selling channel key
     },
-    options = {
+    options: MenuItemEntityFindAllOptions = {
       imageTransform: false,
       imageScaleWidth: 1280,
+      cacheRevalidation: false,
     }
   ) {
     const cacheKey = `MenuItemPrismaEntity.findAll:${JSON.stringify(params)}`;
     let result = this.cacheManager.get<MenuItemWithAssociations[]>(cacheKey);
 
-    if (result) {
+    const shouldUseCache = result && options?.cacheRevalidation === false;
+
+    if (shouldUseCache) {
       return result;
     }
 
@@ -154,7 +154,6 @@ export class MenuItemPrismaEntity {
     const recordsFounded = await this.client.menuItem.findMany({
       where: params?.where,
       include: {
-        priceVariations: true,
         Category: true,
         tags: {
           include: {
@@ -201,7 +200,7 @@ export class MenuItemPrismaEntity {
         models: r.tags.map((t) => t.Tag),
       },
       likes: { amount: r.MenuItemLike.length },
-      shares: r.MenuItemShare.length,
+      shares: { amount: r.MenuItemShare.length },
       meta: {
         isItalyProduct: r.tags.some(
           (t) => t.Tag?.name.toLowerCase() === "produtos-italiano"
@@ -234,7 +233,7 @@ export class MenuItemPrismaEntity {
   }
 
   async findAllGroupedByCategory(
-    params: MenuItemEntityFindAllProps = {},
+    params: MenuItemEntityFindAllParams = {},
     options = {
       imageTransform: false,
       imageScaleWidth: 1280,
@@ -270,7 +269,7 @@ export class MenuItemPrismaEntity {
    * Find all menu items with cost associated to each size
    */
   async findManyWithCostVariations(
-    params: MenuItemEntityFindAllProps = {}
+    params: MenuItemEntityFindAllParams = {}
   ): Promise<MenuItemWithCostVariations[]> {
     const allMenuItems = await this.client.menuItem.findMany({
       where: params?.where,
@@ -319,6 +318,14 @@ export class MenuItemPrismaEntity {
     });
   }
 
+  async findOneWithCostVariations(id: MenuItem["id"]) {
+    const result = await this.findManyWithCostVariations({
+      where: { id },
+    });
+
+    return result[0];
+  }
+
   async findWithCostVariationsByItem(
     menuItemId: string
   ): Promise<MenuItemWithCostVariations | null> {
@@ -330,7 +337,7 @@ export class MenuItemPrismaEntity {
   }
 
   async findManyWithSellPriceVariations(
-    params?: MenuItemEntityFindAllProps,
+    params?: MenuItemEntityFindAllParams,
     sellingChannelKey?: string,
     options?: { includeAuditRecords?: boolean }
   ): Promise<MenuItemWithSellPriceVariations[]> {
@@ -439,6 +446,14 @@ export class MenuItemPrismaEntity {
     });
   }
 
+  async findOneWithSellPriceVariations(id: MenuItem["id"]) {
+    const result = await this.findManyWithSellPriceVariations({
+      where: { id },
+    });
+
+    return result[0];
+  }
+
   async findManyWithCostAndSellPriceVariations() {}
 
   async findById(
@@ -501,7 +516,9 @@ export class MenuItemPrismaEntity {
       likes: {
         amount: item.MenuItemLike.length,
       },
-      shares: item.MenuItemShare.length,
+      shares: {
+        amount: item.MenuItemShare.length,
+      },
     };
   }
 
@@ -514,7 +531,6 @@ export class MenuItemPrismaEntity {
     const item = await this.client.menuItem.findFirst({
       where: { slug },
       include: {
-        priceVariations: true,
         Category: true,
         tags: {
           include: {
@@ -528,6 +544,12 @@ export class MenuItemPrismaEntity {
         },
         MenuItemShare: true,
         MenuItemGalleryImage: true,
+        MenuItemSellingPriceVariation: {
+          include: {
+            MenuItemSellingChannel: true,
+            MenuItemSize: true,
+          },
+        },
       },
     });
 
@@ -555,7 +577,9 @@ export class MenuItemPrismaEntity {
         models: item.tags.map((t) => t.Tag),
       },
       likes: { amount: item.MenuItemLike.length },
-      shares: item.MenuItemShare.length,
+      shares: {
+        amount: item.MenuItemShare.length,
+      },
     };
   }
 

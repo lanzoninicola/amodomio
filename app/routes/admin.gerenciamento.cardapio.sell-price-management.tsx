@@ -114,12 +114,14 @@ export default function AdminGerenciamentoCardapioSellPriceManagement() {
                 return sellingChannel.map(
                   (channel: MenuItemSellingChannel) => {
                     return (
-                      <div className={
-                        cn(
-                          "hover:bg-muted flex flex-col border rounded-md p-2 my-4",
-                          activeTab === channel.key && "bg-slate-200",
-                        )
-                      }>
+                      <div
+                        key={channel?.id}
+                        className={
+                          cn(
+                            "hover:bg-muted flex flex-col border rounded-md p-2 my-4",
+                            activeTab === channel.key && "bg-slate-200",
+                          )
+                        }>
                         <div className="flex items-center justify-center gap-4 mb-2">
                           <h2 className="font-semibold text-center ">{channel.name}</h2>
                           <button onClick={() => setShowProfitSettings(!showProfitSettings)}

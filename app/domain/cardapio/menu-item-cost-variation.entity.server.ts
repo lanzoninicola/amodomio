@@ -107,7 +107,7 @@ export class MenuItemCostVariationPrismaEntity {
       );
 
     const sizeKeys: PizzaSizeKey[] = [
-      "pizza-small",
+      "pizza-individual",
       "pizza-medium",
       "pizza-big",
       "pizza-bigger",

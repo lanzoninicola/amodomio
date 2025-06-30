@@ -2,6 +2,7 @@ import prismaClient from "~/lib/prisma/client.server";
 import { PrismaEntityProps } from "~/lib/prisma/types.server";
 
 export type SizeKey =
+  | "pizza-individual"
   | "pizza-small"
   | "pizza-medium"
   | "pizza-big"
