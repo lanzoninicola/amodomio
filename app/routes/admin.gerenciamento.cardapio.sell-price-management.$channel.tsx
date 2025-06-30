@@ -1,5 +1,5 @@
 import { MenuItemSellingChannel } from "@prisma/client";
-import { Outlet } from "@remix-run/react";
+import { Outlet, useLocation } from "@remix-run/react";
 
 import { MenuItemWithSellPriceVariations } from "~/domain/cardapio/menu-item.types";
 import { LoggedUser } from "~/domain/auth/types.server";
@@ -14,9 +14,10 @@ export interface AdminGerenciamentoCardapioSellPriceManagementSingleChannelOutle
 }
 
 export default function AdminGerenciamentoCardapioSellPriceManagementSingleChannelOutlet() {
+  const { pathname } = useLocation()
 
 
-  return <Outlet />
+  return <Outlet key={pathname} />
 }
 
 

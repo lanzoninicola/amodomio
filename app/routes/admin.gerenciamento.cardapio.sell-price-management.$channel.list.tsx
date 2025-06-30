@@ -12,7 +12,7 @@ import prismaClient from "~/lib/prisma/client.server";
 import { badRequest } from "~/utils/http-response.server";
 import { menuItemSizePrismaEntity } from "~/domain/cardapio/menu-item-size.entity.server";
 import { Await, useLoaderData } from "@remix-run/react";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Loading from "~/components/loading/loading";
 import { MenuItemsFilters } from "~/domain/cardapio/components/menu-items-filters/menu-items-filters";
 import AlertsCostsAndSellPrice from "~/domain/cardapio/components/alerts-cost-and-sell-price/alerts-cost-and-sell-price";
@@ -24,6 +24,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       key: sellingChannelKey,
     },
   })
+
+  console.log({ currentSellingChannel })
 
   if (!currentSellingChannel) {
     return badRequest(`Can not find selling channel with key ${sellingChannelKey}`)
@@ -76,6 +78,10 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
           {/* @ts-ignore */}
           {([menuItemsWithSellPriceVariations, user, currentSellingChannel, groups, categories, sizes]) => {
             const [items, setItems] = useState<MenuItemWithSellPriceVariations[]>(menuItemsWithSellPriceVariations || [])
+
+            useEffect(() => {
+              console.log({ currentSellingChannel })
+            }, currentSellingChannel)
 
             const BreakEvenAmount = ({ amount }: { amount: number }) => {
               return (
