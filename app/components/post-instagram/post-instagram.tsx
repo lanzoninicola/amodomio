@@ -23,44 +23,69 @@ export default function PostInstagram({
   const [showFullCaption, setShowFullCaption] = useState(false);
   const [height, setHeight] = useReactState<number | "auto">(0);
   const captionRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (captionRef.current) {
       if (showFullCaption) {
         const scrollHeight = captionRef.current.scrollHeight;
         setHeight(scrollHeight);
-        // Após a transição, fixa para "auto" para não quebrar layout
         setTimeout(() => setHeight("auto"), 300);
       } else {
-        setHeight(captionRef.current.scrollHeight); // Força altura antes de colapsar
+        setHeight(captionRef.current.scrollHeight);
         requestAnimationFrame(() => setHeight(0));
       }
     }
   }, [showFullCaption]);
 
+  // 👉 função para expandir legenda e rolar até ela
+  const expandAndScrollToCaption = () => {
+    setShowFullCaption(true);
+    setTimeout(() => {
+      captionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
+  };
+
+  const compressAndScrollToContent = () => {
+    setShowFullCaption(false);
+    setTimeout(() => {
+      headerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
+  };
+
   return (
     <div className="w-[350px] border shadow-xl rounded-xl bg-white">
       <div className="flex flex-col">
         {/* Header */}
-        <div className="flex items-center gap-2 py-2 px-2 border-b">
+        <div
+          ref={headerRef}
+          className="flex items-center gap-3 py-2 px-2 border-b">
           <Logo color="white" circle className="w-[30px] p-0" />
-          <h1 className="text-sm font-mono font-semibold">A Modo Mio</h1>
+          <Logo color="black" onlyText className="w-[100px] h-[30px] md:w-[150px] md:h-[50px]" tagline={false} />
         </div>
 
-        {/* Content */}
-        {content}
+        {/* Content clicável */}
+        <div
+          className="cursor-pointer"
+          onClick={expandAndScrollToCaption}>
+          {content}
+        </div>
 
         {/* Actions */}
-        <PostInstagramActionBar postId={postId} likesAmount={likesAmount} sharesAmount={sharesAmount} />
+        <PostInstagramActionBar
+          postId={postId}
+          likesAmount={likesAmount}
+          sharesAmount={sharesAmount}
+        />
 
-        {/* Caption with transition */}
+        {/* Caption com transição */}
         <div className="border-t px-2 py-3 text-sm">
           {!showFullCaption && (
             <>
               {captionPreview}
               <button
                 className="text-blue-500 mt-1"
-                onClick={() => setShowFullCaption(true)}
+                onClick={expandAndScrollToCaption}
               >
                 Ler mais...
               </button>
@@ -70,14 +95,14 @@ export default function PostInstagram({
           <div
             ref={captionRef}
             style={{ height: height === "auto" ? "auto" : `${height}px` }}
-            className={`transition-all duration-300 ease-in-out overflow-hidden`}
+            className="transition-all duration-300 ease-in-out overflow-hidden"
           >
             {showFullCaption && (
               <div>
                 {captionFull}
                 <button
                   className="text-blue-500 ml-1"
-                  onClick={() => setShowFullCaption(false)}
+                  onClick={compressAndScrollToContent}
                 >
                   Fechar...
                 </button>
@@ -91,23 +116,21 @@ export default function PostInstagram({
 }
 
 interface PostInstagramActionBarProps {
-  postId: string
-  likesAmount: number
-  sharesAmount: number
+  postId: string;
+  likesAmount: number;
+  sharesAmount: number;
 }
 
-
 function PostInstagramActionBar({ postId, likesAmount, sharesAmount }: PostInstagramActionBarProps) {
-  const [likeIt, setLikeIt] = useState(false)
-  const [currentLikesAmount, setCurrentLikesAmount] = useState(likesAmount || 0)
-  const [currentSharesAmount, setCurrentSharesAmount] = useState(sharesAmount || 0)
+  const [likeIt, setLikeIt] = useState(false);
+  const [currentLikesAmount, setCurrentLikesAmount] = useState(likesAmount || 0);
+  const [currentSharesAmount, setCurrentSharesAmount] = useState(sharesAmount || 0);
 
   const fetcher = useFetcher();
 
   const likingIt = () => {
-
-    setLikeIt(true)
-    setCurrentLikesAmount(currentLikesAmount + 1)
+    setLikeIt(true);
+    setCurrentLikesAmount(currentLikesAmount + 1);
 
     fetcher.submit(
       {
@@ -121,17 +144,16 @@ function PostInstagramActionBar({ postId, likesAmount, sharesAmount }: PostInsta
 
   const shareIt = () => {
     if (!navigator?.share) {
-      console.log("Navegador não suporta o compartilhamento")
-      return
+      console.log("Navegador não suporta o compartilhamento");
+      return;
     }
 
-    const text = `Olha a novidade da pizzaria A Modo Mio deste inverno`
+    const text = `Olha a novidade da pizzaria A Modo Mio deste inverno`;
     navigator.share({
       title: "Lançamento de inverno no ar no A Modo Mio",
       text,
       url: `https://www.amodomio.com.br/cardapio#post-lancamento`
     }).then(() => {
-
       fetcher.submit(
         {
           action: "post-share-it",
@@ -139,10 +161,8 @@ function PostInstagramActionBar({ postId, likesAmount, sharesAmount }: PostInsta
         },
         { method: 'post' }
       );
-
-    }).catch((error) => {
-    })
-  }
+    }).catch((error) => { });
+  };
 
   return (
     <div className="flex justify-between px-4 py-2 w-full">
@@ -169,7 +189,6 @@ function PostInstagramActionBar({ postId, likesAmount, sharesAmount }: PostInsta
       </div>
       <div className="grid place-items-center">
         <WhatsappExternalLink
-
           phoneNumber="46991272525"
           ariaLabel="Envia uma mensagem com WhatsApp"
           message={"Olá, gostaria fazer um pedido"}
@@ -178,8 +197,6 @@ function PostInstagramActionBar({ postId, likesAmount, sharesAmount }: PostInsta
           <WhatsAppIcon color="black" />
         </WhatsappExternalLink>
       </div>
-
-
     </div>
   );
 }

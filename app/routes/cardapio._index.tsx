@@ -219,7 +219,7 @@ export default function CardapioWebIndex() {
     return (
 
 
-        <section id="post-lancamento" className="flex flex-col mb-24" data-element="cardapio-index">
+        <section className="flex flex-col mb-24" data-element="cardapio-index">
 
             <Separator className="my-4" />
 
@@ -230,7 +230,7 @@ export default function CardapioWebIndex() {
                     {(postFeatured) => {
 
                         return (
-                            <section className="grid place-items-center py-6">
+                            <section id="post-lancamento" className="grid place-items-center py-6">
                                 <PostInstagram
                                     postId={postFeatured?.id || ""}
                                     likesAmount={postFeatured?._count.PostLike || 0}
@@ -240,7 +240,7 @@ export default function CardapioWebIndex() {
                                     }
                                     captionPreview={
                                         <div className="flex flex-col gap-4 mb-4">
-                                            <p className="text-sm font-neue"><span className="text-sm font-semibold">amodomiopb </span>
+                                            <p className="text-sm font-neue"><span className="text-sm font-semibold">@amodomiopb </span>
                                                 Lançamento de inverno no ar! ❄️ Novas criações com sabores que aquecem, direto das montanhas italianas. 🇮🇹🔥
 
                                             </p>
