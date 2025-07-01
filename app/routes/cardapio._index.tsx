@@ -20,6 +20,10 @@ import { Carousel, CarouselContent, CarouselItem } from "~/components/ui/carouse
 import Autoplay from "embla-carousel-autoplay";
 import CardapioItemImageSingle from "~/domain/cardapio/components/cardapio-item-image-single/cardapio-item-image-single";
 import { SwiperCarousel } from "~/components/swiper-carousel/swiper-carousel";
+import { CloudinaryUtils } from "~/lib/cloudinary";
+import VideoBackground from "~/components/video-background/video-background";
+import Logo from "~/components/primitives/logo/logo";
+import { Bookmark, Heart, MessageCircle, Share2 } from "lucide-react";
 
 
 export const headers: HeadersFunction = () => ({
@@ -59,7 +63,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
     return defer({
         items,
-        tags
+        tags,
+        videoURLs: {
+            lancamento: {
+                video480: CloudinaryUtils.getVideoURL("2025-06-30_LANÇAMENTO_ESCRITA_VIDEO_p0i685"),
+                video1080: null
+            }
+        }
     })
 
 
@@ -130,7 +140,7 @@ export async function action({ request }: LoaderFunctionArgs) {
 }
 
 export default function CardapioWebIndex() {
-    const { items, tags } = useLoaderData<typeof loader>()
+    const { items, tags, videoURLs } = useLoaderData<typeof loader>()
 
 
 
@@ -141,31 +151,72 @@ export default function CardapioWebIndex() {
             <Separator className="my-4" />
 
             <Suspense fallback={<Loading />}>
+                <Await resolve={videoURLs}>
+
+                    {(videoURLs) => {
+
+                        const imageUrls = Array.from({ length: 7 }, (_, i) => `/images/criacoes-inverno/criacoes-inverno-0${i + 1}.png`);
+
+                        return (
+                            <section className="relative">
+                                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white z-50">
+                                    <div className="w-[300px] h-[400px] border shadow-xl rounded-lg bg-white">
+                                        <div className="flex flex-col bg-white">
+                                            <div className="flex items-center gap-2 py-2 px-2 border-b">
+                                                <Logo color="white" circle={true} className="w-[30px] p-0" />
+                                                <h1 className="text-sm font-mono font-semibold">A Modo Mio</h1>
+                                            </div>
+                                            <SwiperCarousel slides={imageUrls || []} />
+                                            <div className="flex justify-between p-2">
+                                                <div className="flex items-center gap-x-2">
+                                                    <Heart />
+                                                    <MessageCircle />
+                                                    <Share2 />
+                                                </div>
+                                                <Bookmark />
+                                            </div>
+                                            <div className="border px-2 py-3">
+                                                <p className="text-sm font-neue"><span className="text-sm font-semibold">amodomiopb</span> Lançamento de inverno no ar! ❄️ Novas criações com sabores que aquecem, direto das montanhas italianas. 🇮🇹🔥</p>
+                                            </div>
+                                        </div>
+
+                                    </div>
+                                </div>
+                                <VideoBackground
+                                    src={videoURLs.lancamento.video480 || ""}
+                                    overlay={false}
+                                    cnVideo="h-[600px]"
+
+                                />
+
+                            </section>
+                        )
+                    }}
+                </Await>
+            </Suspense>
+
+            <Suspense fallback={<Loading />}>
                 <Await resolve={items}>
 
                     {(items) => {
 
-                        const featuredImagesUrls = items.map(i => i.MenuItemGalleryImage.filter(img => img.isPrimary)[0])
-                            .slice(0, 10).map(i => i?.secureUrl || "")
-
-                        const imageUrls = Array.from({ length: 7 }, (_, i) => `/images/criacoes-inverno/criacoes-inverno-0${i + 1}.png`);
-
-
-
                         return (
-                            <section className="flex flex-col gap-4 mx-2 md:grid md:grid-cols-2">
+                            <>
 
-                                <SwiperCarousel slides={imageUrls || []} />
+                                <section className="flex flex-col gap-4 mx-2 md:grid md:grid-cols-2">
 
-                                <Separator className="my-4" />
+                                    {/* <SwiperCarousel slides={imageUrls || []} /> */}
+
+                                    <Separator className="my-4" />
 
 
-                                {/** @ts-ignore */}
-                                <CardapioItemListDestaque items={items} title="Sugestões do chef" tagFilter="em-destaque" />
-                                {/** @ts-ignore */}
-                                <CardapioItemListDestaque items={items} title="Mais vendidos" tagFilter="mais-vendido" carouselDelay={2100} />
+                                    {/** @ts-ignore */}
+                                    <CardapioItemListDestaque items={items} title="Sugestões do chef" tagFilter="em-destaque" />
+                                    {/** @ts-ignore */}
+                                    <CardapioItemListDestaque items={items} title="Mais vendidos" tagFilter="mais-vendido" carouselDelay={2100} />
 
-                            </section>
+                                </section>
+                            </>
                         )
                     }}
                 </Await>
@@ -193,7 +244,7 @@ export default function CardapioWebIndex() {
                 </Await>
 
             </Suspense>
-        </section>
+        </section >
 
 
     );
