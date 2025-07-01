@@ -20,10 +20,6 @@ import { Carousel, CarouselContent, CarouselItem } from "~/components/ui/carouse
 import Autoplay from "embla-carousel-autoplay";
 import CardapioItemImageSingle from "~/domain/cardapio/components/cardapio-item-image-single/cardapio-item-image-single";
 import { SwiperImagesCarousel } from "~/components/swiper-carousel/swiper-images-carousel";
-import { CloudinaryUtils } from "~/lib/cloudinary";
-import VideoBackground from "~/components/video-background/video-background";
-import Logo from "~/components/primitives/logo/logo";
-import { Bookmark, Heart, MessageCircle, Share2 } from "lucide-react";
 import PostInstagram from "~/components/post-instagram/post-instagram";
 import prismaClient from "~/lib/prisma/client.server";
 
@@ -232,8 +228,6 @@ export default function CardapioWebIndex() {
                 <Await resolve={postFeatured}>
 
                     {(postFeatured) => {
-
-                        console.log({ postFeatured })
 
                         return (
                             <section className="grid place-items-center py-6">

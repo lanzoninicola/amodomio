@@ -145,11 +145,15 @@ function PostInstagramActionBar({ postId, likesAmount, sharesAmount }: PostInsta
   }
 
   return (
-    <div className="flex justify-between px-4 pt-4 pb-2 w-full">
-      <div className="flex flex-col gap-x-4">
-        <div className="grid grid-cols-2 gap-x-4 items-center">
+    <div className="flex justify-between px-4 py-2 w-full">
+      <div className="flex gap-4 items-center">
+        <div className="flex flex-col items-center gap-1 cursor-pointer p-1 active:bg-black/50 " onClick={shareIt}>
           <Share2 color="black" />
-
+          <span className="text-xs text-center font-neue tracking-widest font-semibold uppercase text-black">
+            {currentSharesAmount}
+          </span>
+        </div>
+        <div className="flex flex-col items-center gap-1 cursor-pointer p-1 active:bg-black/50" onClick={likingIt}>
           <Heart
             className={cn(
               "stroke-black",
@@ -158,19 +162,12 @@ function PostInstagramActionBar({ postId, likesAmount, sharesAmount }: PostInsta
               likesAmount && likesAmount > 0 ? "stroke-red-500" : "stroke-black"
             )}
           />
-
-        </div>
-        <div className="grid grid-cols-2 gap-x-4 items-center">
-          <span className="text-lg text-center font-neue tracking-widest font-semibold uppercase text-white">
-            {currentSharesAmount > 0 && `${currentSharesAmount}`}
-          </span>
-          <span className="text-sm text-center font-neue tracking-widest font-semibold uppercase text-red-500">
-            {currentLikesAmount > 0 && `${currentLikesAmount}`}
-
+          <span className="text-xs text-center font-neue tracking-widest font-semibold uppercase text-red-500">
+            {currentLikesAmount}
           </span>
         </div>
       </div>
-      <div className="grid place-items-start">
+      <div className="grid place-items-center">
         <WhatsappExternalLink
 
           phoneNumber="46991272525"
