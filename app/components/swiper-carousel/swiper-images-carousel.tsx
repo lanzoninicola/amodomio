@@ -1,9 +1,9 @@
 import { Swiper, SwiperSlide } from 'swiper/react'
 import { Navigation, Pagination, Autoplay, EffectCards } from 'swiper/modules'
 
-export function SwiperCarousel({ slides }: { slides: string[] }) {
+export function SwiperImagesCarousel({ slides }: { slides: string[] }) {
   return (
-    <div className="relative w-full max-w-5xl mx-auto" element-name="swiper-carousel">
+    <div className="relative w-full max-w-5xl mx-auto" element-name="swiper-images-carousel">
       <Swiper
         modules={[Navigation, Pagination, Autoplay]}
         slidesPerView={1}
@@ -20,7 +20,7 @@ export function SwiperCarousel({ slides }: { slides: string[] }) {
               <img
                 src={src}
                 alt={`Slide ${idx + 1}`}
-                className="w-full h-full object-cover rounded-sm transition-transform duration-500 hover:scale-[1.02]"
+                className="w-full h-full object-cover transition-transform duration-500 hover:scale-[1.02]"
               />
 
             </SwiperSlide>
