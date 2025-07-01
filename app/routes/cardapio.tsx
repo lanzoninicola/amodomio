@@ -259,7 +259,7 @@ function CardapioFooter() {
     return (
         <div className={
             cn(
-                "fixed bottom-0 w-screen md:max-w-6xl md:-translate-x-1/2 md:left-1/2  shadow-sm",
+                "fixed bottom-0 w-screen md:max-w-6xl md:-translate-x-1/2 md:left-1/2  shadow-sm z-50",
             )
         }>
             <footer className="grid grid-cols-4 md:grid-cols-8 gap-x-2 bg-white px-4" >
