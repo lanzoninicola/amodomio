@@ -1,15 +1,13 @@
 
 import { ActionFunctionArgs, LoaderFunctionArgs, } from "@remix-run/node";
 import { Await, useLoaderData, defer, Form, useActionData } from "@remix-run/react";
-import { AlertCircleIcon, AlertTriangleIcon, InfoIcon, SearchIcon } from "lucide-react";
-import { Suspense, useState } from "react";
-import OptionTab from "~/components/layout/option-tab/option-tab";
+import { AlertCircleIcon } from "lucide-react";
+import { Suspense, useEffect, useState } from "react";
 import Loading from "~/components/loading/loading";
 import { NumericInput } from "~/components/numeric-input/numeric-input";
 import SubmitButton from "~/components/primitives/submit-button/submit-button";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "~/components/ui/accordion";
 import { Input } from "~/components/ui/input";
-import { Separator } from "~/components/ui/separator";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { toast } from "~/components/ui/use-toast";
 import { authenticator } from "~/domain/auth/google.server";
 import AlertsCostsAndSellPrice from "~/domain/cardapio/components/alerts-cost-and-sell-price/alerts-cost-and-sell-price";
@@ -23,16 +21,33 @@ import { badRequest, ok } from "~/utils/http-response.server";
 import parserFormDataEntryToNumber from "~/utils/parse-form-data-entry-to-number";
 import randomReactKey from "~/utils/random-react-key";
 import createUUID from "~/utils/uuid";
+import { MenuItemVisibilityFilterOption } from "./admin.gerenciamento.cardapio.main.list";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "~/components/ui/accordion";
+import prismaClient from "~/lib/prisma/client.server";
+import { MenuItemsFilters } from "~/domain/cardapio/components/menu-items-filters/menu-items-filters";
 
 
 
 export async function loader({ request }: LoaderFunctionArgs) {
 
-    const menuItemsWithCostVariationsAndRecommended = menuItemCostHandler.loadAll()
+    const menuItemWithCostVariations = menuItemCostHandler.loadAll()
 
     const user = authenticator.isAuthenticated(request);
 
-    const data = Promise.all([menuItemsWithCostVariationsAndRecommended, user]);
+    const menuItemGroups = prismaClient.menuItemGroup.findMany({
+        where: {
+            deletedAt: null,
+            visible: true
+        }
+    })
+
+    const menuItemCategories = prismaClient.category.findMany({
+        where: {
+            type: "menu"
+        }
+    })
+
+    const data = Promise.all([menuItemWithCostVariations, user, menuItemGroups, menuItemCategories]);
 
     return defer({
         data
@@ -184,68 +199,26 @@ export default function AdminGerenciamentoCardapioCostManagementIndex() {
             <Suspense fallback={<Loading />}>
                 <Await resolve={data}>
                     {/* @ts-ignore */}
-                    {([menuItemsWithCostVariationsAndRecommended, user]) => {
+                    {([menuItemWithCostVariations, user, groups, categories]) => {
 
                         {/* @ts-ignore */ }
-                        const [items, setItems] = useState<MenuItemWithCostVariations[]>(menuItemsWithCostVariationsAndRecommended.filter(item => item.visible === true && item.active === true) || [])
-
-                        const [optVisibleItems, setOptVisibleItems] = useState<boolean | null>(true)
-                        const [optActiveItems, setOptActiveItems] = useState<boolean | null>(null)
-
-                        const handleOptionVisibileItems = (state: boolean) => {
-                            setOptVisibleItems(state)
-                            setOptActiveItems(null)
-                            // @ts-ignore
-                            setItems(menuItemsWithCostVariationsAndRecommended.filter(item => item.visible === state && item.active === true))
-                        }
-                        const handleOptionActiveItems = (state: boolean) => {
-                            setOptActiveItems(state)
-                            setOptVisibleItems(null)
-                            // @ts-ignore
-                            setItems(menuItemsWithCostVariationsAndRecommended.filter(item => item.active === state))
-                        }
-
-                        const [search, setSearch] = useState("")
-
-                        const handleSearch = (event: React.ChangeEvent<HTMLInputElement>) => {
-                            const allItems = menuItemsWithCostVariationsAndRecommended.filter(item => item.visible === true && item.active === true)
-
-                            const value = event.target.value
-
-                            setSearch(value)
-                            // @ts-ignore
-                            if (!value || value.length === 0 || value === "") {
-                                return setItems(allItems)
-                            }
-
-                            const searchedItems = items
-                                .filter(item => {
-                                    return (
-                                        item.name?.toLowerCase().includes(value.toLowerCase())
-                                        || item.ingredients?.toLowerCase().includes(value.toLowerCase())
-                                    )
-                                })
-
-                            setItems(searchedItems)
-                        }
-
+                        const [items, setItems] = useState<MenuItemWithCostVariations[]>(menuItemWithCostVariations || [])
 
                         return (
                             <div className="flex flex-col">
-                                <div className="flex gap-4 items-center justify-center">
-                                    <OptionTab label="Venda ativa" onClickFn={() => handleOptionVisibileItems(true)} state={true} highlightCondition={optVisibleItems === true && optActiveItems === null} />
-                                    <span>-</span>
-                                    <OptionTab label="Venda pausada" onClickFn={() => handleOptionVisibileItems(false)} state={false} highlightCondition={optVisibleItems === false && optActiveItems === null} />
-                                    <span>-</span>
-                                    <OptionTab label="Inativos" onClickFn={() => handleOptionActiveItems(false)} state={false} highlightCondition={optActiveItems === false && optVisibleItems === null} />
 
-                                </div>
-                                <Separator className="my-4" />
-
-                                <AlertsCostsAndSellPrice items={items} />
-
-                                <div className="bg-slate-50 px-60 py-2 grid place-items-center mb-4 rounded-sm">
-                                    <Input name="search" className="w-full py-4 text-lg bg-white " placeholder="Pesquisar o sabor..." onChange={(e) => handleSearch(e)} value={search} />
+                                <div className="flex flex-col gap-2 py-2 md:py-0 md:grid md:grid-cols-8 md:items-center mb-4 bg-slate-50 px-1">
+                                    <MenuItemsFilters
+                                        // @ts-ignore
+                                        initialItems={menuItemWithCostVariations}
+                                        // @ts-ignore
+                                        groups={groups}
+                                        // @ts-ignore
+                                        categories={categories}
+                                        onItemsChange={(filtered) => setItems(filtered)}
+                                        cnContainer="col-span-7"
+                                    />
+                                    <AlertsCostsAndSellPrice items={items} cnContainer="col-span-1 flex justify-center md:justify-end w-full col-span-1" />
                                 </div>
 
                                 <div className="h-[500px] overflow-y-scroll">
@@ -255,144 +228,158 @@ export default function AdminGerenciamentoCardapioCostManagementIndex() {
                                             items.map((menuItem: MenuItemWithCostVariations) => {
 
                                                 return (
-                                                    <li key={menuItem.menuItemId} className="p-2">
-                                                        <div className="flex justify-between  items-center mb-4 bg-slate-300 rounded-md px-4 py-1">
+                                                    <li key={menuItem.menuItemId}>
 
-                                                            <h3 className="text-md font-semibold">{menuItem.name}</h3>
-                                                            <Form method="post" className="flex gap-2">
-                                                                <input type="hidden" name="menuItemId" value={menuItem.menuItemId} />
-                                                                {/* @ts-ignore */}
-                                                                <input type="hidden" name="updatedBy" value={user?.email || ""} />
-                                                                <SubmitButton
-                                                                    actionName="menu-item-cost-variation-upsert-all-proposed-input"
-                                                                    tabIndex={0}
-                                                                    cnContainer="bg-white border w-full hover:bg-slate-200"
-                                                                    cnLabel="text-[11px] tracking-widest text-black uppercase leading-[1.15]"
-                                                                    hideIcon
-                                                                    idleText="Aceitar todas as propostas"
-                                                                    loadingText="Aceitando..."
-                                                                />
-                                                            </Form>
-                                                        </div>
+                                                        <Accordion type="single" collapsible className="border rounded-md px-4 py-2 mb-4">
+                                                            <AccordionItem value="item-1" className="border-none">
+                                                                <AccordionTrigger className="py-2">
+                                                                    <h3 className="text-md font-semibold">{menuItem.name}</h3>
+                                                                </AccordionTrigger>
 
-                                                        <ul className="grid grid-cols-4 gap-x-1">
-                                                            {menuItem.costVariations.map((record) => (
-                                                                <section key={randomReactKey()} className="mb-8">
+                                                                <AccordionContent>
 
-                                                                    <ul className="flex gap-6">
-                                                                        <li key={record.sizeId} className={
-                                                                            cn(
-                                                                                "p-2 rounded-md",
-                                                                            )
-                                                                        }>
-                                                                            <div className="flex flex-col">
-                                                                                <div className={
-                                                                                    cn(
-                                                                                        " mb-2",
-                                                                                        record.sizeKey === "pizza-medium" && "grid place-items-center bg-black",
-                                                                                    )
-                                                                                }>
-                                                                                    <h4 className={
+                                                                    <ul className="grid grid-cols-5 gap-x-1">
+                                                                        {menuItem.costVariations.map((record) => (
+                                                                            <section key={randomReactKey()} className="mb-8">
+
+                                                                                <ul className="flex gap-6">
+                                                                                    <li key={record.sizeId} className={
                                                                                         cn(
-                                                                                            "text-[12px] font-medium uppercase tracking-wider",
-                                                                                            record.sizeKey === "pizza-medium" && "font-semibold text-white",
+                                                                                            "p-2 rounded-md",
                                                                                         )
                                                                                     }>
-                                                                                        {record.sizeName}
-                                                                                    </h4>
-                                                                                </div>
-
-                                                                                <Form method="post" className="flex flex-col gap-1 justify-center items-center">
-                                                                                    <div className="flex flex-col gap-2 mb-2">
-                                                                                        <input type="hidden" name="menuItemId" value={menuItem.menuItemId} />
-                                                                                        <input type="hidden" name="menuItemCostVariationId" value={record.menuItemCostVariationId ?? ""} />
-                                                                                        <input type="hidden" name="menuItemSizeId" value={record.sizeId ?? ""} />
-                                                                                        {/* @ts-ignore */}
-                                                                                        <input type="hidden" name="updatedBy" value={record.updatedBy || user?.email || ""} />
-                                                                                        <input type="hidden" name="previousCostAmount" value={record.previousCostAmount} />
-
-                                                                                        <div className="flex flex-col gap-2">
-                                                                                            <div className="flex flex-col gap-1">
-                                                                                                <div className="grid grid-cols-2 gap-2">
-
-                                                                                                    <div className="flex flex-col gap-1 items-center">
-                                                                                                        <div className="flex flex-col gap-y-0">
-                                                                                                            <span className="text-muted-foreground text-[11px]">Novo custo:</span>
-                                                                                                            <NumericInput name="costAmount" defaultValue={record.costAmount} />
-                                                                                                        </div>
-
-                                                                                                        <SubmitButton
-                                                                                                            actionName="menu-item-cost-variation-upsert-user-input"
-                                                                                                            tabIndex={0}
-                                                                                                            cnContainer="bg-slate-300 md:max-w-none hover:bg-slate-400"
-                                                                                                            cnLabel="text-[11px] tracking-widest text-black uppercase"
-                                                                                                            iconColor="black"
-
-                                                                                                        />
-
-
-                                                                                                    </div>
-
-                                                                                                    <div className="flex flex-col gap-1 items-center">
-                                                                                                        <div className="flex flex-col gap-y-0 w-ma">
-                                                                                                            <span className="text-muted-foreground text-[11px]">Valor proposto</span>
-                                                                                                            <NumericInput name="recommendedCostAmount" defaultValue={record.recommendedCostAmount} readOnly />
-                                                                                                        </div>
-                                                                                                        <SubmitButton
-                                                                                                            actionName="menu-item-cost-variation-upsert-proposed-input"
-                                                                                                            tabIndex={0}
-                                                                                                            cnContainer="bg-white border w-full hover:bg-slate-200 "
-                                                                                                            cnLabel="text-[11px] tracking-widest text-black uppercase leading-[1.15]"
-                                                                                                            hideIcon
-                                                                                                            idleText="Aceitar proposta"
-                                                                                                            loadingText="Aceitando..."
-                                                                                                        />
-                                                                                                    </div>
-
-                                                                                                </div>
-                                                                                                <SubmitButton
-                                                                                                    variant={"outline"}
-                                                                                                    actionName="menu-item-cost-variation-upsert-from-medium"
-                                                                                                    tabIndex={0}
-                                                                                                    cnContainer={
-                                                                                                        cn(
-                                                                                                            "md:max-w-none",
-                                                                                                            record.sizeKey !== "pizza-medium" && "hidden"
-                                                                                                        )
-                                                                                                    }
-                                                                                                    cnLabel="text-[11px] tracking-widest text-black uppercase leading-[1.15] "
-                                                                                                    iconColor="black"
-                                                                                                    idleText="Recalcular outros tamanhos"
-                                                                                                    loadingText="Recalculando..."
-                                                                                                />
+                                                                                        <div className="flex flex-col">
+                                                                                            <div className={
+                                                                                                cn(
+                                                                                                    " mb-2",
+                                                                                                    record.sizeKey === "pizza-medium" && "grid place-items-center bg-black",
+                                                                                                )
+                                                                                            }>
+                                                                                                <h4 className={
+                                                                                                    cn(
+                                                                                                        "text-[12px] font-medium uppercase tracking-wider",
+                                                                                                        record.sizeKey === "pizza-medium" && "font-semibold text-white",
+                                                                                                    )
+                                                                                                }>
+                                                                                                    {record.sizeName}
+                                                                                                </h4>
                                                                                             </div>
-                                                                                            {(record?.costAmount ?? 0) === 0 && (
-                                                                                                <div className="flex gap-2 items-center mt-2">
-                                                                                                    <AlertCircleIcon className="h-4 w-4 text-red-500" />
-                                                                                                    <span className="text-red-500 text-xs font font-semibold">Custo ficha tecnica não definido</span>
+
+                                                                                            <Form method="post" className="flex flex-col gap-1 justify-center items-center">
+                                                                                                <div className="flex flex-col gap-2 mb-2">
+                                                                                                    <input type="hidden" name="menuItemId" value={menuItem.menuItemId} />
+                                                                                                    <input type="hidden" name="menuItemCostVariationId" value={record.menuItemCostVariationId ?? ""} />
+                                                                                                    <input type="hidden" name="menuItemSizeId" value={record.sizeId ?? ""} />
+                                                                                                    {/* @ts-ignore */}
+                                                                                                    <input type="hidden" name="updatedBy" value={record.updatedBy || user?.email || ""} />
+                                                                                                    <input type="hidden" name="previousCostAmount" value={record.previousCostAmount} />
+
+                                                                                                    <div className="flex flex-col gap-2">
+                                                                                                        <div className="flex flex-col gap-1">
+                                                                                                            <div className="grid grid-cols-2 gap-2">
+
+                                                                                                                <div className="flex flex-col gap-1 items-center">
+                                                                                                                    <div className="flex flex-col gap-y-0">
+                                                                                                                        <span className="text-muted-foreground text-[11px]">Novo custo:</span>
+                                                                                                                        <NumericInput name="costAmount" defaultValue={record.costAmount} />
+                                                                                                                    </div>
+
+                                                                                                                    <SubmitButton
+                                                                                                                        actionName="menu-item-cost-variation-upsert-user-input"
+                                                                                                                        tabIndex={0}
+                                                                                                                        cnContainer="bg-slate-300 md:max-w-none hover:bg-slate-400"
+                                                                                                                        cnLabel="text-[11px] tracking-widest text-black uppercase"
+                                                                                                                        iconColor="black"
+
+                                                                                                                    />
+
+
+                                                                                                                </div>
+
+                                                                                                                <div className="flex flex-col gap-1 items-center">
+                                                                                                                    <div className="flex flex-col gap-y-0 w-ma">
+                                                                                                                        <span className="text-muted-foreground text-[11px]">Valor proposto</span>
+                                                                                                                        <NumericInput name="recommendedCostAmount" defaultValue={record.recommendedCostAmount} readOnly />
+                                                                                                                    </div>
+                                                                                                                    <SubmitButton
+                                                                                                                        actionName="menu-item-cost-variation-upsert-proposed-input"
+                                                                                                                        tabIndex={0}
+                                                                                                                        cnContainer="bg-white border w-full hover:bg-slate-200 "
+                                                                                                                        cnLabel="text-[11px] tracking-widest text-black uppercase leading-[1.15]"
+                                                                                                                        hideIcon
+                                                                                                                        idleText="Aceitar proposta"
+                                                                                                                        loadingText="Aceitando..."
+                                                                                                                    />
+                                                                                                                </div>
+
+                                                                                                            </div>
+                                                                                                            <div className="flex flex-col gap-2">
+                                                                                                                <SubmitButton
+                                                                                                                    actionName="menu-item-cost-variation-upsert-from-medium"
+                                                                                                                    tabIndex={0}
+                                                                                                                    cnContainer={
+                                                                                                                        cn(
+                                                                                                                            "md:max-w-none bg-blue-500",
+                                                                                                                            record.sizeKey !== "pizza-medium" && "hidden"
+                                                                                                                        )
+                                                                                                                    }
+                                                                                                                    cnLabel="text-[11px] tracking-widest text-white uppercase leading-[1.15] "
+                                                                                                                    iconColor="white"
+                                                                                                                    idleText="Recalcular outros tamanhos"
+                                                                                                                    loadingText="Recalculando..."
+
+                                                                                                                    disabled={record.sizeKey !== "pizza-medium" ||
+                                                                                                                        (record.costAmount === 0 || record.costAmount === null)
+                                                                                                                    }
+                                                                                                                />
+                                                                                                                <span className={
+                                                                                                                    cn(
+                                                                                                                        "text-[11px] text-muted-foreground font-semibold text-blue-500 leading-[1.2]",
+                                                                                                                        record.sizeKey !== "pizza-medium" && "hidden",
+                                                                                                                        record.sizeKey !== "pizza-medium" ||
+                                                                                                                        (record.costAmount !== 0 || record.costAmount !== null) && "hidden",
+                                                                                                                    )
+                                                                                                                }>
+                                                                                                                    Para calcular o custo dos outros tamanhos inserir o custo do tamanho médio.
+                                                                                                                </span>
+                                                                                                            </div>
+                                                                                                        </div>
+                                                                                                        {(record?.costAmount ?? 0) === 0 && (
+                                                                                                            <div className="flex gap-2 items-center mt-2">
+                                                                                                                <AlertCircleIcon className="h-4 w-4 text-red-500" />
+                                                                                                                <span className="text-red-500 text-xs font font-semibold">Custo ficha tecnica não definido</span>
+                                                                                                            </div>
+                                                                                                        )}
+                                                                                                    </div>
+
+
+
+
+                                                                                                    <div className="flex flex-col gap-1">
+                                                                                                        <span className="text-xs">Custo atual: {record.costAmount}</span>
+                                                                                                        <span className="text-xs text-muted-foreground">Custo anterior: {record.previousCostAmount}</span>
+                                                                                                    </div>
                                                                                                 </div>
-                                                                                            )}
+
+
+                                                                                            </Form>
                                                                                         </div>
+                                                                                    </li>
 
-
-
-
-                                                                                        <div className="flex flex-col gap-1">
-                                                                                            <span className="text-xs">Custo atual: {record.costAmount}</span>
-                                                                                            <span className="text-xs text-muted-foreground">Custo anterior: {record.previousCostAmount}</span>
-                                                                                        </div>
-                                                                                    </div>
-
-
-                                                                                </Form>
-                                                                            </div>
-                                                                        </li>
+                                                                                </ul>
+                                                                            </section>
+                                                                        ))}
 
                                                                     </ul>
-                                                                </section>
-                                                            ))}
 
-                                                        </ul>
+
+                                                                </AccordionContent>
+                                                            </AccordionItem>
+                                                        </Accordion>
+
+
+
+
 
 
                                                     </li>

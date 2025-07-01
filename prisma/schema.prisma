@@ -158,6 +158,7 @@ model GroceryListItem {
 
 model MenuItemGroup {
   id             String    @id @default(uuid())
+  key            String
   name           String
   description    String
   /// sortOrder should be 1000 for the first group, 2000 for the second, etc
@@ -387,6 +388,7 @@ model MenuItemSize {
   name                               String
   nameAbbreviated                    String?                              @map("name_abbreviated") // <- nova coluna
   description                        String?                              @map("description")
+  shortDescription                   String?                              @map("short_description")
   sortOrderIndex                     Int                                  @default(0) @map("sort_order_index")
   createdAt                          DateTime                             @map("created_at")
   updatedAt                          DateTime                             @default(now()) @updatedAt @map("updated_at")
@@ -576,6 +578,8 @@ model Session {
   updatedAt     DateTime        @default(now()) @updatedAt @map("updated_at")
   MenuItemLike  MenuItemLike[]
   MenuItemShare MenuItemShare[]
+  PostLike      PostLike[]
+  PostShare     PostShare[]
 
   @@map("sessions")
 }
@@ -841,4 +845,48 @@ model DeliveryFee {
 
   @@unique([bairroId, pizzeriaLocationId])
   @@map("delivery_fees")
+}
+
+model Post {
+  id        String      @id @default(uuid())
+  title     String
+  type      String
+  caption   String
+  /// featured => true show on home page
+  featured  Boolean     @default(false)
+  createdAt DateTime    @map("created_at")
+  updatedAt DateTime    @default(now()) @updatedAt @map("updated_at")
+  deletedAt DateTime?   @map("deleted_at")
+  PostLike  PostLike[]
+  PostShare PostShare[]
+
+  @@map("posts")
+}
+
+model PostLike {
+  id        String    @id @default(uuid())
+  Post      Post?     @relation(fields: [postId], references: [id])
+  postId    String?   @map("post_id")
+  sessionId String?   @map("session_id")
+  Session   Session?  @relation(fields: [sessionId], references: [id])
+  amount    Float     @default(0) @map("amount")
+  createdAt DateTime  @map("created_at")
+  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  @@map("post_likes")
+}
+
+model PostShare {
+  id        String    @id @default(uuid())
+  Post      Post?     @relation(fields: [postId], references: [id])
+  postId    String?   @map("post_id")
+  sessionId String?   @map("session_id")
+  Session   Session?  @relation(fields: [sessionId], references: [id])
+  amount    Float     @default(0) @map("amount")
+  createdAt DateTime  @map("created_at")
+  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  @@map("post_shares")
 }

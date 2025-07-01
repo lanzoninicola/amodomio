@@ -6,31 +6,18 @@ import { cn } from "~/lib/utils"
 
 
 
-interface MenuItemSwitchActivationProps {
+interface MenuItemSwitchVisibilityProps {
     menuItem: MenuItemWithAssociations | undefined,
-    active: boolean,
-    setActive: React.Dispatch<React.SetStateAction<boolean>>
     showStatus?: boolean
+    cnContainer?: string
     cnLabel?: string
     cnSubLabel?: string
-    cnContainer?: string
 }
 
-export default function MenuItemSwitchActivation({
-    menuItem,
-    active, setActive,
-    showStatus = true,
-    cnLabel,
-    cnSubLabel,
-    cnContainer
-
-}: MenuItemSwitchActivationProps) {
+export default function MenuItemSwitchVisibilitySubmit({ menuItem, cnContainer, showStatus = true, cnLabel, cnSubLabel }: MenuItemSwitchVisibilityProps) {
     const submitBtnRef = React.useRef<HTMLButtonElement>(null)
 
-    function handleActivation() {
-
-        setActive(!active)
-
+    function handleVisibility() {
         if (submitBtnRef.current) {
             submitBtnRef.current.click()
         }
@@ -48,27 +35,26 @@ export default function MenuItemSwitchActivation({
             <div className="flex flex-col gap-0">
                 <span className={
                     cn(
-                        "font-semibold text-sm text-red-500",
+                        "font-semibold text-sm",
                         cnLabel
                     )
-                }>Ativar</span>
+                }>Ativar venda</span>
                 {
                     showStatus && (
                         <span className={
                             cn(
-                                "text-[11px] text-red-400",
+                                "text-[11px] text-muted-foreground",
                                 cnSubLabel
                             )
                         }>
-                            Status: {menuItem?.active ? "Ativo" : "Não ativo"}
+                            Status: {menuItem?.visible ? "Ativado" : "Pausado"}
                         </span>
                     )
                 }
             </div>
-
-            <Switch defaultChecked={menuItem?.active || false} onCheckedChange={handleActivation} className="data-[state=checked]:bg-red-500" />
+            <Switch defaultChecked={menuItem?.visible || false} onCheckedChange={handleVisibility} />
             <input type="hidden" name="id" value={menuItem?.id} />
-            <button ref={submitBtnRef} className="hidden" type="submit" value={"menu-item-activation-change"} name="_action" />
+            <button ref={submitBtnRef} className="hidden" type="submit" value={"menu-item-visibility-change"} name="_action" />
 
         </Form>
     )
@@ -89,14 +75,14 @@ export default function MenuItemSwitchActivation({
         }
 
         const [err, result] = await tryit(menuItemPrismaEntity.update(id, {
-            active: !item.active
+            visible: !item.visible
         }))
 
         if (err) {
             return badRequest(err)
         }
 
-        const returnedMessage = !item.active === true ? `Sabor "${item.name}" visivel no cardápio` : `Sabor "${item.name}" não visivel no cardápio`;
+        const returnedMessage = !item.visible === true ? `Sabor "${item.name}" visivel no cardápio` : `Sabor "${item.name}" não visivel no cardápio`;
 
         return ok(returnedMessage);
     }

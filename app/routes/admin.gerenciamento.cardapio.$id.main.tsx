@@ -14,6 +14,7 @@ import prismaClient from "~/lib/prisma/client.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { badRequest, ok } from "~/utils/http-response.server";
 import { jsonParse } from "~/utils/json-helper";
+import tryit from "~/utils/try-it";
 
 export const meta: MetaFunction<typeof loader> = ({ data }) => {
     // @ts-ignore
@@ -102,10 +103,8 @@ export async function action({ request }: LoaderFunctionArgs) {
         return ok("Elemento atualizado com successo")
     }
 
-    if (_action === "menu-item-soft-delete") {
-
+    if (_action === "menu-item-visibility-change") {
         const id = values?.id as string
-        const loggedUser = jsonParse(values?.loggedUser as string)?.email || ""
 
         const [errItem, item] = await prismaIt(menuItemPrismaEntity.findById(id));
 
@@ -117,14 +116,68 @@ export async function action({ request }: LoaderFunctionArgs) {
             return badRequest("Item não encontrado")
         }
 
-        const [err, result] = await prismaIt(menuItemPrismaEntity.softDelete(id, loggedUser))
-
+        const [err, result] = await tryit(menuItemPrismaEntity.update(id, {
+            visible: !item.visible
+        }))
 
         if (err) {
             return badRequest(err)
         }
 
-        const returnedMessage = !item.active === false ? `Sabor "${item.name}" excluido` : `Algo deu errado ao excluir o sabor "${item.name}"`;
+        const returnedMessage = !item.visible === true ? `Sabor "${item.name}" visivel no cardápio` : `Sabor "${item.name}" não visivel no cardápio`;
+
+        return ok(returnedMessage);
+    }
+
+    if (_action === "menu-item-activation-change") {
+        const id = values?.id as string
+
+        const [errItem, item] = await prismaIt(menuItemPrismaEntity.findById(id));
+
+        if (errItem) {
+            return badRequest(errItem)
+        }
+
+        if (!item) {
+            return badRequest("Item não encontrado")
+        }
+
+        const [err, result] = await tryit(menuItemPrismaEntity.update(id, {
+            active: !item.active
+        }))
+
+        if (err) {
+            return badRequest(err)
+        }
+
+        const returnedMessage = !item.active === true ? `O sabor "${item.name}" foi ativado` : `O sabor "${item.name}" foi desativado`;
+
+        return ok(returnedMessage);
+    }
+
+    if (_action === "menu-item-upcoming-change") {
+        const id = values?.id as string
+
+        const [errItem, item] = await prismaIt(menuItemPrismaEntity.findById(id));
+
+        if (errItem) {
+            return badRequest(errItem)
+        }
+
+        if (!item) {
+            return badRequest("Item não encontrado")
+        }
+
+        const [err, result] = await tryit(menuItemPrismaEntity.update(id, {
+            upcoming: !item.upcoming,
+            visible: item.upcoming === true ? false : true
+        }))
+
+        if (err) {
+            return badRequest(err)
+        }
+
+        const returnedMessage = !item.upcoming === true ? `O sabor "\${item.name}" é um futuro lançamento` : `O sabor ${item.name} foi removido da futuro lançamento`;
 
         return ok(returnedMessage);
     }

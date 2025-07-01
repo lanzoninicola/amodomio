@@ -19,6 +19,9 @@ import CardapioItemPrice from "~/domain/cardapio/components/cardapio-item-price/
 import { Carousel, CarouselContent, CarouselItem } from "~/components/ui/carousel";
 import Autoplay from "embla-carousel-autoplay";
 import CardapioItemImageSingle from "~/domain/cardapio/components/cardapio-item-image-single/cardapio-item-image-single";
+import { SwiperImagesCarousel } from "~/components/swiper-carousel/swiper-images-carousel";
+import PostInstagram from "~/components/post-instagram/post-instagram";
+import prismaClient from "~/lib/prisma/client.server";
 
 
 export const headers: HeadersFunction = () => ({
@@ -48,19 +51,36 @@ export async function loader({ request }: LoaderFunctionArgs) {
         // mock: env === "development"
     }, {
         imageTransform: true,
-        imageScaleWidth: 375
+        imageScaleWidth: 375,
     })
-
-
 
 
     const tags = tagPrismaEntity.findAll({
         public: true
     })
 
+    const postFeatured = await prismaClient.post.findFirst({
+        where: {
+            featured: true,
+        },
+        select: {
+            id: true,
+            title: true, // ou quaisquer outros campos que você queira do post
+            _count: {
+                select: {
+                    PostLike: true,
+                    PostShare: true,
+                },
+            },
+        },
+    })
+
+
     return defer({
         items,
-        tags
+        tags,
+        postFeatured
+
     })
 
 
@@ -127,17 +147,160 @@ export async function action({ request }: LoaderFunctionArgs) {
 
     }
 
+    if (values?.action === "post-like-it") {
+        const postId = values?.postId as string
+        let amount = 0
+
+        amount = isNaN(Number(values?.likesAmount)) ? 1 : Number(values?.likesAmount)
+
+        const [err, likeAmount] = await prismaIt(prismaClient.postLike.create({
+            data: {
+                createdAt: new Date().toISOString(),
+                amount,
+                Post: {
+                    connect: {
+                        id: postId
+                    }
+                }
+            }
+        }))
+
+        if (err) {
+            return badRequest({
+                action: "post-like-it",
+                likeAmount
+            })
+        }
+
+        return ok({
+            action: "post-like-it",
+            likeAmount
+        })
+
+    }
+
+    if (values?.action === "post-share-it") {
+        const postId = values?.postId as string
+
+        const [err, shareAmount] = await prismaIt(prismaClient.postShare.create({
+            data: {
+                createdAt: new Date().toISOString(),
+                Post: {
+                    connect: {
+                        id: postId
+                    }
+                }
+            }
+        }))
+
+
+        if (err) {
+            return badRequest({
+                action: "post-share-it",
+                shareAmount
+            })
+        }
+
+        return ok({
+            action: "post-share-it",
+            shareAmount
+        })
+
+    }
+
     return null
 }
 
 export default function CardapioWebIndex() {
-    const { items, tags } = useLoaderData<typeof loader>()
+    const { items, tags, postFeatured } = useLoaderData<typeof loader>()
+
+    const imageUrls = Array.from({ length: 7 }, (_, i) => `/images/criacoes-inverno/criacoes-inverno-0${i + 1}.png`);
 
     return (
+
 
         <section className="flex flex-col mb-24" data-element="cardapio-index">
 
             <Separator className="my-4" />
+
+            {/* Post Lançamento  */}
+            <Suspense fallback={<Loading />}>
+                <Await resolve={postFeatured}>
+
+                    {(postFeatured) => {
+
+                        return (
+                            <section id="post-lancamento" className="grid place-items-center py-6">
+                                <PostInstagram
+                                    postId={postFeatured?.id || ""}
+                                    likesAmount={postFeatured?._count.PostLike || 0}
+                                    sharesAmount={postFeatured?._count.PostShare || 0}
+                                    content={
+                                        <SwiperImagesCarousel slides={imageUrls || []} />
+                                    }
+                                    captionPreview={
+                                        <div className="flex flex-col gap-4 mb-4">
+                                            <p className="text-sm font-neue"><span className="text-sm font-semibold">@amodomiopb </span>
+                                                Lançamento de inverno no ar! ❄️ Novas criações com sabores que aquecem, direto das montanhas italianas. 🇮🇹🔥
+
+                                            </p>
+                                            <p className="font-neue">*** Sabores disponíveis somente no cardápio A Modo Mio ou via WhatsApp (46) 99127 2525</p>
+                                        </div>
+                                    }
+                                    captionFull={
+                                        <section className="p-2 space-y-6 font-neue">
+                                            <h2 className="text-lg font-semibold">Lançamento de inverno no ar! ❄️</h2>
+                                            <p>Novas criações com sabores que aquecem, direto das montanhas italianas. 🇮🇹🔥</p>
+                                            <h3 className="block text-md">
+                                                Sabores invernais com inspiração nas Montanhas Italianas
+                                            </h3>
+
+                                            <article className="space-y-2">
+                                                <h4 className="text-lg font-semibold font-mono">🏔️ TRENTINA</h4>
+                                                <p><span className="font-semibold">Ingredientes:</span> Molho de tomate italiano, muçarela, gorgonzola, bacon defumado e parmesão.</p>
+                                                <p><span className="font-semibold">Perfil:</span> 👉 Intensa, cremosa e crocante.</p>
+                                                <p><span className="font-semibold">Inspiração:</span> Homenagem direta ao Trentino, terra de montanhas, neve, queijos fortes e sabores defumados. Um sabor que transmite o espírito dos refúgios alpinos da região, conforto e tradição.</p>
+                                            </article>
+
+                                            <article className="space-y-2">
+                                                <h4 className="text-lg font-semibold font-mono">🏔️ ETNA</h4>
+                                                <p><span className="font-semibold fontmo">Ingredientes:</span> Molho de tomate italiano, muçarela, abobrinha assada, provolone defumado, nozes e geleia apimentada.</p>
+                                                <p><span className="font-semibold">Perfil:</span> 👉 Vegetariana, surpreendente e levemente adocicada.</p>
+                                                <p><span className="font-semibold">Inspiração:</span> O vulcão ativo da Sicília inspira uma pizza cheia de energia e calor, com notas defumadas, doces e crocantes. Uma verdadeira explosão de sabores.</p>
+                                            </article>
+
+                                            <article className="space-y-2">
+                                                <h4 className="text-lg font-semibold font-mono">🏔️ MARMOLADA</h4>
+                                                <p><span className="font-semibold">Ingredientes:</span> Molho de tomate italiano, muçarela, cogumelos salteados, brie, presunto cru e molho pesto artesanal.</p>
+                                                <p><span className="font-semibold">Perfil:</span> 👉 Sofisticada, aromática e cheia de personalidade.</p>
+                                                <p><span className="font-semibold">Inspiração:</span> A Marmolada é a Rainha das Dolomitas. Seus bosques e trilhas inspiram uma pizza rica em sabores da montanha: cogumelos, queijos e ervas.</p>
+                                            </article>
+
+                                            <article className="space-y-2">
+                                                <h4 className="text-lg font-semibold font-mono">🏔️ GRAN PARADISO</h4>
+                                                <p><span className="font-semibold">Ingredientes:</span> Molho de tomate italiano, muçarela, bacon defumado, brie, nozes e geleia de damasco.</p>
+                                                <p><span className="font-semibold">Perfil:</span> 👉 Doce, salgada e crocante.</p>
+                                                <p><span className="font-semibold">Inspiração:</span> Uma montanha símbolo de equilíbrio e natureza preservada. Esta pizza traduz esse conceito com uma combinação harmoniosa de doce, salgado e crocância.</p>
+                                            </article>
+
+                                            <div className="bg-green-700 text-white font-neue px-2 py-1 space-y-2 rounded-md">
+                                                <p>Sabores disponíveis somente no cardápio A Modo Mio ou via WhatsApp (46) 99127 2525</p>
+                                            </div>
+                                        </section>
+
+
+                                    }
+                                />
+
+                            </section>
+                        )
+                    }}
+                </Await>
+            </Suspense>
+
+            <Separator className="my-4" />
+
+            {/* destaques */}
 
             <Suspense fallback={<Loading />}>
                 <Await resolve={items}>
@@ -145,15 +308,17 @@ export default function CardapioWebIndex() {
                     {(items) => {
 
                         return (
-                            <section className="flex flex-col gap-4 mx-2 md:grid md:grid-cols-2">
+                            <>
 
+                                <section className="flex flex-col gap-4 mx-2 md:grid md:grid-cols-2">
 
-                                {/** @ts-ignore */}
-                                <CardapioItemListDestaque items={items} title="Sugestões do chef" tagFilter="em-destaque" />
-                                {/** @ts-ignore */}
-                                <CardapioItemListDestaque items={items} title="Mais vendidos" tagFilter="mais-vendido" carouselDelay={2100} />
+                                    {/** @ts-ignore */}
+                                    <CardapioItemListDestaque items={items} title="Sugestões do chef" tagFilter="em-destaque" />
+                                    {/** @ts-ignore */}
+                                    <CardapioItemListDestaque items={items} title="Mais vendidos" tagFilter="mais-vendido" carouselDelay={2100} />
 
-                            </section>
+                                </section>
+                            </>
                         )
                     }}
                 </Await>
@@ -171,6 +336,8 @@ export default function CardapioWebIndex() {
                     }}
                 </Await>
             </Suspense>
+
+            {/* Lista items */}
             <Suspense fallback={<Loading />}>
                 <Await resolve={items}>
 
@@ -181,7 +348,7 @@ export default function CardapioWebIndex() {
                 </Await>
 
             </Suspense>
-        </section>
+        </section >
 
 
     );
@@ -305,16 +472,19 @@ const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) =>
                     )
                 }>
                     <div className="flex flex-col gap-0 mb-1">
-                        <h3 className="font-neue text-xl tracking-wider font-semibold uppercase">{item.name}</h3>
+                        <div className="flex items-center gap-2">
+                            <h3 className="font-neue text-xl tracking-wider font-semibold uppercase">{item.name}</h3>
+                            {italyProduct && <ItalyIngredientsStatement showText={false} />}
+                        </div>
                         <div className="flex flex-col gap-2">
                             {bestSeller && <AwardBadge>A mais desejada</AwardBadge>}
                             {bestMonthlySeller && <AwardBadge>Mais vendida do mes</AwardBadge>}
                         </div>
                     </div>
 
-                    {italyProduct && <ItalyIngredientsStatement />}
+
                     <p className="leading-snug text-[15px] my-2">{capitalize(item.ingredients)}</p>
-                    <CardapioItemPrice prices={item?.priceVariations} cnLabel="text-black" showValuta={false} />
+                    <CardapioItemPrice prices={item?.MenuItemSellingPriceVariation} cnLabel="text-black" showValuta={false} />
                     <CardapioItemActionBar item={item} />
                 </div>
                 {/* <CardapioItemImage imageURL={item.imageTransformedURL}
@@ -367,18 +537,21 @@ const CardapioItemFullImage = React.forwardRef(({ item }: CardapioItemFullImageP
                             )
                         }>
                             <div className="flex flex-col gap-0">
-                                <h3 className="font-urw text-xl">{item.name}</h3>
+                                <div className="flex items-center gap-2">
+                                    {italyProduct && <ItalyIngredientsStatement showText={false} />}
+                                    <h3 className="font-urw text-xl">{item.name}</h3>
+                                </div>
+
                                 <div className="flex flex-col gap-2">
                                     {bestSeller && <AwardBadge>A mais desejada</AwardBadge>}
                                     {bestMonthlySeller && <AwardBadge>Mais vendida do mes</AwardBadge>}
                                 </div>
                             </div>
 
-                            {italyProduct && <ItalyIngredientsStatement cnText="text-white" />}
 
                             <div className="flex flex-col gap-0 ">
-                                <p className="font-neue leading-tight text-[15px] my-2 tracking-wide">{capitalize(item.ingredients)}</p>
-                                <CardapioItemPrice prices={item?.priceVariations} cnLabel="text-white" cnValue="text-white font-semibold" showValuta={false} />
+                                <p className="font-neue leading-tight text-[15px] mt-1 mb-4 tracking-wide">{capitalize(item.ingredients)}</p>
+                                <CardapioItemPrice prices={item?.MenuItemSellingPriceVariation} cnLabel="text-white" cnValue="text-white font-semibold" showValuta={false} />
                             </div>
 
                         </div>
@@ -389,49 +562,7 @@ const CardapioItemFullImage = React.forwardRef(({ item }: CardapioItemFullImageP
             </div>
 
         </li>
-        // <li className="snap-start border-b py-2" id={item.id} ref={ref}>
-        //     {/* <CardapioItemDialog item={item} triggerComponent={
-        //     <CardapioItemImage item={item} />
-        // }> */}
 
-
-        //     <div className="grid grid-cols-8 min-h-[120px] mx-4 gap-x-4">
-        //         <div className={
-        //             cn(
-        //                 "flex flex-col mb-2 col-span-5",
-        //             )
-        //         }>
-        //             <div className="flex flex-col gap-0 mb-1">
-        //                 <h3 className="font-neue text-xl tracking-wider font-semibold uppercase">{item.name}</h3>
-        //                 <div className="flex flex-col gap-2">
-        //                     {bestSeller && <AwardBadge>A mais desejada</AwardBadge>}
-        //                     {bestMonthlySeller && <AwardBadge>Mais vendida do mes</AwardBadge>}
-        //                 </div>
-        //             </div>
-
-        //             {italyProduct && <ItalyIngredientsStatement />}
-        //             <p className="leading-snug text-[15px] my-2">{capitalize(item.ingredients)}</p>
-        //             <CardapioItemPrice prices={item?.priceVariations} cnLabel="text-black" showValuta={false} />
-        //             <CardapioItemActionBar item={item} />
-        //         </div>
-        //         {/* <CardapioItemImage imageURL={item.imageTransformedURL}
-        //             cnClassName="col-span-3 h-[120px] rounded-lg overflow-hidden"
-        //             placeholderImage={true}
-        //             cnImage={"bg-left"}
-        //         /> */}
-        //         <CardapioItemImageSingle
-        //             src={item.imageTransformedURL || ""}
-        //             placeholder={item.imagePlaceholderURL || ""}
-        //             placeholderIcon={true}
-        //             enableOverlay={false}
-        //             cnContainer="col-span-3 h-[120px] rounded-lg overflow-hidden"
-        //         />
-
-        //     </div>
-
-
-        //     {/* </CardapioItemDialog> */}
-        // </li>
     )
 })
 

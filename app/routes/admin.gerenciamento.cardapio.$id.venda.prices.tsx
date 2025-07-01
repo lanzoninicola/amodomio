@@ -1,22 +1,17 @@
-import { MenuItemPriceVariation } from "@prisma/client";
-import { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
-import { useActionData, useLoaderData, useNavigation, useOutletContext } from "@remix-run/react";
-import { useState } from "react";
-import Fieldset from "~/components/ui/fieldset";
-import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
+import { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
+import { Await, defer, Link, Outlet, useLoaderData, useLocation } from "@remix-run/react";
+import { channel } from "diagnostics_channel";
+import { List } from "lucide-react";
+import { Suspense } from "react";
+import Loading from "~/components/loading/loading";
 import { Separator } from "~/components/ui/separator";
-import { authenticator } from "~/domain/auth/google.server";
-import MenuItemPriceVariationForm, { MenuItemPriceVariationFormAction } from "~/domain/cardapio/components/menu-item-price-variation-form/menu-item-price-variation-form";
-import { defaultItemsPriceVariations, suggestPriceVariations } from "~/domain/cardapio/fn.utils";
-import { menuItemPriceVariationsEntity } from "~/domain/cardapio/menu-item-price-variations.prisma.entity.server";
-import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
+import { menuItemPrismaEntity, MenuItemWithAssociations } from "~/domain/cardapio/menu-item.prisma.entity.server";
+import prismaClient from "~/lib/prisma/client.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { cn } from "~/lib/utils";
-import { badRequest, ok, serverError } from "~/utils/http-response.server";
-import { jsonParse } from "~/utils/json-helper";
-import parserFormDataEntryToNumber from "~/utils/parse-form-data-entry-to-number";
-import { urlAt } from "~/utils/url";
+import getSearchParam from "~/utils/get-search-param";
+import { badRequest, serverError } from "~/utils/http-response.server";
+import { lastUrlSegment, urlAt } from "~/utils/url";
 
 export const meta: MetaFunction = ({ data }) => {
     const item: MenuItemWithAssociations = data?.payload?.item
@@ -26,9 +21,12 @@ export const meta: MetaFunction = ({ data }) => {
     ];
 };
 
+
 export async function loader({ request, params }: LoaderFunctionArgs) {
-    const itemId = urlAt(request.url, -3);
-    let user = await authenticator.isAuthenticated(request);
+
+
+    const itemId = params.id
+
 
     if (!itemId) {
         return badRequest("Nenhum item encontrado");
@@ -44,89 +42,68 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         return badRequest("Nenhum item encontrado");
     }
 
-    return ok({
-        item,
-        loggedUser: user
-    });
+    const sellingChannnels = await prismaClient.menuItemSellingChannel.findMany();
+
+
+    const returnedData = Promise.all([
+        sellingChannnels,
+    ]);
+
+    return defer({
+        returnedData
+    })
 }
 
-export async function action({ request }: ActionFunctionArgs) {
-
-    let formData = await request.formData();
-    const { _action, ...values } = Object.fromEntries(formData);
-
-    // console.log({ action: _action, values })
-
-    if (_action === "menu-item-price-variation-update") {
-
-        const amount = isNaN(Number(values?.amount)) ? 0 : Number(values?.amount)
-        const latestAmount = parserFormDataEntryToNumber(values?.latestAmount)
-        const discountPercentage = isNaN(Number(values?.discountPercentage)) ? 0 : Number(values?.discountPercentage)
-        const showOnCardapio = values?.showOnCardapio === "on" ? true : false
-        const updatedBy = jsonParse(values?.updatedBy)?.email || ""
-
-        const nextPrice: Partial<MenuItemPriceVariation> = {
-            id: values.id as string,
-            amount,
-            discountPercentage,
-            showOnCardapio,
-            latestAmount,
-            updatedBy
-        }
-
-        const [err, result] = await prismaIt(menuItemPriceVariationsEntity.update(values.id as string, nextPrice))
-
-        if (err) {
-            return badRequest(err)
-        }
-
-        return ok("Elemento atualizado com successo")
-    }
-
-    return ok("Elemento atualizado com successo")
-}
 
 
 export default function SingleMenuItemVendaPrice() {
+    const { returnedData } = useLoaderData<typeof loader>();
+    const { pathname } = useLocation()
 
-
-
-    const loaderData = useLoaderData<typeof loader>()
-    const item: MenuItemWithAssociations = loaderData.payload?.item
-    let priceVariations = item.priceVariations || []
-    let formAction: MenuItemPriceVariationFormAction = "menu-item-price-variation-update"
-
-    const loggedUser = loaderData.payload?.loggedUser
-
-
-    if (priceVariations.length === 0) {
-        priceVariations = defaultItemsPriceVariations() as MenuItemWithAssociations["priceVariations"]
-        formAction = "menu-item-price-variation-create"
-    }
-
-    const [currentBasePrice, setCurrentBasePrice] = useState(item?.basePriceAmount || 0)
+    const activeTab = lastUrlSegment(pathname)
 
 
     return (
+        <Suspense fallback={<Loading />}>
+            <Await resolve={returnedData}>
 
-        <div className="flex flex-col">
-            <div className="flex flex-col gap-4">
-                <div className="grid grid-cols-8 items-center">
-                    <span className="text-xs uppercase tracking-wider col-span-1 font-semibold text-muted-foreground ">Sabor</span>
-                    <span className="text-sm text-right font-semibold">{item.name}</span>
-                </div>
-                <div className="grid grid-cols-8 items-center">
-                    <span className="text-xs uppercase tracking-wider col-span-1 font-semibold text-muted-foreground">Preço Base</span>
-                    <span className="text-sm text-right font-semibold">{item.basePriceAmount}</span>
-                </div>
-            </div>
-            <Separator className="my-8" />
-            <div className="flex flex-col gap-4">
-                {priceVariations.map((pv: MenuItemPriceVariation) => <MenuItemPriceVariationForm
-                    key={pv.id} price={pv} action={formAction} loggedUser={loggedUser}
-                    basePrice={currentBasePrice} />
-                )}
-            </div>
-        </div>
+                {/* @ts-ignore */}
+                {([sellingChannels]) => {
+
+
+                    return (
+                        <div className="flex flex-col">
+                            <ul className="grid grid-cols-3">
+                                {
+                                    sellingChannels && (
+                                        sellingChannels.sort((a, b) => a.sortOrderIndex - b.sortOrderIndex).map(sc => {
+                                            return (
+                                                <Link to={`${sc.key}`}
+                                                    className="hover:bg-muted my-4"
+                                                >
+                                                    <div className={
+                                                        cn(
+                                                            "flex items-center gap-2 justify-center  py-1",
+                                                            activeTab === "list" && "bg-muted font-semibold rounded-md "
+                                                        )
+                                                    }>
+                                                        <List size={14} />
+                                                        <span className="text-[14px] uppercase tracking-wider font-semibold">
+                                                            {sc.name}
+                                                        </span>
+                                                    </div>
+                                                </Link>
+                                            )
+                                        })
+                                    )
+                                }
+                            </ul>
+                            <Separator className="mb-8" />
+                            <Outlet key={pathname} />
+                        </div>
+                    )
+                }}
+            </Await>
+        </Suspense>
     )
 }

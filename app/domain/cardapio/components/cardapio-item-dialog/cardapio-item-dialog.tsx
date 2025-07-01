@@ -54,7 +54,7 @@ export default function CardapioItemDialog({ item, children, triggerComponent }:
 
                         <p className="leading-snug text-[15px] mb-6">{capitalize(item.ingredients)}</p>
 
-                        <CardapioItemPrice prices={item?.priceVariations} cnLabel="text-black items-start" showValuta={false} />
+                        <CardapioItemPrice prices={item?.MenuItemSellingPriceVariation} cnLabel="text-black items-start" showValuta={false} />
                     </div>
                     {children}
                     <DialogClose asChild>

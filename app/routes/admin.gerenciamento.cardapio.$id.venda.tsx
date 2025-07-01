@@ -15,7 +15,7 @@ export default function SingleMenuItemVenda() {
 
     return (
 
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col">
 
             <div className="flex items-center col-span-6">
 
@@ -29,9 +29,9 @@ export default function SingleMenuItemVenda() {
 
             </div>
 
-            <Separator className="my-4" />
+            <Separator className="my-1" />
 
-            <Outlet />
+            <Outlet key={location.pathname} />
         </div>
     )
 }

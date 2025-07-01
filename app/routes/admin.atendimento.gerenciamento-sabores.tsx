@@ -6,7 +6,7 @@ import { Input } from "~/components/ui/input";
 import { mapPriceVariationsLabel } from "~/domain/cardapio/fn.utils";
 import CopyButton from "~/components/primitives/copy-button/copy-button";
 import Loading from "~/components/loading/loading";
-import MenuItemSwitchVisibility from "~/domain/cardapio/components/menu-item-switch-visibility/menu-item-switch-visibility";
+import MenuItemSwitchVisibilitySubmit from "~/domain/cardapio/components/menu-item-switch-visibility/menu-item-switch-visibility-submit";
 import { LoaderFunctionArgs } from "@remix-run/node";
 import { badRequest, ok } from "~/utils/http-response.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
@@ -19,7 +19,7 @@ import { Button } from "~/components/ui/button";
 import { DialogTitle } from "@radix-ui/react-dialog";
 import { Car, ExpandIcon } from "lucide-react";
 import OptionTab from "~/components/layout/option-tab/option-tab";
-import MenuItemSwitchActivation from "~/domain/cardapio/components/menu-item-switch-activation.tsx/menu-item-switch-activation";
+import MenuItemSwitchActivationSubmit from "~/domain/cardapio/components/menu-item-switch-activation.tsx/menu-item-switch-activation-submit";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { MenuItemSellingPriceVariation } from "@prisma/client";
 
@@ -155,7 +155,7 @@ export default function AdminAtendimentoGerenciamentoSabores() {
             // @ts-ignore
             return (
               <div className="flex flex-col gap-4">
-                <div className="grid grid-cols-1 md:grid-cols-8 gap-4 items-center">
+                <div className="grid grid-cols-1 md:grid-cols-8 gap-4 items-center bg-slate-50 px-4 py-2">
                   <h1 className="text-lg font-bold tracking-tighter md:text-lg col-span-2">
                     Gerençiamento sabores
                   </h1>
@@ -168,8 +168,9 @@ export default function AdminAtendimentoGerenciamentoSabores() {
                       else if (value === "inactive") handleOptionActiveItems(false)
                     }}
                     defaultValue={"active"}
+
                   >
-                    <SelectTrigger className="w-[200px] col-span-2">
+                    <SelectTrigger className="w-[200px] col-span-2 bg-white">
                       <SelectValue placeholder="Filtrar vendas" />
                     </SelectTrigger>
                     <SelectContent >
@@ -280,8 +281,8 @@ function CardapioItem({ item, setVisible, visible, active, setActive, showExpand
       <Separator className="my-3" />
 
       <div className="flex justify-end">
-        {/* <MenuItemSwitchActivation menuItem={item} active={active} setActive={setActive} cnLabel="text-[12px]" cnContainer="md:justify-start" /> */}
-        <MenuItemSwitchVisibility menuItem={item} visible={visible} setVisible={setVisible} cnLabel="text-[12px]" cnContainer="justify-items-end" />
+        {/* <MenuItemSwitchActivationSubmit menuItem={item} active={active} setActive={setActive} cnLabel="text-[12px]" cnContainer="md:justify-start" /> */}
+        <MenuItemSwitchVisibilitySubmit menuItem={item} cnLabel="text-[12px]" cnContainer="justify-items-end" />
       </div>
     </div>
   )

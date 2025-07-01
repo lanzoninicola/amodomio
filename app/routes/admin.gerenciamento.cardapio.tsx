@@ -1,6 +1,6 @@
 import { MenuItemTag } from "@prisma/client";
 import { Link, Outlet, MetaFunction, useLocation } from "@remix-run/react";
-import { CircleArrowOutUpRight, Printer, SquarePlus } from "lucide-react";
+import { ChevronRight, CircleArrowOutUpRight, Printer, SquarePlus } from "lucide-react";
 import Container from "~/components/layout/container/container";
 import { Separator } from "~/components/ui/separator";
 import MenuItemNavLink from "~/domain/cardapio/components/menu-item-nav-link/menu-item-nav-link";
@@ -94,24 +94,21 @@ export default function AdminCardapioOutlet() {
         <Container className="mb-24" fullWidth={true} >
             <div className={
                 cn(
-                    "flex flex-col",
+                    "flex flex-col mb-4",
                     isExportPage && "hidden",
                 )
             }>
 
-                <div className="w-full mb-8 rounded-lg" >
-                    <div className="flex justify-between items-center">
-                        <h1 className="font-semibold text-2xl mb-1">Gerenciamento Cardápio</h1>
-
-                        <Link to="/admin/gerenciamento/cardapio/main/list" >
-                            <span className="text-[12px] underline uppercase tracking-wider">Voltar para a lista</span>
-                        </Link>
+                <div className="flex justify-between items-center">
+                    <div className="flex items-center">
+                        <ChevronRight size={14} />
+                        <h1 className="font-semibold text-sm text-muted-foreground">Gerenciamento Cardápio</h1>
                     </div>
-                    <Separator className="mb-2" />
+
+                    <Link to="/admin/gerenciamento/cardapio/main/list" >
+                        <span className="text-[12px] underline uppercase tracking-wider">Voltar para a lista</span>
+                    </Link>
                 </div>
-
-
-
 
             </div>
 

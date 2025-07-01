@@ -12,8 +12,9 @@ import MenuItemPriceVariationUtility from "../../menu-item-price-variations-util
 import randomReactKey from "~/utils/random-react-key"
 import { cn } from "~/lib/utils"
 import useFormSubmissionnState from "~/hooks/useFormSubmissionState"
-import MenuItemSwitchVisibility from "../menu-item-switch-visibility/menu-item-switch-visibility"
-import MenuItemSwitchActivation from "../menu-item-switch-activation.tsx/menu-item-switch-activation"
+import MenuItemSwitchVisibilitySubmit from "../menu-item-switch-visibility/menu-item-switch-visibility-submit"
+import MenuItemSwitchActivationSubmit from "../menu-item-switch-activation.tsx/menu-item-switch-activation-submit"
+import MenuItemSwitchUpcomingSubmit from "../menu-item-switch-upcoming/menu-item-switch-upcoming-submit"
 
 
 interface MenuItemCardProps {
@@ -32,20 +33,7 @@ export default function MenuItemCard({ item, dragAndDrop }: MenuItemCardProps) {
     // const [searchParams, setSearchParams] = useSearchParams()
     // const action = searchParams.get("_action")
 
-    const [visible, setVisible] = useState(false)
-    const [active, setActive] = useState(false)
-    const submitBtnRef = React.useRef<HTMLButtonElement>(null)
-
     const featuredImage = item?.MenuItemGalleryImage?.find(img => img.isPrimary)
-
-    function handleVisibility() {
-
-        setVisible(!visible)
-
-        if (submitBtnRef.current) {
-            submitBtnRef.current.click()
-        }
-    }
 
     function copyItemId() {
         navigator.clipboard.writeText(item.id)
@@ -68,7 +56,7 @@ export default function MenuItemCard({ item, dragAndDrop }: MenuItemCardProps) {
 
         <div className="p-4 rounded-md border border-gray-200 bg-white w-full">
             <div className="flex flex-col gap-2">
-                <section className="flex flex-col gap-2 md:grid md:grid-cols-12 md:items-center w-full">
+                <section className="flex flex-col gap-2 md:grid md:grid-cols-12 md:items-center md:gap-0 w-full">
 
                     <div className="hidden md:block w-16 h-16 bg-muted rounded-lg bg-center bg-no-repeat bg-cover col-span-1">
                         {featuredImage?.thumbnailUrl ?
@@ -77,7 +65,7 @@ export default function MenuItemCard({ item, dragAndDrop }: MenuItemCardProps) {
                             <div className="w-full h-full bg-muted rounded-lg" />
                         }
                     </div>
-                    <div className="flex items-center col-span-5 gap-2">
+                    <div className="flex items-center col-span-3 gap-2">
                         <div className="flex flex-col gap-0">
                             <h4 className="text-lg font-bold tracking-tight leading-9 md:leading-7">
                                 {item.name}
@@ -87,19 +75,10 @@ export default function MenuItemCard({ item, dragAndDrop }: MenuItemCardProps) {
                         </div>
                     </div>
 
-                    <div className="flex gap-4 col-span-5">
-                        <MenuItemSwitchActivation
-                            menuItem={item}
-                            setActive={setActive}
-                            active={active}
-                            cnContainer="md:justify-start"
-                        />
-                        <MenuItemSwitchVisibility
-                            menuItem={item}
-                            setVisible={setVisible}
-                            visible={visible}
-                        />
-
+                    <div className="flex gap-4 col-span-7">
+                        <MenuItemSwitchUpcomingSubmit menuItem={item} cnLabel="leading-[1.2]" />
+                        <MenuItemSwitchVisibilitySubmit menuItem={item} />
+                        <MenuItemSwitchActivationSubmit menuItem={item} cnContainer="md:justify-start" />
                     </div>
 
                     <div className="col-span-1 flex justify-end">

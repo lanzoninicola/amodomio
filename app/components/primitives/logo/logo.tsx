@@ -7,17 +7,35 @@ interface LogoProps {
     className?: string
     tagline?: boolean
     onlyText?: boolean
+    circle?: boolean
 }
 
 
-export default function Logo({ color = "white", className, tagline = true, onlyText = false }: LogoProps) {
+export default function Logo({ color = "white", className, tagline = true, onlyText = false, circle = false }: LogoProps) {
 
-    if (onlyText) {
+    if (onlyText && circle === false) {
         return <LogoOnlyText color={color} className={className} />
     }
 
-    if (tagline) {
-        return <LogoTagline color={color} className={className} />
+    if (tagline && circle === false) {
+        return (
+
+            <LogoTagline color={color} className={className} />
+
+        )
+
+
+    }
+
+    if (circle) {
+        return <div className={cn(
+            "rounded-full p-2",
+            color === "white" && "bg-black",
+            color === "black" && "bg-white",
+            className
+        )}>
+            <img src={`/images/logos/logo-redondo-${color}.svg`} alt="Logo A Modo Mio" />
+        </div>
     }
 
     return <LogoSvg color={color} className={className} />
