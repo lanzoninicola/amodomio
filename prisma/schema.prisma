@@ -445,14 +445,16 @@ model MenuItemTag {
 }
 
 model Tag {
-  id          String        @id @default(uuid())
-  name        String
-  public      Boolean       @default(false)
-  colorHEX    String        @default("#e0e0e0") @map("color_hex")
-  deletedAt   DateTime?     @map("deleted_at")
-  createdAt   DateTime      @map("created_at")
-  updatedAt   DateTime      @default(now()) @updatedAt @map("updated_at")
-  MenuItemTag MenuItemTag[]
+  id             String        @id @default(uuid())
+  name           String
+  public         Boolean       @default(false)
+  colorHEX       String        @default("#e0e0e0") @map("color_hex")
+  featuredFilter Boolean       @default(false) @map("featured_filter")
+  sortOrderIndex Int           @default(0) @map("sort_order_index")
+  deletedAt      DateTime?     @map("deleted_at")
+  createdAt      DateTime      @map("created_at")
+  updatedAt      DateTime      @default(now()) @updatedAt @map("updated_at")
+  MenuItemTag    MenuItemTag[]
 
   @@map("tags")
 }

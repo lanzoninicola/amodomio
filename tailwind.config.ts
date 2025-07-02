@@ -148,6 +148,10 @@ module.exports = {
           "0%": { transform: "scale(1)" },
           "100%": { transform: "scale(1.05)" },
         },
+        fadeInTag: {
+          "0%": { opacity: 0, transform: "translateY(-5px)" },
+          "100%": { opacity: 1, transform: "translateY(0)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -169,6 +173,7 @@ module.exports = {
         animation: {
           zoomOnce: "zoomOnce 2.5s ease-out forwards",
         },
+        fadeInTag: "fadeIn 0.3s ease-out forwards",
       },
       backgroundImage: {
         hero: "url('/images/hero-image.jpg')",
