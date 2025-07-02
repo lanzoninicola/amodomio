@@ -1,87 +1,90 @@
 import { Tag } from "@prisma/client"
-import { Link, useSearchParams } from "@remix-run/react"
-import { Filter, FilterIcon } from "lucide-react"
-import { Badge } from "~/components/ui/badge"
+import { Link } from "@remix-run/react"
+import { Filter } from "lucide-react"
 import BadgeTag from "~/domain/tags/components/badge-tag"
 import { cn } from "~/lib/utils"
 
-export default function FiltersTags({ tags, showBanner = false }: { tags: Tag[], showBanner?: boolean }) {
+interface FiltersTagsProps {
+    tags: Tag[]
+    currentTag: Tag
+    onCurrentTagSelected: (tag: Tag) => void
+    showBanner?: boolean
+}
 
-    const [searchParams, setSearchParams] = useSearchParams()
-    const tagFilter = searchParams.get("tag")
-
+export default function FiltersTags({
+    tags,
+    currentTag,
+    onCurrentTagSelected,
+    showBanner = false
+}: FiltersTagsProps) {
     const tagsWithTodos = [
         {
             id: "all",
             name: "Todos",
-            colorHEX: "#000000",
+            colorHEX: "#eab308",
+            featuredFilter: false,
+            sortOrderIndex: 0,
             createdAt: new Date(),
-            deletedAt: null,
             updatedAt: new Date(),
+            deletedAt: null,
             public: true
         },
         ...tags
     ]
 
-    const linkUrl = (tag: Tag) => {
-        if (tag.id === "all") {
-            return "/cardapio"
-        }
-        return `/cardapio?tag=${tag.name}`
-    }
+    const sortedTags = tagsWithTodos.sort((a, b) =>
+        Number(b.featuredFilter) - Number(a.featuredFilter)
+    )
 
     return (
-
         <div className="bg-white sticky top-20 z-10">
-            <div className="flex flex-col ">
-                <p className="font-neue text-sm font-semibold min-w-[70px] pl-2">Filtrar por:</p>
-                {/* <FilterIcon className="w-4 h-4 mx-2" /> */}
-                <div className="w-full overflow-x-auto pr-2" >
+            <div className="flex flex-col">
+                <p className="font-neue text-sm font-semibold pl-2">Filtrar por:</p>
 
-                    <ul className="py-1 pr-2" style={{
-                        display: "-webkit-inline-box"
-                    }}>
+                <div className="w-full overflow-x-auto pr-2">
+                    <ul className="flex py-1 pr-2">
+                        {sortedTags.map(tag => {
+                            const isActive = currentTag?.id === tag.id
 
-                        {tagsWithTodos.map((tag) => (
-                            <li key={tag.id} className="ml-3">
-                                <Link to={linkUrl(tag)}
-                                    className="text-[13px] font-medium tracking-widest font-neue uppercase text-muted-foreground">
-                                    <BadgeTag tag={tag}
-                                        classNameLabel={
-                                            cn(
-                                                "text-muted-foreground py-2",
-                                                tagFilter === tag.name && "text-black border border-b-black border-b-2 border-t-0 border-r-0 border-l-0"
-                                            )
-                                        }
-                                        allowRemove={false}
-                                        tagColor={false}
-                                    />
-                                </Link>
-                            </li>
-                        ))}
-
-
+                            return (
+                                <li key={tag.id} className="my-2">
+                                    <button
+                                        title={tag.name} // Tooltip nativo do navegador
+                                        onClick={() => onCurrentTagSelected(tag as Tag)}
+                                    >
+                                        <BadgeTag
+                                            tag={tag}
+                                            classNameContainer={cn(
+                                                "transition-all duration-300 ease-in-out min-w-[100px] justify-center text-center px-3 py-1",
+                                            )}
+                                            classNameLabel={cn(
+                                                "font-neue text-sm border-b-2 border-b-black uppercase whitespace-nowrap overflow-hidden text-ellipsis transition-all duration-300 ease-in-out",
+                                                isActive && "text-black border-b-2 border-b-yellow-500",
+                                            )}
+                                            allowRemove={false}
+                                            tagColor={false}
+                                        />
+                                    </button>
+                                </li>
+                            )
+                        })}
                     </ul>
                 </div>
             </div>
 
-            {
-                showBanner && tagFilter && (
-                    <div className="absolute top-12 left-0 right-0 flex gap-2 items-center px-2 bg-blue-300 py-[0.15rem]">
-                        <div className="flex items-center justify-between w-full">
-                            <div className="flex gap-1 items-center">
-                                <Filter size={12} />
-                                <p className="font-neue text-[12px]">Você está visualizando os sabores <span className="font-semibold">"{tagFilter}"</span></p>
-                            </div>
-                            <Link to={`/cardapio`} className="font-neue text-[12px] underline font-semibold self-end">
-                                Voltar
-                            </Link>
-                        </div>
+            {showBanner && currentTag && (
+                <div className="absolute top-12 left-0 right-0 flex items-center justify-between px-2 py-1 bg-blue-300 text-[12px] font-neue animate-fade-in">
+                    <div className="flex items-center gap-1">
+                        <Filter size={12} />
+                        <p>
+                            Você está visualizando os sabores <span className="font-semibold">"{currentTag.name}"</span>
+                        </p>
                     </div>
-                )
-            }
+                    <Link to="/cardapio" className="underline font-semibold">
+                        Voltar
+                    </Link>
+                </div>
+            )}
         </div>
-
-
     )
 }
