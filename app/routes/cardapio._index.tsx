@@ -22,6 +22,7 @@ import CardapioItemImageSingle from "~/domain/cardapio/components/cardapio-item-
 import { SwiperImagesCarousel } from "~/components/swiper-carousel/swiper-images-carousel";
 import PostInstagram from "~/components/post-instagram/post-instagram";
 import prismaClient from "~/lib/prisma/client.server";
+import { Tag } from "@prisma/client";
 
 
 export const headers: HeadersFunction = () => ({
@@ -214,6 +215,8 @@ export async function action({ request }: LoaderFunctionArgs) {
 export default function CardapioWebIndex() {
     const { items, tags, postFeatured } = useLoaderData<typeof loader>()
 
+
+
     const imageUrls = Array.from({ length: 7 }, (_, i) => `/images/criacoes-inverno/criacoes-inverno-0${i + 1}.png`);
 
     return (
@@ -326,27 +329,46 @@ export default function CardapioWebIndex() {
 
             <Separator className="my-4" />
 
-            {/* <Loading /> */}
-            <Suspense fallback={<Loading />}>
 
-                <Await resolve={tags}>
-                    {(tags) => {
-                        // @ts-ignore
-                        return <FiltersTags tags={tags ?? []} />
-                    }}
-                </Await>
-            </Suspense>
 
             {/* Lista items */}
-            <Suspense fallback={<Loading />}>
-                <Await resolve={items}>
 
-                    {(items) => {
-                        // @ts-ignore
-                        return <CardapioItemList allItems={items ?? []} />
+            <Suspense fallback={<Loading />}>
+                <Await resolve={Promise.all([tags, items])}>
+                    {([loadedTags, loadedItems]) => {
+                        const [currentItems, setCurrentItems] = useState(loadedItems);
+                        const [currentFilterTag, setCurrentFilterTag] = useState<Tag | null>(null);
+
+                        const onCurrentTagSelected = (tag: Tag | null) => {
+                            setCurrentFilterTag(tag);
+
+                            if (tag?.id === "all") {
+                                setCurrentItems(loadedItems);
+                                return
+                            }
+
+                            if (tag) {
+                                const filtered = loadedItems.filter(item =>
+                                    item.tags?.public.some(t => t === tag.name)
+                                );
+                                setCurrentItems(filtered);
+                            } else {
+                                setCurrentItems(loadedItems);
+                            }
+                        };
+
+                        return (
+                            <div className="flex flex-col ">
+                                <FiltersTags
+                                    tags={loadedTags}
+                                    currentTag={currentFilterTag}
+                                    onCurrentTagSelected={onCurrentTagSelected}
+                                />
+                                <CardapioItemList allItems={currentItems} />
+                            </div>
+                        );
                     }}
                 </Await>
-
             </Suspense>
         </section >
 
@@ -613,10 +635,11 @@ function CardapioItemListDestaque({ title, items, tagFilter, carouselDelay = 200
                                                 src={featuredImage?.secureUrl || ""}
                                                 placeholder={i.imagePlaceholderURL || ""}
 
-                                                placeholderIcon={true}
+                                                // placeholderIcon={true}
 
                                                 // placeholderText="Imagem não disponível"
                                                 cnContainer="h-full w-full rounded-md"
+                                                cnPlaceholderText="text-[11px]"
                                             />
 
                                             <div className="absolute bottom-2 w-full">
