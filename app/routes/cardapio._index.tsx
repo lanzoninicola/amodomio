@@ -635,10 +635,11 @@ function CardapioItemListDestaque({ title, items, tagFilter, carouselDelay = 200
                                                 src={featuredImage?.secureUrl || ""}
                                                 placeholder={i.imagePlaceholderURL || ""}
 
-                                                placeholderIcon={true}
+                                                // placeholderIcon={true}
 
                                                 // placeholderText="Imagem não disponível"
                                                 cnContainer="h-full w-full rounded-md"
+                                                cnPlaceholderText="text-[11px]"
                                             />
 
                                             <div className="absolute bottom-2 w-full">

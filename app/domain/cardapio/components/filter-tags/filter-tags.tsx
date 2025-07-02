@@ -42,7 +42,7 @@ export default function FiltersTags({
                 <p className="font-neue text-sm font-semibold pl-2">Filtrar por:</p>
 
                 <div className="w-full overflow-x-auto pr-2">
-                    <ul className="flex py-1 pr-2">
+                    <ul className="flex gap-4 overflow-x-auto whitespace-nowrap px-2" >
                         {sortedTags.map(tag => {
                             const isActive = currentTag?.id === tag.id
 
