@@ -49,7 +49,7 @@ export default function BadgeTag({
                 />
             )}
 
-            <span
+            <p
                 className={cn(
                     "text-sm font-medium leading-none truncate",
                     textColor,
@@ -57,7 +57,7 @@ export default function BadgeTag({
                 )}
             >
                 {tag.name}
-            </span>
+            </p>
 
             {allowRemove && (
                 <button

@@ -55,11 +55,12 @@ export default function FiltersTags({
                                         <BadgeTag
                                             tag={tag}
                                             classNameContainer={cn(
-                                                "transition-all duration-300 ease-in-out min-w-[100px] justify-center text-center px-3 py-1",
+                                                "border border-black rounded-xl my-2",
+                                                "transition-all duration-300 ease-in-out",
+                                                isActive && "outline outline-yellow-500 border-none",
                                             )}
                                             classNameLabel={cn(
-                                                "font-neue text-sm border-b-2 border-b-black uppercase whitespace-nowrap overflow-hidden text-ellipsis transition-all duration-300 ease-in-out",
-                                                isActive && "text-black border-b-2 border-b-yellow-500",
+                                                "font-neue text-xs uppercase whitespace-nowrap overflow-hidden text-ellipsis transition-all duration-300 ease-in-out",
                                             )}
                                             allowRemove={false}
                                             tagColor={false}
