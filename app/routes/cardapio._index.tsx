@@ -226,106 +226,115 @@ export default function CardapioWebIndex() {
 
             <Separator className="my-4" />
 
-            {/* Post Lançamento  */}
-            <Suspense fallback={<Loading />}>
-                <Await resolve={postFeatured}>
+            <div className="flex flex-col  md:flex-row md:gap-12">
 
-                    {(postFeatured) => {
+                {/* Post Lançamento  */}
+                <Suspense fallback={<Loading />}>
+                    <Await resolve={postFeatured}>
 
-                        return (
-                            <section id="post-lancamento" className="grid place-items-center py-6">
-                                <PostInstagram
-                                    postId={postFeatured?.id || ""}
-                                    likesAmount={postFeatured?._count.PostLike || 0}
-                                    sharesAmount={postFeatured?._count.PostShare || 0}
-                                    content={
-                                        <SwiperImagesCarousel slides={imageUrls || []} />
-                                    }
-                                    captionPreview={
-                                        <div className="flex flex-col gap-4 mb-4">
-                                            <p className="text-sm font-neue"><span className="text-sm font-semibold">@amodomiopb </span>
-                                                Lançamento de inverno no ar! ❄️ Novas criações com sabores que aquecem, direto das montanhas italianas. 🇮🇹🔥
+                        {(postFeatured) => {
 
-                                            </p>
-                                            <p className="font-neue">*** Sabores disponíveis somente no cardápio A Modo Mio ou via WhatsApp (46) 99127 2525</p>
-                                        </div>
-                                    }
-                                    captionFull={
-                                        <section className="p-2 space-y-6 font-neue">
-                                            <h2 className="text-lg font-semibold">Lançamento de inverno no ar! ❄️</h2>
-                                            <p>Novas criações com sabores que aquecem, direto das montanhas italianas. 🇮🇹🔥</p>
-                                            <h3 className="block text-md">
-                                                Sabores invernais com inspiração nas Montanhas Italianas
-                                            </h3>
+                            return (
+                                <section id="post-lancamento" className="p-4" >
+                                    <SectionTitle>Alerta de novidade</SectionTitle>
+                                    <div className="grid place-items-center ">
+                                        <PostInstagram
+                                            postId={postFeatured?.id || ""}
+                                            likesAmount={postFeatured?._count.PostLike || 0}
+                                            sharesAmount={postFeatured?._count.PostShare || 0}
+                                            content={
+                                                <SwiperImagesCarousel slides={imageUrls || []} />
+                                            }
+                                            captionPreview={
+                                                <div className="flex flex-col gap-4 mb-4">
+                                                    <p className="text-sm font-neue"><span className="text-sm font-semibold">@amodomiopb </span>
+                                                        Lançamento de inverno no ar! ❄️ Novas criações com sabores que aquecem, direto das montanhas italianas. 🇮🇹🔥
 
-                                            <article className="space-y-2">
-                                                <h4 className="text-lg font-semibold font-mono">🏔️ TRENTINA</h4>
-                                                <p><span className="font-semibold">Ingredientes:</span> Molho de tomate italiano, muçarela, gorgonzola, bacon defumado e parmesão.</p>
-                                                <p><span className="font-semibold">Perfil:</span> 👉 Intensa, cremosa e crocante.</p>
-                                                <p><span className="font-semibold">Inspiração:</span> Homenagem direta ao Trentino, terra de montanhas, neve, queijos fortes e sabores defumados. Um sabor que transmite o espírito dos refúgios alpinos da região, conforto e tradição.</p>
-                                            </article>
+                                                    </p>
+                                                    <p className="font-neue">*** Sabores disponíveis somente no cardápio A Modo Mio ou via WhatsApp (46) 99127 2525</p>
+                                                </div>
+                                            }
+                                            captionFull={
+                                                <section className="p-2 space-y-6 font-neue">
+                                                    <h2 className="text-lg font-semibold">Lançamento de inverno no ar! ❄️</h2>
+                                                    <p>Novas criações com sabores que aquecem, direto das montanhas italianas. 🇮🇹🔥</p>
+                                                    <h3 className="block text-md">
+                                                        Sabores invernais com inspiração nas Montanhas Italianas
+                                                    </h3>
 
-                                            <article className="space-y-2">
-                                                <h4 className="text-lg font-semibold font-mono">🏔️ ETNA</h4>
-                                                <p><span className="font-semibold fontmo">Ingredientes:</span> Molho de tomate italiano, muçarela, abobrinha assada, provolone defumado, nozes e geleia apimentada.</p>
-                                                <p><span className="font-semibold">Perfil:</span> 👉 Vegetariana, surpreendente e levemente adocicada.</p>
-                                                <p><span className="font-semibold">Inspiração:</span> O vulcão ativo da Sicília inspira uma pizza cheia de energia e calor, com notas defumadas, doces e crocantes. Uma verdadeira explosão de sabores.</p>
-                                            </article>
+                                                    <article className="space-y-2">
+                                                        <h4 className="text-lg font-semibold font-mono">🏔️ TRENTINA</h4>
+                                                        <p><span className="font-semibold">Ingredientes:</span> Molho de tomate italiano, muçarela, gorgonzola, bacon defumado e parmesão.</p>
+                                                        <p><span className="font-semibold">Perfil:</span> 👉 Intensa, cremosa e crocante.</p>
+                                                        <p><span className="font-semibold">Inspiração:</span> Homenagem direta ao Trentino, terra de montanhas, neve, queijos fortes e sabores defumados. Um sabor que transmite o espírito dos refúgios alpinos da região, conforto e tradição.</p>
+                                                    </article>
 
-                                            <article className="space-y-2">
-                                                <h4 className="text-lg font-semibold font-mono">🏔️ MARMOLADA</h4>
-                                                <p><span className="font-semibold">Ingredientes:</span> Molho de tomate italiano, muçarela, cogumelos salteados, brie, presunto cru e molho pesto artesanal.</p>
-                                                <p><span className="font-semibold">Perfil:</span> 👉 Sofisticada, aromática e cheia de personalidade.</p>
-                                                <p><span className="font-semibold">Inspiração:</span> A Marmolada é a Rainha das Dolomitas. Seus bosques e trilhas inspiram uma pizza rica em sabores da montanha: cogumelos, queijos e ervas.</p>
-                                            </article>
+                                                    <article className="space-y-2">
+                                                        <h4 className="text-lg font-semibold font-mono">🏔️ ETNA</h4>
+                                                        <p><span className="font-semibold fontmo">Ingredientes:</span> Molho de tomate italiano, muçarela, abobrinha assada, provolone defumado, nozes e geleia apimentada.</p>
+                                                        <p><span className="font-semibold">Perfil:</span> 👉 Vegetariana, surpreendente e levemente adocicada.</p>
+                                                        <p><span className="font-semibold">Inspiração:</span> O vulcão ativo da Sicília inspira uma pizza cheia de energia e calor, com notas defumadas, doces e crocantes. Uma verdadeira explosão de sabores.</p>
+                                                    </article>
 
-                                            <article className="space-y-2">
-                                                <h4 className="text-lg font-semibold font-mono">🏔️ GRAN PARADISO</h4>
-                                                <p><span className="font-semibold">Ingredientes:</span> Molho de tomate italiano, muçarela, bacon defumado, brie, nozes e geleia de damasco.</p>
-                                                <p><span className="font-semibold">Perfil:</span> 👉 Doce, salgada e crocante.</p>
-                                                <p><span className="font-semibold">Inspiração:</span> Uma montanha símbolo de equilíbrio e natureza preservada. Esta pizza traduz esse conceito com uma combinação harmoniosa de doce, salgado e crocância.</p>
-                                            </article>
+                                                    <article className="space-y-2">
+                                                        <h4 className="text-lg font-semibold font-mono">🏔️ MARMOLADA</h4>
+                                                        <p><span className="font-semibold">Ingredientes:</span> Molho de tomate italiano, muçarela, cogumelos salteados, brie, presunto cru e molho pesto artesanal.</p>
+                                                        <p><span className="font-semibold">Perfil:</span> 👉 Sofisticada, aromática e cheia de personalidade.</p>
+                                                        <p><span className="font-semibold">Inspiração:</span> A Marmolada é a Rainha das Dolomitas. Seus bosques e trilhas inspiram uma pizza rica em sabores da montanha: cogumelos, queijos e ervas.</p>
+                                                    </article>
 
-                                            <div className="bg-green-700 text-white font-neue px-2 py-1 space-y-2 rounded-md">
-                                                <p>Sabores disponíveis somente no cardápio A Modo Mio ou via WhatsApp (46) 99127 2525</p>
-                                            </div>
-                                        </section>
+                                                    <article className="space-y-2">
+                                                        <h4 className="text-lg font-semibold font-mono">🏔️ GRAN PARADISO</h4>
+                                                        <p><span className="font-semibold">Ingredientes:</span> Molho de tomate italiano, muçarela, bacon defumado, brie, nozes e geleia de damasco.</p>
+                                                        <p><span className="font-semibold">Perfil:</span> 👉 Doce, salgada e crocante.</p>
+                                                        <p><span className="font-semibold">Inspiração:</span> Uma montanha símbolo de equilíbrio e natureza preservada. Esta pizza traduz esse conceito com uma combinação harmoniosa de doce, salgado e crocância.</p>
+                                                    </article>
+
+                                                    <div className="bg-green-700 text-white font-neue px-2 py-1 space-y-2 rounded-md">
+                                                        <p>Sabores disponíveis somente no cardápio A Modo Mio ou via WhatsApp (46) 99127 2525</p>
+                                                    </div>
+                                                </section>
 
 
-                                    }
-                                />
-
-                            </section>
-                        )
-                    }}
-                </Await>
-            </Suspense>
-
-            <Separator className="my-4" />
-
-            {/* destaques */}
-
-            <Suspense fallback={<Loading />}>
-                <Await resolve={items}>
-
-                    {(items) => {
-
-                        return (
-                            <>
-
-                                <section className="flex flex-col gap-4 mx-2 md:grid md:grid-cols-2">
-
-                                    {/** @ts-ignore */}
-                                    <CardapioItemListDestaque items={items} title="Sugestões do chef" tagFilter="em-destaque" />
-                                    {/** @ts-ignore */}
-                                    <CardapioItemListDestaque items={items} title="Mais vendidos" tagFilter="mais-vendido" carouselDelay={2100} />
+                                            }
+                                        />
+                                    </div>
 
                                 </section>
-                            </>
-                        )
-                    }}
-                </Await>
-            </Suspense>
+                            )
+                        }}
+                    </Await>
+                </Suspense>
+
+                <Separator className="my-4 md:hidden" />
+
+                <Separator orientation="vertical" className="hidden md:mx-4" />
+
+                {/* destaques */}
+
+                <Suspense fallback={<Loading />}>
+                    <Await resolve={items}>
+
+                        {(items) => {
+
+                            return (
+                                <>
+
+                                    <section className="flex flex-col gap-4 mx-2 md:flex-1">
+
+                                        {/** @ts-ignore */}
+                                        <CardapioItemListDestaque items={items} title="Sugestões do chef" tagFilter="em-destaque" />
+                                        {/** @ts-ignore */}
+                                        <CardapioItemListDestaque items={items} title="Mais vendidos" tagFilter="mais-vendido" carouselDelay={2100} />
+
+                                    </section>
+                                </>
+                            )
+                        }}
+                    </Await>
+                </Suspense>
+
+            </div>
 
             <Separator className="my-4" />
 
@@ -603,7 +612,7 @@ function CardapioItemListDestaque({ title, items, tagFilter, carouselDelay = 200
 
     return (
         <div className="rounded-md p-2">
-            <h3 className="font-medium text-xl tracking-tight mb-2 font-neue">{title}</h3>
+            <SectionTitle>{title}</SectionTitle>
             {/* <Carousel>
                 <CarouselContent className="-ml-2 md:-ml-4">
                     <CarouselItem className="pl-2 md:pl-4">...</CarouselItem>
@@ -630,7 +639,7 @@ function CardapioItemListDestaque({ title, items, tagFilter, carouselDelay = 200
                                 <CarouselItem key={i.id} className="basis-1/2 md:basis-1/3" data-element="carousel-item">
                                     <Link to={`/cardapio/${i.slug}`} className="w-full">
 
-                                        <div className="relative grid place-items-center rounded-md bg-slate-50 h-[112px]">
+                                        <div className="relative grid place-items-center rounded-md bg-slate-50 h-[112px] md:h-[250px]">
                                             <CardapioItemImageSingle
                                                 src={featuredImage?.secureUrl || ""}
                                                 placeholder={i.imagePlaceholderURL || ""}
@@ -659,6 +668,16 @@ function CardapioItemListDestaque({ title, items, tagFilter, carouselDelay = 200
 }
 
 
+interface SectionTitleProps {
+    children: React.ReactNode,
+    cnContainer?: string
+}
+
+function SectionTitle({ children, cnContainer }: SectionTitleProps) {
+    return (
+        <h3 className={cn("font-medium text-xl tracking-tight mb-4 font-neue", cnContainer)}>{children}</h3>
+    )
+}
 
 
 
