@@ -59,13 +59,8 @@ export default function FiltersTags({
                                                 "transition-all duration-300 ease-in-out",
                                                 isActive && "outline outline-yellow-500 border-none",
                                             )}
-                                            // classNameLabel="uppercase text-xs leading-none"
-                                            // classNameContainer={cn(
-                                            //     "transition-all duration-300 ease-in-out min-w-[100px] justify-center text-center px-3 py-1",
-                                            // )}
                                             classNameLabel={cn(
                                                 "font-neue text-xs uppercase whitespace-nowrap overflow-hidden text-ellipsis transition-all duration-300 ease-in-out",
-                                                // isActive && "text-yellow-500",
                                             )}
                                             allowRemove={false}
                                             tagColor={false}
