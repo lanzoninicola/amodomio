@@ -48,6 +48,8 @@ export interface SellPriceVariation {
   /** a percentagem do profito desejada para o canal de venda */
   profitExpectedPerc: number;
   discountPercentage: number;
+  showOnCardapio: boolean;
+  showOnCardapioAt: Date | null;
   updatedBy?: string;
   updatedAt?: Date;
   previousPriceAmount: number;
