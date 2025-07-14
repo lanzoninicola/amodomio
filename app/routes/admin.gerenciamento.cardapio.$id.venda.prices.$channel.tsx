@@ -110,6 +110,8 @@ export async function action({ request }: ActionFunctionArgs) {
       dnaPerc
     )
 
+    console.log({ showOnCardapio })
+
     const nextPrice: MenuItemSellingPriceVariationUpsertParams = {
       menuItemId,
       menuItemSellingChannelId,
@@ -199,44 +201,42 @@ export default function SingleMenuItemVendaPriceChannel() {
               {
                 menuItemsWithSellPriceVariations.sellPriceVariations.map((record) => (
 
-                  <section key={randomReactKey()} className="mb-6">
 
-                    <ul className="flex gap-6">
-                      <li key={record.sizeId} className={
+                  <ul key={record.sizeId} className="flex gap-6 flex-col md:flex-row mb-6 ">
+                    <li className={
+                      cn(
+                        "flex flex-col",
+                        "p-2 border-r",
+                        "hover:border-t-2 hover:border-t-black"
+                      )
+                    }>
+                      <div className={
                         cn(
-                          "p-2 border-r",
-                          "hover:border-t-2 hover:border-t-black"
+                          "min-h-[50px] mb-4",
+                          record.sizeKey === "pizza-medium" && "grid place-items-center bg-black",
                         )
                       }>
-                        <div className="flex flex-col">
-                          <div className={
-                            cn(
-                              "mb-2",
-                              record.sizeKey === "pizza-medium" && "grid place-items-center bg-black",
-                            )
-                          }>
 
-                            <h4 className={
-                              cn(
-                                "text-[12px] font-medium uppercase tracking-wider",
-                                record.sizeKey === "pizza-medium" && "font-semibold text-white",
-                              )
-                            }>
-                              {record.sizeName}
-                            </h4>
-                          </div>
+                        <h4 className={
+                          cn(
+                            "text-[12px] font-medium uppercase tracking-wider",
+                            record.sizeKey === "pizza-medium" && "font-semibold text-white",
+                          )
+                        }>
+                          {record.sizeName}
+                        </h4>
+                      </div>
 
-                          <MenuItemSellPriceForm
-                            menuItemId={menuItemsWithSellPriceVariations.menuItemId}
-                            sellPriceVariation={record}
-                            sellingChannel={currentSellingChannel}
-                            user={user}
-                          />
-                        </div>
-                      </li>
+                      <MenuItemSellPriceForm
+                        menuItemId={menuItemsWithSellPriceVariations.menuItemId}
+                        sellPriceVariation={record}
+                        sellingChannel={currentSellingChannel}
+                        user={user}
+                      />
+                    </li>
 
-                    </ul>
-                  </section>
+                  </ul>
+
                 ))
               }
             </div>

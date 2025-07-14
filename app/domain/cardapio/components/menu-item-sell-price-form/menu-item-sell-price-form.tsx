@@ -9,6 +9,7 @@ import { Separator } from "~/components/ui/separator";
 import { cn } from "~/lib/utils";
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from "~/components/ui/dialog";
 import { Button } from "~/components/ui/button";
+import { Switch } from "~/components/ui/switch";
 
 
 interface MenuItemSellPriceFormProps {
@@ -39,6 +40,10 @@ export default function MenuItemSellPriceForm({ menuItemId, sellPriceVariation, 
         <input type="hidden" name="sellingPriceExpectedAmount" value={sellPriceVariation.computedSellingPriceBreakdown?.minimumPrice.priceAmount.withProfit ?? 0} />
         <input type="hidden" name="profitExpectedPerc" value={sellPriceVariation.computedSellingPriceBreakdown?.channel.targetMarginPerc ?? 0} />
 
+        <div className="flex flex-row justify-between items-center mb-4">
+          <span className="text-xs"> Visualizar no cardapio:</span>
+          <Switch name="showOnCardapio" defaultChecked={sellPriceVariation?.showOnCardapio || false} />
+        </div>
         <div className="grid grid-cols-2 gap-2">
 
           <div className="flex flex-col gap-1 items-center">

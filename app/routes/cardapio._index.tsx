@@ -23,6 +23,7 @@ import { SwiperImagesCarousel } from "~/components/swiper-carousel/swiper-images
 import PostInstagram from "~/components/post-instagram/post-instagram";
 import prismaClient from "~/lib/prisma/client.server";
 import { Tag } from "@prisma/client";
+import { useSoundEffects } from "~/components/sound-effects/use-sound-effects";
 
 
 export const headers: HeadersFunction = () => ({
@@ -465,13 +466,13 @@ const CardapioItemList = ({ allItems }: { allItems: MenuItemWithAssociations[] }
                     {items.map((item, index) => {
                         const isLastItem = items.length === index + 1;
                         return (
-                            <Link to={`/cardapio/${item.slug}`} key={item.id} className="w-full">
-                                <CardapioItemFullImage
-                                    ref={isLastItem ? lastItemRef : null}
-                                    key={item.id}
-                                    item={item}
-                                />
-                            </Link>
+
+                            <CardapioItemFullImage
+                                ref={isLastItem ? lastItemRef : null}
+                                key={item.id}
+                                item={item}
+                            />
+
                         );
                     })}
                 </ul>
@@ -480,70 +481,14 @@ const CardapioItemList = ({ allItems }: { allItems: MenuItemWithAssociations[] }
     );
 }
 
-interface CardapioItemProps {
-    item: MenuItemWithAssociations;
-}
 
-const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) => {
-    const italyProduct = item.tags?.public.some(t => t.toLocaleLowerCase() === "produtos-italianos")
-    const bestMonthlySeller = item.tags?.all.some(t => t.toLocaleLowerCase() === "mais-vendido-mes")
-    const bestSeller = item.tags?.all.some(t => t.toLocaleLowerCase() === "mais-vendido")
-
-    return (
-        <li className="snap-start border-b py-2" id={item.id} ref={ref}>
-            {/* <CardapioItemDialog item={item} triggerComponent={
-            <CardapioItemImage item={item} />
-        }> */}
-
-
-            <div className="grid grid-cols-8 min-h-[120px] mx-4 gap-x-4">
-                <div className={
-                    cn(
-                        "flex flex-col mb-2 col-span-5",
-                    )
-                }>
-                    <div className="flex flex-col gap-0 mb-1">
-                        <div className="flex items-center gap-2">
-                            <h3 className="font-neue text-xl tracking-wider font-semibold uppercase">{item.name}</h3>
-                            {italyProduct && <ItalyIngredientsStatement showText={false} />}
-                        </div>
-                        <div className="flex flex-col gap-2">
-                            {bestSeller && <AwardBadge>A mais desejada</AwardBadge>}
-                            {bestMonthlySeller && <AwardBadge>Mais vendida do mes</AwardBadge>}
-                        </div>
-                    </div>
-
-
-                    <p className="leading-snug text-[15px] my-2">{capitalize(item.ingredients)}</p>
-                    <CardapioItemPrice prices={item?.MenuItemSellingPriceVariation} cnLabel="text-black" showValuta={false} />
-                    <CardapioItemActionBar item={item} />
-                </div>
-                {/* <CardapioItemImage imageURL={item.imageTransformedURL}
-                    cnClassName="col-span-3 h-[120px] rounded-lg overflow-hidden"
-                    placeholderImage={true}
-                    cnImage={"bg-left"}
-                /> */}
-                <CardapioItemImageSingle
-                    src={item.imageTransformedURL || ""}
-                    placeholder={item.imagePlaceholderURL || ""}
-                    placeholderIcon={true}
-                    enableOverlay={false}
-                    cnContainer="col-span-3 h-[120px] rounded-lg overflow-hidden"
-                />
-
-            </div>
-
-
-            {/* </CardapioItemDialog> */}
-        </li>
-    )
-})
 
 interface CardapioItemFullImageProps {
     item: MenuItemWithAssociations;
 }
 
 const CardapioItemFullImage = React.forwardRef(({ item }: CardapioItemFullImageProps, ref: any) => {
+    const { playNavigation } = useSoundEffects()
     const italyProduct = item.tags?.public.some(t => t.toLocaleLowerCase() === "produtos-italianos")
     const bestMonthlySeller = item.tags?.all.some(t => t.toLocaleLowerCase() === "mais-vendido-mes")
     const bestSeller = item.tags?.all.some(t => t.toLocaleLowerCase() === "mais-vendido")
@@ -553,6 +498,7 @@ const CardapioItemFullImage = React.forwardRef(({ item }: CardapioItemFullImageP
     return (
         <li className="snap-start border-b py-[0.15rem]" id={item.id} ref={ref}>
             <div className="relative h-[350px]">
+
                 <CardapioItemImageSingle
                     src={featuredImage?.secureUrl || ""}
                     placeholder={item.imagePlaceholderURL || ""}
@@ -560,13 +506,17 @@ const CardapioItemFullImage = React.forwardRef(({ item }: CardapioItemFullImageP
 
                     cnContainer="w-full h-full"
                 />
+
+
                 <div className="absolute inset-0" >
+
                     <div className="grid grid-cols-8 h-full">
-                        <div className={
-                            cn(
-                                "flex flex-col mb-2 px-4 text-white col-span-7 justify-end",
-                            )
-                        }>
+                        <Link to={`/cardapio/${item.slug}`}
+                            className="flex flex-col mb-2 px-4 text-white  justify-end items-end w-full col-span-7"
+                            onClick={() => {
+                                playNavigation()
+                            }}
+                        >
                             <div className="flex flex-col gap-0">
                                 <div className="flex items-center gap-2">
                                     {italyProduct && <ItalyIngredientsStatement showText={false} />}
@@ -577,17 +527,18 @@ const CardapioItemFullImage = React.forwardRef(({ item }: CardapioItemFullImageP
                                     {bestSeller && <AwardBadge>A mais desejada</AwardBadge>}
                                     {bestMonthlySeller && <AwardBadge>Mais vendida do mes</AwardBadge>}
                                 </div>
+
+
+                                <div className="flex flex-col gap-0 ">
+                                    <p className="font-neue leading-tight text-[15px] mt-1 mb-4 tracking-wide">{capitalize(item.ingredients)}</p>
+                                    <CardapioItemPrice prices={item?.MenuItemSellingPriceVariation} cnLabel="text-white" cnValue="text-white font-semibold" showValuta={false} />
+                                </div>
+
                             </div>
-
-
-                            <div className="flex flex-col gap-0 ">
-                                <p className="font-neue leading-tight text-[15px] mt-1 mb-4 tracking-wide">{capitalize(item.ingredients)}</p>
-                                <CardapioItemPrice prices={item?.MenuItemSellingPriceVariation} cnLabel="text-white" cnValue="text-white font-semibold" showValuta={false} />
-                            </div>
-
-                        </div>
+                        </Link>
                         <CardapioItemActionBar item={item} />
                     </div>
+
 
                 </div>
             </div>
@@ -609,6 +560,7 @@ interface CardapioItemListDestaqueProps {
 
 
 function CardapioItemListDestaque({ title, items, tagFilter, carouselDelay = 2000 }: CardapioItemListDestaqueProps) {
+    const { playNavigation } = useSoundEffects()
 
     return (
         <div className="rounded-md p-2">
@@ -637,7 +589,9 @@ function CardapioItemListDestaque({ title, items, tagFilter, carouselDelay = 200
 
                             return (
                                 <CarouselItem key={i.id} className="basis-1/2 md:basis-1/3" data-element="carousel-item">
-                                    <Link to={`/cardapio/${i.slug}`} className="w-full">
+                                    <Link to={`/cardapio/${i.slug}`} className="w-full" onClick={() => {
+                                        playNavigation()
+                                    }}>
 
                                         <div className="relative grid place-items-center rounded-md bg-slate-50 h-[112px] md:h-[250px]">
                                             <CardapioItemImageSingle

@@ -152,6 +152,43 @@ module.exports = {
           "0%": { opacity: 0, transform: "translateY(-5px)" },
           "100%": { opacity: 1, transform: "translateY(0)" },
         },
+        // Novas animações customizadas
+        fadeInUp: {
+          "0%": {
+            opacity: "0",
+            transform: "translateY(30px)",
+          },
+          "100%": {
+            opacity: "1",
+            transform: "translateY(0)",
+          },
+        },
+        shimmer: {
+          "0%": {
+            transform: "translateX(-100%) skewX(-12deg)",
+          },
+          "100%": {
+            transform: "translateX(100%) skewX(-12deg)",
+          },
+        },
+        float: {
+          "0%, 100%": {
+            transform: "translateY(0px)",
+          },
+          "50%": {
+            transform: "translateY(-10px)",
+          },
+        },
+        glow: {
+          "0%, 100%": {
+            opacity: "0.5",
+            transform: "scale(1)",
+          },
+          "50%": {
+            opacity: "1",
+            transform: "scale(1.05)",
+          },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -170,10 +207,13 @@ module.exports = {
         pulseSlow: "pulse 2s ease-in-out infinite",
         scrollingText: "scrollingText 18s linear infinite",
         slowZoom: "slowZoom 20s infinite linear",
-        animation: {
-          zoomOnce: "zoomOnce 2.5s ease-out forwards",
-        },
+        zoomOnce: "zoomOnce 2.5s ease-out forwards",
         fadeInTag: "fadeIn 0.3s ease-out forwards",
+        // Novas animações customizadas
+        fadeInUp: "fadeInUp 0.6s ease-out",
+        shimmer: "shimmer 2s infinite",
+        floatSlow: "float 3s ease-in-out infinite",
+        glow: "glow 2s ease-in-out infinite",
       },
       backgroundImage: {
         hero: "url('/images/hero-image.jpg')",
@@ -182,7 +222,63 @@ module.exports = {
         "pizza-placeholder-sm":
           "url('/images/cardapio-web-app/pizza-placeholder-sm.jpg')",
       },
+      // Transitions customizadas
+      transitionProperty: {
+        height: "height",
+        spacing: "margin, padding",
+        "colors-transform": "color, background-color, border-color, transform",
+      },
+
+      // Durations adicionais
+      transitionDuration: {
+        "350": "350ms",
+        "400": "400ms",
+        "600": "600ms",
+        "800": "800ms",
+      },
+
+      // Timing functions customizadas
+      transitionTimingFunction: {
+        "bounce-in": "cubic-bezier(0.68, -0.55, 0.265, 1.55)",
+        smooth: "cubic-bezier(0.4, 0, 0.2, 1)",
+        slide: "cubic-bezier(0.25, 0.46, 0.45, 0.94)",
+      },
+
+      // Backdrop blur customizado
+      backdropBlur: {
+        xs: "2px",
+        "4xl": "72px",
+      },
+
+      // Scales customizadas para hover
+      scale: {
+        "102": "1.02",
+        "103": "1.03",
+        "98": "0.98",
+      },
     },
   },
-  plugins: [require("tailwindcss-animate")],
+  plugins: [
+    require("tailwindcss-animate"),
+    // Plugin para desabilitar hover em touch devices
+    function ({ addUtilities }) {
+      const newUtilities = {
+        "@media (hover: none)": {
+          ".hover\\:scale-105:hover": {
+            transform: "none",
+          },
+          ".hover\\:scale-102:hover": {
+            transform: "none",
+          },
+          ".hover\\:scale-103:hover": {
+            transform: "none",
+          },
+          ".hover\\:scale-110:hover": {
+            transform: "none",
+          },
+        },
+      };
+      addUtilities(newUtilities);
+    },
+  ],
 };
