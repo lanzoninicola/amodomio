@@ -1,6 +1,7 @@
 import { Tag } from "@prisma/client"
 import { Link } from "@remix-run/react"
 import { Filter } from "lucide-react"
+import { useSoundEffects } from "~/components/sound-effects/use-sound-effects"
 import BadgeTag from "~/domain/tags/components/badge-tag"
 import { cn } from "~/lib/utils"
 
@@ -17,6 +18,7 @@ export default function FiltersTags({
     onCurrentTagSelected,
     showBanner = false
 }: FiltersTagsProps) {
+    const { playFilter } = useSoundEffects()
     const tagsWithTodos = [
         {
             id: "all",
@@ -50,7 +52,10 @@ export default function FiltersTags({
                                 <li key={tag.id} className="my-2">
                                     <button
                                         title={tag.name} // Tooltip nativo do navegador
-                                        onClick={() => onCurrentTagSelected(tag as Tag)}
+                                        onClick={() => {
+                                            playFilter()
+                                            onCurrentTagSelected(tag as Tag)
+                                        }}
                                     >
                                         <BadgeTag
                                             tag={tag}

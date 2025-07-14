@@ -1,5 +1,3 @@
-// hooks/useSound.ts
-
 export interface SoundOptions {
   volume?: number;
   enabled?: boolean;
@@ -61,7 +59,7 @@ export class SoundManager {
     oscillator.stop(this.audioContext.currentTime + duration);
   }
 
-  // Sons específicos para diferentes ações
+  // Sons originais
   async playClick() {
     await this.init();
     this.createTone(800, 0.1, "sine");
@@ -74,23 +72,23 @@ export class SoundManager {
 
   async playSuccess() {
     await this.init();
-    this.createTone(523, 0.15, "sine"); // C5
-    setTimeout(() => this.createTone(659, 0.15, "sine"), 50); // E5
-    setTimeout(() => this.createTone(784, 0.2, "sine"), 100); // G5
+    this.createTone(523, 0.15, "sine");
+    setTimeout(() => this.createTone(659, 0.15, "sine"), 50);
+    setTimeout(() => this.createTone(784, 0.2, "sine"), 100);
   }
 
   async playLike() {
     await this.init();
-    this.createTone(440, 0.1, "sine"); // A4
-    setTimeout(() => this.createTone(554, 0.1, "sine"), 50); // C#5
-    setTimeout(() => this.createTone(659, 0.15, "sine"), 100); // E5
+    this.createTone(440, 0.1, "sine");
+    setTimeout(() => this.createTone(554, 0.1, "sine"), 50);
+    setTimeout(() => this.createTone(659, 0.15, "sine"), 100);
   }
 
   async playShare() {
     await this.init();
-    this.createTone(330, 0.12, "sine"); // E4
-    setTimeout(() => this.createTone(440, 0.12, "sine"), 60); // A4
-    setTimeout(() => this.createTone(523, 0.15, "sine"), 120); // C5
+    this.createTone(330, 0.12, "sine");
+    setTimeout(() => this.createTone(440, 0.12, "sine"), 60);
+    setTimeout(() => this.createTone(523, 0.15, "sine"), 120);
   }
 
   async playNavigation() {
@@ -120,14 +118,42 @@ export class SoundManager {
 
   async playSlideIn() {
     await this.init();
-    this.createTone(264, 0.15, "sine"); // C4
-    setTimeout(() => this.createTone(330, 0.15, "sine"), 50); // E4
+    this.createTone(264, 0.15, "sine");
+    setTimeout(() => this.createTone(330, 0.15, "sine"), 50);
   }
 
   async playSlideOut() {
     await this.init();
-    this.createTone(330, 0.15, "sine"); // E4
-    setTimeout(() => this.createTone(264, 0.15, "sine"), 50); // C4
+    this.createTone(330, 0.15, "sine");
+    setTimeout(() => this.createTone(264, 0.15, "sine"), 50);
+  }
+
+  // 🆕 NOVOS SONS MECÂNICOS
+  async playTap() {
+    await this.init();
+    this.createTone(600, 0.04, "sine");
+  }
+
+  async playTick() {
+    await this.init();
+    this.createTone(1200, 0.03, "square");
+  }
+
+  async playClik() {
+    await this.init();
+    this.createTone(2000, 0.02, "square");
+  }
+
+  async playPop() {
+    await this.init();
+    this.createTone(800, 0.05, "triangle");
+    setTimeout(() => this.createTone(400, 0.03, "square"), 10);
+  }
+
+  async playSnap() {
+    await this.init();
+    this.createTone(1500, 0.015, "square");
+    setTimeout(() => this.createTone(800, 0.025, "triangle"), 5);
   }
 
   setVolume(volume: number) {
