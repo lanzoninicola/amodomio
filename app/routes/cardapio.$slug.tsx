@@ -72,7 +72,6 @@ export default function SingleCardapioItem() {
                 placeholder={itemImagePlaceholder || ""}
                 placeholderIcon={true}
                 cnPlaceholderIcon="w-[100px]"
-                placeholderText="Imagem ainda não disponível"
                 cnPlaceholderText="font-neue uppercase font-semibold tracking-wider mt-2"
               />
               {/* Overlay de gradiente preto */}
