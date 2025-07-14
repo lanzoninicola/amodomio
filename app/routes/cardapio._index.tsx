@@ -480,64 +480,7 @@ const CardapioItemList = ({ allItems }: { allItems: MenuItemWithAssociations[] }
     );
 }
 
-interface CardapioItemProps {
-    item: MenuItemWithAssociations;
-}
 
-const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) => {
-    const italyProduct = item.tags?.public.some(t => t.toLocaleLowerCase() === "produtos-italianos")
-    const bestMonthlySeller = item.tags?.all.some(t => t.toLocaleLowerCase() === "mais-vendido-mes")
-    const bestSeller = item.tags?.all.some(t => t.toLocaleLowerCase() === "mais-vendido")
-
-    return (
-        <li className="snap-start border-b py-2" id={item.id} ref={ref}>
-            {/* <CardapioItemDialog item={item} triggerComponent={
-            <CardapioItemImage item={item} />
-        }> */}
-
-
-            <div className="grid grid-cols-8 min-h-[120px] mx-4 gap-x-4">
-                <div className={
-                    cn(
-                        "flex flex-col mb-2 col-span-5",
-                    )
-                }>
-                    <div className="flex flex-col gap-0 mb-1">
-                        <div className="flex items-center gap-2">
-                            <h3 className="font-neue text-xl tracking-wider font-semibold uppercase">{item.name}</h3>
-                            {italyProduct && <ItalyIngredientsStatement showText={false} />}
-                        </div>
-                        <div className="flex flex-col gap-2">
-                            {bestSeller && <AwardBadge>A mais desejada</AwardBadge>}
-                            {bestMonthlySeller && <AwardBadge>Mais vendida do mes</AwardBadge>}
-                        </div>
-                    </div>
-
-
-                    <p className="leading-snug text-[15px] my-2">{capitalize(item.ingredients)}</p>
-                    <CardapioItemPrice prices={item?.MenuItemSellingPriceVariation} cnLabel="text-black" showValuta={false} />
-                    <CardapioItemActionBar item={item} />
-                </div>
-                {/* <CardapioItemImage imageURL={item.imageTransformedURL}
-                    cnClassName="col-span-3 h-[120px] rounded-lg overflow-hidden"
-                    placeholderImage={true}
-                    cnImage={"bg-left"}
-                /> */}
-                <CardapioItemImageSingle
-                    src={item.imageTransformedURL || ""}
-                    placeholder={item.imagePlaceholderURL || ""}
-                    placeholderIcon={true}
-                    enableOverlay={false}
-                    cnContainer="col-span-3 h-[120px] rounded-lg overflow-hidden"
-                />
-
-            </div>
-
-
-            {/* </CardapioItemDialog> */}
-        </li>
-    )
-})
 
 interface CardapioItemFullImageProps {
     item: MenuItemWithAssociations;
