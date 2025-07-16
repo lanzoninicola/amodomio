@@ -892,3 +892,13 @@ model PostShare {
 
   @@map("post_shares")
 }
+
+model Feedback {
+  id          String   @id @default(cuid())
+  createdAt   DateTime @default(now())
+  sentiment   String // "positive" ou "negative", controlado pela aplicação
+  imageBase64 String
+  text        String?
+
+  @@map("feedbacks")
+}
