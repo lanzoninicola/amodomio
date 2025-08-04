@@ -902,3 +902,23 @@ model Feedback {
 
   @@map("feedbacks")
 }
+
+model CalendarDay {
+  id          String   @id @default(uuid())
+  date        DateTime @unique // Data completa
+  dateInt     Int      @unique @map("date_int") // Ex: 20250804
+  year        Int
+  month       Int
+  day         Int
+  weekday     Int // 0=Dom, 6=Sáb
+  isWeekend   Boolean  @default(false) @map("is_weekend")
+  isHoliday   Boolean  @default(false) @map("is_holiday")
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Relacionamentos futuros
+  // orderDays   OrderDay[]
+  // production  ProductionDay[]
+
+  @@map("calendar_day")
+}
