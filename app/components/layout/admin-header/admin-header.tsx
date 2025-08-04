@@ -22,6 +22,7 @@ export function AdminHeader({ urlSegment }: AdminHeaderProps) {
                 urlSegment === "orders-delivery-time-left" && "hidden",
                 urlSegment === "export-wall" && "hidden",
                 urlSegment === "export-wall-two" && "hidden",
+                urlSegment === "kds" && "hidden"
 
             )
         }>

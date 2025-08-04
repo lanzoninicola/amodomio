@@ -61,7 +61,7 @@ export default function AdminOutlet() {
 
     return (
         <SidebarProvider data-element="sidebar-provider">
-            <AdminSidebar navigationLinks={ADMIN_WEBSITE_NAVIGATION_ITEMS} />
+            <AdminSidebar navigationLinks={ADMIN_WEBSITE_NAVIGATION_ITEMS} urlSegment={urlSegment} />
             <SidebarTrigger />
             <div className="flex flex-col w-screen">
                 <AdminHeader urlSegment={urlSegment} />
