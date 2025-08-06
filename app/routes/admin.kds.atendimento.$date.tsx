@@ -7,7 +7,7 @@ import { useHotkeys } from "react-hotkeys-hook";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Check, Trash, Pencil } from "lucide-react";
+import { Trash, Pencil, Save } from "lucide-react";
 
 // Tipos auxiliares
 type SizeCounts = { F: number; M: number; P: number; I: number };
@@ -140,6 +140,20 @@ function SizeSelector({
   );
 }
 
+const statusLabels: Record<string, string> = {
+  emFila: "Fila",
+  emProducao: "Montando",
+  pronto: "Pronto",
+  forno: "Forno",
+};
+
+const statusColors: Record<string, string> = {
+  emFila: "bg-muted text-muted-foreground",
+  emProducao: "bg-blue-100 text-blue-800",
+  pronto: "bg-yellow-100 text-yellow-800",
+  forno: "bg-orange-100 text-orange-800",
+};
+
 // =============================
 // Página principal
 // =============================
@@ -155,7 +169,6 @@ export default function KdsAtendimentoPlanilha() {
   });
 
   const canais = ["WHTAS / PRESENCIAL / TELE", "MOGO", "AIQFOME", "IFOOD"];
-  const statusOptions = ["pendente", "em preparo", "finalizado"];
 
   return (
     <Suspense fallback={<div>Carregando pedidos...</div>}>
@@ -281,17 +294,16 @@ export default function KdsAtendimentoPlanilha() {
                                 <SelectValue placeholder="Status" />
                               </SelectTrigger>
                               <SelectContent>
-                                {statusOptions.map((s) => (
-                                  <SelectItem key={s} value={s}>
-                                    {s}
-                                  </SelectItem>
-                                ))}
+                                <SelectItem value="emFila">Fila</SelectItem>
+                                <SelectItem value="emProducao">Montando</SelectItem>
+                                <SelectItem value="pronto">Pronto</SelectItem>
+                                <SelectItem value="forno">Forno</SelectItem>
                               </SelectContent>
                             </Select>
                           ) : (
-                            <Badge variant="outline" className="text-xs">
-                              {currentStatus}
-                            </Badge>
+                            <div className={`px-2 py-1 text-xs rounded-md ${statusColors[currentStatus] || "bg-gray-200 text-gray-800"}`}>
+                              {statusLabels[currentStatus] || currentStatus}
+                            </div>
                           )}
                           <button
                             type="button"
@@ -304,13 +316,13 @@ export default function KdsAtendimentoPlanilha() {
 
                         {/* Botões Ações */}
                         <div className="flex justify-center gap-2">
-                          <Button type="submit" size="icon">
-                            <Check className="w-4 h-4" />
+                          <Button type="submit" variant={"outline"}>
+                            <Save className="w-4 h-4" />
                           </Button>
                           {order?.id && (
                             <Form method="post">
                               <input type="hidden" name="id" value={order.id} />
-                              <Button type="submit" name="_action" value="delete" variant="destructive" size="icon">
+                              <Button type="submit" name="_action" value="delete" variant={"destructive"}>
                                 <Trash className="w-4 h-4" />
                               </Button>
                             </Form>
