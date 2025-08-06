@@ -89,7 +89,6 @@ export async function action({ request, params }: { request: Request; params: { 
       date: currentDate,
       dateInt,
       commandNumber: 0, // número visual
-      product: "PIZZA",
       size: JSON.stringify(sizeCounts),
       hasMoto,
       motoValue: 0,
@@ -205,8 +204,6 @@ export default function KdsAtendimentoPlanilha() {
                   const [counts, setCounts] = useState<SizeCounts>(initialCounts);
 
                   // Estados de edição inline
-                  const [editingMoto, setEditingMoto] = useState(false);
-                  const [editingCanal, setEditingCanal] = useState(false);
                   const [editingStatus, setEditingStatus] = useState(false);
 
                   const currentMoto = order?.hasMoto ? "Sim" : "Não";
@@ -233,57 +230,34 @@ export default function KdsAtendimentoPlanilha() {
 
                         {/* Campo Moto (badge + editar) */}
                         <div className="flex items-center justify-center gap-2">
-                          {editingMoto ? (
-                            <Select name="hasMoto" defaultValue={order?.hasMoto ? "true" : "false"}>
-                              <SelectTrigger className="w-20 text-xs">
-                                <SelectValue placeholder="Moto" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="true">Sim</SelectItem>
-                                <SelectItem value="false">Não</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          ) : (
-                            <Badge variant="outline" className="text-xs">
-                              {currentMoto}
-                            </Badge>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => setEditingMoto(!editingMoto)}
-                            className="text-gray-500 hover:text-gray-700"
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </button>
+
+                          <Select name="hasMoto" defaultValue={order?.hasMoto ? "true" : "false"}>
+                            <SelectTrigger className="w-20 text-xs">
+                              <SelectValue placeholder="Moto" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="true">Sim</SelectItem>
+                              <SelectItem value="false">Não</SelectItem>
+                            </SelectContent>
+                          </Select>
+
                         </div>
 
                         {/* Campo Canal (badge + editar) */}
                         <div className="flex items-center justify-center gap-2">
-                          {editingCanal ? (
-                            <Select name="channel" defaultValue={order?.channel ?? ""}>
-                              <SelectTrigger className="w-36 text-xs">
-                                <SelectValue placeholder="Canal" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {canais.map((canal) => (
-                                  <SelectItem key={canal} value={canal}>
-                                    {canal}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          ) : (
-                            <Badge variant="outline" className="text-xs">
-                              {currentCanal}
-                            </Badge>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => setEditingCanal(!editingCanal)}
-                            className="text-gray-500 hover:text-gray-700"
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </button>
+                          <Select name="channel" defaultValue={order?.channel ?? ""}>
+                            <SelectTrigger className="w-36 text-xs">
+                              <SelectValue placeholder="Canal" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {canais.map((canal) => (
+                                <SelectItem key={canal} value={canal}>
+                                  {canal}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+
                         </div>
 
                         {/* Campo Status (badge + editar) */}
