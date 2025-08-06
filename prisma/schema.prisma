@@ -921,28 +921,22 @@ model CalendarDay {
 }
 
 model KdsOrder {
-  id      String   @id @default(uuid())
-  date    DateTime @unique
-  dateInt Int      @unique @map("date_int") // YYYYMMDD
-
-  commandNumber Int     @map("command_number") // Número da comanda
-  size          String // G, M, G/M, etc.
-  qtyF          Int     @map("qty_f")
-  qtyM          Int     @map("qty_m")
-  qtyP          Int     @map("qty_p")
-  qtyI          Int     @map("qty_i")
-  hasMoto       Boolean @default(false) @map("has_moto")
-  motoValue     Decimal @map("moto_value")
-  channel       String // WhatsApp, AIQFome, etc.
-
-  status String
-
-  bairroId String @map("bairro_id")
-  bairro   Bairro @relation(fields: [bairroId], references: [id])
-
+  id        String   @id @default(uuid())
+  date      DateTime
+  dateInt   Int      @map("date_int") // formato YYYYMMDD
   createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  @@index([commandNumber])
-  @@index([channel])
+  commandNumber Int    @map("command_number") // número da comanda (mas agora é o número da linha)
+  size          String // JSON com contadores: { "F": 1, "M": 0, ... }
+
+  hasMoto   Boolean @default(false) @map("has_moto")
+  motoValue Decimal @default(0) @map("moto_value")
+  channel   String // WhatsApp, Balcão, etc.
+  status    String  @default("pendente")
+  Bairro    Bairro? @relation(fields: [bairroId], references: [id])
+  bairroId  String?
+
+  @@index([dateInt])
   @@map("kds_orders")
 }

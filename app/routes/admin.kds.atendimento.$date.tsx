@@ -7,15 +7,19 @@ import { useHotkeys } from "react-hotkeys-hook";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Save, Trash, Pencil } from "lucide-react";
+import { Check, Trash, Pencil } from "lucide-react";
 
+// Tipos auxiliares
 type SizeCounts = { F: number; M: number; P: number; I: number };
 
+// Utilitário para criar contadores zerados
 function defaultSizeCounts(): SizeCounts {
   return { F: 0, M: 0, P: 0, I: 0 };
 }
 
+// =============================
 // Loader
+// =============================
 export async function loader({ params }: { params: { date: string } }) {
   const currentDate = new Date(params.date);
   const dateInt = Number(
@@ -35,12 +39,14 @@ export async function loader({ params }: { params: { date: string } }) {
   });
 }
 
-// Action
+// =============================
+// Action (Create / Update / Delete)
+// =============================
 export async function action({ request, params }: { request: Request; params: { date: string } }) {
   const formData = await request.formData();
   const _action = formData.get("_action");
 
-  // Delete
+  // DELETE
   if (_action === "delete") {
     const id = formData.get("id") as string;
     if (id) {
@@ -49,12 +55,13 @@ export async function action({ request, params }: { request: Request; params: { 
     return redirect(`/admin/kds/atendimento/${params.date}`);
   }
 
-  // Create / Update
+  // CREATE / UPDATE
   const id = formData.get("id") as string | null;
   const hasMoto = formData.get("hasMoto") === "true";
   const channel = (formData.get("channel") as string) || "";
   const status = (formData.get("status") as string) || "pendente";
 
+  // Parse contadores de tamanho
   const sizeCounts: SizeCounts = JSON.parse(formData.get("size") as string);
 
   const currentDate = new Date(params.date);
@@ -81,7 +88,7 @@ export async function action({ request, params }: { request: Request; params: { 
     data: {
       date: currentDate,
       dateInt,
-      commandNumber: 0,
+      commandNumber: 0, // número visual
       product: "PIZZA",
       size: JSON.stringify(sizeCounts),
       hasMoto,
@@ -94,7 +101,9 @@ export async function action({ request, params }: { request: Request; params: { 
   return redirect(`/admin/kds/atendimento/${params.date}`);
 }
 
-// SizeSelector
+// =============================
+// Componente SizeSelector
+// =============================
 function SizeSelector({
   counts,
   onChange,
@@ -131,11 +140,14 @@ function SizeSelector({
   );
 }
 
+// =============================
 // Página principal
+// =============================
 export default function KdsAtendimentoPlanilha() {
   const data = useLoaderData<typeof loader>();
   const [rows, setRows] = useState(50);
 
+  // Hotkeys
   useHotkeys("enter", (e) => {
     e.preventDefault();
     const form = e.target.closest("form");
@@ -155,14 +167,13 @@ export default function KdsAtendimentoPlanilha() {
           return (
             <div className="space-y-2">
               {/* Cabeçalho fixo */}
-              <div className="grid grid-cols-7 gap-2 border-b font-semibold text-sm sticky top-0 bg-white z-10">
+              <div className="grid grid-cols-6 gap-2 border-b font-semibold text-sm sticky top-0 bg-white z-10">
                 <div className="text-center">#</div>
                 <div className="text-center">Tamanho</div>
                 <div className="text-center">Moto</div>
                 <div className="text-center">Canal</div>
                 <div className="text-center">Status</div>
-                <div className="text-center">Salvar</div>
-                <div className="text-center">Cancelar</div>
+                <div className="text-center">Ações</div>
               </div>
 
               {/* Linhas */}
@@ -179,6 +190,8 @@ export default function KdsAtendimentoPlanilha() {
                   }
 
                   const [counts, setCounts] = useState<SizeCounts>(initialCounts);
+
+                  // Estados de edição inline
                   const [editingMoto, setEditingMoto] = useState(false);
                   const [editingCanal, setEditingCanal] = useState(false);
                   const [editingStatus, setEditingStatus] = useState(false);
@@ -189,7 +202,7 @@ export default function KdsAtendimentoPlanilha() {
 
                   return (
                     <li key={index}>
-                      <Form method="post" className="grid grid-cols-7 gap-2 items-center py-2">
+                      <Form method="post" className="grid grid-cols-6 gap-2 items-center py-2">
                         {/* Número da linha */}
                         <div className="flex justify-center">
                           <div className="w-7 h-7 rounded-full border flex items-center justify-center text-xs font-bold">
@@ -205,7 +218,7 @@ export default function KdsAtendimentoPlanilha() {
                           <SizeSelector counts={counts} onChange={setCounts} />
                         </div>
 
-                        {/* Moto */}
+                        {/* Campo Moto (badge + editar) */}
                         <div className="flex items-center justify-center gap-2">
                           {editingMoto ? (
                             <Select name="hasMoto" defaultValue={order?.hasMoto ? "true" : "false"}>
@@ -231,7 +244,7 @@ export default function KdsAtendimentoPlanilha() {
                           </button>
                         </div>
 
-                        {/* Canal */}
+                        {/* Campo Canal (badge + editar) */}
                         <div className="flex items-center justify-center gap-2">
                           {editingCanal ? (
                             <Select name="channel" defaultValue={order?.channel ?? ""}>
@@ -260,7 +273,7 @@ export default function KdsAtendimentoPlanilha() {
                           </button>
                         </div>
 
-                        {/* Status */}
+                        {/* Campo Status (badge + editar) */}
                         <div className="flex items-center justify-center gap-2">
                           {editingStatus ? (
                             <Select name="status" defaultValue={currentStatus}>
@@ -289,19 +302,15 @@ export default function KdsAtendimentoPlanilha() {
                           </button>
                         </div>
 
-                        {/* Botão Salvar */}
-                        <div className="flex justify-center">
-                          <Button type="submit" variant={"outline"}>
-                            <Save className="w-4 h-4" />
+                        {/* Botões Ações */}
+                        <div className="flex justify-center gap-2">
+                          <Button type="submit" size="icon">
+                            <Check className="w-4 h-4" />
                           </Button>
-                        </div>
-
-                        {/* Botão Cancelar/Excluir */}
-                        <div className="flex justify-center">
                           {order?.id && (
                             <Form method="post">
                               <input type="hidden" name="id" value={order.id} />
-                              <Button type="submit" name="_action" value="delete" variant={"destructive"} >
+                              <Button type="submit" name="_action" value="delete" variant="destructive" size="icon">
                                 <Trash className="w-4 h-4" />
                               </Button>
                             </Form>
