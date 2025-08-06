@@ -44,9 +44,9 @@ export const loader: LoaderFunction = async ({ request }: LoaderFunctionArgs) =>
         return redirect("/login");
     }
 
-    const urlSegment = lastUrlSegment(request.url)
+    const slug = lastUrlSegment(request.url)
 
-    return ok({ user, urlSegment, environment, prismaDbName })
+    return ok({ user, slug, environment, prismaDbName, urlSegment: request.url })
 }
 
 
@@ -56,15 +56,16 @@ export default function AdminOutlet() {
     const loaderData = useLoaderData<typeof loader>();
 
     const loggedUser = loaderData?.payload?.user;
-    const urlSegment = loaderData?.payload?.urlSegment;
+    const slug = loaderData?.payload?.slug;
+    const urlSegment = loaderData?.payload?.urlSegment
     const env = loaderData?.payload?.environment
 
     return (
         <SidebarProvider data-element="sidebar-provider">
-            <AdminSidebar navigationLinks={ADMIN_WEBSITE_NAVIGATION_ITEMS} urlSegment={urlSegment} />
+            <AdminSidebar navigationLinks={ADMIN_WEBSITE_NAVIGATION_ITEMS} />
             <SidebarTrigger />
             <div className="flex flex-col w-screen">
-                <AdminHeader urlSegment={urlSegment} />
+                <AdminHeader slug={slug} urlSegment={urlSegment} />
                 {/* {env === "development" && <EnvironmentAlert />} */}
                 <div className="mt-6 mr-12" data-element="outer-div-admin-outlet">
                     <Outlet context={{

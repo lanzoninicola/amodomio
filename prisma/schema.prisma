@@ -796,6 +796,7 @@ model Bairro {
 
   distances    DistanceToPizzeria[]
   deliveryFees DeliveryFee[]
+  KdsOrders    KdsOrder[]
 
   @@map("bairros")
 }
@@ -916,9 +917,32 @@ model CalendarDay {
   description String?
   createdAt   DateTime @default(now()) @map("created_at")
 
-  // Relacionamentos futuros
-  // orderDays   OrderDay[]
-  // production  ProductionDay[]
-
   @@map("calendar_day")
+}
+
+model KdsOrder {
+  id      String   @id @default(uuid())
+  date    DateTime @unique
+  dateInt Int      @unique @map("date_int") // YYYYMMDD
+
+  commandNumber Int     @map("command_number") // Número da comanda
+  size          String // G, M, G/M, etc.
+  qtyF          Int     @map("qty_f")
+  qtyM          Int     @map("qty_m")
+  qtyP          Int     @map("qty_p")
+  qtyI          Int     @map("qty_i")
+  hasMoto       Boolean @default(false) @map("has_moto")
+  motoValue     Decimal @map("moto_value")
+  channel       String // WhatsApp, AIQFome, etc.
+
+  status String
+
+  bairroId String @map("bairro_id")
+  bairro   Bairro @relation(fields: [bairroId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([commandNumber])
+  @@index([channel])
+  @@map("kds_orders")
 }
