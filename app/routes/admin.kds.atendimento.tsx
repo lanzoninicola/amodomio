@@ -6,6 +6,7 @@ import prismaClient from "~/lib/prisma/client.server";
 import { useHotkeys } from "react-hotkeys-hook";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { AlertCircleIcon } from "lucide-react";
+import { lastUrlSegment } from "~/utils/url";
 
 export function formatLocalDate(date: Date): string {
   const year = date.getFullYear();
@@ -63,6 +64,8 @@ export default function KdsAtendimento() {
 
   const { pathname } = useLocation()
 
+  const slug = lastUrlSegment(pathname)
+  console.log({ slug })
   return (
     <div>
       <Suspense fallback={<div>Carregando dias...</div>}>
@@ -133,10 +136,14 @@ export default function KdsAtendimento() {
                   })}
                 </TabsList>
               </Tabs>
-              <div className="flex gap-3 items-center">
-                <AlertCircleIcon />
-                <p>Selecionar uma data para começar</p>
-              </div>
+              {
+                slug === "atendimento" && (
+                  <div className="flex gap-3 items-center">
+                    <AlertCircleIcon />
+                    <p>Selecionar uma data para começar</p>
+                  </div>
+                )
+              }
               <Outlet key={pathname} />
             </div>
           )}

@@ -19,7 +19,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Trash, Pencil, Save } from "lucide-react";
+import { Trash, Pencil, Save, GripVertical } from "lucide-react";
+
+/* DND-KIT */
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 /* =============================
  * Date utils (timezone-safe)
@@ -38,7 +55,7 @@ function ymdToUtcNoon(ymd: string) {
 }
 
 /* =============================
- * In-memory lock (app-level uniqueness)
+ * In-memory lock (unicidade no app)
  * ============================= */
 const inFlightLocks = new Set<string>();
 function lockKey(dateInt: number, commandNumber: number) {
@@ -95,7 +112,7 @@ export async function loader({ params }: { params: { date?: string } }) {
 }
 
 /* =============================
- * Action: app-level upsert by (dateInt, commandNumber)
+ * Action
  * ============================= */
 export async function action({
   request,
@@ -119,11 +136,36 @@ export async function action({
   const currentDate = ymdToUtcNoon(dateStr);
 
   try {
+    /* ---------- REORDER ---------- */
+    if (_action === "reorder") {
+      const idsRaw = (formData.get("ids") as string) ?? "[]";
+      let ids: string[] = [];
+      try {
+        ids = JSON.parse(idsRaw);
+      } catch {
+        throw new Error("Lista de ids inválida.");
+      }
+      if (!Array.isArray(ids) || ids.some((id) => typeof id !== "string" || !id)) {
+        throw new Error("Lista de ids inválida.");
+      }
+
+      await prismaClient.$transaction(
+        ids.map((id, idx) =>
+          prismaClient.kdsOrder.update({
+            where: { id },
+            data: { commandNumber: idx + 1 },
+          })
+        )
+      );
+
+      return json({ ok: true, reordered: true });
+    }
+
+    /* ---------- DELETE/UPSERT ---------- */
     const commandNumber = Number(formData.get("commandNumber") || 0);
     if (!commandNumber) throw new Error("commandNumber inválido.");
 
     const key = lockKey(dateInt, commandNumber);
-
     if (inFlightLocks.has(key)) {
       return json(
         { ok: false, error: "Outra gravação desta linha está em andamento. Tente novamente." },
@@ -239,18 +281,18 @@ export async function action({
  * Status labels/colors
  * ============================= */
 const statusLabels: Record<string, string> = {
-  aguardandoForno: "Aguardando forno",
-  emProducao: "Em Produção",
-  despachada: "Despachada",
-  assando: "Assando",
   novoPedido: "Novo Pedido",
+  emProducao: "Em Produção",
+  aguardandoForno: "Aguardando forno",
+  assando: "Assando",
+  despachada: "Despachada",
 };
 const statusColors: Record<string, string> = {
-  aguardandoForno: "bg-gray-200 text-gray-700",
-  emProducao: "bg-blue-100 text-blue-800",
-  despachada: "bg-yellow-100 text-yellow-800",
-  assando: "bg-orange-100 text-orange-800",
   novoPedido: "bg-gray-200 text-gray-800",
+  emProducao: "bg-blue-100 text-blue-800",
+  aguardandoForno: "bg-purple-100 text-purple-800",
+  assando: "bg-orange-100 text-orange-800",
+  despachada: "bg-yellow-100 text-yellow-800",
 };
 function statusColorClasses(status: string | undefined) {
   return statusColors[status || "novoPedido"] || "bg-gray-200 text-gray-800";
@@ -328,8 +370,8 @@ function MoneyInput({
 }
 
 /* =============================
- * Grid template (Channel spans 2 cols)
- * Order: # | Status | Pedido | Tamanho | Moto | Moto(R$) | Canal (×2) | Ações
+ * Grid template (Canal em 2 colunas)
+ * Ordem: # | Status | Pedido | Tamanho | Moto | Moto(R$) | Canal (×2) | Ações
  * ============================= */
 const GRID_TMPL =
   "grid grid-cols-[48px,180px,200px,220px,112px,120px,150px,150px,120px] gap-2 items-center";
@@ -376,6 +418,39 @@ function SizeSelector({
 }
 
 /* =============================
+ * Sortable Row wrapper
+ * ============================= */
+function SortableRow({
+  order,
+  index,
+  canais,
+  dateStr,
+}: {
+  order: OrderRow;
+  index: number;
+  canais: string[];
+  dateStr: string;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: order.id!,
+  });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  } as React.CSSProperties;
+
+  return (
+    <RowItem
+      order={order}
+      index={index}
+      canais={canais}
+      dateStr={dateStr}
+      sortable={{ attributes, listeners, setNodeRef, style, isDragging }}
+    />
+  );
+}
+
+/* =============================
  * RowItem (fetcher + feedback)
  * ============================= */
 function RowItem({
@@ -383,11 +458,19 @@ function RowItem({
   index,
   canais,
   dateStr,
+  sortable,
 }: {
   order: OrderRow | null;
   index: number;
   canais: string[];
   dateStr: string;
+  sortable?: {
+    attributes: any;
+    listeners: any;
+    setNodeRef: (el: HTMLElement | null) => void;
+    style: React.CSSProperties;
+    isDragging: boolean;
+  };
 }) {
   const fetcher = useFetcher<{ ok: boolean; error?: string; id?: string }>();
   const { revalidate } = useRevalidator();
@@ -424,6 +507,7 @@ function RowItem({
         setLastOk(true);
         setErrorText(null);
         if (fetcher.data.id) setRowId(fetcher.data.id);
+        setEditingStatus(false); // ← volta para badge após salvar
         revalidate();
         const t = setTimeout(() => setLastOk(null), 1500);
         return () => clearTimeout(t);
@@ -443,11 +527,26 @@ function RowItem({
   }, [fetcher.state, lastOk, currentStatus]);
 
   return (
-    <li>
-      {/* grid: # | Status | Pedido | Tamanho | Moto | Moto(R$) | Canal (×2) | Ações */}
+    <li
+      ref={sortable?.setNodeRef}
+      style={sortable?.style}
+      className={sortable?.isDragging ? "opacity-60" : undefined}
+    >
+      {/* grid: # | Status | Pedido (R$) | Tamanho | Moto | Moto (R$) | Canal (×2) | Ações */}
       <fetcher.Form method="post" className={`${GRID_TMPL} py-2`}>
-        {/* # */}
-        <div className="flex justify-center">
+        {/* # + grip handle */}
+        <div className="flex items-center justify-center gap-1">
+          {rowId && (
+            <button
+              type="button"
+              {...(sortable?.listeners || {})}
+              {...(sortable?.attributes || {})}
+              className="cursor-grab active:cursor-grabbing text-gray-400"
+              title="Arrastar para reordenar"
+            >
+              <GripVertical className="w-4 h-4" />
+            </button>
+          )}
           <div
             className={`w-7 h-7 rounded-full border flex items-center justify-center text-xs font-bold ${circleClass}`}
             title={
@@ -571,11 +670,12 @@ function RowItem({
               type="submit"
               name="_action"
               value="delete"
-              variant={"destructive"}
+              variant={"ghost"}
               disabled={fetcher.state === "submitting"}
               title="Excluir"
+              className="hover:bg-red-50"
             >
-              <Trash className="w-4 h-4" />
+              <Trash className="w-4 h-4 text-red-500 " />
             </Button>
           )}
         </div>
@@ -590,12 +690,13 @@ function RowItem({
 }
 
 /* =============================
- * Page
+ * Page (com DND)
  * ============================= */
 export default function KdsAtendimentoPlanilha() {
   const data = useLoaderData<typeof loader>();
   const [rows, setRows] = useState(50);
 
+  // ENTER submete o form focado (evita inputs de texto)
   useHotkeys("enter", (e) => {
     const target = e.target as HTMLElement | null;
     const tag = target?.tagName?.toLowerCase();
@@ -610,15 +711,56 @@ export default function KdsAtendimentoPlanilha() {
     []
   );
 
+  const [orderList, setOrderList] = useState<OrderRow[]>([]);
+  useEffect(() => {
+    // carrega a lista quando o loader resolve
+    // @ts-ignore – data.orders é resolvido via <Await>; aqui usamos efeito após render
+  }, []);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+  );
+
+  const reorderFetcher = useFetcher();
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    setOrderList((prev) => {
+      const oldIndex = prev.findIndex((o) => o.id === active.id);
+      const newIndex = prev.findIndex((o) => o.id === over.id);
+      if (oldIndex === -1 || newIndex === -1) return prev;
+
+      const next = arrayMove(prev, oldIndex, newIndex);
+
+      // envia para o servidor a nova ordem (ids)
+      reorderFetcher.submit(
+        {
+          _action: "reorder",
+          date: data.currentDate,
+          ids: JSON.stringify(next.map((o) => o.id)),
+        },
+        { method: "post" }
+      );
+
+      return next;
+    });
+  }
+
   return (
     <Suspense fallback={<div>Carregando pedidos...</div>}>
       <Await resolve={data.orders}>
         {(orders) => {
           const safeOrders = Array.isArray(orders) ? (orders as OrderRow[]) : [];
-          const displayRows = [
-            ...safeOrders,
-            ...Array(Math.max(0, 50 - safeOrders.length)).fill(null),
-          ];
+
+          // sincroniza estado local quando o loader muda
+          useEffect(() => {
+            setOrderList(safeOrders.filter((o) => !!o?.id));
+          }, [safeOrders]);
+
+          const fillerCount = Math.max(0, 50 - safeOrders.filter((o) => !!o?.id).length);
+          const fillers = Array(fillerCount).fill(null);
 
           return (
             <div className="space-y-2">
@@ -634,21 +776,39 @@ export default function KdsAtendimentoPlanilha() {
                 <div className="text-center">Ações</div>
               </div>
 
-              {/* Rows */}
-              <ul className="divide-y divide-gray-300">
-                {displayRows.map((order, index) => (
+              {/* Lista com DnD para registros existentes */}
+              <ul>
+                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                  <SortableContext
+                    items={orderList.map((o) => o.id!)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    {orderList.map((order, index) => (
+                      <SortableRow
+                        key={order.id}
+                        order={order}
+                        index={index}
+                        canais={canais}
+                        dateStr={data.currentDate}
+                      />
+                    ))}
+                  </SortableContext>
+                </DndContext>
+
+                {/* Linhas vazias (não arrastáveis) */}
+                {fillers.map((_, i) => (
                   <RowItem
-                    key={(order as OrderRow)?.id ?? `row-${index}`}
-                    order={order as OrderRow | null}
-                    index={index}
+                    key={`row-empty-${i}`}
+                    order={null}
+                    index={orderList.length + i}
                     canais={canais}
-                    dateStr={data.currentDate}   // pass date to each row
+                    dateStr={data.currentDate}
                   />
                 ))}
               </ul>
 
-              {/* Add more lines */}
-              {displayRows.length >= 50 && (
+              {/* Adicionar mais linhas (mantém mínimo 50) */}
+              {orderList.length + fillers.length >= 50 && (
                 <div className="flex justify-center mt-4">
                   <Button onClick={() => setRows((r) => r + 50)}>
                     Adicionar 50 linhas
@@ -662,4 +822,3 @@ export default function KdsAtendimentoPlanilha() {
     </Suspense>
   );
 }
-
