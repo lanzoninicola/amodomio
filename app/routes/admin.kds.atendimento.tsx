@@ -38,7 +38,7 @@ export async function loader() {
   });
 }
 
-export default function KdsAtendimentoIndex() {
+export default function KdsAtendimento() {
   const data = useLoaderData<typeof loader>();
   const params = useParams();
   const navigate = useNavigate();
