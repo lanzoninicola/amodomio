@@ -934,7 +934,7 @@ model KdsOrder {
   hasMoto   Boolean @default(false) @map("has_moto")
   motoValue Decimal @map("moto_value") @db.Decimal(10, 2)
   channel   String // WhatsApp, Balcão, etc.
-  status    String  @default("pendente")
+  status    String  @default("novoPedido")
   Bairro    Bairro? @relation(fields: [bairroId], references: [id])
   bairroId  String?
 

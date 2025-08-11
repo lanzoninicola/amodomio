@@ -146,7 +146,7 @@ export async function action({
       // Form data
       const hasMoto = formData.get("hasMoto") === "true";
       const channel = (formData.get("channel") as string) || "";
-      const status = (formData.get("status") as string) || "pendente";
+      const status = (formData.get("status") as string) || "novoPedido";
 
       const sizeCountsRaw = formData.get("size") as string;
       if (!sizeCountsRaw) throw new Error("Tamanhos não informados.");
@@ -177,7 +177,7 @@ export async function action({
         total === 0 &&
         !hasMoto &&
         !channel &&
-        (status === "pendente" || !status) &&
+        (status === "novoPedido" || !status) &&
         motoValueNum === 0 &&
         orderAmountNum === 0;
 
@@ -239,21 +239,21 @@ export async function action({
  * Status labels/colors
  * ============================= */
 const statusLabels: Record<string, string> = {
-  emFila: "Fila",
-  emProducao: "Montando",
-  pronto: "Pronto",
-  forno: "Forno",
-  pendente: "Pendente",
+  aguardandoForno: "Aguardando forno",
+  emProducao: "Em Produção",
+  despachada: "Despachada",
+  assando: "Assando",
+  novoPedido: "Novo Pedido",
 };
 const statusColors: Record<string, string> = {
-  emFila: "bg-gray-200 text-gray-700",
+  aguardandoForno: "bg-gray-200 text-gray-700",
   emProducao: "bg-blue-100 text-blue-800",
-  pronto: "bg-yellow-100 text-yellow-800",
-  forno: "bg-orange-100 text-orange-800",
-  pendente: "bg-gray-200 text-gray-800",
+  despachada: "bg-yellow-100 text-yellow-800",
+  assando: "bg-orange-100 text-orange-800",
+  novoPedido: "bg-gray-200 text-gray-800",
 };
 function statusColorClasses(status: string | undefined) {
-  return statusColors[status || "pendente"] || "bg-gray-200 text-gray-800";
+  return statusColors[status || "novoPedido"] || "bg-gray-200 text-gray-800";
 }
 
 /* =============================
@@ -409,7 +409,7 @@ function RowItem({
   const [errorText, setErrorText] = useState<string | null>(null);
   const [lastOk, setLastOk] = useState<boolean | null>(null);
 
-  const currentStatus = order?.status || "pendente";
+  const currentStatus = order?.status || "novoPedido";
 
   useEffect(() => {
     if (fetcher.state === "submitting") {
@@ -472,11 +472,11 @@ function RowItem({
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="emFila">Fila</SelectItem>
-                <SelectItem value="emProducao">Montando</SelectItem>
-                <SelectItem value="pronto">Pronto</SelectItem>
-                <SelectItem value="forno">Forno</SelectItem>
-                <SelectItem value="pendente">Pendente</SelectItem>
+                <SelectItem value="novoPedido">(1) Novo Pedido</SelectItem>
+                <SelectItem value="emProducao">(2) Em Produção</SelectItem>
+                <SelectItem value="aguardandoForno">(3) Aguardando forno</SelectItem>
+                <SelectItem value="assando">(4) Assando</SelectItem>
+                <SelectItem value="despachada">(5) Despachada</SelectItem>
               </SelectContent>
             </Select>
           ) : (
