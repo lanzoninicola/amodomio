@@ -72,7 +72,7 @@ type OrderRow = {
   id?: string;
   date?: string;
   dateInt?: number;
-  createdAt?: string;
+  createdAt?: string | Date;
   commandNumber?: number;
 
   size?: string;
@@ -370,13 +370,33 @@ function MoneyInput({
 }
 
 /* =============================
- * Grid template (Canal em 2 colunas)
- * Ordem: # | Status | Pedido | Tamanho | Moto | Moto(R$) | Canal (×2) | Ações
+ * Helpers de hora/decorrido
+ * ============================= */
+function fmtHHMM(dateLike: string | Date | undefined) {
+  if (!dateLike) return "--:--";
+  const d = new Date(dateLike);
+  if (isNaN(d.getTime())) return "--:--";
+  return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+}
+function fmtElapsedHHMM(from: string | Date | undefined, nowMs: number) {
+  if (!from) return "--:--";
+  const d = new Date(from);
+  const diff = nowMs - d.getTime();
+  if (!isFinite(diff) || diff < 0) return "--:--";
+  const totalMin = Math.floor(diff / 60000);
+  const hh = Math.floor(totalMin / 60).toString().padStart(2, "0");
+  const mm = (totalMin % 60).toString().padStart(2, "0");
+  return `${hh}:${mm}`;
+}
+
+/* =============================
+ * Grid template (adiciona Hora/Decorrido)
+ * Ordem: # | Hora | Decorrido | Status | Pedido | Tamanho | Moto | Moto(R$) | Canal (×2) | Ações
  * ============================= */
 const GRID_TMPL =
-  "grid grid-cols-[48px,180px,200px,220px,112px,120px,150px,150px,120px] gap-2 items-center";
+  "grid grid-cols-[48px,84px,96px,180px,200px,220px,112px,120px,150px,150px,120px] gap-2 items-center";
 const HEADER_TMPL =
-  "grid grid-cols-[48px,180px,200px,220px,112px,120px,150px,150px,120px] gap-2 border-b font-semibold text-sm sticky top-0 bg-white z-10";
+  "grid grid-cols-[48px,84px,96px,180px,200px,220px,112px,120px,150px,150px,120px] gap-2 border-b font-semibold text-sm sticky top-0 bg-white z-10";
 
 /* =============================
  * SizeSelector
@@ -425,11 +445,13 @@ function SortableRow({
   index,
   canais,
   dateStr,
+  nowMs,
 }: {
   order: OrderRow;
   index: number;
   canais: string[];
   dateStr: string;
+  nowMs: number;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: order.id!,
@@ -445,6 +467,7 @@ function SortableRow({
       index={index}
       canais={canais}
       dateStr={dateStr}
+      nowMs={nowMs}
       sortable={{ attributes, listeners, setNodeRef, style, isDragging }}
     />
   );
@@ -458,12 +481,14 @@ function RowItem({
   index,
   canais,
   dateStr,
+  nowMs,
   sortable,
 }: {
   order: OrderRow | null;
   index: number;
   canais: string[];
   dateStr: string;
+  nowMs: number;
   sortable?: {
     attributes: any;
     listeners: any;
@@ -526,13 +551,16 @@ function RowItem({
     return statusColorClasses(currentStatus);
   }, [fetcher.state, lastOk, currentStatus]);
 
+  const horaStr = fmtHHMM(order?.createdAt);
+  const decorridoStr = fmtElapsedHHMM(order?.createdAt, nowMs);
+
   return (
     <li
       ref={sortable?.setNodeRef}
       style={sortable?.style}
       className={sortable?.isDragging ? "opacity-60" : undefined}
     >
-      {/* grid: # | Status | Pedido (R$) | Tamanho | Moto | Moto (R$) | Canal (×2) | Ações */}
+      {/* grid: # | Hora | Decorrido | Status | Pedido (R$) | Tamanho | Moto | Moto (R$) | Canal (×2) | Ações */}
       <fetcher.Form method="post" className={`${GRID_TMPL} py-2`}>
         {/* # + grip handle (sempre visível) */}
         <div className="flex items-center justify-center gap-1">
@@ -564,6 +592,12 @@ function RowItem({
             {index + 1}
           </div>
         </div>
+
+        {/* Hora */}
+        <div className="text-center text-sm text-gray-800 font-mono">{horaStr}</div>
+
+        {/* Decorrido */}
+        <div className="text-center text-sm text-gray-800 font-mono">{decorridoStr}</div>
 
         {/* Status */}
         <div className="flex items-center justify-center gap-2">
@@ -672,18 +706,19 @@ function RowItem({
               type="submit"
               name="_action"
               value="delete"
-              variant={"destructive"}
+              variant={"ghost"}
               disabled={fetcher.state === "submitting"}
               title="Excluir"
+              className="hover:bg-red-50"
             >
-              <Trash className="w-4 h-4" />
+              <Trash className="w-4 h-4 text-red-500" />
             </Button>
           )}
         </div>
 
-        {/* Erro (9 cols) */}
+        {/* Erro (11 cols) */}
         {errorText && (
-          <div className="col-span-9 text-red-600 text-xs mt-1">{errorText}</div>
+          <div className="col-span-11 text-red-600 text-xs mt-1">{errorText}</div>
         )}
       </fetcher.Form>
     </li>
@@ -691,11 +726,18 @@ function RowItem({
 }
 
 /* =============================
- * Página (com DND e Totais)
+ * Página (com DND, Totais e relógio para "Decorrido")
  * ============================= */
 export default function KdsAtendimentoPlanilha() {
   const data = useLoaderData<typeof loader>();
   const [rows, setRows] = useState(50);
+
+  // Atualiza "agora" a cada 30s para recalcular o decorrido
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNowMs(Date.now()), 30000);
+    return () => clearInterval(t);
+  }, []);
 
   // ENTER submete o form focado (evita inputs de texto)
   useHotkeys("enter", (e) => {
@@ -713,14 +755,9 @@ export default function KdsAtendimentoPlanilha() {
   );
 
   const [orderList, setOrderList] = useState<OrderRow[]>([]);
-  useEffect(() => {
-    // (intencionalmente vazio aqui; sincronizamos dentro do <Await>)
-  }, []);
-
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   );
-
   const reorderFetcher = useFetcher();
 
   function handleDragEnd(event: DragEndEvent) {
@@ -734,7 +771,6 @@ export default function KdsAtendimentoPlanilha() {
 
       const next = arrayMove(prev, oldIndex, newIndex);
 
-      // envia para o servidor a nova ordem (ids)
       reorderFetcher.submit(
         {
           _action: "reorder",
@@ -768,7 +804,7 @@ export default function KdsAtendimentoPlanilha() {
           const fillers = Array(fillerCount).fill(null);
 
           return (
-            <div className="space-y-4">
+            <div className="space-y-6">
               {/* Cards de totais */}
               <div className="flex flex-wrap items-center gap-3 mb-2">
                 <div className="px-3 py-2 rounded-lg border bg-gray-50">
@@ -792,9 +828,11 @@ export default function KdsAtendimentoPlanilha() {
                 </div>
               </div>
 
-              {/* Cabeçalho */}
+              {/* Cabeçalho: # | Hora | Decorrido | Status | Pedido (R$) | Tamanho | Moto | Moto (R$) | Canal (×2) | Ações */}
               <div className={`${HEADER_TMPL}`}>
                 <div className="text-center">#</div>
+                <div className="text-center">Hora</div>
+                <div className="text-center">Decorrido</div>
                 <div className="text-center">Status</div>
                 <div className="text-center">Pedido (R$)</div>
                 <div className="text-center">Tamanho</div>
@@ -818,6 +856,7 @@ export default function KdsAtendimentoPlanilha() {
                         index={index}
                         canais={canais}
                         dateStr={data.currentDate}
+                        nowMs={nowMs}
                       />
                     ))}
                   </SortableContext>
@@ -831,6 +870,7 @@ export default function KdsAtendimentoPlanilha() {
                     index={orderList.length + i}
                     canais={canais}
                     dateStr={data.currentDate}
+                    nowMs={nowMs}
                   />
                 ))}
               </ul>

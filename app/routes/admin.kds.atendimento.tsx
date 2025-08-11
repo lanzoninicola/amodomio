@@ -71,7 +71,7 @@ export default function KdsAtendimento() {
       <Suspense fallback={<div>Carregando dias...</div>}>
         <Await resolve={data.days}>
           {(days) => (
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-0">
               <Tabs value={selectedDate}>
                 <TabsList className="flex justify-start space-x-2 mb-4">
                   {days.map((d: any) => {
