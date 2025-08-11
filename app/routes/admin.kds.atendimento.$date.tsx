@@ -22,13 +22,13 @@ import {
 import { Trash, Pencil, Save } from "lucide-react";
 
 /* =============================
- * Utils de data (sem fuso)
+ * Date utils (timezone-safe)
  * ============================= */
 function ymdToDateInt(ymd: string) {
   const [y, m, d] = ymd.split("-");
   const mm = m.padStart(2, "0");
   const dd = d.padStart(2, "0");
-  return Number(`${y}${mm}${dd}`); // 20250811
+  return Number(`${y}${mm}${dd}`);
 }
 function ymdToUtcNoon(ymd: string) {
   const [y, m, d] = ymd.split("-");
@@ -38,7 +38,7 @@ function ymdToUtcNoon(ymd: string) {
 }
 
 /* =============================
- * Lock em memória (unicidade no app)
+ * In-memory lock (app-level uniqueness)
  * ============================= */
 const inFlightLocks = new Set<string>();
 function lockKey(dateInt: number, commandNumber: number) {
@@ -46,7 +46,7 @@ function lockKey(dateInt: number, commandNumber: number) {
 }
 
 /* =============================
- * Tipos
+ * Types
  * ============================= */
 type SizeCounts = { F: number; M: number; P: number; I: number };
 type DecimalLike = number | string | Prisma.Decimal;
@@ -71,22 +71,17 @@ function defaultSizeCounts(): SizeCounts {
   return { F: 0, M: 0, P: 0, I: 0 };
 }
 
-function decimalToInput(v: DecimalLike | undefined, fallback = "0.00") {
-  if (v == null) return fallback;
-  if (typeof v === "number") return v.toFixed(2);
-  const s = (v as any)?.toString?.() ?? `${v}`;
-  const n = Number(s);
-  return Number.isFinite(n) ? n.toFixed(2) : fallback;
-}
-
 /* =============================
- * Loader (compat 7 e 8 dígitos)
+ * Loader (robust date; compat 7/8-digit dateInt)
  * ============================= */
-export async function loader({ params }: { params: { date: string } }) {
-  const dateInt8 = ymdToDateInt(params.date);
-  const [y, m, d] = params.date.split("-");
-  const dateInt7 = Number(`${y}${Number(m)}${Number(d)}`); // compat legado
-  const currentDate = ymdToUtcNoon(params.date);
+export async function loader({ params }: { params: { date?: string } }) {
+  const fallbackToday = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  const dateStr = params.date ?? fallbackToday;
+
+  const dateInt8 = ymdToDateInt(dateStr);
+  const [y, m, d] = dateStr.split("-");
+  const dateInt7 = Number(`${y}${Number(m)}${Number(d)}`); // legacy compat
+  const currentDate = ymdToUtcNoon(dateStr);
 
   const ordersPromise = await prismaClient.kdsOrder.findMany({
     where: { dateInt: { in: [dateInt8, dateInt7] } },
@@ -100,19 +95,26 @@ export async function loader({ params }: { params: { date: string } }) {
 }
 
 /* =============================
- * Action: gestão no app por (dateInt, commandNumber)
+ * Action: app-level upsert by (dateInt, commandNumber)
  * ============================= */
 export async function action({
   request,
   params,
 }: {
   request: Request;
-  params: { date: string };
+  params: { date?: string };
 }) {
   const formData = await request.formData();
   const _action = (formData.get("_action") as string) ?? "upsert";
 
-  const dateStr = params.date; // "YYYY-MM-DD"
+  const fallbackToday = new Date().toISOString().slice(0, 10);
+  const formDate = (formData.get("date") as string) || "";
+  const dateStr = formDate || params.date || fallbackToday;
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    return json({ ok: false, error: "Invalid date." }, { status: 400 });
+  }
+
   const dateInt = ymdToDateInt(dateStr);
   const currentDate = ymdToUtcNoon(dateStr);
 
@@ -141,7 +143,7 @@ export async function action({
         return json({ ok: true, deleted: true, id: existente.id });
       }
 
-      // Dados do formulário
+      // Form data
       const hasMoto = formData.get("hasMoto") === "true";
       const channel = (formData.get("channel") as string) || "";
       const status = (formData.get("status") as string) || "pendente";
@@ -156,15 +158,15 @@ export async function action({
         throw new Error("Formato inválido dos tamanhos.");
       }
 
-      // Valores monetários
+      // Money (string -> Decimal with 2 places)
       const rawMoto = (formData.get("motoValue") as string) ?? "0";
       const rawAmount = (formData.get("orderAmount") as string) ?? "0";
-      const motoValueNum = Math.max(0, Number(rawMoto || 0));
-      const orderAmountNum = Math.max(0, Number(rawAmount || 0));
+      const motoValueNum = Math.max(0, Number(rawMoto.replace(",", ".") || 0));
+      const orderAmountNum = Math.max(0, Number(rawAmount.replace(",", ".") || 0));
       const motoValue = new Prisma.Decimal(motoValueNum.toFixed(2));
       const orderAmount = new Prisma.Decimal(orderAmountNum.toFixed(2));
 
-      // Linha vazia? (não criar lixo)
+      // Empty-line guard
       const total =
         (sizeCounts.F || 0) +
         (sizeCounts.M || 0) +
@@ -186,7 +188,7 @@ export async function action({
         );
       }
 
-      // Procura existente por (dateInt, commandNumber)
+      // Upsert by (dateInt, commandNumber)
       const existente = await prismaClient.kdsOrder.findFirst({
         where: { dateInt, commandNumber },
         select: { id: true },
@@ -208,7 +210,6 @@ export async function action({
         return json({ ok: true, id: updated.id, mode: "update" });
       }
 
-      // Cria somente se não existir
       const created = await prismaClient.kdsOrder.create({
         data: {
           date: currentDate,
@@ -235,7 +236,7 @@ export async function action({
 }
 
 /* =============================
- * Status labels/cores
+ * Status labels/colors
  * ============================= */
 const statusLabels: Record<string, string> = {
   emFila: "Fila",
@@ -244,7 +245,6 @@ const statusLabels: Record<string, string> = {
   forno: "Forno",
   pendente: "Pendente",
 };
-
 const statusColors: Record<string, string> = {
   emFila: "bg-gray-200 text-gray-700",
   emProducao: "bg-blue-100 text-blue-800",
@@ -252,12 +252,89 @@ const statusColors: Record<string, string> = {
   forno: "bg-orange-100 text-orange-800",
   pendente: "bg-gray-200 text-gray-800",
 };
-
-/* Util para pegar classes de status (para o círculo) */
 function statusColorClasses(status: string | undefined) {
-  const base = statusColors[status || "pendente"] || "bg-gray-200 text-gray-800";
-  return base;
+  return statusColors[status || "pendente"] || "bg-gray-200 text-gray-800";
 }
+
+/* =============================
+ * MoneyInput (cent-based typing)
+ * ============================= */
+function MoneyInput({
+  name,
+  defaultValue,
+  placeholder,
+  className = "w-24",
+}: {
+  name: string;
+  defaultValue?: DecimalLike;
+  placeholder?: string;
+  className?: string;
+}) {
+  const initialCents = (() => {
+    const n =
+      defaultValue == null
+        ? 0
+        : typeof defaultValue === "number"
+          ? defaultValue
+          : Number((defaultValue as any)?.toString?.() ?? `${defaultValue}`);
+    return Math.max(0, Math.round((Number.isFinite(n) ? n : 0) * 100));
+  })();
+
+  const [cents, setCents] = useState<number>(initialCents);
+
+  const display = (cents / 100).toLocaleString("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    const k = e.key;
+    if (k === "Backspace") {
+      e.preventDefault();
+      setCents((c) => Math.floor(c / 10));
+      return;
+    }
+    if (k === "Delete") {
+      e.preventDefault();
+      setCents(0);
+      return;
+    }
+    if (/^\d$/.test(k)) {
+      e.preventDefault();
+      const d = Number(k);
+      setCents((c) => (c * 10 + d) % 1000000000);
+      return;
+    }
+    if (k === "Tab" || k === "ArrowLeft" || k === "ArrowRight" || k === "Home" || k === "End") {
+      return;
+    }
+    e.preventDefault();
+  }
+
+  return (
+    <div className="relative">
+      <input
+        type="text"
+        inputMode="numeric"
+        value={display}
+        onKeyDown={handleKeyDown}
+        onChange={() => { }}
+        className={`${className} h-9 border rounded px-2 py-1 text-right`}
+        placeholder={placeholder}
+      />
+      <input type="hidden" name={name} value={(cents / 100).toFixed(2)} />
+    </div>
+  );
+}
+
+/* =============================
+ * Grid template (Channel spans 2 cols)
+ * Order: # | Status | Pedido | Tamanho | Moto | Moto(R$) | Canal (×2) | Ações
+ * ============================= */
+const GRID_TMPL =
+  "grid grid-cols-[48px,180px,200px,220px,112px,120px,150px,150px,120px] gap-2 items-center";
+const HEADER_TMPL =
+  "grid grid-cols-[48px,180px,200px,220px,112px,120px,150px,150px,120px] gap-2 border-b font-semibold text-sm sticky top-0 bg-white z-10";
 
 /* =============================
  * SizeSelector
@@ -305,10 +382,12 @@ function RowItem({
   order,
   index,
   canais,
+  dateStr,
 }: {
   order: OrderRow | null;
   index: number;
   canais: string[];
+  dateStr: string;
 }) {
   const fetcher = useFetcher<{ ok: boolean; error?: string; id?: string }>();
   const { revalidate } = useRevalidator();
@@ -355,7 +434,7 @@ function RowItem({
     }
   }, [fetcher.data, revalidate]);
 
-  // Cor do círculo: prioridade ao feedback; senão, cor do status
+  // Circle color: save feedback > status color
   const circleClass = useMemo(() => {
     if (fetcher.state === "submitting") return "bg-gray-200";
     if (lastOk === true) return "bg-green-500 text-white";
@@ -365,9 +444,9 @@ function RowItem({
 
   return (
     <li>
-      {/* grid: # | Pedido (R$) | Tamanho | Moto | Moto (R$) | Canal | Status | Ações */}
-      <fetcher.Form method="post" className="grid grid-cols-8 gap-2 items-center py-2">
-        {/* # com cor de status + feedback */}
+      {/* grid: # | Status | Pedido | Tamanho | Moto | Moto(R$) | Canal (×2) | Ações */}
+      <fetcher.Form method="post" className={`${GRID_TMPL} py-2`}>
+        {/* # */}
         <div className="flex justify-center">
           <div
             className={`w-7 h-7 rounded-full border flex items-center justify-center text-xs font-bold ${circleClass}`}
@@ -385,77 +464,11 @@ function RowItem({
           </div>
         </div>
 
-        {/* Pedido (R$) — logo após o número */}
-        <div className="flex items-center justify-center gap-2">
-          <input
-            name="orderAmount"
-            type="number"
-            step="0.01"
-            min="0"
-            defaultValue={decimalToInput(order?.orderAmount)}
-            className="w-24 border rounded px-2 py-1 text-xs text-right"
-            placeholder="Pedido (R$)"
-          />
-        </div>
-
-        {/* Hidden */}
-        {rowId && <input type="hidden" name="id" value={rowId} />}
-        <input type="hidden" name="_action" value="upsert" />
-        <input type="hidden" name="size" value={JSON.stringify(counts)} />
-        <input type="hidden" name="commandNumber" value={index + 1} />
-
-        {/* Tamanhos */}
-        <div>
-          <SizeSelector counts={counts} onChange={setCounts} />
-        </div>
-
-        {/* Moto (boolean) */}
-        <div className="flex items-center justify-center gap-2">
-          <Select name="hasMoto" defaultValue={order?.hasMoto ? "true" : "false"}>
-            <SelectTrigger className="w-20 text-xs">
-              <SelectValue placeholder="Moto" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="true">Sim</SelectItem>
-              <SelectItem value="false">Não</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Moto (R$) — logo após o select Moto */}
-        <div className="flex items-center justify-center gap-2">
-          <input
-            name="motoValue"
-            type="number"
-            step="0.01"
-            min="0"
-            defaultValue={decimalToInput(order?.motoValue)}
-            className="w-24 border rounded px-2 py-1 text-xs text-right"
-            placeholder="Moto (R$)"
-          />
-        </div>
-
-        {/* Canal */}
-        <div className="flex items-center justify-center gap-2">
-          <Select name="channel" defaultValue={order?.channel ?? ""}>
-            <SelectTrigger className="w-36 text-xs">
-              <SelectValue placeholder="Canal" />
-            </SelectTrigger>
-            <SelectContent>
-              {canais.map((canal) => (
-                <SelectItem key={canal} value={canal}>
-                  {canal}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
         {/* Status */}
         <div className="flex items-center justify-center gap-2">
           {editingStatus ? (
             <Select name="status" defaultValue={currentStatus}>
-              <SelectTrigger className="w-28 text-xs">
+              <SelectTrigger className="w-40 h-9 text-xs">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
@@ -467,10 +480,7 @@ function RowItem({
               </SelectContent>
             </Select>
           ) : (
-            <div
-              className={`px-2 py-1 text-xs rounded-md ${statusColorClasses(currentStatus)
-                }`}
-            >
+            <div className={`px-2 py-1 text-xs rounded-md ${statusColorClasses(currentStatus)}`}>
               {statusLabels[currentStatus] || currentStatus}
             </div>
           )}
@@ -478,9 +488,71 @@ function RowItem({
             type="button"
             onClick={() => setEditingStatus((v) => !v)}
             className="text-gray-500 hover:text-gray-700"
+            title="Editar status"
           >
             <Pencil className="w-4 h-4" />
           </button>
+        </div>
+
+        {/* Pedido (R$) */}
+        <div className="flex items-center justify-center">
+          <MoneyInput
+            name="orderAmount"
+            defaultValue={order?.orderAmount}
+            placeholder="Pedido (R$)"
+            className="w-40"
+          />
+        </div>
+
+        {/* Hidden */}
+        {rowId && <input type="hidden" name="id" value={rowId} />}
+        <input type="hidden" name="_action" value="upsert" />
+        <input type="hidden" name="size" value={JSON.stringify(counts)} />
+        <input type="hidden" name="commandNumber" value={index + 1} />
+        <input type="hidden" name="date" value={dateStr} />
+
+        {/* Tamanhos */}
+        <div>
+          <SizeSelector counts={counts} onChange={setCounts} />
+        </div>
+
+        {/* Moto (boolean) */}
+        <div className="flex items-center justify-center">
+          <Select name="hasMoto" defaultValue={order?.hasMoto ? "true" : "false"}>
+            <SelectTrigger className="w-28 h-9 text-xs">
+              <SelectValue placeholder="Moto" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="true">Sim</SelectItem>
+              <SelectItem value="false">Não</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Moto (R$) */}
+        <div className="flex items-center justify-center">
+          <MoneyInput
+            name="motoValue"
+            defaultValue={order?.motoValue}
+            placeholder="Moto (R$)"
+            className="w-28"
+          />
+        </div>
+
+        {/* Canal (span 2) */}
+        <div className="flex items-center justify-center col-span-2">
+          <Select name="channel" defaultValue={order?.channel ?? ""}>
+            <SelectTrigger className="w-full h-9 text-xs">
+              <SelectValue placeholder="Canal" />
+            </SelectTrigger>
+            <SelectContent>
+              {canais.map((canal) => (
+                <SelectItem key={canal} value={canal}>
+                  {canal}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Ações */}
@@ -494,7 +566,6 @@ function RowItem({
             <Save className="w-4 h-4" />
           </Button>
 
-          {/* Exibir 'Excluir' apenas se existir registro */}
           {rowId && (
             <Button
               type="submit"
@@ -509,9 +580,9 @@ function RowItem({
           )}
         </div>
 
-        {/* Erro inline */}
+        {/* Error row (9 cols) */}
         {errorText && (
-          <div className="col-span-8 text-red-600 text-xs mt-1">{errorText}</div>
+          <div className="col-span-9 text-red-600 text-xs mt-1">{errorText}</div>
         )}
       </fetcher.Form>
     </li>
@@ -519,13 +590,12 @@ function RowItem({
 }
 
 /* =============================
- * Página principal
+ * Page
  * ============================= */
 export default function KdsAtendimentoPlanilha() {
   const data = useLoaderData<typeof loader>();
   const [rows, setRows] = useState(50);
 
-  // ENTER submete o form focado (evita inputs de texto)
   useHotkeys("enter", (e) => {
     const target = e.target as HTMLElement | null;
     const tag = target?.tagName?.toLowerCase();
@@ -552,19 +622,19 @@ export default function KdsAtendimentoPlanilha() {
 
           return (
             <div className="space-y-2">
-              {/* Cabeçalho: # | Pedido (R$) | Tamanho | Moto | Moto (R$) | Canal | Status | Ações */}
-              <div className="grid grid-cols-8 gap-2 border-b font-semibold text-sm sticky top-0 bg-white z-10">
+              {/* Header: # | Status | Pedido | Tamanho | Moto | Moto (R$) | Canal (×2) | Ações */}
+              <div className={`${HEADER_TMPL}`}>
                 <div className="text-center">#</div>
+                <div className="text-center">Status</div>
                 <div className="text-center">Pedido (R$)</div>
                 <div className="text-center">Tamanho</div>
                 <div className="text-center">Moto</div>
                 <div className="text-center">Moto (R$)</div>
-                <div className="text-center">Canal</div>
-                <div className="text-center">Status</div>
+                <div className="text-center col-span-2">Canal</div>
                 <div className="text-center">Ações</div>
               </div>
 
-              {/* Linhas */}
+              {/* Rows */}
               <ul className="divide-y divide-gray-300">
                 {displayRows.map((order, index) => (
                   <RowItem
@@ -572,11 +642,12 @@ export default function KdsAtendimentoPlanilha() {
                     order={order as OrderRow | null}
                     index={index}
                     canais={canais}
+                    dateStr={data.currentDate}   // pass date to each row
                   />
                 ))}
               </ul>
 
-              {/* Adicionar mais linhas (mantém mínimo 50) */}
+              {/* Add more lines */}
               {displayRows.length >= 50 && (
                 <div className="flex justify-center mt-4">
                   <Button onClick={() => setRows((r) => r + 50)}>
@@ -591,3 +662,4 @@ export default function KdsAtendimentoPlanilha() {
     </Suspense>
   );
 }
+

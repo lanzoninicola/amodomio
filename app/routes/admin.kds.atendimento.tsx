@@ -5,6 +5,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import prismaClient from "~/lib/prisma/client.server";
 import { useHotkeys } from "react-hotkeys-hook";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { AlertCircleIcon } from "lucide-react";
 
 export function formatLocalDate(date: Date): string {
   const year = date.getFullYear();
@@ -67,7 +68,7 @@ export default function KdsAtendimento() {
       <Suspense fallback={<div>Carregando dias...</div>}>
         <Await resolve={data.days}>
           {(days) => (
-            <div>
+            <div className="flex flex-col gap-6">
               <Tabs value={selectedDate}>
                 <TabsList className="flex justify-start space-x-2 mb-4">
                   {days.map((d: any) => {
@@ -132,6 +133,10 @@ export default function KdsAtendimento() {
                   })}
                 </TabsList>
               </Tabs>
+              <div className="flex gap-3 items-center">
+                <AlertCircleIcon />
+                <p>Selecionar uma data para começar</p>
+              </div>
               <Outlet key={pathname} />
             </div>
           )}
