@@ -63,7 +63,7 @@ function lockKey(dateInt: number, commandNumber: number) {
 }
 
 /* =============================
- * Types
+ * Tipos
  * ============================= */
 type SizeCounts = { F: number; M: number; P: number; I: number };
 type DecimalLike = number | string | Prisma.Decimal;
@@ -507,7 +507,7 @@ function RowItem({
         setLastOk(true);
         setErrorText(null);
         if (fetcher.data.id) setRowId(fetcher.data.id);
-        setEditingStatus(false); // ← volta para badge após salvar
+        setEditingStatus(false); // volta para badge após salvar
         revalidate();
         const t = setTimeout(() => setLastOk(null), 1500);
         return () => clearTimeout(t);
@@ -518,7 +518,7 @@ function RowItem({
     }
   }, [fetcher.data, revalidate]);
 
-  // Circle color: save feedback > status color
+  // Circulo: feedback > cor do status
   const circleClass = useMemo(() => {
     if (fetcher.state === "submitting") return "bg-gray-200";
     if (lastOk === true) return "bg-green-500 text-white";
@@ -534,19 +534,21 @@ function RowItem({
     >
       {/* grid: # | Status | Pedido (R$) | Tamanho | Moto | Moto (R$) | Canal (×2) | Ações */}
       <fetcher.Form method="post" className={`${GRID_TMPL} py-2`}>
-        {/* # + grip handle */}
+        {/* # + grip handle (sempre visível) */}
         <div className="flex items-center justify-center gap-1">
-          {rowId && (
-            <button
-              type="button"
-              {...(sortable?.listeners || {})}
-              {...(sortable?.attributes || {})}
-              className="cursor-grab active:cursor-grabbing text-gray-400"
-              title="Arrastar para reordenar"
-            >
-              <GripVertical className="w-4 h-4" />
-            </button>
-          )}
+          <button
+            type="button"
+            {...(rowId ? (sortable?.listeners || {}) : {})}
+            {...(rowId ? (sortable?.attributes || {}) : {})}
+            className={
+              "text-gray-600 " +
+              (rowId ? "cursor-grab active:cursor-grabbing" : "opacity-30 cursor-not-allowed")
+            }
+            title={rowId ? "Arraste para reordenar" : "Salve a linha para habilitar arraste"}
+          >
+            <GripVertical className="w-4 h-4" />
+          </button>
+
           <div
             className={`w-7 h-7 rounded-full border flex items-center justify-center text-xs font-bold ${circleClass}`}
             title={
@@ -670,17 +672,16 @@ function RowItem({
               type="submit"
               name="_action"
               value="delete"
-              variant={"ghost"}
+              variant={"destructive"}
               disabled={fetcher.state === "submitting"}
               title="Excluir"
-              className="hover:bg-red-50"
             >
-              <Trash className="w-4 h-4 text-red-500 " />
+              <Trash className="w-4 h-4" />
             </Button>
           )}
         </div>
 
-        {/* Error row (9 cols) */}
+        {/* Erro (9 cols) */}
         {errorText && (
           <div className="col-span-9 text-red-600 text-xs mt-1">{errorText}</div>
         )}
@@ -690,7 +691,7 @@ function RowItem({
 }
 
 /* =============================
- * Page (com DND)
+ * Página (com DND e Totais)
  * ============================= */
 export default function KdsAtendimentoPlanilha() {
   const data = useLoaderData<typeof loader>();
@@ -713,8 +714,7 @@ export default function KdsAtendimentoPlanilha() {
 
   const [orderList, setOrderList] = useState<OrderRow[]>([]);
   useEffect(() => {
-    // carrega a lista quando o loader resolve
-    // @ts-ignore – data.orders é resolvido via <Await>; aqui usamos efeito após render
+    // (intencionalmente vazio aqui; sincronizamos dentro do <Await>)
   }, []);
 
   const sensors = useSensors(
@@ -754,6 +754,11 @@ export default function KdsAtendimentoPlanilha() {
         {(orders) => {
           const safeOrders = Array.isArray(orders) ? (orders as OrderRow[]) : [];
 
+          // Totais
+          const toNum = (v: any) => Number((v as any)?.toString?.() ?? v ?? 0) || 0;
+          const totalPedido = safeOrders.reduce((s, o) => s + toNum(o?.orderAmount), 0);
+          const totalMoto = safeOrders.reduce((s, o) => s + toNum(o?.motoValue), 0);
+
           // sincroniza estado local quando o loader muda
           useEffect(() => {
             setOrderList(safeOrders.filter((o) => !!o?.id));
@@ -763,8 +768,31 @@ export default function KdsAtendimentoPlanilha() {
           const fillers = Array(fillerCount).fill(null);
 
           return (
-            <div className="space-y-2">
-              {/* Header: # | Status | Pedido | Tamanho | Moto | Moto (R$) | Canal (×2) | Ações */}
+            <div className="space-y-4">
+              {/* Cards de totais */}
+              <div className="flex flex-wrap items-center gap-3 mb-2">
+                <div className="px-3 py-2 rounded-lg border bg-gray-50">
+                  <div className="text-xs text-gray-500">Total Pedido (R$)</div>
+                  <div className="text-base font-semibold">
+                    {totalPedido.toLocaleString("pt-BR", {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </div>
+                </div>
+
+                <div className="px-3 py-2 rounded-lg border bg-gray-50">
+                  <div className="text-xs text-gray-500">Total Moto (R$)</div>
+                  <div className="text-base font-semibold">
+                    {totalMoto.toLocaleString("pt-BR", {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* Cabeçalho */}
               <div className={`${HEADER_TMPL}`}>
                 <div className="text-center">#</div>
                 <div className="text-center">Status</div>
