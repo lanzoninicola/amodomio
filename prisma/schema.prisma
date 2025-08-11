@@ -927,11 +927,12 @@ model KdsOrder {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  commandNumber Int    @map("command_number") // número da comanda (mas agora é o número da linha)
+  commandNumber Int     @map("command_number") // número da comanda (mas agora é o número da linha)
+  orderAmount   Decimal @map("order_amount") @db.Decimal(10, 2)
   size          String // JSON com contadores: { "F": 1, "M": 0, ... }
 
   hasMoto   Boolean @default(false) @map("has_moto")
-  motoValue Decimal @default(0) @map("moto_value")
+  motoValue Decimal @map("moto_value") @db.Decimal(10, 2)
   channel   String // WhatsApp, Balcão, etc.
   status    String  @default("pendente")
   Bairro    Bairro? @relation(fields: [bairroId], references: [id])
