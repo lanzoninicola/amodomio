@@ -55,7 +55,7 @@ export async function loader({ params }: { params: { date: string } }) {
   const dateStr = params.date;
   const dateInt = ymdToDateInt(dateStr);
 
-  const ordersPromise = await prismaClient.kdsOrder.findMany({
+  const ordersPromise = await prismaClient.kdsDailyOrderDetail.findMany({
     where: {
       dateInt,
       status: { not: "despachada" }, // não mostrar 'despachada'
@@ -86,7 +86,7 @@ export async function action({ request }: { request: Request }) {
   if (status === "despachada") return json({ ok: false, error: "Operação não permitida." }, { status: 403 });
   if (!STATUS_BY_ID[status]) return json({ ok: false, error: "Status desconhecido." }, { status: 400 });
 
-  await prismaClient.kdsOrder.update({ where: { id }, data: { status } });
+  await prismaClient.kdsDailyOrderDetail.update({ where: { id }, data: { status } });
   return json({ ok: true, id, status });
 }
 
