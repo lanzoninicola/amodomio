@@ -135,11 +135,21 @@ function SortableCard({ item }: { item: Detail }) {
       {...attributes}
       className="rounded-md border px-3 py-2 bg-white shadow-sm cursor-grab active:cursor-grabbing touch-pan-y"
     >
-      <div className="flex items-center justify-between mb-1">
+      <div className="flex items-start justify-between mb-1">
         <div className="font-semibold">#{item.commandNumber}</div>
-        <div className="text-[11px] text-gray-600 font-mono">{hora}</div>
+        <div className="flex flex-col items-end">
+          <div className="flex justify-between gap-x-3">
+            <span className="text-[10px] text-gray-500">Hóra Pedido:</span>
+            <div className="text-[12px] text-gray-600 font-mono">{hora}</div>
+          </div>
+          <div className="flex items-center gap-x-3">
+            <span className="text-[10px] text-gray-500">Decorrido:</span>
+            <div className="text-sm font-semibold font-mono">{dec}</div>
+          </div>
+
+
+        </div>
       </div>
-      <div className="text-sm font-semibold font-mono">{dec}</div>
     </article>
   );
 }
