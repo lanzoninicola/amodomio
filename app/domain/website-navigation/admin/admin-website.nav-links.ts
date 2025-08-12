@@ -58,6 +58,12 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
           items: [],
           disabled: false,
         },
+        {
+          title: "Comentarios clientes",
+          href: "/admin/atendimento/comentarios",
+          items: [],
+          disabled: false,
+        },
       ],
     },
     {
