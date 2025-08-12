@@ -54,6 +54,14 @@ function ymdToUtcNoon(ymd: string) {
   return new Date(`${y}-${mm}-${dd}T12:00:00.000Z`);
 }
 
+function todayLocalYMD() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`; // YYYY-MM-DD no fuso local
+}
+
 /* =============================
  * In-memory lock (unicidade no app)
  * ============================= */
@@ -89,10 +97,10 @@ function defaultSizeCounts(): SizeCounts {
 }
 
 /* =============================
- * Loader (robust date; compat 7/8-digit dateInt)
+ * Loader (compat 7/8 dígitos)
  * ============================= */
 export async function loader({ params }: { params: { date?: string } }) {
-  const fallbackToday = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  const fallbackToday = todayLocalYMD();
   const dateStr = params.date ?? fallbackToday;
 
   const dateInt8 = ymdToDateInt(dateStr);
@@ -100,7 +108,7 @@ export async function loader({ params }: { params: { date?: string } }) {
   const dateInt7 = Number(`${y}${Number(m)}${Number(d)}`); // legacy compat
   const currentDate = ymdToUtcNoon(dateStr);
 
-  const ordersPromise = await prismaClient.kdsOrder.findMany({
+  const ordersPromise = await prismaClient.kdsDailyOrderDetail.findMany({
     where: { dateInt: { in: [dateInt8, dateInt7] } },
     orderBy: [{ commandNumber: "asc" }, { createdAt: "asc" }],
   });
@@ -108,6 +116,21 @@ export async function loader({ params }: { params: { date?: string } }) {
   return defer({
     orders: ordersPromise,
     currentDate: currentDate.toISOString().split("T")[0],
+  });
+}
+
+/* =============================
+ * Helpers de totals do cabeçalho
+ * ============================= */
+async function recalcHeaderTotal(dateInt: number) {
+  const agg = await prismaClient.kdsDailyOrderDetail.aggregate({
+    where: { dateInt },
+    _sum: { orderAmount: true },
+  });
+  const total = agg._sum.orderAmount ?? new Prisma.Decimal(0);
+  await prismaClient.kdsDailyOrder.update({
+    where: { dateInt },
+    data: { totOrdersAmount: total },
   });
 }
 
@@ -124,7 +147,7 @@ export async function action({
   const formData = await request.formData();
   const _action = (formData.get("_action") as string) ?? "upsert";
 
-  const fallbackToday = new Date().toISOString().slice(0, 10);
+  const fallbackToday = todayLocalYMD();
   const formDate = (formData.get("date") as string) || "";
   const dateStr = formDate || params.date || fallbackToday;
 
@@ -151,7 +174,7 @@ export async function action({
 
       await prismaClient.$transaction(
         ids.map((id, idx) =>
-          prismaClient.kdsOrder.update({
+          prismaClient.kdsDailyOrderDetail.update({
             where: { id },
             data: { commandNumber: idx + 1 },
           })
@@ -176,14 +199,25 @@ export async function action({
 
     try {
       if (_action === "delete") {
-        const existente = await prismaClient.kdsOrder.findFirst({
+        const existente = await prismaClient.kdsDailyOrderDetail.findFirst({
           where: { dateInt, commandNumber },
           select: { id: true },
         });
         if (!existente) return json({ ok: true, deleted: false });
-        await prismaClient.kdsOrder.delete({ where: { id: existente.id } });
+
+        await prismaClient.kdsDailyOrderDetail.delete({ where: { id: existente.id } });
+        await recalcHeaderTotal(dateInt);
+
         return json({ ok: true, deleted: true, id: existente.id });
       }
+
+      // Upsert precisa garantir o cabeçalho do dia
+      const header = await prismaClient.kdsDailyOrder.upsert({
+        where: { dateInt },
+        update: {},
+        create: { date: currentDate, dateInt, totOrdersAmount: new Prisma.Decimal(0) },
+        select: { id: true },
+      });
 
       // Form data
       const hasMoto = formData.get("hasMoto") === "true";
@@ -230,14 +264,14 @@ export async function action({
         );
       }
 
-      // Upsert by (dateInt, commandNumber)
-      const existente = await prismaClient.kdsOrder.findFirst({
+      // Upsert por (dateInt, commandNumber)
+      const existente = await prismaClient.kdsDailyOrderDetail.findFirst({
         where: { dateInt, commandNumber },
         select: { id: true },
       });
 
       if (existente) {
-        const updated = await prismaClient.kdsOrder.update({
+        const updated = await prismaClient.kdsDailyOrderDetail.update({
           where: { id: existente.id },
           data: {
             commandNumber,
@@ -249,12 +283,14 @@ export async function action({
             orderAmount,
           },
         });
+
+        await recalcHeaderTotal(dateInt);
         return json({ ok: true, id: updated.id, mode: "update" });
       }
 
-      const created = await prismaClient.kdsOrder.create({
+      const created = await prismaClient.kdsDailyOrderDetail.create({
         data: {
-          date: currentDate,
+          orderId: header.id,
           dateInt,
           commandNumber,
           size: JSON.stringify(sizeCounts),
@@ -265,6 +301,8 @@ export async function action({
           status,
         },
       });
+
+      await recalcHeaderTotal(dateInt);
       return json({ ok: true, id: created.id, mode: "create" });
     } finally {
       inFlightLocks.delete(key);
@@ -278,7 +316,7 @@ export async function action({
 }
 
 /* =============================
- * Status labels/colors
+ * Status labels/colors (UI intacta)
  * ============================= */
 const statusLabels: Record<string, string> = {
   novoPedido: "Novo Pedido",
@@ -390,8 +428,7 @@ function fmtElapsedHHMM(from: string | Date | undefined, nowMs: number) {
 }
 
 /* =============================
- * Grid template (adiciona Hora/Decorrido)
- * Ordem: # | Hora | Decorrido | Status | Pedido | Tamanho | Moto | Moto(R$) | Canal (×2) | Ações
+ * Grid template (UI preservada)
  * ============================= */
 const GRID_TMPL =
   "grid grid-cols-[48px,84px,96px,180px,200px,220px,112px,120px,150px,150px,120px] gap-2 items-center";
@@ -747,7 +784,6 @@ export default function KdsAtendimentoPlanilha() {
     }, 5 * 60 * 1000);
     return () => clearInterval(t);
   }, [revalidate]);
-
 
   // ENTER submete o form focado (evita inputs de texto)
   useHotkeys("enter", (e) => {
