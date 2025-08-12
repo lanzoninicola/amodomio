@@ -7,6 +7,7 @@ import {
   useLocation,
   useNavigate,
   useParams,
+  useRevalidator,
 } from "@remix-run/react";
 import { Suspense, useEffect, useState } from "react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -18,8 +19,9 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { AlertCircleIcon } from "lucide-react";
+import { AlertCircleIcon, Grid3X3, SquareKanban } from "lucide-react";
 import { lastUrlSegment } from "~/utils/url";
+import { Button } from "~/components/ui/button";
 
 /* =============================
  * Helpers de data
@@ -135,92 +137,107 @@ export default function KdsAtendimento() {
 
   const slug = lastUrlSegment(pathname);
 
+  const { date } = useParams();
+  const isKanban = pathname.endsWith("/kanban");
+  const { revalidate, state } = useRevalidator();
+
   return (
     <div>
       <Suspense fallback={<div>Carregando dias...</div>}>
         <Await resolve={data.days}>
           {(days) => (
             <div className="flex flex-col gap-0 ">
-              {/* ===== Seletor de dias (mantido o layout/estilo) ===== */}
-              <Tabs value={selectedDate}>
-                <TabsList className="flex justify-start space-x-2 mb-4 overflow-x-auto md:max-w-6xl min-h-fit" >
-                  {days.map((d: any) => {
-                    const isSelected = d.localDateStr === selectedDate;
-                    const isToday = d.localDateStr === data.today;
-                    const isHoliday = d.isHoliday;
 
-                    let tabClass =
-                      "px-4 py-2 rounded transition-colors flex items-center space-x-1";
-                    if (isSelected) {
-                      tabClass += " bg-blue-600 text-white";
-                    } else if (isHoliday) {
-                      tabClass += " bg-red-200 text-red-800";
-                    } else {
-                      tabClass += " bg-gray-100 text-black";
-                      if (isToday) tabClass += " font-semibold";
-                    }
+              <div className="flex flex-wrap gap-3 items-center mb-4 ">
+                <div className="flex gap-2">
+                  <Button asChild size="sm" variant={isKanban ? "outline" : "default"}>
+                    <Link to={`/admin/kds/atendimento/${date}`}><Grid3X3 size={16} /></Link>
+                  </Button>
+                  <Button asChild size="sm" variant={isKanban ? "default" : "outline"}>
+                    <Link to={`/admin/kds/atendimento/${date}/kanban`}><SquareKanban size={16} /></Link>
+                  </Button>
+                </div>
+                {/* ===== Seletor de dias (mantido o layout/estilo) ===== */}
+                <Tabs value={selectedDate}>
+                  <TabsList className="flex justify-start space-x-2 overflow-x-auto md:max-w-6xl min-h-fit" >
+                    {days.map((d: any) => {
+                      const isSelected = d.localDateStr === selectedDate;
+                      const isToday = d.localDateStr === data.today;
+                      const isHoliday = d.isHoliday;
 
-                    const dateObj = new Date(d.date);
-                    const dayAbbr = dateObj
-                      .toLocaleDateString("pt-BR", { weekday: "short" })
-                      .replace(".", "");
-                    const formattedDate = dateObj.toLocaleDateString("pt-BR", {
-                      day: "2-digit",
-                      month: "2-digit",
-                    });
-                    const fullDate = dateObj.toLocaleDateString("pt-BR", {
-                      weekday: "long",
-                      day: "2-digit",
-                      month: "long",
-                      year: "numeric",
-                    });
+                      let tabClass =
+                        "px-4 py-2 rounded transition-colors flex items-center space-x-1";
+                      if (isSelected) {
+                        tabClass += " bg-blue-600 text-white";
+                      } else if (isHoliday) {
+                        tabClass += " bg-red-200 text-red-800";
+                      } else {
+                        tabClass += " bg-gray-100 text-black";
+                        if (isToday) tabClass += " font-semibold";
+                      }
 
-                    return (
-                      <TabsTrigger key={d.id} value={d.localDateStr} asChild>
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              {/* Preserva o modo atual (?mes=1) sem mudar o layout */}
-                              <Link
-                                to={`/admin/kds/atendimento/${d.localDateStr}${keepMonth}`}
-                                className={tabClass}
-                              >
+                      const dateObj = new Date(d.date);
+                      const dayAbbr = dateObj
+                        .toLocaleDateString("pt-BR", { weekday: "short" })
+                        .replace(".", "");
+                      const formattedDate = dateObj.toLocaleDateString("pt-BR", {
+                        day: "2-digit",
+                        month: "2-digit",
+                      });
+                      const fullDate = dateObj.toLocaleDateString("pt-BR", {
+                        weekday: "long",
+                        day: "2-digit",
+                        month: "long",
+                        year: "numeric",
+                      });
 
-                                {
-                                  fullMonthUI ?
-                                    <div className="flex flex-col gap-0">
-                                      <span className="text-xs">{dayAbbr}</span>
-                                      <span>{formattedDate}</span>
-                                    </div> :
-                                    <span>{dayAbbr}: {formattedDate}</span>
-                                }
-                                {isToday && (
-                                  <span className="ml-1 text-[10px] bg-blue-200 text-blue-800 px-1 rounded">
-                                    Hoje
-                                  </span>
+                      return (
+                        <TabsTrigger key={d.id} value={d.localDateStr} asChild>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                {/* Preserva o modo atual (?mes=1) sem mudar o layout */}
+                                <Link
+                                  to={`/admin/kds/atendimento/${d.localDateStr}${keepMonth}`}
+                                  className={tabClass}
+                                >
+
+                                  {
+                                    fullMonthUI ?
+                                      <div className="flex flex-col gap-0">
+                                        <span className="text-xs">{dayAbbr}</span>
+                                        <span>{formattedDate}</span>
+                                      </div> :
+                                      <span>{dayAbbr}: {formattedDate}</span>
+                                  }
+                                  {isToday && (
+                                    <span className="ml-1 text-[10px] bg-blue-200 text-blue-800 px-1 rounded">
+                                      Hoje
+                                    </span>
+                                  )}
+                                </Link>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>{fullDate}</p>
+                                {isHoliday && (
+                                  <p className="text-red-600 text-xs">Feriado</p>
                                 )}
-                              </Link>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>{fullDate}</p>
-                              {isHoliday && (
-                                <p className="text-red-600 text-xs">Feriado</p>
-                              )}
-                              {isToday && (
-                                <p className="text-blue-600 text-xs">Hoje</p>
-                              )}
-                              {/* Exemplo: usar o state SÓ para decisão visual (sem mudar layout) */}
-                              {fullMonthUI && (
-                                <p className="text-xs text-blue-700 mt-1">Modo mês</p>
-                              )}
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      </TabsTrigger>
-                    );
-                  })}
-                </TabsList>
-              </Tabs>
+                                {isToday && (
+                                  <p className="text-blue-600 text-xs">Hoje</p>
+                                )}
+                                {/* Exemplo: usar o state SÓ para decisão visual (sem mudar layout) */}
+                                {fullMonthUI && (
+                                  <p className="text-xs text-blue-700 mt-1">Modo mês</p>
+                                )}
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </TabsTrigger>
+                      );
+                    })}
+                  </TabsList>
+                </Tabs>
+              </div>
               {/* ===== Fim do seletor ===== */}
 
               {slug === "atendimento" && (
