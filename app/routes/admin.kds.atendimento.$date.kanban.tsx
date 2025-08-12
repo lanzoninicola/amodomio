@@ -1,19 +1,22 @@
+// app/routes/admin.kds.atendimento.$date.kanban.tsx
 import { json } from "@remix-run/node";
-import { Link, useFetcher, useLoaderData, useRevalidator } from "@remix-run/react";
+import { useFetcher, useLoaderData, useRevalidator } from "@remix-run/react";
 import prisma from "~/lib/prisma/client.server";
 import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 
 /* dnd-kit core + sortable */
 import {
   DndContext,
   DragEndEvent,
+  DragStartEvent,
   PointerSensor,
   TouchSensor,
   useSensor,
   useSensors,
   useDroppable,
+  DragOverlay,
+  closestCorners,
 } from "@dnd-kit/core";
 import {
   SortableContext,
@@ -73,7 +76,7 @@ function isStatusId(x: string): x is StatusId { return STATUS_IDS.includes(x as 
 /* ============================= loader/action ============================= */
 export async function loader({ params }: { params: { date: string } }) {
   const dateStr = params.date;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) throw new Response("Data inválida", { status: 400 });
+  if (!/^\d{4}-\d{2}-\d2$/.test(dateStr)) throw new Response("Data inválida", { status: 400 });
   const dateInt = ymdToDateInt(dateStr);
 
   const details = await prisma.kdsDailyOrderDetail.findMany({
@@ -117,37 +120,42 @@ function SortableCard({ item }: { item: Detail }) {
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.6 : 1,
+    opacity: isDragging ? 0.7 : 1,
   };
 
   const hora = fmtHHMM(item.createdAt);
   const dec = fmtElapsed(item.createdAt, Date.now());
 
-  // Cartão simplificado: #, hora, decorrido (destaque)
+  // Cartão minimalista: #, hora, decorrido (destaque)
   return (
     <article
       ref={setNodeRef}
       style={style}
       {...listeners}
       {...attributes}
-      className="rounded-md border px-3 py-2 bg-white shadow-sm cursor-grab active:cursor-grabbing touch-pan-y flex justify-between items-start hover:bg-blue-400 hover:cursor-pointer"
+      className="rounded-md border px-3 py-2 bg-white shadow-sm cursor-grab active:cursor-grabbing touch-pan-y"
     >
-      <div className="font-semibold">#{item.commandNumber}</div>
-
-      <div className="flex flex-col items-end">
-        <div className="flex justify-between gap-x-3">
-          <span className="text-[10px] text-gray-500">Hóra Pedido:</span>
-          <div className="text-[12px] text-gray-600 font-mono">{hora}</div>
-        </div>
-        <div className="flex items-center gap-x-3">
-          <span className="text-[10px] text-gray-500">Decorrido:</span>
-          <div className="text-sm font-semibold font-mono">{dec}</div>
-        </div>
-
-
+      <div className="flex items-center justify-between mb-1">
+        <div className="font-semibold">#{item.commandNumber}</div>
+        <div className="text-[11px] text-gray-600 font-mono">{hora}</div>
       </div>
-
+      <div className="text-sm font-semibold font-mono">{dec}</div>
     </article>
+  );
+}
+
+/* Card usado no DragOverlay para arraste mais suave */
+function CardPreview({ item }: { item: Detail }) {
+  const hora = fmtHHMM(item.createdAt);
+  const dec = fmtElapsed(item.createdAt, Date.now());
+  return (
+    <div className="rounded-md border px-3 py-2 bg-white shadow-lg">
+      <div className="flex items-center justify-between mb-1">
+        <div className="font-semibold">#{item.commandNumber}</div>
+        <div className="text-[11px] text-gray-600 font-mono">{hora}</div>
+      </div>
+      <div className="text-sm font-semibold font-mono">{dec}</div>
+    </div>
   );
 }
 
@@ -166,12 +174,13 @@ function Column({
   return (
     <section
       ref={setNodeRef}
-      className={`flex flex-col rounded-lg border bg-white min-h-[70vh] ${isOver ? "outline outline-2 outline-blue-400" : ""
+      className={`flex flex-col rounded-lg border bg-white h-[calc(100vh-180px)] ${isOver ? "outline outline-2 outline-blue-400" : ""
         }`}
     >
       {header}
-      {/* SortableContext: reorder dentro da coluna */}
-      <div className="p-2 space-y-2 overflow-y-auto">
+
+      {/* Lista com scroll próprio da coluna */}
+      <div className="p-2 space-y-2 overflow-y-auto flex-1 min-h-0">
         <SortableContext items={items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
           {items.length === 0 && (
             <div className="text-xs text-gray-500 px-2 py-6 text-center">Nenhum pedido.</div>
@@ -187,7 +196,7 @@ function Column({
 
 /* ============================= página ============================= */
 export default function KanbanAtendimento() {
-  const { dateStr, details } = useLoaderData<typeof loader>();
+  const { details } = useLoaderData<typeof loader>();
   const { revalidate } = useRevalidator();
   const fetcher = useFetcher();
 
@@ -217,7 +226,7 @@ export default function KanbanAtendimento() {
 
   // sensores
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 120, tolerance: 4 } })
   );
 
@@ -230,7 +239,25 @@ export default function KanbanAtendimento() {
     return map;
   }, [board]);
 
+  const [active, setActive] = useState<Detail | null>(null);
+
+  function onDragStart(e: DragStartEvent) {
+    const id = String(e.active.id);
+    let found: Detail | null = null;
+    (Object.keys(board) as StatusId[]).some((col) => {
+      const it = board[col].find((d) => d.id === id);
+      if (it) {
+        found = it;
+        return true;
+      }
+      return false;
+    });
+    setActive(found);
+  }
+
   function onDragEnd(e: DragEndEvent) {
+    setActive(null);
+
     const activeId = String(e.active.id);
     const overRaw = e.over?.id;
     if (!overRaw) return;
@@ -238,11 +265,11 @@ export default function KanbanAtendimento() {
     const from = idToColumn.get(activeId) as StatusId | undefined;
     if (!from) return;
 
-    // destino pode ser um card (id) ou uma coluna (statusId)
+    // destino pode ser card (id) ou coluna (statusId)
     let to: StatusId | undefined;
     const overId = String(overRaw);
     if (isStatusId(overId)) {
-      to = overId; // soltou na área da coluna (vazia ou não)
+      to = overId; // soltou na área da coluna
     } else {
       to = idToColumn.get(overId) as StatusId | undefined; // soltou sobre um card
     }
@@ -251,7 +278,7 @@ export default function KanbanAtendimento() {
     const fromIdx = board[from].findIndex((i) => i.id === activeId);
     if (fromIdx < 0) return;
 
-    // Se mesma coluna e sobre outro card, apenas reorder visual
+    // mesma coluna: só reorder visual
     if (from === to) {
       const overIdx = board[to].findIndex((i) => i.id === overId);
       if (overIdx < 0 || overIdx === fromIdx) return;
@@ -259,7 +286,7 @@ export default function KanbanAtendimento() {
       return;
     }
 
-    // Move entre colunas (muda status) — otimista
+    // entre colunas: muda status (otimista)
     const moved = board[from][fromIdx];
     setBoard((prev) => {
       const next = { ...prev };
@@ -285,36 +312,38 @@ export default function KanbanAtendimento() {
   }
 
   return (
-    <div className="space-y-3">
-      {/* Toggle (se o layout já tem, pode remover este botão) */}
-      <div className="flex justify-end">
-        <Button asChild variant="outline" size="sm">
-          <Link to={`/admin/kds/atendimento/${dateStr}`}>Ver planilha</Link>
-        </Button>
+    <DndContext
+      sensors={sensors}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      collisionDetection={closestCorners}
+      autoScroll
+    >
+      <div className="grid gap-4 md:gap-6 grid-cols-1 md:grid-cols-2 xl:grid-cols-5">
+        {STATUSES.map((s) => {
+          const list = board[s.id] || [];
+          return (
+            <Column
+              key={s.id}
+              status={s.id}
+              items={list}
+              header={
+                <header className="px-3 py-2 border-b sticky top-0 bg-white rounded-t-lg">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold">{s.label}</span>
+                    <Badge variant="secondary" className={`${s.color} border-0`}>{list.length}</Badge>
+                  </div>
+                </header>
+              }
+            />
+          );
+        })}
       </div>
 
-      <DndContext sensors={sensors} onDragEnd={onDragEnd}>
-        <div className="grid gap-4 md:gap-6 grid-cols-1 md:grid-cols-2 xl:grid-cols-5">
-          {STATUSES.map((s) => {
-            const list = board[s.id] || [];
-            return (
-              <Column
-                key={s.id}
-                status={s.id}
-                items={list}
-                header={
-                  <header className="px-3 py-2 border-b sticky top-0 bg-white rounded-t-lg">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-semibold">{s.label}</span>
-                      <Badge variant="secondary" className={`${s.color} border-0`}>{list.length}</Badge>
-                    </div>
-                  </header>
-                }
-              />
-            );
-          })}
-        </div>
-      </DndContext>
-    </div>
+      {/* DragOverlay para arraste mais suave */}
+      <DragOverlay dropAnimation={{ duration: 180 }}>
+        {active ? <CardPreview item={active} /> : null}
+      </DragOverlay>
+    </DndContext>
   );
 }

@@ -19,7 +19,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { AlertCircleIcon, Grid3X3, SquareKanban } from "lucide-react";
+import { AlertCircleIcon, Grid3X3, RefreshCw, SquareKanban } from "lucide-react";
 import { lastUrlSegment } from "~/utils/url";
 import { Button } from "~/components/ui/button";
 
@@ -141,6 +141,12 @@ export default function KdsAtendimento() {
   const isKanban = pathname.endsWith("/kanban");
   const { revalidate, state } = useRevalidator();
 
+  // Revalida a cada 5min
+  useEffect(() => {
+    const t = setInterval(() => revalidate(), 5 * 60 * 1000);
+    return () => clearInterval(t);
+  }, [revalidate]);
+
   return (
     <div>
       <Suspense fallback={<div>Carregando dias...</div>}>
@@ -148,8 +154,8 @@ export default function KdsAtendimento() {
           {(days) => (
             <div className="flex flex-col gap-0 ">
 
-              <div className="flex flex-wrap gap-3 items-center mb-4 ">
-                <div className="flex gap-2">
+              <div className="grid grid-cols-12 items-center mb-6">
+                <div className="flex gap-2 col-span-1">
                   <Button asChild size="sm" variant={isKanban ? "outline" : "default"}>
                     <Link to={`/admin/kds/atendimento/${date}`}><Grid3X3 size={16} /></Link>
                   </Button>
@@ -158,7 +164,7 @@ export default function KdsAtendimento() {
                   </Button>
                 </div>
                 {/* ===== Seletor de dias (mantido o layout/estilo) ===== */}
-                <Tabs value={selectedDate}>
+                <Tabs value={selectedDate} className="col-span-10">
                   <TabsList className="flex justify-start space-x-2 overflow-x-auto md:max-w-6xl min-h-fit" >
                     {days.map((d: any) => {
                       const isSelected = d.localDateStr === selectedDate;
@@ -237,6 +243,12 @@ export default function KdsAtendimento() {
                     })}
                   </TabsList>
                 </Tabs>
+
+                <div className="flex justify-center w-full items-center col-span-1">
+                  <Button size="sm" variant={"outline"} onClick={() => revalidate()}>
+                    <RefreshCw size={16} className={`${state === "loading" ? "animate-spin" : ""}`} />
+                  </Button>
+                </div>
               </div>
               {/* ===== Fim do seletor ===== */}
 
