@@ -854,9 +854,9 @@ export default function KdsAtendimentoPlanilha() {
             <div className="space-y-6">
               {/* Cards de totais */}
               <div className="flex flex-wrap items-center gap-3 mb-2">
-                <div className="px-3 py-2 rounded-lg border bg-gray-50">
-                  <div className="text-xs text-gray-500">Total Pedido (R$)</div>
-                  <div className="text-base font-semibold">
+                <div className="flex  items-center gap-x-3 px-3 py-2 rounded-lg border">
+                  <span className="text-xs text-gray-500">Total Pedido (R$)</span>
+                  <div className="text-base font-semibold font-mono">
                     {totalPedido.toLocaleString("pt-BR", {
                       minimumFractionDigits: 2,
                       maximumFractionDigits: 2,
@@ -864,9 +864,9 @@ export default function KdsAtendimentoPlanilha() {
                   </div>
                 </div>
 
-                <div className="px-3 py-2 rounded-lg border bg-gray-50">
-                  <div className="text-xs text-gray-500">Total Moto (R$)</div>
-                  <div className="text-base font-semibold">
+                <div className="flex  items-center gap-x-3  px-3 py-2 rounded-lg border ">
+                  <span className="text-xs text-gray-500">Total Moto (R$)</span>
+                  <div className="text-base font-semibold font-mono">
                     {totalMoto.toLocaleString("pt-BR", {
                       minimumFractionDigits: 2,
                       maximumFractionDigits: 2,

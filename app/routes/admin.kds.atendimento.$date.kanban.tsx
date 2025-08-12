@@ -1,10 +1,5 @@
 import { json } from "@remix-run/node";
-import {
-  Link,
-  useFetcher,
-  useLoaderData,
-  useRevalidator,
-} from "@remix-run/react";
+import { Link, useFetcher, useLoaderData, useRevalidator } from "@remix-run/react";
 import prisma from "~/lib/prisma/client.server";
 import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +13,7 @@ import {
   TouchSensor,
   useSensor,
   useSensors,
+  useDroppable,
 } from "@dnd-kit/core";
 import {
   SortableContext,
@@ -50,12 +46,7 @@ function fmtElapsed(from?: string | Date, nowMs?: number) {
 }
 
 /* ============================= tipos ============================= */
-type StatusId =
-  | "novoPedido"
-  | "emProducao"
-  | "aguardandoForno"
-  | "assando"
-  | "despachada";
+type StatusId = "novoPedido" | "emProducao" | "aguardandoForno" | "assando" | "despachada";
 
 type Detail = {
   id: string;
@@ -76,13 +67,13 @@ const STATUSES: { id: StatusId; label: string; color: string }[] = [
   { id: "assando", label: "Assando", color: "bg-orange-100 text-orange-800" },
   { id: "despachada", label: "Despachada", color: "bg-yellow-100 text-yellow-900" },
 ];
+const STATUS_IDS = STATUSES.map(s => s.id) as StatusId[];
+function isStatusId(x: string): x is StatusId { return STATUS_IDS.includes(x as StatusId); }
 
 /* ============================= loader/action ============================= */
 export async function loader({ params }: { params: { date: string } }) {
   const dateStr = params.date;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-    throw new Response("Data inválida", { status: 400 });
-  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) throw new Response("Data inválida", { status: 400 });
   const dateInt = ymdToDateInt(dateStr);
 
   const details = await prisma.kdsDailyOrderDetail.findMany({
@@ -106,23 +97,15 @@ export async function loader({ params }: { params: { date: string } }) {
 export async function action({ request }: { request: Request }) {
   const form = await request.formData();
   const _action = String(form.get("_action") || "");
-  if (_action !== "setStatus") {
-    return json({ ok: false, error: "Ação inválida" }, { status: 400 });
-  }
+  if (_action !== "setStatus") return json({ ok: false, error: "Ação inválida" }, { status: 400 });
+
   const id = String(form.get("id") || "");
-  const status = String(form.get("status") || "") as StatusId;
-  if (!id || !status) {
+  const status = String(form.get("status") || "");
+  if (!id || !status || !isStatusId(status)) {
     return json({ ok: false, error: "Parâmetros insuficientes" }, { status: 400 });
   }
-  if (!STATUSES.some((s) => s.id === status)) {
-    return json({ ok: false, error: "Status desconhecido" }, { status: 400 });
-  }
 
-  await prisma.kdsDailyOrderDetail.update({
-    where: { id },
-    data: { status },
-  });
-
+  await prisma.kdsDailyOrderDetail.update({ where: { id }, data: { status } });
   return json({ ok: true, id, status });
 }
 
@@ -137,43 +120,33 @@ function SortableCard({ item }: { item: Detail }) {
     opacity: isDragging ? 0.6 : 1,
   };
 
-  const pedido = Number(item.orderAmount?.toString?.() ?? item.orderAmount ?? 0);
-  const moto = Number(item.motoValue?.toString?.() ?? item.motoValue ?? 0);
-
   const hora = fmtHHMM(item.createdAt);
   const dec = fmtElapsed(item.createdAt, Date.now());
 
+  // Cartão simplificado: #, hora, decorrido (destaque)
   return (
     <article
       ref={setNodeRef}
       style={style}
       {...listeners}
       {...attributes}
-      className="rounded-md border px-3 py-2 bg-white shadow-sm cursor-grab active:cursor-grabbing touch-pan-y"
+      className="rounded-md border px-3 py-2 bg-white shadow-sm cursor-grab active:cursor-grabbing touch-pan-y flex justify-between items-start hover:bg-blue-400 hover:cursor-pointer"
     >
-      <div className="flex items-center justify-between mb-1">
-        <div className="font-semibold">#{item.commandNumber}</div>
-        <div className="text-[11px] text-gray-600 font-mono">{hora}</div>
-      </div>
-      <div className="flex items-center justify-between text-[12px]">
-        <div className="text-gray-700 font-mono font-semibold">{dec}</div>
-        <div className="text-gray-600">{item.channel ?? ""}</div>
+      <div className="font-semibold">#{item.commandNumber}</div>
+
+      <div className="flex flex-col items-end">
+        <div className="flex justify-between gap-x-3">
+          <span className="text-[10px] text-gray-500">Hóra Pedido:</span>
+          <div className="text-[12px] text-gray-600 font-mono">{hora}</div>
+        </div>
+        <div className="flex items-center gap-x-3">
+          <span className="text-[10px] text-gray-500">Decorrido:</span>
+          <div className="text-sm font-semibold font-mono">{dec}</div>
+        </div>
+
+
       </div>
 
-      <div className="mt-2 grid grid-cols-2 gap-2 text-[12px]">
-        <div className="rounded bg-gray-50 px-2 py-1">
-          <span className="text-gray-500">Pedido</span>{" "}
-          <span className="font-semibold">
-            {pedido.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </span>
-        </div>
-        <div className="rounded bg-gray-50 px-2 py-1">
-          <span className="text-gray-500">Moto</span>{" "}
-          <span className="font-semibold">
-            {moto.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </span>
-        </div>
-      </div>
     </article>
   );
 }
@@ -181,25 +154,27 @@ function SortableCard({ item }: { item: Detail }) {
 function Column({
   status,
   items,
-  children,
+  header,
 }: {
   status: StatusId;
   items: Detail[];
-  children: React.ReactNode;
+  header: React.ReactNode;
 }) {
+  // Coluna droppable: permite soltar mesmo quando está vazia
+  const { setNodeRef, isOver } = useDroppable({ id: status });
+
   return (
-    <section className="flex flex-col rounded-lg border bg-white min-h-[60vh]">
-      {children}
-      {/* SortableContext dá reorder dentro da coluna */}
+    <section
+      ref={setNodeRef}
+      className={`flex flex-col rounded-lg border bg-white min-h-[70vh] ${isOver ? "outline outline-2 outline-blue-400" : ""
+        }`}
+    >
+      {header}
+      {/* SortableContext: reorder dentro da coluna */}
       <div className="p-2 space-y-2 overflow-y-auto">
-        <SortableContext
-          items={items.map((i) => i.id)}
-          strategy={verticalListSortingStrategy}
-        >
+        <SortableContext items={items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
           {items.length === 0 && (
-            <div className="text-xs text-gray-500 px-2 py-6 text-center">
-              Nenhum pedido.
-            </div>
+            <div className="text-xs text-gray-500 px-2 py-6 text-center">Nenhum pedido.</div>
           )}
           {items.map((o) => (
             <SortableCard key={o.id} item={o} />
@@ -216,7 +191,7 @@ export default function KanbanAtendimento() {
   const { revalidate } = useRevalidator();
   const fetcher = useFetcher();
 
-  // dados em memória (UX otimista)
+  // estado local (UX otimista)
   const [board, setBoard] = useState<Record<StatusId, Detail[]>>(() => {
     const g: Record<StatusId, Detail[]> = {
       novoPedido: [], emProducao: [], aguardandoForno: [], assando: [], despachada: [],
@@ -234,19 +209,19 @@ export default function KanbanAtendimento() {
     setBoard(g);
   }, [details]);
 
-  // refresh automático
+  // auto refresh
   useEffect(() => {
     const t = setInterval(() => revalidate(), 5 * 60 * 1000);
     return () => clearInterval(t);
   }, [revalidate]);
 
-  // sensores (mouse + touch)
+  // sensores
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 120, tolerance: 4 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 120, tolerance: 4 } })
   );
 
-  // map rápido: id -> coluna
+  // mapa rápido: id do card -> coluna
   const idToColumn = useMemo(() => {
     const map = new Map<string, StatusId>();
     (Object.keys(board) as StatusId[]).forEach((col) => {
@@ -257,40 +232,34 @@ export default function KanbanAtendimento() {
 
   function onDragEnd(e: DragEndEvent) {
     const activeId = String(e.active.id);
-    const overId = e.over?.id ? String(e.over.id) : undefined;
-    if (!overId) return;
+    const overRaw = e.over?.id;
+    if (!overRaw) return;
 
     const from = idToColumn.get(activeId) as StatusId | undefined;
     if (!from) return;
 
-    // alvo pode ser card ou coluna vazia; descobrir coluna destino
-    let to: StatusId | undefined = idToColumn.get(overId) as StatusId | undefined;
-    if (!to) {
-      // se overId não é card conhecido, pode ser id de uma coluna (usamos o próprio 'status' como fallback)
-      // aqui mapeamos por header ids, mas como SortableContext usa ids dos cards,
-      // quando solta numa coluna vazia 'overId' será o container; vamos testar pelas chaves do board:
-      const maybeCol = (Object.keys(board) as StatusId[]).find((c) => c === (e.over?.id as any));
-      if (maybeCol) to = maybeCol;
+    // destino pode ser um card (id) ou uma coluna (statusId)
+    let to: StatusId | undefined;
+    const overId = String(overRaw);
+    if (isStatusId(overId)) {
+      to = overId; // soltou na área da coluna (vazia ou não)
+    } else {
+      to = idToColumn.get(overId) as StatusId | undefined; // soltou sobre um card
     }
     if (!to) return;
 
-    // índice do card ativo na coluna origem
     const fromIdx = board[from].findIndex((i) => i.id === activeId);
     if (fromIdx < 0) return;
 
-    // se destino for um card da mesma coluna, reordenar visualmente (arrayMove)
+    // Se mesma coluna e sobre outro card, apenas reorder visual
     if (from === to) {
       const overIdx = board[to].findIndex((i) => i.id === overId);
       if (overIdx < 0 || overIdx === fromIdx) return;
-      setBoard((prev) => ({
-        ...prev,
-        [to!]: arrayMove(prev[to!], fromIdx, overIdx),
-      }));
-      // (Somente visual; se quiser persistir a ordem, posso propor um campo próprio)
+      setBoard((prev) => ({ ...prev, [to!]: arrayMove(prev[to!], fromIdx, overIdx) }));
       return;
     }
 
-    // move entre colunas (muda status) — otimista
+    // Move entre colunas (muda status) — otimista
     const moved = board[from][fromIdx];
     setBoard((prev) => {
       const next = { ...prev };
@@ -299,14 +268,14 @@ export default function KanbanAtendimento() {
       return next;
     });
 
-    // persiste novo status
+    // Persistir novo status
     const fd = new FormData();
     fd.set("_action", "setStatus");
     fd.set("id", activeId);
     fd.set("status", to);
     fetcher.submit(fd, { method: "post" });
 
-    // revalida ao terminar
+    // Revalidar quando concluir
     const stop = setInterval(() => {
       if (fetcher.state === "idle") {
         clearInterval(stop);
@@ -317,7 +286,7 @@ export default function KanbanAtendimento() {
 
   return (
     <div className="space-y-3">
-      {/* Toggle Planilha/Kanban */}
+      {/* Toggle (se o layout já tem, pode remover este botão) */}
       <div className="flex justify-end">
         <Button asChild variant="outline" size="sm">
           <Link to={`/admin/kds/atendimento/${dateStr}`}>Ver planilha</Link>
@@ -329,16 +298,19 @@ export default function KanbanAtendimento() {
           {STATUSES.map((s) => {
             const list = board[s.id] || [];
             return (
-              <Column key={s.id} status={s.id} items={list}>
-                <header className="px-3 py-2 border-b sticky top-0 bg-white rounded-t-lg">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold">{s.label}</span>
-                    <Badge variant="secondary" className={`${s.color} border-0`}>
-                      {list.length}
-                    </Badge>
-                  </div>
-                </header>
-              </Column>
+              <Column
+                key={s.id}
+                status={s.id}
+                items={list}
+                header={
+                  <header className="px-3 py-2 border-b sticky top-0 bg-white rounded-t-lg">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-semibold">{s.label}</span>
+                      <Badge variant="secondary" className={`${s.color} border-0`}>{list.length}</Badge>
+                    </div>
+                  </header>
+                }
+              />
             );
           })}
         </div>
