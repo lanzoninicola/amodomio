@@ -796,6 +796,7 @@ model Bairro {
 
   distances    DistanceToPizzeria[]
   deliveryFees DeliveryFee[]
+  KdsOrders    KdsOrder[]
 
   @@map("bairros")
 }
@@ -891,4 +892,52 @@ model PostShare {
   deletedAt DateTime? @map("deleted_at")
 
   @@map("post_shares")
+}
+
+model Feedback {
+  id          String   @id @default(cuid())
+  createdAt   DateTime @default(now())
+  sentiment   String // "positive" ou "negative", controlado pela aplicação
+  imageBase64 String
+  text        String?
+
+  @@map("feedbacks")
+}
+
+model CalendarDay {
+  id          String   @id @default(uuid())
+  date        DateTime @unique // Data completa
+  dateInt     Int      @unique @map("date_int") // Ex: 20250804
+  year        Int
+  month       Int
+  day         Int
+  weekday     Int // 0=Dom, 6=Sáb
+  isWeekend   Boolean  @default(false) @map("is_weekend")
+  isHoliday   Boolean  @default(false) @map("is_holiday")
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("calendar_day")
+}
+
+model KdsOrder {
+  id        String   @id @default(uuid())
+  date      DateTime
+  dateInt   Int      @map("date_int") // formato YYYYMMDD
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  commandNumber Int     @map("command_number") // número da comanda (mas agora é o número da linha)
+  orderAmount   Decimal @map("order_amount") @db.Decimal(10, 2)
+  size          String // JSON com contadores: { "F": 1, "M": 0, ... }
+
+  hasMoto   Boolean @default(false) @map("has_moto")
+  motoValue Decimal @map("moto_value") @db.Decimal(10, 2)
+  channel   String // WhatsApp, Balcão, etc.
+  status    String  @default("novoPedido")
+  Bairro    Bairro? @relation(fields: [bairroId], references: [id])
+  bairroId  String?
+
+  @@index([dateInt])
+  @@map("kds_orders")
 }

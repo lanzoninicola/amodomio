@@ -9,19 +9,23 @@ import ADMIN_WEBSITE_NAVIGATION_ITEMS from "~/domain/website-navigation/admin/ad
 
 interface AdminHeaderProps {
     urlSegment?: string
+    slug?: string
 }
 
 
-export function AdminHeader({ urlSegment }: AdminHeaderProps) {
+export function AdminHeader({ urlSegment, slug }: AdminHeaderProps) {
 
 
     return (
         <header className={
             cn(
                 "sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60",
-                urlSegment === "orders-delivery-time-left" && "hidden",
-                urlSegment === "export-wall" && "hidden",
-                urlSegment === "export-wall-two" && "hidden",
+                slug === "orders-delivery-time-left" && "hidden",
+                slug === "export-wall" && "hidden",
+                slug === "export-wall-two" && "hidden",
+                slug === "atendimento" && "hidden",
+                urlSegment?.includes("admin/kds/atendimento") && "hidden",
+                urlSegment?.includes("admin/kds/cozinha") && "hidden"
 
             )
         }>
