@@ -794,9 +794,9 @@ model Bairro {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  distances    DistanceToPizzeria[]
-  deliveryFees DeliveryFee[]
-  KdsOrders    KdsOrder[]
+  distances           DistanceToPizzeria[]
+  deliveryFees        DeliveryFee[]
+  KdsDailyOrderDetail KdsDailyOrderDetail[]
 
   @@map("bairros")
 }
@@ -920,24 +920,59 @@ model CalendarDay {
   @@map("calendar_day")
 }
 
-model KdsOrder {
-  id        String   @id @default(uuid())
-  date      DateTime
-  dateInt   Int      @map("date_int") // formato YYYYMMDD
+model KdsDailyOrder {
+  /// Cabeçalho de UM dia (agrega os pedidos do dia)
+  id      String   @id @default(uuid())
+  date    DateTime
+  dateInt Int      @map("date_int")
+
+  /// Total dos pedidos do dia (soma de orderAmount dos detalhes)
+  totOrdersAmount Decimal @default(0) @map("tot_orders_amount") @db.Decimal(10, 2)
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  commandNumber Int     @map("command_number") // número da comanda (mas agora é o número da linha)
-  orderAmount   Decimal @map("order_amount") @db.Decimal(10, 2)
-  size          String // JSON com contadores: { "F": 1, "M": 0, ... }
+  details KdsDailyOrderDetail[]
 
-  hasMoto   Boolean @default(false) @map("has_moto")
-  motoValue Decimal @map("moto_value") @db.Decimal(10, 2)
-  channel   String // WhatsApp, Balcão, etc.
-  status    String  @default("novoPedido")
-  Bairro    Bairro? @relation(fields: [bairroId], references: [id])
-  bairroId  String?
-
+  /// Um cabeçalho por dia
+  @@unique([dateInt])
   @@index([dateInt])
-  @@map("kds_orders")
+  @@map("kds_daily_orders")
+}
+
+model KdsDailyOrderDetail {
+  /// Linhas (uma por pedido) pertencentes a um dia
+  id String @id @default(uuid())
+
+  /// FK obrigatória para o cabeçalho do dia
+  orderId String        @map("order_id")
+  order   KdsDailyOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  /// Redundância útil para filtros/uniques por dia
+  dateInt Int @map("date_int")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  /// Nº da comanda (único dentro do dia)
+  commandNumber Int @map("command_number")
+
+  /// Campos do pedido (linha)
+  size        String?
+  hasMoto     Boolean @default(false) @map("has_moto")
+  motoValue   Decimal @default(0) @map("moto_value") @db.Decimal(10, 2)
+  orderAmount Decimal @default(0) @map("order_amount") @db.Decimal(10, 2)
+  channel     String?
+  status      String  @default("novoPedido")
+
+  /// Bairro (se aplicável)
+  Bairro   Bairro? @relation(fields: [bairroId], references: [id])
+  bairroId String? @map("bairro_id")
+
+  /// Regras/índices
+  @@unique([dateInt, commandNumber]) // comanda única no mesmo dia
+  @@index([dateInt])
+  @@index([commandNumber])
+  @@index([orderId])
+  @@map("kds_daily_order_details")
 }
