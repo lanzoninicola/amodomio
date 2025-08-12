@@ -739,6 +739,16 @@ export default function KdsAtendimentoPlanilha() {
     return () => clearInterval(t);
   }, []);
 
+  const { revalidate } = useRevalidator();
+  // Recarrega os dados (loader) a cada 5 minutos
+  useEffect(() => {
+    const t = setInterval(() => {
+      revalidate(); // chama o loader de novo
+    }, 5 * 60 * 1000);
+    return () => clearInterval(t);
+  }, [revalidate]);
+
+
   // ENTER submete o form focado (evita inputs de texto)
   useHotkeys("enter", (e) => {
     const target = e.target as HTMLElement | null;

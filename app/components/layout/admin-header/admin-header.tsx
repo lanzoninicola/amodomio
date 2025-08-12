@@ -24,7 +24,8 @@ export function AdminHeader({ urlSegment, slug }: AdminHeaderProps) {
                 slug === "export-wall" && "hidden",
                 slug === "export-wall-two" && "hidden",
                 slug === "atendimento" && "hidden",
-                urlSegment?.includes("admin/kds/atendimento") && "hidden"
+                urlSegment?.includes("admin/kds/atendimento") && "hidden",
+                urlSegment?.includes("admin/kds/cozinha") && "hidden"
 
             )
         }>
