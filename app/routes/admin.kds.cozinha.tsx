@@ -48,12 +48,13 @@ export async function loader() {
 /* ===== Página (topbar sticky: Select + Atualizar) ===== */
 export default function CozinhaWrapper() {
   const data = useLoaderData<typeof loader>();
-  const { date } = useParams();
+  const { date } = useParams();               // pode estar undefined
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { revalidate, state } = useRevalidator();
 
-  const selectedDate = date ?? data.today;
+  // ❗Não definimos mais valor inicial: placeholder aparece até o usuário escolher
+  const selectedDate = date ?? undefined;
 
   return (
     <div className="min-h-screen">
@@ -61,11 +62,11 @@ export default function CozinhaWrapper() {
       <div className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b">
         <div className="max-w-md mx-auto flex items-center gap-2 p-2">
           <Select
-            value={selectedDate}
+            value={selectedDate} // undefined => mostra placeholder
             onValueChange={(val) => navigate(`/admin/kds/cozinha/${val}`)}
           >
             <SelectTrigger className="w-full h-12 text-base">
-              <SelectValue placeholder="Selecionar dia" />
+              <SelectValue placeholder="Selecione a data" />
             </SelectTrigger>
             <SelectContent className="max-h-[55vh]">
               {data.days.map((d) => (
@@ -93,11 +94,11 @@ export default function CozinhaWrapper() {
         </div>
       </div>
 
-      {/* Conteúdo rolável */}
+      {/* Conteúdo rolável: só renderiza algo quando houver :date */}
       <div className="max-w-md mx-auto p-3">
         <Suspense fallback={<div>Carregando…</div>}>
           <Await resolve={data.days}>
-            {() => <Outlet key={pathname} />}
+            {() => (selectedDate ? <Outlet key={pathname} /> : null)}
           </Await>
         </Suspense>
       </div>
