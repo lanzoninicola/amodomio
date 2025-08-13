@@ -1,9 +1,10 @@
-// app/routes/admin.kds.atendimento.$date.kanban.tsx
 import { json } from "@remix-run/node";
 import { useFetcher, useLoaderData, useRevalidator } from "@remix-run/react";
 import prisma from "~/lib/prisma/client.server";
 import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Flame } from "lucide-react";
 
 /* dnd-kit core + sortable */
 import {
@@ -25,6 +26,7 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { cn } from "~/lib/utils";
 
 /* ============================= helpers ============================= */
 function ymdToDateInt(ymd: string) {
@@ -60,6 +62,7 @@ type Detail = {
   orderAmount: any;
   motoValue: any;
   channel: string | null;
+  requestedForOven: boolean; // << novo campo
 };
 
 /* ============================= status ============================= */
@@ -70,18 +73,13 @@ const STATUSES: { id: StatusId; label: string; color: string }[] = [
   { id: "assando", label: "Assando", color: "bg-orange-100 text-orange-800" },
   { id: "despachada", label: "Despachada", color: "bg-yellow-100 text-yellow-900" },
 ];
-const STATUS_IDS = STATUSES.map((s) => s.id) as StatusId[];
-function isStatusId(x: string): x is StatusId {
-  return STATUS_IDS.includes(x as StatusId);
-}
+const STATUS_IDS = STATUSES.map(s => s.id) as StatusId[];
+function isStatusId(x: string): x is StatusId { return STATUS_IDS.includes(x as StatusId); }
 
 /* ============================= loader/action ============================= */
 export async function loader({ params }: { params: { date: string } }) {
   const dateStr = params.date;
-  // ✅ regex corrigida (antes estava \d2)
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-    throw new Response("Data inválida", { status: 400 });
-  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) throw new Response("Data inválida", { status: 400 });
   const dateInt = ymdToDateInt(dateStr);
 
   const details = await prisma.kdsDailyOrderDetail.findMany({
@@ -96,6 +94,7 @@ export async function loader({ params }: { params: { date: string } }) {
       orderAmount: true,
       motoValue: true,
       channel: true,
+      requestedForOven: true, // << carregar o flag
     },
   });
 
@@ -105,22 +104,44 @@ export async function loader({ params }: { params: { date: string } }) {
 export async function action({ request }: { request: Request }) {
   const form = await request.formData();
   const _action = String(form.get("_action") || "");
-  if (_action !== "setStatus") {
-    return json({ ok: false, error: "Ação inválida" }, { status: 400 });
-  }
-  const id = String(form.get("id") || "");
-  const status = String(form.get("status") || "");
-  if (!id || !status || !isStatusId(status)) {
-    return json({ ok: false, error: "Parâmetros insuficientes" }, { status: 400 });
+
+  // mudar status (já existia)
+  if (_action === "setStatus") {
+    const id = String(form.get("id") || "");
+    const status = String(form.get("status") || "");
+    if (!id || !status || !isStatusId(status)) {
+      return json({ ok: false, error: "Parâmetros insuficientes" }, { status: 400 });
+    }
+    await prisma.kdsDailyOrderDetail.update({ where: { id }, data: { status } });
+    return json({ ok: true, id, status });
   }
 
-  await prisma.kdsDailyOrderDetail.update({ where: { id }, data: { status: status as StatusId } });
+  // novo: toggle pedido para assar
+  if (_action === "toggleOven") {
+    const id = String(form.get("id") || "");
+    const valueStr = String(form.get("value") || "");
+    if (!id || (valueStr !== "true" && valueStr !== "false")) {
+      return json({ ok: false, error: "Parâmetros inválidos" }, { status: 400 });
+    }
+    const value = valueStr === "true";
+    await prisma.kdsDailyOrderDetail.update({
+      where: { id },
+      data: { requestedForOven: value },
+    });
+    return json({ ok: true, id, requestedForOven: value });
+  }
 
-  return json({ ok: true, id, status });
+  return json({ ok: false, error: "Ação inválida" }, { status: 400 });
 }
 
 /* ============================= componentes ============================= */
-function SortableCard({ item }: { item: Detail }) {
+function SortableCard({
+  item,
+  onToggleOven,
+}: {
+  item: Detail;
+  onToggleOven: (id: string, next: boolean) => void;
+}) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: item.id });
 
@@ -139,7 +160,8 @@ function SortableCard({ item }: { item: Detail }) {
       style={style}
       {...listeners}
       {...attributes}
-      className="rounded-md border px-3 py-2 bg-white shadow-sm cursor-grab active:cursor-grabbing touch-pan-y"
+      className="rounded-md border px-3 py-2 bg-white shadow-sm cursor-grab active:cursor-grabbing touch-pan-y
+      flex flex-col"
     >
       <div className="flex items-start justify-between mb-1">
         <div className="font-semibold">#{item.commandNumber}</div>
@@ -154,6 +176,30 @@ function SortableCard({ item }: { item: Detail }) {
           </div>
         </div>
       </div>
+
+      {/* Botão ghost — toggle "pedido para assar" */}
+      {
+        item.status === "aguardandoForno" && (
+          <Button
+            type="button"
+            variant="outline"
+            title={item.requestedForOven ? "Pedido para assar (ativo)" : "Marcar pedido para assar"}
+            onMouseDown={(e) => e.stopPropagation()} // evita iniciar drag
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleOven(item.id, !item.requestedForOven);
+            }}
+            className={
+              cn(
+                "self-end",
+                item.requestedForOven && "bg-red-500"
+              )
+            }
+          >
+            <Flame className={`w-4 h-4 ${item.requestedForOven ? "text-white" : "text-gray-900"}`} />
+          </Button>
+        )
+      }
     </article>
   );
 }
@@ -176,10 +222,12 @@ function Column({
   status,
   items,
   header,
+  onToggleOven,
 }: {
   status: StatusId;
   items: Detail[];
   header: React.ReactNode;
+  onToggleOven: (id: string, next: boolean) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
 
@@ -196,7 +244,7 @@ function Column({
             <div className="text-xs text-gray-500 px-2 py-6 text-center">Nenhum pedido.</div>
           )}
           {items.map((o) => (
-            <SortableCard key={o.id} item={o} />
+            <SortableCard key={o.id} item={o} onToggleOven={onToggleOven} />
           ))}
         </SortableContext>
       </div>
@@ -212,11 +260,7 @@ export default function KanbanAtendimento() {
 
   const [board, setBoard] = useState<Record<StatusId, Detail[]>>(() => {
     const g: Record<StatusId, Detail[]> = {
-      novoPedido: [],
-      emProducao: [],
-      aguardandoForno: [],
-      assando: [],
-      despachada: [],
+      novoPedido: [], emProducao: [], aguardandoForno: [], assando: [], despachada: [],
     };
     for (const d of details as Detail[]) g[d.status]?.push(d);
     return g;
@@ -224,11 +268,7 @@ export default function KanbanAtendimento() {
 
   useEffect(() => {
     const g: Record<StatusId, Detail[]> = {
-      novoPedido: [],
-      emProducao: [],
-      aguardandoForno: [],
-      assando: [],
-      despachada: [],
+      novoPedido: [], emProducao: [], aguardandoForno: [], assando: [], despachada: [],
     };
     for (const d of details as Detail[]) g[d.status]?.push(d);
     setBoard(g);
@@ -259,10 +299,7 @@ export default function KanbanAtendimento() {
     let found: Detail | null = null;
     (Object.keys(board) as StatusId[]).some((col) => {
       const it = board[col].find((d) => d.id === id);
-      if (it) {
-        found = it;
-        return true;
-      }
+      if (it) { found = it; return true; }
       return false;
     });
     setActive(found);
@@ -319,6 +356,33 @@ export default function KanbanAtendimento() {
     }, 200);
   }
 
+  // Toggle do “pedido para assar” (UX otimista)
+  function toggleOven(id: string, next: boolean) {
+    const col = idToColumn.get(id);
+    if (!col) return;
+
+    setBoard((prev) => {
+      const nextBoard = { ...prev };
+      nextBoard[col] = nextBoard[col].map((it) =>
+        it.id === id ? { ...it, requestedForOven: next } : it
+      );
+      return nextBoard;
+    });
+
+    const fd = new FormData();
+    fd.set("_action", "toggleOven");
+    fd.set("id", id);
+    fd.set("value", String(next));
+    fetcher.submit(fd, { method: "post" });
+
+    const stop = setInterval(() => {
+      if (fetcher.state === "idle") {
+        clearInterval(stop);
+        revalidate();
+      }
+    }, 200);
+  }
+
   return (
     <DndContext
       sensors={sensors}
@@ -335,6 +399,7 @@ export default function KanbanAtendimento() {
               key={s.id}
               status={s.id}
               items={list}
+              onToggleOven={toggleOven}
               header={
                 <header className="px-3 py-2 border-b sticky top-0 bg-white rounded-t-lg">
                   <div className="flex items-center justify-between">

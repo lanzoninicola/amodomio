@@ -1,10 +1,11 @@
-// app/routes/admin.kds.cozinha.$date.tsx
 import { json, defer } from "@remix-run/node";
 import { Await, useFetcher, useLoaderData, useRevalidator } from "@remix-run/react";
 import { Prisma } from "@prisma/client";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import prismaClient from "~/lib/prisma/client.server";
 import { Button } from "@/components/ui/button";
+import { Flame } from "lucide-react";
+import { cn } from "~/lib/utils";
 
 /* ===== Helpers ===== */
 function ymdToDateInt(ymd: string) {
@@ -16,14 +17,17 @@ function fmtHHMM(dateLike: string | Date | undefined) {
   const d = new Date(dateLike);
   return isNaN(d.getTime()) ? "--:--" : d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 }
-function fmtElapsedHHMM(from: string | Date | undefined, nowMs: number) {
-  if (!from) return "--:--";
+function elapsedMinutes(from: string | Date | undefined, nowMs: number) {
+  if (!from) return 0;
   const d = new Date(from);
   const diff = nowMs - d.getTime();
-  if (!isFinite(diff) || diff < 0) return "--:--";
-  const totalMin = Math.floor(diff / 60000);
-  const hh = String(Math.floor(totalMin / 60)).padStart(2, "0");
-  const mm = String(totalMin % 60).padStart(2, "0");
+  if (!isFinite(diff) || diff < 0) return 0;
+  return Math.floor(diff / 60000);
+}
+function fmtElapsedHHMM(from: string | Date | undefined, nowMs: number) {
+  const mins = elapsedMinutes(from, nowMs);
+  const hh = String(Math.floor(mins / 60)).padStart(2, "0");
+  const mm = String(mins % 60).padStart(2, "0");
   return `${hh}:${mm}`;
 }
 
@@ -35,20 +39,37 @@ type OrderRow = {
   commandNumber: number;
   status: string;
   orderAmount?: DecimalLike;
+  requestedForOven: boolean;
 };
 
 /* ===== Status (label + 2 letras) ===== */
 const ALL_STATUSES = [
-  { id: "novoPedido", label: "Novo Pedido", abbr2: "NO", badge: "bg-gray-200 text-gray-900" },
+  { id: "novoPedido", label: "Novo Pedido", abbr2: "NP", badge: "bg-gray-200 text-gray-900" },
   { id: "emProducao", label: "Em Produção", abbr2: "EP", badge: "bg-blue-100 text-blue-800" },
   { id: "aguardandoForno", label: "Aguard. forno", abbr2: "AF", badge: "bg-purple-100 text-purple-800" },
   { id: "assando", label: "Assando", abbr2: "AS", badge: "bg-orange-100 text-orange-800" },
   { id: "despachada", label: "Despachada", abbr2: "DE", badge: "bg-yellow-100 text-yellow-900" },
 ] as const;
-const STATUS_BY_ID = Object.fromEntries(ALL_STATUSES.map(s => [s.id, s]));
+const STATUS_BY_ID = Object.fromEntries(ALL_STATUSES.map((s) => [s.id, s]));
 
 // Botões clicáveis na cozinha (sem "despachada")
-const CLICKABLE = ALL_STATUSES.filter(s => s.id !== "despachada");
+const CLICKABLE = ALL_STATUSES.filter((s) => s.id !== "despachada");
+
+/* ===== SLA (limiares de atenção por status, em minutos) ===== */
+const SLA: Record<string, { warn: number; late: number }> = {
+  novoPedido: { warn: 10, late: 20 },
+  emProducao: { warn: 15, late: 30 },
+  aguardandoForno: { warn: 5, late: 10 },
+  assando: { warn: 8, late: 12 },
+  despachada: { warn: 9999, late: 9999 },
+};
+function severityFor(order: OrderRow, nowMs: number) {
+  const mins = elapsedMinutes(order.createdAt, nowMs);
+  const t = SLA[order.status] || { warn: 9999, late: 9999 };
+  if (mins >= t.late) return "late";
+  if (mins >= t.warn) return "warn";
+  return "ok";
+}
 
 /* ===== Loader: pedidos do dia (oculta 'despachada') ===== */
 export async function loader({ params }: { params: { date: string } }) {
@@ -68,6 +89,7 @@ export async function loader({ params }: { params: { date: string } }) {
       commandNumber: true,
       status: true,
       orderAmount: true,
+      requestedForOven: true,
     },
   });
 
@@ -96,6 +118,9 @@ export default function CozinhaDia() {
   const { revalidate } = useRevalidator();
   const [nowMs, setNowMs] = useState(() => Date.now());
 
+  // fetcher para “assando” rápido (atalhos do topo)
+  const quickFetcher = useFetcher<{ ok: boolean }>();
+
   // Atualiza "decorrido" a cada 30s
   useEffect(() => {
     const t = setInterval(() => setNowMs(Date.now()), 30000);
@@ -108,18 +133,63 @@ export default function CozinhaDia() {
     return () => clearInterval(t);
   }, [revalidate]);
 
+  // Revalida ao terminar ações rápidas
+  useEffect(() => {
+    if (quickFetcher.state === "idle") revalidate();
+  }, [quickFetcher.state, revalidate]);
+
+  function startOven(id: string) {
+    const fd = new FormData();
+    fd.set("_action", "setStatus");
+    fd.set("id", id);
+    fd.set("status", "assando");
+    quickFetcher.submit(fd, { method: "post" });
+  }
+
   return (
     <div className="max-w-md mx-auto">
       <Suspense fallback={<div>Carregando pedidos do dia…</div>}>
         <Await resolve={data.orders}>
           {(orders: OrderRow[]) => {
-            const countNO = orders.filter(o => o.status === "novoPedido").length;
-            const countAF = orders.filter(o => o.status === "aguardandoForno").length;
+            const countNO = orders.filter((o) => o.status === "novoPedido").length;
+            const countAF = orders.filter((o) => o.status === "aguardandoForno").length;
+
+            // “Pedidos para assar” (AF + flag)
+            const ordersRequestedForOven = orders.filter(
+              (o) => o.status === "aguardandoForno" && o.requestedForOven === true
+            );
 
             return (
               <>
-                {/* === Barra de contadores (fixa no topo, abaixo do seletor) === */}
-                <div className="sticky top-14 z-30 bg-white/95 backdrop-blur border-b">
+                {/* === Barra de contadores + “pedidos p/assar” (fixa abaixo do seletor) === */}
+                <div className="sticky top-20 z-30 bg-white/95 backdrop-blur border-b">
+                  {/* Atalhos de “pedido para assar” */}
+                  {ordersRequestedForOven.length > 0 && (
+                    <div className="px-3 pt-2 pb-2">
+                      <div className="text-[11px] text-gray-500 mb-1">Pedidos para assar</div>
+                      <div className="grid grid-cols-4 gap-2">
+                        {ordersRequestedForOven.map((o) => (
+                          <div key={o.id} className="relative flex items-center justify-center">
+                            {/* ping */}
+                            <span className="absolute inline-flex h-10 w-10 rounded-full bg-red-500 opacity-60 animate-ping" />
+                            <Button
+                              type="button"
+                              variant="default"
+                              className="relative rounded-full w-10 h-10 bg-red-600 text-white shadow"
+                              title={`Assar #${o.commandNumber}`}
+                              onClick={() => startOven(o.id)}
+                            >
+                              <span className="text-[15px] font-semibold leading-none">
+                                {o.commandNumber}
+                              </span>
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Contadores */}
                   <div className="px-3 py-2 flex items-center gap-3">
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-gray-500">Novo Pedido</span>
@@ -163,7 +233,9 @@ function OrderItem({ order, nowMs }: { order: OrderRow; nowMs: number }) {
   const current = STATUS_BY_ID[order.status] ?? ALL_STATUSES[0];
 
   const hora = useMemo(() => fmtHHMM(order.createdAt), [order.createdAt]);
+  const decorridoMins = useMemo(() => elapsedMinutes(order.createdAt, nowMs), [order.createdAt, nowMs]);
   const decorrido = useMemo(() => fmtElapsedHHMM(order.createdAt, nowMs), [order.createdAt, nowMs]);
+  const sev = severityFor(order, nowMs);
 
   function setStatus(nextId: string) {
     if (nextId === order.status) return;
@@ -174,12 +246,27 @@ function OrderItem({ order, nowMs }: { order: OrderRow; nowMs: number }) {
     fetcher.submit(fd, { method: "post" });
   }
 
+  // classes por severidade
+  const sevText =
+    sev === "late" ? "text-red-600 animate-pulse"
+      : sev === "warn" ? "text-orange-600"
+        : "text-gray-900";
+
+
   return (
-    <li className="rounded-lg border p-3 bg-white">
+    <li className={`relative rounded-lg border p-3 bg-white `}>
       {/* Topo: Nº + Status perto | Hora (mono) | Decorrido (mono, maior e bold) */}
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
-          <div className="text-base font-semibold">#{order.commandNumber}</div>
+          <div className="text-base font-semibold flex items-center gap-1.5">
+            {/* badge 🔥 quando solicitado para forno */}
+            {order.requestedForOven && (
+              <span className="inline-flex items-center justify-center rounded-full bg-red-100 text-red-600 w-5 h-5">
+                <Flame className="w-3.5 h-3.5" />
+              </span>
+            )}
+            #{order.commandNumber}
+          </div>
           <span className={`text-[11px] px-2 py-0.5 rounded ${current.badge}`}>
             {current.label}
           </span>
@@ -187,7 +274,12 @@ function OrderItem({ order, nowMs }: { order: OrderRow; nowMs: number }) {
 
         <div className="flex items-center gap-4">
           <div className="text-xs text-gray-700 font-mono">{hora}</div>
-          <div className="text-lg font-semibold font-mono">{decorrido}</div>
+          <div className={
+            cn(
+              "text-lg font-semibold font-mono",
+              decorridoMins > 45 && sevText
+            )
+          }>{decorrido}</div>
         </div>
       </div>
 
