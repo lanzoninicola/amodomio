@@ -70,13 +70,18 @@ const STATUSES: { id: StatusId; label: string; color: string }[] = [
   { id: "assando", label: "Assando", color: "bg-orange-100 text-orange-800" },
   { id: "despachada", label: "Despachada", color: "bg-yellow-100 text-yellow-900" },
 ];
-const STATUS_IDS = STATUSES.map(s => s.id) as StatusId[];
-function isStatusId(x: string): x is StatusId { return STATUS_IDS.includes(x as StatusId); }
+const STATUS_IDS = STATUSES.map((s) => s.id) as StatusId[];
+function isStatusId(x: string): x is StatusId {
+  return STATUS_IDS.includes(x as StatusId);
+}
 
 /* ============================= loader/action ============================= */
 export async function loader({ params }: { params: { date: string } }) {
   const dateStr = params.date;
-  if (!/^\d{4}-\d{2}-\d2$/.test(dateStr)) throw new Response("Data inválida", { status: 400 });
+  // ✅ regex corrigida (antes estava \d2)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    throw new Response("Data inválida", { status: 400 });
+  }
   const dateInt = ymdToDateInt(dateStr);
 
   const details = await prisma.kdsDailyOrderDetail.findMany({
@@ -100,15 +105,17 @@ export async function loader({ params }: { params: { date: string } }) {
 export async function action({ request }: { request: Request }) {
   const form = await request.formData();
   const _action = String(form.get("_action") || "");
-  if (_action !== "setStatus") return json({ ok: false, error: "Ação inválida" }, { status: 400 });
-
+  if (_action !== "setStatus") {
+    return json({ ok: false, error: "Ação inválida" }, { status: 400 });
+  }
   const id = String(form.get("id") || "");
   const status = String(form.get("status") || "");
   if (!id || !status || !isStatusId(status)) {
     return json({ ok: false, error: "Parâmetros insuficientes" }, { status: 400 });
   }
 
-  await prisma.kdsDailyOrderDetail.update({ where: { id }, data: { status } });
+  await prisma.kdsDailyOrderDetail.update({ where: { id }, data: { status: status as StatusId } });
+
   return json({ ok: true, id, status });
 }
 
@@ -126,7 +133,6 @@ function SortableCard({ item }: { item: Detail }) {
   const hora = fmtHHMM(item.createdAt);
   const dec = fmtElapsed(item.createdAt, Date.now());
 
-  // Cartão minimalista: #, hora, decorrido (destaque)
   return (
     <article
       ref={setNodeRef}
@@ -139,22 +145,19 @@ function SortableCard({ item }: { item: Detail }) {
         <div className="font-semibold">#{item.commandNumber}</div>
         <div className="flex flex-col items-end">
           <div className="flex justify-between gap-x-3">
-            <span className="text-[10px] text-gray-500">Hóra Pedido:</span>
+            <span className="text-[10px] text-gray-500">Hora Pedido:</span>
             <div className="text-[12px] text-gray-600 font-mono">{hora}</div>
           </div>
           <div className="flex items-center gap-x-3">
             <span className="text-[10px] text-gray-500">Decorrido:</span>
             <div className="text-sm font-semibold font-mono">{dec}</div>
           </div>
-
-
         </div>
       </div>
     </article>
   );
 }
 
-/* Card usado no DragOverlay para arraste mais suave */
 function CardPreview({ item }: { item: Detail }) {
   const hora = fmtHHMM(item.createdAt);
   const dec = fmtElapsed(item.createdAt, Date.now());
@@ -178,7 +181,6 @@ function Column({
   items: Detail[];
   header: React.ReactNode;
 }) {
-  // Coluna droppable: permite soltar mesmo quando está vazia
   const { setNodeRef, isOver } = useDroppable({ id: status });
 
   return (
@@ -188,8 +190,6 @@ function Column({
         }`}
     >
       {header}
-
-      {/* Lista com scroll próprio da coluna */}
       <div className="p-2 space-y-2 overflow-y-auto flex-1 min-h-0">
         <SortableContext items={items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
           {items.length === 0 && (
@@ -210,37 +210,40 @@ export default function KanbanAtendimento() {
   const { revalidate } = useRevalidator();
   const fetcher = useFetcher();
 
-  // estado local (UX otimista)
   const [board, setBoard] = useState<Record<StatusId, Detail[]>>(() => {
     const g: Record<StatusId, Detail[]> = {
-      novoPedido: [], emProducao: [], aguardandoForno: [], assando: [], despachada: [],
+      novoPedido: [],
+      emProducao: [],
+      aguardandoForno: [],
+      assando: [],
+      despachada: [],
     };
     for (const d of details as Detail[]) g[d.status]?.push(d);
     return g;
   });
 
-  // rehidrata quando loader muda
   useEffect(() => {
     const g: Record<StatusId, Detail[]> = {
-      novoPedido: [], emProducao: [], aguardandoForno: [], assando: [], despachada: [],
+      novoPedido: [],
+      emProducao: [],
+      aguardandoForno: [],
+      assando: [],
+      despachada: [],
     };
     for (const d of details as Detail[]) g[d.status]?.push(d);
     setBoard(g);
   }, [details]);
 
-  // auto refresh
   useEffect(() => {
     const t = setInterval(() => revalidate(), 5 * 60 * 1000);
     return () => clearInterval(t);
   }, [revalidate]);
 
-  // sensores
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 120, tolerance: 4 } })
   );
 
-  // mapa rápido: id do card -> coluna
   const idToColumn = useMemo(() => {
     const map = new Map<string, StatusId>();
     (Object.keys(board) as StatusId[]).forEach((col) => {
@@ -275,7 +278,6 @@ export default function KanbanAtendimento() {
     const from = idToColumn.get(activeId) as StatusId | undefined;
     if (!from) return;
 
-    // destino pode ser card (id) ou coluna (statusId)
     let to: StatusId | undefined;
     const overId = String(overRaw);
     if (isStatusId(overId)) {
@@ -288,7 +290,6 @@ export default function KanbanAtendimento() {
     const fromIdx = board[from].findIndex((i) => i.id === activeId);
     if (fromIdx < 0) return;
 
-    // mesma coluna: só reorder visual
     if (from === to) {
       const overIdx = board[to].findIndex((i) => i.id === overId);
       if (overIdx < 0 || overIdx === fromIdx) return;
@@ -296,7 +297,6 @@ export default function KanbanAtendimento() {
       return;
     }
 
-    // entre colunas: muda status (otimista)
     const moved = board[from][fromIdx];
     setBoard((prev) => {
       const next = { ...prev };
@@ -305,14 +305,12 @@ export default function KanbanAtendimento() {
       return next;
     });
 
-    // Persistir novo status
     const fd = new FormData();
     fd.set("_action", "setStatus");
     fd.set("id", activeId);
     fd.set("status", to);
     fetcher.submit(fd, { method: "post" });
 
-    // Revalidar quando concluir
     const stop = setInterval(() => {
       if (fetcher.state === "idle") {
         clearInterval(stop);
@@ -341,7 +339,9 @@ export default function KanbanAtendimento() {
                 <header className="px-3 py-2 border-b sticky top-0 bg-white rounded-t-lg">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-semibold">{s.label}</span>
-                    <Badge variant="secondary" className={`${s.color} border-0`}>{list.length}</Badge>
+                    <Badge variant="secondary" className={`${s.color} border-0`}>
+                      {list.length}
+                    </Badge>
                   </div>
                 </header>
               }
@@ -350,7 +350,6 @@ export default function KanbanAtendimento() {
         })}
       </div>
 
-      {/* DragOverlay para arraste mais suave */}
       <DragOverlay dropAnimation={{ duration: 180 }}>
         {active ? <CardPreview item={active} /> : null}
       </DragOverlay>
