@@ -920,6 +920,19 @@ export default function KdsAtendimentoPlanilha() {
           const toNum = (v: any) => Number((v as any)?.toString?.() ?? v ?? 0) || 0;
           const totalPedido = activeOrders.reduce((s, o) => s + toNum(o?.orderAmount), 0);
           const totalMoto = activeOrders.reduce((s, o) => s + toNum(o?.motoValue), 0);
+          const sizeTotals = activeOrders.reduce(
+            (acc, o) => {
+              try {
+                const s = o?.size ? JSON.parse(o.size as any) : {};
+                acc.F += Number(s.F || 0);
+                acc.M += Number(s.M || 0);
+                acc.P += Number(s.P || 0);
+                acc.I += Number(s.I || 0);
+              } catch { } // ignora JSON malformado
+              return acc;
+            },
+            { F: 0, M: 0, P: 0, I: 0 }
+          );
 
           // sincroniza estado local quando o loader muda
           useEffect(() => {
@@ -937,6 +950,12 @@ export default function KdsAtendimentoPlanilha() {
             <div className="space-y-6">
               {/* Totais (IGNORAM cancelados) */}
               <div className="flex flex-wrap items-center gap-3 mb-2">
+                <div className="flex  items-center gap-x-3 px-3 py-2 rounded-lg border">
+                  <span className="text-xs text-gray-500">Numero Pedidos</span>
+                  <div className="text-base font-semibold font-mono">
+                    {activeOrders.length}
+                  </div>
+                </div>
                 <div className="flex  items-center gap-x-3 px-3 py-2 rounded-lg border">
                   <span className="text-xs text-gray-500">Total Pedido (R$)</span>
                   <div className="text-base font-semibold font-mono">
@@ -956,6 +975,17 @@ export default function KdsAtendimentoPlanilha() {
                     })}
                   </div>
                 </div>
+
+                <div className="flex items-center gap-x-3 px-3 py-2 rounded-lg border">
+                  <span className="text-xs text-gray-500">Total Tamanhos</span>
+                  <div className="text-sm font-mono">
+                    F: <span className="font-semibold">{sizeTotals.F}</span>{" "}
+                    M: <span className="font-semibold">{sizeTotals.M}</span>{" "}
+                    P: <span className="font-semibold">{sizeTotals.P}</span>{" "}
+                    I: <span className="font-semibold">{sizeTotals.I}</span>
+                  </div>
+                </div>
+
               </div>
 
               {/* Cabeçalho */}
