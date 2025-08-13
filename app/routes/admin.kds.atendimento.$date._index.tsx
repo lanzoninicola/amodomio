@@ -957,7 +957,7 @@ export default function KdsAtendimentoPlanilha() {
                   </div>
                 </div>
                 <div className="flex  items-center gap-x-3 px-3 py-2 rounded-lg border">
-                  <span className="text-xs text-gray-500">Total Pedido (R$)</span>
+                  <span className="text-xs text-gray-500">Faturamento dia (R$)</span>
                   <div className="text-base font-semibold font-mono">
                     {totalPedido.toLocaleString("pt-BR", {
                       minimumFractionDigits: 2,
