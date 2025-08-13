@@ -80,6 +80,7 @@ export async function loader({ params }: { params: { date: string } }) {
     where: {
       dateInt,
       status: { not: "despachada" }, // não mostrar 'despachada'
+      deletedAt: null,
     },
     orderBy: [{ commandNumber: "asc" }, { createdAt: "asc" }],
     select: {

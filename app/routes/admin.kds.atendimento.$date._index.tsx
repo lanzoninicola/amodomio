@@ -363,6 +363,18 @@ function MoneyInput({
 
   const [cents, setCents] = useState<number>(initialCents);
 
+  useEffect(() => {
+    const n =
+      defaultValue == null
+        ? 0
+        : typeof defaultValue === "number"
+          ? defaultValue
+          : Number((defaultValue as any)?.toString?.() ?? `${defaultValue}`);
+    const centsFromProp = Math.max(0, Math.round((Number.isFinite(n) ? n : 0) * 100));
+    setCents(centsFromProp);
+  }, [defaultValue]);
+
+
   const display = (cents / 100).toLocaleString("pt-BR", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
@@ -370,6 +382,10 @@ function MoneyInput({
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     const k = e.key;
+    if (k === "Enter") {
+      // deixa o Enter passar para o form submeter
+      return;
+    }
     if (k === "Backspace") {
       e.preventDefault();
       setCents((c) => Math.floor(c / 10));
@@ -550,6 +566,21 @@ function RowItem({
     return defaultSizeCounts();
   });
 
+  useEffect(() => {
+    // quando muda a ordem associada à linha (ou vira null), re-sincroniza o estado local
+    if (order?.size) {
+      try {
+        const parsed = JSON.parse(order.size as any);
+        setCounts({ ...defaultSizeCounts(), ...parsed });
+      } catch {
+        setCounts(defaultSizeCounts());
+      }
+    } else {
+      // linha vazia deve sempre começar zerada
+      setCounts(defaultSizeCounts());
+    }
+  }, [order?.id]);
+
   const [rowId, setRowId] = useState<string | null>(order?.id ?? null);
   const [editingStatus, setEditingStatus] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
@@ -679,7 +710,6 @@ function RowItem({
 
         {/* Hidden */}
         {rowId && <input type="hidden" name="id" value={rowId} />}
-        <input type="hidden" name="_action" value="upsert" />
         <input type="hidden" name="size" value={JSON.stringify(counts)} />
         <input type="hidden" name="commandNumber" value={index + 1} />
         <input type="hidden" name="date" value={dateStr} />
@@ -732,6 +762,8 @@ function RowItem({
         <div className="flex justify-center gap-2">
           <Button
             type="submit"
+            name="_action"
+            value="upsert"
             variant={"outline"}
             disabled={fetcher.state === "submitting"}
             title="Salvar"
@@ -913,7 +945,7 @@ export default function KdsAtendimentoPlanilha() {
                 {/* Linhas vazias (não arrastáveis) */}
                 {fillers.map((_, i) => (
                   <RowItem
-                    key={`row-empty-${i}`}
+                    key={`row-empty-${i}-${safeOrders.length}`}
                     order={null}
                     index={orderList.length + i}
                     canais={canais}
