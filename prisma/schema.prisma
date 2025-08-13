@@ -785,71 +785,6 @@ model HrHiringProposal {
   @@map("hr_hiring_proposals")
 }
 
-model Bairro {
-  id        String   @id @default(uuid())
-  name      String
-  city      String
-  state     String
-  zipCode   String?  @map("zip_code")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  distances           DistanceToPizzeria[]
-  deliveryFees        DeliveryFee[]
-  KdsDailyOrderDetail KdsDailyOrderDetail[]
-
-  @@map("bairros")
-}
-
-model PizzeriaLocation {
-  id          String   @id @default(uuid())
-  name        String
-  address     String
-  city        String
-  state       String
-  zipCode     String?  @map("zip_code")
-  phoneNumber String?  @map("phone_number")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-
-  mainLocation Boolean @default(false) @map("main_location")
-
-  distances    DistanceToPizzeria[]
-  deliveryFees DeliveryFee[]
-
-  @@map("pizzeria_locations")
-}
-
-model DistanceToPizzeria {
-  id                 String   @id @default(uuid())
-  bairroId           String   @map("bairro_id")
-  pizzeriaLocationId String   @map("pizzeria_location_id")
-  distanceInKm       Float    @map("distance_in_km")
-  estimatedTimeInMin Int?     @map("estimated_time_in_min")
-  createdAt          DateTime @default(now()) @map("created_at")
-
-  bairro           Bairro           @relation(fields: [bairroId], references: [id])
-  pizzeriaLocation PizzeriaLocation @relation(fields: [pizzeriaLocationId], references: [id])
-
-  @@unique([bairroId, pizzeriaLocationId])
-  @@map("distance_to_pizzeria")
-}
-
-model DeliveryFee {
-  id                 String   @id @default(uuid())
-  bairroId           String   @map("bairro_id")
-  pizzeriaLocationId String   @map("pizzeria_location_id")
-  amount             Float
-  createdAt          DateTime @default(now()) @map("created_at")
-  updatedAt          DateTime @updatedAt @map("updated_at")
-
-  bairro           Bairro           @relation(fields: [bairroId], references: [id])
-  pizzeriaLocation PizzeriaLocation @relation(fields: [pizzeriaLocationId], references: [id])
-
-  @@unique([bairroId, pizzeriaLocationId])
-  @@map("delivery_fees")
-}
-
 model Post {
   id        String      @id @default(uuid())
   title     String
@@ -921,7 +856,7 @@ model CalendarDay {
 }
 
 model KdsDailyOrder {
-  /// Cabeçalho de UM dia (agrega os pedidos do dia)
+  /// Cabeçalho 1 UM dia (agrega os pedidos do dia)
   id      String   @id @default(uuid())
   date    DateTime
   dateInt Int      @map("date_int")
@@ -955,6 +890,8 @@ model KdsDailyOrderDetail {
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
 
+  deliveredAt DateTime? @map("delivered_at")
+
   /// Nº da comanda (único dentro do dia)
   commandNumber Int @map("command_number")
 
@@ -967,10 +904,8 @@ model KdsDailyOrderDetail {
   status      String  @default("novoPedido")
 
   requestedForOven Boolean @default(false) @map("requested_for_oven")
-
-  /// Bairro (se aplicável)
-  Bairro   Bairro? @relation(fields: [bairroId], references: [id])
-  bairroId String? @map("bairro_id")
+  Bairro           Bairro? @relation(fields: [bairroId], references: [id])
+  bairroId         String? @map("bairro_id")
 
   /// Regras/índices
   @@unique([dateInt, commandNumber]) // comanda única no mesmo dia
@@ -978,4 +913,78 @@ model KdsDailyOrderDetail {
   @@index([commandNumber])
   @@index([orderId])
   @@map("kds_daily_order_details")
+}
+
+model Bairro {
+  id        String   @id @default(uuid())
+  name      String
+  city      String
+  state     String
+  zipCode   String?  @map("zip_code")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  distances           DeliveryZoneDistance[]
+  deliveryFees        DeliveryFee[]
+  KdsDailyOrderDetail KdsDailyOrderDetail[]
+
+  @@map("bairros")
+}
+
+model CompanyLocation {
+  id          String   @id @default(uuid())
+  name        String
+  address     String
+  city        String
+  state       String
+  zipCode     String?  @map("zip_code")
+  phoneNumber String?  @map("phone_number")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  mainLocation Boolean @default(false) @map("main_location")
+
+  distances    DeliveryZoneDistance[]
+  deliveryFees DeliveryFee[]
+
+  @@map("company_locations")
+}
+
+model DeliveryZoneDistance {
+  id                 String   @id @default(uuid())
+  bairroId           String   @map("bairro_id")
+  companyLocationId  String   @map("company_location_id")
+  distanceInKm       Float    @map("distance_in_km")
+  estimatedTimeInMin Int?     @map("estimated_time_in_min")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  bairro          Bairro          @relation(fields: [bairroId], references: [id])
+  companyLocation CompanyLocation @relation(fields: [companyLocationId], references: [id])
+
+  @@unique([bairroId, companyLocationId])
+  @@map("delivery_zone_distance")
+}
+
+model DeliveryFee {
+  id                String   @id @default(uuid())
+  bairroId          String   @map("bairro_id")
+  companyLocationId String   @map("pizzeria_location_id")
+  amount            Float
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  bairro          Bairro          @relation(fields: [bairroId], references: [id])
+  companyLocation CompanyLocation @relation(fields: [companyLocationId], references: [id])
+
+  @@unique([bairroId, companyLocationId])
+  @@map("delivery_fees")
+}
+
+model DeliveryRider {
+  id            String  @id @default(uuid())
+  name          String
+  phoneNumber   String  @map("phone_number")
+  baseFeeAmount Decimal @default(0) @map("base_fee_amount") @db.Decimal(10, 2)
+
+  @@map("delivery_riders")
 }

@@ -204,8 +204,9 @@ export async function action({
 
       const existente = await prismaClient.kdsDailyOrderDetail.findFirst({
         where: { dateInt, commandNumber },
-        select: { id: true },
+        select: { id: true, status: true, deliveredAt: true }, // << incluir
       });
+
       if (!existente) return json({ ok: true, canceled: false });
 
       await prismaClient.kdsDailyOrderDetail.update({
@@ -217,7 +218,7 @@ export async function action({
           orderAmount: new Prisma.Decimal(0),
           channel: "",
           // requestedForOven: false, // só se o campo existir neste form
-          deletedAt: new Date(), // << soft delete
+          deletedAt: currentDate, // << soft delete
         },
       });
 
@@ -295,14 +296,21 @@ export async function action({
       // Upsert por (dateInt, commandNumber)
       const existente = await prismaClient.kdsDailyOrderDetail.findFirst({
         where: { dateInt, commandNumber },
-        select: { id: true, deletedAt: true },
+        select: { id: true, status: true, deliveredAt: true }, // << incluir
       });
 
+
       if (existente) {
+        let deliveredAtUpdate: Date | null | undefined = undefined;
+        if (status === "despachada" && existente.status !== "despachada") {
+          deliveredAtUpdate = currentDate;
+        } else if (status !== "despachada" && existente.status === "despachada") {
+          deliveredAtUpdate = null;
+        }
+
         const updated = await prismaClient.kdsDailyOrderDetail.update({
           where: { id: existente.id },
           data: {
-            orderId: header.id,
             commandNumber,
             size: JSON.stringify(sizeCounts),
             hasMoto,
@@ -310,13 +318,14 @@ export async function action({
             status,
             motoValue,
             orderAmount,
-            deletedAt: null, // reativa se estava cancelada
+            ...(deliveredAtUpdate !== undefined ? { deliveredAt: deliveredAtUpdate } : {}),
           },
         });
 
         await recalcHeaderTotal(dateInt);
         return json({ ok: true, id: updated.id, mode: "update" });
       }
+
 
       const created = await prismaClient.kdsDailyOrderDetail.create({
         data: {
@@ -329,7 +338,7 @@ export async function action({
           orderAmount,
           channel,
           status,
-          deletedAt: null,
+          deliveredAt: status === "despachada" ? currentDate : null, // << incluir
         },
       });
 
