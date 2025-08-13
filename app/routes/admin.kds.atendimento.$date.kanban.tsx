@@ -112,7 +112,28 @@ export async function action({ request }: { request: Request }) {
     if (!id || !status || !isStatusId(status)) {
       return json({ ok: false, error: "Parâmetros insuficientes" }, { status: 400 });
     }
-    await prisma.kdsDailyOrderDetail.update({ where: { id }, data: { status } });
+
+    // Lê status anterior para decidir deliveredAt
+    const prev = await prisma.kdsDailyOrderDetail.findUnique({
+      where: { id },
+      select: { status: true, deliveredAt: true },
+    });
+
+    let deliveredAtUpdate: Date | null | undefined = undefined;
+    if (status === "despachada" && prev?.status !== "despachada") {
+      deliveredAtUpdate = new Date(); // entrou em despachada
+    } else if (status !== "despachada" && prev?.status === "despachada") {
+      deliveredAtUpdate = null; // saiu de despachada
+    }
+
+    await prisma.kdsDailyOrderDetail.update({
+      where: { id },
+      data: {
+        status,
+        ...(deliveredAtUpdate !== undefined ? { deliveredAt: deliveredAtUpdate } : {}),
+      },
+    });
+
     return json({ ok: true, id, status });
   }
 
