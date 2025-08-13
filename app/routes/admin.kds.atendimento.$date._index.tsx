@@ -60,7 +60,7 @@ function todayLocalYMD() {
   const y = now.getFullYear();
   const m = String(now.getMonth() + 1).padStart(2, "0");
   const d = String(now.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`; // YYYY-MM-DD no fuso local
+  return `${y}-${m}-${d}`;
 }
 
 /* =============================
@@ -91,6 +91,9 @@ type OrderRow = {
 
   channel?: string;
   status?: string;
+
+  // NOVO: campo para soft delete
+  deletedAt?: string | null;
 };
 
 function defaultSizeCounts(): SizeCounts {
@@ -121,11 +124,11 @@ export async function loader({ params }: { params: { date?: string } }) {
 }
 
 /* =============================
- * Helpers de totals do cabeçalho
+ * Helpers de totals do cabeçalho (IGNORA cancelados)
  * ============================= */
 async function recalcHeaderTotal(dateInt: number) {
   const agg = await prismaClient.kdsDailyOrderDetail.aggregate({
-    where: { dateInt },
+    where: { dateInt, deletedAt: null }, // << só ativos
     _sum: { orderAmount: true },
   });
   const total = agg._sum.orderAmount ?? new Prisma.Decimal(0);
@@ -160,7 +163,7 @@ export async function action({
   const currentDate = ymdToUtcNoon(dateStr);
 
   try {
-    /* ---------- REORDER ---------- */
+    /* ---------- REORDER (mantém o mesmo conjunto de números dos ATIVOS) ---------- */
     if (_action === "reorder") {
       const idsRaw = (formData.get("ids") as string) ?? "[]";
       let ids: string[] = [];
@@ -173,11 +176,20 @@ export async function action({
         throw new Error("Lista de ids inválida.");
       }
 
+      // Busca commandNumbers atuais dos ATIVOS (ids informados)
+      const active = await prismaClient.kdsDailyOrderDetail.findMany({
+        where: { dateInt, deletedAt: null, id: { in: ids } },
+        select: { id: true, commandNumber: true },
+        orderBy: { commandNumber: "asc" },
+      });
+      const numbers = active.map((a) => a.commandNumber!); // preserva lacunas de cancelados
+
+      // Aplica os MESMOS números na nova ordem de ids
       await prismaClient.$transaction(
         ids.map((id, idx) =>
           prismaClient.kdsDailyOrderDetail.update({
             where: { id },
-            data: { commandNumber: idx + 1 },
+            data: { commandNumber: numbers[idx] ?? numbers[numbers.length - 1] },
           })
         )
       );
@@ -185,7 +197,35 @@ export async function action({
       return json({ ok: true, reordered: true });
     }
 
-    /* ---------- DELETE/UPSERT ---------- */
+    /* ---------- CANCELAMENTO LÓGICO ---------- */
+    if (_action === "cancel") {
+      const commandNumber = Number(formData.get("commandNumber") || 0);
+      if (!commandNumber) throw new Error("commandNumber inválido.");
+
+      const existente = await prismaClient.kdsDailyOrderDetail.findFirst({
+        where: { dateInt, commandNumber },
+        select: { id: true },
+      });
+      if (!existente) return json({ ok: true, canceled: false });
+
+      await prismaClient.kdsDailyOrderDetail.update({
+        where: { id: existente.id },
+        data: {
+          size: JSON.stringify({ F: 0, M: 0, P: 0, I: 0 }),
+          hasMoto: false,
+          motoValue: new Prisma.Decimal(0),
+          orderAmount: new Prisma.Decimal(0),
+          channel: "",
+          // requestedForOven: false, // só se o campo existir neste form
+          deletedAt: new Date(), // << soft delete
+        },
+      });
+
+      await recalcHeaderTotal(dateInt);
+      return json({ ok: true, canceled: true, id: existente.id });
+    }
+
+    /* ---------- UPSERT ---------- */
     const commandNumber = Number(formData.get("commandNumber") || 0);
     if (!commandNumber) throw new Error("commandNumber inválido.");
 
@@ -199,20 +239,7 @@ export async function action({
     inFlightLocks.add(key);
 
     try {
-      if (_action === "delete") {
-        const existente = await prismaClient.kdsDailyOrderDetail.findFirst({
-          where: { dateInt, commandNumber },
-          select: { id: true },
-        });
-        if (!existente) return json({ ok: true, deleted: false });
-
-        await prismaClient.kdsDailyOrderDetail.delete({ where: { id: existente.id } });
-        await recalcHeaderTotal(dateInt);
-
-        return json({ ok: true, deleted: true, id: existente.id });
-      }
-
-      // Upsert precisa garantir o cabeçalho do dia
+      // Garante cabeçalho do dia
       const header = await prismaClient.kdsDailyOrder.upsert({
         where: { dateInt },
         update: {},
@@ -235,7 +262,7 @@ export async function action({
         throw new Error("Formato inválido dos tamanhos.");
       }
 
-      // Money (string -> Decimal with 2 places)
+      // Money (string -> Decimal com 2 casas)
       const rawMoto = (formData.get("motoValue") as string) ?? "0";
       const rawAmount = (formData.get("orderAmount") as string) ?? "0";
       const motoValueNum = Math.max(0, Number(rawMoto.replace(",", ".") || 0));
@@ -243,7 +270,7 @@ export async function action({
       const motoValue = new Prisma.Decimal(motoValueNum.toFixed(2));
       const orderAmount = new Prisma.Decimal(orderAmountNum.toFixed(2));
 
-      // Empty-line guard
+      // Linha vazia? (bloqueia)
       const total =
         (sizeCounts.F || 0) +
         (sizeCounts.M || 0) +
@@ -268,13 +295,14 @@ export async function action({
       // Upsert por (dateInt, commandNumber)
       const existente = await prismaClient.kdsDailyOrderDetail.findFirst({
         where: { dateInt, commandNumber },
-        select: { id: true },
+        select: { id: true, deletedAt: true },
       });
 
       if (existente) {
         const updated = await prismaClient.kdsDailyOrderDetail.update({
           where: { id: existente.id },
           data: {
+            orderId: header.id,
             commandNumber,
             size: JSON.stringify(sizeCounts),
             hasMoto,
@@ -282,6 +310,7 @@ export async function action({
             status,
             motoValue,
             orderAmount,
+            deletedAt: null, // reativa se estava cancelada
           },
         });
 
@@ -300,6 +329,7 @@ export async function action({
           orderAmount,
           channel,
           status,
+          deletedAt: null,
         },
       });
 
@@ -338,18 +368,20 @@ function statusColorClasses(status: string | undefined) {
 }
 
 /* =============================
- * MoneyInput (cent-based typing)
+ * MoneyInput (cent-based typing) — sem mudar UI
  * ============================= */
 function MoneyInput({
   name,
   defaultValue,
   placeholder,
   className = "w-24",
+  disabled = false, // << permite desabilitar quando cancelado
 }: {
   name: string;
   defaultValue?: DecimalLike;
   placeholder?: string;
   className?: string;
+  disabled?: boolean;
 }) {
   const initialCents = (() => {
     const n =
@@ -374,18 +406,15 @@ function MoneyInput({
     setCents(centsFromProp);
   }, [defaultValue]);
 
-
   const display = (cents / 100).toLocaleString("pt-BR", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (disabled) return; // << não edita se cancelado
     const k = e.key;
-    if (k === "Enter") {
-      // deixa o Enter passar para o form submeter
-      return;
-    }
+    if (k === "Enter") return; // deixa o Enter passar para o form
     if (k === "Backspace") {
       e.preventDefault();
       setCents((c) => Math.floor(c / 10));
@@ -416,7 +445,10 @@ function MoneyInput({
         value={display}
         onKeyDown={handleKeyDown}
         onChange={() => { }}
-        className={`${className} h-9 border rounded px-2 py-1 text-right`}
+        disabled={disabled}          // << desabilita visualmente
+        aria-disabled={disabled}
+        className={`${className} h-9 border rounded px-2 py-1 text-right ${disabled ? "bg-gray-50 text-gray-400" : ""
+          }`}
         placeholder={placeholder}
       />
       <input type="hidden" name={name} value={(cents / 100).toFixed(2)} />
@@ -425,7 +457,7 @@ function MoneyInput({
 }
 
 /* =============================
- * Helpers de hora/decorrido
+ * Helpers de hora/decorrido (inalterados)
  * ============================= */
 function fmtHHMM(dateLike: string | Date | undefined) {
   if (!dateLike) return "--:--";
@@ -453,19 +485,23 @@ const HEADER_TMPL =
   "grid grid-cols-[48px,60px,60px,150px,120px,220px,85px,85px,85px,100px,120px] gap-2 gap-x-4 border-b font-semibold text-sm sticky top-0  z-10";
 
 /* =============================
- * SizeSelector
+ * SizeSelector (UI INALTERADA)
  * ============================= */
 function SizeSelector({
   counts,
   onChange,
+  disabled,
 }: {
   counts: SizeCounts;
   onChange: (newCounts: SizeCounts) => void;
+  disabled?: boolean; // << adicionamos apenas para travar quando cancelado
 }) {
   function increment(size: keyof SizeCounts) {
+    if (disabled) return;
     onChange({ ...counts, [size]: counts[size] + 1 });
   }
   function reset() {
+    if (disabled) return;
     onChange(defaultSizeCounts());
   }
 
@@ -477,14 +513,19 @@ function SizeSelector({
           type="button"
           onClick={() => increment(size)}
           className={`w-8 h-8 rounded-full border flex items-center justify-center text-xs font-bold ${counts[size] > 0 ? "bg-primary text-white" : "bg-white"
-            }`}
+            } ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
           aria-label={`Adicionar ${size}`}
+          disabled={disabled}
         >
           {size}
           {counts[size] > 0 && <span className="ml-1">{counts[size]}</span>}
         </button>
       ))}
-      <Badge variant="secondary" className="ml-1 cursor-pointer" onClick={reset}>
+      <Badge
+        variant="secondary"
+        className={`ml-1 cursor-pointer ${disabled ? "opacity-50 pointer-events-none" : ""}`}
+        onClick={reset}
+      >
         Zerar
       </Badge>
     </div>
@@ -492,7 +533,7 @@ function SizeSelector({
 }
 
 /* =============================
- * Sortable Row wrapper
+ * Sortable Row wrapper (somente para ATIVOS)
  * ============================= */
 function SortableRow({
   order,
@@ -528,7 +569,7 @@ function SortableRow({
 }
 
 /* =============================
- * RowItem (fetcher + feedback)
+ * RowItem (fetcher + feedback + cancelamento lógico)
  * ============================= */
 function RowItem({
   order,
@@ -567,7 +608,6 @@ function RowItem({
   });
 
   useEffect(() => {
-    // quando muda a ordem associada à linha (ou vira null), re-sincroniza o estado local
     if (order?.size) {
       try {
         const parsed = JSON.parse(order.size as any);
@@ -576,7 +616,6 @@ function RowItem({
         setCounts(defaultSizeCounts());
       }
     } else {
-      // linha vazia deve sempre começar zerada
       setCounts(defaultSizeCounts());
     }
   }, [order?.id]);
@@ -587,6 +626,7 @@ function RowItem({
   const [lastOk, setLastOk] = useState<boolean | null>(null);
 
   const currentStatus = order?.status || "novoPedido";
+  const isCanceled = !!order?.deletedAt;
 
   useEffect(() => {
     if (fetcher.state === "submitting") {
@@ -601,7 +641,7 @@ function RowItem({
         setLastOk(true);
         setErrorText(null);
         if (fetcher.data.id) setRowId(fetcher.data.id);
-        setEditingStatus(false); // volta para badge após salvar
+        setEditingStatus(false);
         revalidate();
         const t = setTimeout(() => setLastOk(null), 1500);
         return () => clearTimeout(t);
@@ -612,7 +652,7 @@ function RowItem({
     }
   }, [fetcher.data, revalidate]);
 
-  // Circulo: feedback > cor do status
+  // Círculo: feedback > cor do status
   const circleClass = useMemo(() => {
     if (fetcher.state === "submitting") return "bg-gray-200";
     if (lastOk === true) return "bg-green-500 text-white";
@@ -627,21 +667,22 @@ function RowItem({
     <li
       ref={sortable?.setNodeRef}
       style={sortable?.style}
-      className={sortable?.isDragging ? "opacity-60" : undefined}
+      className={isCanceled ? "opacity-50" : sortable?.isDragging ? "opacity-60" : undefined}
     >
       {/* grid: # | Hora | Decorrido | Status | Pedido (R$) | Tamanho | Moto | Moto (R$) | Canal (×2) | Ações */}
       <fetcher.Form method="post" className={`${GRID_TMPL} py-2`}>
-        {/* # + grip handle (sempre visível) */}
+        {/* # + grip handle */}
         <div className="flex items-center justify-center gap-1">
           <button
             type="button"
-            {...(rowId ? (sortable?.listeners || {}) : {})}
-            {...(rowId ? (sortable?.attributes || {}) : {})}
+            {...(rowId && !isCanceled ? (sortable?.listeners || {}) : {})}
+            {...(rowId && !isCanceled ? (sortable?.attributes || {}) : {})}
             className={
               "text-gray-600 " +
-              (rowId ? "cursor-grab active:cursor-grabbing" : "opacity-30 cursor-not-allowed")
+              (rowId && !isCanceled ? "cursor-grab active:cursor-grabbing" : "opacity-30 cursor-not-allowed")
             }
-            title={rowId ? "Arraste para reordenar" : "Salve a linha para habilitar arraste"}
+            title={rowId && !isCanceled ? "Arraste para reordenar" : "Linha bloqueada"}
+            disabled={isCanceled}
           >
             <GripVertical className="w-4 h-4" />
           </button>
@@ -655,23 +696,21 @@ function RowItem({
                   ? "Salvo!"
                   : lastOk === false
                     ? "Erro ao salvar"
-                    : `Linha ${index + 1}`
+                    : `Comanda ${order?.commandNumber ?? index + 1}`
             }
           >
-            {index + 1}
+            {order?.commandNumber ?? index + 1}
           </div>
         </div>
 
-        {/* Hora */}
+        {/* Hora / Decorrido */}
         <div className="text-center text-sm text-gray-800 font-mono">{horaStr}</div>
-
-        {/* Decorrido */}
         <div className="text-center text-sm text-gray-800 font-mono">{decorridoStr}</div>
 
         {/* Status */}
         <div className="flex items-center justify-center gap-2">
           {editingStatus ? (
-            <Select name="status" defaultValue={currentStatus}>
+            <Select name="status" defaultValue={currentStatus} disabled={isCanceled}>
               <SelectTrigger className="w-40 h-9 text-xs">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
@@ -690,9 +729,10 @@ function RowItem({
           )}
           <button
             type="button"
-            onClick={() => setEditingStatus((v) => !v)}
-            className="text-gray-500 hover:text-gray-700"
-            title="Editar status"
+            onClick={() => !isCanceled && setEditingStatus((v) => !v)}
+            className={"text-gray-500 hover:text-gray-700 " + (isCanceled ? "opacity-30 cursor-not-allowed" : "")}
+            title={isCanceled ? "Linha cancelada" : "Editar status"}
+            disabled={isCanceled}
           >
             <Pencil className="w-4 h-4" />
           </button>
@@ -705,23 +745,25 @@ function RowItem({
             defaultValue={order?.orderAmount}
             placeholder="Pedido (R$)"
             className="w-24"
+            disabled={isCanceled}
           />
         </div>
 
         {/* Hidden */}
         {rowId && <input type="hidden" name="id" value={rowId} />}
         <input type="hidden" name="size" value={JSON.stringify(counts)} />
-        <input type="hidden" name="commandNumber" value={index + 1} />
+        <input type="hidden" name="commandNumber" value={order?.commandNumber ?? index + 1} />
         <input type="hidden" name="date" value={dateStr} />
+        <input type="hidden" name="status" value={currentStatus} />
 
-        {/* Tamanhos */}
+        {/* Tamanhos (UI intacta; apenas travamos se cancelado) */}
         <div>
-          <SizeSelector counts={counts} onChange={setCounts} />
+          <SizeSelector counts={counts} onChange={setCounts} disabled={isCanceled} />
         </div>
 
         {/* Moto (boolean) */}
         <div className="flex items-center justify-center">
-          <Select name="hasMoto" defaultValue={order?.hasMoto ? "true" : "false"}>
+          <Select name="hasMoto" defaultValue={order?.hasMoto ? "true" : "false"} disabled={isCanceled}>
             <SelectTrigger className="w-24 h-9 text-xs">
               <SelectValue placeholder="Moto" />
             </SelectTrigger>
@@ -739,17 +781,18 @@ function RowItem({
             defaultValue={order?.motoValue}
             placeholder="Moto (R$)"
             className="w-28"
+            disabled={isCanceled}
           />
         </div>
 
         {/* Canal (span 2) */}
         <div className="flex items-center justify-center col-span-2">
-          <Select name="channel" defaultValue={order?.channel ?? ""}>
+          <Select name="channel" defaultValue={order?.channel ?? ""} disabled={isCanceled}>
             <SelectTrigger className="w-full h-9 text-xs">
               <SelectValue placeholder="Canal" />
             </SelectTrigger>
             <SelectContent>
-              {canais.map((canal) => (
+              {["WHATS/PRESENCIAL/TELE", "MOGO", "AIQFOME", "IFOOD"].map((canal) => (
                 <SelectItem key={canal} value={canal}>
                   {canal}
                 </SelectItem>
@@ -765,8 +808,8 @@ function RowItem({
             name="_action"
             value="upsert"
             variant={"outline"}
-            disabled={fetcher.state === "submitting"}
-            title="Salvar"
+            disabled={isCanceled || fetcher.state === "submitting"}
+            title={isCanceled ? "Linha cancelada" : "Salvar"}
           >
             <Save className="w-4 h-4" />
           </Button>
@@ -775,10 +818,10 @@ function RowItem({
             <Button
               type="submit"
               name="_action"
-              value="delete"
+              value="cancel" /* << ERA delete */
               variant={"ghost"}
-              disabled={fetcher.state === "submitting"}
-              title="Excluir"
+              disabled={isCanceled || fetcher.state === "submitting"}
+              title="Cancelar (lógico)"
               className="hover:bg-red-50"
             >
               <Trash className="w-4 h-4 text-red-500" />
@@ -796,11 +839,10 @@ function RowItem({
 }
 
 /* =============================
- * Página (com DND, Totais e relógio para "Decorrido")
+ * Página (DnD, Totais, Refresh)
  * ============================= */
 export default function KdsAtendimentoPlanilha() {
   const data = useLoaderData<typeof loader>();
-  const [rows, setRows] = useState(50);
 
   // Atualiza "agora" a cada 30s para recalcular o decorrido
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -812,9 +854,7 @@ export default function KdsAtendimentoPlanilha() {
   const { revalidate } = useRevalidator();
   // Recarrega os dados (loader) a cada 5 minutos
   useEffect(() => {
-    const t = setInterval(() => {
-      revalidate(); // chama o loader de novo
-    }, 5 * 60 * 1000);
+    const t = setInterval(() => revalidate(), 5 * 60 * 1000);
     return () => clearInterval(t);
   }, [revalidate]);
 
@@ -844,21 +884,27 @@ export default function KdsAtendimentoPlanilha() {
     if (!over || active.id === over.id) return;
 
     setOrderList((prev) => {
-      const oldIndex = prev.findIndex((o) => o.id === active.id);
-      const newIndex = prev.findIndex((o) => o.id === over.id);
-      if (oldIndex === -1 || newIndex === -1) return prev;
+      // Só reordena entre ATIVOS
+      const activeOnly = prev.filter((o) => !o.deletedAt);
+      const oldIndex = activeOnly.findIndex((o) => o.id === active.id);
+      const newIndex = activeOnly.findIndex((o) => o.id === over.id);
+      if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return prev;
 
-      const next = arrayMove(prev, oldIndex, newIndex);
+      const nextActive = arrayMove(activeOnly, oldIndex, newIndex);
+      const ids = nextActive.map((o) => o.id);
 
+      // servidor preserva o conjunto de commandNumber dos ATIVOS
       reorderFetcher.submit(
-        {
-          _action: "reorder",
-          date: data.currentDate,
-          ids: JSON.stringify(next.map((o) => o.id)),
-        },
+        { _action: "reorder", date: data.currentDate, ids: JSON.stringify(ids) },
         { method: "post" }
       );
 
+      // Reflete visual (apenas rearranja os ativos, cancelados ficam no lugar)
+      const next = [...prev];
+      let k = 0;
+      for (let i = 0; i < next.length; i++) {
+        if (!next[i].deletedAt) next[i] = nextActive[k++];
+      }
       return next;
     });
   }
@@ -869,22 +915,27 @@ export default function KdsAtendimentoPlanilha() {
         {(orders) => {
           const safeOrders = Array.isArray(orders) ? (orders as OrderRow[]) : [];
 
-          // Totais
+          // Totais só com ATIVOS
+          const activeOrders = safeOrders.filter((o) => !o?.deletedAt);
           const toNum = (v: any) => Number((v as any)?.toString?.() ?? v ?? 0) || 0;
-          const totalPedido = safeOrders.reduce((s, o) => s + toNum(o?.orderAmount), 0);
-          const totalMoto = safeOrders.reduce((s, o) => s + toNum(o?.motoValue), 0);
+          const totalPedido = activeOrders.reduce((s, o) => s + toNum(o?.orderAmount), 0);
+          const totalMoto = activeOrders.reduce((s, o) => s + toNum(o?.motoValue), 0);
 
           // sincroniza estado local quando o loader muda
           useEffect(() => {
             setOrderList(safeOrders.filter((o) => !!o?.id));
           }, [safeOrders]);
 
-          const fillerCount = Math.max(0, 50 - safeOrders.filter((o) => !!o?.id).length);
+          // ids arrastáveis = apenas ativos
+          const activeIds = orderList.filter((o) => !o.deletedAt).map((o) => o.id!) as string[];
+
+          // fillers
+          const fillerCount = Math.max(0, 50 - orderList.length);
           const fillers = Array(fillerCount).fill(null);
 
           return (
             <div className="space-y-6">
-              {/* Cards de totais */}
+              {/* Totais (IGNORAM cancelados) */}
               <div className="flex flex-wrap items-center gap-3 mb-2">
                 <div className="flex  items-center gap-x-3 px-3 py-2 rounded-lg border">
                   <span className="text-xs text-gray-500">Total Pedido (R$)</span>
@@ -905,10 +956,9 @@ export default function KdsAtendimentoPlanilha() {
                     })}
                   </div>
                 </div>
-
               </div>
 
-              {/* Cabeçalho: # | Hora | Decorrido | Status | Pedido (R$) | Tamanho | Moto | Moto (R$) | Canal (×2) | Ações */}
+              {/* Cabeçalho */}
               <div className={`${HEADER_TMPL}`}>
                 <div className="text-center">#</div>
                 <div className="text-center">Hora</div>
@@ -922,23 +972,31 @@ export default function KdsAtendimentoPlanilha() {
                 <div className="text-center">Ações</div>
               </div>
 
-              {/* Lista com DnD para registros existentes */}
+              {/* Lista: ATIVOS (sortable) + CANCELADOS (não-sortable, opacos) */}
               <ul>
                 <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                  <SortableContext
-                    items={orderList.map((o) => o.id!)}
-                    strategy={verticalListSortingStrategy}
-                  >
-                    {orderList.map((order, index) => (
-                      <SortableRow
-                        key={order.id}
-                        order={order}
-                        index={index}
-                        canais={canais}
-                        dateStr={data.currentDate}
-                        nowMs={nowMs}
-                      />
-                    ))}
+                  <SortableContext items={activeIds} strategy={verticalListSortingStrategy}>
+                    {orderList.map((order, index) =>
+                      order.deletedAt ? (
+                        <RowItem
+                          key={order.id}
+                          order={order}
+                          index={index}
+                          canais={["WHATS/PRESENCIAL/TELE", "MOGO", "AIQFOME", "IFOOD"]}
+                          dateStr={data.currentDate}
+                          nowMs={nowMs}
+                        />
+                      ) : (
+                        <SortableRow
+                          key={order.id}
+                          order={order}
+                          index={index}
+                          canais={["WHATS/PRESENCIAL/TELE", "MOGO", "AIQFOME", "IFOOD"]}
+                          dateStr={data.currentDate}
+                          nowMs={nowMs}
+                        />
+                      )
+                    )}
                   </SortableContext>
                 </DndContext>
 
@@ -948,21 +1006,12 @@ export default function KdsAtendimentoPlanilha() {
                     key={`row-empty-${i}-${safeOrders.length}`}
                     order={null}
                     index={orderList.length + i}
-                    canais={canais}
+                    canais={["WHATS/PRESENCIAL/TELE", "MOGO", "AIQFOME", "IFOOD"]}
                     dateStr={data.currentDate}
                     nowMs={nowMs}
                   />
                 ))}
               </ul>
-
-              {/* Adicionar mais linhas (mantém mínimo 50) */}
-              {orderList.length + fillers.length >= 50 && (
-                <div className="flex justify-center mt-4">
-                  <Button onClick={() => setRows((r) => r + 50)}>
-                    Adicionar 50 linhas
-                  </Button>
-                </div>
-              )}
             </div>
           );
         }}
