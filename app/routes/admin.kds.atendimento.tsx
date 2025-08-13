@@ -10,7 +10,6 @@ import {
   useRevalidator,
 } from "@remix-run/react";
 import { Suspense, useEffect, useState } from "react";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import prismaClient from "~/lib/prisma/client.server";
 import { useHotkeys } from "react-hotkeys-hook";
 import {
@@ -19,14 +18,21 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { AlertCircleIcon, Grid3X3, RefreshCw, SquareKanban } from "lucide-react";
-import { lastUrlSegment } from "~/utils/url";
-import { Button } from "~/components/ui/button";
+import { Grid3X3, RefreshCw, SquareKanban } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { cn } from "~/lib/utils";
 
 /* =============================
  * Helpers de data
  * ============================= */
-export function formatLocalDate(date: Date): string {
+function formatLocalDate(date: Date): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
@@ -69,14 +75,15 @@ export async function loader({ request }: { request: Request }) {
     orderBy: { date: "asc" },
   });
 
+  // chave estável para navegação (UTC) + mantém o date original para rótulos
   const normalizedDays = days.map((d) => ({
     ...d,
-    localDateStr: formatLocalDate(new Date(d.date)),
+    ymd: new Date(d.date).toISOString().slice(0, 10), // YYYY-MM-DD estável
   }));
 
   return defer({
     days: normalizedDays,
-    today: todayStr,
+    today: todayStr, // não é usada como value; mantida por compat.
     fullMonth, // modo atual (dados)
   });
 }
@@ -90,7 +97,8 @@ export default function KdsAtendimento() {
   const navigate = useNavigate();
   const { pathname, search } = useLocation();
 
-  const selectedDate = params.date || data.today;
+  // Se não houver :date na URL, Select mostra placeholder
+  const selectedDateFromUrl = params.date;
 
   // URL é a fonte de verdade para DADOS
   const fullMonthFromUrl = new URLSearchParams(search).get("mes") === "1";
@@ -104,23 +112,23 @@ export default function KdsAtendimento() {
   useHotkeys(
     "ctrl+right",
     () => {
-      const index = data.days.findIndex((d: any) => d.localDateStr === selectedDate);
-      if (index < data.days.length - 1) {
-        navigate(`/admin/kds/atendimento/${data.days[index + 1].localDateStr}${keepMonth}`);
+      const index = data.days.findIndex((d: any) => d.ymd === (selectedDateFromUrl ?? ""));
+      if (index >= 0 && index < data.days.length - 1) {
+        navigate(`/admin/kds/atendimento/${(data.days as any[])[index + 1].ymd}${keepMonth}`);
       }
     },
-    [data.days, selectedDate, keepMonth]
+    [data.days, selectedDateFromUrl, keepMonth]
   );
 
   useHotkeys(
     "ctrl+left",
     () => {
-      const index = data.days.findIndex((d: any) => d.localDateStr === selectedDate);
+      const index = data.days.findIndex((d: any) => d.ymd === (selectedDateFromUrl ?? ""));
       if (index > 0) {
-        navigate(`/admin/kds/atendimento/${data.days[index - 1].localDateStr}${keepMonth}`);
+        navigate(`/admin/kds/atendimento/${(data.days as any[])[index - 1].ymd}${keepMonth}`);
       }
     },
-    [data.days, selectedDate, keepMonth]
+    [data.days, selectedDateFromUrl, keepMonth]
   );
 
   // Atalho "m" para alternar MÊS/Semana (dados: altera a URL)
@@ -128,14 +136,11 @@ export default function KdsAtendimento() {
     "m",
     (e) => {
       e.preventDefault();
-      const base = `/admin/kds/atendimento/${selectedDate}`;
+      const base = `/admin/kds/atendimento/${selectedDateFromUrl ?? localTodayYMD()}`;
       navigate(fullMonthFromUrl ? base : `${base}?mes=1`);
-      // UI seguirá a URL pelo efeito acima
     },
-    [fullMonthFromUrl, selectedDate]
+    [fullMonthFromUrl, selectedDateFromUrl]
   );
-
-  const slug = lastUrlSegment(pathname);
 
   const { date } = useParams();
   const isKanban = pathname.endsWith("/kanban");
@@ -147,117 +152,136 @@ export default function KdsAtendimento() {
     return () => clearInterval(t);
   }, [revalidate]);
 
+  // Helpers de label no fuso do cliente
+  function localTodayYMD() {
+    const n = new Date();
+    const y = n.getFullYear();
+    const m = String(n.getMonth() + 1).padStart(2, "0");
+    const d = String(n.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+  const clientTodayYMD = localTodayYMD();
+  const clientTodayLabel =
+    new Date(`${clientTodayYMD}T12:00:00`).toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    }) + " — dia de hoje";
+
+  const renderLabel = (ymd: string) => {
+    const dateObj = new Date(`${ymd}T12:00:00`); // DST-safe
+    const dayAbbr = dateObj
+      .toLocaleDateString("pt-BR", { weekday: "short" })
+      .replace(".", "");
+    const formattedDate = dateObj.toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+    });
+    return fullMonthUI ? `${formattedDate} (${dayAbbr})` : `${dayAbbr}: ${formattedDate}`;
+  };
+
   return (
     <div>
       <Suspense fallback={<div>Carregando dias...</div>}>
         <Await resolve={data.days}>
           {(days) => (
             <div className="flex flex-col gap-0 ">
+              <div className="flex flex-wrap justify-between mb-6">
+                {/* ===== Seletor de dias (Select com placeholder) ===== */}
+                <div className="flex flex-row items-center gap-x-4">
+                  <Select
+                    value={selectedDateFromUrl /* undefined => placeholder */}
+                    onValueChange={(val) =>
+                      navigate(`/admin/kds/atendimento/${val}${keepMonth}`)
+                    }
+                  >
+                    <SelectTrigger className="w-[420px] h-12 text-base">
+                      <SelectValue placeholder="Selecionar uma data" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-[55vh]">
+                      {/* Hoje (cliente) em primeiro */}
+                      <SelectItem value={clientTodayYMD}>{clientTodayLabel}</SelectItem>
 
-              <div className="grid grid-cols-12 items-center mb-6">
-                <div className="flex gap-2 col-span-1">
-                  <Button asChild size="sm" variant={isKanban ? "outline" : "default"}>
-                    <Link to={`/admin/kds/atendimento/${date}`}><Grid3X3 size={16} /></Link>
-                  </Button>
-                  <Button asChild size="sm" variant={isKanban ? "default" : "outline"}>
-                    <Link to={`/admin/kds/atendimento/${date}/kanban`}><SquareKanban size={16} /></Link>
+                      {/* Separador visual */}
+                      <div className="my-1 border-t" role="none" />
+
+                      {/* Demais dias (exclui hoje do cliente) */}
+                      {(days as any[])
+                        .filter((d) => d.ymd !== clientTodayYMD)
+                        .map((d) => (
+                          <SelectItem key={d.id} value={d.ymd}>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span>{renderLabel(d.ymd)}</span>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>
+                                    {new Date(`${d.ymd}T12:00:00`).toLocaleDateString("pt-BR", {
+                                      weekday: "long",
+                                      day: "2-digit",
+                                      month: "long",
+                                      year: "numeric",
+                                    })}
+                                  </p>
+                                  {d.isHoliday && (
+                                    <p className="text-red-600 text-xs">Feriado</p>
+                                  )}
+                                  {fullMonthUI && (
+                                    <p className="text-xs text-blue-700 mt-1">Modo mês</p>
+                                  )}
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+
+                  {/* Refresh */}
+                  <Button
+                    size="sm"
+                    variant={"outline"}
+                    onClick={() => revalidate()}
+                    className={
+                      cn(
+                        "flex flex-row gap-2",
+                        state === "loading" && "bg-blue-100"
+                      )
+                    }
+                  >
+                    <span className="text-sm">
+                      {`${state === "loading" ? "Atualizando..." : "Atualizar"}`}
+                    </span>
+                    <RefreshCw
+                      size={16}
+                      className={`${state === "loading" ? "animate-spin" : ""}`}
+                    />
                   </Button>
                 </div>
-                {/* ===== Seletor de dias (mantido o layout/estilo) ===== */}
-                <Tabs value={selectedDate} className="col-span-10">
-                  <TabsList className="flex justify-start space-x-2 overflow-x-auto md:max-w-6xl min-h-fit" >
-                    {days.map((d: any) => {
-                      const isSelected = d.localDateStr === selectedDate;
-                      const isToday = d.localDateStr === data.today;
-                      const isHoliday = d.isHoliday;
 
-                      let tabClass =
-                        "px-4 py-2 rounded transition-colors flex items-center space-x-1";
-                      if (isSelected) {
-                        tabClass += " bg-blue-600 text-white";
-                      } else if (isHoliday) {
-                        tabClass += " bg-red-200 text-red-800";
-                      } else {
-                        tabClass += " bg-gray-100 text-black";
-                        if (isToday) tabClass += " font-semibold";
-                      }
-
-                      const dateObj = new Date(d.date);
-                      const dayAbbr = dateObj
-                        .toLocaleDateString("pt-BR", { weekday: "short" })
-                        .replace(".", "");
-                      const formattedDate = dateObj.toLocaleDateString("pt-BR", {
-                        day: "2-digit",
-                        month: "2-digit",
-                      });
-                      const fullDate = dateObj.toLocaleDateString("pt-BR", {
-                        weekday: "long",
-                        day: "2-digit",
-                        month: "long",
-                        year: "numeric",
-                      });
-
-                      return (
-                        <TabsTrigger key={d.id} value={d.localDateStr} asChild>
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                {/* Preserva o modo atual (?mes=1) sem mudar o layout */}
-                                <Link
-                                  to={`/admin/kds/atendimento/${d.localDateStr}${keepMonth}`}
-                                  className={tabClass}
-                                >
-
-                                  {
-                                    fullMonthUI ?
-                                      <div className="flex flex-col gap-0">
-                                        <span className="text-xs">{dayAbbr}</span>
-                                        <span>{formattedDate}</span>
-                                      </div> :
-                                      <span>{dayAbbr}: {formattedDate}</span>
-                                  }
-                                  {isToday && (
-                                    <span className="ml-1 text-[10px] bg-blue-200 text-blue-800 px-1 rounded">
-                                      Hoje
-                                    </span>
-                                  )}
-                                </Link>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>{fullDate}</p>
-                                {isHoliday && (
-                                  <p className="text-red-600 text-xs">Feriado</p>
-                                )}
-                                {isToday && (
-                                  <p className="text-blue-600 text-xs">Hoje</p>
-                                )}
-                                {/* Exemplo: usar o state SÓ para decisão visual (sem mudar layout) */}
-                                {fullMonthUI && (
-                                  <p className="text-xs text-blue-700 mt-1">Modo mês</p>
-                                )}
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        </TabsTrigger>
-                      );
-                    })}
-                  </TabsList>
-                </Tabs>
-
-                <div className="flex justify-center w-full items-center col-span-1">
-                  <Button size="sm" variant={"outline"} onClick={() => revalidate()}>
-                    <RefreshCw size={16} className={`${state === "loading" ? "animate-spin" : ""}`} />
+                {/* Toggle Planilha/Kanban */}
+                <div className="flex gap-2">
+                  <Button asChild size="sm" variant={isKanban ? "outline" : "default"}>
+                    <Link
+                      to={`/admin/kds/atendimento/${date ?? clientTodayYMD}`}
+                      className="flex items-center gap-2"
+                    >
+                      <span className="text-sm">Planilha</span>
+                      <Grid3X3 size={16} />
+                    </Link>
+                  </Button>
+                  <Button asChild size="sm" variant={isKanban ? "default" : "outline"}>
+                    <Link
+                      to={`/admin/kds/atendimento/${date ?? clientTodayYMD}/kanban`}
+                      className="flex items-center gap-2"
+                    >
+                      <span className="text-sm">Kanban</span>
+                      <SquareKanban size={16} />
+                    </Link>
                   </Button>
                 </div>
               </div>
-              {/* ===== Fim do seletor ===== */}
-
-              {slug === "atendimento" && (
-                <div className="flex gap-3 items-center">
-                  <AlertCircleIcon />
-                  <p>Selecionar uma data para começar</p>
-                </div>
-              )}
 
               <Outlet key={pathname} />
             </div>
