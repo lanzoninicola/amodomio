@@ -4,7 +4,7 @@ import { Prisma } from "@prisma/client";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import prismaClient from "~/lib/prisma/client.server";
 import { Button } from "@/components/ui/button";
-import { Flame } from "lucide-react";
+import { Bike, Flame, Store } from "lucide-react";
 import { cn } from "~/lib/utils";
 
 /* ===== Helpers ===== */
@@ -38,6 +38,7 @@ type OrderRow = {
   createdAt: string;
   commandNumber: number;
   status: string;
+  takeAway: boolean
   orderAmount?: DecimalLike;
   requestedForOven: boolean;
 };
@@ -90,6 +91,7 @@ export async function loader({ params }: { params: { date: string } }) {
       commandNumber: true,
       status: true,
       orderAmount: true,
+      takeAway: true,
       requestedForOven: true,
     },
   });
@@ -266,6 +268,9 @@ function OrderItem({ order, nowMs }: { order: OrderRow; nowMs: number }) {
                 <Flame className="w-3.5 h-3.5" />
               </span>
             )}
+            <span className="inline-flex items-center justify-center rounded-full bg-gray-100 text-gray-600 w-5 h-5">
+              {order.takeAway ? <Bike size={13} /> : <Store size={13} />}
+            </span>
             #{order.commandNumber}
           </div>
           <span className={`text-[11px] px-2 py-0.5 rounded ${current.badge}`}>

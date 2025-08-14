@@ -20,7 +20,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Trash, Pencil, Save, GripVertical } from "lucide-react";
+import { Trash, Pencil, Save, GripVertical, Store, Truck } from "lucide-react";
+
 
 /* DND-KIT */
 import {
@@ -87,6 +88,7 @@ type OrderRow = {
   size?: string;
   hasMoto?: boolean;
   motoValue?: DecimalLike;
+  take_away?: boolean
   orderAmount?: DecimalLike;
 
   channel?: string;
@@ -252,6 +254,7 @@ export async function action({
       const hasMoto = formData.get("hasMoto") === "true";
       const channel = (formData.get("channel") as string) || "";
       const status = (formData.get("status") as string) || "novoPedido";
+      const takeAway = formData.get("take_away") === "true";
 
       const sizeCountsRaw = formData.get("size") as string;
       if (!sizeCountsRaw) throw new Error("Tamanhos não informados.");
@@ -318,6 +321,7 @@ export async function action({
             status,
             motoValue,
             orderAmount,
+            takeAway,
             ...(deliveredAtUpdate !== undefined ? { deliveredAt: deliveredAtUpdate } : {}),
           },
         });
@@ -335,6 +339,7 @@ export async function action({
           size: JSON.stringify(sizeCounts),
           hasMoto,
           motoValue,
+          takeAway,
           orderAmount,
           channel,
           status,
@@ -489,9 +494,10 @@ function fmtElapsedHHMM(from: string | Date | undefined, nowMs: number) {
  * Grid template (UI preservada)
  * ============================= */
 const GRID_TMPL =
-  "grid grid-cols-[48px,60px,60px,150px,120px,220px,85px,85px,85px,100px,120px] gap-2 items-center gap-x-4";
+  "grid grid-cols-[48px,60px,60px,150px,120px,220px,85px,85px,85px,85px,100px,120px] gap-2 items-center gap-x-4";
 const HEADER_TMPL =
-  "grid grid-cols-[48px,60px,60px,150px,120px,220px,85px,85px,85px,100px,120px] gap-2 gap-x-4 border-b font-semibold text-sm sticky top-0  z-10";
+  "grid grid-cols-[48px,60px,60px,150px,120px,220px,85px,85px,85px,85px,100px,120px] gap-2 gap-x-4 border-b font-semibold text-sm sticky top-0  z-10";
+
 
 /* =============================
  * SizeSelector (UI INALTERADA)
@@ -633,6 +639,8 @@ function RowItem({
   const [editingStatus, setEditingStatus] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [lastOk, setLastOk] = useState<boolean | null>(null);
+  const [takeAway, setTakeAway] = useState(order?.take_away ?? false);
+
 
   const currentStatus = order?.status || "novoPedido";
   const isCanceled = !!order?.deletedAt;
@@ -783,6 +791,8 @@ function RowItem({
           </Select>
         </div>
 
+
+
         {/* Moto (R$) */}
         <div className="flex items-center justify-center">
           <MoneyInput
@@ -793,6 +803,26 @@ function RowItem({
             disabled={isCanceled}
           />
         </div>
+
+        {/* Take Away (boolean) */}
+        <div className="flex items-center justify-center">
+          <input type="hidden" name="take_away" value={takeAway ? "true" : "false"} />
+          <button
+            type="button"
+            onClick={() => !isCanceled && setTakeAway((v) => !v)}
+            className={`w-[35px] h-[35px] rounded-lg ${takeAway ? "bg-green-100" : "bg-gray-100"} ${isCanceled ? "opacity-50 cursor-not-allowed" : "hover:bg-green-200"
+              }`}
+            title={takeAway ? "Retirada no balcão" : "Delivery"}
+            disabled={isCanceled}
+          >
+            {takeAway ?
+              <span className="font-semibold text-sm ">B</span> :
+              <span className="font-semibold text-sm">D</span>
+            }
+          </button>
+        </div>
+
+
 
         {/* Canal (span 2) */}
         <div className="flex items-center justify-center col-span-2">
@@ -1007,6 +1037,7 @@ export default function KdsAtendimentoPlanilha() {
                 <div className="text-center">Tamanho</div>
                 <div className="text-center">Moto</div>
                 <div className="text-center">Moto (R$)</div>
+                <div className="text-center">Delivery/Balcão</div>
                 <div className="text-center col-span-2">Canal</div>
                 <div className="text-center">Ações</div>
               </div>

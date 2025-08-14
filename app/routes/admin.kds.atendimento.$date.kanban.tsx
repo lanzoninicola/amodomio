@@ -4,7 +4,7 @@ import prisma from "~/lib/prisma/client.server";
 import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Flame } from "lucide-react";
+import { Bike, Flame, Store, Truck } from "lucide-react";
 
 /* dnd-kit core + sortable */
 import {
@@ -61,6 +61,7 @@ type Detail = {
   status: StatusId;
   orderAmount: any;
   motoValue: any;
+  takeAway: boolean
   channel: string | null;
   requestedForOven: boolean; // << novo campo
 };
@@ -94,6 +95,7 @@ export async function loader({ params }: { params: { date: string } }) {
       orderAmount: true,
       motoValue: true,
       channel: true,
+      takeAway: true,
       requestedForOven: true, // << carregar o flag
     },
   });
@@ -185,7 +187,13 @@ function SortableCard({
       flex flex-col"
     >
       <div className="flex items-start justify-between mb-1">
-        <div className="font-semibold">#{item.commandNumber}</div>
+        <div className="flex gap-1 items-center">
+
+          <div className="font-semibold text-lg">#{item.commandNumber}</div>
+          <span className="inline-flex items-center justify-center rounded-full bg-gray-100 text-gray-600 w-5 h-5">
+            {item.takeAway ? <Bike size={13} /> : <Store size={13} />}
+          </span>{/* {item.takeAway ? <Store size={14} /> : <Bike size={14} />} */}
+        </div>
         <div className="flex flex-col items-end">
           <div className="flex justify-between gap-x-3">
             <span className="text-[10px] text-gray-500">Hora Pedido:</span>
@@ -212,7 +220,7 @@ function SortableCard({
             }}
             className={
               cn(
-                "self-end",
+                "mt-2 p-2 self-end",
                 item.requestedForOven && "bg-red-500"
               )
             }
