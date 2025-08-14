@@ -4,7 +4,7 @@ import prisma from "~/lib/prisma/client.server";
 import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Flame } from "lucide-react";
+import { Bike, Flame, Store, TrendingUpIcon, Truck } from "lucide-react";
 
 /* dnd-kit core + sortable */
 import {
@@ -51,7 +51,7 @@ function fmtElapsed(from?: string | Date, nowMs?: number) {
 }
 
 /* ============================= tipos ============================= */
-type StatusId = "novoPedido" | "emProducao" | "aguardandoForno" | "assando" | "despachada";
+type StatusId = "novoPedido" | "emProducao" | "aguardandoForno" | "assando" | "finalizado";
 
 type Detail = {
   id: string;
@@ -61,17 +61,18 @@ type Detail = {
   status: StatusId;
   orderAmount: any;
   motoValue: any;
+  takeAway: boolean
   channel: string | null;
   requestedForOven: boolean; // << novo campo
 };
 
 /* ============================= status ============================= */
-const STATUSES: { id: StatusId; label: string; color: string }[] = [
-  { id: "novoPedido", label: "Novo Pedido", color: "bg-gray-100 text-gray-900" },
-  { id: "emProducao", label: "Em Produção", color: "bg-blue-100 text-blue-800" },
-  { id: "aguardandoForno", label: "Aguardando forno", color: "bg-purple-100 text-purple-800" },
-  { id: "assando", label: "Assando", color: "bg-orange-100 text-orange-800" },
-  { id: "despachada", label: "Despachada", color: "bg-yellow-100 text-yellow-900" },
+const STATUSES: { id: StatusId; label: string; color: string; showOnKanban: boolean }[] = [
+  { id: "novoPedido", label: "Novo Pedido", color: "bg-gray-100 text-gray-900", showOnKanban: true },
+  { id: "emProducao", label: "Em Produção", color: "bg-blue-100 text-blue-800", showOnKanban: true },
+  { id: "aguardandoForno", label: "Aguardando forno", color: "bg-purple-100 text-purple-800", showOnKanban: true },
+  { id: "assando", label: "Assando", color: "bg-orange-100 text-orange-800", showOnKanban: true },
+  { id: "finalizado", label: "Finalizado", color: "bg-yellow-100 text-yellow-900", showOnKanban: true },
 ];
 const STATUS_IDS = STATUSES.map(s => s.id) as StatusId[];
 function isStatusId(x: string): x is StatusId { return STATUS_IDS.includes(x as StatusId); }
@@ -83,7 +84,7 @@ export async function loader({ params }: { params: { date: string } }) {
   const dateInt = ymdToDateInt(dateStr);
 
   const details = await prisma.kdsDailyOrderDetail.findMany({
-    where: { dateInt },
+    where: { dateInt, deletedAt: null },
     orderBy: [{ commandNumber: "asc" }, { createdAt: "asc" }],
     select: {
       id: true,
@@ -94,6 +95,7 @@ export async function loader({ params }: { params: { date: string } }) {
       orderAmount: true,
       motoValue: true,
       channel: true,
+      takeAway: true,
       requestedForOven: true, // << carregar o flag
     },
   });
@@ -120,10 +122,10 @@ export async function action({ request }: { request: Request }) {
     });
 
     let deliveredAtUpdate: Date | null | undefined = undefined;
-    if (status === "despachada" && prev?.status !== "despachada") {
-      deliveredAtUpdate = new Date(); // entrou em despachada
-    } else if (status !== "despachada" && prev?.status === "despachada") {
-      deliveredAtUpdate = null; // saiu de despachada
+    if (status === "finalizado" && prev?.status !== "finalizado") {
+      deliveredAtUpdate = new Date(); // entrou em finalizado
+    } else if (status !== "finalizado" && prev?.status === "finalizado") {
+      deliveredAtUpdate = null; // saiu de finalizado
     }
 
     await prisma.kdsDailyOrderDetail.update({
@@ -185,7 +187,13 @@ function SortableCard({
       flex flex-col"
     >
       <div className="flex items-start justify-between mb-1">
-        <div className="font-semibold">#{item.commandNumber}</div>
+        <div className="flex gap-1 items-center">
+
+          <div className="font-semibold text-lg">#{item.commandNumber}</div>
+          <span className="inline-flex items-center justify-center rounded-full bg-gray-100 text-gray-600 w-5 h-5">
+            {item.takeAway ? <Bike size={13} /> : <Store size={13} />}
+          </span>{/* {item.takeAway ? <Store size={14} /> : <Bike size={14} />} */}
+        </div>
         <div className="flex flex-col items-end">
           <div className="flex justify-between gap-x-3">
             <span className="text-[10px] text-gray-500">Hora Pedido:</span>
@@ -212,7 +220,7 @@ function SortableCard({
             }}
             className={
               cn(
-                "self-end",
+                "mt-2 p-2 self-end",
                 item.requestedForOven && "bg-red-500"
               )
             }
@@ -281,7 +289,7 @@ export default function KanbanAtendimento() {
 
   const [board, setBoard] = useState<Record<StatusId, Detail[]>>(() => {
     const g: Record<StatusId, Detail[]> = {
-      novoPedido: [], emProducao: [], aguardandoForno: [], assando: [], despachada: [],
+      novoPedido: [], emProducao: [], aguardandoForno: [], assando: [], finalizado: [],
     };
     for (const d of details as Detail[]) g[d.status]?.push(d);
     return g;
@@ -289,7 +297,7 @@ export default function KanbanAtendimento() {
 
   useEffect(() => {
     const g: Record<StatusId, Detail[]> = {
-      novoPedido: [], emProducao: [], aguardandoForno: [], assando: [], despachada: [],
+      novoPedido: [], emProducao: [], aguardandoForno: [], assando: [], finalizado: [],
     };
     for (const d of details as Detail[]) g[d.status]?.push(d);
     setBoard(g);
@@ -413,7 +421,7 @@ export default function KanbanAtendimento() {
       autoScroll
     >
       <div className="grid gap-4 md:gap-6 grid-cols-1 md:grid-cols-2 xl:grid-cols-5">
-        {STATUSES.map((s) => {
+        {STATUSES.filter(s => s.showOnKanban === true).map((s) => {
           const list = board[s.id] || [];
           return (
             <Column

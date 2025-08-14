@@ -49,6 +49,8 @@ let googleStrategy = new GoogleStrategy(
     const emailWhitelist = process.env.GOOGLE_AUTH_EMAIL_WHITELIST;
     const emailWhitelistArray = emailWhitelist?.split(",");
 
+    console.log("google.server.ts", emailWhitelistArray);
+
     const emailInbound = profile.emails[0].value;
 
     if (!emailInbound) {

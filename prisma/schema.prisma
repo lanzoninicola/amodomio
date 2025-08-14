@@ -903,6 +903,8 @@ model KdsDailyOrderDetail {
   channel     String?
   status      String  @default("novoPedido")
 
+  takeAway Boolean @default(false) @map("take_away")
+
   requestedForOven Boolean @default(false) @map("requested_for_oven")
   Bairro           Bairro? @relation(fields: [bairroId], references: [id])
   bairroId         String? @map("bairro_id")
