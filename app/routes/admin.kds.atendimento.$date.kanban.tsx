@@ -84,7 +84,7 @@ export async function loader({ params }: { params: { date: string } }) {
   const dateInt = ymdToDateInt(dateStr);
 
   const details = await prisma.kdsDailyOrderDetail.findMany({
-    where: { dateInt },
+    where: { dateInt, deletedAt: null },
     orderBy: [{ commandNumber: "asc" }, { createdAt: "asc" }],
     select: {
       id: true,
