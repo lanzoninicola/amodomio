@@ -49,12 +49,12 @@ const ALL_STATUSES = [
   { id: "emProducao", label: "Em Produção", abbr2: "EP", badge: "bg-blue-100 text-blue-800" },
   { id: "aguardandoForno", label: "Aguard. forno", abbr2: "AF", badge: "bg-purple-100 text-purple-800" },
   { id: "assando", label: "Assando", abbr2: "AS", badge: "bg-orange-100 text-orange-800" },
-  { id: "despachada", label: "Despachada", abbr2: "DE", badge: "bg-yellow-100 text-yellow-900" },
+  { id: "finalizado", label: "Finalizado", abbr2: "DE", badge: "bg-yellow-100 text-yellow-900" },
 ] as const;
 const STATUS_BY_ID = Object.fromEntries(ALL_STATUSES.map((s) => [s.id, s]));
 
-// Botões clicáveis na cozinha (sem "despachada")
-const CLICKABLE = ALL_STATUSES.filter((s) => s.id !== "despachada");
+// Botões clicáveis na cozinha (sem "finalizado")
+const CLICKABLE = ALL_STATUSES.filter((s) => s.id !== "finalizado");
 
 /* ===== SLA (limiares de atenção por status, em minutos) ===== */
 const SLA: Record<string, { warn: number; late: number }> = {
@@ -62,7 +62,7 @@ const SLA: Record<string, { warn: number; late: number }> = {
   emProducao: { warn: 15, late: 30 },
   aguardandoForno: { warn: 5, late: 10 },
   assando: { warn: 8, late: 12 },
-  despachada: { warn: 9999, late: 9999 },
+  finalizado: { warn: 9999, late: 9999 },
 };
 function severityFor(order: OrderRow, nowMs: number) {
   const mins = elapsedMinutes(order.createdAt, nowMs);
@@ -72,7 +72,7 @@ function severityFor(order: OrderRow, nowMs: number) {
   return "ok";
 }
 
-/* ===== Loader: pedidos do dia (oculta 'despachada') ===== */
+/* ===== Loader: pedidos do dia (oculta 'finalizado') ===== */
 export async function loader({ params }: { params: { date: string } }) {
   const dateStr = params.date;
   const dateInt = ymdToDateInt(dateStr);
@@ -80,7 +80,7 @@ export async function loader({ params }: { params: { date: string } }) {
   const ordersPromise = await prismaClient.kdsDailyOrderDetail.findMany({
     where: {
       dateInt,
-      status: { not: "despachada" }, // não mostrar 'despachada'
+      status: { not: "finalizado" }, // não mostrar 'finalizado'
       deletedAt: null,
     },
     orderBy: [{ commandNumber: "asc" }, { createdAt: "asc" }],
@@ -99,7 +99,7 @@ export async function loader({ params }: { params: { date: string } }) {
   return defer({ dateStr, dateInt, orders: ordersPromise });
 }
 
-/* ===== Action: atualizar status (cozinha NÃO pode setar 'despachada') ===== */
+/* ===== Action: atualizar status (cozinha NÃO pode setar 'finalizado') ===== */
 export async function action({ request }: { request: Request }) {
   const form = await request.formData();
   const _action = String(form.get("_action") || "");
@@ -108,7 +108,6 @@ export async function action({ request }: { request: Request }) {
   const id = String(form.get("id") || "");
   const status = String(form.get("status") || "");
   if (!id || !status) return json({ ok: false, error: "Parâmetros insuficientes." }, { status: 400 });
-  if (status === "despachada") return json({ ok: false, error: "Operação não permitida." }, { status: 403 });
   if (!STATUS_BY_ID[status]) return json({ ok: false, error: "Status desconhecido." }, { status: 400 });
 
   await prismaClient.kdsDailyOrderDetail.update({ where: { id }, data: { status } });
@@ -289,8 +288,8 @@ function OrderItem({ order, nowMs }: { order: OrderRow; nowMs: number }) {
         </div>
       </div>
 
-      {/* Botões de status — grid, 2 letras, salva no toque (sem 'despachada') */}
-      <div className="grid grid-cols-4 gap-2">
+      {/* Botões de status — grid, 2 letras, salva no toque (sem 'finalizado') */}
+      <div className="grid grid-cols-4 gap-2 mb-4">
         {CLICKABLE.map((s) => {
           const active = s.id === order.status;
           return (
@@ -311,6 +310,25 @@ function OrderItem({ order, nowMs }: { order: OrderRow; nowMs: number }) {
           );
         })}
       </div>
+      {
+        order.status === "assando" && (
+          <Button
+            type="button"
+            size="sm"
+            className={"w-full h-12 rounded-full p-0 text-sm font-semibold uppercase tracking-wider bg-green-600"}
+            onClick={() => {
+              const fd = new FormData();
+              fd.set("_action", "setStatus");
+              fd.set("id", order.id);
+              fd.set("status", 'finalizado');
+              fetcher.submit(fd, { method: "post" });
+            }}
+            title={'Finalizado'}
+          >
+            Finalizado
+          </Button>
+        )
+      }
     </li>
   );
 }

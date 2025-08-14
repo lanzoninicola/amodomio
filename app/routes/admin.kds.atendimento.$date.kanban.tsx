@@ -4,7 +4,7 @@ import prisma from "~/lib/prisma/client.server";
 import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Bike, Flame, Store, Truck } from "lucide-react";
+import { Bike, Flame, Store, TrendingUpIcon, Truck } from "lucide-react";
 
 /* dnd-kit core + sortable */
 import {
@@ -51,7 +51,7 @@ function fmtElapsed(from?: string | Date, nowMs?: number) {
 }
 
 /* ============================= tipos ============================= */
-type StatusId = "novoPedido" | "emProducao" | "aguardandoForno" | "assando" | "despachada";
+type StatusId = "novoPedido" | "emProducao" | "aguardandoForno" | "assando" | "finalizado";
 
 type Detail = {
   id: string;
@@ -67,12 +67,12 @@ type Detail = {
 };
 
 /* ============================= status ============================= */
-const STATUSES: { id: StatusId; label: string; color: string }[] = [
-  { id: "novoPedido", label: "Novo Pedido", color: "bg-gray-100 text-gray-900" },
-  { id: "emProducao", label: "Em Produção", color: "bg-blue-100 text-blue-800" },
-  { id: "aguardandoForno", label: "Aguardando forno", color: "bg-purple-100 text-purple-800" },
-  { id: "assando", label: "Assando", color: "bg-orange-100 text-orange-800" },
-  { id: "despachada", label: "Despachada", color: "bg-yellow-100 text-yellow-900" },
+const STATUSES: { id: StatusId; label: string; color: string; showOnKanban: boolean }[] = [
+  { id: "novoPedido", label: "Novo Pedido", color: "bg-gray-100 text-gray-900", showOnKanban: true },
+  { id: "emProducao", label: "Em Produção", color: "bg-blue-100 text-blue-800", showOnKanban: true },
+  { id: "aguardandoForno", label: "Aguardando forno", color: "bg-purple-100 text-purple-800", showOnKanban: true },
+  { id: "assando", label: "Assando", color: "bg-orange-100 text-orange-800", showOnKanban: true },
+  { id: "finalizado", label: "Finalizado", color: "bg-yellow-100 text-yellow-900", showOnKanban: true },
 ];
 const STATUS_IDS = STATUSES.map(s => s.id) as StatusId[];
 function isStatusId(x: string): x is StatusId { return STATUS_IDS.includes(x as StatusId); }
@@ -122,10 +122,10 @@ export async function action({ request }: { request: Request }) {
     });
 
     let deliveredAtUpdate: Date | null | undefined = undefined;
-    if (status === "despachada" && prev?.status !== "despachada") {
-      deliveredAtUpdate = new Date(); // entrou em despachada
-    } else if (status !== "despachada" && prev?.status === "despachada") {
-      deliveredAtUpdate = null; // saiu de despachada
+    if (status === "finalizado" && prev?.status !== "finalizado") {
+      deliveredAtUpdate = new Date(); // entrou em finalizado
+    } else if (status !== "finalizado" && prev?.status === "finalizado") {
+      deliveredAtUpdate = null; // saiu de finalizado
     }
 
     await prisma.kdsDailyOrderDetail.update({
@@ -289,7 +289,7 @@ export default function KanbanAtendimento() {
 
   const [board, setBoard] = useState<Record<StatusId, Detail[]>>(() => {
     const g: Record<StatusId, Detail[]> = {
-      novoPedido: [], emProducao: [], aguardandoForno: [], assando: [], despachada: [],
+      novoPedido: [], emProducao: [], aguardandoForno: [], assando: [], finalizado: [],
     };
     for (const d of details as Detail[]) g[d.status]?.push(d);
     return g;
@@ -297,7 +297,7 @@ export default function KanbanAtendimento() {
 
   useEffect(() => {
     const g: Record<StatusId, Detail[]> = {
-      novoPedido: [], emProducao: [], aguardandoForno: [], assando: [], despachada: [],
+      novoPedido: [], emProducao: [], aguardandoForno: [], assando: [], finalizado: [],
     };
     for (const d of details as Detail[]) g[d.status]?.push(d);
     setBoard(g);
@@ -421,7 +421,7 @@ export default function KanbanAtendimento() {
       autoScroll
     >
       <div className="grid gap-4 md:gap-6 grid-cols-1 md:grid-cols-2 xl:grid-cols-5">
-        {STATUSES.map((s) => {
+        {STATUSES.filter(s => s.showOnKanban === true).map((s) => {
           const list = board[s.id] || [];
           return (
             <Column

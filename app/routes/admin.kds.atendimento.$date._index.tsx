@@ -305,9 +305,9 @@ export async function action({
 
       if (existente) {
         let deliveredAtUpdate: Date | null | undefined = undefined;
-        if (status === "despachada" && existente.status !== "despachada") {
+        if (status === "finalizado" && existente.status !== "finalizado") {
           deliveredAtUpdate = currentDate;
-        } else if (status !== "despachada" && existente.status === "despachada") {
+        } else if (status !== "finalizado" && existente.status === "finalizado") {
           deliveredAtUpdate = null;
         }
 
@@ -343,7 +343,7 @@ export async function action({
           orderAmount,
           channel,
           status,
-          deliveredAt: status === "despachada" ? currentDate : null, // << incluir
+          deliveredAt: status === "finalizado" ? currentDate : null, // << incluir
         },
       });
 
@@ -368,14 +368,14 @@ const statusLabels: Record<string, string> = {
   emProducao: "Em Produção",
   aguardandoForno: "Aguardando forno",
   assando: "Assando",
-  despachada: "Despachada",
+  finalizado: "Finalizado",
 };
 const statusColors: Record<string, string> = {
   novoPedido: "bg-gray-200 text-gray-800",
   emProducao: "bg-blue-100 text-blue-800",
   aguardandoForno: "bg-purple-100 text-purple-800",
   assando: "bg-orange-100 text-orange-800",
-  despachada: "bg-yellow-100 text-yellow-800",
+  finalizado: "bg-yellow-100 text-yellow-800",
 };
 function statusColorClasses(status: string | undefined) {
   return statusColors[status || "novoPedido"] || "bg-gray-200 text-gray-800";
@@ -736,7 +736,7 @@ function RowItem({
                 <SelectItem value="emProducao">(2) Em Produção</SelectItem>
                 <SelectItem value="aguardandoForno">(3) Aguardando forno</SelectItem>
                 <SelectItem value="assando">(4) Assando</SelectItem>
-                <SelectItem value="despachada">(5) Despachada</SelectItem>
+                <SelectItem value="finalizado">(5) Finalizado</SelectItem>
               </SelectContent>
             </Select>
           ) : (
