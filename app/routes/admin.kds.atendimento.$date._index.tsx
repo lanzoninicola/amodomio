@@ -82,7 +82,7 @@ function lockKey(dateInt: number, commandNumber: number) {
 /* =============================
  * Tipos
  * ============================= */
-type SizeCounts = { F: number; M: number; P: number; I: number };
+type SizeCounts = { F: number; M: number; P: number; I: number; FT: number };
 type DecimalLike = number | string | Prisma.Decimal;
 
 type OrderRow = {
@@ -106,7 +106,7 @@ type OrderRow = {
 };
 
 function defaultSizeCounts(): SizeCounts {
-  return { F: 0, M: 0, P: 0, I: 0 };
+  return { F: 0, M: 0, P: 0, I: 0, FT: 0 };
 }
 
 /* =============================
@@ -284,7 +284,8 @@ export async function action({
         (sizeCounts.F || 0) +
         (sizeCounts.M || 0) +
         (sizeCounts.P || 0) +
-        (sizeCounts.I || 0);
+        (sizeCounts.I || 0) +
+        (sizeCounts.FT || 0);
 
       const linhaVazia =
         total === 0 &&
@@ -523,14 +524,15 @@ function fmtElapsedHHMM(from: string | Date | undefined, nowMs: number) {
 
 /* =============================
  * Grid template (sem Hora/Decorrido/Status na linha)
+ * aumentei a coluna de Tamanho para acomodar FT
  * ============================= */
 const GRID_TMPL =
-  "grid grid-cols-[48px,150px,240px,90px,110px,85px,160px,120px,60px,96px] gap-2 items-center gap-x-4";
+  "grid grid-cols-[48px,150px,280px,90px,110px,85px,160px,80px,60px,96px] gap-2 items-center gap-x-4";
 const HEADER_TMPL =
-  "grid grid-cols-[48px,150px,240px,90px,110px,85px,160px,120px,60px,96px] gap-2 gap-x-4 border-b font-semibold text-sm sticky top-0 z-10";
+  "grid grid-cols-[48px,150px,280px,90px,110px,85px,160px,80px,60px,96px] gap-2 gap-x-4 border-b font-semibold text-sm sticky top-0 z-10";
 
 /* =============================
- * SizeSelector
+ * SizeSelector (inclui FT - FATIA)
  * ============================= */
 function SizeSelector({
   counts,
@@ -551,17 +553,18 @@ function SizeSelector({
   }
 
   return (
-    <div className="flex items-center gap-3"> {/* antes era gap-2 */}
-      {(["F", "M", "P", "I"] as (keyof SizeCounts)[]).map((size) => (
+    <div className="flex items-center gap-3">
+      {(["F", "M", "P", "I", "FT"] as (keyof SizeCounts)[]).map((size) => (
         <button
           key={size}
           type="button"
           onClick={() => increment(size)}
-          className={`w-10 h-10 rounded-full border flex items-center justify-center text-sm font-semibold
+          className={`w-14 h-10 rounded-md border flex items-center justify-center text-sm font-semibold
           ${counts[size] > 0 ? "bg-primary text-white" : "bg-white"}
           ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
           aria-label={`Adicionar ${size}`}
           disabled={disabled}
+          title={size === "FT" ? "FATIA" : String(size)}
         >
           {size}
           {counts[size] > 0 && <span className="ml-1">{counts[size]}</span>}
@@ -866,7 +869,6 @@ function RowItem({
           <Button
             type="button"
             variant="ghost"
-
             onClick={() => setDetailsOpen(true)}
             disabled={isCanceled}
             title="Detalhes da comanda"
@@ -1020,7 +1022,7 @@ function RowItem({
               <div className="col-span-2">
                 <div className="text-gray-500 mb-1">Tamanhos</div>
                 <div className="font-mono">
-                  F:{counts.F} M:{counts.M} P:{counts.P} I:{counts.I}
+                  F:{counts.F} M:{counts.M} P:{counts.P} I:{counts.I} FT:{counts.FT}
                 </div>
               </div>
 
@@ -1140,10 +1142,11 @@ export default function KdsAtendimentoPlanilha() {
                 acc.M += Number(s.M || 0);
                 acc.P += Number(s.P || 0);
                 acc.I += Number(s.I || 0);
+                acc.FT += Number(s.FT || 0);
               } catch { }
               return acc;
             },
-            { F: 0, M: 0, P: 0, I: 0 }
+            { F: 0, M: 0, P: 0, I: 0, FT: 0 }
           );
 
           // Alerta de números duplicados (apenas ativos)
@@ -1244,7 +1247,8 @@ export default function KdsAtendimentoPlanilha() {
                     F: <span className="font-semibold">{sizeTotals.F}</span>{" "}
                     M: <span className="font-semibold">{sizeTotals.M}</span>{" "}
                     P: <span className="font-semibold">{sizeTotals.P}</span>{" "}
-                    I: <span className="font-semibold">{sizeTotals.I}</span>
+                    I: <span className="font-semibold">{sizeTotals.I}</span>{" "}
+                    FT: <span className="font-semibold">{sizeTotals.FT}</span>
                   </div>
                 </div>
               </div>
