@@ -222,7 +222,7 @@ export async function action({
         takeAway: false,
         orderAmount: new Prisma.Decimal(0),
         channel: "",
-        status: "novoPedido",
+        status: "pendente",
         deliveredAt: null,
       }));
       await prismaClient.kdsDailyOrderDetail.createMany({ data: rows });
@@ -247,7 +247,7 @@ export async function action({
         takeAway: false,
         orderAmount: new Prisma.Decimal(0),
         channel: "",
-        status: "novoPedido",
+        status: "pendente",
         deliveredAt: null,
       }));
       await prismaClient.kdsDailyOrderDetail.createMany({ data: rows });
@@ -328,7 +328,7 @@ export async function action({
       totalSizes === 0 &&
       !hasMoto &&
       !channel &&
-      (status === "novoPedido" || !status) &&
+      (status === "novoPedido" || status === "pendente" || !status) &&
       motoValueNum === 0 &&
       orderAmountNum === 0 &&
       isUnnumbered;
@@ -424,6 +424,7 @@ export async function action({
  * Status labels/colors
  * ============================= */
 const statusColors: Record<string, string> = {
+  pendente: "bg-gray-50 text-gray-600",
   novoPedido: "bg-gray-200 text-gray-800",
   emProducao: "bg-blue-100 text-blue-800",
   aguardandoForno: "bg-purple-100 text-purple-800",
@@ -431,7 +432,7 @@ const statusColors: Record<string, string> = {
   finalizado: "bg-yellow-100 text-yellow-800",
 };
 function statusColorClasses(status: string | undefined | null) {
-  return statusColors[status || "novoPedido"] || "bg-gray-200 text-gray-800";
+  return statusColors[status || "pendente"] || "bg-gray-50 text-gray-600";
 }
 
 /* =============================
@@ -705,7 +706,7 @@ function RowItem({
   const [isEditingNumber, setIsEditingNumber] = useState(false);
   const [cmdText, setCmdText] = useState<string>(order.commandNumber ? String(order.commandNumber) : "");
 
-  const currentStatus = order?.status || "novoPedido";
+  const currentStatus = order?.status || "pendente";
   const semNumero = order.commandNumber == null || order.isUnnumbered;
 
   useEffect(() => {

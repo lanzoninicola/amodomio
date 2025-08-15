@@ -80,7 +80,8 @@ export async function loader({ params }: { params: { date: string } }) {
   const ordersPromise = await prismaClient.kdsDailyOrderDetail.findMany({
     where: {
       dateInt,
-      status: { not: "finalizado" }, // não mostrar 'finalizado'
+      status: { notIn: ["finalizado", "pendente"] }, // não mostrar 'finalizado'
+      isUnnumbered: false,
       deletedAt: null,
     },
     orderBy: [{ commandNumber: "asc" }, { createdAt: "asc" }],
