@@ -893,7 +893,7 @@ model KdsDailyOrderDetail {
   deliveredAt DateTime? @map("delivered_at")
 
   /// Nº da comanda (único dentro do dia)
-  commandNumber Int @map("command_number")
+  commandNumber Int? @map("command_number")
 
   /// Campos do pedido (linha)
   size        String?
@@ -910,7 +910,7 @@ model KdsDailyOrderDetail {
   bairroId         String? @map("bairro_id")
 
   /// Regras/índices
-  @@unique([dateInt, commandNumber]) // comanda única no mesmo dia
+
   @@index([dateInt])
   @@index([commandNumber])
   @@index([orderId])

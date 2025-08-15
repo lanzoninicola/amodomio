@@ -4,7 +4,6 @@ import {
   useLoaderData,
   useFetcher,
   useRevalidator,
-  Link,
 } from "@remix-run/react";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { Prisma } from "@prisma/client";
@@ -20,8 +19,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Trash, Pencil, Save, GripVertical, Store, Truck } from "lucide-react";
+import { Trash, Save, GripVertical, MoreHorizontal } from "lucide-react";
 
+/* Dialogs (Detalhes + Confirmação de cancelamento) */
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 /* DND-KIT */
 import {
@@ -55,7 +63,6 @@ function ymdToUtcNoon(ymd: string) {
   const dd = d.padStart(2, "0");
   return new Date(`${y}-${mm}-${dd}T12:00:00.000Z`);
 }
-
 function todayLocalYMD() {
   const now = new Date();
   const y = now.getFullYear();
@@ -75,7 +82,7 @@ function lockKey(dateInt: number, commandNumber: number) {
 /* =============================
  * Tipos
  * ============================= */
-type SizeCounts = { F: number; M: number; P: number; I: number };
+type SizeCounts = { F: number; M: number; P: number; I: number; FT: number };
 type DecimalLike = number | string | Prisma.Decimal;
 
 type OrderRow = {
@@ -88,18 +95,18 @@ type OrderRow = {
   size?: string;
   hasMoto?: boolean;
   motoValue?: DecimalLike;
-  take_away?: boolean
+  take_away?: boolean;
   orderAmount?: DecimalLike;
 
   channel?: string;
   status?: string;
 
-  // NOVO: campo para soft delete
+  // soft delete (mantido por compat), mas cancel agora é delete físico
   deletedAt?: string | null;
 };
 
 function defaultSizeCounts(): SizeCounts {
-  return { F: 0, M: 0, P: 0, I: 0 };
+  return { F: 0, M: 0, P: 0, I: 0, FT: 0 };
 }
 
 /* =============================
@@ -130,7 +137,7 @@ export async function loader({ params }: { params: { date?: string } }) {
  * ============================= */
 async function recalcHeaderTotal(dateInt: number) {
   const agg = await prismaClient.kdsDailyOrderDetail.aggregate({
-    where: { dateInt, deletedAt: null }, // << só ativos
+    where: { dateInt, deletedAt: null }, // só ativos
     _sum: { orderAmount: true },
   });
   const total = agg._sum.orderAmount ?? new Prisma.Decimal(0);
@@ -152,6 +159,7 @@ export async function action({
 }) {
   const formData = await request.formData();
   const _action = (formData.get("_action") as string) ?? "upsert";
+  const rowId = (formData.get("id") as string) || null; // usa id quando existir
 
   const fallbackToday = todayLocalYMD();
   const formDate = (formData.get("date") as string) || "";
@@ -199,29 +207,26 @@ export async function action({
       return json({ ok: true, reordered: true });
     }
 
-    /* ---------- CANCELAMENTO LÓGICO ---------- */
+    /* ---------- CANCELAMENTO FÍSICO (DELETE) ---------- */
     if (_action === "cancel") {
+      const idFromForm = (formData.get("id") as string) || null;
       const commandNumber = Number(formData.get("commandNumber") || 0);
-      if (!commandNumber) throw new Error("commandNumber inválido.");
+      if (!idFromForm && !commandNumber) throw new Error("id ou commandNumber inválido.");
 
-      const existente = await prismaClient.kdsDailyOrderDetail.findFirst({
-        where: { dateInt, commandNumber },
-        select: { id: true, status: true, deliveredAt: true }, // << incluir
-      });
+      const existente = idFromForm
+        ? await prismaClient.kdsDailyOrderDetail.findUnique({
+          where: { id: idFromForm },
+          select: { id: true },
+        })
+        : await prismaClient.kdsDailyOrderDetail.findFirst({
+          where: { dateInt, commandNumber },
+          select: { id: true },
+        });
 
       if (!existente) return json({ ok: true, canceled: false });
 
-      await prismaClient.kdsDailyOrderDetail.update({
+      await prismaClient.kdsDailyOrderDetail.delete({
         where: { id: existente.id },
-        data: {
-          size: JSON.stringify({ F: 0, M: 0, P: 0, I: 0 }),
-          hasMoto: false,
-          motoValue: new Prisma.Decimal(0),
-          orderAmount: new Prisma.Decimal(0),
-          channel: "",
-          // requestedForOven: false, // só se o campo existir neste form
-          deletedAt: currentDate, // << soft delete
-        },
       });
 
       await recalcHeaderTotal(dateInt);
@@ -279,7 +284,8 @@ export async function action({
         (sizeCounts.F || 0) +
         (sizeCounts.M || 0) +
         (sizeCounts.P || 0) +
-        (sizeCounts.I || 0);
+        (sizeCounts.I || 0) +
+        (sizeCounts.FT || 0);
 
       const linhaVazia =
         total === 0 &&
@@ -296,23 +302,49 @@ export async function action({
         );
       }
 
-      // Upsert por (dateInt, commandNumber)
-      const existente = await prismaClient.kdsDailyOrderDetail.findFirst({
-        where: { dateInt, commandNumber },
-        select: { id: true, status: true, deliveredAt: true }, // << incluir
-      });
+      // >>> BLOQUEIO DE DUPLICIDADE (ativos) <<<
+      if (rowId) {
+        const dup = await prismaClient.kdsDailyOrderDetail.findFirst({
+          where: { dateInt, commandNumber, deletedAt: null, id: { not: rowId } },
+          select: { id: true },
+        });
+        if (dup) {
+          return json(
+            { ok: false, error: `Número de comanda ${commandNumber} já existe neste dia.` },
+            { status: 400 }
+          );
+        }
+      } else {
+        const dup = await prismaClient.kdsDailyOrderDetail.findFirst({
+          where: { dateInt, commandNumber, deletedAt: null },
+          select: { id: true },
+        });
+        if (dup) {
+          return json(
+            { ok: false, error: `Número de comanda ${commandNumber} já existe neste dia.` },
+            { status: 400 }
+          );
+        }
+      }
+      // <<< FIM duplicidade
 
+      // >>> UPDATE por id (permite mudar número sem duplicar)
+      if (rowId) {
+        const prev = await prismaClient.kdsDailyOrderDetail.findUnique({
+          where: { id: rowId },
+          select: { status: true },
+        });
+        if (!prev) throw new Error("Registro não encontrado para o id informado.");
 
-      if (existente) {
         let deliveredAtUpdate: Date | null | undefined = undefined;
-        if (status === "finalizado" && existente.status !== "finalizado") {
+        if (status === "finalizado" && prev.status !== "finalizado") {
           deliveredAtUpdate = currentDate;
-        } else if (status !== "finalizado" && existente.status === "finalizado") {
+        } else if (status !== "finalizado" && prev.status === "finalizado") {
           deliveredAtUpdate = null;
         }
 
         const updated = await prismaClient.kdsDailyOrderDetail.update({
-          where: { id: existente.id },
+          where: { id: rowId },
           data: {
             commandNumber,
             size: JSON.stringify(sizeCounts),
@@ -329,8 +361,9 @@ export async function action({
         await recalcHeaderTotal(dateInt);
         return json({ ok: true, id: updated.id, mode: "update" });
       }
+      // <<< FIM update por id
 
-
+      // CREATE (linha nova)
       const created = await prismaClient.kdsDailyOrderDetail.create({
         data: {
           orderId: header.id,
@@ -343,7 +376,7 @@ export async function action({
           orderAmount,
           channel,
           status,
-          deliveredAt: status === "finalizado" ? currentDate : null, // << incluir
+          deliveredAt: status === "finalizado" ? currentDate : null,
         },
       });
 
@@ -361,7 +394,7 @@ export async function action({
 }
 
 /* =============================
- * Status labels/colors (UI intacta)
+ * Status labels/colors
  * ============================= */
 const statusLabels: Record<string, string> = {
   novoPedido: "Novo Pedido",
@@ -382,14 +415,14 @@ function statusColorClasses(status: string | undefined) {
 }
 
 /* =============================
- * MoneyInput (cent-based typing) — sem mudar UI
+ * MoneyInput (cent-based typing)
  * ============================= */
 function MoneyInput({
   name,
   defaultValue,
   placeholder,
   className = "w-24",
-  disabled = false, // << permite desabilitar quando cancelado
+  disabled = false,
 }: {
   name: string;
   defaultValue?: DecimalLike;
@@ -426,9 +459,9 @@ function MoneyInput({
   });
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (disabled) return; // << não edita se cancelado
+    if (disabled) return;
     const k = e.key;
-    if (k === "Enter") return; // deixa o Enter passar para o form
+    if (k === "Enter") return;
     if (k === "Backspace") {
       e.preventDefault();
       setCents((c) => Math.floor(c / 10));
@@ -459,10 +492,9 @@ function MoneyInput({
         value={display}
         onKeyDown={handleKeyDown}
         onChange={() => { }}
-        disabled={disabled}          // << desabilita visualmente
+        disabled={disabled}
         aria-disabled={disabled}
-        className={`${className} h-9 border rounded px-2 py-1 text-right ${disabled ? "bg-gray-50 text-gray-400" : ""
-          }`}
+        className={`${className} h-9 border rounded px-2 py-1 text-right ${disabled ? "bg-gray-50 text-gray-400" : ""}`}
         placeholder={placeholder}
       />
       <input type="hidden" name={name} value={(cents / 100).toFixed(2)} />
@@ -471,7 +503,7 @@ function MoneyInput({
 }
 
 /* =============================
- * Helpers de hora/decorrido (inalterados)
+ * Helpers de hora/decorrido (para o Dialog de detalhes)
  * ============================= */
 function fmtHHMM(dateLike: string | Date | undefined) {
   if (!dateLike) return "--:--";
@@ -491,16 +523,16 @@ function fmtElapsedHHMM(from: string | Date | undefined, nowMs: number) {
 }
 
 /* =============================
- * Grid template (UI preservada)
+ * Grid template (sem Hora/Decorrido/Status na linha)
+ * aumentei a coluna de Tamanho para acomodar FT
  * ============================= */
 const GRID_TMPL =
-  "grid grid-cols-[48px,60px,60px,150px,120px,220px,85px,85px,85px,85px,100px,120px] gap-2 items-center gap-x-4";
+  "grid grid-cols-[48px,150px,280px,90px,110px,85px,160px,80px,60px,96px] gap-2 items-center gap-x-4";
 const HEADER_TMPL =
-  "grid grid-cols-[48px,60px,60px,150px,120px,220px,85px,85px,85px,85px,100px,120px] gap-2 gap-x-4 border-b font-semibold text-sm sticky top-0  z-10";
-
+  "grid grid-cols-[48px,150px,280px,90px,110px,85px,160px,80px,60px,96px] gap-2 gap-x-4 border-b font-semibold text-sm sticky top-0 z-10";
 
 /* =============================
- * SizeSelector (UI INALTERADA)
+ * SizeSelector (inclui FT - FATIA)
  * ============================= */
 function SizeSelector({
   counts,
@@ -509,7 +541,7 @@ function SizeSelector({
 }: {
   counts: SizeCounts;
   onChange: (newCounts: SizeCounts) => void;
-  disabled?: boolean; // << adicionamos apenas para travar quando cancelado
+  disabled?: boolean;
 }) {
   function increment(size: keyof SizeCounts) {
     if (disabled) return;
@@ -521,16 +553,18 @@ function SizeSelector({
   }
 
   return (
-    <div className="flex items-center gap-2">
-      {(["F", "M", "P", "I"] as (keyof SizeCounts)[]).map((size) => (
+    <div className="flex items-center gap-3">
+      {(["F", "M", "P", "I", "FT"] as (keyof SizeCounts)[]).map((size) => (
         <button
           key={size}
           type="button"
           onClick={() => increment(size)}
-          className={`w-8 h-8 rounded-full border flex items-center justify-center text-xs font-bold ${counts[size] > 0 ? "bg-primary text-white" : "bg-white"
-            } ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
+          className={`w-14 h-10 rounded-md border flex items-center justify-center text-sm font-semibold
+          ${counts[size] > 0 ? "bg-primary text-white" : "bg-white"}
+          ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
           aria-label={`Adicionar ${size}`}
           disabled={disabled}
+          title={size === "FT" ? "FATIA" : String(size)}
         >
           {size}
           {counts[size] > 0 && <span className="ml-1">{counts[size]}</span>}
@@ -548,7 +582,7 @@ function SizeSelector({
 }
 
 /* =============================
- * Sortable Row wrapper (somente para ATIVOS)
+ * Sortable Row (somente ATIVOS)
  * ============================= */
 function SortableRow({
   order,
@@ -584,7 +618,7 @@ function SortableRow({
 }
 
 /* =============================
- * RowItem (fetcher + feedback + cancelamento lógico)
+ * RowItem (fetcher + feedback + dialogs + edição do número)
  * ============================= */
 function RowItem({
   order,
@@ -593,6 +627,7 @@ function RowItem({
   dateStr,
   nowMs,
   sortable,
+  initialNumber, // número proposto para fillers
 }: {
   order: OrderRow | null;
   index: number;
@@ -606,6 +641,7 @@ function RowItem({
     style: React.CSSProperties;
     isDragging: boolean;
   };
+  initialNumber?: number;
 }) {
   const fetcher = useFetcher<{ ok: boolean; error?: string; id?: string }>();
   const { revalidate } = useRevalidator();
@@ -636,11 +672,22 @@ function RowItem({
   }, [order?.id]);
 
   const [rowId, setRowId] = useState<string | null>(order?.id ?? null);
-  const [editingStatus, setEditingStatus] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [lastOk, setLastOk] = useState<boolean | null>(null);
   const [takeAway, setTakeAway] = useState(order?.take_away ?? false);
 
+  // Dialogs
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+
+  // Número de comanda editável
+  const [isEditingNumber, setIsEditingNumber] = useState(false);
+  const [commandNum, setCommandNum] = useState<number>(() =>
+    order?.commandNumber ?? initialNumber ?? index + 1
+  );
+  useEffect(() => {
+    setCommandNum(order?.commandNumber ?? initialNumber ?? index + 1);
+  }, [order?.id, order?.commandNumber, initialNumber, index]);
 
   const currentStatus = order?.status || "novoPedido";
   const isCanceled = !!order?.deletedAt;
@@ -658,9 +705,8 @@ function RowItem({
         setLastOk(true);
         setErrorText(null);
         if (fetcher.data.id) setRowId(fetcher.data.id);
-        setEditingStatus(false);
         revalidate();
-        const t = setTimeout(() => setLastOk(null), 1500);
+        const t = setTimeout(() => setLastOk(null), 1200);
         return () => clearTimeout(t);
       } else {
         setLastOk(false);
@@ -669,7 +715,7 @@ function RowItem({
     }
   }, [fetcher.data, revalidate]);
 
-  // Círculo: feedback > cor do status
+  // Círculo: feedback visual de salvar
   const circleClass = useMemo(() => {
     if (fetcher.state === "submitting") return "bg-gray-200";
     if (lastOk === true) return "bg-green-500 text-white";
@@ -686,9 +732,9 @@ function RowItem({
       style={sortable?.style}
       className={isCanceled ? "opacity-50" : sortable?.isDragging ? "opacity-60" : undefined}
     >
-      {/* grid: # | Hora | Decorrido | Status | Pedido (R$) | Tamanho | Moto | Moto (R$) | Canal (×2) | Ações */}
+      {/* grid: # | Pedido (R$) | Tamanho | Moto | Moto (R$) | Delivery/Balcão | Canal (×2) | Detalhes | Ações */}
       <fetcher.Form method="post" className={`${GRID_TMPL} py-2`}>
-        {/* # + grip handle */}
+        {/* # + grip handle + edição do número */}
         <div className="flex items-center justify-center gap-1">
           <button
             type="button"
@@ -704,8 +750,10 @@ function RowItem({
             <GripVertical className="w-4 h-4" />
           </button>
 
+          {/* Círculo do número (clicável para editar) */}
           <div
-            className={`w-7 h-7 rounded-full border flex items-center justify-center text-xs font-bold ${circleClass}`}
+            className={`w-7 h-7 rounded-full border flex items-center justify-center text-xs font-bold ${circleClass} ${isCanceled ? "cursor-not-allowed" : "cursor-pointer"
+              }`}
             title={
               fetcher.state === "submitting"
                 ? "Salvando…"
@@ -713,46 +761,32 @@ function RowItem({
                   ? "Salvo!"
                   : lastOk === false
                     ? "Erro ao salvar"
-                    : `Comanda ${order?.commandNumber ?? index + 1}`
+                    : `Comanda ${commandNum}`
             }
+            onClick={() => {
+              if (!isCanceled) setIsEditingNumber(true);
+            }}
           >
-            {order?.commandNumber ?? index + 1}
+            {isEditingNumber ? (
+              <input
+                autoFocus
+                type="number"
+                min={1}
+                className="w-16 h-8 text-center rounded-full border bg-white/90 text-gray-900 outline-none"
+                value={commandNum}
+                onChange={(e) => {
+                  const v = Math.max(1, Number(e.target.value || 1));
+                  setCommandNum(v);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === "Escape") setIsEditingNumber(false);
+                }}
+                onBlur={() => setIsEditingNumber(false)}
+              />
+            ) : (
+              <span>{commandNum}</span>
+            )}
           </div>
-        </div>
-
-        {/* Hora / Decorrido */}
-        <div className="text-center text-sm text-gray-800 font-mono">{horaStr}</div>
-        <div className="text-center text-sm text-gray-800 font-mono">{decorridoStr}</div>
-
-        {/* Status */}
-        <div className="flex items-center justify-center gap-2">
-          {editingStatus ? (
-            <Select name="status" defaultValue={currentStatus} disabled={isCanceled}>
-              <SelectTrigger className="w-40 h-9 text-xs">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="novoPedido">(1) Novo Pedido</SelectItem>
-                <SelectItem value="emProducao">(2) Em Produção</SelectItem>
-                <SelectItem value="aguardandoForno">(3) Aguardando forno</SelectItem>
-                <SelectItem value="assando">(4) Assando</SelectItem>
-                <SelectItem value="finalizado">(5) Finalizado</SelectItem>
-              </SelectContent>
-            </Select>
-          ) : (
-            <div className={`px-2 py-1 text-xs rounded-md ${statusColorClasses(currentStatus)}`}>
-              {statusLabels[currentStatus] || currentStatus}
-            </div>
-          )}
-          <button
-            type="button"
-            onClick={() => !isCanceled && setEditingStatus((v) => !v)}
-            className={"text-gray-500 hover:text-gray-700 " + (isCanceled ? "opacity-30 cursor-not-allowed" : "")}
-            title={isCanceled ? "Linha cancelada" : "Editar status"}
-            disabled={isCanceled}
-          >
-            <Pencil className="w-4 h-4" />
-          </button>
         </div>
 
         {/* Pedido (R$) */}
@@ -766,14 +800,7 @@ function RowItem({
           />
         </div>
 
-        {/* Hidden */}
-        {rowId && <input type="hidden" name="id" value={rowId} />}
-        <input type="hidden" name="size" value={JSON.stringify(counts)} />
-        <input type="hidden" name="commandNumber" value={order?.commandNumber ?? index + 1} />
-        <input type="hidden" name="date" value={dateStr} />
-        <input type="hidden" name="status" value={currentStatus} />
-
-        {/* Tamanhos (UI intacta; apenas travamos se cancelado) */}
+        {/* Tamanhos */}
         <div>
           <SizeSelector counts={counts} onChange={setCounts} disabled={isCanceled} />
         </div>
@@ -791,8 +818,6 @@ function RowItem({
           </Select>
         </div>
 
-
-
         {/* Moto (R$) */}
         <div className="flex items-center justify-center">
           <MoneyInput
@@ -804,25 +829,24 @@ function RowItem({
           />
         </div>
 
-        {/* Take Away (boolean) */}
+        {/* Delivery/Balcão */}
         <div className="flex items-center justify-center">
           <input type="hidden" name="take_away" value={takeAway ? "true" : "false"} />
           <button
             type="button"
             onClick={() => !isCanceled && setTakeAway((v) => !v)}
-            className={`w-[35px] h-[35px] rounded-lg ${takeAway ? "bg-green-100" : "bg-gray-100"} ${isCanceled ? "opacity-50 cursor-not-allowed" : "hover:bg-green-200"
-              }`}
+            className={`w-[35px] h-[35px] rounded-lg ${takeAway ? "bg-green-100" : "bg-gray-100"
+              } ${isCanceled ? "opacity-50 cursor-not-allowed" : "hover:bg-green-200"}`}
             title={takeAway ? "Retirada no balcão" : "Delivery"}
             disabled={isCanceled}
           >
-            {takeAway ?
-              <span className="font-semibold text-sm ">B</span> :
+            {takeAway ? (
+              <span className="font-semibold text-sm ">B</span>
+            ) : (
               <span className="font-semibold text-sm">D</span>
-            }
+            )}
           </button>
         </div>
-
-
 
         {/* Canal (span 2) */}
         <div className="flex items-center justify-center col-span-2">
@@ -840,6 +864,20 @@ function RowItem({
           </Select>
         </div>
 
+        {/* Detalhes (abre dialog com informações completas) */}
+        <div className="flex items-center justify-center">
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => setDetailsOpen(true)}
+            disabled={isCanceled}
+            title="Detalhes da comanda"
+            className="mx-auto"
+          >
+            <MoreHorizontal className="w-5 h-5" />
+          </Button>
+        </div>
+
         {/* Ações */}
         <div className="flex justify-center gap-2">
           <Button
@@ -854,31 +892,175 @@ function RowItem({
           </Button>
 
           {rowId && (
-            <Button
-              type="submit"
-              name="_action"
-              value="cancel" /* << ERA delete */
-              variant={"ghost"}
-              disabled={isCanceled || fetcher.state === "submitting"}
-              title="Cancelar (lógico)"
-              className="hover:bg-red-50"
-            >
-              <Trash className="w-4 h-4 text-red-500" />
-            </Button>
+            <>
+              <Button
+                type="button"
+                onClick={() => setConfirmOpen(true)}
+                variant={"ghost"}
+                disabled={isCanceled || fetcher.state === "submitting"}
+                title="Cancelar (exclusão definitiva)"
+                className="hover:bg-red-50"
+              >
+                <Trash className="w-4 h-4 text-red-500" />
+              </Button>
+
+              {/* Dialog de confirmação de cancelamento */}
+              <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Cancelar pedido?</DialogTitle>
+                    <DialogDescription>
+                      Esta ação <strong>remove definitivamente</strong> o registro da comanda #{commandNum}.
+                      Não será possível desfazer.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setConfirmOpen(false)}>
+                      Voltar
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      onClick={() => {
+                        if (!rowId) return;
+                        fetcher.submit(
+                          {
+                            _action: "cancel",
+                            id: rowId,
+                            date: dateStr,
+                            commandNumber: String(commandNum),
+                          },
+                          { method: "post" }
+                        );
+                        setConfirmOpen(false);
+                      }}
+                    >
+                      Cancelar pedido
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </>
           )}
         </div>
 
-        {/* Erro (11 cols) */}
-        {errorText && (
-          <div className="col-span-11 text-red-600 text-xs mt-1">{errorText}</div>
-        )}
+        {/* Hidden necessários */}
+        {rowId && <input type="hidden" name="id" value={rowId} />}
+        <input type="hidden" name="size" value={JSON.stringify(counts)} />
+        <input type="hidden" name="commandNumber" value={commandNum} />
+        <input type="hidden" name="date" value={dateStr} />
+        <input type="hidden" name="status" value={currentStatus} />
+
+        {/* Erro (toda a linha) */}
+        {errorText && <div className="col-span-10 text-red-600 text-xs mt-1">{errorText}</div>}
       </fetcher.Form>
+
+      {/* Dialog de Detalhes */}
+      <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Comanda #{commandNum}</DialogTitle>
+            <DialogDescription>Informações completas do registro</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 text-sm">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <div className="text-gray-500">Criado às</div>
+                <div className="font-mono text-3xl">{fmtHHMM(order?.createdAt)}</div>
+              </div>
+              <div>
+                <div className="text-gray-500">Decorrido</div>
+                <div className="font-mono text-3xl">{fmtElapsedHHMM(order?.createdAt, nowMs)}</div>
+              </div>
+
+              {/* Status editável dentro do dialog */}
+              <div className="col-span-2">
+                <div className="text-gray-500 mb-1">Status</div>
+                <Select
+                  defaultValue={currentStatus}
+                  onValueChange={(v) => {
+                    // Atualiza o campo hidden "status" do form da linha
+                    const root = document.getElementById("__next") || document.body;
+                    const form = root.querySelector('form') as HTMLFormElement | null;
+                    const input = form?.querySelector('input[name="status"]') as HTMLInputElement | null;
+                    if (input) input.value = v;
+                  }}
+                  disabled={isCanceled}
+                >
+                  <SelectTrigger className="w-full h-9 text-xs">
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="novoPedido">(1) Novo Pedido</SelectItem>
+                    <SelectItem value="emProducao">(2) Em Produção</SelectItem>
+                    <SelectItem value="aguardandoForno">(3) Aguardando forno</SelectItem>
+                    <SelectItem value="assando">(4) Assando</SelectItem>
+                    <SelectItem value="finalizado">(5) Finalizado</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Resumo de valores */}
+              <div>
+                <div className="text-gray-500">Pedido (R$)</div>
+                <div className="font-mono">
+                  {Number((order?.orderAmount as any) ?? 0).toLocaleString("pt-BR", {
+                    minimumFractionDigits: 2,
+                  })}
+                </div>
+              </div>
+              <div>
+                <div className="text-gray-500">Moto (R$)</div>
+                <div className="font-mono">
+                  {Number((order?.motoValue as any) ?? 0).toLocaleString("pt-BR", {
+                    minimumFractionDigits: 2,
+                  })}
+                </div>
+              </div>
+
+              {/* Tamanhos (resumo) */}
+              <div className="col-span-2">
+                <div className="text-gray-500 mb-1">Tamanhos</div>
+                <div className="font-mono">
+                  F:{counts.F} M:{counts.M} P:{counts.P} I:{counts.I} FT:{counts.FT}
+                </div>
+              </div>
+
+              {/* Canal */}
+              {order?.channel && (
+                <div className="col-span-2">
+                  <div className="text-gray-500">Canal</div>
+                  <div>{order.channel}</div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setDetailsOpen(false)}>
+              Fechar
+            </Button>
+            <Button
+              variant="default"
+              onClick={() => {
+                // submit do form da linha
+                const form = (document.activeElement as HTMLElement)?.closest?.("form") as HTMLFormElement | null
+                  || document.querySelector("form");
+                form?.requestSubmit();
+                setDetailsOpen(false);
+              }}
+            >
+              Salvar alterações
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </li>
   );
 }
 
 /* =============================
- * Página (DnD, Totais, Refresh)
+ * Página (DnD, Totais, Fillers + merge ordenado, Refresh)
  * ============================= */
 export default function KdsAtendimentoPlanilha() {
   const data = useLoaderData<typeof loader>();
@@ -907,15 +1089,8 @@ export default function KdsAtendimentoPlanilha() {
     if (form) form.requestSubmit();
   });
 
-  const canais = useMemo(
-    () => ["WHATS/PRESENCIAL/TELE", "MOGO", "AIQFOME", "IFOOD"],
-    []
-  );
-
   const [orderList, setOrderList] = useState<OrderRow[]>([]);
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
-  );
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
   const reorderFetcher = useFetcher();
 
   function handleDragEnd(event: DragEndEvent) {
@@ -967,11 +1142,26 @@ export default function KdsAtendimentoPlanilha() {
                 acc.M += Number(s.M || 0);
                 acc.P += Number(s.P || 0);
                 acc.I += Number(s.I || 0);
-              } catch { } // ignora JSON malformado
+                acc.FT += Number(s.FT || 0);
+              } catch { }
               return acc;
             },
-            { F: 0, M: 0, P: 0, I: 0 }
+            { F: 0, M: 0, P: 0, I: 0, FT: 0 }
           );
+
+          // Alerta de números duplicados (apenas ativos)
+          const duplicatedNumbers = (() => {
+            const counts = new Map<number, number>();
+            for (const o of activeOrders) {
+              const n = Number(o?.commandNumber ?? 0);
+              if (!n) continue;
+              counts.set(n, (counts.get(n) ?? 0) + 1);
+            }
+            return [...counts.entries()]
+              .filter(([, c]) => c > 1)
+              .map(([n]) => n)
+              .sort((a, b) => a - b);
+          })();
 
           // sincroniza estado local quando o loader muda
           useEffect(() => {
@@ -981,37 +1171,73 @@ export default function KdsAtendimentoPlanilha() {
           // ids arrastáveis = apenas ativos
           const activeIds = orderList.filter((o) => !o.deletedAt).map((o) => o.id!) as string[];
 
-          // fillers
-          const fillerCount = Math.max(0, 50 - orderList.length);
-          const fillers = Array(fillerCount).fill(null);
+          /* --------- FILLERS + MERGE ORDENADO POR commandNumber --------- */
+          const usedNumbers = new Set<number>();
+          for (const o of activeOrders) {
+            const n = Number(o?.commandNumber ?? 0);
+            if (n > 0) usedNumbers.add(n);
+          }
+
+          const TARGET_ROWS = 50;
+          const fillerCount = Math.max(0, TARGET_ROWS - activeOrders.length);
+
+          function takeMissingNumbers(need: number) {
+            const res: number[] = [];
+            if (need <= 0) return res;
+            const temp = new Set(usedNumbers);
+            let cand = 1;
+            while (res.length < need) {
+              if (!temp.has(cand)) {
+                res.push(cand);
+                temp.add(cand);
+              }
+              cand++;
+            }
+            return res;
+          }
+          const fillerNumbers = takeMissingNumbers(fillerCount);
+
+          type MergedItem =
+            | { kind: "order"; number: number; order: OrderRow }
+            | { kind: "filler"; number: number };
+
+          const merged: MergedItem[] = [
+            ...activeOrders.map((o) => ({
+              kind: "order" as const,
+              number: Number(o?.commandNumber ?? 0) || 0,
+              order: o,
+            })),
+            ...fillerNumbers.map((n) => ({ kind: "filler" as const, number: n })),
+          ].sort((a, b) => a.number - b.number);
+          /* -------------------------------------------------------------- */
 
           return (
             <div className="space-y-6">
+              {/* Alerta duplicados (não-bloqueante) */}
+              {duplicatedNumbers.length > 0 && (
+                <div className="rounded-md border border-red-300 bg-red-50 text-red-800 px-3 py-2 text-sm">
+                  <strong>Atenção:</strong> existem números de comanda repetidos neste dia:{" "}
+                  <span className="font-mono">{duplicatedNumbers.join(", ")}</span>.
+                </div>
+              )}
+
               {/* Totais (IGNORAM cancelados) */}
               <div className="flex flex-wrap items-center gap-3 mb-2">
-                <div className="flex  items-center gap-x-3 px-3 py-2 rounded-lg border">
+                <div className="flex items-center gap-x-3 px-3 py-2 rounded-lg border">
                   <span className="text-xs text-gray-500">Numero Pedidos</span>
-                  <div className="text-base font-semibold font-mono">
-                    {activeOrders.length}
-                  </div>
+                  <div className="text-base font-semibold font-mono">{activeOrders.length}</div>
                 </div>
-                <div className="flex  items-center gap-x-3 px-3 py-2 rounded-lg border">
+                <div className="flex items-center gap-x-3 px-3 py-2 rounded-lg border">
                   <span className="text-xs text-gray-500">Faturamento dia (R$)</span>
                   <div className="text-base font-semibold font-mono">
-                    {totalPedido.toLocaleString("pt-BR", {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
+                    {totalPedido.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </div>
                 </div>
 
-                <div className="flex  items-center gap-x-3  px-3 py-2 rounded-lg border ">
+                <div className="flex items-center gap-x-3 px-3 py-2 rounded-lg border ">
                   <span className="text-xs text-gray-500">Total Moto (R$)</span>
                   <div className="text-base font-semibold font-mono">
-                    {totalMoto.toLocaleString("pt-BR", {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
+                    {totalMoto.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </div>
                 </div>
 
@@ -1021,66 +1247,65 @@ export default function KdsAtendimentoPlanilha() {
                     F: <span className="font-semibold">{sizeTotals.F}</span>{" "}
                     M: <span className="font-semibold">{sizeTotals.M}</span>{" "}
                     P: <span className="font-semibold">{sizeTotals.P}</span>{" "}
-                    I: <span className="font-semibold">{sizeTotals.I}</span>
+                    I: <span className="font-semibold">{sizeTotals.I}</span>{" "}
+                    FT: <span className="font-semibold">{sizeTotals.FT}</span>
                   </div>
                 </div>
-
               </div>
 
-              {/* Cabeçalho */}
+              {/* Cabeçalho enxuto (sem hora/decorrido/status) */}
               <div className={`${HEADER_TMPL}`}>
                 <div className="text-center">#</div>
-                <div className="text-center">Hora</div>
-                <div className="text-center">Decorrido</div>
-                <div className="text-center">Status</div>
                 <div className="text-center">Pedido (R$)</div>
                 <div className="text-center">Tamanho</div>
                 <div className="text-center">Moto</div>
                 <div className="text-center">Moto (R$)</div>
                 <div className="text-center">Delivery/Balcão</div>
                 <div className="text-center col-span-2">Canal</div>
+                <div className="text-center">Detalhes</div>
                 <div className="text-center">Ações</div>
               </div>
 
-              {/* Lista: ATIVOS (sortable) + CANCELADOS (não-sortable, opacos) */}
+              {/* Lista: ATIVOS (sortable) + FILLERS (ordenados por número) */}
               <ul>
                 <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                   <SortableContext items={activeIds} strategy={verticalListSortingStrategy}>
-                    {orderList.map((order, index) =>
-                      order.deletedAt ? (
+                    {merged.map((item, i) => {
+                      if (item.kind === "order") {
+                        return item.order.deletedAt ? (
+                          <RowItem
+                            key={item.order.id}
+                            order={item.order}
+                            index={i}
+                            canais={["WHATS/PRESENCIAL/TELE", "MOGO", "AIQFOME", "IFOOD"]}
+                            dateStr={data.currentDate}
+                            nowMs={nowMs}
+                          />
+                        ) : (
+                          <SortableRow
+                            key={item.order.id}
+                            order={item.order}
+                            index={i}
+                            canais={["WHATS/PRESENCIAL/TELE", "MOGO", "AIQFOME", "IFOOD"]}
+                            dateStr={data.currentDate}
+                            nowMs={nowMs}
+                          />
+                        );
+                      }
+                      return (
                         <RowItem
-                          key={order.id}
-                          order={order}
-                          index={index}
+                          key={`row-empty-${i}-${item.number}`}
+                          order={null}
+                          index={i}
                           canais={["WHATS/PRESENCIAL/TELE", "MOGO", "AIQFOME", "IFOOD"]}
                           dateStr={data.currentDate}
                           nowMs={nowMs}
+                          initialNumber={item.number}
                         />
-                      ) : (
-                        <SortableRow
-                          key={order.id}
-                          order={order}
-                          index={index}
-                          canais={["WHATS/PRESENCIAL/TELE", "MOGO", "AIQFOME", "IFOOD"]}
-                          dateStr={data.currentDate}
-                          nowMs={nowMs}
-                        />
-                      )
-                    )}
+                      );
+                    })}
                   </SortableContext>
                 </DndContext>
-
-                {/* Linhas vazias (não arrastáveis) */}
-                {fillers.map((_, i) => (
-                  <RowItem
-                    key={`row-empty-${i}-${safeOrders.length}`}
-                    order={null}
-                    index={orderList.length + i}
-                    canais={["WHATS/PRESENCIAL/TELE", "MOGO", "AIQFOME", "IFOOD"]}
-                    dateStr={data.currentDate}
-                    nowMs={nowMs}
-                  />
-                ))}
               </ul>
             </div>
           );
