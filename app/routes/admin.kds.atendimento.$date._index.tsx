@@ -22,6 +22,16 @@ import {
 } from "@/components/ui/select";
 import { Trash, Pencil, Save, GripVertical } from "lucide-react";
 
+/* Dialog (confirmação de cancelamento) */
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+
 /* DND-KIT */
 import {
   DndContext,
@@ -92,7 +102,7 @@ type OrderRow = {
   channel?: string;
   status?: string;
 
-  // soft delete
+  // soft delete (mantido no tipo para compat, mas não usamos mais para cancelar)
   deletedAt?: string | null;
 };
 
@@ -128,7 +138,7 @@ export async function loader({ params }: { params: { date?: string } }) {
  * ============================= */
 async function recalcHeaderTotal(dateInt: number) {
   const agg = await prismaClient.kdsDailyOrderDetail.aggregate({
-    where: { dateInt, deletedAt: null }, // só ativos
+    where: { dateInt, deletedAt: null }, // só ativos (aqui não impacta o delete físico)
     _sum: { orderAmount: true },
   });
   const total = agg._sum.orderAmount ?? new Prisma.Decimal(0);
@@ -150,7 +160,7 @@ export async function action({
 }) {
   const formData = await request.formData();
   const _action = (formData.get("_action") as string) ?? "upsert";
-  const rowId = (formData.get("id") as string) || null; // << usa id quando existir
+  const rowId = (formData.get("id") as string) || null; // usa id quando existir
 
   const fallbackToday = todayLocalYMD();
   const formDate = (formData.get("date") as string) || "";
@@ -198,7 +208,7 @@ export async function action({
       return json({ ok: true, reordered: true });
     }
 
-    /* ---------- CANCELAMENTO LÓGICO (por id quando houver) ---------- */
+    /* ---------- CANCELAMENTO FÍSICO (delete) ---------- */
     if (_action === "cancel") {
       const idFromForm = (formData.get("id") as string) || null;
       const commandNumber = Number(formData.get("commandNumber") || 0);
@@ -216,16 +226,9 @@ export async function action({
 
       if (!existente) return json({ ok: true, canceled: false });
 
-      await prismaClient.kdsDailyOrderDetail.update({
+      // DELETE físico
+      await prismaClient.kdsDailyOrderDetail.delete({
         where: { id: existente.id },
-        data: {
-          size: JSON.stringify({ F: 0, M: 0, P: 0, I: 0 }),
-          hasMoto: false,
-          motoValue: new Prisma.Decimal(0),
-          orderAmount: new Prisma.Decimal(0),
-          channel: "",
-          deletedAt: currentDate, // soft delete
-        },
       });
 
       await recalcHeaderTotal(dateInt);
@@ -613,7 +616,7 @@ function SortableRow({
 }
 
 /* =============================
- * RowItem (fetcher + feedback + cancelamento lógico + edição do número)
+ * RowItem (fetcher + feedback + cancelamento + edição do número)
  * ============================= */
 function RowItem({
   order,
@@ -622,7 +625,7 @@ function RowItem({
   dateStr,
   nowMs,
   sortable,
-  initialNumber, // << número proposto para fillers
+  initialNumber, // número proposto para fillers
 }: {
   order: OrderRow | null;
   index: number;
@@ -636,7 +639,7 @@ function RowItem({
     style: React.CSSProperties;
     isDragging: boolean;
   };
-  initialNumber?: number; // << NOVO
+  initialNumber?: number;
 }) {
   const fetcher = useFetcher<{ ok: boolean; error?: string; id?: string }>();
   const { revalidate } = useRevalidator();
@@ -671,6 +674,9 @@ function RowItem({
   const [errorText, setErrorText] = useState<string | null>(null);
   const [lastOk, setLastOk] = useState<boolean | null>(null);
   const [takeAway, setTakeAway] = useState(order?.take_away ?? false);
+
+  // Diálogo de confirmação
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   // Número de comanda editável
   const [isEditingNumber, setIsEditingNumber] = useState(false);
@@ -915,17 +921,54 @@ function RowItem({
           </Button>
 
           {rowId && (
-            <Button
-              type="submit"
-              name="_action"
-              value="cancel"
-              variant={"ghost"}
-              disabled={isCanceled || fetcher.state === "submitting"}
-              title="Cancelar (lógico)"
-              className="hover:bg-red-50"
-            >
-              <Trash className="w-4 h-4 text-red-500" />
-            </Button>
+            <>
+              <Button
+                type="button"
+                onClick={() => setConfirmOpen(true)}
+                variant={"ghost"}
+                disabled={isCanceled || fetcher.state === "submitting"}
+                title="Cancelar (exclusão definitiva)"
+                className="hover:bg-red-50"
+              >
+                <Trash className="w-4 h-4 text-red-500" />
+              </Button>
+
+              {/* Dialog de confirmação */}
+              <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Cancelar pedido?</DialogTitle>
+                    <DialogDescription>
+                      Esta ação <strong>remove definitivamente</strong> o registro da comanda #{commandNum}.
+                      Não será possível desfazer.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setConfirmOpen(false)}>
+                      Voltar
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      onClick={() => {
+                        if (!rowId) return;
+                        fetcher.submit(
+                          {
+                            _action: "cancel",
+                            id: rowId,
+                            date: dateStr,
+                            commandNumber: String(commandNum),
+                          },
+                          { method: "post" }
+                        );
+                        setConfirmOpen(false);
+                      }}
+                    >
+                      Cancelar pedido
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </>
           )}
         </div>
 
@@ -937,7 +980,7 @@ function RowItem({
 }
 
 /* =============================
- * Página (DnD, Totais, Fillers com números únicos, Refresh)
+ * Página (DnD, Totais, Fillers + merge ordenado, Refresh)
  * ============================= */
 export default function KdsAtendimentoPlanilha() {
   const data = useLoaderData<typeof loader>();
@@ -1095,7 +1138,6 @@ export default function KdsAtendimentoPlanilha() {
           ].sort((a, b) => a.number - b.number);
           /* -------------------------------------------------------------- */
 
-
           return (
             <div className="space-y-6">
               {/* Alerta duplicados (não-bloqueante) */}
@@ -1152,7 +1194,7 @@ export default function KdsAtendimentoPlanilha() {
                 <div className="text-center">Ações</div>
               </div>
 
-              {/* Lista: ATIVOS (sortable) + CANCELADOS (não-sortable, opacos) */}
+              {/* Lista: ATIVOS (sortable) + FILLERS (ordenados por número) */}
               <ul>
                 <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                   <SortableContext items={activeIds} strategy={verticalListSortingStrategy}>
@@ -1195,7 +1237,6 @@ export default function KdsAtendimentoPlanilha() {
                   </SortableContext>
                 </DndContext>
               </ul>
-
             </div>
           );
         }}
