@@ -49,7 +49,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 
 /* =============================
- * Date utils (timezone-safe)
+ * Date utils
  * ============================= */
 function ymdToDateInt(ymd: string) {
   const [y, m, d] = ymd.split("-");
@@ -72,37 +72,27 @@ function todayLocalYMD() {
 }
 
 /* =============================
- * In-memory lock (unicidade no app)
- * ============================= */
-const inFlightLocks = new Set<string>();
-function lockKey(dateInt: number, commandNumber: number) {
-  return `${dateInt}:${commandNumber}`;
-}
-
-/* =============================
  * Tipos
  * ============================= */
 type SizeCounts = { F: number; M: number; P: number; I: number; FT: number };
 type DecimalLike = number | string | Prisma.Decimal;
 
 type OrderRow = {
-  id?: string;
-  date?: string;
-  dateInt?: number;
-  createdAt?: string | Date;
-  commandNumber?: number;
+  id: string;
+  dateInt: number;
+  createdAt?: string | Date | null;
+  commandNumber: number | null;
+  sortOrderIndex: number;
+  isUnnumbered: boolean;
 
-  size?: string;
-  hasMoto?: boolean;
-  motoValue?: DecimalLike;
-  take_away?: boolean;
-  orderAmount?: DecimalLike;
+  size?: string | null;
+  hasMoto?: boolean | null;
+  motoValue?: DecimalLike | null;
+  take_away?: boolean | null;
+  orderAmount?: DecimalLike | null;
 
-  channel?: string;
-  status?: string;
-
-  // soft delete (mantido por compat), mas cancel agora é delete físico
-  deletedAt?: string | null;
+  channel?: string | null;
+  status?: string | null;
 };
 
 function defaultSizeCounts(): SizeCounts {
@@ -110,7 +100,39 @@ function defaultSizeCounts(): SizeCounts {
 }
 
 /* =============================
- * Loader (compat 7/8 dígitos)
+ * Helpers de header/seed
+ * ============================= */
+async function ensureHeader(dateInt: number, currentDate: Date) {
+  return prismaClient.kdsDailyOrder.upsert({
+    where: { dateInt },
+    update: {},
+    create: { date: currentDate, dateInt, totOrdersAmount: new Prisma.Decimal(0) },
+    select: { id: true },
+  });
+}
+async function recalcHeaderTotal(dateInt: number) {
+  const agg = await prismaClient.kdsDailyOrderDetail.aggregate({
+    where: { dateInt },
+    _sum: { orderAmount: true },
+  });
+  const total = agg._sum.orderAmount ?? new Prisma.Decimal(0);
+  await prismaClient.kdsDailyOrder.update({
+    where: { dateInt },
+    data: { totOrdersAmount: total },
+  });
+}
+async function getMaxes(dateInt: number) {
+  const [_max] = await prismaClient.$queryRawUnsafe<
+    { max_cmd: number | null; max_sort: number | null }[]
+  >(
+    `SELECT MAX(command_number) AS max_cmd, MAX(sort_order_index) AS max_sort
+     FROM "KdsDailyOrderDetail" WHERE "date_int" = ${dateInt};`
+  );
+  return { maxCmd: _max?.max_cmd ?? 0, maxSort: _max?.max_sort ?? 0 };
+}
+
+/* =============================
+ * Loader
  * ============================= */
 export async function loader({ params }: { params: { date?: string } }) {
   const fallbackToday = todayLocalYMD();
@@ -118,32 +140,21 @@ export async function loader({ params }: { params: { date?: string } }) {
 
   const dateInt8 = ymdToDateInt(dateStr);
   const [y, m, d] = dateStr.split("-");
-  const dateInt7 = Number(`${y}${Number(m)}${Number(d)}`); // legacy compat
+  const dateInt7 = Number(`${y}${Number(m)}${Number(d)}`); // compat legado
   const currentDate = ymdToUtcNoon(dateStr);
 
   const ordersPromise = await prismaClient.kdsDailyOrderDetail.findMany({
     where: { dateInt: { in: [dateInt8, dateInt7] } },
-    orderBy: [{ commandNumber: "asc" }, { createdAt: "asc" }],
+    orderBy: [
+      { sortOrderIndex: "asc" },
+      { createdAt: "asc" },
+    ],
   });
+
 
   return defer({
     orders: ordersPromise,
     currentDate: currentDate.toISOString().split("T")[0],
-  });
-}
-
-/* =============================
- * Helpers de totals do cabeçalho (IGNORA cancelados)
- * ============================= */
-async function recalcHeaderTotal(dateInt: number) {
-  const agg = await prismaClient.kdsDailyOrderDetail.aggregate({
-    where: { dateInt, deletedAt: null }, // só ativos
-    _sum: { orderAmount: true },
-  });
-  const total = agg._sum.orderAmount ?? new Prisma.Decimal(0);
-  await prismaClient.kdsDailyOrder.update({
-    where: { dateInt },
-    data: { totOrdersAmount: total },
   });
 }
 
@@ -159,250 +170,259 @@ export async function action({
 }) {
   const formData = await request.formData();
   const _action = (formData.get("_action") as string) ?? "upsert";
-  const rowId = (formData.get("id") as string) || null; // usa id quando existir
+  const rowId = (formData.get("id") as string) || null;
 
   const fallbackToday = todayLocalYMD();
   const formDate = (formData.get("date") as string) || "";
   const dateStr = formDate || params.date || fallbackToday;
-
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-    return json({ ok: false, error: "Invalid date." }, { status: 400 });
+    return json({ ok: false, error: "Data inválida." }, { status: 400 });
   }
-
   const dateInt = ymdToDateInt(dateStr);
   const currentDate = ymdToUtcNoon(dateStr);
 
   try {
-    /* ---------- REORDER (mantém o mesmo conjunto de números dos ATIVOS) ---------- */
+    /* ---------- REORDER: só mexe no sortOrderIndex ---------- */
     if (_action === "reorder") {
       const idsRaw = (formData.get("ids") as string) ?? "[]";
       let ids: string[] = [];
-      try {
-        ids = JSON.parse(idsRaw);
-      } catch {
-        throw new Error("Lista de ids inválida.");
-      }
+      try { ids = JSON.parse(idsRaw); } catch { throw new Error("Lista de ids inválida."); }
       if (!Array.isArray(ids) || ids.some((id) => typeof id !== "string" || !id)) {
         throw new Error("Lista de ids inválida.");
       }
-
-      // Busca commandNumbers atuais dos ATIVOS (ids informados)
-      const active = await prismaClient.kdsDailyOrderDetail.findMany({
-        where: { dateInt, deletedAt: null, id: { in: ids } },
-        select: { id: true, commandNumber: true },
-        orderBy: { commandNumber: "asc" },
-      });
-      const numbers = active.map((a) => a.commandNumber!); // preserva lacunas de cancelados
-
-      // Aplica os MESMOS números na nova ordem de ids
+      const STEP = 1000;
       await prismaClient.$transaction(
         ids.map((id, idx) =>
           prismaClient.kdsDailyOrderDetail.update({
             where: { id },
-            data: { commandNumber: numbers[idx] ?? numbers[numbers.length - 1] },
+            data: { sortOrderIndex: (idx + 1) * STEP },
           })
         )
       );
-
       return json({ ok: true, reordered: true });
     }
 
-    /* ---------- CANCELAMENTO FÍSICO (DELETE) ---------- */
-    if (_action === "cancel") {
-      const idFromForm = (formData.get("id") as string) || null;
-      const commandNumber = Number(formData.get("commandNumber") || 0);
-      if (!idFromForm && !commandNumber) throw new Error("id ou commandNumber inválido.");
-
-      const existente = idFromForm
-        ? await prismaClient.kdsDailyOrderDetail.findUnique({
-          where: { id: idFromForm },
-          select: { id: true },
-        })
-        : await prismaClient.kdsDailyOrderDetail.findFirst({
-          where: { dateInt, commandNumber },
-          select: { id: true },
-        });
-
-      if (!existente) return json({ ok: true, canceled: false });
-
-      await prismaClient.kdsDailyOrderDetail.delete({
-        where: { id: existente.id },
-      });
-
-      await recalcHeaderTotal(dateInt);
-      return json({ ok: true, canceled: true, id: existente.id });
+    /* ---------- ABRIR DIA: cria 40 registros numerados 1..40 ---------- */
+    if (_action === "openDay") {
+      const header = await ensureHeader(dateInt, currentDate);
+      const existing = await prismaClient.kdsDailyOrderDetail.count({ where: { dateInt } });
+      if (existing > 0) {
+        return json({ ok: false, error: "Dia já possui registros." }, { status: 400 });
+      }
+      const STEP = 1000;
+      const rows = Array.from({ length: 40 }).map((_, i) => ({
+        orderId: header.id,
+        dateInt,
+        commandNumber: i + 1,
+        isUnnumbered: false,
+        sortOrderIndex: (i + 1) * STEP,
+        size: JSON.stringify({ F: 0, M: 0, P: 0, I: 0, FT: 0 }),
+        hasMoto: false,
+        motoValue: new Prisma.Decimal(0),
+        takeAway: false,
+        orderAmount: new Prisma.Decimal(0),
+        channel: "",
+        status: "novoPedido",
+        deliveredAt: null,
+      }));
+      await prismaClient.kdsDailyOrderDetail.createMany({ data: rows });
+      return json({ ok: true, seeded: 40 });
     }
 
-    /* ---------- UPSERT ---------- */
-    const commandNumber = Number(formData.get("commandNumber") || 0);
-    if (!commandNumber) throw new Error("commandNumber inválido.");
-
-    const key = lockKey(dateInt, commandNumber);
-    if (inFlightLocks.has(key)) {
-      return json(
-        { ok: false, error: "Outra gravação desta linha está em andamento. Tente novamente." },
-        { status: 429 }
-      );
+    /* ---------- ADICIONAR MAIS X ---------- */
+    if (_action === "addSlots") {
+      const qty = Math.max(1, Number(formData.get("qty") || 10));
+      const header = await ensureHeader(dateInt, currentDate);
+      const { maxCmd, maxSort } = await getMaxes(dateInt);
+      const STEP = 1000;
+      const rows = Array.from({ length: qty }).map((_, i) => ({
+        orderId: header.id,
+        dateInt,
+        commandNumber: (maxCmd || 0) + i + 1, // se preferir slots sem número: use null
+        isUnnumbered: false,
+        sortOrderIndex: (maxSort || 0) + (i + 1) * STEP,
+        size: JSON.stringify({ F: 0, M: 0, P: 0, I: 0, FT: 0 }),
+        hasMoto: false,
+        motoValue: new Prisma.Decimal(0),
+        takeAway: false,
+        orderAmount: new Prisma.Decimal(0),
+        channel: "",
+        status: "novoPedido",
+        deliveredAt: null,
+      }));
+      await prismaClient.kdsDailyOrderDetail.createMany({ data: rows });
+      return json({ ok: true, added: qty });
     }
-    inFlightLocks.add(key);
 
-    try {
-      // Garante cabeçalho do dia
-      const header = await prismaClient.kdsDailyOrder.upsert({
-        where: { dateInt },
-        update: {},
-        create: { date: currentDate, dateInt, totOrdersAmount: new Prisma.Decimal(0) },
-        select: { id: true },
-      });
-
-      // Form data
-      const hasMoto = formData.get("hasMoto") === "true";
-      const channel = (formData.get("channel") as string) || "";
-      const status = (formData.get("status") as string) || "novoPedido";
-      const takeAway = formData.get("take_away") === "true";
-
-      const sizeCountsRaw = formData.get("size") as string;
-      if (!sizeCountsRaw) throw new Error("Tamanhos não informados.");
-
-      let sizeCounts: SizeCounts;
-      try {
-        sizeCounts = JSON.parse(sizeCountsRaw);
-      } catch {
-        throw new Error("Formato inválido dos tamanhos.");
-      }
-
-      // Money (string -> Decimal com 2 casas)
-      const rawMoto = (formData.get("motoValue") as string) ?? "0";
-      const rawAmount = (formData.get("orderAmount") as string) ?? "0";
-      const motoValueNum = Math.max(0, Number(rawMoto.replace(",", ".") || 0));
-      const orderAmountNum = Math.max(0, Number(rawAmount.replace(",", ".") || 0));
-      const motoValue = new Prisma.Decimal(motoValueNum.toFixed(2));
-      const orderAmount = new Prisma.Decimal(orderAmountNum.toFixed(2));
-
-      // Linha vazia? (bloqueia)
-      const total =
-        (sizeCounts.F || 0) +
-        (sizeCounts.M || 0) +
-        (sizeCounts.P || 0) +
-        (sizeCounts.I || 0) +
-        (sizeCounts.FT || 0);
-
-      const linhaVazia =
-        total === 0 &&
-        !hasMoto &&
-        !channel &&
-        (status === "novoPedido" || !status) &&
-        motoValueNum === 0 &&
-        orderAmountNum === 0;
-
-      if (linhaVazia) {
-        return json(
-          { ok: false, error: "Linha vazia — nada para salvar." },
-          { status: 400 }
-        );
-      }
-
-      // >>> BLOQUEIO DE DUPLICIDADE (ativos) <<<
-      if (rowId) {
-        const dup = await prismaClient.kdsDailyOrderDetail.findFirst({
-          where: { dateInt, commandNumber, deletedAt: null, id: { not: rowId } },
-          select: { id: true },
-        });
-        if (dup) {
-          return json(
-            { ok: false, error: `Número de comanda ${commandNumber} já existe neste dia.` },
-            { status: 400 }
-          );
-        }
-      } else {
-        const dup = await prismaClient.kdsDailyOrderDetail.findFirst({
-          where: { dateInt, commandNumber, deletedAt: null },
-          select: { id: true },
-        });
-        if (dup) {
-          return json(
-            { ok: false, error: `Número de comanda ${commandNumber} já existe neste dia.` },
-            { status: 400 }
-          );
-        }
-      }
-      // <<< FIM duplicidade
-
-      // >>> UPDATE por id (permite mudar número sem duplicar)
-      if (rowId) {
-        const prev = await prismaClient.kdsDailyOrderDetail.findUnique({
-          where: { id: rowId },
-          select: { status: true },
-        });
-        if (!prev) throw new Error("Registro não encontrado para o id informado.");
-
-        let deliveredAtUpdate: Date | null | undefined = undefined;
-        if (status === "finalizado" && prev.status !== "finalizado") {
-          deliveredAtUpdate = currentDate;
-        } else if (status !== "finalizado" && prev.status === "finalizado") {
-          deliveredAtUpdate = null;
-        }
-
-        const updated = await prismaClient.kdsDailyOrderDetail.update({
-          where: { id: rowId },
-          data: {
-            commandNumber,
-            size: JSON.stringify(sizeCounts),
-            hasMoto,
-            channel,
-            status,
-            motoValue,
-            orderAmount,
-            takeAway,
-            ...(deliveredAtUpdate !== undefined ? { deliveredAt: deliveredAtUpdate } : {}),
-          },
-        });
-
-        await recalcHeaderTotal(dateInt);
-        return json({ ok: true, id: updated.id, mode: "update" });
-      }
-      // <<< FIM update por id
-
-      // CREATE (linha nova)
+    /* ---------- CRIAR VENDA SEM Nº ---------- */
+    if (_action === "createUnnumbered") {
+      const header = await ensureHeader(dateInt, currentDate);
+      const { maxSort } = await getMaxes(dateInt);
+      const STEP = 1000;
       const created = await prismaClient.kdsDailyOrderDetail.create({
         data: {
           orderId: header.id,
           dateInt,
+          commandNumber: null,
+          isUnnumbered: true,
+          sortOrderIndex: (maxSort || 0) + STEP,
+          size: JSON.stringify({ F: 0, M: 0, P: 0, I: 0, FT: 0 }),
+          hasMoto: false,
+          motoValue: new Prisma.Decimal(0),
+          takeAway: false,
+          orderAmount: new Prisma.Decimal(0),
+          channel: "",
+          status: "novoPedido",
+          deliveredAt: null,
+        },
+        select: { id: true },
+      });
+      return json({ ok: true, id: created.id, mode: "createUnnumbered" });
+    }
+
+    /* ---------- CANCELAMENTO (DELETE físico) ---------- */
+    if (_action === "cancel") {
+      const idFromForm = (formData.get("id") as string) || null;
+      if (!idFromForm) throw new Error("id inválido.");
+      await prismaClient.kdsDailyOrderDetail.delete({ where: { id: idFromForm } });
+      await recalcHeaderTotal(dateInt);
+      return json({ ok: true, canceled: true, id: idFromForm });
+    }
+
+    /* ---------- UPSERT (salvar/atualizar) ---------- */
+    const rawCmd = (formData.get("commandNumber") as string) ?? "";
+    const channel = (formData.get("channel") as string) || "";
+    const status = (formData.get("status") as string) || "novoPedido";
+    const hasMoto = (formData.get("hasMoto") as string) === "true";
+    const takeAway = (formData.get("take_away") as string) === "true";
+
+    const sizeCountsRaw = (formData.get("size") as string) || "";
+    if (!sizeCountsRaw) {
+      return json({ ok: false, error: "Tamanhos não informados." }, { status: 400 });
+    }
+
+    let sizeCounts: SizeCounts;
+    try {
+      sizeCounts = JSON.parse(sizeCountsRaw);
+    } catch {
+      return json({ ok: false, error: "Formato inválido dos tamanhos." }, { status: 400 });
+    }
+
+    const rawMoto = (formData.get("motoValue") as string) ?? "0";
+    const rawAmount = (formData.get("orderAmount") as string) ?? "0";
+    const motoValueNum = Math.max(0, Number(rawMoto.replace(",", ".") || 0));
+    const orderAmountNum = Math.max(0, Number(rawAmount.replace(",", ".") || 0));
+    const motoValue = new Prisma.Decimal(motoValueNum.toFixed(2));
+    const orderAmount = new Prisma.Decimal(orderAmountNum.toFixed(2));
+
+    let commandNumber: number | null = null;
+    if (rawCmd.trim() !== "") {
+      const n = Number(rawCmd);
+      commandNumber = Number.isFinite(n) && n > 0 ? n : null;
+    }
+    const isUnnumbered = commandNumber == null;
+
+    // Linha vazia? bloqueia save inútil
+    const totalSizes = (sizeCounts.F || 0) + (sizeCounts.M || 0) + (sizeCounts.P || 0) + (sizeCounts.I || 0) + (sizeCounts.FT || 0);
+    const linhaVazia =
+      totalSizes === 0 &&
+      !hasMoto &&
+      !channel &&
+      (status === "novoPedido" || !status) &&
+      motoValueNum === 0 &&
+      orderAmountNum === 0 &&
+      isUnnumbered;
+    if (linhaVazia && rowId) {
+      // nada para atualizar
+      return json({ ok: true, id: rowId, mode: "noop" });
+    } else if (linhaVazia && !rowId) {
+      return json({ ok: false, error: "Linha vazia — nada para salvar." }, { status: 400 });
+    }
+
+    // duplicidade só quando há número
+    if (commandNumber != null) {
+      const dup = await prismaClient.kdsDailyOrderDetail.findFirst({
+        where: {
+          dateInt,
           commandNumber,
+          ...(rowId ? { id: { not: rowId } } : {}),
+        },
+        select: { id: true },
+      });
+      if (dup) {
+        return json({ ok: false, error: `Número de comanda ${commandNumber} já existe neste dia.` }, { status: 400 });
+      }
+    }
+
+    // garante header do dia
+    const header = await ensureHeader(dateInt, currentDate);
+
+    // UPDATE
+    if (rowId) {
+      const prev = await prismaClient.kdsDailyOrderDetail.findUnique({
+        where: { id: rowId },
+        select: { status: true },
+      });
+      if (!prev) throw new Error("Registro não encontrado.");
+
+      let deliveredAtUpdate: Date | null | undefined = undefined;
+      if (status === "finalizado" && prev.status !== "finalizado") {
+        deliveredAtUpdate = currentDate;
+      } else if (status !== "finalizado" && prev.status === "finalizado") {
+        deliveredAtUpdate = null;
+      }
+
+      const updated = await prismaClient.kdsDailyOrderDetail.update({
+        where: { id: rowId },
+        data: {
+          orderId: header.id,
+          dateInt,
+          commandNumber,         // pode ser null
+          isUnnumbered,
           size: JSON.stringify(sizeCounts),
           hasMoto,
-          motoValue,
-          takeAway,
-          orderAmount,
           channel,
           status,
-          deliveredAt: status === "finalizado" ? currentDate : null,
+          motoValue,
+          orderAmount,
+          takeAway,
+          ...(deliveredAtUpdate !== undefined ? { deliveredAt: deliveredAtUpdate } : {}),
         },
+        select: { id: true, commandNumber: true },
       });
-
       await recalcHeaderTotal(dateInt);
-      return json({ ok: true, id: created.id, mode: "create" });
-    } finally {
-      inFlightLocks.delete(key);
+      return json({ ok: true, id: updated.id, mode: "update", commandNumber: updated.commandNumber });
     }
+
+    // CREATE (usado pontualmente; em geral já criamos via abrir dia / add / venda sem nº)
+    const created = await prismaClient.kdsDailyOrderDetail.create({
+      data: {
+        orderId: header.id,
+        dateInt,
+        commandNumber,
+        isUnnumbered,
+        sortOrderIndex: (await getMaxes(dateInt)).maxSort + 1000,
+        size: JSON.stringify(sizeCounts),
+        hasMoto,
+        channel,
+        status,
+        motoValue,
+        orderAmount,
+        takeAway,
+        deliveredAt: status === "finalizado" ? currentDate : null,
+      },
+      select: { id: true, commandNumber: true },
+    });
+    await recalcHeaderTotal(dateInt);
+    return json({ ok: true, id: created.id, mode: "create", commandNumber: created.commandNumber });
   } catch (err: any) {
-    return json(
-      { ok: false, error: err?.message ?? "Erro desconhecido ao salvar." },
-      { status: 400 }
-    );
+    return json({ ok: false, error: err?.message ?? "Erro desconhecido." }, { status: 400 });
   }
 }
 
 /* =============================
  * Status labels/colors
  * ============================= */
-const statusLabels: Record<string, string> = {
-  novoPedido: "Novo Pedido",
-  emProducao: "Em Produção",
-  aguardandoForno: "Aguardando forno",
-  assando: "Assando",
-  finalizado: "Finalizado",
-};
 const statusColors: Record<string, string> = {
   novoPedido: "bg-gray-200 text-gray-800",
   emProducao: "bg-blue-100 text-blue-800",
@@ -410,7 +430,7 @@ const statusColors: Record<string, string> = {
   assando: "bg-orange-100 text-orange-800",
   finalizado: "bg-yellow-100 text-yellow-800",
 };
-function statusColorClasses(status: string | undefined) {
+function statusColorClasses(status: string | undefined | null) {
   return statusColors[status || "novoPedido"] || "bg-gray-200 text-gray-800";
 }
 
@@ -425,7 +445,7 @@ function MoneyInput({
   disabled = false,
 }: {
   name: string;
-  defaultValue?: DecimalLike;
+  defaultValue?: DecimalLike | null;
   placeholder?: string;
   className?: string;
   disabled?: boolean;
@@ -503,15 +523,15 @@ function MoneyInput({
 }
 
 /* =============================
- * Helpers de hora/decorrido (para o Dialog de detalhes)
+ * Helpers de hora/decorrido (Dialog)
  * ============================= */
-function fmtHHMM(dateLike: string | Date | undefined) {
+function fmtHHMM(dateLike: string | Date | undefined | null) {
   if (!dateLike) return "--:--";
   const d = new Date(dateLike);
   if (isNaN(d.getTime())) return "--:--";
   return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 }
-function fmtElapsedHHMM(from: string | Date | undefined, nowMs: number) {
+function fmtElapsedHHMM(from: string | Date | undefined | null, nowMs: number) {
   if (!from) return "--:--";
   const d = new Date(from);
   const diff = nowMs - d.getTime();
@@ -523,16 +543,15 @@ function fmtElapsedHHMM(from: string | Date | undefined, nowMs: number) {
 }
 
 /* =============================
- * Grid template (sem Hora/Decorrido/Status na linha)
- * aumentei a coluna de Tamanho para acomodar FT
+ * Grid (sem hora/decorrido/status na linha)
  * ============================= */
 const GRID_TMPL =
-  "grid grid-cols-[48px,150px,280px,90px,110px,85px,160px,80px,60px,96px] gap-2 items-center gap-x-4";
+  "grid grid-cols-[70px,150px,260px,90px,110px,85px,160px,120px,60px,96px] gap-2 items-center gap-x-4";
 const HEADER_TMPL =
-  "grid grid-cols-[48px,150px,280px,90px,110px,85px,160px,80px,60px,96px] gap-2 gap-x-4 border-b font-semibold text-sm sticky top-0 z-10";
+  "grid grid-cols-[70px,150px,260px,90px,110px,85px,160px,120px,60px,96px] gap-2 gap-x-4 border-b font-semibold text-sm sticky top-0 z-10";
 
 /* =============================
- * SizeSelector (inclui FT - FATIA)
+ * SizeSelector (com FT - FATIA)
  * ============================= */
 function SizeSelector({
   counts,
@@ -559,7 +578,7 @@ function SizeSelector({
           key={size}
           type="button"
           onClick={() => increment(size)}
-          className={`w-14 h-10 rounded-md border flex items-center justify-center text-sm font-semibold
+          className={`w-10 h-10 rounded-full border flex items-center justify-center text-sm font-semibold
           ${counts[size] > 0 ? "bg-primary text-white" : "bg-white"}
           ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
           aria-label={`Adicionar ${size}`}
@@ -582,7 +601,7 @@ function SizeSelector({
 }
 
 /* =============================
- * Sortable Row (somente ATIVOS)
+ * Sortable Row
  * ============================= */
 function SortableRow({
   order,
@@ -590,15 +609,17 @@ function SortableRow({
   canais,
   dateStr,
   nowMs,
+  displayNumber,
 }: {
   order: OrderRow;
   index: number;
   canais: string[];
   dateStr: string;
   nowMs: number;
+  displayNumber: number;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: order.id!,
+    id: order.id,
   });
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -612,13 +633,14 @@ function SortableRow({
       canais={canais}
       dateStr={dateStr}
       nowMs={nowMs}
+      displayNumber={displayNumber}
       sortable={{ attributes, listeners, setNodeRef, style, isDragging }}
     />
   );
 }
 
 /* =============================
- * RowItem (fetcher + feedback + dialogs + edição do número)
+ * RowItem
  * ============================= */
 function RowItem({
   order,
@@ -626,14 +648,15 @@ function RowItem({
   canais,
   dateStr,
   nowMs,
+  displayNumber,
   sortable,
-  initialNumber, // número proposto para fillers
 }: {
-  order: OrderRow | null;
+  order: OrderRow;
   index: number;
   canais: string[];
   dateStr: string;
   nowMs: number;
+  displayNumber: number;
   sortable?: {
     attributes: any;
     listeners: any;
@@ -641,15 +664,14 @@ function RowItem({
     style: React.CSSProperties;
     isDragging: boolean;
   };
-  initialNumber?: number;
 }) {
-  const fetcher = useFetcher<{ ok: boolean; error?: string; id?: string }>();
+  const fetcher = useFetcher<{ ok: boolean; error?: string; id?: string; commandNumber?: number | null }>();
   const { revalidate } = useRevalidator();
 
   const [counts, setCounts] = useState<SizeCounts>(() => {
     if (order?.size) {
       try {
-        const parsed = JSON.parse(order.size);
+        const parsed = JSON.parse(order.size as any);
         return { ...defaultSizeCounts(), ...parsed };
       } catch {
         return defaultSizeCounts();
@@ -657,7 +679,6 @@ function RowItem({
     }
     return defaultSizeCounts();
   });
-
   useEffect(() => {
     if (order?.size) {
       try {
@@ -671,7 +692,7 @@ function RowItem({
     }
   }, [order?.id]);
 
-  const [rowId, setRowId] = useState<string | null>(order?.id ?? null);
+  const [rowId, setRowId] = useState<string>(order.id);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [lastOk, setLastOk] = useState<boolean | null>(null);
   const [takeAway, setTakeAway] = useState(order?.take_away ?? false);
@@ -680,17 +701,12 @@ function RowItem({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
 
-  // Número de comanda editável
+  // Número de comanda (como texto: permite vazio)
   const [isEditingNumber, setIsEditingNumber] = useState(false);
-  const [commandNum, setCommandNum] = useState<number>(() =>
-    order?.commandNumber ?? initialNumber ?? index + 1
-  );
-  useEffect(() => {
-    setCommandNum(order?.commandNumber ?? initialNumber ?? index + 1);
-  }, [order?.id, order?.commandNumber, initialNumber, index]);
+  const [cmdText, setCmdText] = useState<string>(order.commandNumber ? String(order.commandNumber) : "");
 
   const currentStatus = order?.status || "novoPedido";
-  const isCanceled = !!order?.deletedAt;
+  const semNumero = order.commandNumber == null || order.isUnnumbered;
 
   useEffect(() => {
     if (fetcher.state === "submitting") {
@@ -705,8 +721,12 @@ function RowItem({
         setLastOk(true);
         setErrorText(null);
         if (fetcher.data.id) setRowId(fetcher.data.id);
+        if ("commandNumber" in (fetcher.data as any)) {
+          const n = (fetcher.data as any).commandNumber;
+          setCmdText(n == null ? "" : String(n));
+        }
         revalidate();
-        const t = setTimeout(() => setLastOk(null), 1200);
+        const t = setTimeout(() => setLastOk(null), 1000);
         return () => clearTimeout(t);
       } else {
         setLastOk(false);
@@ -715,13 +735,12 @@ function RowItem({
     }
   }, [fetcher.data, revalidate]);
 
-  // Círculo: feedback visual de salvar
   const circleClass = useMemo(() => {
     if (fetcher.state === "submitting") return "bg-gray-200";
     if (lastOk === true) return "bg-green-500 text-white";
     if (lastOk === false) return "bg-red-500 text-white";
-    return statusColorClasses(currentStatus);
-  }, [fetcher.state, lastOk, currentStatus]);
+    return semNumero ? "bg-white text-gray-700 border-dashed" : statusColorClasses(currentStatus);
+  }, [fetcher.state, lastOk, currentStatus, semNumero]);
 
   const horaStr = fmtHHMM(order?.createdAt);
   const decorridoStr = fmtElapsedHHMM(order?.createdAt, nowMs);
@@ -730,30 +749,23 @@ function RowItem({
     <li
       ref={sortable?.setNodeRef}
       style={sortable?.style}
-      className={isCanceled ? "opacity-50" : sortable?.isDragging ? "opacity-60" : undefined}
+      className={sortable?.isDragging ? "opacity-60" : undefined}
     >
-      {/* grid: # | Pedido (R$) | Tamanho | Moto | Moto (R$) | Delivery/Balcão | Canal (×2) | Detalhes | Ações */}
       <fetcher.Form method="post" className={`${GRID_TMPL} py-2`}>
-        {/* # + grip handle + edição do número */}
-        <div className="flex items-center justify-center gap-1">
+        {/* # / drag / número */}
+        <div className="flex items-center justify-center gap-2">
           <button
             type="button"
-            {...(rowId && !isCanceled ? (sortable?.listeners || {}) : {})}
-            {...(rowId && !isCanceled ? (sortable?.attributes || {}) : {})}
-            className={
-              "text-gray-600 " +
-              (rowId && !isCanceled ? "cursor-grab active:cursor-grabbing" : "opacity-30 cursor-not-allowed")
-            }
-            title={rowId && !isCanceled ? "Arraste para reordenar" : "Linha bloqueada"}
-            disabled={isCanceled}
+            {...(sortable?.listeners || {})}
+            {...(sortable?.attributes || {})}
+            className={"text-gray-600 cursor-grab active:cursor-grabbing"}
+            title="Arraste para reordenar"
           >
             <GripVertical className="w-4 h-4" />
           </button>
 
-          {/* Círculo do número (clicável para editar) */}
           <div
-            className={`w-7 h-7 rounded-full border flex items-center justify-center text-xs font-bold ${circleClass} ${isCanceled ? "cursor-not-allowed" : "cursor-pointer"
-              }`}
+            className={`w-9 h-9 rounded-full border flex items-center justify-center text-sm font-bold ${circleClass} cursor-pointer`}
             title={
               fetcher.state === "submitting"
                 ? "Salvando…"
@@ -761,32 +773,34 @@ function RowItem({
                   ? "Salvo!"
                   : lastOk === false
                     ? "Erro ao salvar"
-                    : `Comanda ${commandNum}`
+                    : order.commandNumber
+                      ? `Comanda ${cmdText}`
+                      : `Sem nº (mostrando posição ${displayNumber})`
             }
-            onClick={() => {
-              if (!isCanceled) setIsEditingNumber(true);
-            }}
+            onClick={() => setIsEditingNumber(true)}
           >
             {isEditingNumber ? (
               <input
                 autoFocus
-                type="number"
-                min={1}
+                type="text"
+                inputMode="numeric"
                 className="w-16 h-8 text-center rounded-full border bg-white/90 text-gray-900 outline-none"
-                value={commandNum}
-                onChange={(e) => {
-                  const v = Math.max(1, Number(e.target.value || 1));
-                  setCommandNum(v);
-                }}
+                value={cmdText}
+                onChange={(e) => setCmdText(e.target.value.replace(/[^\d]/g, ""))}
+                placeholder={String(displayNumber)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === "Escape") setIsEditingNumber(false);
                 }}
                 onBlur={() => setIsEditingNumber(false)}
               />
             ) : (
-              <span>{commandNum}</span>
+              <span>{cmdText || String(displayNumber)}</span>
             )}
           </div>
+
+          {semNumero && (
+            <Badge variant="secondary" className="text-[10px] px-1 py-0.5">SN</Badge>
+          )}
         </div>
 
         {/* Pedido (R$) */}
@@ -796,18 +810,17 @@ function RowItem({
             defaultValue={order?.orderAmount}
             placeholder="Pedido (R$)"
             className="w-24"
-            disabled={isCanceled}
           />
         </div>
 
         {/* Tamanhos */}
         <div>
-          <SizeSelector counts={counts} onChange={setCounts} disabled={isCanceled} />
+          <SizeSelector counts={counts} onChange={setCounts} />
         </div>
 
         {/* Moto (boolean) */}
         <div className="flex items-center justify-center">
-          <Select name="hasMoto" defaultValue={order?.hasMoto ? "true" : "false"} disabled={isCanceled}>
+          <Select name="hasMoto" defaultValue={order?.hasMoto ? "true" : "false"}>
             <SelectTrigger className="w-24 h-9 text-xs">
               <SelectValue placeholder="Moto" />
             </SelectTrigger>
@@ -825,7 +838,6 @@ function RowItem({
             defaultValue={order?.motoValue}
             placeholder="Moto (R$)"
             className="w-28"
-            disabled={isCanceled}
           />
         </div>
 
@@ -834,23 +846,17 @@ function RowItem({
           <input type="hidden" name="take_away" value={takeAway ? "true" : "false"} />
           <button
             type="button"
-            onClick={() => !isCanceled && setTakeAway((v) => !v)}
-            className={`w-[35px] h-[35px] rounded-lg ${takeAway ? "bg-green-100" : "bg-gray-100"
-              } ${isCanceled ? "opacity-50 cursor-not-allowed" : "hover:bg-green-200"}`}
+            onClick={() => setTakeAway((v) => !v)}
+            className={`w-[35px] h-[35px] rounded-lg ${takeAway ? "bg-green-100" : "bg-gray-100"} hover:bg-green-200`}
             title={takeAway ? "Retirada no balcão" : "Delivery"}
-            disabled={isCanceled}
           >
-            {takeAway ? (
-              <span className="font-semibold text-sm ">B</span>
-            ) : (
-              <span className="font-semibold text-sm">D</span>
-            )}
+            {takeAway ? <span className="font-semibold text-sm">B</span> : <span className="font-semibold text-sm">D</span>}
           </button>
         </div>
 
         {/* Canal (span 2) */}
         <div className="flex items-center justify-center col-span-2">
-          <Select name="channel" defaultValue={order?.channel ?? ""} disabled={isCanceled}>
+          <Select name="channel" defaultValue={order?.channel ?? ""}>
             <SelectTrigger className="w-full h-9 text-xs">
               <SelectValue placeholder="Canal" />
             </SelectTrigger>
@@ -864,13 +870,12 @@ function RowItem({
           </Select>
         </div>
 
-        {/* Detalhes (abre dialog com informações completas) */}
+        {/* Detalhes (abre dialog) */}
         <div className="flex items-center justify-center">
           <Button
             type="button"
             variant="ghost"
             onClick={() => setDetailsOpen(true)}
-            disabled={isCanceled}
             title="Detalhes da comanda"
             className="mx-auto"
           >
@@ -885,72 +890,60 @@ function RowItem({
             name="_action"
             value="upsert"
             variant={"outline"}
-            disabled={isCanceled || fetcher.state === "submitting"}
-            title={isCanceled ? "Linha cancelada" : "Salvar"}
+            title="Salvar"
           >
             <Save className="w-4 h-4" />
           </Button>
 
-          {rowId && (
-            <>
-              <Button
-                type="button"
-                onClick={() => setConfirmOpen(true)}
-                variant={"ghost"}
-                disabled={isCanceled || fetcher.state === "submitting"}
-                title="Cancelar (exclusão definitiva)"
-                className="hover:bg-red-50"
-              >
-                <Trash className="w-4 h-4 text-red-500" />
-              </Button>
+          <Button
+            type="button"
+            onClick={() => setConfirmOpen(true)}
+            variant={"ghost"}
+            title="Cancelar (exclusão definitiva)"
+            className="hover:bg-red-50"
+          >
+            <Trash className="w-4 h-4 text-red-500" />
+          </Button>
 
-              {/* Dialog de confirmação de cancelamento */}
-              <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Cancelar pedido?</DialogTitle>
-                    <DialogDescription>
-                      Esta ação <strong>remove definitivamente</strong> o registro da comanda #{commandNum}.
-                      Não será possível desfazer.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <DialogFooter>
-                    <Button variant="outline" onClick={() => setConfirmOpen(false)}>
-                      Voltar
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      onClick={() => {
-                        if (!rowId) return;
-                        fetcher.submit(
-                          {
-                            _action: "cancel",
-                            id: rowId,
-                            date: dateStr,
-                            commandNumber: String(commandNum),
-                          },
-                          { method: "post" }
-                        );
-                        setConfirmOpen(false);
-                      }}
-                    >
-                      Cancelar pedido
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            </>
-          )}
+          {/* Dialog de confirmação de cancelamento */}
+          <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Cancelar pedido?</DialogTitle>
+                <DialogDescription>
+                  Esta ação <strong>remove definitivamente</strong> o registro da comanda.
+                  Não será possível desfazer.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setConfirmOpen(false)}>
+                  Voltar
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => {
+                    fetcher.submit(
+                      { _action: "cancel", id: rowId, date: dateStr },
+                      { method: "post" }
+                    );
+                    setConfirmOpen(false);
+                  }}
+                >
+                  Cancelar pedido
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
 
         {/* Hidden necessários */}
-        {rowId && <input type="hidden" name="id" value={rowId} />}
+        <input type="hidden" name="id" value={rowId} />
         <input type="hidden" name="size" value={JSON.stringify(counts)} />
-        <input type="hidden" name="commandNumber" value={commandNum} />
+        <input type="hidden" name="commandNumber" value={cmdText} />
         <input type="hidden" name="date" value={dateStr} />
         <input type="hidden" name="status" value={currentStatus} />
 
-        {/* Erro (toda a linha) */}
+        {/* Erro (linha) */}
         {errorText && <div className="col-span-10 text-red-600 text-xs mt-1">{errorText}</div>}
       </fetcher.Form>
 
@@ -958,7 +951,9 @@ function RowItem({
       <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Comanda #{commandNum}</DialogTitle>
+            <DialogTitle>
+              {order.commandNumber ? `Comanda #${cmdText}` : `Sem nº (pos. ${displayNumber})`}
+            </DialogTitle>
             <DialogDescription>Informações completas do registro</DialogDescription>
           </DialogHeader>
 
@@ -966,26 +961,23 @@ function RowItem({
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <div className="text-gray-500">Criado às</div>
-                <div className="font-mono text-3xl">{fmtHHMM(order?.createdAt)}</div>
+                <div className="font-mono text-3xl">{horaStr}</div>
               </div>
               <div>
                 <div className="text-gray-500">Decorrido</div>
-                <div className="font-mono text-3xl">{fmtElapsedHHMM(order?.createdAt, nowMs)}</div>
+                <div className="font-mono text-3xl">{decorridoStr}</div>
               </div>
 
-              {/* Status editável dentro do dialog */}
+              {/* Status */}
               <div className="col-span-2">
                 <div className="text-gray-500 mb-1">Status</div>
                 <Select
                   defaultValue={currentStatus}
                   onValueChange={(v) => {
-                    // Atualiza o campo hidden "status" do form da linha
-                    const root = document.getElementById("__next") || document.body;
-                    const form = root.querySelector('form') as HTMLFormElement | null;
+                    const form = document.querySelector(`form input[name="id"][value="${rowId}"]`)?.closest("form") as HTMLFormElement | null;
                     const input = form?.querySelector('input[name="status"]') as HTMLInputElement | null;
                     if (input) input.value = v;
                   }}
-                  disabled={isCanceled}
                 >
                   <SelectTrigger className="w-full h-9 text-xs">
                     <SelectValue placeholder="Status" />
@@ -1043,9 +1035,7 @@ function RowItem({
             <Button
               variant="default"
               onClick={() => {
-                // submit do form da linha
-                const form = (document.activeElement as HTMLElement)?.closest?.("form") as HTMLFormElement | null
-                  || document.querySelector("form");
+                const form = document.querySelector(`form input[name="id"][value="${rowId}"]`)?.closest("form") as HTMLFormElement | null;
                 form?.requestSubmit();
                 setDetailsOpen(false);
               }}
@@ -1060,7 +1050,7 @@ function RowItem({
 }
 
 /* =============================
- * Página (DnD, Totais, Fillers + merge ordenado, Refresh)
+ * Página
  * ============================= */
 export default function KdsAtendimentoPlanilha() {
   const data = useLoaderData<typeof loader>();
@@ -1073,7 +1063,7 @@ export default function KdsAtendimentoPlanilha() {
   }, []);
 
   const { revalidate } = useRevalidator();
-  // Recarrega os dados (loader) a cada 5 minutos
+  // Recarrega dados a cada 5 minutos
   useEffect(() => {
     const t = setInterval(() => revalidate(), 5 * 60 * 1000);
     return () => clearInterval(t);
@@ -1083,44 +1073,33 @@ export default function KdsAtendimentoPlanilha() {
   useHotkeys("enter", (e) => {
     const target = e.target as HTMLElement | null;
     const tag = target?.tagName?.toLowerCase();
-    if (tag === "input" || tag === "textarea") return;
+    if (tag === "input" || tag === "textarea" || tag === "select") return;
     e.preventDefault();
     const form = target?.closest("form") as HTMLFormElement | null;
-    if (form) form.requestSubmit();
+    form?.requestSubmit();
   });
 
-  const [orderList, setOrderList] = useState<OrderRow[]>([]);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
   const reorderFetcher = useFetcher();
+  const openDayFetcher = useFetcher();
+  const addSlotsFetcher = useFetcher();
+  const createUnFetcher = useFetcher();
 
-  function handleDragEnd(event: DragEndEvent) {
+  function handleDragEnd(event: DragEndEvent, list: OrderRow[]) {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
-    setOrderList((prev) => {
-      // Só reordena entre ATIVOS
-      const activeOnly = prev.filter((o) => !o.deletedAt);
-      const oldIndex = activeOnly.findIndex((o) => o.id === active.id);
-      const newIndex = activeOnly.findIndex((o) => o.id === over.id);
-      if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return prev;
+    const oldIndex = list.findIndex((o) => o.id === active.id);
+    const newIndex = list.findIndex((o) => o.id === over.id);
+    if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return;
 
-      const nextActive = arrayMove(activeOnly, oldIndex, newIndex);
-      const ids = nextActive.map((o) => o.id);
+    const next = arrayMove(list, oldIndex, newIndex);
+    const ids = next.map((o) => o.id);
 
-      // servidor preserva o conjunto de commandNumber dos ATIVOS
-      reorderFetcher.submit(
-        { _action: "reorder", date: data.currentDate, ids: JSON.stringify(ids) },
-        { method: "post" }
-      );
-
-      // Reflete visual (apenas rearranja os ativos, cancelados ficam no lugar)
-      const next = [...prev];
-      let k = 0;
-      for (let i = 0; i < next.length; i++) {
-        if (!next[i].deletedAt) next[i] = nextActive[k++];
-      }
-      return next;
-    });
+    reorderFetcher.submit(
+      { _action: "reorder", date: data.currentDate, ids: JSON.stringify(ids) },
+      { method: "post" }
+    );
   }
 
   return (
@@ -1128,13 +1107,13 @@ export default function KdsAtendimentoPlanilha() {
       <Await resolve={data.orders}>
         {(orders) => {
           const safeOrders = Array.isArray(orders) ? (orders as OrderRow[]) : [];
+          const hasAny = safeOrders.length > 0;
 
-          // Totais só com ATIVOS
-          const activeOrders = safeOrders.filter((o) => !o?.deletedAt);
+          // Totais
           const toNum = (v: any) => Number((v as any)?.toString?.() ?? v ?? 0) || 0;
-          const totalPedido = activeOrders.reduce((s, o) => s + toNum(o?.orderAmount), 0);
-          const totalMoto = activeOrders.reduce((s, o) => s + toNum(o?.motoValue), 0);
-          const sizeTotals = activeOrders.reduce(
+          const totalPedido = safeOrders.reduce((s, o) => s + toNum(o?.orderAmount), 0);
+          const totalMoto = safeOrders.reduce((s, o) => s + toNum(o?.motoValue), 0);
+          const sizeTotals = safeOrders.reduce(
             (acc, o) => {
               try {
                 const s = o?.size ? JSON.parse(o.size as any) : {};
@@ -1149,11 +1128,11 @@ export default function KdsAtendimentoPlanilha() {
             { F: 0, M: 0, P: 0, I: 0, FT: 0 }
           );
 
-          // Alerta de números duplicados (apenas ativos)
+          // Alerta de comanda duplicada (ignora null)
           const duplicatedNumbers = (() => {
             const counts = new Map<number, number>();
-            for (const o of activeOrders) {
-              const n = Number(o?.commandNumber ?? 0);
+            for (const o of safeOrders) {
+              const n = o.commandNumber;
               if (!n) continue;
               counts.set(n, (counts.get(n) ?? 0) + 1);
             }
@@ -1163,57 +1142,68 @@ export default function KdsAtendimentoPlanilha() {
               .sort((a, b) => a - b);
           })();
 
-          // sincroniza estado local quando o loader muda
-          useEffect(() => {
-            setOrderList(safeOrders.filter((o) => !!o?.id));
-          }, [safeOrders]);
-
-          // ids arrastáveis = apenas ativos
-          const activeIds = orderList.filter((o) => !o.deletedAt).map((o) => o.id!) as string[];
-
-          /* --------- FILLERS + MERGE ORDENADO POR commandNumber --------- */
-          const usedNumbers = new Set<number>();
-          for (const o of activeOrders) {
-            const n = Number(o?.commandNumber ?? 0);
-            if (n > 0) usedNumbers.add(n);
-          }
-
-          const TARGET_ROWS = 50;
-          const fillerCount = Math.max(0, TARGET_ROWS - activeOrders.length);
-
-          function takeMissingNumbers(need: number) {
-            const res: number[] = [];
-            if (need <= 0) return res;
-            const temp = new Set(usedNumbers);
-            let cand = 1;
-            while (res.length < need) {
-              if (!temp.has(cand)) {
-                res.push(cand);
-                temp.add(cand);
-              }
-              cand++;
-            }
-            return res;
-          }
-          const fillerNumbers = takeMissingNumbers(fillerCount);
-
-          type MergedItem =
-            | { kind: "order"; number: number; order: OrderRow }
-            | { kind: "filler"; number: number };
-
-          const merged: MergedItem[] = [
-            ...activeOrders.map((o) => ({
-              kind: "order" as const,
-              number: Number(o?.commandNumber ?? 0) || 0,
-              order: o,
-            })),
-            ...fillerNumbers.map((n) => ({ kind: "filler" as const, number: n })),
-          ].sort((a, b) => a.number - b.number);
-          /* -------------------------------------------------------------- */
+          // ids para DnD
+          const itemIds = safeOrders.map((o) => o.id);
 
           return (
             <div className="space-y-6">
-              {/* Alerta duplicados (não-bloqueante) */}
+              {/* Barra superior: ações de dia */}
+              <div className="flex flex-wrap items-center gap-3 mb-2">
+                {!hasAny ? (
+                  <openDayFetcher.Form method="post">
+                    <input type="hidden" name="_action" value="openDay" />
+                    <input type="hidden" name="date" value={data.currentDate} />
+                    <Button type="submit" variant="default">Abrir dia (40)</Button>
+                  </openDayFetcher.Form>
+                ) : (
+                  <>
+                    <addSlotsFetcher.Form method="post" className="flex items-center gap-2">
+                      <input type="hidden" name="_action" value="addSlots" />
+                      <input type="hidden" name="date" value={data.currentDate} />
+                      <input name="qty" defaultValue={10} className="w-16 h-9 border rounded px-2 text-right" />
+                      <Button type="submit" variant="secondary">+ adicionar</Button>
+                    </addSlotsFetcher.Form>
+
+                    <createUnFetcher.Form method="post">
+                      <input type="hidden" name="_action" value="createUnnumbered" />
+                      <input type="hidden" name="date" value={data.currentDate} />
+                      <Button type="submit" variant="secondary">+ Venda sem nº</Button>
+                    </createUnFetcher.Form>
+                  </>
+                )}
+
+                {/* Totais */}
+                <div className="ml-auto flex flex-wrap items-center gap-3">
+                  <div className="flex items-center gap-x-3 px-3 py-2 rounded-lg border">
+                    <span className="text-xs text-gray-500">Numero Pedidos</span>
+                    <div className="text-base font-semibold font-mono">{safeOrders.length}</div>
+                  </div>
+                  <div className="flex items-center gap-x-3 px-3 py-2 rounded-lg border">
+                    <span className="text-xs text-gray-500">Faturamento dia (R$)</span>
+                    <div className="text-base font-semibold font-mono">
+                      {totalPedido.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-x-3 px-3 py-2 rounded-lg border ">
+                    <span className="text-xs text-gray-500">Total Moto (R$)</span>
+                    <div className="text-base font-semibold font-mono">
+                      {totalMoto.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-x-3 px-3 py-2 rounded-lg border">
+                    <span className="text-xs text-gray-500">Total Tamanhos</span>
+                    <div className="text-sm font-mono">
+                      F: <span className="font-semibold">{sizeTotals.F}</span>{" "}
+                      M: <span className="font-semibold">{sizeTotals.M}</span>{" "}
+                      P: <span className="font-semibold">{sizeTotals.P}</span>{" "}
+                      I: <span className="font-semibold">{sizeTotals.I}</span>{" "}
+                      FT: <span className="font-semibold">{sizeTotals.FT}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Alerta duplicados */}
               {duplicatedNumbers.length > 0 && (
                 <div className="rounded-md border border-red-300 bg-red-50 text-red-800 px-3 py-2 text-sm">
                   <strong>Atenção:</strong> existem números de comanda repetidos neste dia:{" "}
@@ -1221,39 +1211,7 @@ export default function KdsAtendimentoPlanilha() {
                 </div>
               )}
 
-              {/* Totais (IGNORAM cancelados) */}
-              <div className="flex flex-wrap items-center gap-3 mb-2">
-                <div className="flex items-center gap-x-3 px-3 py-2 rounded-lg border">
-                  <span className="text-xs text-gray-500">Numero Pedidos</span>
-                  <div className="text-base font-semibold font-mono">{activeOrders.length}</div>
-                </div>
-                <div className="flex items-center gap-x-3 px-3 py-2 rounded-lg border">
-                  <span className="text-xs text-gray-500">Faturamento dia (R$)</span>
-                  <div className="text-base font-semibold font-mono">
-                    {totalPedido.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-x-3 px-3 py-2 rounded-lg border ">
-                  <span className="text-xs text-gray-500">Total Moto (R$)</span>
-                  <div className="text-base font-semibold font-mono">
-                    {totalMoto.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-x-3 px-3 py-2 rounded-lg border">
-                  <span className="text-xs text-gray-500">Total Tamanhos</span>
-                  <div className="text-sm font-mono">
-                    F: <span className="font-semibold">{sizeTotals.F}</span>{" "}
-                    M: <span className="font-semibold">{sizeTotals.M}</span>{" "}
-                    P: <span className="font-semibold">{sizeTotals.P}</span>{" "}
-                    I: <span className="font-semibold">{sizeTotals.I}</span>{" "}
-                    FT: <span className="font-semibold">{sizeTotals.FT}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Cabeçalho enxuto (sem hora/decorrido/status) */}
+              {/* Cabeçalho */}
               <div className={`${HEADER_TMPL}`}>
                 <div className="text-center">#</div>
                 <div className="text-center">Pedido (R$)</div>
@@ -1266,44 +1224,25 @@ export default function KdsAtendimentoPlanilha() {
                 <div className="text-center">Ações</div>
               </div>
 
-              {/* Lista: ATIVOS (sortable) + FILLERS (ordenados por número) */}
+              {/* Lista (somente registros do banco) */}
               <ul>
-                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                  <SortableContext items={activeIds} strategy={verticalListSortingStrategy}>
-                    {merged.map((item, i) => {
-                      if (item.kind === "order") {
-                        return item.order.deletedAt ? (
-                          <RowItem
-                            key={item.order.id}
-                            order={item.order}
-                            index={i}
-                            canais={["WHATS/PRESENCIAL/TELE", "MOGO", "AIQFOME", "IFOOD"]}
-                            dateStr={data.currentDate}
-                            nowMs={nowMs}
-                          />
-                        ) : (
-                          <SortableRow
-                            key={item.order.id}
-                            order={item.order}
-                            index={i}
-                            canais={["WHATS/PRESENCIAL/TELE", "MOGO", "AIQFOME", "IFOOD"]}
-                            dateStr={data.currentDate}
-                            nowMs={nowMs}
-                          />
-                        );
-                      }
-                      return (
-                        <RowItem
-                          key={`row-empty-${i}-${item.number}`}
-                          order={null}
-                          index={i}
-                          canais={["WHATS/PRESENCIAL/TELE", "MOGO", "AIQFOME", "IFOOD"]}
-                          dateStr={data.currentDate}
-                          nowMs={nowMs}
-                          initialNumber={item.number}
-                        />
-                      );
-                    })}
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={(ev) => handleDragEnd(ev, safeOrders)}
+                >
+                  <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
+                    {safeOrders.map((o, i) => (
+                      <SortableRow
+                        key={o.id}
+                        order={o}
+                        index={i}
+                        canais={["WHATS/PRESENCIAL/TELE", "MOGO", "AIQFOME", "IFOOD"]}
+                        dateStr={data.currentDate}
+                        nowMs={nowMs}
+                        displayNumber={i + 1} // número de exibição sempre presente
+                      />
+                    ))}
                   </SortableContext>
                 </DndContext>
               </ul>

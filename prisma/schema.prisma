@@ -909,8 +909,12 @@ model KdsDailyOrderDetail {
   Bairro           Bairro? @relation(fields: [bairroId], references: [id])
   bairroId         String? @map("bairro_id")
 
-  /// Regras/índices
+  sortOrderIndex Int @default(0) @map("sort_order_index") // NOVO
 
+  isUnnumbered Boolean @default(false) @map("is_unnumbered")
+
+  /// Regras/índices
+  @@index([dateInt, sortOrderIndex])
   @@index([dateInt])
   @@index([commandNumber])
   @@index([orderId])
