@@ -259,7 +259,7 @@ function OrderItem({ order, nowMs }: { order: OrderRow; nowMs: number }) {
     <li className={`relative rounded-lg border p-3 bg-white `}>
       {/* Topo: Nº + Status perto | Hora (mono) | Decorrido (mono, maior e bold) */}
       <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col items-center gap-2 mb-2">
           <div className="text-base font-semibold flex items-center gap-1.5">
             {/* badge 🔥 quando solicitado para forno */}
             {order.requestedForOven && (
