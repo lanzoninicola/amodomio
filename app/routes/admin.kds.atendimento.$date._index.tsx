@@ -20,8 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Trash, Pencil, Save, GripVertical, Store, Truck } from "lucide-react";
-
+import { Trash, Pencil, Save, GripVertical } from "lucide-react";
 
 /* DND-KIT */
 import {
@@ -55,7 +54,6 @@ function ymdToUtcNoon(ymd: string) {
   const dd = d.padStart(2, "0");
   return new Date(`${y}-${mm}-${dd}T12:00:00.000Z`);
 }
-
 function todayLocalYMD() {
   const now = new Date();
   const y = now.getFullYear();
@@ -88,13 +86,13 @@ type OrderRow = {
   size?: string;
   hasMoto?: boolean;
   motoValue?: DecimalLike;
-  take_away?: boolean
+  take_away?: boolean;
   orderAmount?: DecimalLike;
 
   channel?: string;
   status?: string;
 
-  // NOVO: campo para soft delete
+  // soft delete
   deletedAt?: string | null;
 };
 
@@ -130,7 +128,7 @@ export async function loader({ params }: { params: { date?: string } }) {
  * ============================= */
 async function recalcHeaderTotal(dateInt: number) {
   const agg = await prismaClient.kdsDailyOrderDetail.aggregate({
-    where: { dateInt, deletedAt: null }, // << só ativos
+    where: { dateInt, deletedAt: null }, // só ativos
     _sum: { orderAmount: true },
   });
   const total = agg._sum.orderAmount ?? new Prisma.Decimal(0);
@@ -152,6 +150,7 @@ export async function action({
 }) {
   const formData = await request.formData();
   const _action = (formData.get("_action") as string) ?? "upsert";
+  const rowId = (formData.get("id") as string) || null; // << usa id quando existir
 
   const fallbackToday = todayLocalYMD();
   const formDate = (formData.get("date") as string) || "";
@@ -199,15 +198,21 @@ export async function action({
       return json({ ok: true, reordered: true });
     }
 
-    /* ---------- CANCELAMENTO LÓGICO ---------- */
+    /* ---------- CANCELAMENTO LÓGICO (por id quando houver) ---------- */
     if (_action === "cancel") {
+      const idFromForm = (formData.get("id") as string) || null;
       const commandNumber = Number(formData.get("commandNumber") || 0);
-      if (!commandNumber) throw new Error("commandNumber inválido.");
+      if (!idFromForm && !commandNumber) throw new Error("id ou commandNumber inválido.");
 
-      const existente = await prismaClient.kdsDailyOrderDetail.findFirst({
-        where: { dateInt, commandNumber },
-        select: { id: true, status: true, deliveredAt: true }, // << incluir
-      });
+      const existente = idFromForm
+        ? await prismaClient.kdsDailyOrderDetail.findUnique({
+          where: { id: idFromForm },
+          select: { id: true },
+        })
+        : await prismaClient.kdsDailyOrderDetail.findFirst({
+          where: { dateInt, commandNumber },
+          select: { id: true },
+        });
 
       if (!existente) return json({ ok: true, canceled: false });
 
@@ -219,8 +224,7 @@ export async function action({
           motoValue: new Prisma.Decimal(0),
           orderAmount: new Prisma.Decimal(0),
           channel: "",
-          // requestedForOven: false, // só se o campo existir neste form
-          deletedAt: currentDate, // << soft delete
+          deletedAt: currentDate, // soft delete
         },
       });
 
@@ -296,23 +300,49 @@ export async function action({
         );
       }
 
-      // Upsert por (dateInt, commandNumber)
-      const existente = await prismaClient.kdsDailyOrderDetail.findFirst({
-        where: { dateInt, commandNumber },
-        select: { id: true, status: true, deliveredAt: true }, // << incluir
-      });
+      // >>> BLOQUEIO DE DUPLICIDADE (ativos) <<<
+      if (rowId) {
+        const dup = await prismaClient.kdsDailyOrderDetail.findFirst({
+          where: { dateInt, commandNumber, deletedAt: null, id: { not: rowId } },
+          select: { id: true },
+        });
+        if (dup) {
+          return json(
+            { ok: false, error: `Número de comanda ${commandNumber} já existe neste dia.` },
+            { status: 400 }
+          );
+        }
+      } else {
+        const dup = await prismaClient.kdsDailyOrderDetail.findFirst({
+          where: { dateInt, commandNumber, deletedAt: null },
+          select: { id: true },
+        });
+        if (dup) {
+          return json(
+            { ok: false, error: `Número de comanda ${commandNumber} já existe neste dia.` },
+            { status: 400 }
+          );
+        }
+      }
+      // <<< FIM duplicidade
 
+      // >>> UPDATE por id (permite mudar número sem duplicar)
+      if (rowId) {
+        const prev = await prismaClient.kdsDailyOrderDetail.findUnique({
+          where: { id: rowId },
+          select: { status: true },
+        });
+        if (!prev) throw new Error("Registro não encontrado para o id informado.");
 
-      if (existente) {
         let deliveredAtUpdate: Date | null | undefined = undefined;
-        if (status === "finalizado" && existente.status !== "finalizado") {
+        if (status === "finalizado" && prev.status !== "finalizado") {
           deliveredAtUpdate = currentDate;
-        } else if (status !== "finalizado" && existente.status === "finalizado") {
+        } else if (status !== "finalizado" && prev.status === "finalizado") {
           deliveredAtUpdate = null;
         }
 
         const updated = await prismaClient.kdsDailyOrderDetail.update({
-          where: { id: existente.id },
+          where: { id: rowId },
           data: {
             commandNumber,
             size: JSON.stringify(sizeCounts),
@@ -329,8 +359,9 @@ export async function action({
         await recalcHeaderTotal(dateInt);
         return json({ ok: true, id: updated.id, mode: "update" });
       }
+      // <<< FIM update por id
 
-
+      // CREATE (linha nova)
       const created = await prismaClient.kdsDailyOrderDetail.create({
         data: {
           orderId: header.id,
@@ -343,7 +374,7 @@ export async function action({
           orderAmount,
           channel,
           status,
-          deliveredAt: status === "finalizado" ? currentDate : null, // << incluir
+          deliveredAt: status === "finalizado" ? currentDate : null,
         },
       });
 
@@ -382,14 +413,14 @@ function statusColorClasses(status: string | undefined) {
 }
 
 /* =============================
- * MoneyInput (cent-based typing) — sem mudar UI
+ * MoneyInput (cent-based typing)
  * ============================= */
 function MoneyInput({
   name,
   defaultValue,
   placeholder,
   className = "w-24",
-  disabled = false, // << permite desabilitar quando cancelado
+  disabled = false,
 }: {
   name: string;
   defaultValue?: DecimalLike;
@@ -426,9 +457,9 @@ function MoneyInput({
   });
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (disabled) return; // << não edita se cancelado
+    if (disabled) return;
     const k = e.key;
-    if (k === "Enter") return; // deixa o Enter passar para o form
+    if (k === "Enter") return;
     if (k === "Backspace") {
       e.preventDefault();
       setCents((c) => Math.floor(c / 10));
@@ -459,10 +490,9 @@ function MoneyInput({
         value={display}
         onKeyDown={handleKeyDown}
         onChange={() => { }}
-        disabled={disabled}          // << desabilita visualmente
+        disabled={disabled}
         aria-disabled={disabled}
-        className={`${className} h-9 border rounded px-2 py-1 text-right ${disabled ? "bg-gray-50 text-gray-400" : ""
-          }`}
+        className={`${className} h-9 border rounded px-2 py-1 text-right ${disabled ? "bg-gray-50 text-gray-400" : ""}`}
         placeholder={placeholder}
       />
       <input type="hidden" name={name} value={(cents / 100).toFixed(2)} />
@@ -471,7 +501,7 @@ function MoneyInput({
 }
 
 /* =============================
- * Helpers de hora/decorrido (inalterados)
+ * Helpers de hora/decorrido
  * ============================= */
 function fmtHHMM(dateLike: string | Date | undefined) {
   if (!dateLike) return "--:--";
@@ -491,16 +521,15 @@ function fmtElapsedHHMM(from: string | Date | undefined, nowMs: number) {
 }
 
 /* =============================
- * Grid template (UI preservada)
+ * Grid template
  * ============================= */
 const GRID_TMPL =
   "grid grid-cols-[48px,60px,60px,150px,120px,220px,85px,85px,85px,85px,100px,120px] gap-2 items-center gap-x-4";
 const HEADER_TMPL =
-  "grid grid-cols-[48px,60px,60px,150px,120px,220px,85px,85px,85px,85px,100px,120px] gap-2 gap-x-4 border-b font-semibold text-sm sticky top-0  z-10";
-
+  "grid grid-cols-[48px,60px,60px,150px,120px,220px,85px,85px,85px,85px,100px,120px] gap-2 gap-x-4 border-b font-semibold text-sm sticky top-0 z-10";
 
 /* =============================
- * SizeSelector (UI INALTERADA)
+ * SizeSelector
  * ============================= */
 function SizeSelector({
   counts,
@@ -509,7 +538,7 @@ function SizeSelector({
 }: {
   counts: SizeCounts;
   onChange: (newCounts: SizeCounts) => void;
-  disabled?: boolean; // << adicionamos apenas para travar quando cancelado
+  disabled?: boolean;
 }) {
   function increment(size: keyof SizeCounts) {
     if (disabled) return;
@@ -548,7 +577,7 @@ function SizeSelector({
 }
 
 /* =============================
- * Sortable Row wrapper (somente para ATIVOS)
+ * Sortable Row (somente ATIVOS)
  * ============================= */
 function SortableRow({
   order,
@@ -584,7 +613,7 @@ function SortableRow({
 }
 
 /* =============================
- * RowItem (fetcher + feedback + cancelamento lógico)
+ * RowItem (fetcher + feedback + cancelamento lógico + edição do número)
  * ============================= */
 function RowItem({
   order,
@@ -593,6 +622,7 @@ function RowItem({
   dateStr,
   nowMs,
   sortable,
+  initialNumber, // << número proposto para fillers
 }: {
   order: OrderRow | null;
   index: number;
@@ -606,6 +636,7 @@ function RowItem({
     style: React.CSSProperties;
     isDragging: boolean;
   };
+  initialNumber?: number; // << NOVO
 }) {
   const fetcher = useFetcher<{ ok: boolean; error?: string; id?: string }>();
   const { revalidate } = useRevalidator();
@@ -641,6 +672,14 @@ function RowItem({
   const [lastOk, setLastOk] = useState<boolean | null>(null);
   const [takeAway, setTakeAway] = useState(order?.take_away ?? false);
 
+  // Número de comanda editável
+  const [isEditingNumber, setIsEditingNumber] = useState(false);
+  const [commandNum, setCommandNum] = useState<number>(() =>
+    order?.commandNumber ?? initialNumber ?? index + 1
+  );
+  useEffect(() => {
+    setCommandNum(order?.commandNumber ?? initialNumber ?? index + 1);
+  }, [order?.id, order?.commandNumber, initialNumber, index]);
 
   const currentStatus = order?.status || "novoPedido";
   const isCanceled = !!order?.deletedAt;
@@ -704,8 +743,10 @@ function RowItem({
             <GripVertical className="w-4 h-4" />
           </button>
 
+          {/* Círculo do número (clicável para editar) */}
           <div
-            className={`w-7 h-7 rounded-full border flex items-center justify-center text-xs font-bold ${circleClass}`}
+            className={`w-7 h-7 rounded-full border flex items-center justify-center text-xs font-bold ${circleClass} ${isCanceled ? "cursor-not-allowed" : "cursor-pointer"
+              }`}
             title={
               fetcher.state === "submitting"
                 ? "Salvando…"
@@ -713,10 +754,31 @@ function RowItem({
                   ? "Salvo!"
                   : lastOk === false
                     ? "Erro ao salvar"
-                    : `Comanda ${order?.commandNumber ?? index + 1}`
+                    : `Comanda ${commandNum}`
             }
+            onClick={() => {
+              if (!isCanceled) setIsEditingNumber(true);
+            }}
           >
-            {order?.commandNumber ?? index + 1}
+            {isEditingNumber ? (
+              <input
+                autoFocus
+                type="number"
+                min={1}
+                className="w-16 h-8 text-center rounded-full border bg-white/90 text-gray-900 outline-none"
+                value={commandNum}
+                onChange={(e) => {
+                  const v = Math.max(1, Number(e.target.value || 1));
+                  setCommandNum(v);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === "Escape") setIsEditingNumber(false);
+                }}
+                onBlur={() => setIsEditingNumber(false)}
+              />
+            ) : (
+              <span>{commandNum}</span>
+            )}
           </div>
         </div>
 
@@ -747,7 +809,9 @@ function RowItem({
           <button
             type="button"
             onClick={() => !isCanceled && setEditingStatus((v) => !v)}
-            className={"text-gray-500 hover:text-gray-700 " + (isCanceled ? "opacity-30 cursor-not-allowed" : "")}
+            className={
+              "text-gray-500 hover:text-gray-700 " + (isCanceled ? "opacity-30 cursor-not-allowed" : "")
+            }
             title={isCanceled ? "Linha cancelada" : "Editar status"}
             disabled={isCanceled}
           >
@@ -769,11 +833,11 @@ function RowItem({
         {/* Hidden */}
         {rowId && <input type="hidden" name="id" value={rowId} />}
         <input type="hidden" name="size" value={JSON.stringify(counts)} />
-        <input type="hidden" name="commandNumber" value={order?.commandNumber ?? index + 1} />
+        <input type="hidden" name="commandNumber" value={commandNum} />
         <input type="hidden" name="date" value={dateStr} />
         <input type="hidden" name="status" value={currentStatus} />
 
-        {/* Tamanhos (UI intacta; apenas travamos se cancelado) */}
+        {/* Tamanhos */}
         <div>
           <SizeSelector counts={counts} onChange={setCounts} disabled={isCanceled} />
         </div>
@@ -790,8 +854,6 @@ function RowItem({
             </SelectContent>
           </Select>
         </div>
-
-
 
         {/* Moto (R$) */}
         <div className="flex items-center justify-center">
@@ -810,19 +872,18 @@ function RowItem({
           <button
             type="button"
             onClick={() => !isCanceled && setTakeAway((v) => !v)}
-            className={`w-[35px] h-[35px] rounded-lg ${takeAway ? "bg-green-100" : "bg-gray-100"} ${isCanceled ? "opacity-50 cursor-not-allowed" : "hover:bg-green-200"
-              }`}
+            className={`w-[35px] h-[35px] rounded-lg ${takeAway ? "bg-green-100" : "bg-gray-100"
+              } ${isCanceled ? "opacity-50 cursor-not-allowed" : "hover:bg-green-200"}`}
             title={takeAway ? "Retirada no balcão" : "Delivery"}
             disabled={isCanceled}
           >
-            {takeAway ?
-              <span className="font-semibold text-sm ">B</span> :
+            {takeAway ? (
+              <span className="font-semibold text-sm ">B</span>
+            ) : (
               <span className="font-semibold text-sm">D</span>
-            }
+            )}
           </button>
         </div>
-
-
 
         {/* Canal (span 2) */}
         <div className="flex items-center justify-center col-span-2">
@@ -857,7 +918,7 @@ function RowItem({
             <Button
               type="submit"
               name="_action"
-              value="cancel" /* << ERA delete */
+              value="cancel"
               variant={"ghost"}
               disabled={isCanceled || fetcher.state === "submitting"}
               title="Cancelar (lógico)"
@@ -869,16 +930,14 @@ function RowItem({
         </div>
 
         {/* Erro (11 cols) */}
-        {errorText && (
-          <div className="col-span-11 text-red-600 text-xs mt-1">{errorText}</div>
-        )}
+        {errorText && <div className="col-span-11 text-red-600 text-xs mt-1">{errorText}</div>}
       </fetcher.Form>
     </li>
   );
 }
 
 /* =============================
- * Página (DnD, Totais, Refresh)
+ * Página (DnD, Totais, Fillers com números únicos, Refresh)
  * ============================= */
 export default function KdsAtendimentoPlanilha() {
   const data = useLoaderData<typeof loader>();
@@ -907,15 +966,10 @@ export default function KdsAtendimentoPlanilha() {
     if (form) form.requestSubmit();
   });
 
-  const canais = useMemo(
-    () => ["WHATS/PRESENCIAL/TELE", "MOGO", "AIQFOME", "IFOOD"],
-    []
-  );
+  const canais = useMemo(() => ["WHATS/PRESENCIAL/TELE", "MOGO", "AIQFOME", "IFOOD"], []);
 
   const [orderList, setOrderList] = useState<OrderRow[]>([]);
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
-  );
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
   const reorderFetcher = useFetcher();
 
   function handleDragEnd(event: DragEndEvent) {
@@ -967,11 +1021,25 @@ export default function KdsAtendimentoPlanilha() {
                 acc.M += Number(s.M || 0);
                 acc.P += Number(s.P || 0);
                 acc.I += Number(s.I || 0);
-              } catch { } // ignora JSON malformado
+              } catch { }
               return acc;
             },
             { F: 0, M: 0, P: 0, I: 0 }
           );
+
+          // Alerta de números duplicados (apenas ativos)
+          const duplicatedNumbers = (() => {
+            const counts = new Map<number, number>();
+            for (const o of activeOrders) {
+              const n = Number(o?.commandNumber ?? 0);
+              if (!n) continue;
+              counts.set(n, (counts.get(n) ?? 0) + 1);
+            }
+            return [...counts.entries()]
+              .filter(([, c]) => c > 1)
+              .map(([n]) => n)
+              .sort((a, b) => a - b);
+          })();
 
           // sincroniza estado local quando o loader muda
           useEffect(() => {
@@ -981,37 +1049,59 @@ export default function KdsAtendimentoPlanilha() {
           // ids arrastáveis = apenas ativos
           const activeIds = orderList.filter((o) => !o.deletedAt).map((o) => o.id!) as string[];
 
-          // fillers
-          const fillerCount = Math.max(0, 50 - orderList.length);
+          /* --------- FILLERS COM NÚMEROS ÚNICOS --------- */
+          // números já usados pelos ATIVOS
+          const usedNumbers = new Set<number>();
+          for (const o of activeOrders) {
+            const n = Number(o?.commandNumber ?? 0);
+            if (n > 0) usedNumbers.add(n);
+          }
+          // gera a sequência de números livres (1..N) sem repetir os usados
+          function makeProposedNumbers(totalFillers: number) {
+            const proposals: number[] = [];
+            const temp = new Set(usedNumbers);
+            let candidate = 1;
+            for (let i = 0; i < totalFillers; i++) {
+              while (temp.has(candidate)) candidate++;
+              proposals.push(candidate);
+              temp.add(candidate);
+            }
+            return proposals;
+          }
+
+          // fillers baseados na QUANTIDADE DE ATIVOS (para não contar cancelados)
+          const fillerCount = Math.max(0, 50 - activeOrders.length);
           const fillers = Array(fillerCount).fill(null);
+          const fillerNumbers = makeProposedNumbers(fillerCount);
+          /* ----------------------------------------------- */
 
           return (
             <div className="space-y-6">
+              {/* Alerta duplicados (não-bloqueante) */}
+              {duplicatedNumbers.length > 0 && (
+                <div className="rounded-md border border-red-300 bg-red-50 text-red-800 px-3 py-2 text-sm">
+                  <strong>Atenção:</strong> existem números de comanda repetidos neste dia:{" "}
+                  <span className="font-mono">{duplicatedNumbers.join(", ")}</span>.
+                </div>
+              )}
+
               {/* Totais (IGNORAM cancelados) */}
               <div className="flex flex-wrap items-center gap-3 mb-2">
-                <div className="flex  items-center gap-x-3 px-3 py-2 rounded-lg border">
+                <div className="flex items-center gap-x-3 px-3 py-2 rounded-lg border">
                   <span className="text-xs text-gray-500">Numero Pedidos</span>
-                  <div className="text-base font-semibold font-mono">
-                    {activeOrders.length}
-                  </div>
+                  <div className="text-base font-semibold font-mono">{activeOrders.length}</div>
                 </div>
-                <div className="flex  items-center gap-x-3 px-3 py-2 rounded-lg border">
+                <div className="flex items-center gap-x-3 px-3 py-2 rounded-lg border">
                   <span className="text-xs text-gray-500">Faturamento dia (R$)</span>
                   <div className="text-base font-semibold font-mono">
-                    {totalPedido.toLocaleString("pt-BR", {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
+                    {totalPedido.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </div>
                 </div>
 
-                <div className="flex  items-center gap-x-3  px-3 py-2 rounded-lg border ">
+                <div className="flex items-center gap-x-3 px-3 py-2 rounded-lg border ">
                   <span className="text-xs text-gray-500">Total Moto (R$)</span>
                   <div className="text-base font-semibold font-mono">
-                    {totalMoto.toLocaleString("pt-BR", {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
+                    {totalMoto.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </div>
                 </div>
 
@@ -1024,7 +1114,6 @@ export default function KdsAtendimentoPlanilha() {
                     I: <span className="font-semibold">{sizeTotals.I}</span>
                   </div>
                 </div>
-
               </div>
 
               {/* Cabeçalho */}
@@ -1075,10 +1164,11 @@ export default function KdsAtendimentoPlanilha() {
                   <RowItem
                     key={`row-empty-${i}-${safeOrders.length}`}
                     order={null}
-                    index={orderList.length + i}
+                    index={activeOrders.length + i}
                     canais={["WHATS/PRESENCIAL/TELE", "MOGO", "AIQFOME", "IFOOD"]}
                     dateStr={data.currentDate}
                     nowMs={nowMs}
+                    initialNumber={fillerNumbers[i]}  // << número único sugerido
                   />
                 ))}
               </ul>
