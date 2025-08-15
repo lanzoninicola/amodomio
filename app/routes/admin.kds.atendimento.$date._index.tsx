@@ -5,7 +5,7 @@ import {
   useFetcher,
   useRevalidator,
 } from "@remix-run/react";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Prisma } from "@prisma/client";
 import prismaClient from "~/lib/prisma/client.server";
 import { useHotkeys } from "react-hotkeys-hook";
@@ -19,7 +19,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Trash, Save, GripVertical, MoreHorizontal } from "lucide-react";
+import { Trash, Save, GripVertical, MoreHorizontal, Loader2, CheckCircle2 } from "lucide-react";
+
 
 /* Dialogs (Detalhes + Confirmação de cancelamento) */
 import {
@@ -640,6 +641,85 @@ function SortableRow({
   );
 }
 
+function OpeningDayOverlay({
+  open,
+  progress,
+  hasError,
+  errorMessage,
+  onClose,
+}: {
+  open: boolean;
+  progress: number;      // 0..100
+  hasError?: boolean;
+  errorMessage?: string | null;
+  onClose?: () => void;
+}) {
+  const isDone = progress >= 100 && !hasError;
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose?.()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            {isDone ? (
+              <>
+                <CheckCircle2 className="w-5 h-5" />
+                Dia aberto!
+              </>
+            ) : hasError ? (
+              "Falha ao abrir o dia"
+            ) : (
+              "Abrindo o dia…"
+            )}
+          </DialogTitle>
+          <DialogDescription>
+            {isDone
+              ? "As 40 comandas iniciais foram criadas."
+              : hasError
+                ? "Ocorreu um erro ao criar as comandas."
+                : "Criando as comandas iniciais no banco…"}
+          </DialogDescription>
+        </DialogHeader>
+
+        {!isDone && !hasError && (
+          <div className="flex items-center gap-3">
+            <Loader2 className="w-5 h-5 animate-spin" />
+            <div className="w-full">
+              <div className="w-full h-2 rounded bg-slate-200 overflow-hidden">
+                <div
+                  className="h-full bg-slate-900/80 transition-[width] duration-300"
+                  style={{ width: `${Math.max(5, Math.min(100, progress))}%` }}
+                />
+              </div>
+              <div className="mt-2 text-xs text-slate-600">{Math.floor(progress)}%</div>
+            </div>
+          </div>
+        )}
+
+        {hasError && (
+          <div className="space-y-3">
+            {errorMessage && (
+              <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
+                {errorMessage}
+              </div>
+            )}
+            <div className="flex justify-end">
+              <Button variant="outline" onClick={onClose}>Fechar</Button>
+            </div>
+          </div>
+        )}
+
+        {isDone && (
+          <div className="text-sm text-slate-600">
+            Fechando em instantes…
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+
 /* =============================
  * RowItem
  * ============================= */
@@ -1086,6 +1166,65 @@ export default function KdsAtendimentoPlanilha() {
   const addSlotsFetcher = useFetcher();
   const createUnFetcher = useFetcher();
 
+  const [openingDayOpen, setOpeningDayOpen] = useState(false);
+  const [openingProgress, setOpeningProgress] = useState(0);
+  const [openingError, setOpeningError] = useState<string | null>(null);
+  const progressTimer = useRef<number | null>(null);
+
+  // quando começa a submeter "Abrir dia", abre overlay e inicia progresso "fake" até ~85%
+  useEffect(() => {
+    if (openDayFetcher.state === "submitting") {
+      setOpeningDayOpen(true);
+      setOpeningError(null);
+      setOpeningProgress(8);
+
+      if (progressTimer.current) {
+        window.clearInterval(progressTimer.current);
+        progressTimer.current = null;
+      }
+      progressTimer.current = window.setInterval(() => {
+        setOpeningProgress((p) => Math.min(85, p + Math.random() * 7 + 3)); // vai subindo devagar até 85%
+      }, 250);
+    }
+  }, [openDayFetcher.state]);
+
+  // quando chega resposta do servidor
+  useEffect(() => {
+    if (openDayFetcher.data) {
+      // para o timer
+      if (progressTimer.current) {
+        window.clearInterval(progressTimer.current);
+        progressTimer.current = null;
+      }
+
+      if ((openDayFetcher.data as any).ok) {
+        // finaliza progresso e fecha sozinho
+        setOpeningProgress(100);
+        setOpeningError(null);
+        const t = window.setTimeout(() => {
+          setOpeningDayOpen(false);
+        }, 700);
+        return () => window.clearTimeout(t);
+      } else {
+        // erro
+        const msg = (openDayFetcher.data as any).error || "Falha ao abrir o dia.";
+        setOpeningError(msg);
+        setOpeningProgress(0);
+      }
+    }
+  }, [openDayFetcher.data]);
+
+  // cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (progressTimer.current) {
+        window.clearInterval(progressTimer.current);
+        progressTimer.current = null;
+      }
+    };
+  }, []);
+
+
   function handleDragEnd(event: DragEndEvent, list: OrderRow[]) {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
@@ -1104,153 +1243,167 @@ export default function KdsAtendimentoPlanilha() {
   }
 
   return (
-    <Suspense fallback={<div>Carregando pedidos...</div>}>
-      <Await resolve={data.orders}>
-        {(orders) => {
-          const safeOrders = Array.isArray(orders) ? (orders as OrderRow[]) : [];
-          const hasAny = safeOrders.length > 0;
+    <>
+      <Suspense fallback={<div>Carregando pedidos...</div>}>
+        <Await resolve={data.orders}>
+          {(orders) => {
+            const safeOrders = Array.isArray(orders) ? (orders as OrderRow[]) : [];
+            const hasAny = safeOrders.length > 0;
 
-          // Totais
-          const toNum = (v: any) => Number((v as any)?.toString?.() ?? v ?? 0) || 0;
-          const totalPedido = safeOrders.reduce((s, o) => s + toNum(o?.orderAmount), 0);
-          const totalMoto = safeOrders.reduce((s, o) => s + toNum(o?.motoValue), 0);
-          const sizeTotals = safeOrders.reduce(
-            (acc, o) => {
-              try {
-                const s = o?.size ? JSON.parse(o.size as any) : {};
-                acc.F += Number(s.F || 0);
-                acc.M += Number(s.M || 0);
-                acc.P += Number(s.P || 0);
-                acc.I += Number(s.I || 0);
-                acc.FT += Number(s.FT || 0);
-              } catch { }
-              return acc;
-            },
-            { F: 0, M: 0, P: 0, I: 0, FT: 0 }
-          );
+            // Totais
+            const toNum = (v: any) => Number((v as any)?.toString?.() ?? v ?? 0) || 0;
+            const totalPedido = safeOrders.reduce((s, o) => s + toNum(o?.orderAmount), 0);
+            const totalMoto = safeOrders.reduce((s, o) => s + toNum(o?.motoValue), 0);
+            const sizeTotals = safeOrders.reduce(
+              (acc, o) => {
+                try {
+                  const s = o?.size ? JSON.parse(o.size as any) : {};
+                  acc.F += Number(s.F || 0);
+                  acc.M += Number(s.M || 0);
+                  acc.P += Number(s.P || 0);
+                  acc.I += Number(s.I || 0);
+                  acc.FT += Number(s.FT || 0);
+                } catch { }
+                return acc;
+              },
+              { F: 0, M: 0, P: 0, I: 0, FT: 0 }
+            );
 
-          // Alerta de comanda duplicada (ignora null)
-          const duplicatedNumbers = (() => {
-            const counts = new Map<number, number>();
-            for (const o of safeOrders) {
-              const n = o.commandNumber;
-              if (!n) continue;
-              counts.set(n, (counts.get(n) ?? 0) + 1);
-            }
-            return [...counts.entries()]
-              .filter(([, c]) => c > 1)
-              .map(([n]) => n)
-              .sort((a, b) => a - b);
-          })();
+            // Alerta de comanda duplicada (ignora null)
+            const duplicatedNumbers = (() => {
+              const counts = new Map<number, number>();
+              for (const o of safeOrders) {
+                const n = o.commandNumber;
+                if (!n) continue;
+                counts.set(n, (counts.get(n) ?? 0) + 1);
+              }
+              return [...counts.entries()]
+                .filter(([, c]) => c > 1)
+                .map(([n]) => n)
+                .sort((a, b) => a - b);
+            })();
 
-          // ids para DnD
-          const itemIds = safeOrders.map((o) => o.id);
+            // ids para DnD
+            const itemIds = safeOrders.map((o) => o.id);
 
-          return (
-            <div className="space-y-6">
-              {/* Barra superior: ações de dia */}
-              <div className="flex flex-wrap items-center gap-3 mb-2">
-                {!hasAny ? (
-                  <openDayFetcher.Form method="post">
-                    <input type="hidden" name="_action" value="openDay" />
-                    <input type="hidden" name="date" value={data.currentDate} />
-                    <Button type="submit" variant="default">Abrir dia (40)</Button>
-                  </openDayFetcher.Form>
-                ) : (
-                  <>
-                    <addSlotsFetcher.Form method="post" className="flex items-center gap-2">
-                      <input type="hidden" name="_action" value="addSlots" />
+            return (
+              <div className="space-y-6">
+                {/* Barra superior: ações de dia */}
+                <div className="flex flex-wrap items-center gap-3 mb-2">
+                  {!hasAny ? (
+                    <openDayFetcher.Form method="post">
+                      <input type="hidden" name="_action" value="openDay" />
                       <input type="hidden" name="date" value={data.currentDate} />
-                      <input name="qty" defaultValue={10} className="w-16 h-9 border rounded px-2 text-right" />
-                      <Button type="submit" variant="secondary">+ adicionar</Button>
-                    </addSlotsFetcher.Form>
+                      <Button type="submit" variant="default">Abrir dia (40)</Button>
+                    </openDayFetcher.Form>
+                  ) : (
+                    <>
+                      <addSlotsFetcher.Form method="post" className="flex items-center gap-2">
+                        <input type="hidden" name="_action" value="addSlots" />
+                        <input type="hidden" name="date" value={data.currentDate} />
+                        <input name="qty" defaultValue={10} className="w-16 h-9 border rounded px-2 text-right" />
+                        <Button type="submit" variant="secondary">+ adicionar</Button>
+                      </addSlotsFetcher.Form>
 
-                    <createUnFetcher.Form method="post">
-                      <input type="hidden" name="_action" value="createUnnumbered" />
-                      <input type="hidden" name="date" value={data.currentDate} />
-                      <Button type="submit" variant="secondary">+ Venda sem nº</Button>
-                    </createUnFetcher.Form>
-                  </>
+                      <createUnFetcher.Form method="post">
+                        <input type="hidden" name="_action" value="createUnnumbered" />
+                        <input type="hidden" name="date" value={data.currentDate} />
+                        <Button type="submit" variant="secondary">+ Venda sem nº</Button>
+                      </createUnFetcher.Form>
+                    </>
+                  )}
+
+                  {/* Totais */}
+                  <div className="ml-auto flex flex-wrap items-center gap-3">
+                    <div className="flex items-center gap-x-3 px-3 py-2 rounded-lg border">
+                      <span className="text-xs text-gray-500">Numero Pedidos</span>
+                      <div className="text-base font-semibold font-mono">{safeOrders.length}</div>
+                    </div>
+                    <div className="flex items-center gap-x-3 px-3 py-2 rounded-lg border">
+                      <span className="text-xs text-gray-500">Faturamento dia (R$)</span>
+                      <div className="text-base font-semibold font-mono">
+                        {totalPedido.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-x-3 px-3 py-2 rounded-lg border ">
+                      <span className="text-xs text-gray-500">Total Moto (R$)</span>
+                      <div className="text-base font-semibold font-mono">
+                        {totalMoto.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-x-3 px-3 py-2 rounded-lg border">
+                      <span className="text-xs text-gray-500">Total Tamanhos</span>
+                      <div className="text-sm font-mono">
+                        F: <span className="font-semibold">{sizeTotals.F}</span>{" "}
+                        M: <span className="font-semibold">{sizeTotals.M}</span>{" "}
+                        P: <span className="font-semibold">{sizeTotals.P}</span>{" "}
+                        I: <span className="font-semibold">{sizeTotals.I}</span>{" "}
+                        FT: <span className="font-semibold">{sizeTotals.FT}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Alerta duplicados */}
+                {duplicatedNumbers.length > 0 && (
+                  <div className="rounded-md border border-red-300 bg-red-50 text-red-800 px-3 py-2 text-sm">
+                    <strong>Atenção:</strong> existem números de comanda repetidos neste dia:{" "}
+                    <span className="font-mono">{duplicatedNumbers.join(", ")}</span>.
+                  </div>
                 )}
 
-                {/* Totais */}
-                <div className="ml-auto flex flex-wrap items-center gap-3">
-                  <div className="flex items-center gap-x-3 px-3 py-2 rounded-lg border">
-                    <span className="text-xs text-gray-500">Numero Pedidos</span>
-                    <div className="text-base font-semibold font-mono">{safeOrders.length}</div>
-                  </div>
-                  <div className="flex items-center gap-x-3 px-3 py-2 rounded-lg border">
-                    <span className="text-xs text-gray-500">Faturamento dia (R$)</span>
-                    <div className="text-base font-semibold font-mono">
-                      {totalPedido.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-x-3 px-3 py-2 rounded-lg border ">
-                    <span className="text-xs text-gray-500">Total Moto (R$)</span>
-                    <div className="text-base font-semibold font-mono">
-                      {totalMoto.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-x-3 px-3 py-2 rounded-lg border">
-                    <span className="text-xs text-gray-500">Total Tamanhos</span>
-                    <div className="text-sm font-mono">
-                      F: <span className="font-semibold">{sizeTotals.F}</span>{" "}
-                      M: <span className="font-semibold">{sizeTotals.M}</span>{" "}
-                      P: <span className="font-semibold">{sizeTotals.P}</span>{" "}
-                      I: <span className="font-semibold">{sizeTotals.I}</span>{" "}
-                      FT: <span className="font-semibold">{sizeTotals.FT}</span>
-                    </div>
-                  </div>
+                {/* Cabeçalho */}
+                <div className={`${HEADER_TMPL}`}>
+                  <div className="text-center">#</div>
+                  <div className="text-center">Pedido (R$)</div>
+                  <div className="text-center">Tamanho</div>
+                  <div className="text-center">Moto</div>
+                  <div className="text-center">Moto (R$)</div>
+                  <div className="text-center">Delivery/Balcão</div>
+                  <div className="text-center col-span-2">Canal</div>
+                  <div className="text-center">Detalhes</div>
+                  <div className="text-center">Ações</div>
                 </div>
+
+                {/* Lista (somente registros do banco) */}
+                <ul>
+                  <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={(ev) => handleDragEnd(ev, safeOrders)}
+                  >
+                    <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
+                      {safeOrders.map((o, i) => (
+                        <SortableRow
+                          key={o.id}
+                          order={o}
+                          index={i}
+                          canais={["WHATS/PRESENCIAL/TELE", "MOGO", "AIQFOME", "IFOOD"]}
+                          dateStr={data.currentDate}
+                          nowMs={nowMs}
+                          displayNumber={i + 1} // número de exibição sempre presente
+                        />
+                      ))}
+                    </SortableContext>
+                  </DndContext>
+                </ul>
               </div>
-
-              {/* Alerta duplicados */}
-              {duplicatedNumbers.length > 0 && (
-                <div className="rounded-md border border-red-300 bg-red-50 text-red-800 px-3 py-2 text-sm">
-                  <strong>Atenção:</strong> existem números de comanda repetidos neste dia:{" "}
-                  <span className="font-mono">{duplicatedNumbers.join(", ")}</span>.
-                </div>
-              )}
-
-              {/* Cabeçalho */}
-              <div className={`${HEADER_TMPL}`}>
-                <div className="text-center">#</div>
-                <div className="text-center">Pedido (R$)</div>
-                <div className="text-center">Tamanho</div>
-                <div className="text-center">Moto</div>
-                <div className="text-center">Moto (R$)</div>
-                <div className="text-center">Delivery/Balcão</div>
-                <div className="text-center col-span-2">Canal</div>
-                <div className="text-center">Detalhes</div>
-                <div className="text-center">Ações</div>
-              </div>
-
-              {/* Lista (somente registros do banco) */}
-              <ul>
-                <DndContext
-                  sensors={sensors}
-                  collisionDetection={closestCenter}
-                  onDragEnd={(ev) => handleDragEnd(ev, safeOrders)}
-                >
-                  <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
-                    {safeOrders.map((o, i) => (
-                      <SortableRow
-                        key={o.id}
-                        order={o}
-                        index={i}
-                        canais={["WHATS/PRESENCIAL/TELE", "MOGO", "AIQFOME", "IFOOD"]}
-                        dateStr={data.currentDate}
-                        nowMs={nowMs}
-                        displayNumber={i + 1} // número de exibição sempre presente
-                      />
-                    ))}
-                  </SortableContext>
-                </DndContext>
-              </ul>
-            </div>
-          );
+            );
+          }}
+        </Await>
+      </Suspense>
+      <OpeningDayOverlay
+        open={openingDayOpen}
+        progress={openingProgress}
+        hasError={!!openingError}
+        errorMessage={openingError}
+        onClose={() => {
+          setOpeningDayOpen(false);
+          setOpeningError(null);
+          setOpeningProgress(0);
         }}
-      </Await>
-    </Suspense>
+
+      />
+    </>
   );
 }
