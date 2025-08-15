@@ -4,7 +4,6 @@ import {
   useLoaderData,
   useFetcher,
   useRevalidator,
-  Link,
 } from "@remix-run/react";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { Prisma } from "@prisma/client";
@@ -20,9 +19,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Trash, Pencil, Save, GripVertical } from "lucide-react";
+import { Trash, Save, GripVertical, MoreHorizontal } from "lucide-react";
 
-/* Dialog (confirmação de cancelamento) */
+/* Dialogs (Detalhes + Confirmação de cancelamento) */
 import {
   Dialog,
   DialogContent,
@@ -102,7 +101,7 @@ type OrderRow = {
   channel?: string;
   status?: string;
 
-  // soft delete (mantido no tipo para compat, mas não usamos mais para cancelar)
+  // soft delete (mantido por compat), mas cancel agora é delete físico
   deletedAt?: string | null;
 };
 
@@ -138,7 +137,7 @@ export async function loader({ params }: { params: { date?: string } }) {
  * ============================= */
 async function recalcHeaderTotal(dateInt: number) {
   const agg = await prismaClient.kdsDailyOrderDetail.aggregate({
-    where: { dateInt, deletedAt: null }, // só ativos (aqui não impacta o delete físico)
+    where: { dateInt, deletedAt: null }, // só ativos
     _sum: { orderAmount: true },
   });
   const total = agg._sum.orderAmount ?? new Prisma.Decimal(0);
@@ -208,7 +207,7 @@ export async function action({
       return json({ ok: true, reordered: true });
     }
 
-    /* ---------- CANCELAMENTO FÍSICO (delete) ---------- */
+    /* ---------- CANCELAMENTO FÍSICO (DELETE) ---------- */
     if (_action === "cancel") {
       const idFromForm = (formData.get("id") as string) || null;
       const commandNumber = Number(formData.get("commandNumber") || 0);
@@ -226,7 +225,6 @@ export async function action({
 
       if (!existente) return json({ ok: true, canceled: false });
 
-      // DELETE físico
       await prismaClient.kdsDailyOrderDetail.delete({
         where: { id: existente.id },
       });
@@ -395,7 +393,7 @@ export async function action({
 }
 
 /* =============================
- * Status labels/colors (UI intacta)
+ * Status labels/colors
  * ============================= */
 const statusLabels: Record<string, string> = {
   novoPedido: "Novo Pedido",
@@ -504,7 +502,7 @@ function MoneyInput({
 }
 
 /* =============================
- * Helpers de hora/decorrido
+ * Helpers de hora/decorrido (para o Dialog de detalhes)
  * ============================= */
 function fmtHHMM(dateLike: string | Date | undefined) {
   if (!dateLike) return "--:--";
@@ -524,12 +522,12 @@ function fmtElapsedHHMM(from: string | Date | undefined, nowMs: number) {
 }
 
 /* =============================
- * Grid template
+ * Grid template (sem Hora/Decorrido/Status na linha)
  * ============================= */
 const GRID_TMPL =
-  "grid grid-cols-[48px,60px,60px,150px,120px,220px,85px,85px,85px,85px,100px,120px] gap-2 items-center gap-x-4";
+  "grid grid-cols-[48px,150px,240px,90px,110px,85px,160px,120px,60px,96px] gap-2 items-center gap-x-4";
 const HEADER_TMPL =
-  "grid grid-cols-[48px,60px,60px,150px,120px,220px,85px,85px,85px,85px,100px,120px] gap-2 gap-x-4 border-b font-semibold text-sm sticky top-0 z-10";
+  "grid grid-cols-[48px,150px,240px,90px,110px,85px,160px,120px,60px,96px] gap-2 gap-x-4 border-b font-semibold text-sm sticky top-0 z-10";
 
 /* =============================
  * SizeSelector
@@ -553,14 +551,15 @@ function SizeSelector({
   }
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-3"> {/* antes era gap-2 */}
       {(["F", "M", "P", "I"] as (keyof SizeCounts)[]).map((size) => (
         <button
           key={size}
           type="button"
           onClick={() => increment(size)}
-          className={`w-8 h-8 rounded-full border flex items-center justify-center text-xs font-bold ${counts[size] > 0 ? "bg-primary text-white" : "bg-white"
-            } ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
+          className={`w-10 h-10 rounded-full border flex items-center justify-center text-sm font-semibold
+          ${counts[size] > 0 ? "bg-primary text-white" : "bg-white"}
+          ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
           aria-label={`Adicionar ${size}`}
           disabled={disabled}
         >
@@ -616,7 +615,7 @@ function SortableRow({
 }
 
 /* =============================
- * RowItem (fetcher + feedback + cancelamento + edição do número)
+ * RowItem (fetcher + feedback + dialogs + edição do número)
  * ============================= */
 function RowItem({
   order,
@@ -670,13 +669,13 @@ function RowItem({
   }, [order?.id]);
 
   const [rowId, setRowId] = useState<string | null>(order?.id ?? null);
-  const [editingStatus, setEditingStatus] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [lastOk, setLastOk] = useState<boolean | null>(null);
   const [takeAway, setTakeAway] = useState(order?.take_away ?? false);
 
-  // Diálogo de confirmação
+  // Dialogs
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   // Número de comanda editável
   const [isEditingNumber, setIsEditingNumber] = useState(false);
@@ -703,9 +702,8 @@ function RowItem({
         setLastOk(true);
         setErrorText(null);
         if (fetcher.data.id) setRowId(fetcher.data.id);
-        setEditingStatus(false);
         revalidate();
-        const t = setTimeout(() => setLastOk(null), 1500);
+        const t = setTimeout(() => setLastOk(null), 1200);
         return () => clearTimeout(t);
       } else {
         setLastOk(false);
@@ -714,7 +712,7 @@ function RowItem({
     }
   }, [fetcher.data, revalidate]);
 
-  // Círculo: feedback > cor do status
+  // Círculo: feedback visual de salvar
   const circleClass = useMemo(() => {
     if (fetcher.state === "submitting") return "bg-gray-200";
     if (lastOk === true) return "bg-green-500 text-white";
@@ -731,9 +729,9 @@ function RowItem({
       style={sortable?.style}
       className={isCanceled ? "opacity-50" : sortable?.isDragging ? "opacity-60" : undefined}
     >
-      {/* grid: # | Hora | Decorrido | Status | Pedido (R$) | Tamanho | Moto | Moto (R$) | Canal (×2) | Ações */}
+      {/* grid: # | Pedido (R$) | Tamanho | Moto | Moto (R$) | Delivery/Balcão | Canal (×2) | Detalhes | Ações */}
       <fetcher.Form method="post" className={`${GRID_TMPL} py-2`}>
-        {/* # + grip handle */}
+        {/* # + grip handle + edição do número */}
         <div className="flex items-center justify-center gap-1">
           <button
             type="button"
@@ -788,43 +786,6 @@ function RowItem({
           </div>
         </div>
 
-        {/* Hora / Decorrido */}
-        <div className="text-center text-sm text-gray-800 font-mono">{horaStr}</div>
-        <div className="text-center text-sm text-gray-800 font-mono">{decorridoStr}</div>
-
-        {/* Status */}
-        <div className="flex items-center justify-center gap-2">
-          {editingStatus ? (
-            <Select name="status" defaultValue={currentStatus} disabled={isCanceled}>
-              <SelectTrigger className="w-40 h-9 text-xs">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="novoPedido">(1) Novo Pedido</SelectItem>
-                <SelectItem value="emProducao">(2) Em Produção</SelectItem>
-                <SelectItem value="aguardandoForno">(3) Aguardando forno</SelectItem>
-                <SelectItem value="assando">(4) Assando</SelectItem>
-                <SelectItem value="finalizado">(5) Finalizado</SelectItem>
-              </SelectContent>
-            </Select>
-          ) : (
-            <div className={`px-2 py-1 text-xs rounded-md ${statusColorClasses(currentStatus)}`}>
-              {statusLabels[currentStatus] || currentStatus}
-            </div>
-          )}
-          <button
-            type="button"
-            onClick={() => !isCanceled && setEditingStatus((v) => !v)}
-            className={
-              "text-gray-500 hover:text-gray-700 " + (isCanceled ? "opacity-30 cursor-not-allowed" : "")
-            }
-            title={isCanceled ? "Linha cancelada" : "Editar status"}
-            disabled={isCanceled}
-          >
-            <Pencil className="w-4 h-4" />
-          </button>
-        </div>
-
         {/* Pedido (R$) */}
         <div className="flex items-center justify-center">
           <MoneyInput
@@ -835,13 +796,6 @@ function RowItem({
             disabled={isCanceled}
           />
         </div>
-
-        {/* Hidden */}
-        {rowId && <input type="hidden" name="id" value={rowId} />}
-        <input type="hidden" name="size" value={JSON.stringify(counts)} />
-        <input type="hidden" name="commandNumber" value={commandNum} />
-        <input type="hidden" name="date" value={dateStr} />
-        <input type="hidden" name="status" value={currentStatus} />
 
         {/* Tamanhos */}
         <div>
@@ -872,7 +826,7 @@ function RowItem({
           />
         </div>
 
-        {/* Take Away (boolean) */}
+        {/* Delivery/Balcão */}
         <div className="flex items-center justify-center">
           <input type="hidden" name="take_away" value={takeAway ? "true" : "false"} />
           <button
@@ -907,6 +861,21 @@ function RowItem({
           </Select>
         </div>
 
+        {/* Detalhes (abre dialog com informações completas) */}
+        <div className="flex items-center justify-center">
+          <Button
+            type="button"
+            variant="ghost"
+
+            onClick={() => setDetailsOpen(true)}
+            disabled={isCanceled}
+            title="Detalhes da comanda"
+            className="mx-auto"
+          >
+            <MoreHorizontal className="w-5 h-5" />
+          </Button>
+        </div>
+
         {/* Ações */}
         <div className="flex justify-center gap-2">
           <Button
@@ -933,7 +902,7 @@ function RowItem({
                 <Trash className="w-4 h-4 text-red-500" />
               </Button>
 
-              {/* Dialog de confirmação */}
+              {/* Dialog de confirmação de cancelamento */}
               <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
                 <DialogContent>
                   <DialogHeader>
@@ -972,9 +941,118 @@ function RowItem({
           )}
         </div>
 
-        {/* Erro (11 cols) */}
-        {errorText && <div className="col-span-11 text-red-600 text-xs mt-1">{errorText}</div>}
+        {/* Hidden necessários */}
+        {rowId && <input type="hidden" name="id" value={rowId} />}
+        <input type="hidden" name="size" value={JSON.stringify(counts)} />
+        <input type="hidden" name="commandNumber" value={commandNum} />
+        <input type="hidden" name="date" value={dateStr} />
+        <input type="hidden" name="status" value={currentStatus} />
+
+        {/* Erro (toda a linha) */}
+        {errorText && <div className="col-span-10 text-red-600 text-xs mt-1">{errorText}</div>}
       </fetcher.Form>
+
+      {/* Dialog de Detalhes */}
+      <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Comanda #{commandNum}</DialogTitle>
+            <DialogDescription>Informações completas do registro</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 text-sm">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <div className="text-gray-500">Criado às</div>
+                <div className="font-mono text-3xl">{fmtHHMM(order?.createdAt)}</div>
+              </div>
+              <div>
+                <div className="text-gray-500">Decorrido</div>
+                <div className="font-mono text-3xl">{fmtElapsedHHMM(order?.createdAt, nowMs)}</div>
+              </div>
+
+              {/* Status editável dentro do dialog */}
+              <div className="col-span-2">
+                <div className="text-gray-500 mb-1">Status</div>
+                <Select
+                  defaultValue={currentStatus}
+                  onValueChange={(v) => {
+                    // Atualiza o campo hidden "status" do form da linha
+                    const root = document.getElementById("__next") || document.body;
+                    const form = root.querySelector('form') as HTMLFormElement | null;
+                    const input = form?.querySelector('input[name="status"]') as HTMLInputElement | null;
+                    if (input) input.value = v;
+                  }}
+                  disabled={isCanceled}
+                >
+                  <SelectTrigger className="w-full h-9 text-xs">
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="novoPedido">(1) Novo Pedido</SelectItem>
+                    <SelectItem value="emProducao">(2) Em Produção</SelectItem>
+                    <SelectItem value="aguardandoForno">(3) Aguardando forno</SelectItem>
+                    <SelectItem value="assando">(4) Assando</SelectItem>
+                    <SelectItem value="finalizado">(5) Finalizado</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Resumo de valores */}
+              <div>
+                <div className="text-gray-500">Pedido (R$)</div>
+                <div className="font-mono">
+                  {Number((order?.orderAmount as any) ?? 0).toLocaleString("pt-BR", {
+                    minimumFractionDigits: 2,
+                  })}
+                </div>
+              </div>
+              <div>
+                <div className="text-gray-500">Moto (R$)</div>
+                <div className="font-mono">
+                  {Number((order?.motoValue as any) ?? 0).toLocaleString("pt-BR", {
+                    minimumFractionDigits: 2,
+                  })}
+                </div>
+              </div>
+
+              {/* Tamanhos (resumo) */}
+              <div className="col-span-2">
+                <div className="text-gray-500 mb-1">Tamanhos</div>
+                <div className="font-mono">
+                  F:{counts.F} M:{counts.M} P:{counts.P} I:{counts.I}
+                </div>
+              </div>
+
+              {/* Canal */}
+              {order?.channel && (
+                <div className="col-span-2">
+                  <div className="text-gray-500">Canal</div>
+                  <div>{order.channel}</div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setDetailsOpen(false)}>
+              Fechar
+            </Button>
+            <Button
+              variant="default"
+              onClick={() => {
+                // submit do form da linha
+                const form = (document.activeElement as HTMLElement)?.closest?.("form") as HTMLFormElement | null
+                  || document.querySelector("form");
+                form?.requestSubmit();
+                setDetailsOpen(false);
+              }}
+            >
+              Salvar alterações
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </li>
   );
 }
@@ -1008,8 +1086,6 @@ export default function KdsAtendimentoPlanilha() {
     const form = target?.closest("form") as HTMLFormElement | null;
     if (form) form.requestSubmit();
   });
-
-  const canais = useMemo(() => ["WHATS/PRESENCIAL/TELE", "MOGO", "AIQFOME", "IFOOD"], []);
 
   const [orderList, setOrderList] = useState<OrderRow[]>([]);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
@@ -1093,20 +1169,15 @@ export default function KdsAtendimentoPlanilha() {
           const activeIds = orderList.filter((o) => !o.deletedAt).map((o) => o.id!) as string[];
 
           /* --------- FILLERS + MERGE ORDENADO POR commandNumber --------- */
-          // números já usados pelos ATIVOS
           const usedNumbers = new Set<number>();
           for (const o of activeOrders) {
             const n = Number(o?.commandNumber ?? 0);
             if (n > 0) usedNumbers.add(n);
           }
 
-          // quantas linhas queremos no total (ex.: 50)
           const TARGET_ROWS = 50;
-
-          // quantos fillers precisamos para atingir TARGET_ROWS
           const fillerCount = Math.max(0, TARGET_ROWS - activeOrders.length);
 
-          // gere os menores números positivos livres, em ordem crescente
           function takeMissingNumbers(need: number) {
             const res: number[] = [];
             if (need <= 0) return res;
@@ -1123,7 +1194,6 @@ export default function KdsAtendimentoPlanilha() {
           }
           const fillerNumbers = takeMissingNumbers(fillerCount);
 
-          // mapeia ativos e fillers para uma lista unificada e ordena por número
           type MergedItem =
             | { kind: "order"; number: number; order: OrderRow }
             | { kind: "filler"; number: number };
@@ -1179,18 +1249,16 @@ export default function KdsAtendimentoPlanilha() {
                 </div>
               </div>
 
-              {/* Cabeçalho */}
+              {/* Cabeçalho enxuto (sem hora/decorrido/status) */}
               <div className={`${HEADER_TMPL}`}>
                 <div className="text-center">#</div>
-                <div className="text-center">Hora</div>
-                <div className="text-center">Decorrido</div>
-                <div className="text-center">Status</div>
                 <div className="text-center">Pedido (R$)</div>
                 <div className="text-center">Tamanho</div>
                 <div className="text-center">Moto</div>
                 <div className="text-center">Moto (R$)</div>
                 <div className="text-center">Delivery/Balcão</div>
                 <div className="text-center col-span-2">Canal</div>
+                <div className="text-center">Detalhes</div>
                 <div className="text-center">Ações</div>
               </div>
 
@@ -1200,7 +1268,6 @@ export default function KdsAtendimentoPlanilha() {
                   <SortableContext items={activeIds} strategy={verticalListSortingStrategy}>
                     {merged.map((item, i) => {
                       if (item.kind === "order") {
-                        // ativa: sortable se NÃO cancelada
                         return item.order.deletedAt ? (
                           <RowItem
                             key={item.order.id}
@@ -1221,7 +1288,6 @@ export default function KdsAtendimentoPlanilha() {
                           />
                         );
                       }
-                      // filler ordenado pelo número proposto
                       return (
                         <RowItem
                           key={`row-empty-${i}-${item.number}`}
