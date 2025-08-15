@@ -1049,31 +1049,52 @@ export default function KdsAtendimentoPlanilha() {
           // ids arrastáveis = apenas ativos
           const activeIds = orderList.filter((o) => !o.deletedAt).map((o) => o.id!) as string[];
 
-          /* --------- FILLERS COM NÚMEROS ÚNICOS --------- */
+          /* --------- FILLERS + MERGE ORDENADO POR commandNumber --------- */
           // números já usados pelos ATIVOS
           const usedNumbers = new Set<number>();
           for (const o of activeOrders) {
             const n = Number(o?.commandNumber ?? 0);
             if (n > 0) usedNumbers.add(n);
           }
-          // gera a sequência de números livres (1..N) sem repetir os usados
-          function makeProposedNumbers(totalFillers: number) {
-            const proposals: number[] = [];
-            const temp = new Set(usedNumbers);
-            let candidate = 1;
-            for (let i = 0; i < totalFillers; i++) {
-              while (temp.has(candidate)) candidate++;
-              proposals.push(candidate);
-              temp.add(candidate);
-            }
-            return proposals;
-          }
 
-          // fillers baseados na QUANTIDADE DE ATIVOS (para não contar cancelados)
-          const fillerCount = Math.max(0, 50 - activeOrders.length);
-          const fillers = Array(fillerCount).fill(null);
-          const fillerNumbers = makeProposedNumbers(fillerCount);
-          /* ----------------------------------------------- */
+          // quantas linhas queremos no total (ex.: 50)
+          const TARGET_ROWS = 50;
+
+          // quantos fillers precisamos para atingir TARGET_ROWS
+          const fillerCount = Math.max(0, TARGET_ROWS - activeOrders.length);
+
+          // gere os menores números positivos livres, em ordem crescente
+          function takeMissingNumbers(need: number) {
+            const res: number[] = [];
+            if (need <= 0) return res;
+            const temp = new Set(usedNumbers);
+            let cand = 1;
+            while (res.length < need) {
+              if (!temp.has(cand)) {
+                res.push(cand);
+                temp.add(cand);
+              }
+              cand++;
+            }
+            return res;
+          }
+          const fillerNumbers = takeMissingNumbers(fillerCount);
+
+          // mapeia ativos e fillers para uma lista unificada e ordena por número
+          type MergedItem =
+            | { kind: "order"; number: number; order: OrderRow }
+            | { kind: "filler"; number: number };
+
+          const merged: MergedItem[] = [
+            ...activeOrders.map((o) => ({
+              kind: "order" as const,
+              number: Number(o?.commandNumber ?? 0) || 0,
+              order: o,
+            })),
+            ...fillerNumbers.map((n) => ({ kind: "filler" as const, number: n })),
+          ].sort((a, b) => a.number - b.number);
+          /* -------------------------------------------------------------- */
+
 
           return (
             <div className="space-y-6">
@@ -1135,43 +1156,46 @@ export default function KdsAtendimentoPlanilha() {
               <ul>
                 <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                   <SortableContext items={activeIds} strategy={verticalListSortingStrategy}>
-                    {orderList.map((order, index) =>
-                      order.deletedAt ? (
+                    {merged.map((item, i) => {
+                      if (item.kind === "order") {
+                        // ativa: sortable se NÃO cancelada
+                        return item.order.deletedAt ? (
+                          <RowItem
+                            key={item.order.id}
+                            order={item.order}
+                            index={i}
+                            canais={["WHATS/PRESENCIAL/TELE", "MOGO", "AIQFOME", "IFOOD"]}
+                            dateStr={data.currentDate}
+                            nowMs={nowMs}
+                          />
+                        ) : (
+                          <SortableRow
+                            key={item.order.id}
+                            order={item.order}
+                            index={i}
+                            canais={["WHATS/PRESENCIAL/TELE", "MOGO", "AIQFOME", "IFOOD"]}
+                            dateStr={data.currentDate}
+                            nowMs={nowMs}
+                          />
+                        );
+                      }
+                      // filler ordenado pelo número proposto
+                      return (
                         <RowItem
-                          key={order.id}
-                          order={order}
-                          index={index}
+                          key={`row-empty-${i}-${item.number}`}
+                          order={null}
+                          index={i}
                           canais={["WHATS/PRESENCIAL/TELE", "MOGO", "AIQFOME", "IFOOD"]}
                           dateStr={data.currentDate}
                           nowMs={nowMs}
+                          initialNumber={item.number}
                         />
-                      ) : (
-                        <SortableRow
-                          key={order.id}
-                          order={order}
-                          index={index}
-                          canais={["WHATS/PRESENCIAL/TELE", "MOGO", "AIQFOME", "IFOOD"]}
-                          dateStr={data.currentDate}
-                          nowMs={nowMs}
-                        />
-                      )
-                    )}
+                      );
+                    })}
                   </SortableContext>
                 </DndContext>
-
-                {/* Linhas vazias (não arrastáveis) */}
-                {fillers.map((_, i) => (
-                  <RowItem
-                    key={`row-empty-${i}-${safeOrders.length}`}
-                    order={null}
-                    index={activeOrders.length + i}
-                    canais={["WHATS/PRESENCIAL/TELE", "MOGO", "AIQFOME", "IFOOD"]}
-                    dateStr={data.currentDate}
-                    nowMs={nowMs}
-                    initialNumber={fillerNumbers[i]}  // << número único sugerido
-                  />
-                ))}
               </ul>
+
             </div>
           );
         }}
