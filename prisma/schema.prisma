@@ -893,7 +893,7 @@ model KdsDailyOrderDetail {
   deliveredAt DateTime? @map("delivered_at")
 
   /// Nº da comanda (único dentro do dia)
-  commandNumber Int @map("command_number")
+  commandNumber Int? @map("command_number")
 
   /// Campos do pedido (linha)
   size        String?
