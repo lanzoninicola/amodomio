@@ -16,6 +16,7 @@ import { Suspense, useEffect, useState } from "react";
 import Loading from "~/components/loading/loading";
 import { MenuItemsFilters } from "~/domain/cardapio/components/menu-items-filters/menu-items-filters";
 import AlertsCostsAndSellPrice from "~/domain/cardapio/components/alerts-cost-and-sell-price/alerts-cost-and-sell-price";
+import { Button } from "~/components/ui/button";
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const sellingChannelKey = params.channel as string;
@@ -123,6 +124,57 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
             );
           }
 
+          const exportRenderedToCSV = () => {
+            // 1) Cabeçalhos dinâmicos por tamanho
+            const sizeNames = sizes.map((s: { name: string }) => s.name);
+            const headers = [
+              "Sabor",
+              ...sizeNames.flatMap((n: string) => [
+                `${n} Preco`,
+                `${n} BreakEven`,
+                `${n} Lucro%`,
+              ]),
+            ];
+
+            // 2) Linhas: percorre os itens filtrados/renderizados
+            const rows = items.map((mi) => {
+              // mapeia por nome do tamanho para acesso O(1)
+              const bySize: Record<string, any> = {};
+              mi.sellPriceVariations.forEach((r: any) => {
+                bySize[r.sizeName] = r;
+              });
+
+              const row: (string | number)[] = [mi.name];
+
+              sizeNames.forEach((sn) => {
+                const r = bySize[sn];
+                const price = r?.priceAmount ?? "";
+                const be =
+                  r?.computedSellingPriceBreakdown?.minimumPrice?.priceAmount?.breakEven ??
+                  "";
+                const perc = r?.profitActualPerc ?? "";
+                row.push(price, be, perc);
+              });
+
+              return row;
+            });
+
+            // 3) Monta CSV (separador ;) e dispara download
+            const csv =
+              headers.join(";") + "\n" + rows.map((r) => r.join(";")).join("\n");
+
+            const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+            const url = URL.createObjectURL(blob);
+            const ts = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `sell-price-${currentSellingChannel.key}-${ts}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+          };
+
           return (
 
             <div className="flex flex-col" >
@@ -132,10 +184,19 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
                   groups={groups}
                   categories={categories}
                   onItemsChange={(filtered) => setItems(filtered)}
-                  cnContainer="col-span-7"
+                  cnContainer="col-span-6 md:col-span-6"
                 />
+
+                {/* Botão de Exportar */}
+                <div className="col-span-1 flex justify-center md:justify-end">
+                  <Button variant="outline" size="sm" onClick={exportRenderedToCSV}>
+                    Exportar CSV
+                  </Button>
+                </div>
+
                 <AlertsCostsAndSellPrice items={items} cnContainer="col-span-1 flex justify-center md:justify-end w-full col-span-1" />
               </div>
+
 
               <div className="md:h-[500px] overflow-y-scroll">
                 <ul className="hidden md:grid md:grid-cols-6 md:mb-4 md:gap-x-2">
