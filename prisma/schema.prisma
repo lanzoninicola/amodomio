@@ -911,7 +911,7 @@ model KdsDailyOrderDetail {
 
   sortOrderIndex Int @default(0) @map("sort_order_index") // NOVO
 
-  isUnnumbered Boolean @default(false) @map("is_unnumbered")
+  isVendaLivre Boolean @default(false) @map("is_venda_livre")
 
   /// Regras/índices
   @@index([dateInt, sortOrderIndex])

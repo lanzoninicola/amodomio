@@ -19,10 +19,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Trash, Save, GripVertical, MoreHorizontal, Loader2, CheckCircle2 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import {
+  Trash,
+  Save,
+  GripVertical,
+  MoreHorizontal,
+  Loader2,
+  PlusCircle,
+  ChevronDown,
+  Receipt,
+} from "lucide-react";
 
-
-/* Dialogs (Detalhes + Confirmação de cancelamento) */
+/* Dialogs */
 import {
   Dialog,
   DialogContent,
@@ -31,6 +40,10 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+
+/* Dropdown & Popover (shadcn) */
+
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 /* DND-KIT */
 import {
@@ -48,6 +61,7 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "~/components/ui/dropdown-menu";
 
 /* =============================
  * Date utils
@@ -84,7 +98,7 @@ type OrderRow = {
   createdAt?: string | Date | null;
   commandNumber: number | null;
   sortOrderIndex: number;
-  isUnnumbered: boolean;
+  isVendaLivre: boolean;
 
   size?: string | null;
   hasMoto?: boolean | null;
@@ -101,7 +115,7 @@ function defaultSizeCounts(): SizeCounts {
 }
 
 /* =============================
- * Helpers de header/seed
+ * Helpers header/seed
  * ============================= */
 async function ensureHeader(dateInt: number, currentDate: Date) {
   return prismaClient.kdsDailyOrder.upsert({
@@ -123,13 +137,15 @@ async function recalcHeaderTotal(dateInt: number) {
   });
 }
 async function getMaxes(dateInt: number) {
-  const [_max] = await prismaClient.$queryRawUnsafe<
-    { max_cmd: number | null; max_sort: number | null }[]
-  >(
-    `SELECT MAX(command_number) AS max_cmd, MAX(sort_order_index) AS max_sort
-     FROM "KdsDailyOrderDetail" WHERE "date_int" = ${dateInt};`
-  );
-  return { maxCmd: _max?.max_cmd ?? 0, maxSort: _max?.max_sort ?? 0 };
+  // ✅ sem SQL raw: evita 42P01
+  const agg = await prismaClient.kdsDailyOrderDetail.aggregate({
+    where: { dateInt },
+    _max: { commandNumber: true, sortOrderIndex: true },
+  });
+  return {
+    maxCmd: agg._max.commandNumber ?? 0,
+    maxSort: agg._max.sortOrderIndex ?? 0,
+  };
 }
 
 /* =============================
@@ -146,12 +162,8 @@ export async function loader({ params }: { params: { date?: string } }) {
 
   const ordersPromise = await prismaClient.kdsDailyOrderDetail.findMany({
     where: { dateInt: { in: [dateInt8, dateInt7] } },
-    orderBy: [
-      { sortOrderIndex: "asc" },
-      { createdAt: "asc" },
-    ],
+    orderBy: [{ sortOrderIndex: "asc" }, { createdAt: "asc" }],
   });
-
 
   return defer({
     orders: ordersPromise,
@@ -215,7 +227,7 @@ export async function action({
         orderId: header.id,
         dateInt,
         commandNumber: i + 1,
-        isUnnumbered: false,
+        isVendaLivre: false,
         sortOrderIndex: (i + 1) * STEP,
         size: JSON.stringify({ F: 0, M: 0, P: 0, I: 0, FT: 0 }),
         hasMoto: false,
@@ -223,7 +235,7 @@ export async function action({
         takeAway: false,
         orderAmount: new Prisma.Decimal(0),
         channel: "",
-        status: "pendente",
+        status: "novoPedido",
         deliveredAt: null,
       }));
       await prismaClient.kdsDailyOrderDetail.createMany({ data: rows });
@@ -240,7 +252,7 @@ export async function action({
         orderId: header.id,
         dateInt,
         commandNumber: (maxCmd || 0) + i + 1, // se preferir slots sem número: use null
-        isUnnumbered: false,
+        isVendaLivre: false,
         sortOrderIndex: (maxSort || 0) + (i + 1) * STEP,
         size: JSON.stringify({ F: 0, M: 0, P: 0, I: 0, FT: 0 }),
         hasMoto: false,
@@ -248,37 +260,43 @@ export async function action({
         takeAway: false,
         orderAmount: new Prisma.Decimal(0),
         channel: "",
-        status: "pendente",
+        status: "novoPedido",
         deliveredAt: null,
       }));
       await prismaClient.kdsDailyOrderDetail.createMany({ data: rows });
       return json({ ok: true, added: qty });
     }
 
-    /* ---------- CRIAR VENDA SEM Nº ---------- */
-    if (_action === "createUnnumbered") {
+    /* ---------- CRIAR VENDA LIVRE (linha rápida) ---------- */
+    if (_action === "createVendaLivre") {
       const header = await ensureHeader(dateInt, currentDate);
       const { maxSort } = await getMaxes(dateInt);
+      const rawAmount = (formData.get("orderAmount") as string) ?? "0";
+      const orderAmountNum = Math.max(0, Number(rawAmount.replace(",", ".") || 0));
+      const orderAmount = new Prisma.Decimal(orderAmountNum.toFixed(2));
+      const status = ((formData.get("status") as string) || "pendente") as string;
       const STEP = 1000;
+
       const created = await prismaClient.kdsDailyOrderDetail.create({
         data: {
           orderId: header.id,
           dateInt,
           commandNumber: null,
-          isUnnumbered: true,
+          isVendaLivre: true,
           sortOrderIndex: (maxSort || 0) + STEP,
           size: JSON.stringify({ F: 0, M: 0, P: 0, I: 0, FT: 0 }),
           hasMoto: false,
           motoValue: new Prisma.Decimal(0),
           takeAway: false,
-          orderAmount: new Prisma.Decimal(0),
+          orderAmount,
           channel: "",
-          status: "novoPedido",
+          status, // pendente por padrão
           deliveredAt: null,
         },
         select: { id: true },
       });
-      return json({ ok: true, id: created.id, mode: "createUnnumbered" });
+      await recalcHeaderTotal(dateInt);
+      return json({ ok: true, id: created.id, mode: "createVendaLivre" });
     }
 
     /* ---------- CANCELAMENTO (DELETE físico) ---------- */
@@ -321,7 +339,7 @@ export async function action({
       const n = Number(rawCmd);
       commandNumber = Number.isFinite(n) && n > 0 ? n : null;
     }
-    const isUnnumbered = commandNumber == null;
+    const isVendaLivre = commandNumber == null;
 
     // Linha vazia? bloqueia save inútil
     const totalSizes = (sizeCounts.F || 0) + (sizeCounts.M || 0) + (sizeCounts.P || 0) + (sizeCounts.I || 0) + (sizeCounts.FT || 0);
@@ -329,12 +347,11 @@ export async function action({
       totalSizes === 0 &&
       !hasMoto &&
       !channel &&
-      (status === "novoPedido" || status === "pendente" || !status) &&
+      (status === "novoPedido" || !status) &&
       motoValueNum === 0 &&
       orderAmountNum === 0 &&
-      isUnnumbered;
+      isVendaLivre;
     if (linhaVazia && rowId) {
-      // nada para atualizar
       return json({ ok: true, id: rowId, mode: "noop" });
     } else if (linhaVazia && !rowId) {
       return json({ ok: false, error: "Linha vazia — nada para salvar." }, { status: 400 });
@@ -379,7 +396,7 @@ export async function action({
           orderId: header.id,
           dateInt,
           commandNumber,         // pode ser null
-          isUnnumbered,
+          isVendaLivre,
           size: JSON.stringify(sizeCounts),
           hasMoto,
           channel,
@@ -395,13 +412,13 @@ export async function action({
       return json({ ok: true, id: updated.id, mode: "update", commandNumber: updated.commandNumber });
     }
 
-    // CREATE (usado pontualmente; em geral já criamos via abrir dia / add / venda sem nº)
+    // CREATE (menos usado; preferir abrir dia / add / venda livre)
     const created = await prismaClient.kdsDailyOrderDetail.create({
       data: {
         orderId: header.id,
         dateInt,
         commandNumber,
-        isUnnumbered,
+        isVendaLivre,
         sortOrderIndex: (await getMaxes(dateInt)).maxSort + 1000,
         size: JSON.stringify(sizeCounts),
         hasMoto,
@@ -422,10 +439,10 @@ export async function action({
 }
 
 /* =============================
- * Status labels/colors
+ * Status colors (inclui "pendente")
  * ============================= */
 const statusColors: Record<string, string> = {
-  pendente: "bg-gray-50 text-gray-600",
+  pendente: "bg-slate-200 text-slate-800",
   novoPedido: "bg-gray-200 text-gray-800",
   emProducao: "bg-blue-100 text-blue-800",
   aguardandoForno: "bg-purple-100 text-purple-800",
@@ -433,7 +450,7 @@ const statusColors: Record<string, string> = {
   finalizado: "bg-yellow-100 text-yellow-800",
 };
 function statusColorClasses(status: string | undefined | null) {
-  return statusColors[status || "pendente"] || "bg-gray-50 text-gray-600";
+  return statusColors[status || "novoPedido"] || "bg-gray-200 text-gray-800";
 }
 
 /* =============================
@@ -525,7 +542,7 @@ function MoneyInput({
 }
 
 /* =============================
- * Helpers de hora/decorrido (Dialog)
+ * Time helpers (Dialog)
  * ============================= */
 function fmtHHMM(dateLike: string | Date | undefined | null) {
   if (!dateLike) return "--:--";
@@ -545,7 +562,7 @@ function fmtElapsedHHMM(from: string | Date | undefined | null, nowMs: number) {
 }
 
 /* =============================
- * Grid (sem hora/decorrido/status na linha)
+ * Grid
  * ============================= */
 const GRID_TMPL =
   "grid grid-cols-[70px,150px,260px,90px,110px,85px,160px,120px,60px,96px] gap-2 items-center gap-x-4";
@@ -641,85 +658,6 @@ function SortableRow({
   );
 }
 
-function OpeningDayOverlay({
-  open,
-  progress,
-  hasError,
-  errorMessage,
-  onClose,
-}: {
-  open: boolean;
-  progress: number;      // 0..100
-  hasError?: boolean;
-  errorMessage?: string | null;
-  onClose?: () => void;
-}) {
-  const isDone = progress >= 100 && !hasError;
-
-  return (
-    <Dialog open={open} onOpenChange={(v) => !v && onClose?.()}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            {isDone ? (
-              <>
-                <CheckCircle2 className="w-5 h-5" />
-                Dia aberto!
-              </>
-            ) : hasError ? (
-              "Falha ao abrir o dia"
-            ) : (
-              "Abrindo o dia…"
-            )}
-          </DialogTitle>
-          <DialogDescription>
-            {isDone
-              ? "As 40 comandas iniciais foram criadas."
-              : hasError
-                ? "Ocorreu um erro ao criar as comandas."
-                : "Criando as comandas iniciais no banco…"}
-          </DialogDescription>
-        </DialogHeader>
-
-        {!isDone && !hasError && (
-          <div className="flex items-center gap-3">
-            <Loader2 className="w-5 h-5 animate-spin" />
-            <div className="w-full">
-              <div className="w-full h-2 rounded bg-slate-200 overflow-hidden">
-                <div
-                  className="h-full bg-slate-900/80 transition-[width] duration-300"
-                  style={{ width: `${Math.max(5, Math.min(100, progress))}%` }}
-                />
-              </div>
-              <div className="mt-2 text-xs text-slate-600">{Math.floor(progress)}%</div>
-            </div>
-          </div>
-        )}
-
-        {hasError && (
-          <div className="space-y-3">
-            {errorMessage && (
-              <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
-                {errorMessage}
-              </div>
-            )}
-            <div className="flex justify-end">
-              <Button variant="outline" onClick={onClose}>Fechar</Button>
-            </div>
-          </div>
-        )}
-
-        {isDone && (
-          <div className="text-sm text-slate-600">
-            Fechando em instantes…
-          </div>
-        )}
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-
 /* =============================
  * RowItem
  * ============================= */
@@ -782,12 +720,12 @@ function RowItem({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
 
-  // Número de comanda (como texto: permite vazio)
+  // Número de comanda (texto: permite vazio)
   const [isEditingNumber, setIsEditingNumber] = useState(false);
   const [cmdText, setCmdText] = useState<string>(order.commandNumber ? String(order.commandNumber) : "");
 
-  const currentStatus = order?.status || "pendente";
-  const semNumero = order.commandNumber == null || order.isUnnumbered;
+  const currentStatus = order?.status || "novoPedido";
+  const semNumero = order.commandNumber == null || order.isVendaLivre;
 
   useEffect(() => {
     if (fetcher.state === "submitting") {
@@ -828,6 +766,7 @@ function RowItem({
 
   return (
     <li
+      data-row-id={order.id}
       ref={sortable?.setNodeRef}
       style={sortable?.style}
       className={sortable?.isDragging ? "opacity-60" : undefined}
@@ -856,7 +795,7 @@ function RowItem({
                     ? "Erro ao salvar"
                     : order.commandNumber
                       ? `Comanda ${cmdText}`
-                      : `Sem nº (mostrando posição ${displayNumber})`
+                      : `Venda livre (posição ${displayNumber})`
             }
             onClick={() => setIsEditingNumber(true)}
           >
@@ -880,7 +819,7 @@ function RowItem({
           </div>
 
           {semNumero && (
-            <Badge variant="secondary" className="text-[10px] px-1 py-0.5">SN</Badge>
+            <Badge variant="secondary" className="text-[10px] px-1 py-0.5">VL</Badge>
           )}
         </div>
 
@@ -992,7 +931,7 @@ function RowItem({
               <DialogHeader>
                 <DialogTitle>Cancelar pedido?</DialogTitle>
                 <DialogDescription>
-                  Esta ação <strong>remove definitivamente</strong> o registro da comanda.
+                  Esta ação <strong>remove definitivamente</strong> o registro.
                   Não será possível desfazer.
                 </DialogDescription>
               </DialogHeader>
@@ -1033,7 +972,7 @@ function RowItem({
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>
-              {order.commandNumber ? `Comanda #${cmdText}` : `Sem nº (pos. ${displayNumber})`}
+              {order.commandNumber ? `Comanda #${cmdText}` : `Venda livre (pos. ${displayNumber})`}
             </DialogTitle>
             <DialogDescription>Informações completas do registro</DialogDescription>
           </DialogHeader>
@@ -1064,6 +1003,7 @@ function RowItem({
                     <SelectValue placeholder="Status" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="pendente">(0) Pendente</SelectItem>
                     <SelectItem value="novoPedido">(1) Novo Pedido</SelectItem>
                     <SelectItem value="emProducao">(2) Em Produção</SelectItem>
                     <SelectItem value="aguardandoForno">(3) Aguardando forno</SelectItem>
@@ -1164,246 +1104,286 @@ export default function KdsAtendimentoPlanilha() {
   const reorderFetcher = useFetcher();
   const openDayFetcher = useFetcher();
   const addSlotsFetcher = useFetcher();
-  const createUnFetcher = useFetcher();
+  const createFreeFetcher = useFetcher();
 
-  const [openingDayOpen, setOpeningDayOpen] = useState(false);
-  const [openingProgress, setOpeningProgress] = useState(0);
-  const [openingError, setOpeningError] = useState<string | null>(null);
-  const progressTimer = useRef<number | null>(null);
+  // Toolbar controls
+  const addQtyRef = useRef<HTMLInputElement>(null);
+  const [showFree, setShowFree] = useState(true);
 
-  // quando começa a submeter "Abrir dia", abre overlay e inicia progresso "fake" até ~85%
+  // Quick-create venda livre feedback
+  const [creatingFree, setCreatingFree] = useState(false);
+  const [createFreeError, setCreateFreeError] = useState<string | null>(null);
+  const [lastCreatedId, setLastCreatedId] = useState<string | null>(null);
+
   useEffect(() => {
-    if (openDayFetcher.state === "submitting") {
-      setOpeningDayOpen(true);
-      setOpeningError(null);
-      setOpeningProgress(8);
-
-      if (progressTimer.current) {
-        window.clearInterval(progressTimer.current);
-        progressTimer.current = null;
-      }
-      progressTimer.current = window.setInterval(() => {
-        setOpeningProgress((p) => Math.min(85, p + Math.random() * 7 + 3)); // vai subindo devagar até 85%
-      }, 250);
+    if (createFreeFetcher.state === "submitting") {
+      setCreatingFree(true);
+      setCreateFreeError(null);
     }
-  }, [openDayFetcher.state]);
+  }, [createFreeFetcher.state]);
 
-  // quando chega resposta do servidor
   useEffect(() => {
-    if (openDayFetcher.data) {
-      // para o timer
-      if (progressTimer.current) {
-        window.clearInterval(progressTimer.current);
-        progressTimer.current = null;
-      }
-
-      if ((openDayFetcher.data as any).ok) {
-        // finaliza progresso e fecha sozinho
-        setOpeningProgress(100);
-        setOpeningError(null);
-        const t = window.setTimeout(() => {
-          setOpeningDayOpen(false);
-        }, 700);
-        return () => window.clearTimeout(t);
+    if (createFreeFetcher.data) {
+      const d = createFreeFetcher.data as any;
+      setCreatingFree(false);
+      if (d.ok) {
+        setLastCreatedId(d.id ?? null);
+        revalidate();
       } else {
-        // erro
-        const msg = (openDayFetcher.data as any).error || "Falha ao abrir o dia.";
-        setOpeningError(msg);
-        setOpeningProgress(0);
+        setCreateFreeError(d.error ?? "Falha ao criar venda livre");
       }
     }
-  }, [openDayFetcher.data]);
+  }, [createFreeFetcher.data, revalidate]);
 
-  // cleanup on unmount
   useEffect(() => {
-    return () => {
-      if (progressTimer.current) {
-        window.clearInterval(progressTimer.current);
-        progressTimer.current = null;
+    if (!lastCreatedId) return;
+    const t = setTimeout(() => {
+      const el = document.querySelector(`[data-row-id="${lastCreatedId}"]`) as HTMLElement | null;
+      if (el) {
+        el.scrollIntoView({ block: "center", behavior: "smooth" });
+        el.classList.add("ring-2", "ring-primary", "rounded-md", "animate-pulse");
+        setTimeout(() => {
+          el.classList.remove("animate-pulse", "ring-2", "ring-primary");
+        }, 1200);
       }
-    };
-  }, []);
-
-
-  function handleDragEnd(event: DragEndEvent, list: OrderRow[]) {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-
-    const oldIndex = list.findIndex((o) => o.id === active.id);
-    const newIndex = list.findIndex((o) => o.id === over.id);
-    if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return;
-
-    const next = arrayMove(list, oldIndex, newIndex);
-    const ids = next.map((o) => o.id);
-
-    reorderFetcher.submit(
-      { _action: "reorder", date: data.currentDate, ids: JSON.stringify(ids) },
-      { method: "post" }
-    );
-  }
+      setLastCreatedId(null);
+    }, 150);
+    return () => clearTimeout(t);
+  }, [lastCreatedId]);
 
   return (
-    <>
-      <Suspense fallback={<div>Carregando pedidos...</div>}>
-        <Await resolve={data.orders}>
-          {(orders) => {
-            const safeOrders = Array.isArray(orders) ? (orders as OrderRow[]) : [];
-            const hasAny = safeOrders.length > 0;
+    <Suspense fallback={<div>Carregando pedidos...</div>}>
+      <Await resolve={data.orders}>
+        {(orders) => {
+          const safeOrders = Array.isArray(orders) ? (orders as OrderRow[]) : [];
+          const hasAny = safeOrders.length > 0;
 
-            // Totais
-            const toNum = (v: any) => Number((v as any)?.toString?.() ?? v ?? 0) || 0;
-            const totalPedido = safeOrders.reduce((s, o) => s + toNum(o?.orderAmount), 0);
-            const totalMoto = safeOrders.reduce((s, o) => s + toNum(o?.motoValue), 0);
-            const sizeTotals = safeOrders.reduce(
-              (acc, o) => {
-                try {
-                  const s = o?.size ? JSON.parse(o.size as any) : {};
-                  acc.F += Number(s.F || 0);
-                  acc.M += Number(s.M || 0);
-                  acc.P += Number(s.P || 0);
-                  acc.I += Number(s.I || 0);
-                  acc.FT += Number(s.FT || 0);
-                } catch { }
-                return acc;
-              },
-              { F: 0, M: 0, P: 0, I: 0, FT: 0 }
+          // Totais (incluem vendas livres mesmo que ocultas)
+          const toNum = (v: any) => Number((v as any)?.toString?.() ?? v ?? 0) || 0;
+          const totalPedido = safeOrders.reduce((s, o) => s + toNum(o?.orderAmount), 0);
+          const totalMoto = safeOrders.reduce((s, o) => s + toNum(o?.motoValue), 0);
+          const sizeTotals = safeOrders.reduce(
+            (acc, o) => {
+              try {
+                const s = o?.size ? JSON.parse(o.size as any) : {};
+                acc.F += Number(s.F || 0);
+                acc.M += Number(s.M || 0);
+                acc.P += Number(s.P || 0);
+                acc.I += Number(s.I || 0);
+                acc.FT += Number(s.FT || 0);
+              } catch { }
+              return acc;
+            },
+            { F: 0, M: 0, P: 0, I: 0, FT: 0 }
+          );
+
+          // Alerta de comanda duplicada (ignora null)
+          const duplicatedNumbers = (() => {
+            const counts = new Map<number, number>();
+            for (const o of safeOrders) {
+              const n = o.commandNumber;
+              if (!n) continue;
+              counts.set(n, (counts.get(n) ?? 0) + 1);
+            }
+            return [...counts.entries()]
+              .filter(([, c]) => c > 1)
+              .map(([n]) => n)
+              .sort((a, b) => a - b);
+          })();
+
+          // Filtragem por toggle
+          const displayedOrders = showFree ? safeOrders : safeOrders.filter((o) => !o.isVendaLivre);
+
+          // IDs visíveis e totais
+          const displayedIds = displayedOrders.map((o) => o.id);
+
+          function handleDragEnd(event: DragEndEvent) {
+            const { active, over } = event;
+            if (!over || active.id === over.id) return;
+
+            const visOldIndex = displayedOrders.findIndex((o) => o.id === active.id);
+            const visNewIndex = displayedOrders.findIndex((o) => o.id === over.id);
+            if (visOldIndex === -1 || visNewIndex === -1 || visOldIndex === visNewIndex) return;
+
+            const nextVisible = arrayMove(displayedOrders, visOldIndex, visNewIndex);
+
+            // Reconstrói ordem completa preservando itens fora da visão
+            const newFull = [...safeOrders];
+            const visibleSet = new Set(displayedIds);
+            const positions: number[] = [];
+            for (let i = 0; i < newFull.length; i++) {
+              if (visibleSet.has(newFull[i].id)) positions.push(i);
+            }
+            positions.forEach((pos, idx) => {
+              newFull[pos] = nextVisible[idx];
+            });
+
+            const ids = newFull.map((o) => o.id);
+            reorderFetcher.submit(
+              { _action: "reorder", date: data.currentDate, ids: JSON.stringify(ids) },
+              { method: "post" }
             );
+          }
 
-            // Alerta de comanda duplicada (ignora null)
-            const duplicatedNumbers = (() => {
-              const counts = new Map<number, number>();
-              for (const o of safeOrders) {
-                const n = o.commandNumber;
-                if (!n) continue;
-                counts.set(n, (counts.get(n) ?? 0) + 1);
-              }
-              return [...counts.entries()]
-                .filter(([, c]) => c > 1)
-                .map(([n]) => n)
-                .sort((a, b) => a - b);
-            })();
-
-            // ids para DnD
-            const itemIds = safeOrders.map((o) => o.id);
-
-            return (
-              <div className="space-y-6">
-                {/* Barra superior: ações de dia */}
-                <div className="flex flex-wrap items-center gap-3 mb-2">
-                  {!hasAny ? (
-                    <openDayFetcher.Form method="post">
-                      <input type="hidden" name="_action" value="openDay" />
-                      <input type="hidden" name="date" value={data.currentDate} />
-                      <Button type="submit" variant="default">Abrir dia (40)</Button>
-                    </openDayFetcher.Form>
-                  ) : (
-                    <>
-                      <addSlotsFetcher.Form method="post" className="flex items-center gap-2">
+          return (
+            <div className="space-y-6">
+              {/* Header organizado */}
+              <div className="flex flex-wrap items-center gap-2 mb-3">
+                {!hasAny ? (
+                  <openDayFetcher.Form method="post">
+                    <input type="hidden" name="_action" value="openDay" />
+                    <input type="hidden" name="date" value={data.currentDate} />
+                    <Button type="submit" variant="default">Abrir dia (40)</Button>
+                  </openDayFetcher.Form>
+                ) : (
+                  <>
+                    {/* Split-button: Adicionar linhas */}
+                    <div className="inline-flex items-center">
+                      <addSlotsFetcher.Form method="post" id="addSlotsForm" className="hidden">
                         <input type="hidden" name="_action" value="addSlots" />
                         <input type="hidden" name="date" value={data.currentDate} />
-                        <input name="qty" defaultValue={10} className="w-16 h-9 border rounded px-2 text-right" />
-                        <Button type="submit" variant="secondary">+ adicionar</Button>
+                        <input ref={addQtyRef} type="hidden" name="qty" defaultValue={10} />
                       </addSlotsFetcher.Form>
 
-                      <createUnFetcher.Form method="post">
-                        <input type="hidden" name="_action" value="createUnnumbered" />
-                        <input type="hidden" name="date" value={data.currentDate} />
-                        <Button type="submit" variant="secondary">+ Venda sem nº</Button>
-                      </createUnFetcher.Form>
-                    </>
-                  )}
+                      <Button
+                        className="rounded-r-none gap-2"
+                        onClick={() => {
+                          const f = document.getElementById("addSlotsForm") as HTMLFormElement | null;
+                          f?.requestSubmit();
+                        }}
+                      >
+                        <PlusCircle className="w-4 h-4" /> Adicionar
+                      </Button>
 
-                  {/* Totais */}
-                  <div className="ml-auto flex flex-wrap items-center gap-3">
-                    <div className="flex items-center gap-x-3 px-3 py-2 rounded-lg border">
-                      <span className="text-xs text-gray-500">Numero Pedidos</span>
-                      <div className="text-base font-semibold font-mono">{safeOrders.length}</div>
-                    </div>
-                    <div className="flex items-center gap-x-3 px-3 py-2 rounded-lg border">
-                      <span className="text-xs text-gray-500">Faturamento dia (R$)</span>
-                      <div className="text-base font-semibold font-mono">
-                        {totalPedido.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-x-3 px-3 py-2 rounded-lg border ">
-                      <span className="text-xs text-gray-500">Total Moto (R$)</span>
-                      <div className="text-base font-semibold font-mono">
-                        {totalMoto.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-x-3 px-3 py-2 rounded-lg border">
-                      <span className="text-xs text-gray-500">Total Tamanhos</span>
-                      <div className="text-sm font-mono">
-                        F: <span className="font-semibold">{sizeTotals.F}</span>{" "}
-                        M: <span className="font-semibold">{sizeTotals.M}</span>{" "}
-                        P: <span className="font-semibold">{sizeTotals.P}</span>{" "}
-                        I: <span className="font-semibold">{sizeTotals.I}</span>{" "}
-                        FT: <span className="font-semibold">{sizeTotals.FT}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="outline" className="rounded-l-none px-2">
+                            <ChevronDown className="w-4 h-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start">
+                          <DropdownMenuItem onClick={() => { if (addQtyRef.current) addQtyRef.current.value = "5"; document.getElementById("addSlotsForm")?.requestSubmit(); }}>
+                            +5 linhas
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => { if (addQtyRef.current) addQtyRef.current.value = "10"; document.getElementById("addSlotsForm")?.requestSubmit(); }}>
+                            +10 linhas
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => { if (addQtyRef.current) addQtyRef.current.value = "20"; document.getElementById("addSlotsForm")?.requestSubmit(); }}>
+                            +20 linhas
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          {/* Poderíamos incluir aqui "+ Venda livre", mas para manter o header limpo,
+                              usamos a linha rápida logo abaixo da grelha. */}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
 
-                {/* Alerta duplicados */}
-                {duplicatedNumbers.length > 0 && (
-                  <div className="rounded-md border border-red-300 bg-red-50 text-red-800 px-3 py-2 text-sm">
-                    <strong>Atenção:</strong> existem números de comanda repetidos neste dia:{" "}
-                    <span className="font-mono">{duplicatedNumbers.join(", ")}</span>.
-                  </div>
+                      {/* Toggle: mostrar vendas livres */}
+                      <div className="ml-2 flex items-center gap-2 px-3 py-2 rounded-lg border">
+                        <span className="text-sm">Mostrar vendas livres</span>
+                        <Switch checked={showFree} onCheckedChange={setShowFree} />
+                      </div>
+                    </div>
+
+                    {/* Relatório compacto */}
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="ghost" className="ml-auto gap-2">
+                          <Receipt className="w-4 h-4" /> Relatório
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-80">
+                        <div className="space-y-2 text-sm">
+                          <div className="flex justify-between"><span>Nº pedidos</span><span className="font-mono font-semibold">{safeOrders.length}</span></div>
+                          <div className="flex justify-between"><span>Faturamento (R$)</span><span className="font-mono font-semibold">{totalPedido.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span></div>
+                          <div className="flex justify-between"><span>Total Moto (R$)</span><span className="font-mono font-semibold">{totalMoto.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span></div>
+                          <div className="flex justify-between"><span>Tamanhos (F/M/P/I/FT)</span>
+                            <span className="font-mono">F:{sizeTotals.F} M:{sizeTotals.M} P:{sizeTotals.P} I:{sizeTotals.I} FT:{sizeTotals.FT}</span>
+                          </div>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  </>
                 )}
-
-                {/* Cabeçalho */}
-                <div className={`${HEADER_TMPL}`}>
-                  <div className="text-center">#</div>
-                  <div className="text-center">Pedido (R$)</div>
-                  <div className="text-center">Tamanho</div>
-                  <div className="text-center">Moto</div>
-                  <div className="text-center">Moto (R$)</div>
-                  <div className="text-center">Delivery/Balcão</div>
-                  <div className="text-center col-span-2">Canal</div>
-                  <div className="text-center">Detalhes</div>
-                  <div className="text-center">Ações</div>
-                </div>
-
-                {/* Lista (somente registros do banco) */}
-                <ul>
-                  <DndContext
-                    sensors={sensors}
-                    collisionDetection={closestCenter}
-                    onDragEnd={(ev) => handleDragEnd(ev, safeOrders)}
-                  >
-                    <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
-                      {safeOrders.map((o, i) => (
-                        <SortableRow
-                          key={o.id}
-                          order={o}
-                          index={i}
-                          canais={["WHATS/PRESENCIAL/TELE", "MOGO", "AIQFOME", "IFOOD"]}
-                          dateStr={data.currentDate}
-                          nowMs={nowMs}
-                          displayNumber={i + 1} // número de exibição sempre presente
-                        />
-                      ))}
-                    </SortableContext>
-                  </DndContext>
-                </ul>
               </div>
-            );
-          }}
-        </Await>
-      </Suspense>
-      <OpeningDayOverlay
-        open={openingDayOpen}
-        progress={openingProgress}
-        hasError={!!openingError}
-        errorMessage={openingError}
-        onClose={() => {
-          setOpeningDayOpen(false);
-          setOpeningError(null);
-          setOpeningProgress(0);
-        }}
 
-      />
-    </>
+              {/* Linha rápida: Venda livre (valor + criar, status pendente) */}
+              <div className="rounded-lg border p-3 flex flex-wrap items-center gap-3">
+                <div className="text-sm font-medium">Venda livre (rápida)</div>
+                <createFreeFetcher.Form method="post" className="flex items-center gap-3">
+                  <input type="hidden" name="_action" value="createVendaLivre" />
+                  <input type="hidden" name="date" value={data.currentDate} />
+                  <input type="hidden" name="status" value="pendente" />
+                  <MoneyInput
+                    name="orderAmount"
+                    placeholder="Valor (R$)"
+                    className="w-32"
+                  />
+                  <Button type="submit" variant="secondary" disabled={creatingFree}>
+                    {creatingFree ? (
+                      <span className="inline-flex items-center gap-2">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Criando…
+                      </span>
+                    ) : (
+                      "Adicionar"
+                    )}
+                  </Button>
+                </createFreeFetcher.Form>
+                {createFreeError && (
+                  <div className="text-red-600 text-xs">{createFreeError}</div>
+                )}
+                <div className="ml-auto text-xs text-slate-500">
+                  Status inicial: <span className="font-semibold">pendente</span>. Depois você pode atribuir um nº clicando na bolinha.
+                </div>
+              </div>
+
+              {/* Duplicados */}
+              {duplicatedNumbers.length > 0 && (
+                <div className="rounded-md border border-red-300 bg-red-50 text-red-800 px-3 py-2 text-sm">
+                  <strong>Atenção:</strong> existem números de comanda repetidos neste dia:{" "}
+                  <span className="font-mono">{duplicatedNumbers.join(", ")}</span>.
+                </div>
+              )}
+
+              {/* Cabeçalho */}
+              <div className={`${HEADER_TMPL}`}>
+                <div className="text-center">#</div>
+                <div className="text-center">Pedido (R$)</div>
+                <div className="text-center">Tamanho</div>
+                <div className="text-center">Moto</div>
+                <div className="text-center">Moto (R$)</div>
+                <div className="text-center">Delivery/Balcão</div>
+                <div className="text-center col-span-2">Canal</div>
+                <div className="text-center">Detalhes</div>
+                <div className="text-center">Ações</div>
+              </div>
+
+              {/* Lista */}
+              <ul>
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd}
+                >
+                  <SortableContext items={displayedOrders.map(o => o.id)} strategy={verticalListSortingStrategy}>
+                    {displayedOrders.map((o, i) => (
+                      <SortableRow
+                        key={o.id}
+                        order={o}
+                        index={i}
+                        canais={["WHATS/PRESENCIAL/TELE", "MOGO", "AIQFOME", "IFOOD"]}
+                        dateStr={data.currentDate}
+                        nowMs={nowMs}
+                        displayNumber={i + 1} // número de exibição
+                      />
+                    ))}
+                  </SortableContext>
+                </DndContext>
+              </ul>
+            </div>
+          );
+        }}
+      </Await>
+    </Suspense>
   );
 }
