@@ -1,4 +1,4 @@
-import { defer, json } from "@remix-run/node";
+import { defer, json, MetaFunction } from "@remix-run/node";
 import {
   Await,
   useLoaderData,
@@ -62,6 +62,12 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "~/components/ui/dropdown-menu";
+
+export const meta: MetaFunction = () => {
+  return [
+    { title: "KDS | Planilha" },
+  ];
+};
 
 /* =============================
  * Date utils
