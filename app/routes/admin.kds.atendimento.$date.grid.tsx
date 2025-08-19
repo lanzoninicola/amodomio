@@ -56,6 +56,7 @@ import {
   Lock,
   Unlock,
 } from "lucide-react";
+import { Separator } from "~/components/ui/separator";
 
 /**
  * COLUNAS (Status removido)
@@ -85,10 +86,12 @@ function CommandNumberInput({
   value,
   onChange,
   className = "w-16 text-center",
+  isVendaLivre = false
 }: {
   value: number | null;
   onChange: (v: number | null) => void;
   className?: string;
+  isVendaLivre?: boolean
 }) {
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     const k = e.key;
@@ -108,6 +111,7 @@ function CommandNumberInput({
       className={`h-9 border rounded px-2 ${className}`}
       placeholder="—"
       autoFocus
+      disabled={isVendaLivre}
     />
   );
 }
@@ -444,24 +448,13 @@ export default function GridKdsPage() {
 
                 {/* Ações quando OPENED */}
                 {status === "OPENED" && (
-                  <>
-                    <listFx.Form method="post" className="flex items-center gap-2">
-                      <input type="hidden" name="_action" value="addMore" />
-                      <input type="hidden" name="date" value={dateStr} />
-                      <Input name="more" defaultValue={20} className="h-9 w-28 text-center" />
-                      <Button type="submit" variant="outline" disabled={listFx.state !== "idle"}>
-                        Adicionar mais
-                      </Button>
-                    </listFx.Form>
-
-                    <listFx.Form method="post" className="flex items-center gap-2">
-                      <input type="hidden" name="_action" value="closeDay" />
-                      <input type="hidden" name="date" value={dateStr} />
-                      <Button type="submit" variant="secondary">
-                        <Lock className="w-4 h-4 mr-2" /> Fechar dia
-                      </Button>
-                    </listFx.Form>
-                  </>
+                  <listFx.Form method="post" className="flex items-center gap-2">
+                    <input type="hidden" name="_action" value="closeDay" />
+                    <input type="hidden" name="date" value={dateStr} />
+                    <Button type="submit" variant="secondary">
+                      <Lock className="w-4 h-4 mr-2" /> Fechar dia
+                    </Button>
+                  </listFx.Form>
                 )}
 
                 {/* Reaberto: editar permitido, sem novos registros */}
@@ -514,9 +507,7 @@ export default function GridKdsPage() {
                     <input type="hidden" name="_action" value="createVL" />
                     <input type="hidden" name="date" value={dateStr} />
                     <MoneyInput name="orderAmount" />
-                    <span className="text-xs text-slate-500">
-                      Status: <b>pendente</b> • Canal: <b>WHATS/PRESENCIAL/TELE</b>
-                    </span>
+
                     <Button type="submit" variant="secondary" disabled={listFx.state !== "idle"}>
                       {listFx.state !== "idle" ? (
                         <>
@@ -571,7 +562,7 @@ export default function GridKdsPage() {
 
                         {/* nº comanda (somente input) */}
                         <div className="flex items-center justify-center">
-                          <CommandNumberInput value={cmdLocal} onChange={setCmdLocal} />
+                          <CommandNumberInput value={cmdLocal} onChange={setCmdLocal} isVendaLivre={o.isVendaLivre} />
                           <input type="hidden" name="commandNumber" value={cmdLocal ?? ""} />
                         </div>
 
@@ -623,17 +614,18 @@ export default function GridKdsPage() {
 
                         {/* Moto (valor) + switch */}
                         <div className="flex items-center justify-center gap-3">
-                          <MoneyInput name="motoValue" defaultValue={o.motoValue} className="w-24" disabled={readOnly} />
                           <div className={`flex items-center gap-2 ${readOnly ? "opacity-60" : ""}`}>
+                            {/* <label htmlFor={`moto-${o.id}`} className="text-xs text-slate-600">Moto</label> */}
                             <Switch checked={hasMoto} onCheckedChange={setHasMoto} id={`moto-${o.id}`} disabled={readOnly} />
-                            <label htmlFor={`moto-${o.id}`} className="text-xs text-slate-600">tem moto</label>
                             <input type="hidden" name="hasMoto" value={hasMoto ? "on" : ""} />
                           </div>
+                          <MoneyInput name="motoValue" defaultValue={o.motoValue} className="w-24" disabled={readOnly || hasMoto === false} />
+
                         </div>
 
                         {/* Retirada (switch) */}
                         <div className={`flex items-center justify-center ${readOnly ? "opacity-60" : ""}`}>
-                          <Switch checked={takeAway} onCheckedChange={setTakeAway} id={`ret-${o.id}`} disabled={readOnly} />
+                          <Switch checked={takeAway} onCheckedChange={setTakeAway} id={`ret-${o.id}`} disabled={readOnly || hasMoto === true} />
                           <input type="hidden" name="takeAway" value={takeAway ? "on" : ""} />
                         </div>
 
@@ -722,6 +714,24 @@ export default function GridKdsPage() {
                   );
                 })}
               </ul>
+
+              {status === "OPENED" && (
+
+                <>
+
+                  <Separator className="my-4" />
+
+                  <listFx.Form method="post" className="flex items-center gap-2">
+                    <input type="hidden" name="_action" value="addMore" />
+                    <input type="hidden" name="date" value={dateStr} />
+                    <Button type="submit" disabled={listFx.state !== "idle"}>
+                      Adicionar mais
+                    </Button>
+                    <Input name="more" defaultValue={20} className="h-9 w-28 text-center" />
+                  </listFx.Form>
+
+                </>
+              )}
 
               {/* Overlay de abertura do dia */}
               <OpeningDayOverlay

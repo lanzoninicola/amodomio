@@ -181,7 +181,7 @@ export default function KdsAtendimento() {
   };
 
   return (
-    <div>
+    <div className="mb-12">
       <Suspense fallback={<div>Carregando dias...</div>}>
         <Await resolve={data.days}>
           {(days) => (
