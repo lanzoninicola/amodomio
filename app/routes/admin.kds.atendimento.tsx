@@ -18,7 +18,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Grid3X3, RefreshCw, SquareKanban } from "lucide-react";
+import { BarChart3, Grid3X3, RefreshCw, SquareKanban } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -28,6 +28,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "~/lib/utils";
+import { todayLocalYMD } from "~/domain/kds";
 
 /* =============================
  * Helpers de data
@@ -50,9 +51,10 @@ function endOfMonth(d: Date) {
  * - Se ?mes=1: mês corrente completo
  * - Caso contrário: janela curta (−5 / +3 dias)
  * ============================= */
-export async function loader({ request }: { request: Request }) {
+export async function loader({ request, params }: { request: Request }) {
   const url = new URL(request.url);
   const fullMonth = url.searchParams.get("mes") === "1";
+  const dateStr = params.date ?? todayLocalYMD();
 
   const today = new Date();
   const todayStr = formatLocalDate(today);
@@ -82,6 +84,7 @@ export async function loader({ request }: { request: Request }) {
   }));
 
   return defer({
+    dateStr,
     days: normalizedDays,
     today: todayStr, // não é usada como value; mantida por compat.
     fullMonth, // modo atual (dados)
@@ -278,6 +281,12 @@ export default function KdsAtendimento() {
                     >
                       <span className="text-sm">Kanban</span>
                       <SquareKanban size={16} />
+                    </Link>
+                  </Button>
+                  {/* Link para Relatório */}
+                  <Button asChild size="sm" variant="secondary">
+                    <Link to={`/admin/kds/atendimento/${selectedDateFromUrl}/relatorio`} className="ml-auto">
+                      <BarChart3 className="w-4 h-4 mr-2" /> Relatório
                     </Link>
                   </Button>
                 </div>

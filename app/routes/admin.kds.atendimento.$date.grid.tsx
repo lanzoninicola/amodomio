@@ -491,12 +491,8 @@ export default function GridKdsPage() {
                   </>
                 )}
 
-                {/* Link para Relatório */}
-                <Link to={`/admin/kds/atendimento/${dateStr}/relatorio`} className="ml-auto">
-                  <Button variant="secondary">
-                    <BarChart3 className="w-4 h-4 mr-2" /> Relatório
-                  </Button>
-                </Link>
+
+
               </div>
 
               {/* Venda livre rápida (status/canal defaults) */}

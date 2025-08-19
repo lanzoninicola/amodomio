@@ -8,3 +8,5 @@ export * from "./components/NumberBubble";
 export * from "./components/ConfirmDeleteDialog";
 export * from "./components/DetailsDialog";
 export * from "./components/OpeningDayOverlay";
+
+export * from "./utils/voice";

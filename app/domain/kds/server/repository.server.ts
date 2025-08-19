@@ -64,3 +64,23 @@ export async function listMotoboy(dateInt: number) {
     select: { id: true, commandNumber: true, isVendaLivre: true, orderAmount: true, motoValue: true, channel: true, status: true },
   });
 }
+
+export async function listActiveOrdersByDate(dateInt: number) {
+  return prisma.kdsDailyOrderDetail.findMany({
+    where: {
+      dateInt,
+      status: { notIn: ["finalizado", "pendente"] },
+      isVendaLivre: false,
+      deletedAt: null,
+    },
+    orderBy: [{ commandNumber: "asc" }, { createdAt: "asc" }],
+    select: {
+      id: true, dateInt: true, createdAt: true, commandNumber: true, status: true,
+      orderAmount: true, takeAway: true, requestedForOven: true,
+    },
+  });
+}
+
+export async function setOrderStatus(id: string, status: string) {
+  return prisma.kdsDailyOrderDetail.update({ where: { id }, data: { status } });
+}
