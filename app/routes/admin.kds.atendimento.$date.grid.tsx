@@ -1,18 +1,19 @@
+
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json, defer } from "@remix-run/node";
 import {
   Await,
   useFetcher,
   useLoaderData,
+  Link,
 } from "@remix-run/react";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import prisma from "~/lib/prisma/client.server";
 import { Prisma } from "@prisma/client";
 
 import {
   MoneyInput,
   SizeSelector,
-  NumberBubble,
   ConfirmDeleteDialog,
   DetailsDialog,
   OpeningDayOverlay,
@@ -20,7 +21,6 @@ import {
   ymdToUtcNoon,
   todayLocalYMD,
   duplicateCommandNumbers,
-  totals,
   type OrderRow,
   type SizeCounts,
   defaultSizeCounts,
@@ -36,8 +36,8 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectTrigger,
@@ -52,93 +52,75 @@ import {
   Trash,
   Ellipsis,
   AlertTriangle,
+  BarChart3,
+  Lock,
+  Unlock,
 } from "lucide-react";
 
 /**
- * TEMPLATE DE COLUNAS AJUSTADO
- * [#, Comanda, Pedido, Tamanhos, Canal, Status, Moto, Retirada, VL, Ações]
+ * COLUNAS (Status removido)
+ * [#, Pedido, Tamanhos, Canal, Moto, Retirada, VL, Detalhes, Ações]
  */
 const COLS =
-  "grid grid-cols-[60px,110px,150px,260px,260px,160px,120px,90px,60px,110px] gap-2 items-center gap-x-4";
+  "grid grid-cols-[60px,150px,260px,320px,120px,110px,70px,80px,110px] gap-2 items-center gap-x-4";
 const COLS_HDR =
-  "grid grid-cols-[60px,110px,150px,260px,260px,160px,120px,90px,60px,110px] gap-2 gap-x-4 border-b font-semibold text-sm sticky top-0 z-10 bg-white";
+  "grid grid-cols-[60px,150px,260px,320px,120px,110px,70px,80px,110px] gap-2 gap-x-4 border-b font-semibold text-sm sticky top-0 z-10 bg-white";
+
+/** URL do calendário mensal. Ajuste aqui se a sua rota for diferente. */
+const MONTH_VIEW_URL_TEMPLATE = (ym: string) => `/admin/kds/atendimento/month/${ym}`;
+
 
 /* ===========================
-   Helpers (somente neste arquivo)
+   Helpers locais
    =========================== */
 
-// Conversão para Decimal
 function toDecimal(value: FormDataEntryValue | null | undefined): Prisma.Decimal {
   const raw = String(value ?? "0").replace(",", ".");
   const n = Number(raw);
   return new Prisma.Decimal(Number.isFinite(n) ? n.toFixed(2) : "0");
 }
 
-// Input inteiro com digitação estilo "MoneyInput"
+// Inteiro com digitação “money-like”
 function CommandNumberInput({
-  name,
-  defaultValue,
-  className = "w-20 text-center",
-  disabled,
+  value,
+  onChange,
+  className = "w-16 text-center",
 }: {
-  name: string;
-  defaultValue?: number | null;
+  value: number | null;
+  onChange: (v: number | null) => void;
   className?: string;
-  disabled?: boolean;
 }) {
-  const [val, setVal] = useState<number>(Math.max(0, Number(defaultValue ?? 0)));
-  useEffect(() => setVal(Math.max(0, Number(defaultValue ?? 0))), [defaultValue]);
-
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (disabled) return;
     const k = e.key;
-    if (k === "Backspace") { e.preventDefault(); setVal((v) => Math.floor(v / 10)); return; }
-    if (k === "Delete") { e.preventDefault(); setVal(0); return; }
-    if (/^\d$/.test(k)) { e.preventDefault(); setVal((v) => (v * 10 + Number(k)) % 10000000); return; }
+    if (k === "Backspace") { e.preventDefault(); onChange(value ? Math.floor(value / 10) : null); return; }
+    if (k === "Delete") { e.preventDefault(); onChange(null); return; }
+    if (/^\d$/.test(k)) { e.preventDefault(); onChange(((value ?? 0) * 10 + Number(k)) % 10000000); return; }
     if (k === "Tab" || k === "Enter" || k.startsWith("Arrow") || k === "Home" || k === "End") return;
     e.preventDefault();
   }
-
   return (
-    <div className="relative">
-      <input
-        type="text"
-        inputMode="numeric"
-        value={val || ""}
-        onKeyDown={onKeyDown}
-        onChange={() => { }}
-        disabled={disabled}
-        className={`h-9 border rounded px-2 ${className} ${disabled ? "bg-gray-50 text-gray-400" : ""}`}
-        placeholder="—"
-      />
-      <input type="hidden" name={name} value={val || ""} />
-    </div>
+    <input
+      type="text"
+      inputMode="numeric"
+      value={value ?? ""}
+      onKeyDown={onKeyDown}
+      onChange={() => { }}
+      className={`h-9 border rounded px-2 ${className}`}
+      placeholder="—"
+      autoFocus
+    />
   );
 }
 
-// tamanhos: parse/string/summary
 function parseSize(json: any): SizeCounts {
   try {
     const o = json ? JSON.parse(String(json)) : {};
-    return {
-      F: Number(o?.F || 0),
-      M: Number(o?.M || 0),
-      P: Number(o?.P || 0),
-      I: Number(o?.I || 0),
-      FT: Number(o?.FT || 0),
-    };
-  } catch {
-    return defaultSizeCounts();
-  }
+    return { F: +o?.F || 0, M: +o?.M || 0, P: +o?.P || 0, I: +o?.I || 0, FT: +o?.FT || 0 };
+  } catch { return defaultSizeCounts(); }
 }
-function stringifySize(counts: SizeCounts) { return JSON.stringify(counts); }
-function sizeSummary(counts: SizeCounts) {
-  const parts: string[] = [];
-  (["F", "M", "P", "I", "FT"] as (keyof SizeCounts)[]).forEach((k) => {
-    if (counts[k] > 0) parts.push(`${k}:${counts[k]}`);
-  });
-  return parts.join("  ");
-}
+const stringifySize = (c: SizeCounts) => JSON.stringify(c);
+const sizeSummary = (c: SizeCounts) =>
+  (["F", "M", "P", "I", "FT"] as (keyof SizeCounts)[]).filter(k => c[k] > 0).map(k => `${k}:${c[k]}`).join("  ");
 
 /* ===========================
    Loader
@@ -147,8 +129,20 @@ function sizeSummary(counts: SizeCounts) {
 export async function loader({ params }: LoaderFunctionArgs) {
   const dateStr = params.date ?? todayLocalYMD();
   const dateInt = ymdToDateInt(dateStr);
+
   const listPromise = listByDate(dateInt);
-  return defer({ dateStr, items: listPromise });
+  const header = await prisma.kdsDailyOrder.findUnique({
+    where: { dateInt },
+    // ALTERAÇÃO: usar operationStatus em vez de isOpen/isClosed
+    select: { id: true, operationStatus: true },
+  });
+
+  return defer({
+    dateStr,
+    items: listPromise,
+    // ALTERAÇÃO: header padrão com operationStatus = "PENDING"
+    header: header ?? { id: null, operationStatus: "PENDING" },
+  });
 }
 
 /* ===========================
@@ -162,6 +156,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const dateInt = ymdToDateInt(dateStr);
 
   const header = await ensureHeader(dateInt, ymdToUtcNoon(dateStr));
+  const headerFlags = await prisma.kdsDailyOrder.findUnique({
+    where: { id: header.id },
+    // ALTERAÇÃO: operationStatus
+    select: { operationStatus: true },
+  });
 
   const getNextSort = async () => {
     const { maxSort } = await getMaxes(dateInt);
@@ -170,66 +169,96 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
   try {
     if (_action === "openDay") {
+      // Permitido quando PENDING (ou inexistente, coberto por ensureHeader + default)
+      if (headerFlags?.operationStatus === "CLOSED") {
+        return json({ ok: false, error: "Dia já foi fechado." }, { status: 400 });
+      }
+      if (headerFlags?.operationStatus === "OPENED" || headerFlags?.operationStatus === "REOPENED") {
+        return json({ ok: false, error: "Dia já está aberto." }, { status: 400 });
+      }
+
       const qty = Math.max(1, Math.min(200, Number(form.get("qty") ?? 40)));
       const existing = await prisma.kdsDailyOrderDetail.findMany({
         where: { dateInt, commandNumber: { not: null } },
         select: { commandNumber: true },
       });
-      const existSet = new Set<number>(
-        existing.map((e) => Number(e.commandNumber!)).filter((n) => Number.isFinite(n))
-      );
+      const existSet = new Set<number>(existing.map(e => Number(e.commandNumber!)).filter(Number.isFinite));
+
       const { maxSort } = await getMaxes(dateInt);
-      let currentSort = (maxSort ?? 0) + 1000;
+      let sort = (maxSort ?? 0) + 1000;
 
       const toCreate: Prisma.KdsDailyOrderDetailCreateManyInput[] = [];
       for (let n = 1; n <= qty; n++) {
         if (existSet.has(n)) continue;
         toCreate.push({
-          orderId: header.id,
-          dateInt,
-          commandNumber: n,
-          isVendaLivre: false,
-          sortOrderIndex: currentSort,
-          orderAmount: new Prisma.Decimal(0),
-          status: "novoPedido",
-          channel: "",
-          hasMoto: false,
-          motoValue: new Prisma.Decimal(0),
-          takeAway: false,
+          orderId: header.id, dateInt, commandNumber: n, isVendaLivre: false,
+          sortOrderIndex: sort, orderAmount: new Prisma.Decimal(0),
+          status: "novoPedido", channel: "", hasMoto: false, motoValue: new Prisma.Decimal(0), takeAway: false,
         } as any);
-        currentSort += 1000;
+        sort += 1000;
       }
-      if (toCreate.length > 0) {
+
+      if (toCreate.length) {
         await prisma.kdsDailyOrderDetail.createMany({ data: toCreate });
-        await recalcHeaderTotal(dateInt);
       }
-      return json({ ok: true, created: toCreate.length });
+      await prisma.kdsDailyOrder.update({
+        where: { id: header.id },
+        // ALTERAÇÃO: marcar OPENED
+        data: { operationStatus: "OPENED" },
+      });
+      await recalcHeaderTotal(dateInt);
+      return json({ ok: true, created: toCreate.length, status: "OPENED" });
+    }
+
+    if (_action === "closeDay") {
+      if (headerFlags?.operationStatus === "CLOSED") {
+        return json({ ok: true, already: true });
+      }
+      await prisma.kdsDailyOrder.update({
+        where: { id: header.id },
+        // ALTERAÇÃO: marcar CLOSED
+        data: { operationStatus: "CLOSED" },
+      });
+      return json({ ok: true, status: "CLOSED" });
+    }
+
+    // NOVO: reabrir dia (não cria registros; apenas permite edição)
+    if (_action === "reopenDay") {
+      if (headerFlags?.operationStatus !== "CLOSED") {
+        return json({ ok: false, error: "Só é possível reabrir um dia fechado." }, { status: 400 });
+      }
+      await prisma.kdsDailyOrder.update({
+        where: { id: header.id },
+        data: { operationStatus: "REOPENED" },
+      });
+      return json({ ok: true, status: "REOPENED" });
+    }
+
+    // bloqueia alterações quando fechado
+    if (headerFlags?.operationStatus === "CLOSED") {
+      return json({ ok: false, error: "Dia fechado. Alterações não são permitidas." }, { status: 403 });
     }
 
     if (_action === "addMore") {
+      // Somente quando OPENED (REOPENED não cria novos)
+      if (headerFlags?.operationStatus !== "OPENED") {
+        return json({ ok: false, error: "Abra o dia (status ABERTO) antes de adicionar mais." }, { status: 400 });
+      }
       const more = Math.max(1, Math.min(200, Number(form.get("more") ?? 20)));
       const { maxCmd } = await getMaxes(dateInt);
-      let currentSort = await getNextSort();
+      let sort = await getNextSort();
 
       const toCreate: Prisma.KdsDailyOrderDetailCreateManyInput[] = [];
       for (let i = 1; i <= more; i++) {
         const n = Number(maxCmd ?? 0) + i;
         toCreate.push({
-          orderId: header.id,
-          dateInt,
-          commandNumber: n,
-          isVendaLivre: false,
-          sortOrderIndex: currentSort,
-          orderAmount: new Prisma.Decimal(0),
-          status: "novoPedido",
-          channel: "",
-          hasMoto: false,
-          motoValue: new Prisma.Decimal(0),
-          takeAway: false,
+          orderId: header.id, dateInt, commandNumber: n, isVendaLivre: false,
+          sortOrderIndex: sort, orderAmount: new Prisma.Decimal(0),
+          status: "novoPedido", channel: "", hasMoto: false, motoValue: new Prisma.Decimal(0), takeAway: false,
         } as any);
-        currentSort += 1000;
+        sort += 1000;
       }
-      if (toCreate.length > 0) {
+      if (toCreate.length) {
         await prisma.kdsDailyOrderDetail.createMany({ data: toCreate });
         await recalcHeaderTotal(dateInt);
       }
@@ -237,10 +266,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }
 
     if (_action === "createVL") {
+      // Somente quando OPENED
+      if (headerFlags?.operationStatus !== "OPENED") {
+        return json({ ok: false, error: "Venda livre só é permitida com o dia ABERTO." }, { status: 400 });
+      }
       const amount = toDecimal(form.get("orderAmount"));
-      const channel = String(form.get("channel") ?? "");
-      const status = String(form.get("status") ?? "pendente");
-
       const created = await prisma.kdsDailyOrderDetail.create({
         data: {
           orderId: header.id,
@@ -249,8 +279,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
           isVendaLivre: true,
           sortOrderIndex: await getNextSort(),
           orderAmount: amount,
-          status,
-          channel,
+          status: "pendente",
+          channel: "WHATS/PRESENCIAL/TELE",
           hasMoto: false,
           motoValue: new Prisma.Decimal(0),
           takeAway: false,
@@ -293,7 +323,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
         isVendaLivre: cmd == null,
         orderAmount: toDecimal(form.get("orderAmount")),
         channel: String(form.get("channel") ?? ""),
-        status: String(form.get("status") ?? "novoPedido"),
+        // status editável só no modal; se vier no form, aceita
+        status: String(form.get("status") ?? undefined) || undefined,
         hasMoto: String(form.get("hasMoto") ?? "") === "on",
         motoValue: toDecimal(form.get("motoValue")),
         takeAway: String(form.get("takeAway") ?? "") === "on",
@@ -320,19 +351,45 @@ export async function action({ request, params }: ActionFunctionArgs) {
 }
 
 /* ===========================
-   Componente principal (Grid)
+   Página (Grid)
    =========================== */
 
 export default function GridKdsPage() {
-  const { dateStr, items } = useLoaderData<typeof loader>();
+  const { dateStr, items, header } = useLoaderData<typeof loader>();
   const listFx = useFetcher();
   const rowFx = useFetcher();
 
-  const [showVL, setShowVL] = useState(true);
+  // ALTERAÇÃO: derivar status a partir de operationStatus
+  const status = (header?.operationStatus ?? "PENDING") as "PENDING" | "OPENED" | "CLOSED" | "REOPENED";
+  const isOpen = status === "OPENED";
+  const isClosed = status === "CLOSED";
+  const isReopened = status === "REOPENED";
+  const readOnly = isClosed;
+
   const [openConfirmId, setOpenConfirmId] = useState<string | null>(null);
   const [detailsOpenId, setDetailsOpenId] = useState<string | null>(null);
   const nowMs = Date.now();
 
+  // Hotkey: "M" para visualizar o mês (lista todos os dias). Ignora quando digitando em inputs/textarea.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key && e.key.toLowerCase() === "m" && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        const target = e.target as HTMLElement | null;
+        const tag = target?.tagName;
+        const editing = target?.isContentEditable || tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+        if (editing) return; // não intercepta quando usuário está digitando em campos
+        e.preventDefault();
+        const parts = (dateStr || "").split("-"); // YYYY-MM-DD
+        const ym = parts.length >= 2 ? `${parts[0]}-${parts[1]}` : "";
+        if (ym) window.location.assign(MONTH_VIEW_URL_TEMPLATE(ym));
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [dateStr]);
+
+
+  // overlay “abrindo dia”
   const [opening, setOpening] = useState(false);
   const [progress, setProgress] = useState(5);
   const [openError, setOpenError] = useState<string | null>(null);
@@ -366,9 +423,7 @@ export default function GridKdsPage() {
     <Suspense fallback={<div className="p-4 text-sm text-slate-600">Carregando…</div>}>
       <Await resolve={items}>
         {(rowsDb: OrderRow[]) => {
-          const rows = rowsDb.filter((r) => (showVL ? true : !r.isVendaLivre));
           const dup = duplicateCommandNumbers(rowsDb);
-          const { totalPedido, totalMoto, sizeTotals } = totals(rowsDb);
 
           return (
             <div className="space-y-4">
@@ -382,113 +437,133 @@ export default function GridKdsPage() {
 
               {/* Toolbar */}
               <div className="flex flex-wrap items-center gap-3">
-                <listFx.Form method="post" className="flex items-center gap-2">
-                  <input type="hidden" name="_action" value="openDay" />
-                  <input type="hidden" name="date" value={dateStr} />
-                  <Input name="qty" defaultValue={40} className="h-9 w-20" />
-                  <Button type="submit" variant="default" disabled={listFx.state !== "idle"}>
-                    {listFx.state !== "idle" ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin mr-1" /> Abrindo…
-                      </>
-                    ) : (
-                      <>
-                        <PlusCircle className="w-4 h-4 mr-1" />
-                        Abrir dia
-                      </>
-                    )}
+                {/* Abrir dia: só se não existe header ou status PENDING */}
+                {(!header?.id || status === "PENDING") && (
+                  <listFx.Form method="post" className="flex items-center gap-2">
+                    <input type="hidden" name="_action" value="openDay" />
+                    <input type="hidden" name="date" value={dateStr} />
+                    <Input name="qty" defaultValue={40} className="h-9 w-20 text-center" />
+                    <Button type="submit" variant="default" disabled={listFx.state !== "idle"}>
+                      {listFx.state !== "idle" ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin mr-1" /> Abrindo…
+                        </>
+                      ) : (
+                        <>
+                          <PlusCircle className="w-4 h-4 mr-1" />
+                          Abrir dia
+                        </>
+                      )}
+                    </Button>
+                  </listFx.Form>
+                )}
+
+                {/* Ações quando OPENED */}
+                {status === "OPENED" && (
+                  <>
+                    <listFx.Form method="post" className="flex items-center gap-2">
+                      <input type="hidden" name="_action" value="addMore" />
+                      <input type="hidden" name="date" value={dateStr} />
+                      <Input name="more" defaultValue={20} className="h-9 w-28 text-center" />
+                      <Button type="submit" variant="outline" disabled={listFx.state !== "idle"}>
+                        Adicionar mais
+                      </Button>
+                    </listFx.Form>
+
+                    <listFx.Form method="post" className="flex items-center gap-2">
+                      <input type="hidden" name="_action" value="closeDay" />
+                      <input type="hidden" name="date" value={dateStr} />
+                      <Button type="submit" variant="secondary">
+                        <Lock className="w-4 h-4 mr-2" /> Fechar dia
+                      </Button>
+                    </listFx.Form>
+                  </>
+                )}
+
+                {/* Reaberto: editar permitido, sem novos registros */}
+                {status === "REOPENED" && (
+                  <>
+                    <div className="px-3 py-1 rounded border text-sm bg-amber-50 text-amber-900">
+                      Dia reaberto (edição liberada, sem novos registros)
+
+                      <span className="text-xs text-slate-500 ml-2">(Atalho: pressione <b>M</b> para ver o mês)</span>
+                    </div>
+                    <listFx.Form method="post" className="flex items-center gap-2">
+                      <input type="hidden" name="_action" value="closeDay" />
+                      <input type="hidden" name="date" value={dateStr} />
+                      <Button type="submit" variant="secondary">
+                        <Lock className="w-4 h-4 mr-2" /> Fechar dia
+                      </Button>
+                    </listFx.Form>
+                  </>
+                )}
+
+                {/* Fechado: somente leitura + opção de reabrir */}
+                {status === "CLOSED" && (
+                  <>
+                    <div className="ml-2 px-3 py-1 rounded border text-sm bg-slate-50 flex items-center gap-2">
+                      <Lock className="w-4 h-4" /> Dia fechado (somente leitura)
+                    </div>
+                    <listFx.Form method="post" className="flex items-center gap-2">
+                      <input type="hidden" name="_action" value="reopenDay" />
+                      <input type="hidden" name="date" value={dateStr} />
+                      <Button type="submit" variant="ghost">
+                        <Unlock className="w-4 h-4 mr-2" /> Reabrir dia
+                      </Button>
+                    </listFx.Form>
+                  </>
+                )}
+
+                {/* Link para Relatório */}
+                <Link to={`/admin/kds/atendimento/${dateStr}/relatorio`} className="ml-auto">
+                  <Button variant="secondary">
+                    <BarChart3 className="w-4 h-4 mr-2" /> Relatório
                   </Button>
-                </listFx.Form>
+                </Link>
+              </div>
 
-                <listFx.Form method="post" className="flex items-center gap-2">
-                  <input type="hidden" name="_action" value="addMore" />
-                  <input type="hidden" name="date" value={dateStr} />
-                  <Input name="more" defaultValue={20} className="h-9 w-20" />
-                  <Button type="submit" variant="outline" disabled={listFx.state !== "idle"}>
-                    Adicionar mais
-                  </Button>
-                </listFx.Form>
-
-                <div className="ml-auto flex items-center gap-2">
-                  <Switch checked={showVL} onCheckedChange={setShowVL} id="show-vl" />
-                  <label htmlFor="show-vl" className="text-sm">Mostrar vendas livres</label>
-
-                  <div className="px-2 py-1 rounded border text-sm">
-                    Pedidos: <b>{rowsDb.length}</b>
-                  </div>
-                  <div className="px-2 py-1 rounded border text-sm">
-                    Faturamento:{" "}
-                    <b className="font-mono">
-                      R$ {totalPedido.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                    </b>
-                  </div>
-                  <div className="px-2 py-1 rounded border text-sm">
-                    Moto:{" "}
-                    <b className="font-mono">
-                      R$ {totalMoto.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                    </b>
-                  </div>
-                  <div className="px-2 py-1 rounded border text-sm hidden xl:block">
-                    Tamanhos:{" "}
-                    <span className="font-mono">
-                      F:{sizeTotals.F} M:{sizeTotals.M} P:{sizeTotals.P} I:{sizeTotals.I} FT:{sizeTotals.FT}
+              {/* Venda livre rápida (status/canal defaults) */}
+              {status === "OPENED" && !readOnly && (
+                <div className="rounded-lg border p-3 flex flex-wrap items-center gap-3">
+                  <div className="text-sm font-medium">Venda livre (rápida)</div>
+                  <listFx.Form method="post" className="flex flex-wrap items-center gap-3">
+                    <input type="hidden" name="_action" value="createVL" />
+                    <input type="hidden" name="date" value={dateStr} />
+                    <MoneyInput name="orderAmount" />
+                    <span className="text-xs text-slate-500">
+                      Status: <b>pendente</b> • Canal: <b>WHATS/PRESENCIAL/TELE</b>
                     </span>
-                  </div>
+                    <Button type="submit" variant="secondary" disabled={listFx.state !== "idle"}>
+                      {listFx.state !== "idle" ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin mr-1" /> Adicionando…
+                        </>
+                      ) : (
+                        "Adicionar"
+                      )}
+                    </Button>
+                  </listFx.Form>
                 </div>
-              </div>
-
-              {/* Venda livre rápida */}
-              <div className="rounded-lg border p-3 flex flex-wrap items-center gap-3">
-                <div className="text-sm font-medium">Venda livre (rápida)</div>
-                <listFx.Form method="post" className="flex flex-wrap items-center gap-3">
-                  <input type="hidden" name="_action" value="createVL" />
-                  <input type="hidden" name="date" value={dateStr} />
-                  <MoneyInput name="orderAmount" />
-                  <Select name="channel" defaultValue="">
-                    <SelectTrigger className="h-9 w-[220px] truncate">
-                      <SelectValue placeholder="Canal" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="">(sem canal)</SelectItem>
-                      {CHANNELS.map((c) => (
-                        <SelectItem key={c} value={c}>{c}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Select name="status" defaultValue="pendente">
-                    <SelectTrigger className="h-9 w-[160px]">
-                      <SelectValue placeholder="Status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="pendente">pendente</SelectItem>
-                      <SelectItem value="novoPedido">novoPedido</SelectItem>
-                      <SelectItem value="finalizado">finalizado</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Button type="submit" variant="secondary" disabled={listFx.state !== "idle"}>
-                    {listFx.state !== "idle" ? (<><Loader2 className="w-4 h-4 animate-spin mr-1" /> Adicionando…</>) : "Adicionar"}
-                  </Button>
-                </listFx.Form>
-              </div>
+              )}
 
               {/* Cabeçalho */}
               <div className={COLS_HDR + " py-2 px-1"}>
                 <div className="text-center">#</div>
-                <div className="text-center">Comanda</div>
                 <div className="text-center">Pedido (R$)</div>
                 <div className="text-center">Tamanhos</div>
                 <div className="text-center">Canal</div>
-                <div className="text-center">Status</div>
                 <div className="text-center">Moto (R$)</div>
                 <div className="text-center">Retirada</div>
                 <div className="text-center">VL</div>
+                <div className="text-center">Detalhes</div>
                 <div className="text-center">Ações</div>
               </div>
 
               {/* Linhas */}
               <ul className="space-y-1">
-                {rows.map((o, idx) => {
+                {rowsDb.map((o) => {
                   const sizeCounts = parseSize(o.size);
+
                   const fxState =
                     rowFx.state !== "idle" &&
                       rowFx.formData?.get("id") === o.id &&
@@ -496,34 +571,29 @@ export default function GridKdsPage() {
                         rowFx.formData?.get("_action") === "cancelRow")
                       ? rowFx.state
                       : "idle";
-                  const savingState =
-                    fxState === "idle" ? "idle" : fxState === "submitting" ? "saving" : "ok";
+                  const savingIcon =
+                    fxState !== "idle" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />;
+
+                  const [cmdLocal, setCmdLocal] = useState<number | null>(o.commandNumber);
+                  const [hasMoto, setHasMoto] = useState<boolean>(!!o.hasMoto);
+                  const [takeAway, setTakeAway] = useState<boolean>(!!(o as any).takeAway);
 
                   return (
                     <li key={o.id} className={COLS + " bg-white px-1"}>
-                      {/* Bubble */}
-                      <NumberBubble
-                        commandNumber={o.commandNumber}
-                        isVendaLivre={o.isVendaLivre}
-                        displayNumber={idx + 1}
-                        status={o.status}
-                        savingState={savingState as any}
-                      />
-
-                      {/* Form da linha */}
                       <rowFx.Form method="post" className="contents">
                         <input type="hidden" name="_action" value="saveRow" />
                         <input type="hidden" name="id" value={o.id} />
                         <input type="hidden" name="date" value={dateStr} />
 
-                        {/* Comanda */}
-                        <div className="flex justify-center">
-                          <CommandNumberInput name="commandNumber" defaultValue={o.commandNumber} />
+                        {/* nº comanda (somente input) */}
+                        <div className="flex items-center justify-center">
+                          <CommandNumberInput value={cmdLocal} onChange={setCmdLocal} />
+                          <input type="hidden" name="commandNumber" value={cmdLocal ?? ""} />
                         </div>
 
                         {/* Valor */}
                         <div className="flex justify-center">
-                          <MoneyInput name="orderAmount" defaultValue={o.orderAmount} className="w-28" />
+                          <MoneyInput name="orderAmount" defaultValue={o.orderAmount} className="w-28" disabled={readOnly} />
                         </div>
 
                         {/* Tamanhos */}
@@ -534,7 +604,7 @@ export default function GridKdsPage() {
                             <input type="hidden" name="sizeP" value={sizeCounts.P} />
                             <input type="hidden" name="sizeI" value={sizeCounts.I} />
                             <input type="hidden" name="sizeFT" value={sizeCounts.FT} />
-                            <div className="scale-[0.95] origin-center">
+                            <div className={`origin-center ${readOnly ? "opacity-60 pointer-events-none" : "scale-[0.95]"}`}>
                               <SizeSelector
                                 counts={sizeCounts}
                                 onChange={(next) => {
@@ -546,6 +616,7 @@ export default function GridKdsPage() {
                                   (formEl.querySelector('input[name="sizeI"]') as HTMLInputElement).value = String(next.I);
                                   (formEl.querySelector('input[name="sizeFT"]') as HTMLInputElement).value = String(next.FT);
                                 }}
+                                disabled={readOnly}
                               />
                             </div>
                           </div>
@@ -554,7 +625,7 @@ export default function GridKdsPage() {
                         {/* Canal */}
                         <div className="flex justify-center">
                           <Select name="channel" defaultValue={o.channel ?? ""}>
-                            <SelectTrigger className="h-9 w-[240px] truncate">
+                            <SelectTrigger className={`h-9 w-[260px] truncate ${readOnly ? "opacity-60 pointer-events-none" : ""}`} disabled={readOnly}>
                               <SelectValue placeholder="Canal" />
                             </SelectTrigger>
                             <SelectContent>
@@ -566,115 +637,103 @@ export default function GridKdsPage() {
                           </Select>
                         </div>
 
-                        {/* Status */}
-                        <div className="flex justify-center">
-                          <Select name="status" defaultValue={o.status ?? "novoPedido"}>
-                            <SelectTrigger className="h-9 w-[160px]">
-                              <SelectValue placeholder="Status" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="pendente">pendente</SelectItem>
-                              <SelectItem value="novoPedido">novoPedido</SelectItem>
-                              <SelectItem value="emProducao">emProducao</SelectItem>
-                              <SelectItem value="aguardandoForno">aguardandoForno</SelectItem>
-                              <SelectItem value="assando">assando</SelectItem>
-                              <SelectItem value="finalizado">finalizado</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        {/* Moto */}
-                        <div className="flex items-center justify-center gap-2">
-                          <MoneyInput name="motoValue" defaultValue={o.motoValue} className="w-24" />
-                          <div className="flex items-center gap-2">
-                            <input type="checkbox" name="hasMoto" defaultChecked={!!o.hasMoto} className="h-4 w-4" />
-                            <span className="text-xs text-slate-600">tem moto</span>
+                        {/* Moto (valor) + switch */}
+                        <div className="flex items-center justify-center gap-3">
+                          <MoneyInput name="motoValue" defaultValue={o.motoValue} className="w-24" disabled={readOnly} />
+                          <div className={`flex items-center gap-2 ${readOnly ? "opacity-60" : ""}`}>
+                            <Switch checked={hasMoto} onCheckedChange={setHasMoto} id={`moto-${o.id}`} disabled={readOnly} />
+                            <label htmlFor={`moto-${o.id}`} className="text-xs text-slate-600">tem moto</label>
+                            <input type="hidden" name="hasMoto" value={hasMoto ? "on" : ""} />
                           </div>
                         </div>
 
-                        {/* Retirada */}
-                        <div className="flex items-center justify-center">
-                          <input type="checkbox" name="takeAway" defaultChecked={!!(o as any).takeAway} className="h-4 w-4" />
+                        {/* Retirada (switch) */}
+                        <div className={`flex items-center justify-center ${readOnly ? "opacity-60" : ""}`}>
+                          <Switch checked={takeAway} onCheckedChange={setTakeAway} id={`ret-${o.id}`} disabled={readOnly} />
+                          <input type="hidden" name="takeAway" value={takeAway ? "on" : ""} />
                         </div>
 
                         {/* VL */}
                         <div className="flex items-center justify-center">
-                          {o.isVendaLivre ? (
+                          {(o.isVendaLivre || cmdLocal == null) ? (
                             <Badge variant="secondary" className="text-[10px]">VL</Badge>
                           ) : <span className="text-xs text-slate-400">—</span>}
                         </div>
 
-                        {/* Ações */}
-                        <div className="flex items-center justify-center gap-2">
-                          <Button type="submit" variant="outline" title="Salvar">
-                            {rowFx.state !== "idle" && rowFx.formData?.get("id") === o.id
-                              ? <Loader2 className="w-4 h-4 animate-spin" />
-                              : <Save className="w-4 h-4" />}
-                          </Button>
-
+                        {/* Detalhes */}
+                        <div className="flex items-center justify-center">
                           <Button type="button" variant="ghost" title="Detalhes" onClick={() => setDetailsOpenId(o.id)}>
                             <Ellipsis className="w-4 h-4" />
                           </Button>
+                        </div>
 
+                        {/* Ações */}
+                        <div className="flex items-center justify-center gap-2">
+                          <Button type="submit" variant="outline" title="Salvar" disabled={readOnly}>
+                            {savingIcon}
+                          </Button>
                           <Button
                             type="button"
                             variant="ghost"
+
                             title="Excluir"
                             className="hover:bg-red-50"
                             onClick={() => setOpenConfirmId(o.id)}
+                            disabled={readOnly}
                           >
-                            <Trash className="w-4 h-4 text-red-600" />
+                            <Trash className="w-4 h-4" />
                           </Button>
                         </div>
+
+                        {/* Dialog confirmar exclusão */}
+                        <ConfirmDeleteDialog
+                          open={openConfirmId === o.id}
+                          onOpenChange={(v) => !v && setOpenConfirmId(null)}
+                          onConfirm={() => {
+                            const fd = new FormData();
+                            fd.set("_action", "cancelRow");
+                            fd.set("id", o.id);
+                            fd.set("date", dateStr);
+                            rowFx.submit(fd, { method: "post" });
+                            setOpenConfirmId(null);
+                          }}
+                        />
+
+                        {/* Dialog detalhes (status editável aqui) */}
+                        <DetailsDialog
+                          open={detailsOpenId === o.id}
+                          onOpenChange={(v) => !v && setDetailsOpenId(null)}
+                          createdAt={o.createdAt as any}
+                          nowMs={nowMs}
+                          status={o.status ?? "novoPedido"}
+                          onStatusChange={(value) => {
+                            if (readOnly) return;
+                            const fd = new FormData();
+                            fd.set("_action", "saveRow");
+                            fd.set("id", o.id);
+                            fd.set("date", dateStr);
+                            fd.set("status", value);
+                            fd.set("commandNumber", String(cmdLocal ?? ""));
+                            fd.set("orderAmount", String(o.orderAmount ?? 0));
+                            fd.set("motoValue", String(o.motoValue ?? 0));
+                            fd.set("hasMoto", hasMoto ? "on" : "");
+                            fd.set("takeAway", takeAway ? "on" : "");
+                            const sc = parseSize(o.size);
+                            fd.set("sizeF", String(sc.F));
+                            fd.set("sizeM", String(sc.M));
+                            fd.set("sizeP", String(sc.P));
+                            fd.set("sizeI", String(sc.I));
+                            fd.set("sizeFT", String(sc.FT));
+                            fd.set("channel", String(o.channel ?? ""));
+                            rowFx.submit(fd, { method: "post" });
+                          }}
+                          onSubmit={() => setDetailsOpenId(null)}
+                          orderAmount={Number(o.orderAmount ?? 0)}
+                          motoValue={Number(o.motoValue ?? 0)}
+                          sizeSummary={sizeSummary(parseSize(o.size))}
+                          channel={o.channel}
+                        />
                       </rowFx.Form>
-
-                      {/* Dialog confirmar exclusão */}
-                      <ConfirmDeleteDialog
-                        open={openConfirmId === o.id}
-                        onOpenChange={(v) => !v && setOpenConfirmId(null)}
-                        onConfirm={() => {
-                          const fd = new FormData();
-                          fd.set("_action", "cancelRow");
-                          fd.set("id", o.id);
-                          fd.set("date", dateStr);
-                          rowFx.submit(fd, { method: "post" });
-                          setOpenConfirmId(null);
-                        }}
-                      />
-
-                      {/* Dialog detalhes */}
-                      <DetailsDialog
-                        open={detailsOpenId === o.id}
-                        onOpenChange={(v) => !v && setDetailsOpenId(null)}
-                        createdAt={o.createdAt as any}
-                        nowMs={nowMs}
-                        status={o.status ?? "novoPedido"}
-                        onStatusChange={(value) => {
-                          const fd = new FormData();
-                          fd.set("_action", "saveRow");
-                          fd.set("id", o.id);
-                          fd.set("date", dateStr);
-                          fd.set("status", value);
-                          fd.set("commandNumber", String(o.commandNumber ?? ""));
-                          fd.set("orderAmount", String(o.orderAmount ?? 0));
-                          fd.set("motoValue", String(o.motoValue ?? 0));
-                          fd.set("hasMoto", o.hasMoto ? "on" : "");
-                          fd.set("takeAway", (o as any).takeAway ? "on" : "");
-                          const sc = parseSize(o.size);
-                          fd.set("sizeF", String(sc.F));
-                          fd.set("sizeM", String(sc.M));
-                          fd.set("sizeP", String(sc.P));
-                          fd.set("sizeI", String(sc.I));
-                          fd.set("sizeFT", String(sc.FT));
-                          fd.set("channel", String(o.channel ?? ""));
-                          rowFx.submit(fd, { method: "post" });
-                        }}
-                        onSubmit={() => setDetailsOpenId(null)}
-                        orderAmount={Number(o.orderAmount ?? 0)}
-                        motoValue={Number(o.motoValue ?? 0)}
-                        sizeSummary={sizeSummary(parseSize(o.size))}
-                        channel={o.channel}
-                      />
                     </li>
                   );
                 })}

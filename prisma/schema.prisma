@@ -869,6 +869,10 @@ model KdsDailyOrder {
 
   details KdsDailyOrderDetail[]
 
+  operationStatus String?   @default("pending") @map("operation_status")
+  openedAt        DateTime? @map("opened_at")
+  closedAt        DateTime? @map("closed_at")
+
   /// Um cabeçalho por dia
   @@unique([dateInt])
   @@index([dateInt])
