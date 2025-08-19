@@ -114,7 +114,7 @@ export default function KdsAtendimento() {
     () => {
       const index = data.days.findIndex((d: any) => d.ymd === (selectedDateFromUrl ?? ""));
       if (index >= 0 && index < data.days.length - 1) {
-        navigate(`/admin/kds/atendimento/${(data.days as any[])[index + 1].ymd}${keepMonth}`);
+        navigate(`/admin/kds/atendimento/${(data.days as any[])[index + 1].ymd}/grid${keepMonth}`);
       }
     },
     [data.days, selectedDateFromUrl, keepMonth]
@@ -125,7 +125,7 @@ export default function KdsAtendimento() {
     () => {
       const index = data.days.findIndex((d: any) => d.ymd === (selectedDateFromUrl ?? ""));
       if (index > 0) {
-        navigate(`/admin/kds/atendimento/${(data.days as any[])[index - 1].ymd}${keepMonth}`);
+        navigate(`/admin/kds/atendimento/${(data.days as any[])[index - 1].ymd}/grid${keepMonth}`);
       }
     },
     [data.days, selectedDateFromUrl, keepMonth]
@@ -136,7 +136,7 @@ export default function KdsAtendimento() {
     "m",
     (e) => {
       e.preventDefault();
-      const base = `/admin/kds/atendimento/${selectedDateFromUrl ?? localTodayYMD()}`;
+      const base = `/admin/kds/atendimento/${selectedDateFromUrl ?? localTodayYMD()}/grid`;
       navigate(fullMonthFromUrl ? base : `${base}?mes=1`);
     },
     [fullMonthFromUrl, selectedDateFromUrl]
@@ -192,7 +192,7 @@ export default function KdsAtendimento() {
                   <Select
                     value={selectedDateFromUrl /* undefined => placeholder */}
                     onValueChange={(val) =>
-                      navigate(`/admin/kds/atendimento/${val}${keepMonth}`)
+                      navigate(`/admin/kds/atendimento/${val}/grid${keepMonth}`)
                     }
                   >
                     <SelectTrigger className="w-[420px] h-12 text-base">
@@ -264,7 +264,7 @@ export default function KdsAtendimento() {
                 <div className="flex gap-2">
                   <Button asChild size="sm" variant={isKanban ? "outline" : "default"}>
                     <Link
-                      to={`/admin/kds/atendimento/${date ?? clientTodayYMD}`}
+                      to={`/admin/kds/atendimento/${date ?? clientTodayYMD}/grid`}
                       className="flex items-center gap-2"
                     >
                       <span className="text-sm">Planilha</span>

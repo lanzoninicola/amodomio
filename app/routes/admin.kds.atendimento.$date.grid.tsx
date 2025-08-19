@@ -67,7 +67,7 @@ const COLS_HDR =
   "grid grid-cols-[60px,150px,260px,320px,120px,110px,70px,80px,110px] gap-2 gap-x-4 border-b font-semibold text-sm sticky top-0 z-10 bg-white";
 
 /** URL do calendário mensal. Ajuste aqui se a sua rota for diferente. */
-const MONTH_VIEW_URL_TEMPLATE = (ym: string) => `/admin/kds/atendimento/month/${ym}`;
+const MONTH_VIEW_URL_TEMPLATE = (ym: string) => `/admin/kds/atendimento/${ym}`;
 
 
 /* ===========================
@@ -370,23 +370,7 @@ export default function GridKdsPage() {
   const [detailsOpenId, setDetailsOpenId] = useState<string | null>(null);
   const nowMs = Date.now();
 
-  // Hotkey: "M" para visualizar o mês (lista todos os dias). Ignora quando digitando em inputs/textarea.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key && e.key.toLowerCase() === "m" && !e.metaKey && !e.ctrlKey && !e.altKey) {
-        const target = e.target as HTMLElement | null;
-        const tag = target?.tagName;
-        const editing = target?.isContentEditable || tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
-        if (editing) return; // não intercepta quando usuário está digitando em campos
-        e.preventDefault();
-        const parts = (dateStr || "").split("-"); // YYYY-MM-DD
-        const ym = parts.length >= 2 ? `${parts[0]}-${parts[1]}` : "";
-        if (ym) window.location.assign(MONTH_VIEW_URL_TEMPLATE(ym));
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [dateStr]);
+
 
 
   // overlay “abrindo dia”
