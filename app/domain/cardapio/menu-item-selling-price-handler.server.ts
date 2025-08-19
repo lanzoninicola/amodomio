@@ -150,6 +150,8 @@ export class MenuItemSellingPriceHandler {
         channelKey: channel.key,
         channelName: channel.name,
         priceAmount: variation?.priceAmount ?? 0,
+        showOnCardapio: variation?.showOnCardapio ?? false,
+        showOnCardapioAt: variation?.showOnCardapioAt ?? null,
         profitActualPerc: variation?.profitActualPerc ?? 0,
         priceExpectedAmount: variation?.priceExpectedAmount ?? 0,
         profitExpectedPerc: variation?.profitExpectedPerc ?? 0,
@@ -279,6 +281,8 @@ export class MenuItemSellingPriceHandler {
         profitExpectedPerc: variation?.profitExpectedPerc ?? 0,
         computedSellingPriceBreakdown,
         discountPercentage: variation?.discountPercentage ?? 0,
+        showOnCardapio: variation?.showOnCardapio ?? false,
+        showOnCardapioAt: variation?.showOnCardapioAt ?? null, // ← new field to control "
         updatedBy: variation?.updatedBy,
         updatedAt: variation?.updatedAt,
         previousPriceAmount: variation?.previousPriceAmount ?? 0,

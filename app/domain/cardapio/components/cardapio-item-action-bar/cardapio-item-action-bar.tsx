@@ -6,17 +6,21 @@ import { Heart, Share2 } from "lucide-react";
 import WhatsappExternalLink from "~/components/primitives/whatsapp/whatsapp-external-link";
 import WhatsAppIcon from "~/components/primitives/whatsapp/whatsapp-icon";
 import { cn } from "~/lib/utils";
+import { useSoundEffects } from "~/components/sound-effects/use-sound-effects";
 
+interface CardapioItemActionBarProps { item: MenuItemWithAssociations, cnContainer?: string }
 
+export default function CardapioItemActionBar({ item, cnContainer }: CardapioItemActionBarProps) {
 
-export default function CardapioItemActionBar({ item }: { item: MenuItemWithAssociations }) {
     const [likeIt, setLikeIt] = useState(false)
     const [likesAmount, setLikesAmount] = useState(item.likes?.amount || 0)
     const [sharesAmount, setSharesAmount] = useState(item.shares?.amount || 0)
+    const { playTap } = useSoundEffects();
 
     const fetcher = useFetcher();
 
     const likingIt = () => {
+        playTap()
 
         setLikeIt(true)
         setLikesAmount(likesAmount + 1)
@@ -32,6 +36,8 @@ export default function CardapioItemActionBar({ item }: { item: MenuItemWithAsso
     };
 
     const shareIt = () => {
+        playTap()
+
         if (!navigator?.share) {
             console.log("Navegador não suporta o compartilhamento")
             return
@@ -60,7 +66,7 @@ export default function CardapioItemActionBar({ item }: { item: MenuItemWithAsso
 
 
     return (
-        <div className="flex flex-col gap-0 my-2 justify-end">
+        <div className={cn("flex flex-col gap-0 my-2 justify-end", cnContainer)} data-element="action-bar">
             <div className="flex flex-col gap-4 justify-center font-neue">
                 <WhatsappExternalLink
                     phoneNumber="46991272525"
@@ -74,7 +80,7 @@ export default function CardapioItemActionBar({ item }: { item: MenuItemWithAsso
 
                     <div className="flex flex-col gap-1 cursor-pointer p-1 active:bg-black/50 " onClick={shareIt}>
                         <Share2 color="white" />
-                        <span className="text-lg text-center font-neue tracking-widest font-semibold uppercase text-white">
+                        <span className="text-md text-center font-neue tracking-widest font-semibold uppercase text-white">
                             {sharesAmount > 0 && `${sharesAmount}`}
                         </span>
                     </div>
@@ -87,7 +93,7 @@ export default function CardapioItemActionBar({ item }: { item: MenuItemWithAsso
                                 item.likes?.amount && item.likes?.amount > 0 ? "stroke-red-500" : "stroke-white"
                             )}
                         />
-                        <span className="text-lg text-center font-neue tracking-widest font-semibold uppercase text-red-500">
+                        <span className="text-md text-center font-neue tracking-widest font-semibold uppercase text-red-500">
                             {likesAmount > 0 && `${likesAmount}`}
 
                         </span>

@@ -445,14 +445,16 @@ model MenuItemTag {
 }
 
 model Tag {
-  id          String        @id @default(uuid())
-  name        String
-  public      Boolean       @default(false)
-  colorHEX    String        @default("#e0e0e0") @map("color_hex")
-  deletedAt   DateTime?     @map("deleted_at")
-  createdAt   DateTime      @map("created_at")
-  updatedAt   DateTime      @default(now()) @updatedAt @map("updated_at")
-  MenuItemTag MenuItemTag[]
+  id             String        @id @default(uuid())
+  name           String
+  public         Boolean       @default(false)
+  colorHEX       String        @default("#e0e0e0") @map("color_hex")
+  featuredFilter Boolean       @default(false) @map("featured_filter")
+  sortOrderIndex Int           @default(0) @map("sort_order_index")
+  deletedAt      DateTime?     @map("deleted_at")
+  createdAt      DateTime      @map("created_at")
+  updatedAt      DateTime      @default(now()) @updatedAt @map("updated_at")
+  MenuItemTag    MenuItemTag[]
 
   @@map("tags")
 }
@@ -783,70 +785,6 @@ model HrHiringProposal {
   @@map("hr_hiring_proposals")
 }
 
-model Bairro {
-  id        String   @id @default(uuid())
-  name      String
-  city      String
-  state     String
-  zipCode   String?  @map("zip_code")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  distances    DistanceToPizzeria[]
-  deliveryFees DeliveryFee[]
-
-  @@map("bairros")
-}
-
-model PizzeriaLocation {
-  id          String   @id @default(uuid())
-  name        String
-  address     String
-  city        String
-  state       String
-  zipCode     String?  @map("zip_code")
-  phoneNumber String?  @map("phone_number")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-
-  mainLocation Boolean @default(false) @map("main_location")
-
-  distances    DistanceToPizzeria[]
-  deliveryFees DeliveryFee[]
-
-  @@map("pizzeria_locations")
-}
-
-model DistanceToPizzeria {
-  id                 String   @id @default(uuid())
-  bairroId           String   @map("bairro_id")
-  pizzeriaLocationId String   @map("pizzeria_location_id")
-  distanceInKm       Float    @map("distance_in_km")
-  estimatedTimeInMin Int?     @map("estimated_time_in_min")
-  createdAt          DateTime @default(now()) @map("created_at")
-
-  bairro           Bairro           @relation(fields: [bairroId], references: [id])
-  pizzeriaLocation PizzeriaLocation @relation(fields: [pizzeriaLocationId], references: [id])
-
-  @@unique([bairroId, pizzeriaLocationId])
-  @@map("distance_to_pizzeria")
-}
-
-model DeliveryFee {
-  id                 String   @id @default(uuid())
-  bairroId           String   @map("bairro_id")
-  pizzeriaLocationId String   @map("pizzeria_location_id")
-  amount             Float
-  createdAt          DateTime @default(now()) @map("created_at")
-  updatedAt          DateTime @updatedAt @map("updated_at")
-
-  bairro           Bairro           @relation(fields: [bairroId], references: [id])
-  pizzeriaLocation PizzeriaLocation @relation(fields: [pizzeriaLocationId], references: [id])
-
-  @@unique([bairroId, pizzeriaLocationId])
-  @@map("delivery_fees")
-}
-
 model Post {
   id        String      @id @default(uuid())
   title     String
@@ -889,4 +827,174 @@ model PostShare {
   deletedAt DateTime? @map("deleted_at")
 
   @@map("post_shares")
+}
+
+model Feedback {
+  id          String   @id @default(cuid())
+  createdAt   DateTime @default(now())
+  sentiment   String // "positive" ou "negative", controlado pela aplicação
+  imageBase64 String
+  text        String?
+
+  @@map("feedbacks")
+}
+
+model CalendarDay {
+  id          String   @id @default(uuid())
+  date        DateTime @unique // Data completa
+  dateInt     Int      @unique @map("date_int") // Ex: 20250804
+  year        Int
+  month       Int
+  day         Int
+  weekday     Int // 0=Dom, 6=Sáb
+  isWeekend   Boolean  @default(false) @map("is_weekend")
+  isHoliday   Boolean  @default(false) @map("is_holiday")
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("calendar_day")
+}
+
+model KdsDailyOrder {
+  /// Cabeçalho 1 UM dia (agrega os pedidos do dia)
+  id      String   @id @default(uuid())
+  date    DateTime
+  dateInt Int      @map("date_int")
+
+  /// Total dos pedidos do dia (soma de orderAmount dos detalhes)
+  totOrdersAmount Decimal @default(0) @map("tot_orders_amount") @db.Decimal(10, 2)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  details KdsDailyOrderDetail[]
+
+  operationStatus String?   @default("pending") @map("operation_status")
+  openedAt        DateTime? @map("opened_at")
+  closedAt        DateTime? @map("closed_at")
+
+  /// Um cabeçalho por dia
+  @@unique([dateInt])
+  @@index([dateInt])
+  @@map("kds_daily_orders")
+}
+
+model KdsDailyOrderDetail {
+  /// Linhas (uma por pedido) pertencentes a um dia
+  id String @id @default(uuid())
+
+  /// FK obrigatória para o cabeçalho do dia
+  orderId String        @map("order_id")
+  order   KdsDailyOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  /// Redundância útil para filtros/uniques por dia
+  dateInt Int @map("date_int")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  deliveredAt DateTime? @map("delivered_at")
+
+  /// Nº da comanda (único dentro do dia)
+  commandNumber Int? @map("command_number")
+
+  /// Campos do pedido (linha)
+  size        String?
+  hasMoto     Boolean @default(false) @map("has_moto")
+  motoValue   Decimal @default(0) @map("moto_value") @db.Decimal(10, 2)
+  orderAmount Decimal @default(0) @map("order_amount") @db.Decimal(10, 2)
+  channel     String?
+  status      String  @default("novoPedido")
+
+  takeAway Boolean @default(false) @map("take_away")
+
+  requestedForOven Boolean @default(false) @map("requested_for_oven")
+  Bairro           Bairro? @relation(fields: [bairroId], references: [id])
+  bairroId         String? @map("bairro_id")
+
+  sortOrderIndex Int @default(0) @map("sort_order_index") // NOVO
+
+  isVendaLivre Boolean @default(false) @map("is_venda_livre")
+
+  /// Regras/índices
+  @@index([dateInt, sortOrderIndex])
+  @@index([dateInt])
+  @@index([commandNumber])
+  @@index([orderId])
+  @@map("kds_daily_order_details")
+}
+
+model Bairro {
+  id        String   @id @default(uuid())
+  name      String
+  city      String
+  state     String
+  zipCode   String?  @map("zip_code")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  distances           DeliveryZoneDistance[]
+  deliveryFees        DeliveryFee[]
+  KdsDailyOrderDetail KdsDailyOrderDetail[]
+
+  @@map("bairros")
+}
+
+model CompanyLocation {
+  id          String   @id @default(uuid())
+  name        String
+  address     String
+  city        String
+  state       String
+  zipCode     String?  @map("zip_code")
+  phoneNumber String?  @map("phone_number")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  mainLocation Boolean @default(false) @map("main_location")
+
+  distances    DeliveryZoneDistance[]
+  deliveryFees DeliveryFee[]
+
+  @@map("company_locations")
+}
+
+model DeliveryZoneDistance {
+  id                 String   @id @default(uuid())
+  bairroId           String   @map("bairro_id")
+  companyLocationId  String   @map("company_location_id")
+  distanceInKm       Float    @map("distance_in_km")
+  estimatedTimeInMin Int?     @map("estimated_time_in_min")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  bairro          Bairro          @relation(fields: [bairroId], references: [id])
+  companyLocation CompanyLocation @relation(fields: [companyLocationId], references: [id])
+
+  @@unique([bairroId, companyLocationId])
+  @@map("delivery_zone_distance")
+}
+
+model DeliveryFee {
+  id                String   @id @default(uuid())
+  bairroId          String   @map("bairro_id")
+  companyLocationId String   @map("pizzeria_location_id")
+  amount            Float
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  bairro          Bairro          @relation(fields: [bairroId], references: [id])
+  companyLocation CompanyLocation @relation(fields: [companyLocationId], references: [id])
+
+  @@unique([bairroId, companyLocationId])
+  @@map("delivery_fees")
+}
+
+model DeliveryRider {
+  id            String  @id @default(uuid())
+  name          String
+  phoneNumber   String  @map("phone_number")
+  baseFeeAmount Decimal @default(0) @map("base_fee_amount") @db.Decimal(10, 2)
+
+  @@map("delivery_riders")
 }

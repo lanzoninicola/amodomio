@@ -424,6 +424,8 @@ export class MenuItemPrismaEntity {
             profitActualPerc: variation.profitActualPerc ?? 0,
             priceExpectedAmount: variation.priceExpectedAmount ?? 0,
             profitExpectedPerc: variation.profitExpectedPerc ?? 0,
+            showOnCardapio: variation.showOnCardapio ?? false,
+            showOnCardapioAt: variation.showOnCardapioAt ?? null,
             updatedBy: variation.updatedBy,
             updatedAt: variation.updatedAt,
             previousPriceAmount: variation.previousPriceAmount ?? 0,

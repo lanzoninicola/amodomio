@@ -28,6 +28,12 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
       title: "Atendimento",
       items: [
         {
+          title: "KDS",
+          href: "/admin/kds/atendimento",
+          items: [],
+          disabled: false,
+        },
+        {
           title: "Gerenciamento Sabores",
           href: "/admin/atendimento/gerenciamento-sabores",
           items: [],
@@ -55,6 +61,12 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
         {
           title: "Linha do tempo Entrega",
           href: "/admin/orders-delivery-time-left",
+          items: [],
+          disabled: false,
+        },
+        {
+          title: "Comentarios clientes",
+          href: "/admin/atendimento/comentarios",
           items: [],
           disabled: false,
         },
@@ -162,6 +174,12 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
     {
       title: "Cozinha",
       items: [
+        {
+          title: "KDS",
+          href: "/admin/kds/cozinha",
+          items: [],
+          disabled: false,
+        },
         {
           title: "Lista de compras",
           href: "/admin/grocery-shopping-list",

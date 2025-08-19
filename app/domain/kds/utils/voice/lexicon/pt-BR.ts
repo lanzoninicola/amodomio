@@ -1,0 +1,55 @@
+import type { Lexicon } from "../types";
+
+export const LEXICON_PT_BR: Lexicon = {
+  intents: {
+    novoPedido: [
+      "novo",
+      "iniciar",
+      "comecar",
+      "começar",
+      "abrir",
+      "novo pedido",
+    ],
+    emProducao: [
+      "producao",
+      "produção",
+      "preparo",
+      "preparar",
+      "fazer",
+      "cozinha",
+      "cozinhar",
+      "manda pra producao",
+    ],
+    aguardandoForno: [
+      "forno",
+      "aguardando forno",
+      "fila do forno",
+      "espera forno",
+      "vai pro forno",
+      "colocar no forno",
+      "botar no forno",
+    ],
+    assando: [
+      "assar",
+      "assando",
+      "bota pra assar",
+      "botar pra assar",
+      "entra no forno",
+      "taca no forno",
+      "mete no forno",
+    ],
+    finalizado: [
+      "finaliza",
+      "finalizado",
+      "finalizar",
+      "pronto",
+      "terminado",
+      "concluido",
+      "concluído",
+      "acabou",
+      "encerra",
+      "tá pronto",
+      "ta pronto",
+    ],
+  },
+};
