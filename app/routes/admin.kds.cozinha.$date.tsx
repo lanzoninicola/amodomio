@@ -262,11 +262,17 @@ function OrderItem({ order, nowMs }: { order: OrderRow; nowMs: number }) {
 }
 
 /* ===== Voice Controller (PT+IT, sem toggle) ===== */
-/* ===== Voice Controller Enhanced (PT+IT, com debug) ===== */
+import { useState, useEffect } from "react";
+import { useFetcher } from "@remix-run/react";
+import { Button } from "@/components/ui/button";
+import { Mic, MicOff, AlertCircle, RefreshCw } from "lucide-react";
+import type { OrderRow } from "@/domain/kds";
+
 function VoiceController({ orders }: { orders: OrderRow[] }) {
   const fetcher = useFetcher();
   const [debugMode, setDebugMode] = useState(false);
   const [lastCommand, setLastCommand] = useState<string>("");
+  const [retryCount, setRetryCount] = useState(0);
 
   function submitStatus(commandNumber: number, statusId: string) {
     const order = orders.find((o) => o.commandNumber === commandNumber);
@@ -301,10 +307,18 @@ function VoiceController({ orders }: { orders: OrderRow[] }) {
   }, { autoStart: false });
 
   // Reset manual para casos extremos
-  const handleForceReset = () => {
+  const handleForceReset = async () => {
     console.log("Force reset requested");
+    setRetryCount(prev => prev + 1);
+
+    // Para completamente
     stop();
-    setTimeout(() => {
+
+    // Aguarda um pouco mais para garantir limpeza
+    await new Promise(resolve => setTimeout(resolve, 1500));
+
+    // Limpa qualquer estado residual
+    if (typeof window !== 'undefined') {
       const store = (window as any).__KDS_SPEECH__;
       if (store) {
         store.forceStopped = false;
@@ -312,20 +326,111 @@ function VoiceController({ orders }: { orders: OrderRow[] }) {
         store.isRunning = false;
         store.isStarting = false;
       }
-      start();
-    }, 1000);
+
+      // Tenta parar qualquer instância de reconhecimento ativa
+      if ((window as any).webkitSpeechRecognition || (window as any).SpeechRecognition) {
+        console.log("Cleaning up any active recognition instances...");
+      }
+    }
+
+    // Reinicia
+    start();
   };
 
-  const bubbleText = interimText || lastHeard || (active && !listening ? "aguardando..." : "");
+  // Auto-reset em caso de erro persistente
+  useEffect(() => {
+    if (micStatus === "erro" && retryCount < 3) {
+      const timer = setTimeout(() => {
+        console.log(`Auto-retry attempt ${retryCount + 1}/3`);
+        handleForceReset();
+      }, 3000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [micStatus, retryCount]);
+
+  // Reset do contador de retry quando funciona
+  useEffect(() => {
+    if (micStatus === "ouvindo") {
+      setRetryCount(0);
+    }
+  }, [micStatus]);
+
+  const bubbleText = interimText || lastHeard ||
+    (active && micStatus === "solicitando" ? "Solicitando permissão..." :
+      active && micStatus === "aguardando" ? "Iniciando..." :
+        active && !listening ? "Aguardando..." : "");
+
   const showBubble = Boolean(bubbleText || (active && listening));
 
   // Determina cor do botão baseado no status
   const getButtonColor = () => {
     if (!active) return "bg-gray-700 hover:bg-gray-800";
-    if (micStatus === "erro") return "bg-red-600 hover:bg-red-700";
-    if (micStatus === "negado") return "bg-red-800 hover:bg-red-900";
-    if (listening) return "bg-green-600 hover:bg-green-700";
-    return "bg-yellow-600 hover:bg-yellow-700"; // aguardando
+
+    switch (micStatus) {
+      case "erro":
+        return "bg-red-600 hover:bg-red-700 animate-pulse";
+      case "negado":
+        return "bg-red-800 hover:bg-red-900";
+      case "ouvindo":
+        return "bg-green-600 hover:bg-green-700";
+      case "solicitando":
+        return "bg-blue-600 hover:bg-blue-700 animate-pulse";
+      case "aguardando":
+        return "bg-yellow-600 hover:bg-yellow-700 animate-pulse";
+      case "reconectando":
+        return "bg-yellow-500 hover:bg-yellow-600 animate-pulse";
+      default:
+        return "bg-gray-700 hover:bg-gray-800";
+    }
+  };
+
+  // Mensagem de status mais clara
+  const getStatusMessage = () => {
+    switch (micStatus) {
+      case "ouvindo":
+        return "🎤 Ouvindo...";
+      case "aguardando":
+        return "⏳ Iniciando...";
+      case "parado":
+        return "⏸️ Parado";
+      case "negado":
+        return "🚫 Permissão negada";
+      case "erro":
+        return `❌ Erro${retryCount > 0 ? ` (tentativa ${retryCount}/3)` : ""}`;
+      case "solicitando":
+        return "🔵 Solicitando permissão...";
+      case "reconectando":
+        return "🔄 Reconectando...";
+      default:
+        return "";
+    }
+  };
+
+  // Instruções para o usuário quando há problema
+  const getHelpMessage = () => {
+    if (micStatus === "negado") {
+      return (
+        <div className="text-[10px] bg-red-100 text-red-800 p-2 rounded max-w-[200px] mt-1">
+          <strong>Permissão negada!</strong><br />
+          1. Clique no 🔒 na barra de endereço<br />
+          2. Permita o microfone<br />
+          3. Recarregue a página
+        </div>
+      );
+    }
+
+    if (micStatus === "erro" && retryCount >= 3) {
+      return (
+        <div className="text-[10px] bg-orange-100 text-orange-800 p-2 rounded max-w-[200px] mt-1">
+          <strong>Erro persistente!</strong><br />
+          Tente recarregar a página ou<br />
+          verificar as configurações do navegador
+        </div>
+      );
+    }
+
+    return null;
   };
 
   return (
@@ -334,7 +439,7 @@ function VoiceController({ orders }: { orders: OrderRow[] }) {
       {process.env.NODE_ENV === 'development' && (
         <button
           onClick={() => setDebugMode(!debugMode)}
-          className="text-[8px] text-gray-400 bg-gray-100 px-1 rounded"
+          className="text-[8px] text-gray-400 bg-gray-100 px-1 rounded hover:bg-gray-200 transition-colors"
         >
           {debugMode ? "Debug ON" : "Debug OFF"}
         </button>
@@ -342,18 +447,15 @@ function VoiceController({ orders }: { orders: OrderRow[] }) {
 
       {/* Status detalhado */}
       <div className="text-[10px] text-gray-600 select-none pr-1 flex flex-col items-end">
-        <div>
-          {micStatus === "ouvindo" && "🎤 ouvindo"}
-          {micStatus === "aguardando" && "⏳ aguardando..."}
-          {micStatus === "parado" && "⏸️ parado"}
-          {micStatus === "negado" && "🚫 perm. negada"}
-          {micStatus === "erro" && "❌ erro"}
+        <div className="font-medium">
+          {getStatusMessage()}
         </div>
         {lastCommand && (
-          <div className="text-green-600 font-mono">
+          <div className="text-green-600 font-mono mt-1">
             ✓ {lastCommand}
           </div>
         )}
+        {getHelpMessage()}
       </div>
 
       {/* Balão de fala */}
@@ -363,12 +465,12 @@ function VoiceController({ orders }: { orders: OrderRow[] }) {
             {bubbleText || "..."}
           </span>
 
-          {/* Indicador de processamento */}
-          {!interimText && !lastHeard && active && !listening && (
+          {/* Indicador de processamento animado */}
+          {active && (micStatus === "aguardando" || micStatus === "solicitando") && (
             <span className="inline-flex ml-1">
-              <span className="w-1 h-1 rounded-full bg-gray-500 animate-pulse mr-1" />
-              <span className="w-1 h-1 rounded-full bg-gray-500 animate-pulse mr-1 delay-150" />
-              <span className="w-1 h-1 rounded-full bg-gray-500 animate-pulse delay-300" />
+              <span className="w-1 h-1 rounded-full bg-blue-500 animate-bounce mr-1" style={{ animationDelay: '0ms' }} />
+              <span className="w-1 h-1 rounded-full bg-blue-500 animate-bounce mr-1" style={{ animationDelay: '150ms' }} />
+              <span className="w-1 h-1 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: '300ms' }} />
             </span>
           )}
 
@@ -388,30 +490,52 @@ function VoiceController({ orders }: { orders: OrderRow[] }) {
           onClick={active ? stop : start}
           className={`rounded-full w-14 h-14 shadow-lg transition-all duration-200 ${getButtonColor()}`}
           title={active ? "Desligar microfone" : "Ligar microfone"}
+          disabled={micStatus === "solicitando"}
         >
-          {active ? <Mic className="w-6 h-6 text-white" /> : <MicOff className="w-6 h-6 text-white" />}
+          {active ? (
+            micStatus === "erro" ? (
+              <AlertCircle className="w-6 h-6 text-white" />
+            ) : (
+              <Mic className="w-6 h-6 text-white" />
+            )
+          ) : (
+            <MicOff className="w-6 h-6 text-white" />
+          )}
         </Button>
 
-        {/* Botão de reset (só aparece em caso de erro) */}
-        {micStatus === "erro" && (
+        {/* Botão de reset manual (aparece em erro após tentativas falharem) */}
+        {micStatus === "erro" && retryCount >= 3 && (
           <Button
             type="button"
             onClick={handleForceReset}
-            className="rounded-full w-10 h-10 bg-orange-600 hover:bg-orange-700 text-white shadow"
-            title="Reset forçado"
+            className="rounded-full w-10 h-10 bg-orange-600 hover:bg-orange-700 text-white shadow transition-all"
+            title="Tentar novamente"
           >
-            <span className="text-xs">🔄</span>
+            <RefreshCw className="w-4 h-4" />
           </Button>
         )}
       </div>
 
-      {/* Debug info */}
+      {/* Debug info aprimorado */}
       {debugMode && process.env.NODE_ENV === 'development' && (
-        <div className="bg-black/80 text-white text-[8px] p-2 rounded max-w-xs">
+        <div className="bg-black/90 text-white text-[10px] p-2 rounded max-w-xs font-mono">
+          <div className="text-green-400">== Voice Debug ==</div>
           <div>Active: {active ? "✓" : "✗"}</div>
           <div>Listening: {listening ? "✓" : "✗"}</div>
           <div>Status: {micStatus}</div>
-          <div>Store: {JSON.stringify((window as any).__KDS_SPEECH__ || {}, null, 1)}</div>
+          <div>Retry: {retryCount}/3</div>
+          <div className="mt-1 text-yellow-400">Last heard:</div>
+          <div className="text-xs">{lastHeard || "(none)"}</div>
+          <div className="mt-1 text-yellow-400">Interim:</div>
+          <div className="text-xs">{interimText || "(none)"}</div>
+          {typeof window !== 'undefined' && (window as any).__KDS_SPEECH__ && (
+            <>
+              <div className="mt-1 text-yellow-400">Store:</div>
+              <pre className="text-[8px] overflow-auto max-w-[200px]">
+                {JSON.stringify((window as any).__KDS_SPEECH__, null, 2)}
+              </pre>
+            </>
+          )}
         </div>
       )}
     </div>

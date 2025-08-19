@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import type { Lexicon, StatusId, LanguageCode } from "./types";
 
 export const VOICE_FEEDBACK = false;
@@ -73,17 +73,17 @@ export function parseNumberMulti(
 type VoiceOpts = { lang?: LanguageCode; autoStart?: boolean };
 
 export type VoiceApi = {
-  /** Intenção do usuário (botão) */
   active: boolean;
-  /** Estado real do motor */
   listening: boolean;
-  /** Último parcial (interim) */
   interimText: string;
-  /** Último final */
   lastHeard: string;
-  /** Status textual do mic (para UI) */
-  micStatus: "parado" | "aguardando" | "ouvindo" | "negado" | "erro";
-  /** Liga/desliga */
+  micStatus:
+    | "parado"
+    | "aguardando"
+    | "ouvindo"
+    | "negado"
+    | "erro"
+    | "reconectando";
   start: () => void;
   stop: () => void;
 };
@@ -93,150 +93,91 @@ export function useVoice(
   opts: VoiceOpts = {}
 ): VoiceApi {
   const lang = opts.lang ?? "pt-BR";
-  const [active, setActive] = useState<boolean>(opts.autoStart ?? false);
+  const [active, setActive] = useState<boolean>(false);
   const [listening, setListening] = useState(false);
   const [interimText, setInterim] = useState("");
   const [lastHeard, setLastHeard] = useState("");
   const [micStatus, setMicStatus] = useState<VoiceApi["micStatus"]>("parado");
 
-  const canUse = useRef(false);
   const recognitionRef = useRef<any>(null);
-  const isStartingRef = useRef(false);
-  const shouldRestartRef = useRef(false);
-  const restartTimeoutRef = useRef<number | null>(null);
   const clearLastTimeoutRef = useRef<number | null>(null);
-  const visibilityPausedRef = useRef(false);
-  const micGrantedRef = useRef<boolean | null>(null);
-  const errorCountRef = useRef(0);
-  const lastStartTimeRef = useRef(0);
+  const isIntentionalStop = useRef(false);
+  const networkErrorCount = useRef(0);
+  const lastNetworkError = useRef<number>(0);
+  const restartTimeout = useRef<number | null>(null);
 
-  // Limpa timeouts
-  const clearTimeouts = () => {
-    if (restartTimeoutRef.current) {
-      clearTimeout(restartTimeoutRef.current);
-      restartTimeoutRef.current = null;
-    }
+  // Limpa todos os timeouts
+  const clearAllTimeouts = useCallback(() => {
     if (clearLastTimeoutRef.current) {
       clearTimeout(clearLastTimeoutRef.current);
       clearLastTimeoutRef.current = null;
     }
-  };
+    if (restartTimeout.current) {
+      clearTimeout(restartTimeout.current);
+      restartTimeout.current = null;
+    }
+  }, []);
 
-  // Verifica permissões do microfone
-  useEffect(() => {
-    (async () => {
+  // Para e limpa o reconhecimento atual
+  const cleanupRecognition = useCallback(() => {
+    if (recognitionRef.current) {
       try {
-        if (
-          "permissions" in navigator &&
-          (navigator as any).permissions?.query
-        ) {
-          const permission = await (navigator as any).permissions.query({
-            name: "microphone" as any,
-          });
-          micGrantedRef.current = permission.state === "granted";
-          setMicStatus(
-            micGrantedRef.current
-              ? "parado"
-              : permission.state === "denied"
-              ? "negado"
-              : "parado"
-          );
-          permission.onchange = () => {
-            micGrantedRef.current = permission.state === "granted";
-            setMicStatus(
-              micGrantedRef.current
-                ? "parado"
-                : permission.state === "denied"
-                ? "negado"
-                : "parado"
-            );
-            if (!micGrantedRef.current && active) {
-              setActive(false);
-            }
-          };
-        } else {
-          micGrantedRef.current = null;
-        }
-      } catch {
-        micGrantedRef.current = null;
-      }
-    })();
+        recognitionRef.current.onstart = null;
+        recognitionRef.current.onend = null;
+        recognitionRef.current.onerror = null;
+        recognitionRef.current.onresult = null;
+        recognitionRef.current.stop();
+      } catch {}
+
+      // Pequeno delay antes de limpar a referência
+      setTimeout(() => {
+        recognitionRef.current = null;
+      }, 100);
+    }
   }, []);
 
-  // Controla visibilidade da página
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "hidden") {
-        console.log("Page hidden, pausing recognition");
-        visibilityPausedRef.current = true;
-        stopRecognition();
-      } else {
-        console.log("Page visible, resuming if active");
-        visibilityPausedRef.current = false;
-        if (active) {
-          setTimeout(() => {
-            if (active && !visibilityPausedRef.current) {
-              startRecognition();
-            }
-          }, 500);
-        }
-      }
-    };
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      clearTimeouts();
-    };
-  }, []);
-
-  // Inicializa reconhecimento de voz
-  useEffect(() => {
+  // Cria nova instância de reconhecimento
+  const createRecognition = useCallback(() => {
     const SpeechRecognition =
       (window as any).SpeechRecognition ||
       (window as any).webkitSpeechRecognition;
 
-    canUse.current = Boolean(SpeechRecognition);
-
     if (!SpeechRecognition) {
-      console.log("SpeechRecognition not available");
-      return;
-    }
-
-    // Sempre cria novo reconhecimento
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.abort();
-      } catch {}
+      console.error("SpeechRecognition not available");
+      setMicStatus("erro");
+      return null;
     }
 
     const recognition = new SpeechRecognition();
     recognition.lang = lang;
     recognition.continuous = true;
     recognition.interimResults = true;
+    recognition.maxAlternatives = 1;
 
     recognition.onstart = () => {
-      console.log("Recognition started");
-      isStartingRef.current = false;
+      console.log("Recognition started successfully");
       setListening(true);
       setMicStatus("ouvindo");
-      errorCountRef.current = 0;
+      networkErrorCount.current = 0; // Reset error count on successful start
     };
 
     recognition.onend = () => {
       console.log("Recognition ended");
       setListening(false);
       setInterim("");
-      isStartingRef.current = false;
 
-      // Se deve reiniciar e ainda está ativo
-      if (shouldRestartRef.current && active && !visibilityPausedRef.current) {
-        console.log("Scheduling restart");
-        restartTimeoutRef.current = setTimeout(() => {
-          if (active && !visibilityPausedRef.current) {
-            startRecognition();
+      // Só reinicia se não foi parada intencionalmente e ainda está ativo
+      if (!isIntentionalStop.current && active) {
+        setMicStatus("reconectando");
+        console.log("Will restart in 2 seconds...");
+
+        clearAllTimeouts();
+        restartTimeout.current = setTimeout(() => {
+          if (active && !isIntentionalStop.current) {
+            console.log("Restarting recognition...");
+            startRecognitionInternal();
           }
-        }, 1500) as unknown as number;
+        }, 2000) as unknown as number;
       } else {
         setMicStatus("parado");
       }
@@ -244,43 +185,68 @@ export function useVoice(
 
     recognition.onerror = (event: any) => {
       const error = event.error;
-      console.log("Recognition error:", error);
+      console.log(`Recognition error: ${error}`, event);
 
-      setListening(false);
-      setInterim("");
-      isStartingRef.current = false;
-      errorCountRef.current++;
+      // Trata erro de rede especificamente
+      if (error === "network") {
+        const now = Date.now();
 
+        // Se o último erro de rede foi há menos de 5 segundos, incrementa contador
+        if (now - lastNetworkError.current < 5000) {
+          networkErrorCount.current++;
+        } else {
+          networkErrorCount.current = 1;
+        }
+        lastNetworkError.current = now;
+
+        console.log(`Network error count: ${networkErrorCount.current}`);
+
+        // Se muitos erros de rede em sequência, para tentar
+        if (networkErrorCount.current >= 3) {
+          console.error("Too many network errors, stopping");
+          setMicStatus("erro");
+          setActive(false);
+          isIntentionalStop.current = true;
+          cleanupRecognition();
+
+          // Reset após 10 segundos para permitir nova tentativa
+          setTimeout(() => {
+            networkErrorCount.current = 0;
+            isIntentionalStop.current = false;
+          }, 10000);
+          return;
+        }
+
+        // Aguarda mais tempo antes de tentar novamente após erro de rede
+        setMicStatus("reconectando");
+        return; // Deixa o onend lidar com o restart
+      }
+
+      // Erro de permissão
       if (error === "not-allowed" || error === "service-not-allowed") {
+        console.error("Permission denied");
         setMicStatus("negado");
         setActive(false);
-        shouldRestartRef.current = false;
+        isIntentionalStop.current = true;
+        cleanupRecognition();
         return;
       }
 
+      // Erro "aborted" - geralmente ok, vai reiniciar via onend
       if (error === "aborted") {
-        console.log("Recognition aborted (normal)");
+        console.log("Recognition aborted (will restart if active)");
         return;
       }
 
-      if (errorCountRef.current >= 3) {
-        console.log("Too many errors, stopping");
-        setMicStatus("erro");
-        setActive(false);
-        shouldRestartRef.current = false;
+      // Erro "no-speech" - normal, continua
+      if (error === "no-speech") {
+        console.log("No speech detected (normal)");
         return;
       }
 
+      // Outros erros
+      console.error(`Unhandled error: ${error}`);
       setMicStatus("erro");
-
-      if (active && !visibilityPausedRef.current) {
-        const delay = error === "network" ? 5000 : 2000;
-        restartTimeoutRef.current = setTimeout(() => {
-          if (active && !visibilityPausedRef.current) {
-            startRecognition();
-          }
-        }, delay) as unknown as number;
-      }
     };
 
     recognition.onresult = (event: any) => {
@@ -298,20 +264,19 @@ export function useVoice(
 
       if (interim) {
         setInterim(interim.trim());
-        setMicStatus("ouvindo");
-      } else {
-        setInterim("");
+        setMicStatus("ouvindo"); // Garante que mostra "ouvindo" quando há atividade
       }
 
       if (finalText) {
         const raw = finalText.trim();
         console.log("Final text:", raw);
         setLastHeard(raw);
-        errorCountRef.current = 0; // Reset error count on success
+        setInterim("");
 
-        if (clearLastTimeoutRef.current) {
-          clearTimeout(clearLastTimeoutRef.current);
-        }
+        // Reset network error count on successful recognition
+        networkErrorCount.current = 0;
+
+        clearAllTimeouts();
         clearLastTimeoutRef.current = setTimeout(
           () => setLastHeard(""),
           4000
@@ -322,119 +287,102 @@ export function useVoice(
       }
     };
 
-    recognitionRef.current = recognition;
-  }, [lang, onCommand]);
+    return recognition;
+  }, [lang, onCommand, active, clearAllTimeouts, cleanupRecognition]);
 
-  const startRecognition = () => {
-    if (!canUse.current || !recognitionRef.current) {
-      console.log("Recognition not available");
-      return;
-    }
+  // Função interna para iniciar reconhecimento
+  const startRecognitionInternal = useCallback(() => {
+    // Limpa qualquer reconhecimento anterior
+    cleanupRecognition();
 
-    if (micGrantedRef.current === false) {
-      console.log("Microphone permission denied");
-      setMicStatus("negado");
-      return;
-    }
-
-    if (isStartingRef.current || listening) {
-      console.log("Already starting or listening");
-      return;
-    }
-
-    if (visibilityPausedRef.current) {
-      console.log("Page not visible, skipping start");
-      return;
-    }
-
-    // Previne starts muito frequentes
-    const now = Date.now();
-    if (now - lastStartTimeRef.current < 1000) {
-      console.log("Too soon since last start");
-      return;
-    }
-
-    console.log("Starting recognition");
-    isStartingRef.current = true;
-    lastStartTimeRef.current = now;
-    setMicStatus("aguardando");
-    clearTimeouts();
-
-    try {
-      recognitionRef.current.start();
-    } catch (error: any) {
-      console.log("Error starting recognition:", error);
-      isStartingRef.current = false;
-
-      if (error.name === "InvalidStateError") {
-        // Já está rodando, ajusta o estado
-        console.log("Recognition already running");
-        setListening(true);
-        setMicStatus("ouvindo");
+    // Aguarda um pouco para garantir limpeza
+    setTimeout(() => {
+      const recognition = createRecognition();
+      if (!recognition) {
+        setMicStatus("erro");
         return;
       }
 
-      errorCountRef.current++;
-      if (errorCountRef.current >= 3) {
-        setMicStatus("erro");
-        setActive(false);
-      }
-    }
-  };
+      recognitionRef.current = recognition;
 
-  const stopRecognition = () => {
-    console.log("Stopping recognition");
-    shouldRestartRef.current = false;
-    clearTimeouts();
-
-    if (recognitionRef.current) {
       try {
-        recognitionRef.current.abort();
-      } catch (error) {
-        console.log("Error stopping recognition:", error);
-      }
-    }
+        console.log("Starting recognition...");
+        setMicStatus("aguardando");
+        recognition.start();
+      } catch (error: any) {
+        console.error("Error starting recognition:", error);
 
+        if (error.name === "InvalidStateError") {
+          // Já está rodando - não é erro
+          console.log("Recognition already running");
+          setListening(true);
+          setMicStatus("ouvindo");
+        } else {
+          setMicStatus("erro");
+
+          // Tenta novamente após delay
+          if (active && !isIntentionalStop.current) {
+            restartTimeout.current = setTimeout(() => {
+              if (active) {
+                startRecognitionInternal();
+              }
+            }, 3000) as unknown as number;
+          }
+        }
+      }
+    }, 200);
+  }, [createRecognition, cleanupRecognition, active]);
+
+  // Inicia reconhecimento (público)
+  const startRecognition = useCallback(() => {
+    console.log("Starting voice recognition...");
+    isIntentionalStop.current = false;
+    networkErrorCount.current = 0;
+    clearAllTimeouts();
+    startRecognitionInternal();
+  }, [startRecognitionInternal, clearAllTimeouts]);
+
+  // Para reconhecimento (público)
+  const stopRecognition = useCallback(() => {
+    console.log("Stopping voice recognition...");
+    isIntentionalStop.current = true;
+    clearAllTimeouts();
+    cleanupRecognition();
     setListening(false);
     setInterim("");
-    isStartingRef.current = false;
-  };
+    setMicStatus("parado");
+  }, [cleanupRecognition, clearAllTimeouts]);
 
-  // Controla start/stop baseado no estado active
+  // Controla início/parada baseado no estado active
   useEffect(() => {
     if (active) {
-      console.log("Activating voice recognition");
-      shouldRestartRef.current = true;
-      errorCountRef.current = 0;
-
-      if (
-        !listening &&
-        !isStartingRef.current &&
-        !visibilityPausedRef.current
-      ) {
-        startRecognition();
-      }
+      startRecognition();
     } else {
-      console.log("Deactivating voice recognition");
-      shouldRestartRef.current = false;
       stopRecognition();
-      setMicStatus("parado");
     }
-  }, [active]);
 
-  const start = () => {
+    // Cleanup ao desmontar
+    return () => {
+      isIntentionalStop.current = true;
+      clearAllTimeouts();
+      cleanupRecognition();
+    };
+  }, [active]); // Removidas dependências de funções para evitar loops
+
+  // Funções públicas da API
+  const start = useCallback(() => {
     console.log("Manual start requested");
     setActive(true);
-  };
+  }, []);
 
-  const stop = () => {
+  const stop = useCallback(() => {
     console.log("Manual stop requested");
     setActive(false);
-  };
+  }, []);
 
   return {
     active,
-    listening: canUse.current && listening,
+    listening,
     interimText,
     lastHeard,
     micStatus,
