@@ -1,8 +1,12 @@
 import { json, defer } from "@remix-run/node";
 import { Await, useFetcher, useLoaderData, useRevalidator } from "@remix-run/react";
 import { Suspense, useEffect, useMemo, useState } from "react";
+
+/* shadcn/ui */
 import { Button } from "@/components/ui/button";
-import { Flame, Mic, MicOff } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 
 /* ========= Domínio KDS ========= */
 import type { OrderRow } from "~/domain/kds";
@@ -11,21 +15,13 @@ import {
   fmtHHMM,
   fmtElapsedHHMM,
   STATUS_COLORS,
-  // Voice (PT+IT com merge)
-  useVoice,
-  mergeLexica,
-  detectStatusWithLexicon,
-  parseNumberMulti,
-  LEXICON_PT_BR,
-  LEXICON_IT_IT,
-  parseNumberPT,
-  parseNumberIT,
 } from "~/domain/kds";
 import {
   listActiveOrdersByDate,
   setOrderStatus,
 } from "~/domain/kds/server/repository.server";
 import VoiceController from "~/domain/kds/utils/voice/components/voice-controller";
+import { cn } from "~/lib/utils";
 
 /* ===== Status (UI da rota) ===== */
 const ALL_STATUSES = [
@@ -64,21 +60,25 @@ export async function action({ request }: { request: Request }) {
   return json({ ok: true, id, status });
 }
 
-/* ===== Página (mobile) ===== */
+/* ===== Página ===== */
 export default function CozinhaDia() {
   const data = useLoaderData<typeof loader>();
   const { revalidate } = useRevalidator();
   const [nowMs, setNowMs] = useState(() => Date.now());
   const quickFetcher = useFetcher<{ ok: boolean }>();
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
+  // relógio leve (atualização de 30s é suficiente para a cozinha)
   useEffect(() => {
-    const t = setInterval(() => setNowMs(Date.now()), 30000);
+    const t = setInterval(() => setNowMs(Date.now()), 30_000);
     return () => clearInterval(t);
   }, []);
+  // revalidação periódica
   useEffect(() => {
     const t = setInterval(() => revalidate(), 5 * 60 * 1000);
     return () => clearInterval(t);
   }, [revalidate]);
+  // revalida quando termina um POST rápido
   useEffect(() => {
     if (quickFetcher.state === "idle") revalidate();
   }, [quickFetcher.state, revalidate]);
@@ -92,13 +92,12 @@ export default function CozinhaDia() {
   }
 
   return (
-    <div className="max-w-md mx-auto">
-      <Suspense fallback={<div>Carregando pedidos do dia…</div>}>
+    <div className="max-w-5xl mx-auto">
+      <Suspense fallback={<div className="px-3 py-4">Carregando pedidos do dia…</div>}>
         <Await resolve={data.orders}>
           {(orders: OrderRow[]) => {
             const countNO = orders.filter((o) => o.status === "novoPedido").length;
             const countAF = orders.filter((o) => o.status === "aguardandoForno").length;
-
             const ordersRequestedForOven = orders.filter(
               (o) => o.status === "aguardandoForno" && (o as any).requestedForOven === true
             );
@@ -110,7 +109,7 @@ export default function CozinhaDia() {
                   {ordersRequestedForOven.length > 0 && (
                     <div className="px-3 pt-2 pb-2">
                       <div className="text-[11px] text-gray-500 mb-1">Pedidos para assar</div>
-                      <div className="grid grid-cols-4 gap-2">
+                      <div className="grid grid-cols-6 sm:grid-cols-8 gap-2">
                         {ordersRequestedForOven.map((o) => (
                           <div key={o.id} className="relative flex items-center justify-center">
                             <span className="absolute inline-flex h-10 w-10 rounded-full bg-red-500 opacity-60 animate-ping" />
@@ -147,13 +146,19 @@ export default function CozinhaDia() {
                   </div>
                 </div>
 
-                {/* Lista */}
-                <ul className="flex flex-col gap-2 pt-2">
+                {/* GRID DE CARDS — colapsado: # grande + tempo; expandido: detalhes */}
+                <ul className="grid grid-cols-3 sm:grid-cols-3 md:col-span-4 gap-2 p-2">
                   {orders.map((o) => (
-                    <OrderItem key={o.id} order={o} nowMs={nowMs} />
+                    <OrderCard
+                      key={o.id}
+                      order={o}
+                      nowMs={nowMs}
+                      expanded={expandedId === o.id}
+                      onToggle={() => setExpandedId((id) => (id === o.id ? null : (o.id as string)))}
+                    />
                   ))}
                   {orders.length === 0 && (
-                    <li className="text-center text-sm text-gray-500 py-6">
+                    <li className="col-span-full text-center text-sm text-gray-500 py-6">
                       Nenhum pedido para este dia.
                     </li>
                   )}
@@ -170,8 +175,18 @@ export default function CozinhaDia() {
   );
 }
 
-/* ===== Item ===== */
-function OrderItem({ order, nowMs }: { order: OrderRow; nowMs: number }) {
+/* ===== Card ===== */
+function OrderCard({
+  order,
+  nowMs,
+  expanded,
+  onToggle,
+}: {
+  order: OrderRow;
+  nowMs: number;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
   const fetcher = useFetcher<{ ok: boolean; id: string; status: string }>();
   const current = STATUS_BY_ID[order.status ?? "novoPedido"] ?? ALL_STATUSES[0];
 
@@ -191,74 +206,109 @@ function OrderItem({ order, nowMs }: { order: OrderRow; nowMs: number }) {
   }
 
   return (
-    <li className="relative rounded-lg border p-3 bg-white">
-      {/* Topo */}
-      <div className="flex items-start justify-between mb-2">
-        <div className="text-2xl font-semibold flex items-center gap-1.5">
-          #{order.commandNumber ?? "—"}
-        </div>
-        <div className="flex items-center gap-4">
-          <div className="text-xs text-gray-700 font-mono">{hora}</div>
-          <div className="text-lg font-semibold font-mono">{decorrido}</div>
-        </div>
-      </div>
+    <li className={["list-none", expanded ? "col-span-3 sm:col-span-3 md:col-span-4 col-span-2 sm:col-span-3 md:col-span-4" : ""].join(" ")}>
+      <Card
+        role="button"
+        aria-expanded={expanded}
+        onClick={onToggle}
+        className={[
+          "relative overflow-hidden",
+          "transition-all duration-300 ease-out",
+          expanded ? "shadow-xl ring-2 ring-primary/40 scale-[1.01]" : "shadow-sm hover:shadow-md",
+          Number(decorrido.substring(0, 2)) >= 45 && "shadow-red-500"
+        ].join(" ")}
+      >
+        <CardContent className="p-1">
+          {/* HEADER COMPACTO: número gigante + tempo */}
+          <div className="flex flex-col items-center justify-center select-none">
+            <div className="leading-none tracking-tight font-black text-5xl sm:text-6xl">
+              <span className="text-2xl text-foreground/90">#</span>
+              <span className="font-mono tabular-nums">{order.commandNumber ?? "—"}</span>
+            </div>
+            <div className="mt-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 font-mono text-xs tabular-nums bg-background/70 border-border/70">
+              <span className={
+                cn(
+                  "inline-block h-1.5 w-1.5 rounded-full bg-foreground/70 animate-pulse",
+                  Number(decorrido.substring(0, 2)) >= 45 && "bg-red-500")
+              } />
+              {decorrido}
+            </div>
+          </div>
 
-      <div className="flex items-center justify-between w-full mb-4">
-        <span
-          className={`text-[11px] px-2 py-0.5 rounded ${STATUS_COLORS[order.status ?? "novoPedido"] ?? "bg-gray-200 text-gray-800"
-            }`}
-        >
-          {current.label}
-        </span>
+          {/* CONTEÚDO EXPANDIDO */}
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className={[
+              "transition-all duration-300 ease-out",
+              expanded ? "mt-3 max-h-[520px] opacity-100" : "mt-0 max-h-0 opacity-0",
+            ].join(" ")}
+          >
+            <Separator className="my-3" />
 
-        <div className="flex gap-2">
-          {(order as any).requestedForOven && (
-            <span className="inline-flex items-center justify-center rounded-full bg-red-100 text-red-600 w-5 h-5">
-              <Flame className="w-3.5 h-3.5" />
-            </span>
-          )}
-          <span className="inline-flex items-center justify-center rounded-full text-gray-600 text-[11px]">
-            {/* aceita tanto takeAway (camel) quanto take_away (snake) */}
-            {(order as any).takeAway ?? (order as any).take_away ? "Retirada" : "Entrega"}
-          </span>
-        </div>
-      </div>
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-xs text-gray-700 font-mono">{hora}</div>
+              <div
+                className={[
+                  "text-[11px] px-2 py-0.5 rounded",
+                  STATUS_COLORS[order.status ?? "novoPedido"] ?? "bg-gray-200 text-gray-800",
+                ].join(" ")}
+              >
+                {current.label}
+              </div>
+            </div>
 
-      {/* Botões de status (sem 'finalizado') */}
-      <div className="grid grid-cols-4 gap-2 mb-4">
-        {CLICKABLE.map((s) => {
-          const active = s.id === order.status;
-          return (
-            <Button
-              key={s.id}
-              type="button"
-              size="sm"
-              variant={active ? "default" : "outline"}
-              className={[
-                "w-full h-12 rounded-full p-0 text-sm font-semibold tracking-wider",
-                active ? "bg-blue-600 text-white" : "bg-white",
-              ].join(" ")}
-              onClick={() => setStatus(s.id)}
-              title={s.label}
-            >
-              {s.abbr2}
-            </Button>
-          );
-        })}
-      </div>
+            <div className="flex items-center justify-between mb-4 text-[11px] text-gray-600">
+              <div className="flex items-center gap-2">
+                {(order as any).requestedForOven && (
+                  <span className="relative inline-flex items-center">
+                    <span className="absolute inline-flex h-2.5 w-2.5 rounded-full bg-red-500 opacity-75 animate-ping" />
+                    <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-600" />
+                  </span>
+                )}
+                <span>
+                  {(order as any).takeAway ?? (order as any).take_away ? "Retirada" : "Entrega"}
+                </span>
+              </div>
+              <span className="font-mono">ID {String(order.id).slice(0, 6)}</span>
+            </div>
 
-      {order.status === "assando" && (
-        <Button
-          type="button"
-          size="sm"
-          className="w-full h-12 rounded-full p-0 text-sm font-semibold uppercase tracking-wider bg-green-600"
-          onClick={() => setStatus("finalizado")}
-          title="Finalizado"
-        >
-          Finalizado
-        </Button>
-      )}
+            {/* Ações de status (sem 'finalizado') */}
+            <div className="grid grid-cols-4 gap-2 mb-3">
+              {CLICKABLE.map((s) => {
+                const active = s.id === order.status;
+                return (
+                  <Button
+                    key={s.id}
+                    type="button"
+                    size="sm"
+                    variant={active ? "default" : "outline"}
+                    className={[
+                      "w-full h-10 rounded-full p-0 text-sm font-semibold tracking-wider",
+                      active ? "bg-blue-600 text-white" : "bg-white",
+                    ].join(" ")}
+                    onClick={() => setStatus(s.id)}
+                    title={s.label}
+                  >
+                    {s.abbr2}
+                  </Button>
+                );
+              })}
+            </div>
+
+            {order.status === "assando" && (
+              <Button
+                type="button"
+                size="sm"
+                className="w-full h-10 rounded-full p-0 text-sm font-semibold uppercase tracking-wider bg-green-600 text-white"
+                onClick={() => setStatus("finalizado")}
+                title="Finalizado"
+              >
+                Finalizado
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
     </li>
   );
 }
-

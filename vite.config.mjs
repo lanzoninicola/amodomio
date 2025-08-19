@@ -2,14 +2,18 @@ import { vitePlugin as remix } from "@remix-run/dev";
 import { defineConfig } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 import { installGlobals } from "@remix-run/node";
-import { RemixVitePWA } from "@vite-pwa/remix";
 import mkcert from 'vite-plugin-mkcert'
+import { RemixVitePWA } from "@vite-pwa/remix";
 
 installGlobals();
+// Gera um hash/versão por build com base em timestamp
+const buildVersion = `v${new Date().toISOString().replace(/[-:.TZ]/g, '')}`;
+
+const { RemixVitePWAPlugin, RemixPWAPreset } = RemixVitePWA();
 
 export default defineConfig({
-  server: {
-    port: 3000,
+  define: {
+    __APP_VERSION__: JSON.stringify(buildVersion) // para usar no frontend
   },
   server: {
     https: true,
