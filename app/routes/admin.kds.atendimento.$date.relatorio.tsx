@@ -1,9 +1,15 @@
-import { json, type LoaderFunctionArgs } from "@remix-run/node";
+import { json, MetaFunction, type LoaderFunctionArgs } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
 import { ymdToDateInt, todayLocalYMD } from "@/domain/kds";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getDailyAggregates, listMotoboy } from "~/domain/kds/server/repository.server";
+
+export const meta: MetaFunction = () => {
+  return [
+    { title: "KDS | Relatorios" },
+  ];
+};
 
 export async function loader({ params }: LoaderFunctionArgs) {
   const dateStr = params.date ?? todayLocalYMD();

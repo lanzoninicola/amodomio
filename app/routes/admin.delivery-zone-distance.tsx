@@ -3,10 +3,6 @@ import { json, redirect } from "@remix-run/node";
 import { Form, useLoaderData, useNavigation, useSearchParams, useSubmit } from "@remix-run/react";
 import * as React from "react";
 
-/**
- * Ajuste este import conforme seu projeto:
- * - Se você usa `~/lib/prisma.server` ou `~/prisma` etc., troque abaixo.
- */
 // import { prisma } from "~/lib/prisma.server";
 import { PrismaClient } from "@prisma/client";
 import { DecimalInput, IntegerInput } from "~/components/inputs/inputs";
@@ -23,15 +19,15 @@ type CompanyLocationDTO = {
   state?: string | null;
 };
 
-type BairroDTO = {
+type DeliveryZoneDTO = {
   id: string;
   name: string;
-  city: string;
-  state: string;
+  city?: string | null;
+  state?: string | null;
 };
 
 type DZDistanceDTO = {
-  bairroId: string;
+  deliveryZoneId: string;
   companyLocationId: string;
   distanceInKm: number;
   estimatedTimeInMin: number | null;
@@ -40,8 +36,8 @@ type DZDistanceDTO = {
 type LoaderData = {
   companyLocations: CompanyLocationDTO[];
   selectedCompanyLocationId: string;
-  bairros: BairroDTO[];
-  distancesByBairroId: Record<string, DZDistanceDTO | undefined>;
+  deliveryZones: DeliveryZoneDTO[];
+  distancesByDeliveryZoneId: Record<string, DZDistanceDTO | undefined>;
 };
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -60,9 +56,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const activeCompanyId = selectedCompanyLocationId ?? companyLocations[0].id;
 
-  // Carrega todos os bairros de Pato Branco/PR (ajuste se quiser listar todos)
-  const bairros = await prisma.bairro.findMany({
-    where: { city: "Pato Branco", state: "PR" },
+  // Carrega as DeliveryZones (ajuste o filtro se quiser limitar por cidade/UF)
+  const deliveryZones = await prisma.deliveryZone.findMany({
+    // Ex.: where: { city: "Pato Branco", state: "PR" },
     orderBy: { name: "asc" },
     select: { id: true, name: true, city: true, state: true },
   });
@@ -71,21 +67,21 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const distances = await prisma.deliveryZoneDistance.findMany({
     where: { companyLocationId: activeCompanyId },
     select: {
-      bairroId: true,
+      deliveryZoneId: true,
       companyLocationId: true,
       distanceInKm: true,
       estimatedTimeInMin: true,
     },
   });
 
-  const distancesByBairroId: Record<string, DZDistanceDTO> = {};
-  for (const d of distances) distancesByBairroId[d.bairroId] = d;
+  const distancesByDeliveryZoneId: Record<string, DZDistanceDTO> = {};
+  for (const d of distances) distancesByDeliveryZoneId[d.deliveryZoneId] = d;
 
   const data: LoaderData = {
     companyLocations: companyLocations as CompanyLocationDTO[],
     selectedCompanyLocationId: activeCompanyId,
-    bairros: bairros as BairroDTO[],
-    distancesByBairroId,
+    deliveryZones: deliveryZones as DeliveryZoneDTO[],
+    distancesByDeliveryZoneId,
   };
 
   return json(data);
@@ -100,16 +96,19 @@ export async function action({ request }: ActionFunctionArgs) {
   const intent = String(formData.get("intent") || "save");
   const companyLocationId = String(formData.get("companyLocationId") || "");
 
-  // --- DELETE (cancelar registro de um bairro específico) ---
+  // --- DELETE (cancelar registro de uma delivery zone específica) ---
   if (intent === "delete") {
-    const bairroId = String(formData.get("bairroId") || "");
-    if (!companyLocationId || !bairroId) {
-      return json({ ok: false, message: "companyLocationId e bairroId são obrigatórios." }, { status: 400 });
+    const deliveryZoneId = String(formData.get("deliveryZoneId") || "");
+    if (!companyLocationId || !deliveryZoneId) {
+      return json(
+        { ok: false, message: "companyLocationId e deliveryZoneId são obrigatórios." },
+        { status: 400 }
+      );
     }
 
     await prisma.deliveryZoneDistance.deleteMany({
       where: {
-        bairroId,
+        deliveryZoneId,
         companyLocationId,
       },
     });
@@ -124,32 +123,31 @@ export async function action({ request }: ActionFunctionArgs) {
     return json({ ok: false, message: "companyLocationId é obrigatório." }, { status: 400 });
   }
 
-  // Recolhe as linhas: rows[0].bairroId, rows[0].distanceInKm, rows[0].estimatedTimeInMin, etc.
-  const rows: Array<{ bairroId: string; distanceInKm: number; estimatedTimeInMin: number | null }> = [];
+  // Recolhe as linhas: rows[0].deliveryZoneId, rows[0].distanceInKm, rows[0].estimatedTimeInMin, etc.
+  const rows: Array<{ deliveryZoneId: string; distanceInKm: number; estimatedTimeInMin: number | null }> = [];
   for (const [key, value] of formData.entries()) {
-    const m = /^rows\[(\d+)\]\.(bairroId|distanceInKm|estimatedTimeInMin)$/.exec(String(key));
+    const m = /^rows\[(\d+)\]\.(deliveryZoneId|distanceInKm|estimatedTimeInMin)$/.exec(String(key));
     if (!m) continue;
     const idx = Number(m[1]);
-    const field = m[2] as "bairroId" | "distanceInKm" | "estimatedTimeInMin";
-    if (!rows[idx]) rows[idx] = { bairroId: "", distanceInKm: 0, estimatedTimeInMin: 0 };
-    if (field === "bairroId") rows[idx].bairroId = String(value);
+    const field = m[2] as "deliveryZoneId" | "distanceInKm" | "estimatedTimeInMin";
+    if (!rows[idx]) rows[idx] = { deliveryZoneId: "", distanceInKm: 0, estimatedTimeInMin: 0 };
+    if (field === "deliveryZoneId") rows[idx].deliveryZoneId = String(value);
     if (field === "distanceInKm") rows[idx].distanceInKm = Number(value || 0);
     if (field === "estimatedTimeInMin") rows[idx].estimatedTimeInMin = value === "" ? null : Number(value);
   }
 
   // Zero-fill do lado do servidor (se solicitado)
   if (intent === "zero-fill") {
-    const bairros = await prisma.bairro.findMany({
-      where: { city: "Pato Branco", state: "PR" },
+    const zones = await prisma.deliveryZone.findMany({
       select: { id: true },
     });
     rows.length = 0;
-    for (const b of bairros) rows.push({ bairroId: b.id, distanceInKm: 0, estimatedTimeInMin: 0 });
+    for (const z of zones) rows.push({ deliveryZoneId: z.id, distanceInKm: 0, estimatedTimeInMin: 0 });
   }
 
   // UPSERT para cada linha
   for (const row of rows) {
-    if (!row?.bairroId) continue;
+    if (!row?.deliveryZoneId) continue;
     const distanceInKm = isFinite(row.distanceInKm) ? row.distanceInKm : 0;
     const estimatedTimeInMin =
       row.estimatedTimeInMin == null || !isFinite(Number(row.estimatedTimeInMin))
@@ -158,8 +156,8 @@ export async function action({ request }: ActionFunctionArgs) {
 
     await prisma.deliveryZoneDistance.upsert({
       where: {
-        bairroId_companyLocationId: {
-          bairroId: row.bairroId,
+        deliveryZoneId_companyLocationId: {
+          deliveryZoneId: row.deliveryZoneId,
           companyLocationId,
         },
       },
@@ -168,7 +166,7 @@ export async function action({ request }: ActionFunctionArgs) {
         estimatedTimeInMin,
       },
       create: {
-        bairroId: row.bairroId,
+        deliveryZoneId: row.deliveryZoneId,
         companyLocationId,
         distanceInKm,
         estimatedTimeInMin,
@@ -187,7 +185,7 @@ export async function action({ request }: ActionFunctionArgs) {
 // -----------------------------
 
 export default function DeliveryZoneDistancePage() {
-  const { companyLocations, selectedCompanyLocationId, bairros, distancesByBairroId } =
+  const { companyLocations, selectedCompanyLocationId, deliveryZones, distancesByDeliveryZoneId } =
     useLoaderData<LoaderData>();
   const [searchParams] = useSearchParams();
   const submit = useSubmit();
@@ -197,11 +195,11 @@ export default function DeliveryZoneDistancePage() {
   const [filter, setFilter] = React.useState("");
   const selectedId = searchParams.get("companyLocationId") || selectedCompanyLocationId;
 
-  const filteredBairros = React.useMemo(() => {
+  const filteredZones = React.useMemo(() => {
     const f = filter.trim().toLowerCase();
-    if (!f) return bairros;
-    return bairros.filter((b) => b.name.toLowerCase().includes(f));
-  }, [filter, bairros]);
+    if (!f) return deliveryZones;
+    return deliveryZones.filter((z) => z.name.toLowerCase().includes(f));
+  }, [filter, deliveryZones]);
 
   // Zero-fill no cliente (preenche campos do form com zeros)
   function zeroFillAll(form: HTMLFormElement | null) {
@@ -218,7 +216,7 @@ export default function DeliveryZoneDistancePage() {
         <div>
           <h1 className="text-2xl font-bold">Zonas de Entrega – Distâncias</h1>
           <p className="text-sm text-muted-foreground">
-            Selecione a unidade e edite distância (km) e tempo (min) por bairro.
+            Selecione a unidade e edite distância (km) e tempo (min) por zona de entrega.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -261,7 +259,7 @@ export default function DeliveryZoneDistancePage() {
               name="intent"
               value="zero-fill"
               className="rounded-2xl px-4 py-2 text-sm font-medium shadow hover:shadow-md border"
-              title="Servidor fará zero-fill para todos os bairros de Pato Branco/PR"
+              title="Servidor fará zero-fill para todas as DeliveryZones"
             >
               Zero-fill (servidor)
             </button>
@@ -270,7 +268,7 @@ export default function DeliveryZoneDistancePage() {
           <div className="flex items-center gap-2">
             <input
               type="text"
-              placeholder="Filtrar bairros…"
+              placeholder="Filtrar zonas…"
               className="w-64 rounded-xl border px-3 py-2 text-sm"
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
@@ -283,28 +281,28 @@ export default function DeliveryZoneDistancePage() {
             <thead className="bg-gray-50">
               <tr className="text-left text-sm">
                 <th className="w-12 px-3 py-2">#</th>
-                <th className="px-3 py-2">Bairro</th>
+                <th className="px-3 py-2">Zona de Entrega</th>
                 <th className="w-36 px-3 py-2">Distância (km)</th>
                 <th className="w-40 px-3 py-2">Tempo (min)</th>
                 <th className="w-28 px-3 py-2">Ações</th>
               </tr>
             </thead>
             <tbody>
-              {filteredBairros.map((b, idx) => {
-                const dist = distancesByBairroId[b.id];
+              {filteredZones.map((z, idx) => {
+                const dist = distancesByDeliveryZoneId[z.id];
                 const defaultKm = dist?.distanceInKm ?? 0;
                 const defaultMin = dist?.estimatedTimeInMin ?? 0;
                 const hasRecord = !!dist;
 
                 return (
-                  <tr key={b.id} className="border-t hover:bg-gray-50/50">
+                  <tr key={z.id} className="border-t hover:bg-gray-50/50">
                     <td className="px-3 py-2 text-xs text-gray-500">{idx + 1}</td>
                     <td className="px-3 py-2">
-                      <div className="font-medium">{b.name}</div>
-                      <div className="text-xs text-gray-500">
-                        {b.city}/{b.state}
-                      </div>
-                      <input type="hidden" name={`rows[${idx}].bairroId`} value={b.id} />
+                      <div className="font-medium">{z.name}</div>
+                      {(z.city || z.state) ? (
+                        <div className="text-xs text-gray-500">{z.city ?? ""}{z.city && z.state ? "/" : ""}{z.state ?? ""}</div>
+                      ) : null}
+                      <input type="hidden" name={`rows[${idx}].deliveryZoneId`} value={z.id} />
                     </td>
                     <td className="px-3 py-2">
                       <DecimalInput
@@ -319,19 +317,18 @@ export default function DeliveryZoneDistancePage() {
                         defaultValue={defaultMin}
                         className="w-full rounded-xl border px-3 py-2 text-sm"
                       />
-
                     </td>
                     <td className="px-3 py-2">
                       {hasRecord ? (
                         <Form method="post" replace>
                           <input type="hidden" name="intent" value="delete" />
                           <input type="hidden" name="companyLocationId" value={selectedId} />
-                          <input type="hidden" name="bairroId" value={b.id} />
+                          <input type="hidden" name="deliveryZoneId" value={z.id} />
                           <button
                             type="submit"
                             className="rounded-xl border px-3 py-2 text-sm hover:shadow-md"
                             onClick={(e) => {
-                              if (!confirm(`Excluir registro de distância para "${b.name}"?`)) {
+                              if (!confirm(`Excluir registro de distância para "${z.name}"?`)) {
                                 e.preventDefault();
                               }
                             }}
