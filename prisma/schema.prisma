@@ -976,6 +976,7 @@ model DeliveryZoneDistance {
   DeliveryZone    DeliveryZone?   @relation(fields: [deliveryZoneId], references: [id])
   deliveryZoneId  String?         @map("delivery_zone_id")
 
+  @@unique([deliveryZoneId, companyLocationId])
   @@map("delivery_zone_distance")
 }
 

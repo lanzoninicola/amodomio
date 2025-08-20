@@ -25,6 +25,8 @@ import {
   type SizeCounts,
   defaultSizeCounts,
   CHANNELS,
+  fmtHHMM,
+  fmtElapsedHHMM,
 } from "@/domain/kds";
 
 import {
@@ -33,6 +35,15 @@ import {
   getMaxes,
   listByDate,
 } from "@/domain/kds/server";
+
+import {
+  buildDzMap,
+  getOperatorCountByDate,
+  getRiderCountByDate,
+  predictReadyTimes,
+  predictArrivalTimes,
+  type MinimalOrderRow,
+} from "@/domain/kds/delivery-prediction";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -54,14 +65,12 @@ import {
   AlertTriangle,
   Lock,
   Unlock,
-  ChevronsUpDown,
-  Check,
 } from "lucide-react";
 import { Separator } from "~/components/ui/separator";
 
-
 import { setOrderStatus } from "~/domain/kds/server/repository.server";
 import DeliveryZoneCombobox from "~/domain/kds/components/delivery-zone-combobox";
+import { cn } from "~/lib/utils";
 
 export const meta: MetaFunction = () => {
   return [
@@ -158,11 +167,21 @@ export async function loader({ params }: LoaderFunctionArgs) {
     orderBy: { name: "asc" },
   });
 
+  // 🔎 Carregar tempos/distâncias por Delivery Zone (para ETA de entrega)
+  const dzTimes = await prisma.deliveryZoneDistance.findMany({
+    select: {
+      deliveryZoneId: true,
+      estimatedTimeInMin: true,
+      distanceInKm: true,
+    },
+  });
+
   return defer({
     dateStr,
     items: listPromise,
     header: header ?? { id: null, operationStatus: "PENDING" as const },
     deliveryZones,
+    dzTimes, // 👈 necessário para ETA
   });
 }
 
@@ -382,7 +401,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
    =========================== */
 
 export default function GridKdsPage() {
-  const { dateStr, items, header, deliveryZones } = useLoaderData<typeof loader>();
+  const { dateStr, items, header, deliveryZones, dzTimes } = useLoaderData<typeof loader>();
   const listFx = useFetcher();
   const rowFx = useFetcher();
 
@@ -431,6 +450,34 @@ export default function GridKdsPage() {
       <Await resolve={items}>
         {(rowsDb: OrderRow[]) => {
           const dup = duplicateCommandNumbers(rowsDb);
+
+          // ======= PREVISÕES (produção + entrega) =======
+          const dzMap = useMemo(() => buildDzMap(dzTimes as any), [dzTimes]);
+
+          const operatorCount = useMemo(() => getOperatorCountByDate(dateStr), [dateStr]);
+          const riderCount = useMemo(() => getRiderCountByDate(dateStr), [dateStr]);
+
+          const predictions = useMemo(() => {
+            const minimal: MinimalOrderRow[] = rowsDb.map((o) => ({
+              id: o.id,
+              createdAt: o.createdAt as any,
+              finalizadoAt: (o as any).finalizadoAt ?? null,
+              size: o.size,
+              hasMoto: (o as any).hasMoto ?? null,
+              takeAway: (o as any).takeAway ?? null,
+              deliveryZoneId: (o as any).deliveryZoneId ?? null,
+            }));
+            const ready = predictReadyTimes(minimal, operatorCount, nowMs);
+            const arrive = predictArrivalTimes(ready, riderCount, dzMap);
+
+            const byId = new Map<string, { readyAtMs: number; arriveAtMs: number | null }>();
+            for (const r of ready) byId.set(r.id, { readyAtMs: r.readyAtMs, arriveAtMs: null });
+            for (const a of arrive) {
+              const cur = byId.get(a.id);
+              if (cur) cur.arriveAtMs = a.arriveAtMs;
+            }
+            return byId;
+          }, [rowsDb, operatorCount, riderCount, dzMap, nowMs]);
 
           return (
             <div className="space-y-4">
@@ -566,174 +613,231 @@ export default function GridKdsPage() {
                   const [deliveryZoneId, setDeliveryZoneId] = useState<string | null | undefined>((o as any).deliveryZoneId ?? null);
 
                   return (
-                    <li key={o.id} className={COLS + " bg-white px-1"}>
-                      <rowFx.Form method="post" className="contents">
-                        <input type="hidden" name="_action" value="saveRow" />
-                        <input type="hidden" name="id" value={o.id} />
-                        <input type="hidden" name="date" value={dateStr} />
-                        {/* hidden real para deliveryZoneId */}
-                        <input type="hidden" name="deliveryZoneId" value={deliveryZoneId ?? ""} />
+                    <li key={o.id} className="flex flex-col">
 
-                        {/* nº comanda */}
-                        <div className="flex items-center justify-center">
-                          <CommandNumberInput value={cmdLocal} onChange={setCmdLocal} isVendaLivre={o.isVendaLivre} />
-                          <input type="hidden" name="commandNumber" value={cmdLocal ?? ""} />
-                        </div>
+                      <div className={COLS + " bg-white px-1 border-b border-b-gray-50 pb-1"}>
+                        <rowFx.Form method="post" className="contents">
+                          <input type="hidden" name="_action" value="saveRow" />
+                          <input type="hidden" name="id" value={o.id} />
+                          <input type="hidden" name="date" value={dateStr} />
+                          {/* hidden real para deliveryZoneId */}
+                          <input type="hidden" name="deliveryZoneId" value={deliveryZoneId ?? ""} />
 
-                        {/* Valor */}
-                        <div className="flex justify-center">
-                          <MoneyInput name="orderAmount" defaultValue={o.orderAmount} className="w-28" disabled={readOnly} />
-                        </div>
 
-                        {/* Tamanhos */}
-                        <div className="flex justify-center">
-                          <div className="flex items-center gap-2">
-                            <input type="hidden" name="sizeF" value={sizeCounts.F} />
-                            <input type="hidden" name="sizeM" value={sizeCounts.M} />
-                            <input type="hidden" name="sizeP" value={sizeCounts.P} />
-                            <input type="hidden" name="sizeI" value={sizeCounts.I} />
-                            <input type="hidden" name="sizeFT" value={sizeCounts.FT} />
-                            <div className={`origin-center ${readOnly ? "opacity-60 pointer-events-none" : "scale-[0.95]"}`}>
-                              <SizeSelector
-                                counts={sizeCounts}
-                                onChange={(next) => {
-                                  const formEl = (document.activeElement as HTMLElement)?.closest("form");
-                                  if (!formEl) return;
-                                  (formEl.querySelector('input[name="sizeF"]') as HTMLInputElement).value = String(next.F);
-                                  (formEl.querySelector('input[name="sizeM"]') as HTMLInputElement).value = String(next.M);
-                                  (formEl.querySelector('input[name="sizeP"]') as HTMLInputElement).value = String(next.P);
-                                  (formEl.querySelector('input[name="sizeI"]') as HTMLInputElement).value = String(next.I);
-                                  (formEl.querySelector('input[name="sizeFT"]') as HTMLInputElement).value = String(next.FT);
-                                }}
-                                disabled={readOnly}
-                              />
+                          {/* nº comanda */}
+                          <div className="flex items-center justify-center">
+                            <CommandNumberInput value={cmdLocal} onChange={setCmdLocal} isVendaLivre={o.isVendaLivre} />
+                            <input type="hidden" name="commandNumber" value={cmdLocal ?? ""} />
+                          </div>
+
+                          {/* Valor */}
+                          <div className="flex justify-center">
+                            <MoneyInput name="orderAmount" defaultValue={o.orderAmount} className="w-28" disabled={readOnly} />
+                          </div>
+
+                          {/* Tamanhos */}
+                          <div className="flex justify-center">
+                            <div className="flex items-center gap-2">
+                              <input type="hidden" name="sizeF" value={sizeCounts.F} />
+                              <input type="hidden" name="sizeM" value={sizeCounts.M} />
+                              <input type="hidden" name="sizeP" value={sizeCounts.P} />
+                              <input type="hidden" name="sizeI" value={sizeCounts.I} />
+                              <input type="hidden" name="sizeFT" value={sizeCounts.FT} />
+                              <div className={`origin-center ${readOnly ? "opacity-60 pointer-events-none" : "scale-[0.95]"}`}>
+                                <SizeSelector
+                                  counts={sizeCounts}
+                                  onChange={(next) => {
+                                    const formEl = (document.activeElement as HTMLElement)?.closest("form");
+                                    if (!formEl) return;
+                                    (formEl.querySelector('input[name="sizeF"]') as HTMLInputElement).value = String(next.F);
+                                    (formEl.querySelector('input[name="sizeM"]') as HTMLInputElement).value = String(next.M);
+                                    (formEl.querySelector('input[name="sizeP"]') as HTMLInputElement).value = String(next.P);
+                                    (formEl.querySelector('input[name="sizeI"]') as HTMLInputElement).value = String(next.I);
+                                    (formEl.querySelector('input[name="sizeFT"]') as HTMLInputElement).value = String(next.FT);
+                                  }}
+                                  disabled={readOnly}
+                                />
+                              </div>
                             </div>
                           </div>
-                        </div>
 
-                        {/* Canal */}
-                        <div className="flex justify-center">
-                          <Select name="channel" defaultValue={o.channel ?? ""}>
-                            <SelectTrigger className={`h-9 w-[240px] truncate ${readOnly ? "opacity-60 pointer-events-none" : ""}`} disabled={readOnly}>
-                              <SelectValue placeholder="Canal" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="">(sem canal)</SelectItem>
-                              {CHANNELS.map((c) => (
-                                <SelectItem key={c} value={c}>{c}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        {/* Delivery Zone (Combobox com busca) */}
-                        <div className="flex justify-center">
-                          <DeliveryZoneCombobox
-                            options={deliveryZones}
-                            value={deliveryZoneId}
-                            onChange={setDeliveryZoneId}
-                            disabled={readOnly || o.isVendaLivre === true}
-                            className="w-[220px]"
-                          />
-                        </div>
-
-                        {/* Moto (valor) + switch */}
-                        <div className="flex items-center justify-center gap-1">
-                          <div className={`flex items-center gap-2 ${readOnly ? "opacity-60" : ""}`}>
-                            <Switch checked={hasMoto} onCheckedChange={setHasMoto} id={`moto-${o.id}`} disabled={readOnly} className="" />
-                            <input type="hidden" name="hasMoto" value={hasMoto ? "on" : ""} />
+                          {/* Canal */}
+                          <div className="flex justify-center">
+                            <Select name="channel" defaultValue={o.channel ?? ""}>
+                              <SelectTrigger className={`h-9 w-[240px] truncate ${readOnly ? "opacity-60 pointer-events-none" : ""}`} disabled={readOnly}>
+                                <SelectValue placeholder="Canal" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="">(sem canal)</SelectItem>
+                                {CHANNELS.map((c) => (
+                                  <SelectItem key={c} value={c}>{c}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                           </div>
-                          <MoneyInput name="motoValue" defaultValue={o.motoValue} className="w-24" disabled={readOnly || hasMoto === false} />
-                        </div>
 
-                        {/* Retirada (switch) */}
-                        <div className={`flex items-center justify-center ${readOnly ? "opacity-60" : ""}`}>
-                          <Switch checked={takeAway} onCheckedChange={setTakeAway} id={`ret-${o.id}`} disabled={readOnly || hasMoto === true} />
-                          <input type="hidden" name="takeAway" value={takeAway ? "on" : ""} />
-                        </div>
+                          {/* Delivery Zone (Combobox com busca) */}
+                          <div className="flex justify-center">
+                            <DeliveryZoneCombobox
+                              options={deliveryZones}
+                              value={deliveryZoneId}
+                              onChange={setDeliveryZoneId}
+                              disabled={readOnly || o.isVendaLivre === true}
+                              className="w-[220px]"
+                            />
+                          </div>
 
-                        {/* VL */}
-                        <div className="flex items-center justify-center">
-                          {(o.isVendaLivre || cmdLocal == null) ? (
-                            <Badge variant="secondary" className="text-[10px]">VL</Badge>
-                          ) : <span className="text-xs text-slate-400">—</span>}
-                        </div>
+                          {/* Moto (valor) + switch */}
+                          <div className="flex items-center justify-center gap-1">
+                            <div className={`flex items-center gap-2 ${readOnly ? "opacity-60" : ""}`}>
+                              <Switch checked={hasMoto} onCheckedChange={setHasMoto} id={`moto-${o.id}`} disabled={readOnly} className="" />
+                              <input type="hidden" name="hasMoto" value={hasMoto ? "on" : ""} />
+                            </div>
+                            <MoneyInput name="motoValue" defaultValue={o.motoValue} className="w-24" disabled={readOnly || hasMoto === false} />
+                          </div>
 
-                        {/* Detalhes */}
-                        <div className="flex items-center justify-center">
-                          <Button type="button" variant="ghost" title="Detalhes" onClick={() => setDetailsOpenId(o.id)}>
-                            <Ellipsis className="w-4 h-4" />
-                          </Button>
-                        </div>
+                          {/* Retirada (switch) */}
+                          <div className={`flex items-center justify-center ${readOnly ? "opacity-60" : ""}`}>
+                            <Switch checked={takeAway} onCheckedChange={setTakeAway} id={`ret-${o.id}`} disabled={readOnly || hasMoto === true} />
+                            <input type="hidden" name="takeAway" value={takeAway ? "on" : ""} />
+                          </div>
 
-                        {/* Ações */}
-                        <div className="flex items-center justify-center gap-2">
-                          <Button type="submit" variant="outline" title="Salvar" disabled={readOnly}>
-                            {savingIcon}
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            title="Excluir"
-                            className="hover:bg-red-50"
-                            onClick={() => setOpenConfirmId(o.id)}
-                            disabled={readOnly}
-                          >
-                            <Trash className="w-4 h-4" />
-                          </Button>
-                        </div>
+                          {/* VL */}
+                          <div className="flex items-center justify-center">
+                            {(o.isVendaLivre || cmdLocal == null) ? (
+                              <Badge variant="secondary" className="text-[10px]">VL</Badge>
+                            ) : <span className="text-xs text-slate-400">—</span>}
+                          </div>
 
-                        {/* Dialog confirmar exclusão */}
-                        <ConfirmDeleteDialog
-                          open={openConfirmId === o.id}
-                          onOpenChange={(v) => !v && setOpenConfirmId(null)}
-                          onConfirm={() => {
-                            const fd = new FormData();
-                            fd.set("_action", "cancelRow");
-                            fd.set("id", o.id);
-                            fd.set("date", dateStr);
-                            rowFx.submit(fd, { method: "post" });
-                            setOpenConfirmId(null);
-                          }}
-                        />
+                          {/* Detalhes */}
+                          <div className="flex items-center justify-center">
+                            <Button type="button" variant="ghost" title="Detalhes" onClick={() => setDetailsOpenId(o.id)}>
+                              <Ellipsis className="w-4 h-4" />
+                            </Button>
+                          </div>
 
-                        {/* Dialog detalhes (status editável aqui) */}
-                        <DetailsDialog
-                          open={detailsOpenId === o.id}
-                          onOpenChange={(v) => !v && setDetailsOpenId(null)}
-                          createdAt={o.createdAt as any}
-                          nowMs={nowMs}
-                          status={o.status ?? "novoPedido"}
-                          onStatusChange={(value) => {
-                            if (readOnly) return;
-                            const fd = new FormData();
-                            fd.set("_action", "saveRow");
-                            fd.set("id", o.id);
-                            fd.set("date", dateStr);
-                            fd.set("status", value);
-                            fd.set("commandNumber", String(cmdLocal ?? ""));
-                            fd.set("orderAmount", String(o.orderAmount ?? 0));
-                            fd.set("motoValue", String(o.motoValue ?? 0));
-                            fd.set("hasMoto", hasMoto ? "on" : "");
-                            fd.set("takeAway", takeAway ? "on" : "");
-                            const sc = parseSize(o.size);
-                            fd.set("sizeF", String(sc.F));
-                            fd.set("sizeM", String(sc.M));
-                            fd.set("sizeP", String(sc.P));
-                            fd.set("sizeI", String(sc.I));
-                            fd.set("sizeFT", String(sc.FT));
-                            fd.set("channel", String(o.channel ?? ""));
-                            // garantir envio da zona atual ao salvar por detalhes
-                            fd.set("deliveryZoneId", String(deliveryZoneId ?? ""));
-                            rowFx.submit(fd, { method: "post" });
-                          }}
-                          onSubmit={() => setDetailsOpenId(null)}
-                          orderAmount={Number(o.orderAmount ?? 0)}
-                          motoValue={Number(o.motoValue ?? 0)}
-                          sizeSummary={sizeSummary(parseSize(o.size))}
-                          channel={o.channel}
-                        />
-                      </rowFx.Form>
+                          {/* Ações */}
+                          <div className="flex items-center justify-center gap-2">
+                            <Button type="submit" variant="outline" title="Salvar" disabled={readOnly}>
+                              {savingIcon}
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              title="Excluir"
+                              className="hover:bg-red-50"
+                              onClick={() => setOpenConfirmId(o.id)}
+                              disabled={readOnly}
+                            >
+                              <Trash className="w-4 h-4" />
+                            </Button>
+                          </div>
+
+                          {/* Dialog confirmar exclusão */}
+                          <ConfirmDeleteDialog
+                            open={openConfirmId === o.id}
+                            onOpenChange={(v) => !v && setOpenConfirmId(null)}
+                            onConfirm={() => {
+                              const fd = new FormData();
+                              fd.set("_action", "cancelRow");
+                              fd.set("id", o.id);
+                              fd.set("date", dateStr);
+                              rowFx.submit(fd, { method: "post" });
+                              setOpenConfirmId(null);
+                            }}
+                          />
+
+                          {/* Dialog detalhes (status editável aqui) */}
+                          <DetailsDialog
+                            open={detailsOpenId === o.id}
+                            onOpenChange={(v) => !v && setDetailsOpenId(null)}
+                            createdAt={o.createdAt as any}
+                            nowMs={nowMs}
+                            status={o.status ?? "novoPedido"}
+                            onStatusChange={(value) => {
+                              if (readOnly) return;
+                              const fd = new FormData();
+                              fd.set("_action", "saveRow");
+                              fd.set("id", o.id);
+                              fd.set("date", dateStr);
+                              fd.set("status", value);
+                              fd.set("commandNumber", String(cmdLocal ?? ""));
+                              fd.set("orderAmount", String(o.orderAmount ?? 0));
+                              fd.set("motoValue", String(o.motoValue ?? 0));
+                              fd.set("hasMoto", hasMoto ? "on" : "");
+                              fd.set("takeAway", takeAway ? "on" : "");
+                              const sc = parseSize(o.size);
+                              fd.set("sizeF", String(sc.F));
+                              fd.set("sizeM", String(sc.M));
+                              fd.set("sizeP", String(sc.P));
+                              fd.set("sizeI", String(sc.I));
+                              fd.set("sizeFT", String(sc.FT));
+                              fd.set("channel", String(o.channel ?? ""));
+                              // garantir envio da zona atual ao salvar por detalhes
+                              fd.set("deliveryZoneId", String(deliveryZoneId ?? ""));
+                              rowFx.submit(fd, { method: "post" });
+                            }}
+                            onSubmit={() => setDetailsOpenId(null)}
+                            orderAmount={Number(o.orderAmount ?? 0)}
+                            motoValue={Number(o.motoValue ?? 0)}
+                            sizeSummary={sizeSummary(parseSize(o.size))}
+                            channel={o.channel}
+                          />
+
+
+
+
+                        </rowFx.Form>
+                      </div>
+
+                      {/* Linha extra com criado/decorrido + previsões */}
+                      <div className="px-2 py-1 text-xs text-slate-500 flex flex-wrap items-center gap-4">
+                        <span className="text-muted-foreground">Criado: </span>
+                        <span className="font-semibold">{fmtHHMM(o.createdAt as any)}</span>
+
+                        {(() => {
+                          const createdMs = new Date(o.createdAt as any).getTime();
+                          const diffMin = Math.floor((nowMs - createdMs) / 60000);
+
+                          let color = "text-slate-500";
+                          if (diffMin >= 60) color = "text-red-500";
+                          else if (diffMin >= 45) color = "text-orange-500";
+
+                          return (
+                            <span>
+                              <span className="text-muted-foreground">Decorrido: </span>
+                              <span className={cn("font-semibold", color)}>
+                                {fmtElapsedHHMM(o.createdAt as any, nowMs)}
+                              </span>
+                            </span>
+                          );
+                        })()}
+
+                        {/* Previsões: Pronta às / Na casa às */}
+                        {(() => {
+                          const pred = predictions.get(o.id);
+                          if (!pred) return null;
+
+                          const isPickup = (o as any).takeAway === true && (o as any).hasMoto !== true;
+
+                          return (
+                            <>
+                              <span>
+                                <span className="text-muted-foreground">{isPickup ? "Retirar às: " : "Pronta às: "}</span>
+                                <span className="font-semibold">{fmtHHMM(pred.readyAtMs)}</span>
+                              </span>
+
+                              {!isPickup && pred.arriveAtMs && (
+                                <span>
+                                  <span className="text-muted-foreground">Na casa às: </span>
+                                  <span className="font-semibold">{fmtHHMM(pred.arriveAtMs)}</span>
+                                </span>
+                              )}
+                            </>
+                          );
+                        })()}
+                      </div>
+                      <Separator className="my-1" />
                     </li>
                   );
                 })}
