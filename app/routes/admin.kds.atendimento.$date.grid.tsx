@@ -36,6 +36,15 @@ import {
   listByDate,
 } from "@/domain/kds/server";
 
+import {
+  buildDzMap,
+  getOperatorCountByDate,
+  getRiderCountByDate,
+  predictReadyTimes,
+  predictArrivalTimes,
+  type MinimalOrderRow,
+} from "@/domain/kds/delivery-prediction";
+
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -56,11 +65,8 @@ import {
   AlertTriangle,
   Lock,
   Unlock,
-  ChevronsUpDown,
-  Check,
 } from "lucide-react";
 import { Separator } from "~/components/ui/separator";
-
 
 import { setOrderStatus } from "~/domain/kds/server/repository.server";
 import DeliveryZoneCombobox from "~/domain/kds/components/delivery-zone-combobox";
@@ -161,11 +167,21 @@ export async function loader({ params }: LoaderFunctionArgs) {
     orderBy: { name: "asc" },
   });
 
+  // 🔎 Carregar tempos/distâncias por Delivery Zone (para ETA de entrega)
+  const dzTimes = await prisma.deliveryZoneDistance.findMany({
+    select: {
+      deliveryZoneId: true,
+      estimatedTimeInMin: true,
+      distanceInKm: true,
+    },
+  });
+
   return defer({
     dateStr,
     items: listPromise,
     header: header ?? { id: null, operationStatus: "PENDING" as const },
     deliveryZones,
+    dzTimes, // 👈 necessário para ETA
   });
 }
 
@@ -385,7 +401,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
    =========================== */
 
 export default function GridKdsPage() {
-  const { dateStr, items, header, deliveryZones } = useLoaderData<typeof loader>();
+  const { dateStr, items, header, deliveryZones, dzTimes } = useLoaderData<typeof loader>();
   const listFx = useFetcher();
   const rowFx = useFetcher();
 
@@ -434,6 +450,34 @@ export default function GridKdsPage() {
       <Await resolve={items}>
         {(rowsDb: OrderRow[]) => {
           const dup = duplicateCommandNumbers(rowsDb);
+
+          // ======= PREVISÕES (produção + entrega) =======
+          const dzMap = useMemo(() => buildDzMap(dzTimes as any), [dzTimes]);
+
+          const operatorCount = useMemo(() => getOperatorCountByDate(dateStr), [dateStr]);
+          const riderCount = useMemo(() => getRiderCountByDate(dateStr), [dateStr]);
+
+          const predictions = useMemo(() => {
+            const minimal: MinimalOrderRow[] = rowsDb.map((o) => ({
+              id: o.id,
+              createdAt: o.createdAt as any,
+              finalizadoAt: (o as any).finalizadoAt ?? null,
+              size: o.size,
+              hasMoto: (o as any).hasMoto ?? null,
+              takeAway: (o as any).takeAway ?? null,
+              deliveryZoneId: (o as any).deliveryZoneId ?? null,
+            }));
+            const ready = predictReadyTimes(minimal, operatorCount, nowMs);
+            const arrive = predictArrivalTimes(ready, riderCount, dzMap);
+
+            const byId = new Map<string, { readyAtMs: number; arriveAtMs: number | null }>();
+            for (const r of ready) byId.set(r.id, { readyAtMs: r.readyAtMs, arriveAtMs: null });
+            for (const a of arrive) {
+              const cur = byId.get(a.id);
+              if (cur) cur.arriveAtMs = a.arriveAtMs;
+            }
+            return byId;
+          }, [rowsDb, operatorCount, riderCount, dzMap, nowMs]);
 
           return (
             <div className="space-y-4">
@@ -746,30 +790,50 @@ export default function GridKdsPage() {
                         </rowFx.Form>
                       </div>
 
-                      {/* Linha extra com criado/decorrido */}
-                      <div className="px-2 py-1 text-xs text-slate-500 flex gap-4">
+                      {/* Linha extra com criado/decorrido + previsões */}
+                      <div className="px-2 py-1 text-xs text-slate-500 flex flex-wrap items-center gap-4">
                         <span className="text-muted-foreground">Criado: </span>
                         <span className="font-semibold">{fmtHHMM(o.createdAt as any)}</span>
+
                         {(() => {
                           const createdMs = new Date(o.createdAt as any).getTime();
                           const diffMin = Math.floor((nowMs - createdMs) / 60000);
 
-                          // cores: normal <45, laranja >=45, vermelho >=60
                           let color = "text-slate-500";
                           if (diffMin >= 60) color = "text-red-500";
                           else if (diffMin >= 45) color = "text-orange-500";
 
                           return (
-                            <p>
+                            <span>
                               <span className="text-muted-foreground">Decorrido: </span>
-                              <span className={
-                                cn(
-                                  "font-semibold",
-                                  color
-                                )
-                              }>{fmtElapsedHHMM(o.createdAt as any, nowMs)}</span>
+                              <span className={cn("font-semibold", color)}>
+                                {fmtElapsedHHMM(o.createdAt as any, nowMs)}
+                              </span>
+                            </span>
+                          );
+                        })()}
 
-                            </p>
+                        {/* Previsões: Pronta às / Na casa às */}
+                        {(() => {
+                          const pred = predictions.get(o.id);
+                          if (!pred) return null;
+
+                          const isPickup = (o as any).takeAway === true && (o as any).hasMoto !== true;
+
+                          return (
+                            <>
+                              <span>
+                                <span className="text-muted-foreground">{isPickup ? "Retirar às: " : "Pronta às: "}</span>
+                                <span className="font-semibold">{fmtHHMM(pred.readyAtMs)}</span>
+                              </span>
+
+                              {!isPickup && pred.arriveAtMs && (
+                                <span>
+                                  <span className="text-muted-foreground">Na casa às: </span>
+                                  <span className="font-semibold">{fmtHHMM(pred.arriveAtMs)}</span>
+                                </span>
+                              )}
+                            </>
                           );
                         })()}
                       </div>
