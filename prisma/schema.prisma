@@ -869,6 +869,10 @@ model KdsDailyOrder {
 
   details KdsDailyOrderDetail[]
 
+  operationStatus String?   @default("pending") @map("operation_status")
+  openedAt        DateTime? @map("opened_at")
+  closedAt        DateTime? @map("closed_at")
+
   /// Um cabeçalho por dia
   @@unique([dateInt])
   @@index([dateInt])
@@ -909,8 +913,17 @@ model KdsDailyOrderDetail {
   Bairro           Bairro? @relation(fields: [bairroId], references: [id])
   bairroId         String? @map("bairro_id")
 
-  /// Regras/índices
+  sortOrderIndex Int @default(0) @map("sort_order_index") // NOVO
 
+  isVendaLivre Boolean @default(false) @map("is_venda_livre")
+
+  emProducaoAt      DateTime? @map("em_producao_at")
+  aguardandoFornoAt DateTime? @map("aguardando_forno_at")
+  assandoAt         DateTime? @map("assando_at")
+  finalizadoAt      DateTime? @map("finalizado_at")
+
+  /// Regras/índices
+  @@index([dateInt, sortOrderIndex])
   @@index([dateInt])
   @@index([commandNumber])
   @@index([orderId])

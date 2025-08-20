@@ -1,4 +1,4 @@
-import { defer } from "@remix-run/node";
+import { defer, LoaderFunctionArgs } from "@remix-run/node";
 import {
   Await,
   Link,
@@ -18,7 +18,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Grid3X3, RefreshCw, SquareKanban } from "lucide-react";
+import { BarChart3, Grid3X3, RefreshCw, SquareKanban } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -28,6 +28,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "~/lib/utils";
+import { todayLocalYMD } from "~/domain/kds";
 
 /* =============================
  * Helpers de data
@@ -50,9 +51,10 @@ function endOfMonth(d: Date) {
  * - Se ?mes=1: mês corrente completo
  * - Caso contrário: janela curta (−5 / +3 dias)
  * ============================= */
-export async function loader({ request }: { request: Request }) {
+export async function loader({ request, params }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const fullMonth = url.searchParams.get("mes") === "1";
+  const dateStr = params.date ?? todayLocalYMD();
 
   const today = new Date();
   const todayStr = formatLocalDate(today);
@@ -82,6 +84,7 @@ export async function loader({ request }: { request: Request }) {
   }));
 
   return defer({
+    dateStr,
     days: normalizedDays,
     today: todayStr, // não é usada como value; mantida por compat.
     fullMonth, // modo atual (dados)
@@ -114,7 +117,7 @@ export default function KdsAtendimento() {
     () => {
       const index = data.days.findIndex((d: any) => d.ymd === (selectedDateFromUrl ?? ""));
       if (index >= 0 && index < data.days.length - 1) {
-        navigate(`/admin/kds/atendimento/${(data.days as any[])[index + 1].ymd}${keepMonth}`);
+        navigate(`/admin/kds/atendimento/${(data.days as any[])[index + 1].ymd}/grid${keepMonth}`);
       }
     },
     [data.days, selectedDateFromUrl, keepMonth]
@@ -125,7 +128,7 @@ export default function KdsAtendimento() {
     () => {
       const index = data.days.findIndex((d: any) => d.ymd === (selectedDateFromUrl ?? ""));
       if (index > 0) {
-        navigate(`/admin/kds/atendimento/${(data.days as any[])[index - 1].ymd}${keepMonth}`);
+        navigate(`/admin/kds/atendimento/${(data.days as any[])[index - 1].ymd}/grid${keepMonth}`);
       }
     },
     [data.days, selectedDateFromUrl, keepMonth]
@@ -136,7 +139,7 @@ export default function KdsAtendimento() {
     "m",
     (e) => {
       e.preventDefault();
-      const base = `/admin/kds/atendimento/${selectedDateFromUrl ?? localTodayYMD()}`;
+      const base = `/admin/kds/atendimento/${selectedDateFromUrl ?? localTodayYMD()}/grid`;
       navigate(fullMonthFromUrl ? base : `${base}?mes=1`);
     },
     [fullMonthFromUrl, selectedDateFromUrl]
@@ -181,7 +184,7 @@ export default function KdsAtendimento() {
   };
 
   return (
-    <div>
+    <div className="mb-12">
       <Suspense fallback={<div>Carregando dias...</div>}>
         <Await resolve={data.days}>
           {(days) => (
@@ -192,7 +195,7 @@ export default function KdsAtendimento() {
                   <Select
                     value={selectedDateFromUrl /* undefined => placeholder */}
                     onValueChange={(val) =>
-                      navigate(`/admin/kds/atendimento/${val}${keepMonth}`)
+                      navigate(`/admin/kds/atendimento/${val}/grid${keepMonth}`)
                     }
                   >
                     <SelectTrigger className="w-[420px] h-12 text-base">
@@ -264,7 +267,7 @@ export default function KdsAtendimento() {
                 <div className="flex gap-2">
                   <Button asChild size="sm" variant={isKanban ? "outline" : "default"}>
                     <Link
-                      to={`/admin/kds/atendimento/${date ?? clientTodayYMD}`}
+                      to={`/admin/kds/atendimento/${date ?? clientTodayYMD}/grid`}
                       className="flex items-center gap-2"
                     >
                       <span className="text-sm">Planilha</span>
@@ -278,6 +281,12 @@ export default function KdsAtendimento() {
                     >
                       <span className="text-sm">Kanban</span>
                       <SquareKanban size={16} />
+                    </Link>
+                  </Button>
+                  {/* Link para Relatório */}
+                  <Button asChild size="sm" variant="secondary">
+                    <Link to={`/admin/kds/atendimento/${selectedDateFromUrl}/relatorio`} className="ml-auto">
+                      <BarChart3 className="w-4 h-4 mr-2" /> Relatório
                     </Link>
                   </Button>
                 </div>

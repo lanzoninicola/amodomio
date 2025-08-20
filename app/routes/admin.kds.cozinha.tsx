@@ -95,7 +95,7 @@ export default function CozinhaWrapper() {
       </div>
 
       {/* Conteúdo rolável: só renderiza algo quando houver :date */}
-      <div className="max-w-md mx-auto p-3">
+      <div className="max-w-md mx-auto">
         <Suspense fallback={<div>Carregando…</div>}>
           <Await resolve={data.days}>
             {() => (selectedDate ? <Outlet key={pathname} /> : null)}
