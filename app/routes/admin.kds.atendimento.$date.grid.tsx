@@ -1,5 +1,5 @@
 // app/routes/admin.kds.atendimento.$date.grid.tsx
-import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
+import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json, defer } from "@remix-run/node";
 import {
   Await,
@@ -59,25 +59,19 @@ import {
 } from "lucide-react";
 import { Separator } from "~/components/ui/separator";
 
-// shadcn/ui – Combobox (Popover + Command)
-import {
-  Popover,
-  PopoverTrigger,
-  PopoverContent,
-} from "~/components/ui/popover";
-import {
-  Command,
-  CommandList,
-  CommandEmpty,
-  CommandInput,
-  CommandGroup,
-  CommandItem,
-} from "~/components/ui/command";
+
 import { setOrderStatus } from "~/domain/kds/server/repository.server";
+import DeliveryZoneCombobox from "~/domain/kds/components/delivery-zone-combobox";
+
+export const meta: MetaFunction = () => {
+  return [
+    { title: "KDS | Pedidos" },
+  ];
+};
 
 /**
  * COLUNAS (Status removido)
- * [#, Pedido, Tamanhos, Canal, Bairro, Moto, Retirada, VL, Detalhes, Ações]
+ * [#, Pedido, Tamanhos, Canal, Zona, Moto, Retirada, VL, Detalhes, Ações]
  */
 const COLS =
   "grid grid-cols-[60px,150px,260px,240px,220px,120px,110px,70px,80px,110px] gap-2 items-center gap-x-8";
@@ -142,10 +136,6 @@ const stringifySize = (c: SizeCounts) => JSON.stringify(c);
 const sizeSummary = (c: SizeCounts) =>
   (["F", "M", "P", "I", "FT"] as (keyof SizeCounts)[]).filter(k => c[k] > 0).map(k => `${k}:${c[k]}`).join("  ");
 
-/* ===========================
-   Tipos locais
-   =========================== */
-type BairroOption = { id: string; name: string };
 
 /* ===========================
    Loader
@@ -162,8 +152,8 @@ export async function loader({ params }: LoaderFunctionArgs) {
     select: { id: true, operationStatus: true },
   });
 
-  // 🔎 Carregar bairros (somente campos necessários)
-  const bairros = await prisma.bairro.findMany({
+  // 🔎 Carregar Delivery Zones (somente campos necessários)
+  const deliveryZones = await prisma.deliveryZone.findMany({
     select: { id: true, name: true },
     orderBy: { name: "asc" },
   });
@@ -172,7 +162,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
     dateStr,
     items: listPromise,
     header: header ?? { id: null, operationStatus: "PENDING" as const },
-    bairros,
+    deliveryZones,
   });
 }
 
@@ -347,9 +337,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
         await setOrderStatus(id, nextStatus);
       }
 
-      // 🔒 bairroId (pode vir vazio para limpar)
-      const bairroIdRaw = String(form.get("bairroId") ?? "").trim();
-      const bairroId = bairroIdRaw === "" ? null : bairroIdRaw;
+      // 🔒 deliveryZoneId (pode vir vazio para limpar)
+      const dzIdRaw = String(form.get("deliveryZoneId") ?? "").trim();
+      const deliveryZoneId = dzIdRaw === "" ? null : dzIdRaw;
 
       await prisma.kdsDailyOrderDetail.update({
         where: { id },
@@ -362,8 +352,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
           motoValue: toDecimal(form.get("motoValue")),
           takeAway: String(form.get("takeAway") ?? "") === "on",
           size: stringifySize(sizeCounts as any),
-          // ✅ salva bairroId
-          bairroId: bairroId as any,
+          // ✅ salva deliveryZoneId
+          deliveryZoneId: deliveryZoneId as any,
         },
       });
 
@@ -385,85 +375,14 @@ export async function action({ request, params }: ActionFunctionArgs) {
   }
 }
 
-/* ===========================
-   Combobox de Bairros
-   =========================== */
 
-function BairroCombobox({
-  options,
-  value,
-  onChange,
-  placeholder = "Selecionar bairro",
-  disabled = false,
-  className = "w-[220px]",
-}: {
-  options: BairroOption[];
-  value: string | null | undefined;
-  onChange: (next: string | null) => void;
-  placeholder?: string;
-  disabled?: boolean;
-  className?: string;
-}) {
-  const [open, setOpen] = useState(false);
-
-  const selected = useMemo(
-    () => options.find((o) => o.id === value) || null,
-    [options, value]
-  );
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild disabled={disabled}>
-        <Button
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          className={`justify-between h-9 ${className} ${disabled ? "opacity-60 pointer-events-none" : ""}`}
-        >
-          <span className="truncate">
-            {selected ? selected.name : placeholder}
-          </span>
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="p-0 w-[320px]">
-        <Command shouldFilter={true}>
-          <CommandInput placeholder="Digite o nome do bairro..." />
-          <CommandEmpty>Nenhum bairro encontrado.</CommandEmpty>
-          <CommandList>
-            <CommandGroup heading="Bairros">
-              {/* Opção para limpar */}
-              <CommandItem
-                value="(sem bairro)"
-                onSelect={() => { onChange(null); setOpen(false); }}
-              >
-                <Check className={`mr-2 h-4 w-4 ${value == null ? "opacity-100" : "opacity-0"}`} />
-                (sem bairro)
-              </CommandItem>
-              {options.map((opt) => (
-                <CommandItem
-                  key={opt.id}
-                  value={opt.name}
-                  onSelect={() => { onChange(opt.id); setOpen(false); }}
-                >
-                  <Check className={`mr-2 h-4 w-4 ${value === opt.id ? "opacity-100" : "opacity-0"}`} />
-                  {opt.name}
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
-  );
-}
 
 /* ===========================
    Página (Grid)
    =========================== */
 
 export default function GridKdsPage() {
-  const { dateStr, items, header, bairros } = useLoaderData<typeof loader>();
+  const { dateStr, items, header, deliveryZones } = useLoaderData<typeof loader>();
   const listFx = useFetcher();
   const rowFx = useFetcher();
 
@@ -618,7 +537,7 @@ export default function GridKdsPage() {
                 <div className="text-center">Pedido (R$)</div>
                 <div className="text-center">Tamanhos</div>
                 <div className="text-center">Canal</div>
-                <div className="text-center">Bairro</div>
+                <div className="text-center">Zona</div>
                 <div className="text-center">Moto (R$)</div>
                 <div className="text-center">Retirada</div>
                 <div className="text-center">VL</div>
@@ -644,7 +563,7 @@ export default function GridKdsPage() {
                   const [cmdLocal, setCmdLocal] = useState<number | null>(o.commandNumber);
                   const [hasMoto, setHasMoto] = useState<boolean>(!!o.hasMoto);
                   const [takeAway, setTakeAway] = useState<boolean>(!!(o as any).takeAway);
-                  const [bairroId, setBairroId] = useState<string | null | undefined>((o as any).bairroId ?? null);
+                  const [deliveryZoneId, setDeliveryZoneId] = useState<string | null | undefined>((o as any).deliveryZoneId ?? null);
 
                   return (
                     <li key={o.id} className={COLS + " bg-white px-1"}>
@@ -652,8 +571,8 @@ export default function GridKdsPage() {
                         <input type="hidden" name="_action" value="saveRow" />
                         <input type="hidden" name="id" value={o.id} />
                         <input type="hidden" name="date" value={dateStr} />
-                        {/* hidden real para bairroId */}
-                        <input type="hidden" name="bairroId" value={bairroId ?? ""} />
+                        {/* hidden real para deliveryZoneId */}
+                        <input type="hidden" name="deliveryZoneId" value={deliveryZoneId ?? ""} />
 
                         {/* nº comanda */}
                         <div className="flex items-center justify-center">
@@ -707,12 +626,12 @@ export default function GridKdsPage() {
                           </Select>
                         </div>
 
-                        {/* Bairro (Combobox com busca) */}
+                        {/* Delivery Zone (Combobox com busca) */}
                         <div className="flex justify-center">
-                          <BairroCombobox
-                            options={bairros}
-                            value={bairroId}
-                            onChange={setBairroId}
+                          <DeliveryZoneCombobox
+                            options={deliveryZones}
+                            value={deliveryZoneId}
+                            onChange={setDeliveryZoneId}
                             disabled={readOnly || o.isVendaLivre === true}
                             className="w-[220px]"
                           />
@@ -804,8 +723,8 @@ export default function GridKdsPage() {
                             fd.set("sizeI", String(sc.I));
                             fd.set("sizeFT", String(sc.FT));
                             fd.set("channel", String(o.channel ?? ""));
-                            // garantir envio do bairro atual no salvar por detalhes
-                            fd.set("bairroId", String(bairroId ?? ""));
+                            // garantir envio da zona atual ao salvar por detalhes
+                            fd.set("deliveryZoneId", String(deliveryZoneId ?? ""));
                             rowFx.submit(fd, { method: "post" });
                           }}
                           onSubmit={() => setDetailsOpenId(null)}

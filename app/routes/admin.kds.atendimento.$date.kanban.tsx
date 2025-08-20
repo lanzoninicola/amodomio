@@ -1,4 +1,4 @@
-import { json } from "@remix-run/node";
+import { json, MetaFunction } from "@remix-run/node";
 import { useFetcher, useLoaderData, useRevalidator } from "@remix-run/react";
 import prisma from "~/lib/prisma/client.server";
 import { useEffect, useMemo, useState } from "react";
@@ -27,6 +27,13 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { cn } from "~/lib/utils";
+
+export const meta: MetaFunction = () => {
+  return [
+    { title: "KDS | Kanban" },
+  ];
+};
+
 
 /* ============================= helpers ============================= */
 function ymdToDateInt(ymd: string) {
