@@ -6,6 +6,7 @@ import * as React from "react";
 // import { prisma } from "~/lib/prisma.server";
 import { PrismaClient } from "@prisma/client";
 import { DecimalInput, IntegerInput } from "~/components/inputs/inputs";
+import { Separator } from "~/components/ui/separator";
 const prisma = new PrismaClient();
 
 // -----------------------------
@@ -212,9 +213,9 @@ export default function DeliveryZoneDistancePage() {
 
   return (
     <div className="mx-auto max-w-6xl p-4">
-      <header className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end justify-between w-full">
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-end justify-between w-full">
         <div>
-          <h1 className="text-2xl font-bold">Zonas de Entrega – Distâncias</h1>
+          <h1 className="text-2xl font-semibold">Zonas de Entrega – Distâncias</h1>
           <p className="text-sm text-muted-foreground">
             Selecione a unidade e edite distância (km) e tempo (min) por zona de entrega.
           </p>
@@ -232,6 +233,8 @@ export default function DeliveryZoneDistancePage() {
           />
         </div>
       </header>
+
+      <Separator className="my-8" />
 
       <Form method="POST" className="bg-white/50">
         <input type="hidden" name="companyLocationId" value={selectedId} />

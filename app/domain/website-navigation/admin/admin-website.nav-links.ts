@@ -241,7 +241,13 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
           disabled: false,
         },
         {
-          title: "Roteiros",
+          title: "Zone de entrega",
+          href: "/admin/delivery-zone",
+          items: [],
+          disabled: false,
+        },
+        {
+          title: "Zone de entrega - Distançias",
           href: "/admin/delivery-zone-distance",
           items: [],
           disabled: false,
