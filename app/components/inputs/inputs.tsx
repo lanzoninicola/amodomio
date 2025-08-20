@@ -64,6 +64,7 @@ export function IntegerInput({
   placeholder,
   className = "w-24",
   disabled = false,
+  ...props
 }: BaseProps) {
   // "units" já é o valor inteiro (sem escala)
   const initial = Math.max(0, Math.round(toNumber(defaultValue)));
@@ -91,6 +92,7 @@ export function IntegerInput({
         className={`${className} h-9 border rounded px-2 py-1 text-right ${disabled ? "bg-gray-50 text-gray-400" : ""
           }`}
         placeholder={placeholder}
+        {...props}
       />
       <input type="hidden" name={name} value={String(units)} />
     </div>
