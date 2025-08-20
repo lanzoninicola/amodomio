@@ -112,6 +112,78 @@ export async function listActiveOrdersByDate(dateInt: number) {
   });
 }
 
-export async function setOrderStatus(id: string, status: string) {
-  return prisma.kdsDailyOrderDetail.update({ where: { id }, data: { status } });
+export type KdsStatus =
+  | "novoPedido"
+  | "emProducao"
+  | "aguardandoForno"
+  | "assando"
+  | "finalizado";
+
+/**
+ * Atualiza o status do pedido e ajusta os timestamps de fase.
+ * Regras:
+ * - `novoPedido`: zera todos os *At
+ * - `emProducao`: define `emProducaoAt` (se vazio) e limpa fases posteriores
+ * - `aguardandoForno`: define `aguardandoFornoAt` (se vazio) e limpa posteriores
+ * - `assando`: define `assandoAt` (se vazio) e limpa `finalizadoAt`
+ * - `finalizado`: define/atualiza `finalizadoAt`
+ *
+ * Obs.: usamos "definir se null" para manter o primeiro instante da fase.
+ * Ao voltar fases, limpamos os *At das fases posteriores para manter a linha do tempo consistente.
+ */
+export async function setOrderStatus(id: string, next: KdsStatus) {
+  const now = new Date();
+
+  // Pega status atual para evitar writes desnecessários (opcional)
+  const current = await prisma.kdsDailyOrderDetail.findUnique({
+    where: { id },
+    select: {
+      status: true,
+      emProducaoAt: true,
+      aguardandoFornoAt: true,
+      assandoAt: true,
+      finalizadoAt: true,
+    },
+  });
+  if (!current) return;
+
+  const data: any = { status: next };
+
+  switch (next) {
+    case "novoPedido": {
+      data.emProducaoAt = null;
+      data.aguardandoFornoAt = null;
+      data.assandoAt = null;
+      data.finalizadoAt = null;
+      break;
+    }
+    case "emProducao": {
+      data.emProducaoAt = current.emProducaoAt ?? now;
+      data.aguardandoFornoAt = null;
+      data.assandoAt = null;
+      data.finalizadoAt = null;
+      break;
+    }
+    case "aguardandoForno": {
+      // Mantém emProducaoAt se já existir; não força agora para não falsificar tempos
+      data.aguardandoFornoAt = current.aguardandoFornoAt ?? now;
+      data.assandoAt = null;
+      data.finalizadoAt = null;
+      break;
+    }
+    case "assando": {
+      data.assandoAt = current.assandoAt ?? now;
+      data.finalizadoAt = null;
+      break;
+    }
+    case "finalizado": {
+      data.finalizadoAt = now; // registra o momento de conclusão
+      break;
+    }
+  }
+
+  await prisma.kdsDailyOrderDetail.update({
+    where: { id },
+    data,
+  });
 }

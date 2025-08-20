@@ -917,6 +917,11 @@ model KdsDailyOrderDetail {
 
   isVendaLivre Boolean @default(false) @map("is_venda_livre")
 
+  emProducaoAt      DateTime? @map("em_producao_at")
+  aguardandoFornoAt DateTime? @map("aguardando_forno_at")
+  assandoAt         DateTime? @map("assando_at")
+  finalizadoAt      DateTime? @map("finalizado_at")
+
   /// Regras/índices
   @@index([dateInt, sortOrderIndex])
   @@index([dateInt])

@@ -1,4 +1,4 @@
-import { defer } from "@remix-run/node";
+import { defer, LoaderFunctionArgs } from "@remix-run/node";
 import {
   Await,
   Link,
@@ -51,7 +51,7 @@ function endOfMonth(d: Date) {
  * - Se ?mes=1: mês corrente completo
  * - Caso contrário: janela curta (−5 / +3 dias)
  * ============================= */
-export async function loader({ request, params }: { request: Request }) {
+export async function loader({ request, params }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const fullMonth = url.searchParams.get("mes") === "1";
   const dateStr = params.date ?? todayLocalYMD();

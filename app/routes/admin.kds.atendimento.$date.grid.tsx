@@ -1,4 +1,4 @@
-
+// app/routes/admin.kds.atendimento.$date.grid.tsx
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json, defer } from "@remix-run/node";
 import {
@@ -7,7 +7,7 @@ import {
   useLoaderData,
   Link,
 } from "@remix-run/react";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import prisma from "~/lib/prisma/client.server";
 import { Prisma } from "@prisma/client";
 
@@ -52,24 +52,40 @@ import {
   Trash,
   Ellipsis,
   AlertTriangle,
-  BarChart3,
   Lock,
   Unlock,
+  ChevronsUpDown,
+  Check,
 } from "lucide-react";
 import { Separator } from "~/components/ui/separator";
 
+// shadcn/ui – Combobox (Popover + Command)
+import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+} from "~/components/ui/popover";
+import {
+  Command,
+  CommandList,
+  CommandEmpty,
+  CommandInput,
+  CommandGroup,
+  CommandItem,
+} from "~/components/ui/command";
+import { setOrderStatus } from "~/domain/kds/server/repository.server";
+
 /**
  * COLUNAS (Status removido)
- * [#, Pedido, Tamanhos, Canal, Moto, Retirada, VL, Detalhes, Ações]
+ * [#, Pedido, Tamanhos, Canal, Bairro, Moto, Retirada, VL, Detalhes, Ações]
  */
 const COLS =
-  "grid grid-cols-[60px,150px,260px,320px,120px,110px,70px,80px,110px] gap-2 items-center gap-x-4";
+  "grid grid-cols-[60px,150px,260px,240px,220px,120px,110px,70px,80px,110px] gap-2 items-center gap-x-8";
 const COLS_HDR =
-  "grid grid-cols-[60px,150px,260px,320px,120px,110px,70px,80px,110px] gap-2 gap-x-4 border-b font-semibold text-sm sticky top-0 z-10 bg-white";
+  "grid grid-cols-[60px,150px,260px,240px,220px,120px,110px,70px,80px,110px] gap-2 gap-x-8 border-b font-semibold text-sm sticky top-0 z-10 bg-white";
 
 /** URL do calendário mensal. Ajuste aqui se a sua rota for diferente. */
 const MONTH_VIEW_URL_TEMPLATE = (ym: string) => `/admin/kds/atendimento/${ym}`;
-
 
 /* ===========================
    Helpers locais
@@ -127,6 +143,11 @@ const sizeSummary = (c: SizeCounts) =>
   (["F", "M", "P", "I", "FT"] as (keyof SizeCounts)[]).filter(k => c[k] > 0).map(k => `${k}:${c[k]}`).join("  ");
 
 /* ===========================
+   Tipos locais
+   =========================== */
+type BairroOption = { id: string; name: string };
+
+/* ===========================
    Loader
    =========================== */
 
@@ -137,15 +158,21 @@ export async function loader({ params }: LoaderFunctionArgs) {
   const listPromise = listByDate(dateInt);
   const header = await prisma.kdsDailyOrder.findUnique({
     where: { dateInt },
-    // ALTERAÇÃO: usar operationStatus em vez de isOpen/isClosed
+    // operationStatus no cabeçalho
     select: { id: true, operationStatus: true },
+  });
+
+  // 🔎 Carregar bairros (somente campos necessários)
+  const bairros = await prisma.bairro.findMany({
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
   });
 
   return defer({
     dateStr,
     items: listPromise,
-    // ALTERAÇÃO: header padrão com operationStatus = "PENDING"
-    header: header ?? { id: null, operationStatus: "PENDING" },
+    header: header ?? { id: null, operationStatus: "PENDING" as const },
+    bairros,
   });
 }
 
@@ -162,7 +189,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const header = await ensureHeader(dateInt, ymdToUtcNoon(dateStr));
   const headerFlags = await prisma.kdsDailyOrder.findUnique({
     where: { id: header.id },
-    // ALTERAÇÃO: operationStatus
     select: { operationStatus: true },
   });
 
@@ -173,7 +199,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
   try {
     if (_action === "openDay") {
-      // Permitido quando PENDING (ou inexistente, coberto por ensureHeader + default)
       if (headerFlags?.operationStatus === "CLOSED") {
         return json({ ok: false, error: "Dia já foi fechado." }, { status: 400 });
       }
@@ -207,7 +232,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
       }
       await prisma.kdsDailyOrder.update({
         where: { id: header.id },
-        // ALTERAÇÃO: marcar OPENED
         data: { operationStatus: "OPENED" },
       });
       await recalcHeaderTotal(dateInt);
@@ -220,13 +244,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
       }
       await prisma.kdsDailyOrder.update({
         where: { id: header.id },
-        // ALTERAÇÃO: marcar CLOSED
         data: { operationStatus: "CLOSED" },
       });
       return json({ ok: true, status: "CLOSED" });
     }
 
-    // NOVO: reabrir dia (não cria registros; apenas permite edição)
     if (_action === "reopenDay") {
       if (headerFlags?.operationStatus !== "CLOSED") {
         return json({ ok: false, error: "Só é possível reabrir um dia fechado." }, { status: 400 });
@@ -244,7 +266,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }
 
     if (_action === "addMore") {
-      // Somente quando OPENED (REOPENED não cria novos)
       if (headerFlags?.operationStatus !== "OPENED") {
         return json({ ok: false, error: "Abra o dia (status ABERTO) antes de adicionar mais." }, { status: 400 });
       }
@@ -270,7 +291,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }
 
     if (_action === "createVL") {
-      // Somente quando OPENED
       if (headerFlags?.operationStatus !== "OPENED") {
         return json({ ok: false, error: "Venda livre só é permitida com o dia ABERTO." }, { status: 400 });
       }
@@ -320,22 +340,33 @@ export async function action({ request, params }: ActionFunctionArgs) {
         P: Number(form.get("sizeP") ?? 0) || 0,
         I: Number(form.get("sizeI") ?? 0) || 0,
         FT: Number(form.get("sizeFT") ?? 0) || 0,
-      } satisfies SizeCounts;
-
-      const data = {
-        commandNumber: cmd,
-        isVendaLivre: cmd == null,
-        orderAmount: toDecimal(form.get("orderAmount")),
-        channel: String(form.get("channel") ?? ""),
-        // status editável só no modal; se vier no form, aceita
-        status: String(form.get("status") ?? undefined) || undefined,
-        hasMoto: String(form.get("hasMoto") ?? "") === "on",
-        motoValue: toDecimal(form.get("motoValue")),
-        takeAway: String(form.get("takeAway") ?? "") === "on",
-        size: stringifySize(sizeCounts),
       };
 
-      await prisma.kdsDailyOrderDetail.update({ where: { id }, data });
+      const nextStatus = String(form.get("status") ?? "") as any; // pode vir vazio
+      if (nextStatus) {
+        await setOrderStatus(id, nextStatus);
+      }
+
+      // 🔒 bairroId (pode vir vazio para limpar)
+      const bairroIdRaw = String(form.get("bairroId") ?? "").trim();
+      const bairroId = bairroIdRaw === "" ? null : bairroIdRaw;
+
+      await prisma.kdsDailyOrderDetail.update({
+        where: { id },
+        data: {
+          commandNumber: cmd,
+          isVendaLivre: cmd == null,
+          orderAmount: toDecimal(form.get("orderAmount")),
+          channel: String(form.get("channel") ?? ""),
+          hasMoto: String(form.get("hasMoto") ?? "") === "on",
+          motoValue: toDecimal(form.get("motoValue")),
+          takeAway: String(form.get("takeAway") ?? "") === "on",
+          size: stringifySize(sizeCounts as any),
+          // ✅ salva bairroId
+          bairroId: bairroId as any,
+        },
+      });
+
       await recalcHeaderTotal(dateInt);
       return json({ ok: true, id, commandNumber: cmd });
     }
@@ -355,15 +386,87 @@ export async function action({ request, params }: ActionFunctionArgs) {
 }
 
 /* ===========================
+   Combobox de Bairros
+   =========================== */
+
+function BairroCombobox({
+  options,
+  value,
+  onChange,
+  placeholder = "Selecionar bairro",
+  disabled = false,
+  className = "w-[220px]",
+}: {
+  options: BairroOption[];
+  value: string | null | undefined;
+  onChange: (next: string | null) => void;
+  placeholder?: string;
+  disabled?: boolean;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+
+  const selected = useMemo(
+    () => options.find((o) => o.id === value) || null,
+    [options, value]
+  );
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild disabled={disabled}>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className={`justify-between h-9 ${className} ${disabled ? "opacity-60 pointer-events-none" : ""}`}
+        >
+          <span className="truncate">
+            {selected ? selected.name : placeholder}
+          </span>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="p-0 w-[320px]">
+        <Command shouldFilter={true}>
+          <CommandInput placeholder="Digite o nome do bairro..." />
+          <CommandEmpty>Nenhum bairro encontrado.</CommandEmpty>
+          <CommandList>
+            <CommandGroup heading="Bairros">
+              {/* Opção para limpar */}
+              <CommandItem
+                value="(sem bairro)"
+                onSelect={() => { onChange(null); setOpen(false); }}
+              >
+                <Check className={`mr-2 h-4 w-4 ${value == null ? "opacity-100" : "opacity-0"}`} />
+                (sem bairro)
+              </CommandItem>
+              {options.map((opt) => (
+                <CommandItem
+                  key={opt.id}
+                  value={opt.name}
+                  onSelect={() => { onChange(opt.id); setOpen(false); }}
+                >
+                  <Check className={`mr-2 h-4 w-4 ${value === opt.id ? "opacity-100" : "opacity-0"}`} />
+                  {opt.name}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/* ===========================
    Página (Grid)
    =========================== */
 
 export default function GridKdsPage() {
-  const { dateStr, items, header } = useLoaderData<typeof loader>();
+  const { dateStr, items, header, bairros } = useLoaderData<typeof loader>();
   const listFx = useFetcher();
   const rowFx = useFetcher();
 
-  // ALTERAÇÃO: derivar status a partir de operationStatus
   const status = (header?.operationStatus ?? "PENDING") as "PENDING" | "OPENED" | "CLOSED" | "REOPENED";
   const isOpen = status === "OPENED";
   const isClosed = status === "CLOSED";
@@ -373,9 +476,6 @@ export default function GridKdsPage() {
   const [openConfirmId, setOpenConfirmId] = useState<string | null>(null);
   const [detailsOpenId, setDetailsOpenId] = useState<string | null>(null);
   const nowMs = Date.now();
-
-
-
 
   // overlay “abrindo dia”
   const [opening, setOpening] = useState(false);
@@ -462,7 +562,6 @@ export default function GridKdsPage() {
                   <>
                     <div className="px-3 py-1 rounded border text-sm bg-amber-50 text-amber-900">
                       Dia reaberto (edição liberada, sem novos registros)
-
                       <span className="text-xs text-slate-500 ml-2">(Atalho: pressione <b>M</b> para ver o mês)</span>
                     </div>
                     <listFx.Form method="post" className="flex items-center gap-2">
@@ -490,9 +589,6 @@ export default function GridKdsPage() {
                     </listFx.Form>
                   </>
                 )}
-
-
-
               </div>
 
               {/* Venda livre rápida (status/canal defaults) */}
@@ -503,7 +599,6 @@ export default function GridKdsPage() {
                     <input type="hidden" name="_action" value="createVL" />
                     <input type="hidden" name="date" value={dateStr} />
                     <MoneyInput name="orderAmount" />
-
                     <Button type="submit" variant="secondary" disabled={listFx.state !== "idle"}>
                       {listFx.state !== "idle" ? (
                         <>
@@ -523,6 +618,7 @@ export default function GridKdsPage() {
                 <div className="text-center">Pedido (R$)</div>
                 <div className="text-center">Tamanhos</div>
                 <div className="text-center">Canal</div>
+                <div className="text-center">Bairro</div>
                 <div className="text-center">Moto (R$)</div>
                 <div className="text-center">Retirada</div>
                 <div className="text-center">VL</div>
@@ -548,6 +644,7 @@ export default function GridKdsPage() {
                   const [cmdLocal, setCmdLocal] = useState<number | null>(o.commandNumber);
                   const [hasMoto, setHasMoto] = useState<boolean>(!!o.hasMoto);
                   const [takeAway, setTakeAway] = useState<boolean>(!!(o as any).takeAway);
+                  const [bairroId, setBairroId] = useState<string | null | undefined>((o as any).bairroId ?? null);
 
                   return (
                     <li key={o.id} className={COLS + " bg-white px-1"}>
@@ -555,8 +652,10 @@ export default function GridKdsPage() {
                         <input type="hidden" name="_action" value="saveRow" />
                         <input type="hidden" name="id" value={o.id} />
                         <input type="hidden" name="date" value={dateStr} />
+                        {/* hidden real para bairroId */}
+                        <input type="hidden" name="bairroId" value={bairroId ?? ""} />
 
-                        {/* nº comanda (somente input) */}
+                        {/* nº comanda */}
                         <div className="flex items-center justify-center">
                           <CommandNumberInput value={cmdLocal} onChange={setCmdLocal} isVendaLivre={o.isVendaLivre} />
                           <input type="hidden" name="commandNumber" value={cmdLocal ?? ""} />
@@ -596,7 +695,7 @@ export default function GridKdsPage() {
                         {/* Canal */}
                         <div className="flex justify-center">
                           <Select name="channel" defaultValue={o.channel ?? ""}>
-                            <SelectTrigger className={`h-9 w-[260px] truncate ${readOnly ? "opacity-60 pointer-events-none" : ""}`} disabled={readOnly}>
+                            <SelectTrigger className={`h-9 w-[240px] truncate ${readOnly ? "opacity-60 pointer-events-none" : ""}`} disabled={readOnly}>
                               <SelectValue placeholder="Canal" />
                             </SelectTrigger>
                             <SelectContent>
@@ -608,15 +707,24 @@ export default function GridKdsPage() {
                           </Select>
                         </div>
 
+                        {/* Bairro (Combobox com busca) */}
+                        <div className="flex justify-center">
+                          <BairroCombobox
+                            options={bairros}
+                            value={bairroId}
+                            onChange={setBairroId}
+                            disabled={readOnly || o.isVendaLivre === true}
+                            className="w-[220px]"
+                          />
+                        </div>
+
                         {/* Moto (valor) + switch */}
-                        <div className="flex items-center justify-center gap-3">
+                        <div className="flex items-center justify-center gap-1">
                           <div className={`flex items-center gap-2 ${readOnly ? "opacity-60" : ""}`}>
-                            {/* <label htmlFor={`moto-${o.id}`} className="text-xs text-slate-600">Moto</label> */}
-                            <Switch checked={hasMoto} onCheckedChange={setHasMoto} id={`moto-${o.id}`} disabled={readOnly} />
+                            <Switch checked={hasMoto} onCheckedChange={setHasMoto} id={`moto-${o.id}`} disabled={readOnly} className="" />
                             <input type="hidden" name="hasMoto" value={hasMoto ? "on" : ""} />
                           </div>
                           <MoneyInput name="motoValue" defaultValue={o.motoValue} className="w-24" disabled={readOnly || hasMoto === false} />
-
                         </div>
 
                         {/* Retirada (switch) */}
@@ -647,7 +755,6 @@ export default function GridKdsPage() {
                           <Button
                             type="button"
                             variant="ghost"
-
                             title="Excluir"
                             className="hover:bg-red-50"
                             onClick={() => setOpenConfirmId(o.id)}
@@ -697,6 +804,8 @@ export default function GridKdsPage() {
                             fd.set("sizeI", String(sc.I));
                             fd.set("sizeFT", String(sc.FT));
                             fd.set("channel", String(o.channel ?? ""));
+                            // garantir envio do bairro atual no salvar por detalhes
+                            fd.set("bairroId", String(bairroId ?? ""));
                             rowFx.submit(fd, { method: "post" });
                           }}
                           onSubmit={() => setDetailsOpenId(null)}
@@ -712,11 +821,8 @@ export default function GridKdsPage() {
               </ul>
 
               {status === "OPENED" && (
-
                 <>
-
                   <Separator className="my-4" />
-
                   <listFx.Form method="post" className="flex items-center gap-2">
                     <input type="hidden" name="_action" value="addMore" />
                     <input type="hidden" name="date" value={dateStr} />
@@ -725,7 +831,6 @@ export default function GridKdsPage() {
                     </Button>
                     <Input name="more" defaultValue={20} className="h-9 w-28 text-center" />
                   </listFx.Form>
-
                 </>
               )}
 

@@ -240,6 +240,12 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
           items: [],
           disabled: false,
         },
+        {
+          title: "Roteiros",
+          href: "/admin/delivery-zone-distance",
+          items: [],
+          disabled: false,
+        },
       ],
     },
   ],

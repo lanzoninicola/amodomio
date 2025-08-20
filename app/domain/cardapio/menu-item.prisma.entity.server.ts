@@ -137,6 +137,13 @@ export class MenuItemPrismaEntity {
       cacheRevalidation: false,
     }
   ) {
+    if (process.env.NODE_ENV === "development") {
+      const stack = new Error().stack?.split("\n").slice(1, 6).join("\n");
+      console.log("[MenuItem.findAll] chamado", {
+        when: new Date().toISOString(),
+      });
+      console.log(stack);
+    }
     const cacheKey = `MenuItemPrismaEntity.findAll:${JSON.stringify(params)}`;
     let result = this.cacheManager.get<MenuItemWithAssociations[]>(cacheKey);
 

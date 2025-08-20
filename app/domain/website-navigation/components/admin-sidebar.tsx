@@ -42,7 +42,7 @@ export function AdminSidebar({ navigationLinks }: AdminSidebarProps) {
                           {item.icon && (
                             <item.icon size={15} />
                           )}
-                          <Link to={item.href || ""}>
+                          <Link to={item.href || ""} prefetch="none">
                             <span className={
                               cn(
                                 item.highlight && "font-semibold"
