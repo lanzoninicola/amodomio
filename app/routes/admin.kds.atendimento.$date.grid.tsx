@@ -351,9 +351,48 @@ export async function action({ request, params }: ActionFunctionArgs) {
         FT: Number(form.get("sizeFT") ?? 0) || 0,
       };
 
-      const nextStatus = String(form.get("status") ?? "") as any; // pode vir vazio
-      if (nextStatus) {
-        await setOrderStatus(id, nextStatus);
+      // === Regra automática: novoPedido quando amount>0, algum tamanho>0 e todos timestamps NULL ===
+      const amountDecimal = toDecimal(form.get("orderAmount"));
+
+      const current = await prisma.kdsDailyOrderDetail.findUnique({
+        where: { id },
+        select: {
+          status: true,
+          emProducaoAt: true,
+          aguardandoFornoAt: true,
+          assandoAt: true,
+          finalizadoAt: true,
+        },
+      });
+
+      const anySize =
+        (sizeCounts.F + sizeCounts.M + sizeCounts.P + sizeCounts.I + sizeCounts.FT) > 0;
+
+      const allProdTimestampsNull =
+        !current?.emProducaoAt &&
+        !current?.aguardandoFornoAt &&
+        !current?.assandoAt &&
+        !current?.finalizadoAt;
+
+      const amountGtZero = (amountDecimal as any)?.gt
+        ? (amountDecimal as any).gt(new Prisma.Decimal(0))
+        : Number(String(amountDecimal)) > 0;
+
+      const autoStatus = (amountGtZero && anySize && allProdTimestampsNull)
+        ? "novoPedido"
+        : "pendente";
+
+      // status enviado pelo form (pode vir vazio)
+      const requestedStatus = String(form.get("status") ?? "");
+
+      // se não for status “forte” solicitado, aplica a regra automática
+      let finalStatus = requestedStatus?.trim();
+      if (!finalStatus || finalStatus === "pendente" || finalStatus === "novoPedido") {
+        finalStatus = autoStatus;
+      }
+
+      if (finalStatus && finalStatus !== current?.status) {
+        await setOrderStatus(id, finalStatus as any);
       }
 
       // 🔒 deliveryZoneId (pode vir vazio para limpar)
@@ -365,7 +404,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         data: {
           commandNumber: cmd,
           isVendaLivre: cmd == null,
-          orderAmount: toDecimal(form.get("orderAmount")),
+          orderAmount: amountDecimal, // usa a variável já normalizada
           channel: String(form.get("channel") ?? ""),
           hasMoto: String(form.get("hasMoto") ?? "") === "on",
           motoValue: toDecimal(form.get("motoValue")),
@@ -755,7 +794,7 @@ export default function GridKdsPage() {
                             onOpenChange={(v) => !v && setDetailsOpenId(null)}
                             createdAt={o.createdAt as any}
                             nowMs={nowMs}
-                            status={o.status ?? "novoPedido"}
+                            status={o.status ?? "pendente"}
                             onStatusChange={(value) => {
                               if (readOnly) return;
                               const fd = new FormData();
@@ -792,8 +831,15 @@ export default function GridKdsPage() {
                         </rowFx.Form>
                       </div>
 
-                      {/* Linha extra com criado/decorrido + previsões */}
-                      <div className="px-2 py-1 text-xs text-slate-500 flex flex-wrap items-center gap-4">
+                      {/* Linha extra com badge + criado/decorrido + previsões */}
+                      <div className=" text-xs text-slate-500 flex flex-wrap items-center gap-4">
+                        <span
+                          className="text-[10px] font-semibold text-emerald-700 "
+                        >
+                          {o.status}
+                        </span>
+
+
                         <span className="text-muted-foreground">Criado: </span>
                         <span className="font-semibold">{fmtHHMM(o.createdAt as any)}</span>
 
