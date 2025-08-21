@@ -17,6 +17,7 @@ import {
   STATUS_COLORS,
 } from "~/domain/kds";
 import {
+  KdsStatus,
   listActiveOrdersByDate,
   setOrderStatus,
 } from "~/domain/kds/server/repository.server";
@@ -56,7 +57,7 @@ export async function action({ request }: { request: Request }) {
     return json({ ok: false, error: "Parâmetros inválidos." }, { status: 400 });
   }
 
-  await setOrderStatus(id, status);
+  await setOrderStatus(id, status as KdsStatus);
   return json({ ok: true, id, status });
 }
 
