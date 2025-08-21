@@ -27,6 +27,7 @@ import {
   CHANNELS,
   fmtHHMM,
   fmtElapsedHHMM,
+  STATUS_RANK,
 } from "@/domain/kds";
 
 import {
@@ -144,6 +145,8 @@ function parseSize(json: any): SizeCounts {
 const stringifySize = (c: SizeCounts) => JSON.stringify(c);
 const sizeSummary = (c: SizeCounts) =>
   (["F", "M", "P", "I", "FT"] as (keyof SizeCounts)[]).filter(k => c[k] > 0).map(k => `${k}:${c[k]}`).join("  ");
+
+
 
 
 /* ===========================
@@ -362,6 +365,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
           aguardandoFornoAt: true,
           assandoAt: true,
           finalizadoAt: true,
+          novoPedidoAt: true
         },
       });
 
@@ -391,6 +395,26 @@ export async function action({ request, params }: ActionFunctionArgs) {
         finalStatus = autoStatus;
       }
 
+      // --- Gestão do novoPedidoAt ---
+      // Setar quando entra em "novoPedido" pela primeira vez;
+      // Não resetar ao avançar;
+      // Resetar SOMENTE se houver downgrade (rank novo < rank antigo).
+      const rankOld = STATUS_RANK[current?.status ?? "pendente"] ?? 0;
+      const rankNew = STATUS_RANK[finalStatus ?? "pendente"] ?? 0;
+
+      let patchNovoPedidoAt: Date | null | undefined = undefined; // undefined = não tocar
+
+      // 1) Primeira vez em "novoPedido" → seta timestamp
+      if (!current?.novoPedidoAt && finalStatus === "novoPedido") {
+        patchNovoPedidoAt = new Date();
+      }
+
+      // 2) Downgrade (ex.: emProducao -> pendente) → limpa timestamp
+      if (current?.novoPedidoAt && rankNew < rankOld) {
+        patchNovoPedidoAt = null;
+      }
+
+
       if (finalStatus && finalStatus !== current?.status) {
         await setOrderStatus(id, finalStatus as any);
       }
@@ -412,6 +436,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
           size: stringifySize(sizeCounts as any),
           // ✅ salva deliveryZoneId
           deliveryZoneId: deliveryZoneId as any,
+          ...(patchNovoPedidoAt !== undefined ? { novoPedidoAt: patchNovoPedidoAt as any } : {}),
         },
       });
 
