@@ -94,7 +94,7 @@ export async function listActiveOrdersByDate(dateInt: number) {
   return prisma.kdsDailyOrderDetail.findMany({
     where: {
       dateInt,
-      // status: { notIn: ["finalizado", "pendente"] },
+      status: { notIn: ["finalizado", "pendente"] },
       isVendaLivre: false,
       deletedAt: null,
     },

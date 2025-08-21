@@ -27,6 +27,7 @@ import {
   CHANNELS,
   fmtHHMM,
   fmtElapsedHHMM,
+  STATUS_RANK,
 } from "@/domain/kds";
 
 import {
@@ -146,6 +147,8 @@ const sizeSummary = (c: SizeCounts) =>
   (["F", "M", "P", "I", "FT"] as (keyof SizeCounts)[]).filter(k => c[k] > 0).map(k => `${k}:${c[k]}`).join("  ");
 
 
+
+
 /* ===========================
    Loader
    =========================== */
@@ -231,7 +234,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         toCreate.push({
           orderId: header.id, dateInt, commandNumber: n, isVendaLivre: false,
           sortOrderIndex: sort, orderAmount: new Prisma.Decimal(0),
-          status: "novoPedido", channel: "", hasMoto: false, motoValue: new Prisma.Decimal(0), takeAway: false,
+          status: "pendente", channel: "", hasMoto: false, motoValue: new Prisma.Decimal(0), takeAway: false,
         } as any);
         sort += 1000;
       }
@@ -288,7 +291,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         toCreate.push({
           orderId: header.id, dateInt, commandNumber: n, isVendaLivre: false,
           sortOrderIndex: sort, orderAmount: new Prisma.Decimal(0),
-          status: "novoPedido", channel: "", hasMoto: false, motoValue: new Prisma.Decimal(0), takeAway: false,
+          status: "pendente", channel: "", hasMoto: false, motoValue: new Prisma.Decimal(0), takeAway: false,
         } as any);
         sort += 1000;
       }
@@ -312,7 +315,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
           isVendaLivre: true,
           sortOrderIndex: await getNextSort(),
           orderAmount: amount,
-          status: "pendente",
+          status: "finalizado",
           channel: "WHATS/PRESENCIAL/TELE",
           hasMoto: false,
           motoValue: new Prisma.Decimal(0),
@@ -351,9 +354,69 @@ export async function action({ request, params }: ActionFunctionArgs) {
         FT: Number(form.get("sizeFT") ?? 0) || 0,
       };
 
-      const nextStatus = String(form.get("status") ?? "") as any; // pode vir vazio
-      if (nextStatus) {
-        await setOrderStatus(id, nextStatus);
+      // === Regra automática: novoPedido quando amount>0, algum tamanho>0 e todos timestamps NULL ===
+      const amountDecimal = toDecimal(form.get("orderAmount"));
+
+      const current = await prisma.kdsDailyOrderDetail.findUnique({
+        where: { id },
+        select: {
+          status: true,
+          emProducaoAt: true,
+          aguardandoFornoAt: true,
+          assandoAt: true,
+          finalizadoAt: true,
+          novoPedidoAt: true
+        },
+      });
+
+      const anySize =
+        (sizeCounts.F + sizeCounts.M + sizeCounts.P + sizeCounts.I + sizeCounts.FT) > 0;
+
+      const allProdTimestampsNull =
+        !current?.emProducaoAt &&
+        !current?.aguardandoFornoAt &&
+        !current?.assandoAt &&
+        !current?.finalizadoAt;
+
+      const amountGtZero = (amountDecimal as any)?.gt
+        ? (amountDecimal as any).gt(new Prisma.Decimal(0))
+        : Number(String(amountDecimal)) > 0;
+
+      const autoStatus = (amountGtZero && anySize && allProdTimestampsNull)
+        ? "novoPedido"
+        : "pendente";
+
+      // status enviado pelo form (pode vir vazio)
+      const requestedStatus = String(form.get("status") ?? "");
+
+      // se não for status “forte” solicitado, aplica a regra automática
+      let finalStatus = requestedStatus?.trim();
+      if (!finalStatus || finalStatus === "pendente" || finalStatus === "novoPedido") {
+        finalStatus = autoStatus;
+      }
+
+      // --- Gestão do novoPedidoAt ---
+      // Setar quando entra em "novoPedido" pela primeira vez;
+      // Não resetar ao avançar;
+      // Resetar SOMENTE se houver downgrade (rank novo < rank antigo).
+      const rankOld = STATUS_RANK[current?.status ?? "pendente"] ?? 0;
+      const rankNew = STATUS_RANK[finalStatus ?? "pendente"] ?? 0;
+
+      let patchNovoPedidoAt: Date | null | undefined = undefined; // undefined = não tocar
+
+      // 1) Primeira vez em "novoPedido" → seta timestamp
+      if (!current?.novoPedidoAt && finalStatus === "novoPedido") {
+        patchNovoPedidoAt = new Date();
+      }
+
+      // 2) Downgrade (ex.: emProducao -> pendente) → limpa timestamp
+      if (current?.novoPedidoAt && rankNew < rankOld) {
+        patchNovoPedidoAt = null;
+      }
+
+
+      if (finalStatus && finalStatus !== current?.status) {
+        await setOrderStatus(id, finalStatus as any);
       }
 
       // 🔒 deliveryZoneId (pode vir vazio para limpar)
@@ -365,7 +428,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         data: {
           commandNumber: cmd,
           isVendaLivre: cmd == null,
-          orderAmount: toDecimal(form.get("orderAmount")),
+          orderAmount: amountDecimal, // usa a variável já normalizada
           channel: String(form.get("channel") ?? ""),
           hasMoto: String(form.get("hasMoto") ?? "") === "on",
           motoValue: toDecimal(form.get("motoValue")),
@@ -373,6 +436,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
           size: stringifySize(sizeCounts as any),
           // ✅ salva deliveryZoneId
           deliveryZoneId: deliveryZoneId as any,
+          ...(patchNovoPedidoAt !== undefined ? { novoPedidoAt: patchNovoPedidoAt as any } : {}),
         },
       });
 
@@ -458,15 +522,24 @@ export default function GridKdsPage() {
           const riderCount = useMemo(() => getRiderCountByDate(dateStr), [dateStr]);
 
           const predictions = useMemo(() => {
-            const minimal: MinimalOrderRow[] = rowsDb.map((o) => ({
+            // Elegíveis: status ≠ pendente E novoPedidoAt definido
+            const eligible = rowsDb.filter((o) => {
+              const st = (o as any).status ?? "pendente";
+              const npAt = (o as any).novoPedidoAt ?? null;
+              return st !== "pendente" && !!npAt;
+            });
+
+            // Base temporal = novoPedidoAt
+            const minimal: MinimalOrderRow[] = eligible.map((o) => ({
               id: o.id,
-              createdAt: o.createdAt as any,
+              createdAt: (o as any).novoPedidoAt as any,
               finalizadoAt: (o as any).finalizadoAt ?? null,
               size: o.size,
               hasMoto: (o as any).hasMoto ?? null,
               takeAway: (o as any).takeAway ?? null,
               deliveryZoneId: (o as any).deliveryZoneId ?? null,
             }));
+
             const ready = predictReadyTimes(minimal, operatorCount, nowMs);
             const arrive = predictArrivalTimes(ready, riderCount, dzMap);
 
@@ -478,6 +551,7 @@ export default function GridKdsPage() {
             }
             return byId;
           }, [rowsDb, operatorCount, riderCount, dzMap, nowMs]);
+
 
           return (
             <div className="space-y-4">
@@ -611,18 +685,22 @@ export default function GridKdsPage() {
                   const [hasMoto, setHasMoto] = useState<boolean>(!!o.hasMoto);
                   const [takeAway, setTakeAway] = useState<boolean>(!!(o as any).takeAway);
                   const [deliveryZoneId, setDeliveryZoneId] = useState<string | null | undefined>((o as any).deliveryZoneId ?? null);
+                  // ✅ estado local para tamanhos, refletindo na UI
+                  const [sizes, setSizes] = useState<SizeCounts>(sizeCounts);
+                  const statusText = (o as any).status ?? "pendente";
+                  const npAt = (o as any).novoPedidoAt ? new Date((o as any).novoPedidoAt as any) : null;
+
 
                   return (
                     <li key={o.id} className="flex flex-col">
 
                       <div className={COLS + " bg-white px-1 border-b border-b-gray-50 pb-1"}>
-                        <rowFx.Form method="post" className="contents">
+                        <rowFx.Form method="post" className="contents" id={`row-form-${o.id}`}>
                           <input type="hidden" name="_action" value="saveRow" />
                           <input type="hidden" name="id" value={o.id} />
                           <input type="hidden" name="date" value={dateStr} />
                           {/* hidden real para deliveryZoneId */}
                           <input type="hidden" name="deliveryZoneId" value={deliveryZoneId ?? ""} />
-
 
                           {/* nº comanda */}
                           <div className="flex items-center justify-center">
@@ -638,16 +716,17 @@ export default function GridKdsPage() {
                           {/* Tamanhos */}
                           <div className="flex justify-center">
                             <div className="flex items-center gap-2">
-                              <input type="hidden" name="sizeF" value={sizeCounts.F} />
-                              <input type="hidden" name="sizeM" value={sizeCounts.M} />
-                              <input type="hidden" name="sizeP" value={sizeCounts.P} />
-                              <input type="hidden" name="sizeI" value={sizeCounts.I} />
-                              <input type="hidden" name="sizeFT" value={sizeCounts.FT} />
+                              <input type="hidden" name="sizeF" value={sizes.F} />
+                              <input type="hidden" name="sizeM" value={sizes.M} />
+                              <input type="hidden" name="sizeP" value={sizes.P} />
+                              <input type="hidden" name="sizeI" value={sizes.I} />
+                              <input type="hidden" name="sizeFT" value={sizes.FT} />
                               <div className={`origin-center ${readOnly ? "opacity-60 pointer-events-none" : "scale-[0.95]"}`}>
                                 <SizeSelector
-                                  counts={sizeCounts}
+                                  counts={sizes}
                                   onChange={(next) => {
-                                    const formEl = (document.activeElement as HTMLElement)?.closest("form");
+                                    setSizes(next);
+                                    const formEl = document.getElementById(`row-form-${o.id}`) as HTMLFormElement | null;
                                     if (!formEl) return;
                                     (formEl.querySelector('input[name="sizeF"]') as HTMLInputElement).value = String(next.F);
                                     (formEl.querySelector('input[name="sizeM"]') as HTMLInputElement).value = String(next.M);
@@ -751,9 +830,9 @@ export default function GridKdsPage() {
                           <DetailsDialog
                             open={detailsOpenId === o.id}
                             onOpenChange={(v) => !v && setDetailsOpenId(null)}
-                            createdAt={o.createdAt as any}
+                            createdAt={(o as any).novoPedidoAt as any}
                             nowMs={nowMs}
-                            status={o.status ?? "novoPedido"}
+                            status={o.status ?? "pendente"}
                             onStatusChange={(value) => {
                               if (readOnly) return;
                               const fd = new FormData();
@@ -790,53 +869,62 @@ export default function GridKdsPage() {
                         </rowFx.Form>
                       </div>
 
-                      {/* Linha extra com criado/decorrido + previsões */}
+                      {/* Linha extra com badge + criado/decorrido + previsões */}
                       <div className="px-2 py-1 text-xs text-slate-500 flex flex-wrap items-center gap-4">
-                        <span className="text-muted-foreground">Criado: </span>
-                        <span className="font-semibold">{fmtHHMM(o.createdAt as any)}</span>
+                        {/* Texto do status atual (não mexer) */}
+                        <span className="font-medium text-slate-600">
+                          {statusText}
+                        </span>
 
-                        {(() => {
-                          const createdMs = new Date(o.createdAt as any).getTime();
-                          const diffMin = Math.floor((nowMs - createdMs) / 60000);
+                        {/* ⛔️ Nada é calculado/exibido quando pendente OU quando não há novoPedidoAt */}
+                        {statusText !== "pendente" && npAt && (
+                          <>
+                            <span className="text-muted-foreground">Criado: </span>
+                            <span className="font-semibold">{fmtHHMM(npAt as any)}</span>
 
-                          let color = "text-slate-500";
-                          if (diffMin >= 60) color = "text-red-500";
-                          else if (diffMin >= 45) color = "text-orange-500";
+                            {(() => {
+                              const diffMin = Math.floor((nowMs - npAt.getTime()) / 60000);
+                              let color = "text-slate-500";
+                              if (diffMin >= 60) color = "text-red-500";
+                              else if (diffMin >= 45) color = "text-orange-500";
 
-                          return (
-                            <span>
-                              <span className="text-muted-foreground">Decorrido: </span>
-                              <span className={cn("font-semibold", color)}>
-                                {fmtElapsedHHMM(o.createdAt as any, nowMs)}
-                              </span>
-                            </span>
-                          );
-                        })()}
-
-                        {/* Previsões: Pronta às / Na casa às */}
-                        {(() => {
-                          const pred = predictions.get(o.id);
-                          if (!pred) return null;
-
-                          const isPickup = (o as any).takeAway === true && (o as any).hasMoto !== true;
-
-                          return (
-                            <>
-                              <span>
-                                <span className="text-muted-foreground">{isPickup ? "Retirar às: " : "Pronta às: "}</span>
-                                <span className="font-semibold">{fmtHHMM(pred.readyAtMs)}</span>
-                              </span>
-
-                              {!isPickup && pred.arriveAtMs && (
+                              return (
                                 <span>
-                                  <span className="text-muted-foreground">Na casa às: </span>
-                                  <span className="font-semibold">{fmtHHMM(pred.arriveAtMs)}</span>
+                                  <span className="text-muted-foreground">Decorrido: </span>
+                                  <span className={cn("font-semibold", color)}>
+                                    {fmtElapsedHHMM(npAt as any, nowMs)}
+                                  </span>
                                 </span>
-                              )}
-                            </>
-                          );
-                        })()}
+                              );
+                            })()}
+
+                            {/* Previsões: Pronta às / Na casa às */}
+                            {(() => {
+                              const pred = predictions.get(o.id);
+                              if (!pred) return null;
+
+                              const isPickup = (o as any).takeAway === true && (o as any).hasMoto !== true;
+
+                              return (
+                                <>
+                                  <span>
+                                    <span className="text-muted-foreground">{isPickup ? "Retirar às: " : "Pronta às: "}</span>
+                                    <span className="font-semibold">{fmtHHMM(pred.readyAtMs)}</span>
+                                  </span>
+
+                                  {!isPickup && pred.arriveAtMs && (
+                                    <span>
+                                      <span className="text-muted-foreground">Na casa às: </span>
+                                      <span className="font-semibold">{fmtHHMM(pred.arriveAtMs)}</span>
+                                    </span>
+                                  )}
+                                </>
+                              );
+                            })()}
+                          </>
+                        )}
                       </div>
+
                       <Separator className="my-1" />
                     </li>
                   );
