@@ -191,10 +191,10 @@ function OrderCard({
   const fetcher = useFetcher<{ ok: boolean; id: string; status: string }>();
   const current = STATUS_BY_ID[order.status ?? "novoPedido"] ?? ALL_STATUSES[0];
 
-  const hora = useMemo(() => fmtHHMM(order.createdAt ?? undefined), [order.createdAt]);
+  const hora = useMemo(() => fmtHHMM(order.novoPedidoAt ?? undefined), [order.createdAt]);
   const decorrido = useMemo(
-    () => fmtElapsedHHMM(order.createdAt ?? undefined, nowMs),
-    [order.createdAt, nowMs]
+    () => fmtElapsedHHMM(order.novoPedidoAt ?? undefined, nowMs),
+    [order.novoPedidoAt, nowMs]
   );
 
   function setStatus(nextId: string) {

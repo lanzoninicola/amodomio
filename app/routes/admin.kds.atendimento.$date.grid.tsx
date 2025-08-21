@@ -522,15 +522,24 @@ export default function GridKdsPage() {
           const riderCount = useMemo(() => getRiderCountByDate(dateStr), [dateStr]);
 
           const predictions = useMemo(() => {
-            const minimal: MinimalOrderRow[] = rowsDb.map((o) => ({
+            // Elegíveis: status ≠ pendente E novoPedidoAt definido
+            const eligible = rowsDb.filter((o) => {
+              const st = (o as any).status ?? "pendente";
+              const npAt = (o as any).novoPedidoAt ?? null;
+              return st !== "pendente" && !!npAt;
+            });
+
+            // Base temporal = novoPedidoAt
+            const minimal: MinimalOrderRow[] = eligible.map((o) => ({
               id: o.id,
-              createdAt: o.createdAt as any,
+              createdAt: (o as any).novoPedidoAt as any,
               finalizadoAt: (o as any).finalizadoAt ?? null,
               size: o.size,
               hasMoto: (o as any).hasMoto ?? null,
               takeAway: (o as any).takeAway ?? null,
               deliveryZoneId: (o as any).deliveryZoneId ?? null,
             }));
+
             const ready = predictReadyTimes(minimal, operatorCount, nowMs);
             const arrive = predictArrivalTimes(ready, riderCount, dzMap);
 
@@ -542,6 +551,7 @@ export default function GridKdsPage() {
             }
             return byId;
           }, [rowsDb, operatorCount, riderCount, dzMap, nowMs]);
+
 
           return (
             <div className="space-y-4">
@@ -677,6 +687,9 @@ export default function GridKdsPage() {
                   const [deliveryZoneId, setDeliveryZoneId] = useState<string | null | undefined>((o as any).deliveryZoneId ?? null);
                   // ✅ estado local para tamanhos, refletindo na UI
                   const [sizes, setSizes] = useState<SizeCounts>(sizeCounts);
+                  const statusText = (o as any).status ?? "pendente";
+                  const npAt = (o as any).novoPedidoAt ? new Date((o as any).novoPedidoAt as any) : null;
+
 
                   return (
                     <li key={o.id} className="flex flex-col">
@@ -817,7 +830,7 @@ export default function GridKdsPage() {
                           <DetailsDialog
                             open={detailsOpenId === o.id}
                             onOpenChange={(v) => !v && setDetailsOpenId(null)}
-                            createdAt={o.createdAt as any}
+                            createdAt={(o as any).novoPedidoAt as any}
                             nowMs={nowMs}
                             status={o.status ?? "pendente"}
                             onStatusChange={(value) => {
@@ -857,59 +870,61 @@ export default function GridKdsPage() {
                       </div>
 
                       {/* Linha extra com badge + criado/decorrido + previsões */}
-                      <div className=" text-xs text-slate-500 flex flex-wrap items-center gap-4">
-                        <span
-                          className="text-[10px] font-semibold text-emerald-700 "
-                        >
-                          {o.status}
+                      <div className="px-2 py-1 text-xs text-slate-500 flex flex-wrap items-center gap-4">
+                        {/* Texto do status atual (não mexer) */}
+                        <span className="font-medium text-slate-600">
+                          {statusText}
                         </span>
 
+                        {/* ⛔️ Nada é calculado/exibido quando pendente OU quando não há novoPedidoAt */}
+                        {statusText !== "pendente" && npAt && (
+                          <>
+                            <span className="text-muted-foreground">Criado: </span>
+                            <span className="font-semibold">{fmtHHMM(npAt as any)}</span>
 
-                        <span className="text-muted-foreground">Criado: </span>
-                        <span className="font-semibold">{fmtHHMM(o.createdAt as any)}</span>
+                            {(() => {
+                              const diffMin = Math.floor((nowMs - npAt.getTime()) / 60000);
+                              let color = "text-slate-500";
+                              if (diffMin >= 60) color = "text-red-500";
+                              else if (diffMin >= 45) color = "text-orange-500";
 
-                        {(() => {
-                          const createdMs = new Date(o.createdAt as any).getTime();
-                          const diffMin = Math.floor((nowMs - createdMs) / 60000);
-
-                          let color = "text-slate-500";
-                          if (diffMin >= 60) color = "text-red-500";
-                          else if (diffMin >= 45) color = "text-orange-500";
-
-                          return (
-                            <span>
-                              <span className="text-muted-foreground">Decorrido: </span>
-                              <span className={cn("font-semibold", color)}>
-                                {fmtElapsedHHMM(o.createdAt as any, nowMs)}
-                              </span>
-                            </span>
-                          );
-                        })()}
-
-                        {/* Previsões: Pronta às / Na casa às */}
-                        {(() => {
-                          const pred = predictions.get(o.id);
-                          if (!pred) return null;
-
-                          const isPickup = (o as any).takeAway === true && (o as any).hasMoto !== true;
-
-                          return (
-                            <>
-                              <span>
-                                <span className="text-muted-foreground">{isPickup ? "Retirar às: " : "Pronta às: "}</span>
-                                <span className="font-semibold">{fmtHHMM(pred.readyAtMs)}</span>
-                              </span>
-
-                              {!isPickup && pred.arriveAtMs && (
+                              return (
                                 <span>
-                                  <span className="text-muted-foreground">Na casa às: </span>
-                                  <span className="font-semibold">{fmtHHMM(pred.arriveAtMs)}</span>
+                                  <span className="text-muted-foreground">Decorrido: </span>
+                                  <span className={cn("font-semibold", color)}>
+                                    {fmtElapsedHHMM(npAt as any, nowMs)}
+                                  </span>
                                 </span>
-                              )}
-                            </>
-                          );
-                        })()}
+                              );
+                            })()}
+
+                            {/* Previsões: Pronta às / Na casa às */}
+                            {(() => {
+                              const pred = predictions.get(o.id);
+                              if (!pred) return null;
+
+                              const isPickup = (o as any).takeAway === true && (o as any).hasMoto !== true;
+
+                              return (
+                                <>
+                                  <span>
+                                    <span className="text-muted-foreground">{isPickup ? "Retirar às: " : "Pronta às: "}</span>
+                                    <span className="font-semibold">{fmtHHMM(pred.readyAtMs)}</span>
+                                  </span>
+
+                                  {!isPickup && pred.arriveAtMs && (
+                                    <span>
+                                      <span className="text-muted-foreground">Na casa às: </span>
+                                      <span className="font-semibold">{fmtHHMM(pred.arriveAtMs)}</span>
+                                    </span>
+                                  )}
+                                </>
+                              );
+                            })()}
+                          </>
+                        )}
                       </div>
+
                       <Separator className="my-1" />
                     </li>
                   );
