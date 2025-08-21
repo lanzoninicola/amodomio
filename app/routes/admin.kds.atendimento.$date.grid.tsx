@@ -231,7 +231,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         toCreate.push({
           orderId: header.id, dateInt, commandNumber: n, isVendaLivre: false,
           sortOrderIndex: sort, orderAmount: new Prisma.Decimal(0),
-          status: "novoPedido", channel: "", hasMoto: false, motoValue: new Prisma.Decimal(0), takeAway: false,
+          status: "pendente", channel: "", hasMoto: false, motoValue: new Prisma.Decimal(0), takeAway: false,
         } as any);
         sort += 1000;
       }
@@ -288,7 +288,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         toCreate.push({
           orderId: header.id, dateInt, commandNumber: n, isVendaLivre: false,
           sortOrderIndex: sort, orderAmount: new Prisma.Decimal(0),
-          status: "novoPedido", channel: "", hasMoto: false, motoValue: new Prisma.Decimal(0), takeAway: false,
+          status: "pendente", channel: "", hasMoto: false, motoValue: new Prisma.Decimal(0), takeAway: false,
         } as any);
         sort += 1000;
       }
@@ -312,7 +312,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
           isVendaLivre: true,
           sortOrderIndex: await getNextSort(),
           orderAmount: amount,
-          status: "pendente",
+          status: "finalizado",
           channel: "WHATS/PRESENCIAL/TELE",
           hasMoto: false,
           motoValue: new Prisma.Decimal(0),
