@@ -611,18 +611,19 @@ export default function GridKdsPage() {
                   const [hasMoto, setHasMoto] = useState<boolean>(!!o.hasMoto);
                   const [takeAway, setTakeAway] = useState<boolean>(!!(o as any).takeAway);
                   const [deliveryZoneId, setDeliveryZoneId] = useState<string | null | undefined>((o as any).deliveryZoneId ?? null);
+                  // ✅ estado local para tamanhos, refletindo na UI
+                  const [sizes, setSizes] = useState<SizeCounts>(sizeCounts);
 
                   return (
                     <li key={o.id} className="flex flex-col">
 
                       <div className={COLS + " bg-white px-1 border-b border-b-gray-50 pb-1"}>
-                        <rowFx.Form method="post" className="contents">
+                        <rowFx.Form method="post" className="contents" id={`row-form-${o.id}`}>
                           <input type="hidden" name="_action" value="saveRow" />
                           <input type="hidden" name="id" value={o.id} />
                           <input type="hidden" name="date" value={dateStr} />
                           {/* hidden real para deliveryZoneId */}
                           <input type="hidden" name="deliveryZoneId" value={deliveryZoneId ?? ""} />
-
 
                           {/* nº comanda */}
                           <div className="flex items-center justify-center">
@@ -638,16 +639,17 @@ export default function GridKdsPage() {
                           {/* Tamanhos */}
                           <div className="flex justify-center">
                             <div className="flex items-center gap-2">
-                              <input type="hidden" name="sizeF" value={sizeCounts.F} />
-                              <input type="hidden" name="sizeM" value={sizeCounts.M} />
-                              <input type="hidden" name="sizeP" value={sizeCounts.P} />
-                              <input type="hidden" name="sizeI" value={sizeCounts.I} />
-                              <input type="hidden" name="sizeFT" value={sizeCounts.FT} />
+                              <input type="hidden" name="sizeF" value={sizes.F} />
+                              <input type="hidden" name="sizeM" value={sizes.M} />
+                              <input type="hidden" name="sizeP" value={sizes.P} />
+                              <input type="hidden" name="sizeI" value={sizes.I} />
+                              <input type="hidden" name="sizeFT" value={sizes.FT} />
                               <div className={`origin-center ${readOnly ? "opacity-60 pointer-events-none" : "scale-[0.95]"}`}>
                                 <SizeSelector
-                                  counts={sizeCounts}
+                                  counts={sizes}
                                   onChange={(next) => {
-                                    const formEl = (document.activeElement as HTMLElement)?.closest("form");
+                                    setSizes(next);
+                                    const formEl = document.getElementById(`row-form-${o.id}`) as HTMLFormElement | null;
                                     if (!formEl) return;
                                     (formEl.querySelector('input[name="sizeF"]') as HTMLInputElement).value = String(next.F);
                                     (formEl.querySelector('input[name="sizeM"]') as HTMLInputElement).value = String(next.M);
