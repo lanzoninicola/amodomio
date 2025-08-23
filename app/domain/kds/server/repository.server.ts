@@ -40,13 +40,13 @@ export async function listByDate(dateInt: number) {
 }
 export async function getDailyAggregates(dateInt: number) {
   const agg = await prisma.kdsDailyOrderDetail.aggregate({
-    where: { dateInt },
+    where: { dateInt, status: { not: "pendente" } },
     _sum: { orderAmount: true, motoValue: true },
     _count: { _all: true },
   });
   const byChannel = await prisma.kdsDailyOrderDetail.groupBy({
     by: ["channel"],
-    where: { dateInt },
+    where: { dateInt, status: { not: "pendente" } },
     _sum: { orderAmount: true, motoValue: true },
     _count: { _all: true },
   });
