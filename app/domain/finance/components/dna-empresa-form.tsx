@@ -9,6 +9,7 @@ export type DnaValues = {
   taxaCartaoPerc?: number | string | null;
   impostoPerc?: number | string | null;
   wastePerc?: number | string | null;
+  custoVariavelPerc?: number | string | null; // NOVO: só persistência
   dnaPerc?: number | string | null; // somente leitura na UI
 };
 
@@ -34,7 +35,7 @@ export default function DnaEmpresaForm({
   }, [onAnyFieldChange]);
 
   return (
-    <div className={"mx-auto w-full max-w-3xl " + (className ?? "")}> {/* NÃO full-width */}
+    <div className={"mx-auto w-full max-w-3xl " + (className ?? "")}>
       <div className="space-y-1">
         <h3 className="font-semibold">DNA da Empresa</h3>
         <p className="text-sm text-muted-foreground">
@@ -120,6 +121,8 @@ export default function DnaEmpresaForm({
             />
           </Field>
         </Row>
+
+
       </div>
 
       <Separator className="my-4" />
@@ -138,6 +141,27 @@ export default function DnaEmpresaForm({
               className="w-full border-none bg-slate-100 font-semibold text-lg"
               readOnly={readOnlyCalculated}
               disabled={readOnlyCalculated}
+              onChange={handleChange}
+            />
+          </Field>
+        </Row>
+      </div>
+
+      <Separator className="my-6" />
+
+      <div className="space-y-3">
+
+        <p>Os valores abaixos não inficiam no calculo do DNA</p>
+
+        {/* NOVO: Custos Variável (%) — não participa do cálculo do DNA */}
+        <Row>
+          <Label>Custos Variável (%)</Label>
+          <Field error={errors?.custoVariavelPerc}>
+            <DecimalInput
+              name="custoVariavelPerc"
+              defaultValue={defaultValues.custoVariavelPerc ?? 0}
+              fractionDigits={2}
+              className="w-full"
               onChange={handleChange}
             />
           </Field>

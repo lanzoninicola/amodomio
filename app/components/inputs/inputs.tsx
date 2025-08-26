@@ -3,6 +3,7 @@ import { DecimalLike } from "~/domain/kds";
 
 
 type BaseProps = {
+  id?: string
   name: string;
   defaultValue?: DecimalLike | null;
   placeholder?: string;

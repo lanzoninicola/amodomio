@@ -50,6 +50,8 @@ export const action: ActionFunction = async ({ request }) => {
         const taxaCartaoPerc = Number(formData.get("taxaCartaoPerc") ?? 0);
         const impostoPerc = Number(formData.get("impostoPerc") ?? 0);
         const wastePerc = Number(formData.get("wastePerc") ?? 0);
+        const custoVariavelPerc = Number(formData.get("custoVariavelPerc") ?? 0);
+
 
         const errors: ActionData["errors"] = {};
         if (!Number.isFinite(faturamentoBrutoAmount) || faturamentoBrutoAmount <= 0) {
@@ -57,6 +59,10 @@ export const action: ActionFunction = async ({ request }) => {
         }
         if (!Number.isFinite(custoFixoAmount) || custoFixoAmount < 0) {
             errors.custoFixoAmount = "Informe um custo fixo válido (>= 0)";
+        }
+
+        if (!Number.isFinite(custoVariavelPerc) || custoVariavelPerc < 0) {
+            (errors as any).custoVariavelPerc = "Informe custos variáveis (%) válido (>= 0)";
         }
 
         if (Object.keys(errors).length > 0) {
@@ -67,6 +73,7 @@ export const action: ActionFunction = async ({ request }) => {
         const dnaPerc = toFixedNumber(custoFixoPerc) + toFixedNumber(taxaCartaoPerc) + toFixedNumber(impostoPerc) + toFixedNumber(wastePerc);
 
         const current = await prismaClient.dnaEmpresaSettings.findFirst();
+        // update/create: adicione custoVariavelPerc no data
         const saved = current
             ? await prismaClient.dnaEmpresaSettings.update({
                 where: { id: current.id },
@@ -77,6 +84,7 @@ export const action: ActionFunction = async ({ request }) => {
                     taxaCartaoPerc,
                     impostoPerc,
                     wastePerc,
+                    custoVariavelPerc, // <— NOVO: apenas persistência
                     dnaPerc,
                 },
             })
@@ -88,6 +96,7 @@ export const action: ActionFunction = async ({ request }) => {
                     taxaCartaoPerc,
                     impostoPerc,
                     wastePerc,
+                    custoVariavelPerc, // <— NOVO
                     dnaPerc,
                 },
             });
@@ -147,7 +156,9 @@ export default function AdminGerenciamentoCardapioDna() {
                             taxaCartaoPerc: settings[1]?.taxaCartaoPerc ?? 0,
                             impostoPerc: settings[1]?.impostoPerc ?? 0,
                             wastePerc: settings[1]?.wastePerc ?? 0,
+                            custoVariavelPerc: settings[1]?.custoVariavelPerc ?? 0,
                             dnaPerc: settings[1]?.dnaPerc ?? 0,
+
                         } as const;
 
                         return (
