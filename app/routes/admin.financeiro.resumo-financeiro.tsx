@@ -1,6 +1,6 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
-import { json, redirect } from "@remix-run/node";
-import { Form, useActionData, useLoaderData, useNavigation } from "@remix-run/react";
+import { json, defer } from "@remix-run/node";
+import { Form, useActionData, useLoaderData, useNavigation, Await } from "@remix-run/react";
 import * as React from "react";
 
 // shadcn/ui
@@ -27,10 +27,10 @@ type FinancialSummary = {
   receitaBrutaAmount: number;
   receitaLiquidaAmount: number;
   custoFixoAmount: number;
-  custoFixoPerc: number; // calculado na UI, mas persistimos também
+  custoFixoPerc: number; // calculado e persistido
   custoVariavelAmount: number;
-  custoVariavelPerc: number; // calculado na UI, mas persistimos também
-  pontoEquilibrioAmount: number; // calculado na UI, mas persistimos também
+  custoVariavelPerc: number; // calculado e persistido
+  pontoEquilibrioAmount: number; // calculado e persistido
   receitaBrutaDia01Perc: number; // qua
   receitaBrutaDia02Perc: number; // qui
   receitaBrutaDia03Perc: number; // sex
@@ -42,25 +42,22 @@ type FinancialSummary = {
 };
 
 // -------------------------------
-// Loader
+// Loader (com streaming via defer)
 // -------------------------------
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  // Padrão: pega o último resumo "válido" (isSnapshot = false)
-  // + lista de snapshots (isSnapshot = true)
-  const [current, snapshots] = await Promise.all([
-    prismaClient.financialSummary.findFirst({
-      where: { isSnapshot: false },
-      orderBy: { createdAt: "desc" },
-    }),
-    prismaClient.financialSummary.findMany({
-      where: { isSnapshot: true },
-      orderBy: { createdAt: "desc" },
-      take: 50,
-    }),
-  ]);
+  const currentPromise = await prismaClient.financialSummary.findFirst({
+    where: { isSnapshot: false },
+    orderBy: { createdAt: "desc" },
+  });
 
-  return json({ current, snapshots });
+  const snapshotsPromise = await prismaClient.financialSummary.findMany({
+    where: { isSnapshot: true },
+    orderBy: { createdAt: "desc" },
+    take: 50,
+  });
+
+  return defer({ current: currentPromise, snapshots: snapshotsPromise });
 }
 
 // -------------------------------
@@ -75,7 +72,6 @@ export async function action({ request }: ActionFunctionArgs) {
   const form = await request.formData();
   const intent = String(form.get("intent") || "save");
 
-  // Campos numéricos utilitários
   const num = (k: string, def = 0) => {
     const v = form.get(k);
     if (v == null || v === "") return def;
@@ -90,7 +86,6 @@ export async function action({ request }: ActionFunctionArgs) {
       return json({ ok: true, message: "Snapshot removido." } satisfies ActionData);
     }
 
-    // Coleta valores do formulário
     const receitaBase = String(form.get("receitaBase") || "LIQUIDA");
     const receitaBrutaAmount = num("receitaBrutaAmount");
     const receitaLiquidaAmount = num("receitaLiquidaAmount");
@@ -99,17 +94,12 @@ export async function action({ request }: ActionFunctionArgs) {
     const ticketMedio = num("ticketMedio");
 
     const receitaBaseValor = receitaBase === "LIQUIDA" ? receitaLiquidaAmount : receitaBrutaAmount;
-
-    // Calculados na action para persistência consistente
     const custoFixoPerc = receitaBaseValor > 0 ? custoFixoAmount / receitaBaseValor : 0;
     const custoVariavelPerc = receitaBaseValor > 0 ? custoVariavelAmount / receitaBaseValor : 0;
-
-    // Ponto de equilíbrio na base escolhida
     const pontoEquilibrioAmount = 1 - custoVariavelPerc !== 0
       ? custoFixoAmount / (1 - custoVariavelPerc)
       : 0;
 
-    // Percentuais de contribuição por DOW (bruta)
     const receitaBrutaDia01Perc = num("receitaBrutaDia01Perc");
     const receitaBrutaDia02Perc = num("receitaBrutaDia02Perc");
     const receitaBrutaDia03Perc = num("receitaBrutaDia03Perc");
@@ -133,7 +123,6 @@ export async function action({ request }: ActionFunctionArgs) {
     } as const;
 
     if (intent === "save") {
-      // Upsert do registro "válido" (isSnapshot=false)
       const existing = await prismaClient.financialSummary.findFirst({
         where: { isSnapshot: false },
         orderBy: { createdAt: "desc" },
@@ -168,36 +157,31 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 // -------------------------------
-// Client Page
+// Client Page (com React.Suspense + <Await>)
 // -------------------------------
 
 export default function AdminFinanceiroResumoFinanceiro() {
-  const { current, snapshots } = useLoaderData<typeof loader>() as {
-    current: Partial<FinancialSummary> | null;
-    snapshots: Partial<FinancialSummary>[];
-  };
+  const data = useLoaderData<typeof loader>();
   const action = useActionData<ActionData>();
   const nav = useNavigation();
 
   const [receitaBase, setReceitaBase] = React.useState<"LIQUIDA" | "BRUTA">("LIQUIDA");
 
-  // Local state (com fallback dos dados atuais)
+  // Estado local; será hidratado quando 'current' resolver
   const [state, setState] = React.useState(() => ({
-    receitaBrutaAmount: current?.receitaBrutaAmount ?? 0,
-    receitaLiquidaAmount: current?.receitaLiquidaAmount ?? 0,
-    custoFixoAmount: current?.custoFixoAmount ?? 0,
-    custoVariavelAmount: current?.custoVariavelAmount ?? 0,
-    // percentuais serão calculados
-    receitaBrutaDia01Perc: current?.receitaBrutaDia01Perc ?? 0.18,
-    receitaBrutaDia02Perc: current?.receitaBrutaDia02Perc ?? 0.19,
-    receitaBrutaDia03Perc: current?.receitaBrutaDia03Perc ?? 0.21,
-    receitaBrutaDia04Perc: current?.receitaBrutaDia04Perc ?? 0.22,
-    receitaBrutaDia05Perc: current?.receitaBrutaDia05Perc ?? 0.20,
-    ticketMedio: current?.ticketMedio ?? 0,
+    receitaBrutaAmount: 0,
+    receitaLiquidaAmount: 0,
+    custoFixoAmount: 0,
+    custoVariavelAmount: 0,
+    receitaBrutaDia01Perc: 0.18,
+    receitaBrutaDia02Perc: 0.19,
+    receitaBrutaDia03Perc: 0.21,
+    receitaBrutaDia04Perc: 0.22,
+    receitaBrutaDia05Perc: 0.20,
+    ticketMedio: 0,
     description: "",
   }));
 
-  // Derivados em client-side (só para exibição):
   const receitaBaseValor = receitaBase === "LIQUIDA" ? state.receitaLiquidaAmount : state.receitaBrutaAmount;
   const custoFixoPerc = receitaBaseValor > 0 ? state.custoFixoAmount / receitaBaseValor : 0;
   const custoVariavelPerc = receitaBaseValor > 0 ? state.custoVariavelAmount / receitaBaseValor : 0;
@@ -243,68 +227,95 @@ export default function AdminFinanceiroResumoFinanceiro() {
         <CardHeader>
           <CardTitle>Base & Totais</CardTitle>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label>Base para % dos custos</Label>
-            <Select value={receitaBase} onValueChange={(v) => setReceitaBase(v as any)} name="receitaBase">
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione a base" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="LIQUIDA">Receita Líquida</SelectItem>
-                <SelectItem value="BRUTA">Receita Bruta</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+        <React.Suspense fallback={<CardContent><div className="text-sm opacity-70">Carregando resumo atual...</div></CardContent>}>
+          <Await resolve={data.current}>
+            {(current: Partial<FinancialSummary> | null) => {
+              React.useEffect(() => {
+                if (current) {
+                  setState((s) => ({
+                    ...s,
+                    receitaBrutaAmount: current.receitaBrutaAmount ?? s.receitaBrutaAmount,
+                    receitaLiquidaAmount: current.receitaLiquidaAmount ?? s.receitaLiquidaAmount,
+                    custoFixoAmount: current.custoFixoAmount ?? s.custoFixoAmount,
+                    custoVariavelAmount: current.custoVariavelAmount ?? s.custoVariavelAmount,
+                    receitaBrutaDia01Perc: current.receitaBrutaDia01Perc ?? s.receitaBrutaDia01Perc,
+                    receitaBrutaDia02Perc: current.receitaBrutaDia02Perc ?? s.receitaBrutaDia02Perc,
+                    receitaBrutaDia03Perc: current.receitaBrutaDia03Perc ?? s.receitaBrutaDia03Perc,
+                    receitaBrutaDia04Perc: current.receitaBrutaDia04Perc ?? s.receitaBrutaDia04Perc,
+                    receitaBrutaDia05Perc: current.receitaBrutaDia05Perc ?? s.receitaBrutaDia05Perc,
+                    ticketMedio: current.ticketMedio ?? s.ticketMedio,
+                  }));
+                }
+                // eslint-disable-next-line react-hooks/exhaustive-deps
+              }, [current?.id]);
 
-          <div className="space-y-2">
-            <Label htmlFor="ticketMedio">Ticket médio (R$)</Label>
-            <Input id="ticketMedio" name="ticketMedio" inputMode="decimal" value={state.ticketMedio}
-              onChange={onNum("ticketMedio")} />
-          </div>
+              return (
+                <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Base para % dos custos</Label>
+                    <Select value={receitaBase} onValueChange={(v) => setReceitaBase(v as any)} name="receitaBase">
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione a base" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="LIQUIDA">Receita Líquida</SelectItem>
+                        <SelectItem value="BRUTA">Receita Bruta</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="receitaBrutaAmount">Receita Bruta (mês)</Label>
-            <Input id="receitaBrutaAmount" name="receitaBrutaAmount" inputMode="decimal" value={state.receitaBrutaAmount}
-              onChange={onNum("receitaBrutaAmount")} />
-          </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="ticketMedio">Ticket médio (R$)</Label>
+                    <Input id="ticketMedio" name="ticketMedio" inputMode="decimal" value={state.ticketMedio}
+                      onChange={onNum("ticketMedio")} />
+                  </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="receitaLiquidaAmount">Receita Líquida (mês)</Label>
-            <Input id="receitaLiquidaAmount" name="receitaLiquidaAmount" inputMode="decimal" value={state.receitaLiquidaAmount}
-              onChange={onNum("receitaLiquidaAmount")} />
-          </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="receitaBrutaAmount">Receita Bruta (mês)</Label>
+                    <Input id="receitaBrutaAmount" name="receitaBrutaAmount" inputMode="decimal" value={state.receitaBrutaAmount}
+                      onChange={onNum("receitaBrutaAmount")} />
+                  </div>
 
-          <Separator className="col-span-full" />
+                  <div className="space-y-2">
+                    <Label htmlFor="receitaLiquidaAmount">Receita Líquida (mês)</Label>
+                    <Input id="receitaLiquidaAmount" name="receitaLiquidaAmount" inputMode="decimal" value={state.receitaLiquidaAmount}
+                      onChange={onNum("receitaLiquidaAmount")} />
+                  </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="custoFixoAmount">Custo Fixo (R$)</Label>
-            <Input id="custoFixoAmount" name="custoFixoAmount" inputMode="decimal" value={state.custoFixoAmount}
-              onChange={onNum("custoFixoAmount")} />
-          </div>
-          <div className="space-y-2">
-            <Label>CF% (auto)</Label>
-            <Input readOnly value={(custoFixoPerc * 100).toFixed(2) + "%"} />
-            <input type="hidden" name="custoFixoPerc" value={custoFixoPerc} />
-          </div>
+                  <Separator className="col-span-full" />
 
-          <div className="space-y-2">
-            <Label htmlFor="custoVariavelAmount">Custo Variável (R$)</Label>
-            <Input id="custoVariavelAmount" name="custoVariavelAmount" inputMode="decimal" value={state.custoVariavelAmount}
-              onChange={onNum("custoVariavelAmount")} />
-          </div>
-          <div className="space-y-2">
-            <Label>CV% (auto)</Label>
-            <Input readOnly value={(custoVariavelPerc * 100).toFixed(2) + "%"} />
-            <input type="hidden" name="custoVariavelPerc" value={custoVariavelPerc} />
-          </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="custoFixoAmount">Custo Fixo (R$)</Label>
+                    <Input id="custoFixoAmount" name="custoFixoAmount" inputMode="decimal" value={state.custoFixoAmount}
+                      onChange={onNum("custoFixoAmount")} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>CF% (auto)</Label>
+                    <Input readOnly value={(custoFixoPerc * 100).toFixed(2) + "%"} />
+                    <input type="hidden" name="custoFixoPerc" value={custoFixoPerc} />
+                  </div>
 
-          <div className="space-y-2">
-            <Label>Ponto de equilíbrio (auto)</Label>
-            <Input readOnly value={pontoEquilibrioAmount.toFixed(2)} />
-            <input type="hidden" name="pontoEquilibrioAmount" value={pontoEquilibrioAmount} />
-          </div>
-        </CardContent>
+                  <div className="space-y-2">
+                    <Label htmlFor="custoVariavelAmount">Custo Variável (R$)</Label>
+                    <Input id="custoVariavelAmount" name="custoVariavelAmount" inputMode="decimal" value={state.custoVariavelAmount}
+                      onChange={onNum("custoVariavelAmount")} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>CV% (auto)</Label>
+                    <Input readOnly value={(custoVariavelPerc * 100).toFixed(2) + "%"} />
+                    <input type="hidden" name="custoVariavelPerc" value={custoVariavelPerc} />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Ponto de equilíbrio (auto)</Label>
+                    <Input readOnly value={pontoEquilibrioAmount.toFixed(2)} />
+                    <input type="hidden" name="pontoEquilibrioAmount" value={pontoEquilibrioAmount} />
+                  </div>
+                </CardContent>
+              );
+            }}
+          </Await>
+        </React.Suspense>
       </Card>
 
       <Card>
@@ -378,7 +389,6 @@ export default function AdminFinanceiroResumoFinanceiro() {
           </CardHeader>
           <CardContent>
             <Form method="post" className="space-y-4">
-              {/* Hidden espelhando o state (para a action recomputar e persistir) */}
               <input type="hidden" name="intent" value="save" />
               <input type="hidden" name="receitaBase" value={receitaBase} />
               <input type="hidden" name="receitaBrutaAmount" value={state.receitaBrutaAmount} />
@@ -407,7 +417,6 @@ export default function AdminFinanceiroResumoFinanceiro() {
           <CardContent>
             <Form method="post" className="space-y-3">
               <input type="hidden" name="intent" value="snapshot" />
-              {/* Repete espelhos do state */}
               <input type="hidden" name="receitaBase" value={receitaBase} />
               <input type="hidden" name="receitaBrutaAmount" value={state.receitaBrutaAmount} />
               <input type="hidden" name="receitaLiquidaAmount" value={state.receitaLiquidaAmount} />
@@ -438,26 +447,37 @@ export default function AdminFinanceiroResumoFinanceiro() {
         <CardHeader>
           <CardTitle>Snapshots</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          {snapshots.length === 0 && (
-            <p className="text-sm opacity-70">Nenhum snapshot ainda.</p>
-          )}
+        <React.Suspense fallback={<CardContent><div className="text-sm opacity-70">Carregando snapshots...</div></CardContent>}>
+          <Await resolve={data.snapshots}>
+            {(snapshots: Partial<FinancialSummary>[]) => {
 
-          {snapshots.map((s) => (
-            <div key={s.id} className="flex items-center justify-between rounded-xl border p-3">
-              <div className="space-y-1">
-                <div className="font-medium">{s.description || "Snapshot"}</div>
-                <div className="text-xs opacity-70">{new Date(s.createdAt!).toLocaleString()}</div>
-                <div className="text-xs opacity-70">PE: R$ {Number(s.pontoEquilibrioAmount ?? 0).toFixed(2)} · CF% {(Number(s.custoFixoPerc ?? 0) * 100).toFixed(1)}% · CV% {(Number(s.custoVariavelPerc ?? 0) * 100).toFixed(1)}%</div>
-              </div>
-              <Form method="post">
-                <input type="hidden" name="intent" value="deleteSnapshot" />
-                <input type="hidden" name="snapshotId" value={s.id} />
-                <Button variant="destructive" size="sm">Excluir</Button>
-              </Form>
-            </div>
-          ))}
-        </CardContent>
+              console.log({ snapshots })
+
+              return (
+                <CardContent className="space-y-4">
+                  {(!snapshots || snapshots.length === 0) && (
+                    <p className="text-sm opacity-70">Nenhum snapshot ainda.</p>
+                  )}
+
+                  {snapshots?.map((s) => (
+                    <div key={s.id} className="flex items-center justify-between rounded-xl border p-3">
+                      <div className="space-y-1">
+                        <div className="font-medium">{s.description || "Snapshot"}</div>
+                        <div className="text-xs opacity-70">{new Date(String(s.createdAt)).toLocaleString()}</div>
+                        <div className="text-xs opacity-70">PE: R$ {Number(s.pontoEquilibrioAmount ?? 0).toFixed(2)} · CF% {(Number(s.custoFixoPerc ?? 0) * 100).toFixed(1)}% · CV% {(Number(s.custoVariavelPerc ?? 0) * 100).toFixed(1)}%</div>
+                      </div>
+                      <Form method="post">
+                        <input type="hidden" name="intent" value="deleteSnapshot" />
+                        <input type="hidden" name="snapshotId" value={String(s.id)} />
+                        <Button variant="destructive" size="sm">Excluir</Button>
+                      </Form>
+                    </div>
+                  ))}
+                </CardContent>
+              )
+            }}
+          </Await>
+        </React.Suspense>
       </Card>
     </div>
   );
