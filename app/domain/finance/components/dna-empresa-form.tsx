@@ -1,9 +1,9 @@
 import { useCallback } from "react";
 import { DecimalInput } from "~/components/inputs/inputs";
 import { Separator } from "~/components/ui/separator";
-// Ajuste este import conforme seu projeto:
 
-type DnaValues = {
+// Tipagens
+export type DnaValues = {
   faturamentoBrutoAmount?: number | string | null;
   custoFixoAmount?: number | string | null;
   taxaCartaoPerc?: number | string | null;
@@ -19,6 +19,7 @@ type Props = {
   errors?: Errors;
   onAnyFieldChange?: () => void;
   readOnlyCalculated?: boolean; // controla o dnaPerc (readonly)
+  className?: string;
 };
 
 export default function DnaEmpresaForm({
@@ -26,13 +27,14 @@ export default function DnaEmpresaForm({
   errors,
   onAnyFieldChange,
   readOnlyCalculated = true,
+  className,
 }: Props) {
   const handleChange = useCallback(() => {
     onAnyFieldChange?.();
   }, [onAnyFieldChange]);
 
   return (
-    <div className="space-y-4">
+    <div className={"mx-auto w-full max-w-3xl " + (className ?? "")}> {/* NÃO full-width */}
       <div className="space-y-1">
         <h3 className="font-semibold">DNA da Empresa</h3>
         <p className="text-sm text-muted-foreground">
@@ -40,107 +42,129 @@ export default function DnaEmpresaForm({
         </p>
       </div>
 
-      <Separator />
+      <Separator className="my-4" />
 
-      {/* Valores (R$) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="space-y-1">
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">Faturamento Bruto (R$)</span>
-            <span className="text-xs">Média (ex.: 4–6 meses)</span>
-          </div>
-          <DecimalInput
-            name="faturamentoBrutoAmount"
-            defaultValue={defaultValues.faturamentoBrutoAmount ?? 0}
-            fractionDigits={2}
-            className="w-full"
-            onChange={handleChange}
-          />
-          {errors?.faturamentoBrutoAmount && (
-            <span className="text-red-500 text-xs">{errors.faturamentoBrutoAmount}</span>
-          )}
-        </div>
+      {/* --- BLOCO: Valores (R$) --- */}
+      <div className="space-y-3">
+        <Row>
+          <Label>
+            <div className="flex items-center gap-2">
+              <span>Faturamento Bruto (R$)</span>
+            </div>
+            <span className="block text-xs text-muted-foreground mt-1">Média (ex.: 4–6 meses)</span>
+          </Label>
+          <Field error={errors?.faturamentoBrutoAmount}>
+            <DecimalInput
+              name="faturamentoBrutoAmount"
+              defaultValue={defaultValues.faturamentoBrutoAmount ?? 0}
+              fractionDigits={2}
+              className="w-full"
+              onChange={handleChange}
+            />
+          </Field>
+        </Row>
 
-        <div className="space-y-1">
-          <span className="text-muted-foreground">Custos Fixos (R$)</span>
-          <DecimalInput
-            name="custoFixoAmount"
-            defaultValue={defaultValues.custoFixoAmount ?? 0}
-            fractionDigits={2}
-            className="w-full"
-            onChange={handleChange}
-          />
-          {errors?.custoFixoAmount && (
-            <span className="text-red-500 text-xs">{errors.custoFixoAmount}</span>
-          )}
-        </div>
+        <Row>
+          <Label>Custos Fixos (R$)</Label>
+          <Field error={errors?.custoFixoAmount}>
+            <DecimalInput
+              name="custoFixoAmount"
+              defaultValue={defaultValues.custoFixoAmount ?? 0}
+              fractionDigits={2}
+              className="w-full"
+              onChange={handleChange}
+            />
+          </Field>
+        </Row>
       </div>
 
-      <Separator />
+      <Separator className="my-4" />
 
-      {/* Percentuais (%) */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="space-y-1">
-          <span className="text-muted-foreground">Taxa de Cartão (%)</span>
-          <DecimalInput
-            name="taxaCartaoPerc"
-            defaultValue={defaultValues.taxaCartaoPerc ?? 0}
-            fractionDigits={2}
-            className="w-full"
-            onChange={handleChange}
-          />
-          {errors?.taxaCartaoPerc && (
-            <span className="text-red-500 text-xs">{errors.taxaCartaoPerc}</span>
-          )}
-        </div>
+      {/* --- BLOCO: Percentuais (%) --- */}
+      <div className="space-y-3">
+        <Row>
+          <Label>Taxa de Cartão (%)</Label>
+          <Field error={errors?.taxaCartaoPerc}>
+            <DecimalInput
+              name="taxaCartaoPerc"
+              defaultValue={defaultValues.taxaCartaoPerc ?? 0}
+              fractionDigits={2}
+              className="w-full"
+              onChange={handleChange}
+            />
+          </Field>
+        </Row>
 
-        <div className="space-y-1">
-          <span className="text-muted-foreground">Impostos (%)</span>
-          <DecimalInput
-            name="impostoPerc"
-            defaultValue={defaultValues.impostoPerc ?? 0}
-            fractionDigits={2}
-            className="w-full"
-            onChange={handleChange}
-          />
-          {errors?.impostoPerc && (
-            <span className="text-red-500 text-xs">{errors.impostoPerc}</span>
-          )}
-        </div>
+        <Row>
+          <Label>Impostos (%)</Label>
+          <Field error={errors?.impostoPerc}>
+            <DecimalInput
+              name="impostoPerc"
+              defaultValue={defaultValues.impostoPerc ?? 0}
+              fractionDigits={2}
+              className="w-full"
+              onChange={handleChange}
+            />
+          </Field>
+        </Row>
 
-        <div className="space-y-1">
-          <span className="text-muted-foreground">Perdas/Waste (%)</span>
-          <DecimalInput
-            name="wastePerc"
-            defaultValue={defaultValues.wastePerc ?? 0}
-            fractionDigits={2}
-            className="w-full"
-            onChange={handleChange}
-          />
-          {errors?.wastePerc && (
-            <span className="text-red-500 text-xs">{errors.wastePerc}</span>
-          )}
-        </div>
+        <Row>
+          <Label>Perdas/Waste (%)</Label>
+          <Field error={errors?.wastePerc}>
+            <DecimalInput
+              name="wastePerc"
+              defaultValue={defaultValues.wastePerc ?? 0}
+              fractionDigits={2}
+              className="w-full"
+              onChange={handleChange}
+            />
+          </Field>
+        </Row>
       </div>
 
-      <Separator />
+      <Separator className="my-4" />
 
-      {/* DNA (%) calculado - somente leitura por padrão */}
-      <div className="space-y-1">
-        <span className="text-muted-foreground font-semibold">DNA (%)</span>
-        <DecimalInput
-          name="dnaPerc"
-          defaultValue={defaultValues.dnaPerc ?? 0}
-          fractionDigits={2}
-          className="w-full border-none bg-slate-100 font-semibold text-lg"
-          readOnly={readOnlyCalculated}
-          disabled={readOnlyCalculated}
-          onChange={handleChange}
-        />
-        {errors?.dnaPerc && (
-          <span className="text-red-500 text-xs">{errors.dnaPerc}</span>
-        )}
+      {/* --- BLOCO: DNA (%) calculado --- */}
+      <div className="space-y-3">
+        <Row>
+          <Label>
+            <span className="font-semibold">DNA (%)</span>
+          </Label>
+          <Field error={errors?.dnaPerc}>
+            <DecimalInput
+              name="dnaPerc"
+              defaultValue={defaultValues.dnaPerc ?? 0}
+              fractionDigits={2}
+              className="w-full border-none bg-slate-100 font-semibold text-lg"
+              readOnly={readOnlyCalculated}
+              disabled={readOnlyCalculated}
+              onChange={handleChange}
+            />
+          </Field>
+        </Row>
       </div>
+    </div>
+  );
+}
+
+/* ----------------- Helpers de layout (2 colunas) ----------------- */
+function Row({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 md:items-center gap-2 md:gap-6">
+      {children}
+    </div>
+  );
+}
+
+function Label({ children }: { children: React.ReactNode }) {
+  return <div className="text-sm text-muted-foreground">{children}</div>;
+}
+
+function Field({ children, error }: { children: React.ReactNode; error?: string }) {
+  return (
+    <div>
+      {children}
+      {error && <span className="text-red-500 text-xs mt-1 block">{error}</span>}
     </div>
   );
 }
