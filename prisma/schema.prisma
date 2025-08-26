@@ -384,16 +384,17 @@ model DnaEmpresaSettings {
 }
 
 model DnaEmpresaSettingsSnapshot {
-  id                     String  @id @default(uuid())
+  id                     String   @id @default(uuid())
   description            String?
-  faturamentoBrutoAmount Float   @default(0) @map("faturamento_bruto_amount")
-  custoFixoAmount        Float   @default(0) @map("custo_fixo_amount")
-  custoFixoPerc          Float   @default(0) @map("custo_fixo_perc")
-  taxaCartaoPerc         Float   @default(0) @map("taxa_cartao_perc")
-  impostoPerc            Float   @default(0) @map("imposto_perc")
-  dnaPerc                Float   @default(0) @map("dna_perc")
-  wastePerc              Float   @default(0) @map("waste_perc")
-  custoVariavelPerc      Float   @default(0) @map("custo_variavel_perc")
+  faturamentoBrutoAmount Float    @default(0) @map("faturamento_bruto_amount")
+  custoFixoAmount        Float    @default(0) @map("custo_fixo_amount")
+  custoFixoPerc          Float    @default(0) @map("custo_fixo_perc")
+  taxaCartaoPerc         Float    @default(0) @map("taxa_cartao_perc")
+  impostoPerc            Float    @default(0) @map("imposto_perc")
+  dnaPerc                Float    @default(0) @map("dna_perc")
+  wastePerc              Float    @default(0) @map("waste_perc")
+  custoVariavelPerc      Float    @default(0) @map("custo_variavel_perc")
+  createdAt              DateTime @default(now()) @map("created_at")
 
   @@map("dna_empresa_settings_snapshot")
 }
