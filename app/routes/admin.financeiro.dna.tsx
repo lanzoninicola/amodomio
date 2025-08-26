@@ -1,4 +1,4 @@
-import { LoaderFunctionArgs, MetaFunction, defer, type ActionFunction } from "@remix-run/node";
+import { LoaderFunctionArgs, defer, type ActionFunction } from "@remix-run/node";
 import { useActionData, Form, Await, useLoaderData, Link } from "@remix-run/react";
 import { Suspense, useState, useTransition } from "react";
 
@@ -17,15 +17,11 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogT
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 
-// Titulo pagina
-export const meta: MetaFunction = () => {
-    return [{ title: "DNA | Gerenciamento" }];
-};
-
 export async function loader({ request }: LoaderFunctionArgs) {
-    const dnaEmpresaSettings = prismaIt(prismaClient.dnaEmpresaSettings.findFirst());
+    const dnaEmpresaSettings = prismaIt(prismaClient.dnaEmpresaSettings.findFirst({ where: { isSnapshot: false } }));
     const dnaEmpresaSnapshots = prismaIt(
-        prismaClient.dnaEmpresaSettingsSnapshot.findMany({
+        prismaClient.dnaEmpresaSettings.findMany({
+            where: { isSnapshot: true },
             orderBy: { createdAt: "desc" },
             take: 15,
         })
@@ -83,7 +79,7 @@ export const action: ActionFunction = async ({ request }) => {
             toFixedNumber(impostoPerc) +
             toFixedNumber(wastePerc);
 
-        const current = await prismaClient.dnaEmpresaSettings.findFirst();
+        const current = await prismaClient.dnaEmpresaSettings.findFirst({ where: { isSnapshot: false } });
         await (current
             ? prismaClient.dnaEmpresaSettings.update({
                 where: { id: current.id },
@@ -94,8 +90,9 @@ export const action: ActionFunction = async ({ request }) => {
                     taxaCartaoPerc,
                     impostoPerc,
                     wastePerc,
-                    custoVariavelPerc, // persistência apenas
+                    custoVariavelPerc,
                     dnaPerc,
+                    isSnapshot: false,
                 },
             })
             : prismaClient.dnaEmpresaSettings.create({
@@ -108,6 +105,7 @@ export const action: ActionFunction = async ({ request }) => {
                     wastePerc,
                     custoVariavelPerc,
                     dnaPerc,
+                    isSnapshot: false,
                 },
             }));
 
@@ -125,8 +123,9 @@ export const action: ActionFunction = async ({ request }) => {
         }
 
         // Modelo: DnaEmpresaSettingsSnapshot sem relation/settingsId
-        await prismaClient.dnaEmpresaSettingsSnapshot.create({
+        await prismaClient.dnaEmpresaSettings.create({
             data: {
+                isSnapshot: true,
                 description,
                 faturamentoBrutoAmount: Number(settings.faturamentoBrutoAmount ?? 0),
                 custoFixoAmount: Number(settings.custoFixoAmount ?? 0),
@@ -135,6 +134,7 @@ export const action: ActionFunction = async ({ request }) => {
                 impostoPerc: Number(settings.impostoPerc ?? 0),
                 dnaPerc: Number(settings.dnaPerc ?? 0),
                 wastePerc: Number(settings.wastePerc ?? 0),
+                custoVariavelAmount: Number((settings as any).custoVariavelAmount ?? 0),
                 custoVariavelPerc: Number((settings as any).custoVariavelPerc ?? 0),
             },
         });
@@ -145,14 +145,14 @@ export const action: ActionFunction = async ({ request }) => {
     return badRequest<ActionData>({ errors: { dnaPerc: "Ação inválida" } });
 };
 
-export default function AdminGerenciamentoDna() {
+export default function AdminFinanceiroDna() {
     const actionData = useActionData<ActionData>();
     const { dnaEmpresaSettings, dnaEmpresaSnapshots, redirectFrom } = useLoaderData<typeof loader>();
     const [isFormTouched, setIsFormTouched] = useState(false);
     const [isPending, startTransition] = useTransition();
 
     return (
-        <div className="space-y-6 mb-12">
+        <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <h2 className="text-xl font-semibold">DNA da Empresa</h2>
                 <Suspense fallback={<Loading cnContainer="h-24" />}>
@@ -234,42 +234,18 @@ export default function AdminGerenciamentoDna() {
                             return (
                                 <ul className="divide-y rounded-md border">
                                     {snaps.map((s: any) => (
-                                        <li key={s.id} className="grid grid-cols-1 md:grid-cols-12 p-3 text-sm">
-                                            <p className="md:col-span-2 font-semibold">{s.description ?? "-"}</p>
-                                            <div className="grid grid-cols-1 md:grid-cols-7 md:col-span-9">
-                                                <div className="flex flex-col">
-                                                    <span className="text-xs text-muted-foreground">Faturamento Bruto</span>
-                                                    <span className="opacity-80">{Number(s.faturamentoBrutoAmount ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
-                                                </div>
-                                                <div className="flex flex-col">
-                                                    <span className="text-xs text-muted-foreground">C. Fixo</span>
-                                                    <span className="opacity-80">{Number(s.custoFixoAmount ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
-                                                </div>
-                                                <div className="flex flex-col">
-                                                    <span className="text-xs text-muted-foreground">C. Fixo</span>
-                                                    <span className="opacity-80">{Number(s.custoFixoPerc ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</span>
-                                                </div>
-                                                <div className="flex flex-col">
-                                                    <span className="text-xs text-muted-foreground">Cartão</span>
-                                                    <span className="opacity-80">{Number(s.taxaCartaoPerc ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</span>
-                                                </div>
-                                                <div className="flex flex-col">
-                                                    <span className="text-xs text-muted-foreground">Waste</span>
-                                                    <span className="opacity-80">{Number(s.wastePerc ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</span>
-                                                </div>
-                                                <div className="flex flex-col">
-                                                    <span className="text-xs text-muted-foreground">DNA</span>
-                                                    <span className="opacity-80">{Number(s.dnaPerc ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</span>
-                                                </div>
-                                                <div className="flex flex-col">
-                                                    <span className="text-xs text-muted-foreground">C. Variavel</span>
-                                                    <span className="opacity-80">{Number(s.custoVariavelPerc ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</span>
-                                                </div>
-
-                                            </div>
-                                            <p className="md:col-span-1 md:text-right opacity-70">{new Date(s.createdAt).toLocaleString("pt-BR")}</p>
+                                        <li key={s.id} className="grid grid-cols-1 md:grid-cols-12 gap-2 p-3 text-sm">
+                                            <span className="md:col-span-3 font-medium">{s.description ?? "-"}</span>
+                                            <span className="opacity-80">Fatur.: {Number(s.faturamentoBrutoAmount ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
+                                            <span className="opacity-80">C.Fixo: {Number(s.custoFixoAmount ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
+                                            <span className="opacity-80">C.Fixo%: {Number(s.custoFixoPerc ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</span>
+                                            <span className="opacity-80">Cartão: {Number(s.taxaCartaoPerc ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</span>
+                                            <span className="opacity-80">Impostos: {Number(s.impostoPerc ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</span>
+                                            <span className="opacity-80">Waste: {Number(s.wastePerc ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</span>
+                                            <span className="opacity-80">Variáveis: {Number(s.custoVariavelPerc ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</span>
+                                            <span className="opacity-80 font-medium">DNA: {Number(s.dnaPerc ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</span>
+                                            <span className="md:col-start-12 md:text-right opacity-70">{new Date(s.createdAt).toLocaleString("pt-BR")}</span>
                                         </li>
-
                                     ))}
                                 </ul>
                             );

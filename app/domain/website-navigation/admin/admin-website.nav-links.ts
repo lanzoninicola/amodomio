@@ -123,13 +123,19 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
       items: [
         {
           title: "DNA",
-          href: "/admin/gerenciamento/dna",
+          href: "/admin/financeiro/dna",
           items: [],
           disabled: false,
         },
         {
-          title: "Custos itens cardápio delivery",
-          href: "/admin/gerenciamento/cardapio-items-costs",
+          title: "Resumo financeiro",
+          href: "/admin/financeiro/resumo-financeiro",
+          items: [],
+          disabled: false,
+        },
+        {
+          title: "Metas",
+          href: "/admin/financeiro/metas",
           items: [],
           disabled: false,
         },

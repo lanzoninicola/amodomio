@@ -370,20 +370,6 @@ model MenuItemCostVariation {
 }
 
 model DnaEmpresaSettings {
-  id                     String @id @default(uuid())
-  faturamentoBrutoAmount Float  @default(0) @map("faturamento_bruto_amount")
-  custoFixoAmount        Float  @default(0) @map("custo_fixo_amount")
-  custoFixoPerc          Float  @default(0) @map("custo_fixo_perc")
-  taxaCartaoPerc         Float  @default(0) @map("taxa_cartao_perc")
-  impostoPerc            Float  @default(0) @map("imposto_perc")
-  dnaPerc                Float  @default(0) @map("dna_perc")
-  wastePerc              Float  @default(0) @map("waste_perc")
-  custoVariavelPerc      Float  @default(0) @map("custo_variavel_perc")
-
-  @@map("dna_empresa_settings")
-}
-
-model DnaEmpresaSettingsSnapshot {
   id                     String   @id @default(uuid())
   description            String?
   faturamentoBrutoAmount Float    @default(0) @map("faturamento_bruto_amount")
@@ -393,10 +379,42 @@ model DnaEmpresaSettingsSnapshot {
   impostoPerc            Float    @default(0) @map("imposto_perc")
   dnaPerc                Float    @default(0) @map("dna_perc")
   wastePerc              Float    @default(0) @map("waste_perc")
+  custoVariavelAmount    Float    @default(0) @map("custo_variavel_amount")
   custoVariavelPerc      Float    @default(0) @map("custo_variavel_perc")
+  isSnapshot             Boolean  @default(false) @map("is_snapshot")
   createdAt              DateTime @default(now()) @map("created_at")
 
-  @@map("dna_empresa_settings_snapshot")
+  @@map("dna_empresa_settings")
+}
+
+model FinancialSummary {
+  id          String  @id @default(uuid())
+  // Snapshot/controle
+  isSnapshot  Boolean @default(false) @map("is_snapshot")
+  description String?
+
+  receitaBrutaAmount   Float @default(0) @map("receita_bruta_amount")
+  receitaLiquidaAmount Float @default(0) @map("receita_liquida_amount")
+  custoFixoAmount      Float @default(0) @map("custo_fixo_amount")
+  custoFixoPerc        Float @default(0) @map("custo_fixo_perc")
+  custoVariavelAmount  Float @default(0) @map("custo_variavel_amount")
+  custoVariavelPerc    Float @default(0) @map("custo_variavel_perc")
+
+  pontoEquilibrioAmount Float @default(0) @map("ponto_equilibrio_amount") /// meta mínima
+
+  // % contribuição da receita bruta por dia da semana
+  receitaBrutaDia01Perc Float @default(0) @map("receita_bruta_dia_01_perc") // Quarta
+  receitaBrutaDia02Perc Float @default(0) @map("receita_bruta_dia_02_perc") // Quinta
+  receitaBrutaDia03Perc Float @default(0) @map("receita_bruta_dia_03_perc") // Sexta
+  receitaBrutaDia04Perc Float @default(0) @map("receita_bruta_dia_04_perc") // Sábado
+  receitaBrutaDia05Perc Float @default(0) @map("receita_bruta_dia_05_perc") // Domingo
+
+  ticketMedio Float @default(0) @map("ticket_medio")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("financial_summaries")
 }
 
 model MenuItemSize {
