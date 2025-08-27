@@ -394,6 +394,11 @@ model FinancialSummary {
   description String?
 
   receitaBrutaAmount   Float @default(0) @map("receita_bruta_amount")
+  vendaCartaoPerc      Float @default(0) @map("venda_cartao_perc")
+  taxaCartaoPerc       Float @default(0) @map("taxa_cartao_perc")
+  taxaCartaoAmount     Float @default(0) @map("taxa_cartao_amount")
+  impostoPerc          Float @default(0) @map("imposto_perc")
+  impostoAmount        Float @default(0) @map("imposto_amount")
   receitaLiquidaAmount Float @default(0) @map("receita_liquida_amount")
   custoFixoAmount      Float @default(0) @map("custo_fixo_amount")
   custoFixoPerc        Float @default(0) @map("custo_fixo_perc")

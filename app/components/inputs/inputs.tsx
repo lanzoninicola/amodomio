@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import { DecimalLike } from "~/domain/kds";
 
 
@@ -9,7 +9,7 @@ type BaseProps = {
   placeholder?: string;
   className?: string;
   disabled?: boolean;
-  onChange?: (v: number) => void;
+  onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void
   readOnly?: boolean;
 };
 
