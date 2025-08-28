@@ -11,6 +11,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Loader2, Trash2 } from "lucide-react";
 import prismaClient from "~/lib/prisma/client.server";
 import { DecimalInput } from "~/components/inputs/inputs";
+import formatDecimalPlaces from "~/utils/format-decimal-places";
 
 // -------------------------------
 // Types
@@ -23,20 +24,19 @@ type FinancialSummary = {
   receitaBrutaAmount: number;
   impostoPerc: number
   impostoAmount: number
+  vendaCartaoAmount: number
   vendaCartaoPerc: number
   taxaCartaoPerc: number
   taxaCartaoAmount: number
+  vendaMarketplaceAmount: number
+  taxaMarketplacePerc: number
+  taxaMarketplaceAmount: number
   receitaLiquidaAmount: number;
   custoFixoAmount: number;
   custoFixoPerc: number;
   custoVariavelAmount: number;
   custoVariavelPerc: number;
   pontoEquilibrioAmount: number;
-  receitaBrutaDia01Perc: number;
-  receitaBrutaDia02Perc: number;
-  receitaBrutaDia03Perc: number;
-  receitaBrutaDia04Perc: number;
-  receitaBrutaDia05Perc: number;
   ticketMedio: number;
   createdAt: string;
   updatedAt: string;
@@ -90,7 +90,26 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     const receitaBrutaAmount = num("receitaBrutaAmount");
-    const receitaLiquidaAmount = num("receitaLiquidaAmount");
+    const rba = receitaBrutaAmount
+
+    // cartão
+    const vendaCartaoAmount = num("vendaCartaoAmount")
+    const vendaCartaoPerc = rba > 0 ? (vendaCartaoAmount / rba) * 100 : 0 // das tot vendas bruta quanta % em cartão
+    const taxaCartaoPerc = num("taxaCartaoPerc") // taxa de cartão em %
+    const receitaBrutaCartao = rba > 0 ? (rba * vendaCartaoPerc) / 100 : 0
+    const taxaCartaoAmount = receitaBrutaCartao > 0 ? (receitaBrutaCartao * taxaCartaoPerc) / 100 : 0
+
+    // imposto
+    const impostoPerc = num("impostoPerc") // das tot vendas bruta quanta % em imposto
+    const impostoAmount = rba > 0 ? (rba * impostoPerc) / 100 : 0
+
+    // marketplace
+    const vendaMarketplaceAmount = num("vendaMarketplaceAmount")
+    const taxaMarketplacePerc = num("taxaMarketplacePerc")
+    const taxaMarketplaceAmount = vendaCartaoAmount > 0 ? (vendaMarketplaceAmount * taxaMarketplacePerc) / 100 : 0
+
+    const receitaLiquidaAmount = rba > 0 ? rba - taxaCartaoAmount - impostoAmount - taxaMarketplaceAmount : 0
+
     const custoFixoAmount = num("custoFixoAmount");
     const custoVariavelAmount = num("custoVariavelAmount");
     const ticketMedio = num("ticketMedio");
@@ -101,26 +120,23 @@ export async function action({ request }: ActionFunctionArgs) {
     const custoVariavelPerc = receitaBaseValor > 0 ? custoVariavelAmount / receitaBaseValor : 0;
     const pontoEquilibrioAmount = 1 - custoVariavelPerc !== 0 ? custoFixoAmount / (1 - custoVariavelPerc) : 0;
 
-    // Percentuais por dia chegam como "percentual" (ex.: 20 => 0.2)
-    const receitaBrutaDia01Perc = num("receitaBrutaDia01Perc") / 100;
-    const receitaBrutaDia02Perc = num("receitaBrutaDia02Perc") / 100;
-    const receitaBrutaDia03Perc = num("receitaBrutaDia03Perc") / 100;
-    const receitaBrutaDia04Perc = num("receitaBrutaDia04Perc") / 100;
-    const receitaBrutaDia05Perc = num("receitaBrutaDia05Perc") / 100;
-
     const baseData = {
       receitaBrutaAmount,
+      vendaCartaoAmount,
+      vendaCartaoPerc,
+      taxaCartaoPerc,
+      taxaCartaoAmount,
+      impostoPerc,
+      impostoAmount,
+      vendaMarketplaceAmount,
+      taxaMarketplacePerc,
+      taxaMarketplaceAmount,
       receitaLiquidaAmount,
       custoFixoAmount,
       custoFixoPerc,
       custoVariavelAmount,
       custoVariavelPerc,
       pontoEquilibrioAmount,
-      receitaBrutaDia01Perc,
-      receitaBrutaDia02Perc,
-      receitaBrutaDia03Perc,
-      receitaBrutaDia04Perc,
-      receitaBrutaDia05Perc,
       ticketMedio,
     } as const;
 
@@ -229,119 +245,141 @@ export default function AdminFinanceiroResumoFinanceiro() {
 
                   <div className="grid grid-cols-1 gap-4">
 
-                    <h3 className="font-semibold text-muted-foreground">Calculo Receita Liquida</h3>
+                    <h3 className="font-semibold">Calculo Receita Liquida</h3>
 
                     <div className="grid grid-cols-2  gap-x-12">
                       <div className="flex flex-col gap-2">
 
                         <Row>
-                          <Label>% Venda no cartão</Label>
-                          <DecimalInput name="vendaCartaoPerc" defaultValue={(current?.vendaCartaoPerc ?? 0) * 100} fractionDigits={2} className="w-full" />
+                          <div className="flex flex-col gap-0">
+                            <Label>Venda no cartão (R$)</Label>
+                            <span className="text-[11px] text-muted-foreground">Media de receita pago em cartão</span>
+                          </div>
+                          <DecimalInput name="vendaCartaoAmount" defaultValue={(current?.vendaCartaoAmount ?? 0)} fractionDigits={2} className="w-full " />
                         </Row>
 
                         <Row>
-                          <Label>% Taxa Cartão</Label>
-                          <DecimalInput name="taxaCartaoPerc" defaultValue={(current?.taxaCartaoPerc ?? 0) * 100} fractionDigits={2} className="w-full" />
+                          <Label>Venda no cartão (%)</Label>
+                          <DecimalInput name="vendaCartaoPerc" defaultValue={(current?.vendaCartaoPerc ?? 0)} fractionDigits={2} className="w-full border-none disabled:bg-green-50 disabled:text-black" disabled />
+                        </Row>
+
+                        <Row>
+                          <Label>Taxa Cartão (%)</Label>
+                          <DecimalInput name="taxaCartaoPerc" defaultValue={(current?.taxaCartaoPerc ?? 0)} fractionDigits={2} className="w-full" />
                         </Row>
                         <Row>
                           <Label>Taxa Cartão (R$)</Label>
                           <DecimalInput name="taxaCartaAmount" defaultValue={current?.taxaCartaoAmount ?? 0} fractionDigits={2} className="w-full border-none disabled:bg-green-50 disabled:text-black" disabled />
                         </Row>
-                      </div>
 
-                      <div className="flex flex-col gap-2">
+                        <Separator />
+
                         <Row>
-                          <Label>% Imposto</Label>
-                          <DecimalInput name="impostoPerc" defaultValue={(current?.impostoPerc ?? 0) * 100} fractionDigits={2} className="w-full" />
+                          <Label>Imposto (%)</Label>
+                          <DecimalInput name="impostoPerc" defaultValue={(current?.impostoPerc ?? 0)} fractionDigits={2} className="w-full" />
                         </Row>
 
                         <Row>
                           <Label>Imposto (R$)</Label>
-                          <DecimalInput name="impostoAmount" defaultValue={(current?.impostoAmount ?? 0) * 100} fractionDigits={2} className="w-full border-none disabled:bg-green-50 disabled:text-black" disabled />
+                          <DecimalInput name="impostoAmount" defaultValue={(current?.impostoAmount ?? 0)} fractionDigits={2} className="w-full border-none disabled:bg-green-50 disabled:text-black" disabled />
                         </Row>
+
+                        <Separator />
+
+                        <Row>
+                          <div className="flex flex-col gap-0">
+                            <Label>Venda marketplace (R$)</Label>
+                            <span className="text-[11px] text-muted-foreground">Media de receita gerada pelo marketplace</span>
+                          </div>
+
+                          <DecimalInput name="vendaMarketplaceAmount" defaultValue={(current?.vendaMarketplaceAmount ?? 0)} fractionDigits={2} className="w-full " />
+                        </Row>
+
+                        <Row>
+                          <Label>Taxa Marketplace (%)</Label>
+                          <DecimalInput name="taxaMarketplacePerc" defaultValue={(current?.taxaMarketplacePerc ?? 0)} fractionDigits={2} className="w-full" />
+                        </Row>
+
+                        <Row>
+                          <Label>Taxa Marketplace (R$)</Label>
+                          <DecimalInput name="taxaMarketplaceAmount" defaultValue={(current?.taxaMarketplaceAmount ?? 0)} fractionDigits={2} className="w-full border-none disabled:bg-green-50 disabled:text-black" disabled />
+                        </Row>
+                      </div>
+                      <div className="flex flex-col gap-4 items-end h-full justify-center">
+                        <p className="text-lg font-semibold uppercase tracking-wider font-mono">Receita Líquida (R$)</p>
+                        <DecimalInput name="receitaLiquidaAmount" defaultValue={current?.receitaLiquidaAmount ?? 0} fractionDigits={2} className="w-full text-2xl font-mono" />
                       </div>
 
 
                     </div>
 
+
+                  </div>
+
+                  <Separator />
+
+                  <div className="flex flex-col space-y-4">
+                    <h3 className="font-semibold">Custos</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+                      <div className="flex flex-col gap-2">
+                        <Row>
+                          <Label>Custo Fixo (R$)</Label>
+                          <DecimalInput name="custoFixoAmount" defaultValue={current?.custoFixoAmount ?? 0} fractionDigits={2} className="w-full" />
+                        </Row>
+                        <Row>
+                          <Label>Custo Fixo (%)</Label>
+                          <DecimalInput name="custoFixoAmount" defaultValue={(current?.custoFixoPerc ?? 0) * 100} fractionDigits={2} className="w-full border-none disabled:bg-green-50 disabled:text-black" disabled={true} />
+                        </Row>
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <Row>
+                          <Label>Custo Variável (R$)</Label>
+                          <DecimalInput name="custoVariavelAmount" defaultValue={current?.custoVariavelAmount ?? 0} fractionDigits={2} className="w-full" />
+                        </Row>
+                        <Row>
+                          <Label>Custo Variável (%)</Label>
+                          <DecimalInput name="custoFixoAmount" defaultValue={(current?.custoVariavelPerc ?? 0) * 100} fractionDigits={2} className="w-full border-none disabled:bg-green-50 disabled:text-black" disabled={true} />
+                        </Row>
+                      </div>
+
+                    </div>
+
+                  </div>
+
+                  <Separator />
+
+                  <div className="grid grid-cols-2 gap-x-4">
                     <Row>
-                      <Label>Receita Líquida (R$)</Label>
-                      <DecimalInput name="receitaLiquidaAmount" defaultValue={current?.receitaLiquidaAmount ?? 0} fractionDigits={2} className="w-full" />
+                      <p className="text-lg font-semibold uppercase tracking-wider font-mono">Ponto de equilíbrio (R$)</p>
+                      <DecimalInput name="pontoEquilibrioAmount" defaultValue={current?.pontoEquilibrioAmount ?? 0}
+                        fractionDigits={2} className="w-full font-mono p-3 text-2xl" />
                     </Row>
-
+                    <p className="font-semibold">A empresa deve alcançar uma receita mínima de R$ {formatDecimalPlaces(current?.pontoEquilibrioAmount ?? 0, 2)} para cobrir todos os custos e atingir o ponto de equilíbrio (lucro zero).</p>
                   </div>
 
                   <Separator />
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="flex flex-col gap-2">
-                      <Row>
-                        <Label>Custo Fixo (R$)</Label>
-                        <DecimalInput name="custoFixoAmount" defaultValue={current?.custoFixoAmount ?? 0} fractionDigits={2} className="w-full" />
-                      </Row>
-                      <Row>
-                        <Label>Custo Fixo (%)</Label>
-                        <DecimalInput name="custoFixoAmount" defaultValue={current?.custoFixoPerc ?? 0} fractionDigits={2} className="w-full border-none disabled:bg-green-50 disabled:text-black" disabled={true} />
-                      </Row>
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      <Row>
-                        <Label>Custo Variável (R$)</Label>
-                        <DecimalInput name="custoVariavelAmount" defaultValue={current?.custoVariavelAmount ?? 0} fractionDigits={2} className="w-full" />
-                      </Row>
-                      <Row>
-                        <Label>Custo Variável (%)</Label>
-                        <DecimalInput name="custoFixoAmount" defaultValue={current?.custoVariavelPerc ?? 0} fractionDigits={2} className="w-full border-none disabled:bg-green-50 disabled:text-black" disabled={true} />
-                      </Row>
+
+
+
+
+                  <div className="flex justify-between">
+                    {action && (
+                      <Alert variant={action.ok ? "default" : "destructive"}>
+                        <AlertTitle>{action.ok ? "Sucesso" : "Erro"}</AlertTitle>
+                        <AlertDescription>{action.message}</AlertDescription>
+                      </Alert>
+                    )}
+                    <div className="flex justify-end w-full">
+                      <Button type="submit" disabled={saving} >
+                        {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Salvando...</> : "Salvar"}
+                      </Button>
                     </div>
 
                   </div>
 
-                  <Separator />
 
-                  <Row>
-                    <Label>Ponto de equilibrio</Label>
-                    <DecimalInput name="pontoEquilibrioAmount" defaultValue={current?.pontoEquilibrioAmount ?? 0} fractionDigits={2} className="w-full" />
-                  </Row>
-
-                  <Separator />
-
-                  <Row>
-                    <Label>% Participação Receita - Quarta</Label>
-                    <DecimalInput name="receitaBrutaDia01Perc" defaultValue={(current?.receitaBrutaDia01Perc ?? 0) * 100} fractionDigits={2} className="w-full" />
-                  </Row>
-                  <Row>
-                    <Label>% Participação Receita - Quinta</Label>
-                    <DecimalInput name="receitaBrutaDia02Perc" defaultValue={(current?.receitaBrutaDia02Perc ?? 0) * 100} fractionDigits={2} className="w-full" />
-                  </Row>
-                  <Row>
-                    <Label>% Participação Receita - Sexta</Label>
-                    <DecimalInput name="receitaBrutaDia03Perc" defaultValue={(current?.receitaBrutaDia03Perc ?? 0) * 100} fractionDigits={2} className="w-full" />
-                  </Row>
-                  <Row>
-                    <Label>% Participação Receita - Sábado</Label>
-                    <DecimalInput name="receitaBrutaDia04Perc" defaultValue={(current?.receitaBrutaDia04Perc ?? 0) * 100} fractionDigits={2} className="w-full" />
-                  </Row>
-                  <Row>
-                    <Label>% Participação Receita - Domingo</Label>
-                    <DecimalInput name="receitaBrutaDia05Perc" defaultValue={(current?.receitaBrutaDia05Perc ?? 0) * 100} fractionDigits={2} className="w-full" />
-                  </Row>
-
-
-
-                  <div className="flex justify-end">
-                    <Button type="submit" disabled={saving}>
-                      {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Salvando...</> : "Salvar"}
-                    </Button>
-
-                  </div>
-
-                  {action && (
-                    <Alert variant={action.ok ? "default" : "destructive"}>
-                      <AlertTitle>{action.ok ? "Sucesso" : "Erro"}</AlertTitle>
-                      <AlertDescription>{action.message}</AlertDescription>
-                    </Alert>
-                  )}
                 </div>
               );
             }}

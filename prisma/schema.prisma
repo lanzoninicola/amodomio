@@ -393,26 +393,23 @@ model FinancialSummary {
   isSnapshot  Boolean @default(false) @map("is_snapshot")
   description String?
 
-  receitaBrutaAmount   Float @default(0) @map("receita_bruta_amount")
-  vendaCartaoPerc      Float @default(0) @map("venda_cartao_perc")
-  taxaCartaoPerc       Float @default(0) @map("taxa_cartao_perc")
-  taxaCartaoAmount     Float @default(0) @map("taxa_cartao_amount")
-  impostoPerc          Float @default(0) @map("imposto_perc")
-  impostoAmount        Float @default(0) @map("imposto_amount")
-  receitaLiquidaAmount Float @default(0) @map("receita_liquida_amount")
-  custoFixoAmount      Float @default(0) @map("custo_fixo_amount")
-  custoFixoPerc        Float @default(0) @map("custo_fixo_perc")
-  custoVariavelAmount  Float @default(0) @map("custo_variavel_amount")
-  custoVariavelPerc    Float @default(0) @map("custo_variavel_perc")
+  receitaBrutaAmount     Float @default(0) @map("receita_bruta_amount")
+  vendaCartaoAmount      Float @default(0) @map("venda_cartao_amount")
+  vendaCartaoPerc        Float @default(0) @map("venda_cartao_perc")
+  taxaCartaoPerc         Float @default(0) @map("taxa_cartao_perc")
+  taxaCartaoAmount       Float @default(0) @map("taxa_cartao_amount")
+  impostoPerc            Float @default(0) @map("imposto_perc")
+  impostoAmount          Float @default(0) @map("imposto_amount")
+  vendaMarketplaceAmount Float @default(0) @map("venda_marketplace_amount")
+  taxaMarketplacePerc    Float @default(0) @map("taxa_marketplace_perc")
+  taxaMarketplaceAmount  Float @default(0) @map("taxa_marketplace_amount")
+  receitaLiquidaAmount   Float @default(0) @map("receita_liquida_amount")
+  custoFixoAmount        Float @default(0) @map("custo_fixo_amount")
+  custoFixoPerc          Float @default(0) @map("custo_fixo_perc")
+  custoVariavelAmount    Float @default(0) @map("custo_variavel_amount")
+  custoVariavelPerc      Float @default(0) @map("custo_variavel_perc")
 
   pontoEquilibrioAmount Float @default(0) @map("ponto_equilibrio_amount") /// meta mínima
-
-  // % contribuição da receita bruta por dia da semana
-  receitaBrutaDia01Perc Float @default(0) @map("receita_bruta_dia_01_perc") // Quarta
-  receitaBrutaDia02Perc Float @default(0) @map("receita_bruta_dia_02_perc") // Quinta
-  receitaBrutaDia03Perc Float @default(0) @map("receita_bruta_dia_03_perc") // Sexta
-  receitaBrutaDia04Perc Float @default(0) @map("receita_bruta_dia_04_perc") // Sábado
-  receitaBrutaDia05Perc Float @default(0) @map("receita_bruta_dia_05_perc") // Domingo
 
   ticketMedio Float @default(0) @map("ticket_medio")
 
@@ -420,6 +417,39 @@ model FinancialSummary {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("financial_summaries")
+}
+
+model FinancialDailyGoal {
+  id          String  @id @default(uuid())
+  // Snapshot/controle
+  isSnapshot  Boolean @default(false) @map("is_snapshot")
+  description String?
+
+  targetProfitPerc Float @default(0) @map("target_profit_perc")
+
+  // % contribuição da receita bruta por dia da semana
+  participacaoDia01Perc Float @default(0) @map("participacao_dia_01_perc") // Quarta
+  participacaoDia02Perc Float @default(0) @map("participacao_dia_02_perc") // Quinta
+  participacaoDia03Perc Float @default(0) @map("participacao_dia_03_perc") // Sexta
+  participacaoDia04Perc Float @default(0) @map("participacao_dia_04_perc") // Sábado
+  participacaoDia05Perc Float @default(0) @map("participacao_dia_05_perc") // Domingo
+
+  minimumGoalDia01Amount Float @default(0) @map("minimum_goal_dia_01_amount")
+  minimumGoalDia02Amount Float @default(0) @map("minimum_goal_dia_02_amount")
+  minimumGoalDia03Amount Float @default(0) @map("minimum_goal_dia_03_amount")
+  minimumGoalDia04Amount Float @default(0) @map("minimum_goal_dia_04_amount")
+  minimumGoalDia05Amount Float @default(0) @map("minimum_goal_dia_05_amount")
+
+  targetProfitDia01Amount Float @default(0) @map("target_profit_dia_01_amount")
+  targetProfitDia02Amount Float @default(0) @map("target_profit_dia_02_amount")
+  targetProfitDia03Amount Float @default(0) @map("target_profit_dia_03_amount")
+  targetProfitDia04Amount Float @default(0) @map("target_profit_dia_04_amount")
+  targetProfitDia05Amount Float @default(0) @map("target_profit_dia_05_amount")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("financial_daily_goals")
 }
 
 model MenuItemSize {
