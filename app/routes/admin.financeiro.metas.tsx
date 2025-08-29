@@ -1,5 +1,4 @@
 // app/routes/admin.financeiro.metas.tsx
-
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { defer, json } from "@remix-run/node";
 import { Await, Form, useActionData, useLoaderData, useNavigation } from "@remix-run/react";
@@ -15,9 +14,9 @@ import { Loader2 } from "lucide-react";
 import prismaClient from "~/lib/prisma/client.server";
 import { DecimalInput } from "~/components/inputs/inputs";
 
-// ---------------------------------
-// Tipos
-// ---------------------------------
+/* ---------------------------------
+   Tipos
+--------------------------------- */
 type FinancialSummary = {
   id: string;
   isSnapshot: boolean;
@@ -26,6 +25,7 @@ type FinancialSummary = {
 
 type FinancialDailyGoal = {
   id: string;
+  isActive: boolean;
 
   targetProfitPerc: number;
 
@@ -51,9 +51,18 @@ type FinancialDailyGoal = {
   updatedAt: string;
 };
 
-// ---------------------------------
-// Loader (defer)
-// ---------------------------------
+type FinancialDailyGoalSettings = {
+  targetProfitPerc: number;
+  participacaoDia01Perc: number;
+  participacaoDia02Perc: number;
+  participacaoDia03Perc: number;
+  participacaoDia04Perc: number;
+  participacaoDia05Perc: number;
+};
+
+/* ---------------------------------
+   Loader (defer)
+--------------------------------- */
 export async function loader({ request }: LoaderFunctionArgs) {
   const summaryPromise = prismaClient.financialSummary.findFirst({
     where: { isSnapshot: false },
@@ -61,19 +70,27 @@ export async function loader({ request }: LoaderFunctionArgs) {
     select: { id: true, isSnapshot: true, pontoEquilibrioAmount: true },
   });
 
+  // pega APENAS o goal ativo (se houver)
   const goalPromise = prismaClient.financialDailyGoal.findFirst({
+    where: { isActive: true },
     orderBy: { createdAt: "desc" },
+  });
+
+  // configurações padrão
+  const settingsPromise = prismaClient.financialDailyGoalSettings.findFirst({
+    orderBy: { id: "desc" },
   });
 
   return defer({
     summary: summaryPromise,
     goal: goalPromise,
+    settings: settingsPromise,
   });
 }
 
-// ---------------------------------
-// Action
-// ---------------------------------
+/* ---------------------------------
+   Action
+--------------------------------- */
 type ActionData = { ok: boolean; message: string };
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -95,30 +112,22 @@ export async function action({ request }: ActionFunctionArgs) {
     const p4 = num("participacaoDia04Perc");
     const p5 = num("participacaoDia05Perc");
 
-    // Obtém ponto de equilíbrio corrente
+    // Obtém ponto de equilíbrio corrente e id do summary
     const summary = await prismaClient.financialSummary.findFirst({
       where: { isSnapshot: false },
       orderBy: { createdAt: "desc" },
-      select: { pontoEquilibrioAmount: true },
+      select: { id: true, pontoEquilibrioAmount: true },
     });
 
     const pe = summary?.pontoEquilibrioAmount ?? 0;
 
     // Cálculos
-    const min1 = pe * (p1 / 100);
-    const min2 = pe * (p2 / 100);
-    const min3 = pe * (p3 / 100);
-    const min4 = pe * (p4 / 100);
-    const min5 = pe * (p5 / 100);
-
-    const mult = 1 + (targetProfitPerc / 100);
-    const tgt1 = min1 * mult;
-    const tgt2 = min2 * mult;
-    const tgt3 = min3 * mult;
-    const tgt4 = min4 * mult;
-    const tgt5 = min5 * mult;
+    const min = (perc: number) => pe * (perc / 100);
+    const mult = 1 + targetProfitPerc / 100;
 
     const data = {
+      financialSummaryId: summary?.id ?? undefined,
+      isActive: true,
       targetProfitPerc,
 
       participacaoDia01Perc: p1,
@@ -127,35 +136,42 @@ export async function action({ request }: ActionFunctionArgs) {
       participacaoDia04Perc: p4,
       participacaoDia05Perc: p5,
 
-      minimumGoalDia01Amount: min1,
-      minimumGoalDia02Amount: min2,
-      minimumGoalDia03Amount: min3,
-      minimumGoalDia04Amount: min4,
-      minimumGoalDia05Amount: min5,
+      minimumGoalDia01Amount: min(p1),
+      minimumGoalDia02Amount: min(p2),
+      minimumGoalDia03Amount: min(p3),
+      minimumGoalDia04Amount: min(p4),
+      minimumGoalDia05Amount: min(p5),
 
-      targetProfitDia01Amount: tgt1,
-      targetProfitDia02Amount: tgt2,
-      targetProfitDia03Amount: tgt3,
-      targetProfitDia04Amount: tgt4,
-      targetProfitDia05Amount: tgt5,
+      targetProfitDia01Amount: min(p1) * mult,
+      targetProfitDia02Amount: min(p2) * mult,
+      targetProfitDia03Amount: min(p3) * mult,
+      targetProfitDia04Amount: min(p4) * mult,
+      targetProfitDia05Amount: min(p5) * mult,
     };
 
-    // Upsert simples (mantém um único registro “corrente”)
-    const existing = await prismaClient.financialDailyGoal.findFirst({
+    // Arquiva o goal ativo (se houver) e cria um novo ativo
+    const existingActive = await prismaClient.financialDailyGoal.findFirst({
+      where: { isActive: true },
       orderBy: { createdAt: "desc" },
       select: { id: true },
     });
 
-    if (existing) {
+    if (existingActive) {
       await prismaClient.financialDailyGoal.update({
-        where: { id: existing.id },
-        data,
+        where: { id: existingActive.id },
+        data: { isActive: false },
       });
-    } else {
-      await prismaClient.financialDailyGoal.create({ data });
     }
 
-    return json({ ok: true, message: "Metas diárias salvas." });
+    await prismaClient.financialDailyGoal.create({ data });
+
+    return json({
+      ok: true,
+      message:
+        existingActive
+          ? "Já existia uma meta ativa: ela foi arquivada e uma nova foi criada."
+          : "Metas diárias criadas e ativadas.",
+    });
   } catch (err) {
     console.error(err);
     return json({ ok: false, message: "Erro ao salvar as metas diárias." });
@@ -174,9 +190,9 @@ function Label({ children }: { children: React.ReactNode }) {
   return <div className="text-sm text-muted-foreground">{children}</div>;
 }
 
-// ---------------------------------
-// Client Page
-// ---------------------------------
+/* ---------------------------------
+   Client Page
+--------------------------------- */
 export default function AdminFinanceiroMetas() {
   const data = useLoaderData<typeof loader>();
   const action = useActionData<ActionData>();
@@ -197,21 +213,35 @@ export default function AdminFinanceiroMetas() {
 
       <Form method="post" className="space-y-6">
         <React.Suspense fallback={<p>Carregando…</p>}>
-          <Await resolve={Promise.all([data.summary, data.goal])}>
-            {([summary, goal]: [Partial<FinancialSummary> | null, Partial<FinancialDailyGoal> | null]) => {
+          <Await resolve={Promise.all([data.summary, data.goal, data.settings])}>
+            {([summary, goal, settings]: [Partial<FinancialSummary> | null, Partial<FinancialDailyGoal> | null, Partial<FinancialDailyGoalSettings> | null]) => {
               const pe = summary?.pontoEquilibrioAmount ?? 0;
 
-              // estados locais para somatório (apenas exibição/UX)
-              const [p1, setP1] = React.useState<number>(goal?.participacaoDia01Perc ?? 0);
-              const [p2, setP2] = React.useState<number>(goal?.participacaoDia02Perc ?? 0);
-              const [p3, setP3] = React.useState<number>(goal?.participacaoDia03Perc ?? 0);
-              const [p4, setP4] = React.useState<number>(goal?.participacaoDia04Perc ?? 0);
-              const [p5, setP5] = React.useState<number>(goal?.participacaoDia05Perc ?? 0);
-              const [tgt, setTgt] = React.useState<number>(goal?.targetProfitPerc ?? 0);
+              // estados locais (preferem goal ativo; se não houver, caem no settings)
+              const [p1, setP1] = React.useState<number>(goal?.participacaoDia01Perc ?? settings?.participacaoDia01Perc ?? 0);
+              const [p2, setP2] = React.useState<number>(goal?.participacaoDia02Perc ?? settings?.participacaoDia02Perc ?? 0);
+              const [p3, setP3] = React.useState<number>(goal?.participacaoDia03Perc ?? settings?.participacaoDia03Perc ?? 0);
+              const [p4, setP4] = React.useState<number>(goal?.participacaoDia04Perc ?? settings?.participacaoDia04Perc ?? 0);
+              const [p5, setP5] = React.useState<number>(goal?.participacaoDia05Perc ?? settings?.participacaoDia05Perc ?? 0);
+              const [tgt, setTgt] = React.useState<number>(goal?.targetProfitPerc ?? settings?.targetProfitPerc ?? 0);
 
               const sum = p1 + p2 + p3 + p4 + p5;
+              const mult = 1 + tgt / 100;
+              const calcMin = (perc: number) => pe * (perc / 100);
+              const calcTgt = (perc: number) => calcMin(perc) * mult;
 
-              // Função helper para montar um bloco de DIA
+              // botão para aplicar os settings “como estão” (UX)
+              const aplicarDefaults = () => {
+                if (!settings) return;
+                setP1(settings.participacaoDia01Perc ?? 0);
+                setP2(settings.participacaoDia02Perc ?? 0);
+                setP3(settings.participacaoDia03Perc ?? 0);
+                setP4(settings.participacaoDia04Perc ?? 0);
+                setP5(settings.participacaoDia05Perc ?? 0);
+                setTgt(settings.targetProfitPerc ?? 0);
+              };
+
+              // Componente de cartão por DIA
               const DayCard = (opts: {
                 label: string;
                 namePerc: string;
@@ -269,17 +299,18 @@ export default function AdminFinanceiroMetas() {
                 </Card>
               );
 
-              // Pré-calcula exibição (somente leitura na UI; o valor oficial é recalculado no action)
-              const mult = 1 + tgt / 100;
-              const calcMin = (perc: number) => pe * (perc / 100);
-              const calcTgt = (perc: number) => calcMin(perc) * mult;
-
               return (
                 <div className="space-y-6">
                   <div className="rounded-md bg-muted p-4 text-sm">
                     <p>
                       Ponto de equilíbrio corrente: <span className="font-mono">R$ {pe.toFixed(2)}</span>
                     </p>
+                    {settings && (
+                      <div className="mt-2 text-xs opacity-80">
+                        <span>Há configurações padrão salvas. </span>
+                        <button type="button" onClick={aplicarDefaults} className="underline">Aplicar configurações padrão</button>
+                      </div>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -287,7 +318,7 @@ export default function AdminFinanceiroMetas() {
                       <Label>Lucro-alvo sobre o mínimo (%)</Label>
                       <DecimalInput
                         name="targetProfitPerc"
-                        defaultValue={goal?.targetProfitPerc ?? 0}
+                        defaultValue={tgt}
                         fractionDigits={2}
                         className="w-full"
                         onChange={(e: any) => {
@@ -313,7 +344,7 @@ export default function AdminFinanceiroMetas() {
                     {DayCard({
                       label: "DIA 1 (Quarta)",
                       namePerc: "participacaoDia01Perc",
-                      defaultPerc: goal?.participacaoDia01Perc ?? 0,
+                      defaultPerc: p1,
                       minAmount: calcMin(p1),
                       tgtAmount: calcTgt(p1),
                       onPercChange: setP1,
@@ -321,7 +352,7 @@ export default function AdminFinanceiroMetas() {
                     {DayCard({
                       label: "DIA 2 (Quinta)",
                       namePerc: "participacaoDia02Perc",
-                      defaultPerc: goal?.participacaoDia02Perc ?? 0,
+                      defaultPerc: p2,
                       minAmount: calcMin(p2),
                       tgtAmount: calcTgt(p2),
                       onPercChange: setP2,
@@ -329,7 +360,7 @@ export default function AdminFinanceiroMetas() {
                     {DayCard({
                       label: "DIA 3 (Sexta)",
                       namePerc: "participacaoDia03Perc",
-                      defaultPerc: goal?.participacaoDia03Perc ?? 0,
+                      defaultPerc: p3,
                       minAmount: calcMin(p3),
                       tgtAmount: calcTgt(p3),
                       onPercChange: setP3,
@@ -337,7 +368,7 @@ export default function AdminFinanceiroMetas() {
                     {DayCard({
                       label: "DIA 4 (Sábado)",
                       namePerc: "participacaoDia04Perc",
-                      defaultPerc: goal?.participacaoDia04Perc ?? 0,
+                      defaultPerc: p4,
                       minAmount: calcMin(p4),
                       tgtAmount: calcTgt(p4),
                       onPercChange: setP4,
@@ -345,7 +376,7 @@ export default function AdminFinanceiroMetas() {
                     {DayCard({
                       label: "DIA 5 (Domingo)",
                       namePerc: "participacaoDia05Perc",
-                      defaultPerc: goal?.participacaoDia05Perc ?? 0,
+                      defaultPerc: p5,
                       minAmount: calcMin(p5),
                       tgtAmount: calcTgt(p5),
                       onPercChange: setP5,

@@ -1,3 +1,4 @@
+// app/routes/admin.financeiro.resumo-financeiro.tsx
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { defer, json } from "@remix-run/node";
 import { Await, Form, useActionData, useLoaderData, useNavigation } from "@remix-run/react";
@@ -13,24 +14,23 @@ import prismaClient from "~/lib/prisma/client.server";
 import { DecimalInput } from "~/components/inputs/inputs";
 import formatDecimalPlaces from "~/utils/format-decimal-places";
 
-// -------------------------------
-// Types
-// -------------------------------
-
+/* -------------------------------
+   Types
+------------------------------- */
 type FinancialSummary = {
   id: string;
   isSnapshot: boolean;
   description: string | null;
   receitaBrutaAmount: number;
-  impostoPerc: number
-  impostoAmount: number
-  vendaCartaoAmount: number
-  vendaCartaoPerc: number
-  taxaCartaoPerc: number
-  taxaCartaoAmount: number
-  vendaMarketplaceAmount: number
-  taxaMarketplacePerc: number
-  taxaMarketplaceAmount: number
+  impostoPerc: number;
+  impostoAmount: number;
+  vendaCartaoAmount: number;
+  vendaCartaoPerc: number;
+  taxaCartaoPerc: number;
+  taxaCartaoAmount: number;
+  vendaMarketplaceAmount: number;
+  taxaMarketplacePerc: number;
+  taxaMarketplaceAmount: number;
   receitaLiquidaAmount: number;
   custoFixoAmount: number;
   custoFixoPerc: number;
@@ -42,10 +42,9 @@ type FinancialSummary = {
   updatedAt: string;
 };
 
-// -------------------------------
-// Loader com defer
-// -------------------------------
-
+/* -------------------------------
+   Loader com defer
+------------------------------- */
 export async function loader({ request }: LoaderFunctionArgs) {
   const currentPromise = await prismaClient.financialSummary.findFirst({
     where: { isSnapshot: false },
@@ -64,11 +63,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
   });
 }
 
-// -------------------------------
-// Action
-// -------------------------------
-
-type ActionData = { ok: boolean; message: string };
+/* -------------------------------
+   Action
+------------------------------- */
+type ActionData = { ok: boolean; message: string; suggestRecalcMetas?: boolean };
 
 export async function action({ request }: ActionFunctionArgs) {
   const form = await request.formData();
@@ -82,39 +80,37 @@ export async function action({ request }: ActionFunctionArgs) {
 
   try {
     if (intent === "deleteSnapshot") {
-
-
       const id = String(form.get("snapshotId"));
       await prismaClient.financialSummary.delete({ where: { id } });
       return json({ ok: true, message: "Snapshot removido." });
     }
 
     const receitaBrutaAmount = num("receitaBrutaAmount");
-    const rba = receitaBrutaAmount
+    const rba = receitaBrutaAmount;
 
     // cartão
-    const vendaCartaoAmount = num("vendaCartaoAmount")
-    const vendaCartaoPerc = rba > 0 ? (vendaCartaoAmount / rba) * 100 : 0 // das tot vendas bruta quanta % em cartão
-    const taxaCartaoPerc = num("taxaCartaoPerc") // taxa de cartão em %
-    const receitaBrutaCartao = rba > 0 ? (rba * vendaCartaoPerc) / 100 : 0
-    const taxaCartaoAmount = receitaBrutaCartao > 0 ? (receitaBrutaCartao * taxaCartaoPerc) / 100 : 0
+    const vendaCartaoAmount = num("vendaCartaoAmount");
+    const vendaCartaoPerc = rba > 0 ? (vendaCartaoAmount / rba) * 100 : 0;
+    const taxaCartaoPerc = num("taxaCartaoPerc");
+    const receitaBrutaCartao = rba > 0 ? (rba * vendaCartaoPerc) / 100 : 0;
+    const taxaCartaoAmount = receitaBrutaCartao > 0 ? (receitaBrutaCartao * taxaCartaoPerc) / 100 : 0;
 
     // imposto
-    const impostoPerc = num("impostoPerc") // das tot vendas bruta quanta % em imposto
-    const impostoAmount = rba > 0 ? (rba * impostoPerc) / 100 : 0
+    const impostoPerc = num("impostoPerc");
+    const impostoAmount = rba > 0 ? (rba * impostoPerc) / 100 : 0;
 
     // marketplace
-    const vendaMarketplaceAmount = num("vendaMarketplaceAmount")
-    const taxaMarketplacePerc = num("taxaMarketplacePerc")
-    const taxaMarketplaceAmount = vendaCartaoAmount > 0 ? (vendaMarketplaceAmount * taxaMarketplacePerc) / 100 : 0
+    const vendaMarketplaceAmount = num("vendaMarketplaceAmount");
+    const taxaMarketplacePerc = num("taxaMarketplacePerc");
+    const taxaMarketplaceAmount = vendaCartaoAmount > 0 ? (vendaMarketplaceAmount * taxaMarketplacePerc) / 100 : 0;
 
-    const receitaLiquidaAmount = rba > 0 ? rba - taxaCartaoAmount - impostoAmount - taxaMarketplaceAmount : 0
+    const receitaLiquidaAmount = rba > 0 ? rba - taxaCartaoAmount - impostoAmount - taxaMarketplaceAmount : 0;
 
     const custoFixoAmount = num("custoFixoAmount");
     const custoVariavelAmount = num("custoVariavelAmount");
     const ticketMedio = num("ticketMedio");
 
-    // Mantém a base como LÍQUIDA por padrão (pode-se adicionar seletor depois)
+    // Base líquida por padrão
     const receitaBaseValor = receitaLiquidaAmount;
     const custoFixoPerc = receitaBaseValor > 0 ? custoFixoAmount / receitaBaseValor : 0;
     const custoVariavelPerc = receitaBaseValor > 0 ? custoVariavelAmount / receitaBaseValor : 0;
@@ -147,16 +143,29 @@ export async function action({ request }: ActionFunctionArgs) {
       });
 
       if (existing) {
-        await prismaClient.financialSummary.update({ where: { id: existing.id }, data: { ...baseData, isSnapshot: false } });
+        await prismaClient.financialSummary.update({
+          where: { id: existing.id },
+          data: { ...baseData, isSnapshot: false },
+        });
       } else {
-        await prismaClient.financialSummary.create({ data: { ...baseData, isSnapshot: false, description: null } });
+        await prismaClient.financialSummary.create({
+          data: { ...baseData, isSnapshot: false, description: null },
+        });
       }
-      return json({ ok: true, message: "Resumo salvo." });
+
+      // Sugerir recalcular metas (3c da jornada)
+      return json({
+        ok: true,
+        message: "Resumo salvo. Deseja recalcular as metas com o novo PE?",
+        suggestRecalcMetas: true,
+      });
     }
 
     if (intent === "snapshot") {
       const description = String(form.get("description") || "Snapshot");
-      await prismaClient.financialSummary.create({ data: { ...baseData, isSnapshot: true, description } });
+      await prismaClient.financialSummary.create({
+        data: { ...baseData, isSnapshot: true, description },
+      });
       return json({ ok: true, message: "Snapshot criado." });
     }
 
@@ -175,15 +184,13 @@ function Row({ children }: { children: React.ReactNode }) {
     </div>
   );
 }
-
 function Label({ children }: { children: React.ReactNode }) {
   return <div className="text-sm text-muted-foreground">{children}</div>;
 }
 
-// -------------------------------
-// Client Page estilo DNA + DecimalInput
-// -------------------------------
-
+/* -------------------------------
+   Client Page (estilo DNA + DecimalInput)
+------------------------------- */
 export default function AdminFinanceiroResumoFinanceiro() {
   const data = useLoaderData<typeof loader>();
   const action = useActionData<ActionData>();
@@ -200,6 +207,8 @@ export default function AdminFinanceiroResumoFinanceiro() {
       <Separator />
 
       <div className="rounded-md bg-muted p-4 text-sm space-y-2">
+        <h2 className="uppercase font-semibold tracking-wide text-lg">Receita Bruta ou Liquida</h2>
+
         <p>Depende do objetivo da meta:</p>
 
         <div className="flex flex-col">
@@ -218,8 +227,14 @@ export default function AdminFinanceiroResumoFinanceiro() {
 
         <Separator className="my-2" />
 
-        <p>Se a meta for financeira/gestão de negócio (cobrir custos, lucro, ponto de equilíbrio) → <strong>use RECEITA LÍQUIDA.</strong></p>
-        <p>Se a meta for comercial (desempenho de vendas, incentivo de equipe) → <strong>pode usar RECEITA BRUTA</strong>, porque é o número que o time consegue enxergar mais facilmente.</p>
+        <p>
+          Se a meta for financeira/gestão de negócio (cobrir custos, lucro, ponto de equilíbrio) →{" "}
+          <strong>use RECEITA LÍQUIDA.</strong>
+        </p>
+        <p>
+          Se a meta for comercial (desempenho de vendas, incentivo de equipe) → <strong>pode usar RECEITA BRUTA</strong>,
+          porque é o número que o time consegue enxergar mais facilmente.
+        </p>
       </div>
 
       <Form method="post" className="space-y-6">
@@ -244,12 +259,10 @@ export default function AdminFinanceiroResumoFinanceiro() {
                   <Separator />
 
                   <div className="grid grid-cols-1 gap-4">
-
                     <h3 className="font-semibold">Calculo Receita Liquida</h3>
 
                     <div className="grid grid-cols-2  gap-x-12">
                       <div className="flex flex-col gap-2">
-
                         <Row>
                           <div className="flex flex-col gap-0">
                             <Label>Venda no cartão (R$)</Label>
@@ -291,7 +304,6 @@ export default function AdminFinanceiroResumoFinanceiro() {
                             <Label>Venda marketplace (R$)</Label>
                             <span className="text-[11px] text-muted-foreground">Media de receita gerada pelo marketplace</span>
                           </div>
-
                           <DecimalInput name="vendaMarketplaceAmount" defaultValue={(current?.vendaMarketplaceAmount ?? 0)} fractionDigits={2} className="w-full " />
                         </Row>
 
@@ -305,15 +317,12 @@ export default function AdminFinanceiroResumoFinanceiro() {
                           <DecimalInput name="taxaMarketplaceAmount" defaultValue={(current?.taxaMarketplaceAmount ?? 0)} fractionDigits={2} className="w-full border-none disabled:bg-green-50 disabled:text-black" disabled />
                         </Row>
                       </div>
+
                       <div className="flex flex-col gap-4 items-end h-full justify-center">
                         <p className="text-lg font-semibold uppercase tracking-wider font-mono">Receita Líquida (R$)</p>
                         <DecimalInput name="receitaLiquidaAmount" defaultValue={current?.receitaLiquidaAmount ?? 0} fractionDigits={2} className="w-full text-2xl font-mono" />
                       </div>
-
-
                     </div>
-
-
                   </div>
 
                   <Separator />
@@ -321,7 +330,6 @@ export default function AdminFinanceiroResumoFinanceiro() {
                   <div className="flex flex-col space-y-4">
                     <h3 className="font-semibold">Custos</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-
                       <div className="flex flex-col gap-2">
                         <Row>
                           <Label>Custo Fixo (R$)</Label>
@@ -329,7 +337,7 @@ export default function AdminFinanceiroResumoFinanceiro() {
                         </Row>
                         <Row>
                           <Label>Custo Fixo (%)</Label>
-                          <DecimalInput name="custoFixoAmount" defaultValue={(current?.custoFixoPerc ?? 0) * 100} fractionDigits={2} className="w-full border-none disabled:bg-green-50 disabled:text-black" disabled={true} />
+                          <DecimalInput name="custoFixoAmount" defaultValue={(current?.custoFixoPerc ?? 0) * 100} fractionDigits={2} className="w-full border-none disabled:bg-green-50 disabled:text-black" disabled />
                         </Row>
                       </div>
                       <div className="flex flex-col gap-2">
@@ -339,12 +347,10 @@ export default function AdminFinanceiroResumoFinanceiro() {
                         </Row>
                         <Row>
                           <Label>Custo Variável (%)</Label>
-                          <DecimalInput name="custoFixoAmount" defaultValue={(current?.custoVariavelPerc ?? 0) * 100} fractionDigits={2} className="w-full border-none disabled:bg-green-50 disabled:text-black" disabled={true} />
+                          <DecimalInput name="custoFixoAmount" defaultValue={(current?.custoVariavelPerc ?? 0) * 100} fractionDigits={2} className="w-full border-none disabled:bg-green-50 disabled:text-black" disabled />
                         </Row>
                       </div>
-
                     </div>
-
                   </div>
 
                   <Separator />
@@ -352,34 +358,41 @@ export default function AdminFinanceiroResumoFinanceiro() {
                   <div className="grid grid-cols-2 gap-x-4">
                     <Row>
                       <p className="text-lg font-semibold uppercase tracking-wider font-mono">Ponto de equilíbrio (R$)</p>
-                      <DecimalInput name="pontoEquilibrioAmount" defaultValue={current?.pontoEquilibrioAmount ?? 0}
-                        fractionDigits={2} className="w-full font-mono p-3 text-2xl" />
+                      <DecimalInput
+                        name="pontoEquilibrioAmount"
+                        defaultValue={current?.pontoEquilibrioAmount ?? 0}
+                        fractionDigits={2}
+                        className="w-full font-mono p-3 text-2xl"
+                      />
                     </Row>
-                    <p className="font-semibold">A empresa deve alcançar uma receita mínima de R$ {formatDecimalPlaces(current?.pontoEquilibrioAmount ?? 0, 2)} para cobrir todos os custos e atingir o ponto de equilíbrio (lucro zero).</p>
+                    <p className="">
+                      A empresa deve alcançar uma <span className="font-semibold uppercase">receita liquida</span> mínima de <span className="font-semibold">R$ {formatDecimalPlaces(current?.pontoEquilibrioAmount ?? 0, 2)}</span> para
+                      cobrir todos os custos e atingir o ponto de equilíbrio (lucro zero).
+                    </p>
                   </div>
 
                   <Separator />
-
-
-
-
 
                   <div className="flex justify-between">
                     {action && (
                       <Alert variant={action.ok ? "default" : "destructive"}>
                         <AlertTitle>{action.ok ? "Sucesso" : "Erro"}</AlertTitle>
-                        <AlertDescription>{action.message}</AlertDescription>
+                        <AlertDescription className="flex items-center gap-3">
+                          <span>{action.message}</span>
+                          {action.ok && action.suggestRecalcMetas && (
+                            <a href="/admin/financeiro/metas" className="inline-flex">
+                              <Button type="button" variant="secondary" size="sm">Recalcular metas</Button>
+                            </a>
+                          )}
+                        </AlertDescription>
                       </Alert>
                     )}
                     <div className="flex justify-end w-full">
-                      <Button type="submit" disabled={saving} >
+                      <Button type="submit" disabled={saving}>
                         {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Salvando...</> : "Salvar"}
                       </Button>
                     </div>
-
                   </div>
-
-
                 </div>
               );
             }}
@@ -406,14 +419,14 @@ export default function AdminFinanceiroResumoFinanceiro() {
               ) : (
                 <ul className="divide-y rounded-md border">
                   {snapshots.map((s) => (
-                    <li key={s.id} >
+                    <li key={s.id}>
                       <div className="grid grid-cols-1 md:grid-cols-8 gap-2 p-3 text-sm">
                         <span className="md:col-span-3 font-medium">{s.description ?? "-"}</span>
                         <span className="opacity-80">Receita Bruta: {s.receitaBrutaAmount}</span>
                         <span className="opacity-80">C.Fixo: {s.custoFixoAmount}</span>
                         <span className="opacity-80">PE: {s.pontoEquilibrioAmount}</span>
                         <span className="">{new Date(s.createdAt!).toLocaleString()}</span>
-                        <Form method="post" >
+                        <Form method="post">
                           <input type="hidden" name="intent" value="deleteSnapshot" />
                           <input type="hidden" name="snapshotId" value={s.id} />
                           <Button type="submit" variant="secondary" className="col-span-2">
@@ -421,7 +434,6 @@ export default function AdminFinanceiroResumoFinanceiro() {
                           </Button>
                         </Form>
                       </div>
-
                     </li>
                   ))}
                 </ul>

@@ -417,6 +417,8 @@ model FinancialSummary {
   updatedAt          DateTime             @updatedAt @map("updated_at")
   FinancialDailyGoal FinancialDailyGoal[]
 
+  // Índices alinhados às consultas
+  @@index([isSnapshot, createdAt], map: "fs_is_snapshot_created_at_idx")
   @@map("financial_summaries")
 }
 
@@ -439,14 +441,16 @@ model FinancialDailyGoal {
   financialSummaryId String           @map("financial_summary_id")
   financialSummary   FinancialSummary @relation(fields: [financialSummaryId], references: [id])
 
+  // NOVO: apenas um registro "válido" por vez
+  isActive Boolean @default(true) @map("is_active")
+
   targetProfitPerc Float @default(0) @map("target_profit_perc")
 
-  // % contribuição da receita bruta por dia da semana
-  participacaoDia01Perc Float @default(0) @map("participacao_dia_01_perc") // Quarta
-  participacaoDia02Perc Float @default(0) @map("participacao_dia_02_perc") // Quinta
-  participacaoDia03Perc Float @default(0) @map("participacao_dia_03_perc") // Sexta
-  participacaoDia04Perc Float @default(0) @map("participacao_dia_04_perc") // Sábado
-  participacaoDia05Perc Float @default(0) @map("participacao_dia_05_perc") // Domingo
+  participacaoDia01Perc Float @default(0) @map("participacao_dia_01_perc")
+  participacaoDia02Perc Float @default(0) @map("participacao_dia_02_perc")
+  participacaoDia03Perc Float @default(0) @map("participacao_dia_03_perc")
+  participacaoDia04Perc Float @default(0) @map("participacao_dia_04_perc")
+  participacaoDia05Perc Float @default(0) @map("participacao_dia_05_perc")
 
   minimumGoalDia01Amount Float @default(0) @map("minimum_goal_dia_01_amount")
   minimumGoalDia02Amount Float @default(0) @map("minimum_goal_dia_02_amount")
@@ -463,6 +467,11 @@ model FinancialDailyGoal {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  // Índices
+  // Se você usa isActive no loader:
+  @@index([isActive, createdAt], map: "fdg_is_active_created_at_idx")
+  // Para consultas por resumo (histórico/relatório):
+  @@index([financialSummaryId, createdAt], map: "fdg_summary_created_at_idx")
   @@map("financial_daily_goals")
 }
 
