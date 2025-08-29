@@ -413,17 +413,31 @@ model FinancialSummary {
 
   ticketMedio Float @default(0) @map("ticket_medio")
 
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  createdAt          DateTime             @default(now()) @map("created_at")
+  updatedAt          DateTime             @updatedAt @map("updated_at")
+  FinancialDailyGoal FinancialDailyGoal[]
 
   @@map("financial_summaries")
 }
 
+model FinancialDailyGoalSettings {
+  id String @id @default(uuid())
+
+  targetProfitPerc Float @default(0) @map("target_profit_perc")
+
+  // % contribuição da receita bruta por dia da semana
+  participacaoDia01Perc Float @default(0) @map("participacao_dia_01_perc") // Quarta
+  participacaoDia02Perc Float @default(0) @map("participacao_dia_02_perc") // Quinta
+  participacaoDia03Perc Float @default(0) @map("participacao_dia_03_perc") // Sexta
+  participacaoDia04Perc Float @default(0) @map("participacao_dia_04_perc") // Sábado
+  participacaoDia05Perc Float @default(0) @map("participacao_dia_05_perc") // Domingo
+}
+
 model FinancialDailyGoal {
-  id          String  @id @default(uuid())
-  // Snapshot/controle
-  isSnapshot  Boolean @default(false) @map("is_snapshot")
-  description String?
+  id String @id @default(uuid())
+
+  financialSummaryId String           @map("financial_summary_id")
+  financialSummary   FinancialSummary @relation(fields: [financialSummaryId], references: [id])
 
   targetProfitPerc Float @default(0) @map("target_profit_perc")
 
