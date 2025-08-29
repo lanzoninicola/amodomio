@@ -10,9 +10,11 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Loader2, Trash2 } from "lucide-react";
+
 import prismaClient from "~/lib/prisma/client.server";
 import { DecimalInput } from "~/components/inputs/inputs";
 import formatDecimalPlaces from "~/utils/format-decimal-places";
+import { QuestionMarkCircledIcon, QuestionMarkIcon } from "@radix-ui/react-icons";
 
 /* -------------------------------
    Types
@@ -79,12 +81,112 @@ export async function action({ request }: ActionFunctionArgs) {
   };
 
   try {
+    /* ------------------------------------------------------
+       NOVO: gerar/recalcular metas a partir do PE + Settings
+    ------------------------------------------------------ */
+    if (intent === "generateDailyGoals") {
+      // resumo corrente
+      const summary = await prismaClient.financialSummary.findFirst({
+        where: { isSnapshot: false },
+        orderBy: { createdAt: "desc" },
+        select: { id: true, pontoEquilibrioAmount: true },
+      });
+
+      if (!summary) {
+        return json({ ok: false, message: "Não há resumo financeiro corrente para calcular o PE." });
+      }
+
+      // configurações padrão de metas
+      const settings = await prismaClient.financialDailyGoalSettings.findFirst({
+        orderBy: { id: "desc" },
+      });
+
+      if (!settings) {
+        return json({
+          ok: false,
+          message:
+            "Nenhuma configuração de metas encontrada. Acesse 'Metas' para configurar os padrões antes de gerar.",
+        });
+      }
+
+      const pe = summary.pontoEquilibrioAmount ?? 0;
+
+      const p1 = settings.participacaoDia01Perc ?? 0;
+      const p2 = settings.participacaoDia02Perc ?? 0;
+      const p3 = settings.participacaoDia03Perc ?? 0;
+      const p4 = settings.participacaoDia04Perc ?? 0;
+      const p5 = settings.participacaoDia05Perc ?? 0;
+      const tgt = settings.targetProfitPerc ?? 0;
+
+      const soma = p1 + p2 + p3 + p4 + p5;
+      if (Math.abs(soma - 100) > 0.01) {
+        return json({
+          ok: false,
+          message: `A soma das participações por dia é ${soma.toFixed(2)}%. Ajuste para 100% nas configurações e tente novamente.`,
+        });
+      }
+
+      const min = (perc: number) => pe * (perc / 100);
+      const mult = 1 + tgt / 100;
+
+      // arquiva o goal ativo anterior (se houver)
+      const existingActive = await prismaClient.financialDailyGoal.findFirst({
+        where: { isActive: true },
+        orderBy: { createdAt: "desc" },
+        select: { id: true },
+      });
+      if (existingActive) {
+        await prismaClient.financialDailyGoal.update({
+          where: { id: existingActive.id },
+          data: { isActive: false },
+        });
+      }
+
+      await prismaClient.financialDailyGoal.create({
+        data: {
+          financialSummaryId: summary.id,
+          isActive: true,
+          targetProfitPerc: tgt,
+
+          participacaoDia01Perc: p1,
+          participacaoDia02Perc: p2,
+          participacaoDia03Perc: p3,
+          participacaoDia04Perc: p4,
+          participacaoDia05Perc: p5,
+
+          minimumGoalDia01Amount: min(p1),
+          minimumGoalDia02Amount: min(p2),
+          minimumGoalDia03Amount: min(p3),
+          minimumGoalDia04Amount: min(p4),
+          minimumGoalDia05Amount: min(p5),
+
+          targetProfitDia01Amount: min(p1) * mult,
+          targetProfitDia02Amount: min(p2) * mult,
+          targetProfitDia03Amount: min(p3) * mult,
+          targetProfitDia04Amount: min(p4) * mult,
+          targetProfitDia05Amount: min(p5) * mult,
+        },
+      });
+
+      return json({
+        ok: true,
+        message:
+          "Metas diárias recalculadas a partir do PE corrente e das configurações padrão. O goal anterior (se havia) foi arquivado.",
+      });
+    }
+
+    /* ------------------------------------------------------
+       Remover snapshot
+    ------------------------------------------------------ */
     if (intent === "deleteSnapshot") {
       const id = String(form.get("snapshotId"));
       await prismaClient.financialSummary.delete({ where: { id } });
       return json({ ok: true, message: "Snapshot removido." });
     }
 
+    /* ------------------------------------------------------
+       Salvar resumo corrente
+    ------------------------------------------------------ */
     const receitaBrutaAmount = num("receitaBrutaAmount");
     const rba = receitaBrutaAmount;
 
@@ -102,7 +204,7 @@ export async function action({ request }: ActionFunctionArgs) {
     // marketplace
     const vendaMarketplaceAmount = num("vendaMarketplaceAmount");
     const taxaMarketplacePerc = num("taxaMarketplacePerc");
-    const taxaMarketplaceAmount = vendaCartaoAmount > 0 ? (vendaMarketplaceAmount * taxaMarketplacePerc) / 100 : 0;
+    const taxaMarketplaceAmount = vendaMarketplaceAmount > 0 ? (vendaMarketplaceAmount * taxaMarketplacePerc) / 100 : 0;
 
     const receitaLiquidaAmount = rba > 0 ? rba - taxaCartaoAmount - impostoAmount - taxaMarketplaceAmount : 0;
 
@@ -161,6 +263,9 @@ export async function action({ request }: ActionFunctionArgs) {
       });
     }
 
+    /* ------------------------------------------------------
+       Criar snapshot
+    ------------------------------------------------------ */
     if (intent === "snapshot") {
       const description = String(form.get("description") || "Snapshot");
       await prismaClient.financialSummary.create({
@@ -197,6 +302,8 @@ export default function AdminFinanceiroResumoFinanceiro() {
   const nav = useNavigation();
   const saving = nav.state !== "idle";
 
+  const [showGuide, setSwhoGuide] = React.useState(false)
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -206,36 +313,45 @@ export default function AdminFinanceiroResumoFinanceiro() {
 
       <Separator />
 
-      <div className="rounded-md bg-muted p-4 text-sm space-y-2">
-        <h2 className="uppercase font-semibold tracking-wide text-lg">Receita Bruta ou Liquida</h2>
 
-        <p>Depende do objetivo da meta:</p>
-
-        <div className="flex flex-col">
-          <p className="font-semibold uppercase">Receita Bruta</p>
-          <p>Inclui tudo que você faturou nas vendas (sem tirar impostos, taxas, devoluções).</p>
-          <p>Boa para comparar desempenho comercial e motivar equipe de vendas.</p>
-          <p>Problema: pode mascarar a realidade, porque parte desse dinheiro não fica na pizzaria.</p>
-        </div>
-
-        <div className="flex flex-col">
-          <p className="font-semibold uppercase">Receita Líquida</p>
-          <p>Receita Bruta – impostos – descontos – devoluções</p>
-          <p>Mostra o valor real que sobra para pagar custos e gerar lucro.</p>
-          <p>É o que se conecta ao ponto de equilíbrio e ao DRE.</p>
-        </div>
-
-        <Separator className="my-2" />
-
-        <p>
-          Se a meta for financeira/gestão de negócio (cobrir custos, lucro, ponto de equilíbrio) →{" "}
-          <strong>use RECEITA LÍQUIDA.</strong>
-        </p>
-        <p>
-          Se a meta for comercial (desempenho de vendas, incentivo de equipe) → <strong>pode usar RECEITA BRUTA</strong>,
-          porque é o número que o time consegue enxergar mais facilmente.
-        </p>
+      <div className="flex justify-end">
+        <button className="flex items-center gap-2 uppercase font-semibold" onClick={() => setSwhoGuide(!showGuide)}>
+          <span><QuestionMarkCircledIcon /></span>
+          Receita bruta ou liquida
+        </button>
       </div>
+      {showGuide && (
+        <div className="rounded-md bg-muted p-4 text-sm space-y-2">
+          <p>Depende do objetivo da meta:</p>
+
+          <div className="grid grid-cols-2">
+            <div className="flex flex-col">
+              <p className="font-semibold uppercase">Receita Bruta</p>
+              <p>Inclui tudo que você faturou nas vendas (sem tirar impostos, taxas, devoluções).</p>
+              <p>Boa para comparar desempenho comercial e motivar equipe de vendas.</p>
+              <p>Problema: pode mascarar a realidade, porque parte desse dinheiro não fica na pizzaria.</p>
+            </div>
+
+            <div className="flex flex-col">
+              <p className="font-semibold uppercase">Receita Líquida</p>
+              <p>Receita Bruta – impostos – descontos – devoluções</p>
+              <p>Mostra o valor real que sobra para pagar custos e gerar lucro.</p>
+              <p>É o que se conecta ao ponto de equilíbrio e ao DRE.</p>
+            </div>
+          </div>
+
+          <Separator className="my-2" />
+
+          <p>
+            Se a meta for financeira/gestão de negócio (cobrir custos, lucro, ponto de equilíbrio) →{" "}
+            <strong>use RECEITA LÍQUIDA.</strong>
+          </p>
+          <p>
+            Se a meta for comercial (desempenho de vendas, incentivo de equipe) → <strong>pode usar RECEITA BRUTA</strong>,
+            porque é o número que o time consegue enxergar mais facilmente.
+          </p>
+        </div>
+      )}
 
       <Form method="post" className="space-y-6">
         <input type="hidden" name="intent" value="save" />
@@ -365,11 +481,38 @@ export default function AdminFinanceiroResumoFinanceiro() {
                         className="w-full font-mono p-3 text-2xl"
                       />
                     </Row>
-                    <p className="">
-                      A empresa deve alcançar uma <span className="font-semibold uppercase">receita liquida</span> mínima de <span className="font-semibold">R$ {formatDecimalPlaces(current?.pontoEquilibrioAmount ?? 0, 2)}</span> para
+                    <p className="font-semibold">
+                      A empresa deve alcançar uma receita mínima de R$ {formatDecimalPlaces(current?.pontoEquilibrioAmount ?? 0, 2)} para
                       cobrir todos os custos e atingir o ponto de equilíbrio (lucro zero).
                     </p>
                   </div>
+
+                  {/* ---------------- NOVO BLOCO: Metas diárias ---------------- */}
+                  <Separator />
+                  <div className="flex flex-col gap-3">
+                    <h3 className="font-semibold">Metas diárias</h3>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      {/* 1 clique para gerar/recalcular metas com base no PE + Settings */}
+                      <Form method="post">
+                        <input type="hidden" name="intent" value="generateDailyGoals" />
+                        <Button type="submit" variant="secondary">
+                          Recalcular metas agora
+                        </Button>
+                      </Form>
+
+                      {/* Atalho para configurar os padrões (FinancialDailyGoalSettings) */}
+                      <a href="/admin/financeiro/metas" className="inline-flex">
+                        <Button type="button" variant="outline">Configurar padrões de metas</Button>
+                      </a>
+                    </div>
+
+                    <p className="text-xs text-muted-foreground">
+                      O recálculo usa o ponto de equilíbrio atual e as configurações padrão (participação por dia e % de lucro-alvo).
+                      O goal ativo anterior é arquivado automaticamente.
+                    </p>
+                  </div>
+                  {/* ----------------------------------------------------------- */}
 
                   <Separator />
 
