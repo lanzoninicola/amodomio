@@ -957,6 +957,9 @@ model KdsDailyOrder {
   /// Total dos pedidos do dia (soma de orderAmount dos detalhes)
   totOrdersAmount Decimal @default(0) @map("tot_orders_amount") @db.Decimal(10, 2)
 
+  minimumGoalProfitAmount Decimal @default(0) @map("minimum_goal_profit_amount") @db.Decimal(10, 2)
+  targetGoalProfitAmount  Decimal @default(0) @map("target_goal_profit_amount") @db.Decimal(10, 2)
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
