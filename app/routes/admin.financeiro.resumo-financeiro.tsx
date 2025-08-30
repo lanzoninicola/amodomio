@@ -199,6 +199,8 @@ export async function action({ request }: ActionFunctionArgs) {
       const p5 = settings.participacaoDia05Perc ?? 0;
       const tgt = settings.targetProfitPerc ?? 0;
 
+      const WEEKDAY_COUNT_IN_MONTH = 4
+
       const soma = p1 + p2 + p3 + p4 + p5;
       if (Math.abs(soma - 100) > 0.01) {
         return json({
@@ -208,7 +210,7 @@ export async function action({ request }: ActionFunctionArgs) {
         });
       }
 
-      const min = (perc: number) => pe * (perc / 100);
+      const min = (perc: number) => (pe * (perc / 100)) / WEEKDAY_COUNT_IN_MONTH;
       const mult = 1 + tgt / 100;
 
       const existingActive = await prismaClient.financialDailyGoal.findFirst({
