@@ -77,16 +77,15 @@ export const meta: MetaFunction = () => {
 };
 
 /**
- * COLUNAS (Status removido)
- * [#, Pedido, Tamanhos, Canal, Zona, Moto, Retirada, VL, Detalhes, Ações]
+ * NOVO LAYOUT DE COLUNAS
+ * [#, Pedido, Tamanhos, Canal, Delivery, Retirada, Detalhes, Ações]
+ *  - Delivery = (switch de delivery) + (select de zona habilitado quando delivery ON) + (valor da moto)
+ *  - Coluna "VL" removida (informação pode ser vista no diálogo de detalhes)
  */
 const COLS =
-  "grid grid-cols-[60px,150px,260px,240px,220px,120px,110px,70px,80px,110px] gap-2 items-center gap-x-8";
+  "grid grid-cols-[60px,150px,260px,240px,360px,110px,80px,110px] gap-2 items-center gap-x-8";
 const COLS_HDR =
-  "grid grid-cols-[60px,150px,260px,240px,220px,120px,110px,70px,80px,110px] gap-2 gap-x-8 border-b font-semibold text-sm sticky top-0 z-10 bg-white";
-
-/** URL do calendário mensal (se usar) */
-const MONTH_VIEW_URL_TEMPLATE = (ym: string) => `/admin/kds/atendimento/${ym}`;
+  "grid grid-cols-[60px,150px,260px,240px,360px,110px,80px,110px] gap-2 gap-x-8 border-b font-semibold text-sm sticky top-0 z-10 bg-white";
 
 /* ===========================
    Helpers locais
@@ -127,8 +126,8 @@ function CommandNumberInput({
       onChange={() => { }}
       className={`h-9 border rounded px-2 ${className}`}
       placeholder="—"
+      /* autoFocus removido para evitar scroll indevido ao filtrar */
       disabled={isVendaLivre}
-    /* autoFocus removido para evitar scroll indevido ao filtrar */
     />
   );
 }
@@ -235,10 +234,12 @@ export async function action({ request, params }: ActionFunctionArgs) {
       if (toCreate.length) {
         await prisma.kdsDailyOrderDetail.createMany({ data: toCreate });
       }
+
       await prisma.kdsDailyOrder.update({
         where: { id: header.id },
         data: { operationStatus: "OPENED" },
       });
+
       await recalcHeaderTotal(dateInt);
       return json({ ok: true, created: toCreate.length, status: "OPENED" });
     }
@@ -396,7 +397,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
       const rankNew = STATUS_RANK[finalStatus ?? "pendente"] ?? 0;
 
       let patchNovoPedidoAt: Date | null | undefined = undefined; // undefined = não tocar
-
       if (!current?.novoPedidoAt && finalStatus === "novoPedido") {
         patchNovoPedidoAt = new Date();
       }
@@ -473,7 +473,7 @@ function RowItem({
   const [openConfirmId, setOpenConfirmId] = useState(false);
   const [detailsOpenId, setDetailsOpenId] = useState(false);
   const [cmdLocal, setCmdLocal] = useState<number | null>(o.commandNumber);
-  const [hasMoto, setHasMoto] = useState<boolean>(!!o.hasMoto);
+  const [hasMoto, setHasMoto] = useState<boolean>(!!o.hasMoto); // agora: switch "Delivery"
   const [takeAway, setTakeAway] = useState<boolean>(!!(o as any).takeAway);
   const [deliveryZoneId, setDeliveryZoneId] = useState<string | null | undefined>((o as any).deliveryZoneId ?? null);
   const [sizes, setSizes] = useState<SizeCounts>(sizeCounts);
@@ -551,37 +551,48 @@ function RowItem({
             </Select>
           </div>
 
-          {/* Delivery Zone */}
-          <div className="flex justify-center">
+          {/* DELIVERY (switch + zona + valor moto) */}
+          <div className="flex items-center justify-center gap-2">
+            <div className={`flex items-center gap-2 ${readOnly ? "opacity-60" : ""}`}>
+              <Switch
+                checked={hasMoto}
+                onCheckedChange={(next) => {
+                  setHasMoto(next);
+                  if (next) setTakeAway(false); // Delivery e Retirada não podem coexistir
+                }}
+                id={`delivery-${o.id}`}
+                disabled={readOnly}
+                title="Delivery on/off"
+              />
+              <input type="hidden" name="hasMoto" value={hasMoto ? "on" : ""} />
+            </div>
+
             <DeliveryZoneCombobox
               options={deliveryZones}
               value={deliveryZoneId}
               onChange={setDeliveryZoneId}
-              disabled={readOnly || o.isVendaLivre === true}
-              className="w-[220px]"
+              disabled={readOnly || !hasMoto || o.isVendaLivre === true}
+              className="w-[180px]"
             />
-          </div>
 
-          {/* Moto (valor) + switch */}
-          <div className="flex items-center justify-center gap-1">
-            <div className={`flex items-center gap-2 ${readOnly ? "opacity-60" : ""}`}>
-              <Switch checked={hasMoto} onCheckedChange={setHasMoto} id={`moto-${o.id}`} disabled={readOnly} />
-              <input type="hidden" name="hasMoto" value={hasMoto ? "on" : ""} />
-            </div>
-            <MoneyInput name="motoValue" defaultValue={o.motoValue} className="w-24" disabled={readOnly || hasMoto === false} />
+            <MoneyInput
+              name="motoValue"
+              defaultValue={o.motoValue}
+              className="w-24"
+              disabled={readOnly || hasMoto === false}
+            />
           </div>
 
           {/* Retirada */}
           <div className={`flex items-center justify-center ${readOnly ? "opacity-60" : ""}`}>
-            <Switch checked={takeAway} onCheckedChange={setTakeAway} id={`ret-${o.id}`} disabled={readOnly || hasMoto === true} />
+            <Switch
+              checked={takeAway}
+              onCheckedChange={setTakeAway}
+              id={`ret-${o.id}`}
+              disabled={readOnly || hasMoto === true}
+              title="Retirada"
+            />
             <input type="hidden" name="takeAway" value={takeAway ? "on" : ""} />
-          </div>
-
-          {/* VL */}
-          <div className="flex items-center justify-center">
-            {(o.isVendaLivre || cmdLocal == null) ? (
-              <Badge variant="secondary" className="text-[10px]">VL</Badge>
-            ) : <span className="text-xs text-slate-400">—</span>}
           </div>
 
           {/* Detalhes */}
@@ -884,58 +895,58 @@ export default function GridKdsPage() {
               </div>
 
               {/* Venda livre + Filtro de Canal */}
-              {status !== "CLOSED" && (
-                <div className="rounded-lg border p-3 flex flex-wrap items-center justify-between gap-3">
-                  {/* Venda Livre */}
-                  <div className="flex items-center gap-3">
-                    <div className="text-sm font-medium">Venda livre (rápida)</div>
-                    <listFx.Form method="post" className="flex flex-wrap items-center gap-3">
-                      <input type="hidden" name="_action" value="createVL" />
-                      <input type="hidden" name="date" value={dateStr} />
-                      <MoneyInput name="orderAmount" />
-                      <Button type="submit" variant="secondary" disabled={listFx.state !== "idle"}>
-                        {listFx.state !== "idle" ? (
-                          <>
-                            <Loader2 className="w-4 h-4 animate-spin mr-1" /> Adicionando…
-                          </>
-                        ) : (
-                          "Adicionar"
-                        )}
-                      </Button>
-                    </listFx.Form>
+              {(status === "OPENED" || status === "REOPENED") && (
+                <>
+                  <div className="rounded-lg border p-3 flex flex-wrap items-center justify-between gap-3">
+                    {/* Venda Livre */}
+                    <div className="flex items-center gap-3">
+                      <div className="text-sm font-medium">Venda livre (rápida)</div>
+                      <listFx.Form method="post" className="flex flex-wrap items-center gap-3">
+                        <input type="hidden" name="_action" value="createVL" />
+                        <input type="hidden" name="date" value={dateStr} />
+                        <MoneyInput name="orderAmount" />
+                        <Button type="submit" variant="secondary" disabled={listFx.state !== "idle"}>
+                          {listFx.state !== "idle" ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin mr-1" /> Adicionando…
+                            </>
+                          ) : (
+                            "Adicionar"
+                          )}
+                        </Button>
+                      </listFx.Form>
+                    </div>
+
+                    {/* Filtro por Canal */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-slate-600">Filtrar canal:</span>
+                      <Select value={channelFilter} onValueChange={(val) => setChannelFilter(val)}>
+                        <SelectTrigger className="w-[240px] h-9">
+                          <SelectValue placeholder="Todos os canais" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="">Todos</SelectItem>
+                          {CHANNELS.map((c) => (
+                            <SelectItem key={c} value={c}>{c}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
 
-                  {/* Filtro por Canal */}
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-slate-600">Filtrar canal:</span>
-                    <Select value={channelFilter} onValueChange={(val) => setChannelFilter(val)}>
-                      <SelectTrigger className="w-[240px] h-9">
-                        <SelectValue placeholder="Todos os canais" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="">Todos</SelectItem>
-                        {CHANNELS.map((c) => (
-                          <SelectItem key={c} value={c}>{c}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                  {/* Cabeçalho */}
+                  <div className={COLS_HDR + " py-2 px-1"}>
+                    <div className="text-center">#</div>
+                    <div className="text-center">Pedido (R$)</div>
+                    <div className="text-center">Tamanhos</div>
+                    <div className="text-center">Canal</div>
+                    <div className="text-center">Delivery</div>
+                    <div className="text-center">Retirada</div>
+                    <div className="text-center">Detalhes</div>
+                    <div className="text-center">Ações</div>
                   </div>
-                </div>
+                </>
               )}
-
-              {/* Cabeçalho */}
-              <div className={COLS_HDR + " py-2 px-1"}>
-                <div className="text-center">#</div>
-                <div className="text-center">Pedido (R$)</div>
-                <div className="text-center">Tamanhos</div>
-                <div className="text-center">Canal</div>
-                <div className="text-center">Zona</div>
-                <div className="text-center">Moto (R$)</div>
-                <div className="text-center">Retirada</div>
-                <div className="text-center">VL</div>
-                <div className="text-center">Detalhes</div>
-                <div className="text-center">Ações</div>
-              </div>
 
               {/* Linhas */}
               <ul className="space-y-1">

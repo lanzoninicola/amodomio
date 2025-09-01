@@ -134,7 +134,7 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
           disabled: false,
         },
         {
-          title: "Metas",
+          title: "Metas financeiras",
           href: "/admin/financeiro/metas",
           items: [],
           disabled: false,

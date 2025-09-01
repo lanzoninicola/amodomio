@@ -1011,6 +1011,8 @@ model KdsDailyOrderDetail {
 
   isVendaLivre Boolean @default(false) @map("is_venda_livre")
 
+  isCreditCard Boolean @default(false) @map("is_credit_card")
+
   novoPedidoAt      DateTime?     @map("novo_pedido_at")
   emProducaoAt      DateTime?     @map("em_producao_at")
   aguardandoFornoAt DateTime?     @map("aguardando_forno_at")
