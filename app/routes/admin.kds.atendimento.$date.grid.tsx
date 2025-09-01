@@ -878,7 +878,7 @@ export default function GridKdsPage() {
                     <input type="hidden" name="_action" value="openDay" />
                     <input type="hidden" name="date" value={dateStr} />
                     <Input name="qty" defaultValue={40} className="h-9 w-20 text-center" />
-                    <Button type="submit" variant="default" disabled={listFx.state !== "idle"}>
+                    <Button type="submit" variant="default" disabled={listFx.state !== "idle"} className="bg-blue-800">
                       {listFx.state !== "idle" ? (
                         <>
                           <Loader2 className="w-4 h-4 animate-spin mr-1" /> Abrindo…
