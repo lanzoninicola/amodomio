@@ -1,11 +1,7 @@
 // app/routes/admin.kds.atendimento.$date.grid.tsx
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json, defer } from "@remix-run/node";
-import {
-  Await,
-  useFetcher,
-  useLoaderData,
-} from "@remix-run/react";
+import { Await, useFetcher, useLoaderData } from "@remix-run/react";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import prisma from "~/lib/prisma/client.server";
 import { Prisma } from "@prisma/client";
@@ -46,7 +42,6 @@ import {
 } from "@/domain/kds/delivery-prediction";
 
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -65,6 +60,8 @@ import {
   AlertTriangle,
   Lock,
   Unlock,
+  CreditCard,
+  BadgeDollarSign,
 } from "lucide-react";
 import { Separator } from "~/components/ui/separator";
 
@@ -77,18 +74,18 @@ export const meta: MetaFunction = () => {
 };
 
 /**
- * NOVO LAYOUT DE COLUNAS
- * [#, Pedido, Tamanhos, Canal, Delivery, Retirada, Detalhes, Ações]
- *  - Delivery = (switch de delivery) + (select de zona habilitado quando delivery ON) + (valor da moto)
- *  - Coluna "VL" removida (informação pode ser vista no diálogo de detalhes)
+ * LAYOUT DE COLUNAS (8 colunas)
+ * [#, Pedido(R$), Tamanhos, Canal, Delivery, Retirada, Detalhes, Ações]
+ *  - Delivery = switch + zona habilitada quando ON + valor da moto
+ *  - "VL" removida do cabeçalho (ícone de venda livre na célula Pedido foi retirado; agora só cartão)
  */
 const COLS =
-  "grid grid-cols-[60px,150px,260px,240px,360px,110px,80px,110px] gap-2 items-center gap-x-8";
+  "grid grid-cols-[60px,180px,260px,240px,360px,110px,80px,110px] gap-2 items-center gap-x-8";
 const COLS_HDR =
-  "grid grid-cols-[60px,150px,260px,240px,360px,110px,80px,110px] gap-2 gap-x-8 border-b font-semibold text-sm sticky top-0 z-10 bg-white";
+  "grid grid-cols-[60px,180px,260px,240px,360px,110px,80px,110px] gap-2 gap-x-8 border-b font-semibold text-sm sticky top-0 z-10 bg-white";
 
 /* ===========================
-   Helpers locais
+   Helpers
    =========================== */
 
 function toDecimal(value: FormDataEntryValue | null | undefined): Prisma.Decimal {
@@ -97,7 +94,6 @@ function toDecimal(value: FormDataEntryValue | null | undefined): Prisma.Decimal
   return new Prisma.Decimal(Number.isFinite(n) ? n.toFixed(2) : "0");
 }
 
-// Inteiro com digitação “money-like”
 function CommandNumberInput({
   value,
   onChange,
@@ -107,7 +103,7 @@ function CommandNumberInput({
   value: number | null;
   onChange: (v: number | null) => void;
   className?: string;
-  isVendaLivre?: boolean
+  isVendaLivre?: boolean;
 }) {
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     const k = e.key;
@@ -126,7 +122,6 @@ function CommandNumberInput({
       onChange={() => { }}
       className={`h-9 border rounded px-2 ${className}`}
       placeholder="—"
-      /* autoFocus removido para evitar scroll indevido ao filtrar */
       disabled={isVendaLivre}
     />
   );
@@ -140,7 +135,10 @@ function parseSize(json: any): SizeCounts {
 }
 const stringifySize = (c: SizeCounts) => JSON.stringify(c);
 const sizeSummary = (c: SizeCounts) =>
-  (["F", "M", "P", "I", "FT"] as (keyof SizeCounts)[]).filter(k => c[k] > 0).map(k => `${k}:${c[k]}`).join("  ");
+  (["F", "M", "P", "I", "FT"] as (keyof SizeCounts)[])
+    .filter(k => c[k] > 0)
+    .map(k => `${k}:${c[k]}`)
+    .join("  ");
 
 /* ===========================
    Loader
@@ -156,13 +154,11 @@ export async function loader({ params }: LoaderFunctionArgs) {
     select: { id: true, operationStatus: true },
   });
 
-  // Delivery Zones (somente campos necessários)
   const deliveryZones = await prisma.deliveryZone.findMany({
     select: { id: true, name: true },
     orderBy: { name: "asc" },
   });
 
-  // Tempos/distâncias por Delivery Zone (para ETA de entrega)
   const dzTimes = await prisma.deliveryZoneDistance.findMany({
     select: {
       deliveryZoneId: true,
@@ -226,7 +222,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
         toCreate.push({
           orderId: header.id, dateInt, commandNumber: n, isVendaLivre: false,
           sortOrderIndex: sort, orderAmount: new Prisma.Decimal(0),
-          status: "pendente", channel: "", hasMoto: false, motoValue: new Prisma.Decimal(0), takeAway: false,
+          status: "pendente", channel: "", hasMoto: false, motoValue: new Prisma.Decimal(0),
+          takeAway: false, isCreditCard: false,
         } as any);
         sort += 1000;
       }
@@ -285,7 +282,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
         toCreate.push({
           orderId: header.id, dateInt, commandNumber: n, isVendaLivre: false,
           sortOrderIndex: sort, orderAmount: new Prisma.Decimal(0),
-          status: "pendente", channel: "", hasMoto: false, motoValue: new Prisma.Decimal(0), takeAway: false,
+          status: "pendente", channel: "", hasMoto: false, motoValue: new Prisma.Decimal(0),
+          takeAway: false, isCreditCard: false,
         } as any);
         sort += 1000;
       }
@@ -314,6 +312,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
           hasMoto: false,
           motoValue: new Prisma.Decimal(0),
           takeAway: false,
+          isCreditCard: String(form.get("isCreditCard") ?? "") === "on", // ← agora pega do form
         },
         select: { id: true },
       });
@@ -325,19 +324,29 @@ export async function action({ request, params }: ActionFunctionArgs) {
       const id = String(form.get("id") ?? "");
       if (!id) return json({ ok: false, error: "id inválido" }, { status: 400 });
 
+      // Novo: permitir alternar "venda livre" via form
+      const isVendaLivre = String(form.get("isVendaLivre") ?? "") === "on";
+
       const rawCmd = String(form.get("commandNumber") ?? "").trim();
-      const cmd = rawCmd === "" ? null : Number(rawCmd);
-      if (rawCmd !== "" && !Number.isFinite(cmd)) {
-        return json({ ok: false, error: "Número de comanda inválido" }, { status: 400 });
-      }
-      if (cmd != null) {
-        const dup = await prisma.kdsDailyOrderDetail.findFirst({
-          where: { dateInt, commandNumber: cmd, id: { not: id } },
-          select: { id: true },
-        });
-        if (dup) {
-          return json({ ok: false, error: `Comanda ${cmd} já existe para ${dateStr}` }, { status: 400 });
+      let cmd: number | null = null;
+
+      if (!isVendaLivre) {
+        // Só valida e usa comanda quando não é venda livre
+        cmd = rawCmd === "" ? null : Number(rawCmd);
+        if (rawCmd !== "" && !Number.isFinite(cmd)) {
+          return json({ ok: false, error: "Número de comanda inválido" }, { status: 400 });
         }
+        if (cmd != null) {
+          const dup = await prisma.kdsDailyOrderDetail.findFirst({
+            where: { dateInt, commandNumber: cmd, id: { not: id } },
+            select: { id: true },
+          });
+          if (dup) {
+            return json({ ok: false, error: `Comanda ${cmd} já existe para ${dateStr}` }, { status: 400 });
+          }
+        }
+      } else {
+        cmd = null; // venda livre força comanda nula
       }
 
       const sizeCounts = {
@@ -348,7 +357,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
         FT: Number(form.get("sizeFT") ?? 0) || 0,
       };
 
-      // === Regra automática: novoPedido quando amount>0, algum tamanho>0 e todos timestamps NULL ===
       const amountDecimal = toDecimal(form.get("orderAmount"));
 
       const current = await prisma.kdsDailyOrderDetail.findUnique({
@@ -380,23 +388,16 @@ export async function action({ request, params }: ActionFunctionArgs) {
         ? "novoPedido"
         : "pendente";
 
-      // status enviado pelo form (pode vir vazio)
       const requestedStatus = String(form.get("status") ?? "");
+      const rankOld = STATUS_RANK[current?.status ?? "pendente"] ?? 0;
 
-      // se não for status “forte” solicitado, aplica a regra automática
       let finalStatus = requestedStatus?.trim();
       if (!finalStatus || finalStatus === "pendente" || finalStatus === "novoPedido") {
         finalStatus = autoStatus;
       }
-
-      // --- Gestão do novoPedidoAt ---
-      // Setar quando entra em "novoPedido" pela primeira vez;
-      // Não resetar ao avançar;
-      // Resetar SOMENTE se houver downgrade (rank novo < rank antigo).
-      const rankOld = STATUS_RANK[current?.status ?? "pendente"] ?? 0;
       const rankNew = STATUS_RANK[finalStatus ?? "pendente"] ?? 0;
 
-      let patchNovoPedidoAt: Date | null | undefined = undefined; // undefined = não tocar
+      let patchNovoPedidoAt: Date | null | undefined = undefined;
       if (!current?.novoPedidoAt && finalStatus === "novoPedido") {
         patchNovoPedidoAt = new Date();
       }
@@ -408,7 +409,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
         await setOrderStatus(id, finalStatus as any);
       }
 
-      // deliveryZoneId (pode vir vazio para limpar)
       const dzIdRaw = String(form.get("deliveryZoneId") ?? "").trim();
       const deliveryZoneId = dzIdRaw === "" ? null : dzIdRaw;
 
@@ -416,7 +416,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         where: { id },
         data: {
           commandNumber: cmd,
-          isVendaLivre: cmd == null,
+          isVendaLivre, // agora persiste direto
           orderAmount: amountDecimal,
           channel: String(form.get("channel") ?? ""),
           hasMoto: String(form.get("hasMoto") ?? "") === "on",
@@ -424,6 +424,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
           takeAway: String(form.get("takeAway") ?? "") === "on",
           size: stringifySize(sizeCounts as any),
           deliveryZoneId: deliveryZoneId as any,
+          isCreditCard: String(form.get("isCreditCard") ?? "") === "on",
           ...(patchNovoPedidoAt !== undefined ? { novoPedidoAt: patchNovoPedidoAt as any } : {}),
         },
       });
@@ -447,7 +448,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 }
 
 /* ===========================
-   Linha (componente filho)
+   Linha (RowItem)
    =========================== */
 
 function RowItem({
@@ -472,12 +473,19 @@ function RowItem({
   // estados por linha
   const [openConfirmId, setOpenConfirmId] = useState(false);
   const [detailsOpenId, setDetailsOpenId] = useState(false);
+
   const [cmdLocal, setCmdLocal] = useState<number | null>(o.commandNumber);
-  const [hasMoto, setHasMoto] = useState<boolean>(!!o.hasMoto); // agora: switch "Delivery"
+  const [isVendaLivre] = useState<boolean>(!!o.isVendaLivre);
+
+  const [hasMoto, setHasMoto] = useState<boolean>(!!o.hasMoto);
   const [takeAway, setTakeAway] = useState<boolean>(!!(o as any).takeAway);
+  const [deliveryZoneId, setDeliveryZoneId] = useState<string | null | undefined>((o as any).deliveryZoneId ?? null);
+
   const [motoDefault, setMotoDefault] = useState<number>(Number(o.motoValue ?? 0));
   const [motoKey, setMotoKey] = useState(0);
-  const [deliveryZoneId, setDeliveryZoneId] = useState<string | null | undefined>((o as any).deliveryZoneId ?? null);
+
+  const [isCreditCard, setIsCreditCard] = useState<boolean>(!!(o as any).isCreditCard);
+
   const [sizes, setSizes] = useState<SizeCounts>(sizeCounts);
   const statusText = (o as any).status ?? "pendente";
   const npAt = (o as any).novoPedidoAt ? new Date((o as any).novoPedidoAt as any) : null;
@@ -499,16 +507,37 @@ function RowItem({
           <input type="hidden" name="id" value={o.id} />
           <input type="hidden" name="date" value={dateStr} />
           <input type="hidden" name="deliveryZoneId" value={deliveryZoneId ?? ""} />
+          <input type="hidden" name="isCreditCard" value={isCreditCard ? "on" : ""} />
 
           {/* nº comanda */}
           <div className="flex items-center justify-center">
-            <CommandNumberInput value={cmdLocal} onChange={setCmdLocal} isVendaLivre={o.isVendaLivre} />
+            <CommandNumberInput value={cmdLocal} onChange={setCmdLocal} isVendaLivre={isVendaLivre} />
             <input type="hidden" name="commandNumber" value={cmdLocal ?? ""} />
           </div>
 
-          {/* Valor */}
+          {/* Pedido (R$) + ícone Cartão (à direita) */}
           <div className="flex justify-center">
-            <MoneyInput name="orderAmount" defaultValue={o.orderAmount} className="w-28" disabled={readOnly} />
+            <div className="flex items-center gap-2">
+              <MoneyInput
+                name="orderAmount"
+                defaultValue={o.orderAmount}
+                className="w-28"
+                disabled={readOnly}
+              />
+
+              {/* Ícone de cartão: preto = true, cinza = false */}
+              <button
+                type="button"
+                onClick={() => setIsCreditCard((v) => !v)}
+                className={`h-9 w-9 grid place-items-center rounded-md border transition
+                            ${readOnly ? "pointer-events-none opacity-60" : "hover:bg-slate-50"}
+                            ${isCreditCard ? "border-blue-600" : "border-slate-200"}`}
+                title="Pago no cartão"
+                aria-pressed={isCreditCard}
+              >
+                <CreditCard className={`h-6 w-6 ${isCreditCard ? "text-blue-600" : "text-slate-300"}`} />
+              </button>
+            </div>
           </div>
 
           {/* Tamanhos */}
@@ -559,18 +588,16 @@ function RowItem({
               <Switch
                 checked={hasMoto}
                 onCheckedChange={(next) => {
-
                   setHasMoto(next);
                   if (next) {
-                    setTakeAway(false);    // Delivery e Retirada não coexistem
-                    setMotoDefault(10);    // coloca R$ 10,00 ao habilitar
-                    setMotoKey((k) => k + 1); // força o remount do MoneyInput (defaultValue novo)
+                    setTakeAway(false);
+                    setMotoDefault(10);
+                    setMotoKey((k) => k + 1);
                   }
-
                   if (!next) {
-                    setDeliveryZoneId(null)
+                    setDeliveryZoneId(null);
                     setMotoDefault(0);
-                    setMotoKey((k) => k + 1); // força o remount do MoneyInput (defaultValue novo)
+                    setMotoKey((k) => k + 1);
                   }
                 }}
                 id={`delivery-${o.id}`}
@@ -589,6 +616,7 @@ function RowItem({
             />
 
             <MoneyInput
+              key={motoKey}
               name="motoValue"
               defaultValue={motoDefault}
               className="w-24"
@@ -673,6 +701,7 @@ function RowItem({
               fd.set("sizeFT", String(sc.FT));
               fd.set("channel", String((o.channel ?? "").trim()));
               fd.set("deliveryZoneId", String(deliveryZoneId ?? ""));
+              fd.set("isCreditCard", String(isCreditCard ? "on" : ""));
               rowFx.submit(fd, { method: "post" });
             }}
             onSubmit={() => setDetailsOpenId(false)}
@@ -684,7 +713,7 @@ function RowItem({
         </rowFx.Form>
       </div>
 
-      {/* Linha extra com badge + criado/decorrido + previsões */}
+      {/* Linha extra com info e previsões */}
       <div className="px-2 py-1 text-xs text-slate-500 flex flex-wrap items-center gap-4">
         <span className="font-medium text-slate-600">{statusText}</span>
 
@@ -757,8 +786,10 @@ export default function GridKdsPage() {
   const [progress, setProgress] = useState(5);
   const [openError, setOpenError] = useState<string | null>(null);
 
-  // filtro de canal (UI)
   const [channelFilter, setChannelFilter] = useState<string>("");
+
+  // ← estado do botão de cartão na Venda Livre rápida
+  const [vlIsCreditCard, setVlIsCreditCard] = useState(false);
 
   useEffect(() => {
     let t: any;
@@ -793,7 +824,6 @@ export default function GridKdsPage() {
         {(rowsDb: OrderRow[]) => {
           const dup = duplicateCommandNumbers(rowsDb);
 
-          // PREVISÕES (produção + entrega)
           const dzMap = useMemo(() => buildDzMap(dzTimes as any), [dzTimes]);
           const operatorCount = useMemo(() => getOperatorCountByDate(dateStr), [dateStr]);
           const riderCount = useMemo(() => getRiderCountByDate(dateStr), [dateStr]);
@@ -826,7 +856,6 @@ export default function GridKdsPage() {
             return byId;
           }, [rowsDb, operatorCount, riderCount, dzMap, nowMs]);
 
-          // Filtro por canal
           const filteredRows = useMemo(() => {
             if (!channelFilter) return rowsDb;
             const wanted = channelFilter;
@@ -835,7 +864,6 @@ export default function GridKdsPage() {
 
           return (
             <div className="space-y-4">
-              {/* Alertas topo */}
               {dup.length > 0 && (
                 <div className="flex items-center gap-2 border border-amber-300 bg-amber-50 text-amber-900 rounded px-3 py-2 text-sm">
                   <AlertTriangle className="w-4 h-4" />
@@ -843,7 +871,7 @@ export default function GridKdsPage() {
                 </div>
               )}
 
-              {/* Toolbar (abrir/fechar dia etc.) */}
+              {/* Toolbar topo */}
               <div className="flex flex-wrap items-center gap-3">
                 {(!header?.id || status === "PENDING") && (
                   <listFx.Form method="post" className="flex items-center gap-2">
@@ -907,17 +935,35 @@ export default function GridKdsPage() {
                 )}
               </div>
 
-              {/* Venda livre + Filtro de Canal */}
+              {/* Venda livre rápida + Filtro de Canal */}
               {(status === "OPENED" || status === "REOPENED") && (
                 <>
                   <div className="rounded-lg border p-3 flex flex-wrap items-center justify-between gap-3">
-                    {/* Venda Livre */}
+                    {/* Venda Livre rápida */}
                     <div className="flex items-center gap-3">
                       <div className="text-sm font-medium">Venda livre (rápida)</div>
                       <listFx.Form method="post" className="flex flex-wrap items-center gap-3">
                         <input type="hidden" name="_action" value="createVL" />
                         <input type="hidden" name="date" value={dateStr} />
+
                         <MoneyInput name="orderAmount" />
+
+                        {/* hidden para enviar o cartão no submit */}
+                        <input type="hidden" name="isCreditCard" value={vlIsCreditCard ? "on" : ""} />
+
+                        {/* Ícone Cartão (preto ativo / cinza inativo) */}
+                        <button
+                          type="button"
+                          onClick={() => setVlIsCreditCard(v => !v)}
+                          className={`h-9 w-9 grid place-items-center rounded-md border transition
+                                      hover:bg-slate-50
+                                      ${vlIsCreditCard ? "border-blue-800" : "border-slate-200"}`}
+                          title="Pago no cartão"
+                          aria-pressed={vlIsCreditCard}
+                        >
+                          <CreditCard className={`h-6 w-6 ${vlIsCreditCard ? "text-blue-800" : "text-slate-300"}`} />
+                        </button>
+
                         <Button type="submit" variant="secondary" disabled={listFx.state !== "idle"}>
                           {listFx.state !== "idle" ? (
                             <>
@@ -968,7 +1014,7 @@ export default function GridKdsPage() {
                     key={o.id}
                     o={o}
                     dateStr={dateStr}
-                    readOnly={readOnly}
+                    readOnly={isClosed}
                     deliveryZones={deliveryZones as any}
                     nowMs={nowMs}
                     predictions={predictions}
@@ -991,7 +1037,6 @@ export default function GridKdsPage() {
                 </>
               )}
 
-              {/* Overlay de abertura do dia */}
               <OpeningDayOverlay
                 open={opening || !!openError}
                 progress={progress}
