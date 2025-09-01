@@ -475,6 +475,8 @@ function RowItem({
   const [cmdLocal, setCmdLocal] = useState<number | null>(o.commandNumber);
   const [hasMoto, setHasMoto] = useState<boolean>(!!o.hasMoto); // agora: switch "Delivery"
   const [takeAway, setTakeAway] = useState<boolean>(!!(o as any).takeAway);
+  const [motoDefault, setMotoDefault] = useState<number>(Number(o.motoValue ?? 0));
+  const [motoKey, setMotoKey] = useState(0);
   const [deliveryZoneId, setDeliveryZoneId] = useState<string | null | undefined>((o as any).deliveryZoneId ?? null);
   const [sizes, setSizes] = useState<SizeCounts>(sizeCounts);
   const statusText = (o as any).status ?? "pendente";
@@ -557,8 +559,19 @@ function RowItem({
               <Switch
                 checked={hasMoto}
                 onCheckedChange={(next) => {
+
                   setHasMoto(next);
-                  if (next) setTakeAway(false); // Delivery e Retirada não podem coexistir
+                  if (next) {
+                    setTakeAway(false);    // Delivery e Retirada não coexistem
+                    setMotoDefault(10);    // coloca R$ 10,00 ao habilitar
+                    setMotoKey((k) => k + 1); // força o remount do MoneyInput (defaultValue novo)
+                  }
+
+                  if (!next) {
+                    setDeliveryZoneId(null)
+                    setMotoDefault(0);
+                    setMotoKey((k) => k + 1); // força o remount do MoneyInput (defaultValue novo)
+                  }
                 }}
                 id={`delivery-${o.id}`}
                 disabled={readOnly}
@@ -577,7 +590,7 @@ function RowItem({
 
             <MoneyInput
               name="motoValue"
-              defaultValue={o.motoValue}
+              defaultValue={motoDefault}
               className="w-24"
               disabled={readOnly || hasMoto === false}
             />
