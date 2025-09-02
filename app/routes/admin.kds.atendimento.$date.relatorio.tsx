@@ -102,7 +102,7 @@ export default function RelatorioKdsPage() {
           <CardContent className="space-y-2">
             <div className="text-2xl font-mono">R$ {fmt(agg.total)}</div>
             <div className="grid grid-cols-1 gap-2">
-              {compBadge("Ontem", agg.total, aggPrev?.total, true)}
+              {/* {compBadge("Ontem", agg.total, aggPrev?.total, true)} */}
               {compBadge("Sem. passada", agg.total, aggWeek?.total, true)}
             </div>
           </CardContent>
@@ -113,7 +113,7 @@ export default function RelatorioKdsPage() {
           <CardContent className="space-y-2">
             <div className="text-2xl font-mono">R$ {fmt(agg.moto)}</div>
             <div className="grid grid-cols-1 gap-2">
-              {compBadge("Ontem", agg.moto, aggPrev?.moto, true)}
+              {/* {compBadge("Ontem", agg.moto, aggPrev?.moto, true)} */}
               {compBadge("Sem. passada", agg.moto, aggWeek?.moto, true)}
             </div>
           </CardContent>
@@ -124,7 +124,7 @@ export default function RelatorioKdsPage() {
           <CardContent className="space-y-2">
             <div className="text-2xl font-mono">{agg.count}</div>
             <div className="grid grid-cols-1 gap-2">
-              {compBadge("Ontem", agg.count, aggPrev?.count, false)}
+              {/* {compBadge("Ontem", agg.count, aggPrev?.count, false)} */}
               {compBadge("Sem. passada", agg.count, aggWeek?.count, false)}
             </div>
           </CardContent>
@@ -151,8 +151,8 @@ export default function RelatorioKdsPage() {
                       <th className="py-2 text-right">Pedidos</th>
                       <th className="py-2 text-right">Faturamento (R$)</th>
                       {/* <th className="py-2 text-right">Moto (R$)</th> */}
-                      <th className="py-2 text-right">Ontem</th>
-                      <th className="py-2 text-right">Δ Ontem</th>
+                      {/* <th className="py-2 text-right">Ontem</th> */}
+                      {/* <th className="py-2 text-right">Δ Ontem</th> */}
                       <th className="py-2 text-right">Sem. passada</th>
                       <th className="py-2 text-right">Δ Sem.</th>
                     </tr>
