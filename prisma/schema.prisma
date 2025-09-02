@@ -370,16 +370,109 @@ model MenuItemCostVariation {
 }
 
 model DnaEmpresaSettings {
-  id                     String @id @default(uuid())
-  faturamentoBrutoAmount Float  @default(0) @map("faturamento_bruto_amount")
-  custoFixoAmount        Float  @default(0) @map("custo_fixo_amount")
-  custoFixoPerc          Float  @default(0) @map("custo_fixo_perc")
-  taxaCartaoPerc         Float  @default(0) @map("taxa_cartao_perc")
-  impostoPerc            Float  @default(0) @map("imposto_perc")
-  dnaPerc                Float  @default(0) @map("dna_perc")
-  wastePerc              Float  @default(0) @map("waste_perc")
+  id                     String   @id @default(uuid())
+  description            String?
+  faturamentoBrutoAmount Float    @default(0) @map("faturamento_bruto_amount")
+  custoFixoAmount        Float    @default(0) @map("custo_fixo_amount")
+  custoFixoPerc          Float    @default(0) @map("custo_fixo_perc")
+  taxaCartaoPerc         Float    @default(0) @map("taxa_cartao_perc")
+  impostoPerc            Float    @default(0) @map("imposto_perc")
+  dnaPerc                Float    @default(0) @map("dna_perc")
+  wastePerc              Float    @default(0) @map("waste_perc")
+  custoVariavelAmount    Float    @default(0) @map("custo_variavel_amount")
+  custoVariavelPerc      Float    @default(0) @map("custo_variavel_perc")
+  isSnapshot             Boolean  @default(false) @map("is_snapshot")
+  createdAt              DateTime @default(now()) @map("created_at")
 
   @@map("dna_empresa_settings")
+}
+
+model FinancialSummary {
+  id          String  @id @default(uuid())
+  // Snapshot/controle
+  isSnapshot  Boolean @default(false) @map("is_snapshot")
+  description String?
+
+  receitaBrutaAmount     Float @default(0) @map("receita_bruta_amount")
+  vendaCartaoAmount      Float @default(0) @map("venda_cartao_amount")
+  vendaCartaoPerc        Float @default(0) @map("venda_cartao_perc")
+  taxaCartaoPerc         Float @default(0) @map("taxa_cartao_perc")
+  taxaCartaoAmount       Float @default(0) @map("taxa_cartao_amount")
+  impostoPerc            Float @default(0) @map("imposto_perc")
+  impostoAmount          Float @default(0) @map("imposto_amount")
+  vendaMarketplaceAmount Float @default(0) @map("venda_marketplace_amount")
+  taxaMarketplacePerc    Float @default(0) @map("taxa_marketplace_perc")
+  taxaMarketplaceAmount  Float @default(0) @map("taxa_marketplace_amount")
+  receitaLiquidaAmount   Float @default(0) @map("receita_liquida_amount")
+  custoFixoAmount        Float @default(0) @map("custo_fixo_amount")
+  custoFixoPerc          Float @default(0) @map("custo_fixo_perc")
+  custoVariavelAmount    Float @default(0) @map("custo_variavel_amount")
+  custoVariavelPerc      Float @default(0) @map("custo_variavel_perc")
+
+  pontoEquilibrioAmount Float @default(0) @map("ponto_equilibrio_amount") /// meta mínima
+
+  ticketMedio Float @default(0) @map("ticket_medio")
+
+  createdAt          DateTime             @default(now()) @map("created_at")
+  updatedAt          DateTime             @updatedAt @map("updated_at")
+  FinancialDailyGoal FinancialDailyGoal[]
+
+  // Índices alinhados às consultas
+  @@index([isSnapshot, createdAt], map: "fs_is_snapshot_created_at_idx")
+  @@map("financial_summaries")
+}
+
+model FinancialDailyGoalSettings {
+  id String @id @default(uuid())
+
+  targetProfitPerc Float @default(0) @map("target_profit_perc")
+
+  // % contribuição da receita bruta por dia da semana
+  participacaoDia01Perc Float @default(0) @map("participacao_dia_01_perc") // Quarta
+  participacaoDia02Perc Float @default(0) @map("participacao_dia_02_perc") // Quinta
+  participacaoDia03Perc Float @default(0) @map("participacao_dia_03_perc") // Sexta
+  participacaoDia04Perc Float @default(0) @map("participacao_dia_04_perc") // Sábado
+  participacaoDia05Perc Float @default(0) @map("participacao_dia_05_perc") // Domingo
+}
+
+model FinancialDailyGoal {
+  id String @id @default(uuid())
+
+  financialSummaryId String           @map("financial_summary_id")
+  financialSummary   FinancialSummary @relation(fields: [financialSummaryId], references: [id])
+
+  // NOVO: apenas um registro "válido" por vez
+  isActive Boolean @default(true) @map("is_active")
+
+  targetProfitPerc Float @default(0) @map("target_profit_perc")
+
+  participacaoDia01Perc Float @default(0) @map("participacao_dia_01_perc")
+  participacaoDia02Perc Float @default(0) @map("participacao_dia_02_perc")
+  participacaoDia03Perc Float @default(0) @map("participacao_dia_03_perc")
+  participacaoDia04Perc Float @default(0) @map("participacao_dia_04_perc")
+  participacaoDia05Perc Float @default(0) @map("participacao_dia_05_perc")
+
+  minimumGoalDia01Amount Float @default(0) @map("minimum_goal_dia_01_amount")
+  minimumGoalDia02Amount Float @default(0) @map("minimum_goal_dia_02_amount")
+  minimumGoalDia03Amount Float @default(0) @map("minimum_goal_dia_03_amount")
+  minimumGoalDia04Amount Float @default(0) @map("minimum_goal_dia_04_amount")
+  minimumGoalDia05Amount Float @default(0) @map("minimum_goal_dia_05_amount")
+
+  targetProfitDia01Amount Float @default(0) @map("target_profit_dia_01_amount")
+  targetProfitDia02Amount Float @default(0) @map("target_profit_dia_02_amount")
+  targetProfitDia03Amount Float @default(0) @map("target_profit_dia_03_amount")
+  targetProfitDia04Amount Float @default(0) @map("target_profit_dia_04_amount")
+  targetProfitDia05Amount Float @default(0) @map("target_profit_dia_05_amount")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Índices
+  // Se você usa isActive no loader:
+  @@index([isActive, createdAt], map: "fdg_is_active_created_at_idx")
+  // Para consultas por resumo (histórico/relatório):
+  @@index([financialSummaryId, createdAt], map: "fdg_summary_created_at_idx")
+  @@map("financial_daily_goals")
 }
 
 model MenuItemSize {
@@ -864,6 +957,9 @@ model KdsDailyOrder {
   /// Total dos pedidos do dia (soma de orderAmount dos detalhes)
   totOrdersAmount Decimal @default(0) @map("tot_orders_amount") @db.Decimal(10, 2)
 
+  minimumGoalProfitAmount Decimal @default(0) @map("minimum_goal_profit_amount") @db.Decimal(10, 2)
+  targetGoalProfitAmount  Decimal @default(0) @map("target_goal_profit_amount") @db.Decimal(10, 2)
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -914,6 +1010,8 @@ model KdsDailyOrderDetail {
   sortOrderIndex Int @default(0) @map("sort_order_index") // NOVO
 
   isVendaLivre Boolean @default(false) @map("is_venda_livre")
+
+  isCreditCard Boolean @default(false) @map("is_credit_card")
 
   novoPedidoAt      DateTime?     @map("novo_pedido_at")
   emProducaoAt      DateTime?     @map("em_producao_at")

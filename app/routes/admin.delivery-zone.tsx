@@ -72,7 +72,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         },
       },
     },
-    orderBy: [{ createdAt: "desc" }],
+    orderBy: [{ name: "asc" }],
   });
 
   // Opcional: ID de uma zona "Não definido" se você criar uma no seed
@@ -102,7 +102,7 @@ export async function action({ request }: ActionFunctionArgs) {
         );
       }
 
-      const zone = await prisma.deliveryZone.create({
+      const zone = await prismaClient.deliveryZone.create({
         data: { name, city, state, zipCode },
       });
       return json({ ok: true, zone });
@@ -123,7 +123,7 @@ export async function action({ request }: ActionFunctionArgs) {
         );
       }
 
-      const zone = await prisma.deliveryZone.update({
+      const zone = await prismaClient.deliveryZone.update({
         where: { id },
         data: { name, city, state, zipCode },
       });
@@ -136,7 +136,7 @@ export async function action({ request }: ActionFunctionArgs) {
         return json({ ok: false, message: "ID é obrigatório." }, { status: 400 });
       }
 
-      await prisma.$transaction(async (tx) => {
+      await prismaClient.$transaction(async (tx) => {
         // 1) Apaga distances vinculados a essa zone
         await tx.deliveryZoneDistance.deleteMany({
           where: { deliveryZoneId: id },

@@ -122,8 +122,20 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
       title: "Financeiro",
       items: [
         {
-          title: "Custos itens cardápio delivery",
-          href: "/admin/gerenciamento/cardapio-items-costs",
+          title: "DNA",
+          href: "/admin/financeiro/dna",
+          items: [],
+          disabled: false,
+        },
+        {
+          title: "Resumo financeiro",
+          href: "/admin/financeiro/resumo-financeiro",
+          items: [],
+          disabled: false,
+        },
+        {
+          title: "Metas financeiras",
+          href: "/admin/financeiro/metas",
           items: [],
           disabled: false,
         },

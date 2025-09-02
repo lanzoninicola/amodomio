@@ -1,13 +1,16 @@
-import { useEffect, useMemo, useState } from "react";
+import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import { DecimalLike } from "~/domain/kds";
 
 
 type BaseProps = {
+  id?: string
   name: string;
   defaultValue?: DecimalLike | null;
   placeholder?: string;
   className?: string;
   disabled?: boolean;
+  onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void
+  readOnly?: boolean;
 };
 
 function toNumber(v?: DecimalLike | null) {
@@ -64,6 +67,8 @@ export function IntegerInput({
   placeholder,
   className = "w-24",
   disabled = false,
+  onChange,
+  readOnly = false,
   ...props
 }: BaseProps) {
   // "units" já é o valor inteiro (sem escala)
@@ -87,7 +92,7 @@ export function IntegerInput({
         inputMode="numeric"
         value={display}
         onKeyDown={onKeyDown}
-        onChange={() => { }}
+        onChange={onChange ? (e) => onChange(Number(e.target.value)) : () => { }}
         disabled={disabled}
         className={`${className} h-9 border rounded px-2 py-1 text-right ${disabled ? "bg-gray-50 text-gray-400" : ""
           }`}
@@ -105,6 +110,7 @@ export function IntegerInput({
 type DecimalInputProps = BaseProps & {
   /** Casas decimais (padrão 2, mesmo comportamento do MoneyInput) */
   fractionDigits?: number;
+
 };
 
 export function DecimalInput({
@@ -114,6 +120,8 @@ export function DecimalInput({
   className = "w-24",
   disabled = false,
   fractionDigits = 2,
+  onChange,
+  readOnly = false,
 }: DecimalInputProps) {
   // escala 10^fractionDigits (ex.: 2 casas => 100)
   const scale = useMemo(() => Math.pow(10, Math.max(0, Math.floor(fractionDigits))), [fractionDigits]);
@@ -144,11 +152,12 @@ export function DecimalInput({
         inputMode="numeric"
         value={display}
         onKeyDown={onKeyDown}
-        onChange={() => { }}
+        onChange={onChange ? (e) => onChange(Number(e.target.value)) : () => { }}
         disabled={disabled}
         className={`${className} h-9 border rounded px-2 py-1 text-right ${disabled ? "bg-gray-50 text-gray-400" : ""
           }`}
         placeholder={placeholder}
+        readOnly={readOnly}
       />
       <input type="hidden" name={name} value={value.toFixed(fractionDigits)} />
     </div>

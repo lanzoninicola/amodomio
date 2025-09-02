@@ -1,0 +1,6 @@
+-- AlterTable
+ALTER TABLE "financial_summaries" ADD COLUMN     "imposto_amount" DOUBLE PRECISION NOT NULL DEFAULT 0,
+ADD COLUMN     "imposto_perc" DOUBLE PRECISION NOT NULL DEFAULT 0,
+ADD COLUMN     "taxa_cartao_amount" DOUBLE PRECISION NOT NULL DEFAULT 0,
+ADD COLUMN     "taxa_cartao_perc" DOUBLE PRECISION NOT NULL DEFAULT 0,
+ADD COLUMN     "venda_cartao_perc" DOUBLE PRECISION NOT NULL DEFAULT 0;

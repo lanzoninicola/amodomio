@@ -8,7 +8,7 @@ export function SizeSelector({ counts, onChange, disabled }: { counts: SizeCount
     {(["F", "M", "P", "I", "FT"] as (keyof SizeCounts)[]).map((k) => (
       <button key={k} type="button" onClick={() => inc(k)}
         className={`w-10 h-10 rounded-full border flex items-center justify-center text-sm font-semibold
-        ${counts[k] > 0 ? "bg-primary text-white" : "bg-white"} ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
+        ${counts[k] > 0 ? "bg-blue-800 text-white" : "bg-white"} ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
         disabled={disabled} title={k === "FT" ? "FATIA" : String(k)}>
         {k}{counts[k] > 0 && <span className="ml-1">{counts[k]}</span>}
       </button>
