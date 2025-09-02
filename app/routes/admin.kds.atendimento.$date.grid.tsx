@@ -64,10 +64,13 @@ import {
   BadgeDollarSign,
 } from "lucide-react";
 import { Separator } from "~/components/ui/separator";
-
-import { setOrderStatus } from "~/domain/kds/server/repository.server";
-import DeliveryZoneCombobox from "~/domain/kds/components/delivery-zone-combobox";
 import { cn } from "~/lib/utils";
+import DeliveryZoneCombobox from "~/domain/kds/components/delivery-zone-combobox";
+import { computeNetRevenueAmount } from "~/domain/finance/compute-net-revenue-amount.server";
+import { channel } from "diagnostics_channel";
+import { setOrderStatus } from "~/domain/kds/server/repository.server";
+
+// ⬇️ Função utilitária (fornecida por você) para calcular a receita líquida
 
 export const meta: MetaFunction = () => {
   return [{ title: "KDS | Pedidos" }];
@@ -92,6 +95,10 @@ function toDecimal(value: FormDataEntryValue | null | undefined): Prisma.Decimal
   const raw = String(value ?? "0").replace(",", ".");
   const n = Number(raw);
   return new Prisma.Decimal(Number.isFinite(n) ? n.toFixed(2) : "0");
+}
+
+function fmtBRL(n: number) {
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2 }).format(n || 0);
 }
 
 function CommandNumberInput({
@@ -144,10 +151,42 @@ const sizeSummary = (c: SizeCounts) =>
    Loader
    =========================== */
 
+type DashboardMeta = {
+  grossAmount: number;
+  cardAmount: number;
+  motoAmount: number;
+  netAmount: number;
+  taxPerc: number;
+  marketplaceTaxPerc: number
+  cardFeePerc: number;
+  goalMinAmount: number;
+  goalTargetAmount: number;
+  pctOfTarget: number; // 0..100
+  status: "below-min" | "between" | "hit-target";
+};
+
+function mapGoalForDate(goal: any, dateStr: string): { min: number; target: number } {
+  // Considerando seu calendário: Quarta a Domingo (Dia01..Dia05)
+  const dt = new Date(`${dateStr}T12:00:00`);
+  const dow = dt.getDay(); // 0=Dom,1=Seg,...,3=Qua,4=Qui,5=Sex,6=Sab
+  // Map: Qua(3)->1, Qui(4)->2, Sex(5)->3, Sab(6)->4, Dom(0)->5
+  const map: Record<number, 1 | 2 | 3 | 4 | 5> = { 3: 1, 4: 2, 5: 3, 6: 4, 0: 5 } as any;
+  const key = map[dow];
+  if (!key) return { min: 0, target: 0 };
+
+  const minField = `minimumGoalDia0${key}Amount`;
+  const targetField = `targetProfitDia0${key}Amount`;
+
+  const min = Number(goal?.[minField] ?? 0) || 0;
+  const target = Number(goal?.[targetField] ?? 0) || 0;
+  return { min, target };
+}
+
 export async function loader({ params }: LoaderFunctionArgs) {
   const dateStr = params.date ?? todayLocalYMD();
   const dateInt = ymdToDateInt(dateStr);
 
+  // Dados já existentes
   const listPromise = listByDate(dateInt);
   const header = await prisma.kdsDailyOrder.findUnique({
     where: { dateInt },
@@ -167,12 +206,107 @@ export async function loader({ params }: LoaderFunctionArgs) {
     },
   });
 
+  // ⬇️ Novos cálculos para o painel-resumo
+  // Somas do dia
+  const grossRow = await prisma.kdsDailyOrderDetail.aggregate({
+    where: { dateInt },
+    _sum: { orderAmount: true },
+  });
+  const cardRow = await prisma.kdsDailyOrderDetail.aggregate({
+    where: { dateInt, isCreditCard: true },
+    _sum: { orderAmount: true },
+  });
+  const motoRow = await prisma.kdsDailyOrderDetail.aggregate({
+    where: { dateInt, hasMoto: true },
+    _sum: { motoValue: true },
+  });
+
+  const aiqfomeChannelStr = CHANNELS[2]
+  const ifoodChannelStr = CHANNELS[3];
+  const marketplaceRow = await prisma.kdsDailyOrderDetail.aggregate({
+    where: {
+      AND: {
+        dateInt,
+        channel: {
+          in: [aiqfomeChannelStr, ifoodChannelStr]
+        }
+      }
+    },
+    _sum: { orderAmount: true },
+  })
+
+  const grossAmount = Number(grossRow._sum.orderAmount ?? 0);
+  const cardAmount = Number(cardRow._sum.orderAmount ?? 0);
+  const motoAmount = Number(motoRow._sum.motoValue ?? 0);
+  const marketplaceAmount = Number(marketplaceRow._sum.orderAmount ?? 0);
+
+  // Taxas vigentes (snapshot=false)
+  const fs = await prisma.financialSummary.findFirst({
+    where: { isSnapshot: false },
+    select: { taxaCartaoPerc: true, impostoPerc: true, taxaMarketplacePerc: true },
+  });
+  const taxPerc = Number(fs?.impostoPerc ?? 0);       // ex.: 4 para 4%
+  const cardFeePerc = Number(fs?.taxaCartaoPerc ?? 0); // ex.: 3.2 para 3,2%
+  const taxaMarketplacePerc = Number(fs?.taxaMarketplacePerc ?? 0);
+
+  // Meta ativa
+  const activeGoal = await prisma.financialDailyGoal.findFirst({
+    where: { isActive: true },
+    select: {
+      minimumGoalDia01Amount: true,
+      minimumGoalDia02Amount: true,
+      minimumGoalDia03Amount: true,
+      minimumGoalDia04Amount: true,
+      minimumGoalDia05Amount: true,
+      targetProfitDia01Amount: true,
+      targetProfitDia02Amount: true,
+      targetProfitDia03Amount: true,
+      targetProfitDia04Amount: true,
+      targetProfitDia05Amount: true,
+    },
+  });
+
+  const { min: goalMinAmount, target: goalTargetAmount } = mapGoalForDate(activeGoal, dateStr);
+
+  // Receita líquida usando sua função utilitária
+  const netAmount = computeNetRevenueAmount({
+    receitaBrutaAmount: grossAmount,
+    vendaCartaoAmount: cardAmount,
+    taxaCartaoPerc: cardFeePerc,
+    taxaMarketplacePerc,
+    vendaMarketplaceAmount: marketplaceAmount,
+    impostoPerc: taxPerc,
+  });
+
+  // Status vs metas
+  let status: DashboardMeta["status"] = "below-min";
+  if (netAmount >= goalTargetAmount && goalTargetAmount > 0) status = "hit-target";
+  else if (netAmount >= goalMinAmount) status = "between";
+
+  const pctOfTarget =
+    goalTargetAmount > 0 ? Math.min(100, (netAmount / goalTargetAmount) * 100) : 0;
+
+  const dashboard: DashboardMeta = {
+    grossAmount,
+    cardAmount,
+    motoAmount,
+    netAmount,
+    taxPerc,
+    cardFeePerc,
+    goalMinAmount,
+    goalTargetAmount,
+    pctOfTarget,
+    status,
+    marketplaceTaxPerc: taxaMarketplacePerc
+  };
+
   return defer({
     dateStr,
     items: listPromise,
     header: header ?? { id: null, operationStatus: "PENDING" as const },
     deliveryZones,
     dzTimes,
+    dashboard,
   });
 }
 
@@ -774,7 +908,7 @@ function RowItem({
    =========================== */
 
 export default function GridKdsPage() {
-  const { dateStr, items, header, deliveryZones, dzTimes } = useLoaderData<typeof loader>();
+  const { dateStr, items, header, deliveryZones, dzTimes, dashboard } = useLoaderData<typeof loader>();
   const listFx = useFetcher();
   const rowFx = useFetcher();
 
@@ -817,6 +951,12 @@ export default function GridKdsPage() {
   }, [listFx.state, opening, listFx.data]);
 
   const nowMs = Date.now();
+
+  // Cores do status de meta
+  const statusColor =
+    dashboard.status === "hit-target" ? "bg-emerald-50 text-emerald-900 border-emerald-200" :
+      dashboard.status === "between" ? "bg-amber-50 text-amber-900 border-amber-200" :
+        "bg-rose-50 text-rose-900 border-rose-200";
 
   return (
     <Suspense fallback={<div className="p-4 text-sm text-slate-600">Carregando…</div>}>
@@ -871,44 +1011,30 @@ export default function GridKdsPage() {
                 </div>
               )}
 
-              {/* Toolbar topo */}
-              <div className="flex flex-wrap items-center gap-3">
-                {(!header?.id || status === "PENDING") && (
-                  <listFx.Form method="post" className="flex items-center gap-2">
-                    <input type="hidden" name="_action" value="openDay" />
-                    <input type="hidden" name="date" value={dateStr} />
-                    <Input name="qty" defaultValue={40} className="h-9 w-20 text-center" />
-                    <Button type="submit" variant="default" disabled={listFx.state !== "idle"} className="bg-blue-800">
-                      {listFx.state !== "idle" ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin mr-1" /> Abrindo…
-                        </>
-                      ) : (
-                        <>
-                          <PlusCircle className="w-4 h-4 mr-1" />
-                          Abrir dia
-                        </>
-                      )}
-                    </Button>
-                  </listFx.Form>
-                )}
+              <div className="grid grid-cols-12 items-start">
+                {/* Toolbar topo */}
+                <div className="flex flex-wrap items-center gap-3 col-span-4">
+                  {(!header?.id || status === "PENDING") && (
+                    <listFx.Form method="post" className="flex items-center gap-2">
+                      <input type="hidden" name="_action" value="openDay" />
+                      <input type="hidden" name="date" value={dateStr} />
+                      <Input name="qty" defaultValue={40} className="h-9 w-20 text-center" />
+                      <Button type="submit" variant="default" disabled={listFx.state !== "idle"} className="bg-blue-800">
+                        {listFx.state !== "idle" ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin mr-1" /> Abrindo…
+                          </>
+                        ) : (
+                          <>
+                            <PlusCircle className="w-4 h-4 mr-1" />
+                            Abrir dia
+                          </>
+                        )}
+                      </Button>
+                    </listFx.Form>
+                  )}
 
-                {status === "OPENED" && (
-                  <listFx.Form method="post" className="flex items-center gap-2">
-                    <input type="hidden" name="_action" value="closeDay" />
-                    <input type="hidden" name="date" value={dateStr} />
-                    <Button type="submit" variant="secondary">
-                      <Lock className="w-4 h-4 mr-2" /> Fechar dia
-                    </Button>
-                  </listFx.Form>
-                )}
-
-                {status === "REOPENED" && (
-                  <>
-                    <div className="px-3 py-1 rounded border text-sm bg-amber-50 text-amber-900">
-                      Dia reaberto (edição liberada, sem novos registros)
-                      <span className="text-xs text-slate-500 ml-2">(Atalho: pressione <b>M</b> para ver o mês)</span>
-                    </div>
+                  {status === "OPENED" && (
                     <listFx.Form method="post" className="flex items-center gap-2">
                       <input type="hidden" name="_action" value="closeDay" />
                       <input type="hidden" name="date" value={dateStr} />
@@ -916,23 +1042,81 @@ export default function GridKdsPage() {
                         <Lock className="w-4 h-4 mr-2" /> Fechar dia
                       </Button>
                     </listFx.Form>
-                  </>
-                )}
+                  )}
 
-                {status === "CLOSED" && (
-                  <>
-                    <div className="ml-2 px-3 py-1 rounded border text-sm bg-slate-50 flex items-center gap-2">
-                      <Lock className="w-4 h-4" /> Dia fechado (somente leitura)
+                  {status === "REOPENED" && (
+                    <>
+                      <div className="px-3 py-1 rounded border text-sm bg-amber-50 text-amber-900">
+                        Dia reaberto (edição liberada, sem novos registros)
+                        <span className="text-xs text-slate-500 ml-2">(Atalho: pressione <b>M</b> para ver o mês)</span>
+                      </div>
+                      <listFx.Form method="post" className="flex items-center gap-2">
+                        <input type="hidden" name="_action" value="closeDay" />
+                        <input type="hidden" name="date" value={dateStr} />
+                        <Button type="submit" variant="secondary">
+                          <Lock className="w-4 h-4 mr-2" /> Fechar dia
+                        </Button>
+                      </listFx.Form>
+                    </>
+                  )}
+
+                  {status === "CLOSED" && (
+                    <>
+                      <div className="ml-2 px-3 py-1 rounded border text-sm bg-slate-50 flex items-center gap-2">
+                        <Lock className="w-4 h-4" /> Dia fechado (somente leitura)
+                      </div>
+                      <listFx.Form method="post" className="flex items-center gap-2">
+                        <input type="hidden" name="_action" value="reopenDay" />
+                        <input type="hidden" name="date" value={dateStr} />
+                        <Button type="submit" variant="ghost">
+                          <Unlock className="w-4 h-4 mr-2" /> Reabrir dia
+                        </Button>
+                      </listFx.Form>
+                    </>
+                  )}
+                </div>
+
+                {/* Painel-resumo de metas e receita */}
+                <div className={cn("rounded-lg border p-3 col-span-8", statusColor)}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <BadgeDollarSign className="w-5 h-5" />
+                    <div className="font-semibold">Meta financeira do dia</div>
+                    <div className="text-xs opacity-70 ml-auto">
+                      Taxa cartão: {dashboard.cardFeePerc?.toFixed(2)}% · Imposto: {dashboard.taxPerc?.toFixed(2)}% · Taxa Marketplace: {dashboard.marketplaceTaxPerc?.toFixed(2)}%
                     </div>
-                    <listFx.Form method="post" className="flex items-center gap-2">
-                      <input type="hidden" name="_action" value="reopenDay" />
-                      <input type="hidden" name="date" value={dateStr} />
-                      <Button type="submit" variant="ghost">
-                        <Unlock className="w-4 h-4 mr-2" /> Reabrir dia
-                      </Button>
-                    </listFx.Form>
-                  </>
-                )}
+                  </div>
+
+                  <div className="grid grid-cols-2 md:grid-cols-6 gap-3 text-sm">
+                    <div>
+                      <div className="opacity-70">Receita Bruta</div>
+                      <div className="font-semibold">{fmtBRL(dashboard.grossAmount)}</div>
+                    </div>
+                    <div>
+                      <div className="opacity-70">Receita Líquida</div>
+                      <div className="font-semibold">{fmtBRL(dashboard.netAmount)}</div>
+                    </div>
+                    <div>
+                      <div className="opacity-70">Meta Mínima (dia)</div>
+                      <div className="font-semibold">{fmtBRL(dashboard.goalMinAmount)}</div>
+                    </div>
+                    <div>
+                      <div className="opacity-70">Meta Target (dia)</div>
+                      <div className="font-semibold">{fmtBRL(dashboard.goalTargetAmount)}</div>
+                    </div>
+                    <div>
+                      <div className="opacity-70">% da Target</div>
+                      <div className="font-semibold">{dashboard.pctOfTarget.toFixed(0)}%</div>
+                    </div>
+                    <div>
+                      <div className="opacity-70">Status</div>
+                      <div className="font-semibold">
+                        {dashboard.status === "hit-target" ? "Atingiu a target" :
+                          dashboard.status === "between" ? "Acima da mínima" :
+                            "Abaixo da mínima"}
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {/* Venda livre rápida + Filtro de Canal */}
