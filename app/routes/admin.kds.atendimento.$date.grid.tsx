@@ -67,11 +67,11 @@ import { Separator } from "~/components/ui/separator";
 import { cn } from "~/lib/utils";
 import DeliveryZoneCombobox from "~/domain/kds/components/delivery-zone-combobox";
 import { computeNetRevenueAmount } from "~/domain/finance/compute-net-revenue-amount.server";
-import { channel } from "diagnostics_channel";
 import { setOrderStatus } from "~/domain/kds/server/repository.server";
 
-// ⬇️ Função utilitária (fornecida por você) para calcular a receita líquida
-
+/* ===========================
+   Meta
+   =========================== */
 export const meta: MetaFunction = () => {
   return [{ title: "KDS | Pedidos" }];
 };
@@ -90,7 +90,6 @@ const COLS_HDR =
 /* ===========================
    Helpers
    =========================== */
-
 function toDecimal(value: FormDataEntryValue | null | undefined): Prisma.Decimal {
   const raw = String(value ?? "0").replace(",", ".");
   const n = Number(raw);
@@ -313,7 +312,6 @@ export async function loader({ params }: LoaderFunctionArgs) {
 /* ===========================
    Actions
    =========================== */
-
 export async function action({ request, params }: ActionFunctionArgs) {
   const form = await request.formData();
   const _action = String(form.get("_action") ?? "");
@@ -584,7 +582,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
 /* ===========================
    Linha (RowItem)
    =========================== */
-
 function RowItem({
   o,
   dateStr,
@@ -904,9 +901,21 @@ function RowItem({
 }
 
 /* ===========================
+   Skeleton de linhas
+   =========================== */
+function RowsSkeleton() {
+  return (
+    <ul className="space-y-1" aria-busy="true" aria-live="polite">
+      {Array.from({ length: 12 }).map((_, i) => (
+        <li key={i} className="rounded border p-3 bg-slate-50 h-14 animate-pulse" />
+      ))}
+    </ul>
+  );
+}
+
+/* ===========================
    Página (Grid)
    =========================== */
-
 export default function GridKdsPage() {
   const { dateStr, items, header, deliveryZones, dzTimes, dashboard } = useLoaderData<typeof loader>();
   const listFx = useFetcher();
@@ -959,279 +968,284 @@ export default function GridKdsPage() {
         "bg-rose-50 text-rose-900 border-rose-200";
 
   return (
-    <Suspense fallback={<div className="p-4 text-sm text-slate-600">Carregando…</div>}>
-      <Await resolve={items}>
-        {(rowsDb: OrderRow[]) => {
-          const dup = duplicateCommandNumbers(rowsDb);
+    <div className="space-y-4">
+      {/* Toolbar topo + Painel-resumo SEM suspense (feedback imediato) */}
+      <div className="grid grid-cols-12 items-start">
+        {/* Toolbar topo */}
+        <div className="flex flex-wrap items-center gap-3 col-span-4">
+          {(!header?.id || status === "PENDING") && (
+            <listFx.Form method="post" className="flex items-center gap-2">
+              <input type="hidden" name="_action" value="openDay" />
+              <input type="hidden" name="date" value={dateStr} />
+              <Input name="qty" defaultValue={40} className="h-9 w-20 text-center" />
+              <Button type="submit" variant="default" disabled={listFx.state !== "idle"} className="bg-blue-800">
+                {listFx.state !== "idle" ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin mr-1" /> Abrindo…
+                  </>
+                ) : (
+                  <>
+                    <PlusCircle className="w-4 h-4 mr-1" />
+                    Abrir dia
+                  </>
+                )}
+              </Button>
+            </listFx.Form>
+          )}
 
-          const dzMap = useMemo(() => buildDzMap(dzTimes as any), [dzTimes]);
-          const operatorCount = useMemo(() => getOperatorCountByDate(dateStr), [dateStr]);
-          const riderCount = useMemo(() => getRiderCountByDate(dateStr), [dateStr]);
+          {status === "OPENED" && (
+            <listFx.Form method="post" className="flex items-center gap-2">
+              <input type="hidden" name="_action" value="closeDay" />
+              <input type="hidden" name="date" value={dateStr} />
+              <Button type="submit" variant="secondary">
+                <Lock className="w-4 h-4 mr-2" /> Fechar dia
+              </Button>
+            </listFx.Form>
+          )}
 
-          const predictions = useMemo(() => {
-            const eligible = rowsDb.filter((o) => {
-              const st = (o as any).status ?? "pendente";
-              const npAt = (o as any).novoPedidoAt ?? null;
-              return st !== "pendente" && !!npAt;
-            });
-            const minimal: MinimalOrderRow[] = eligible.map((o) => ({
-              id: o.id,
-              createdAt: (o as any).novoPedidoAt as any,
-              finalizadoAt: (o as any).finalizadoAt ?? null,
-              size: o.size,
-              hasMoto: (o as any).hasMoto ?? null,
-              takeAway: (o as any).takeAway ?? null,
-              deliveryZoneId: (o as any).deliveryZoneId ?? null,
-            }));
-
-            const ready = predictReadyTimes(minimal, operatorCount, nowMs);
-            const arrive = predictArrivalTimes(ready, riderCount, dzMap);
-
-            const byId = new Map<string, { readyAtMs: number; arriveAtMs: number | null }>();
-            for (const r of ready) byId.set(r.id, { readyAtMs: r.readyAtMs, arriveAtMs: null });
-            for (const a of arrive) {
-              const cur = byId.get(a.id);
-              if (cur) cur.arriveAtMs = a.arriveAtMs;
-            }
-            return byId;
-          }, [rowsDb, operatorCount, riderCount, dzMap, nowMs]);
-
-          const filteredRows = useMemo(() => {
-            if (!channelFilter) return rowsDb;
-            const wanted = channelFilter;
-            return rowsDb.filter((o) => ((o.channel ?? "").trim() === wanted));
-          }, [rowsDb, channelFilter]);
-
-          return (
-            <div className="space-y-4">
-              {dup.length > 0 && (
-                <div className="flex items-center gap-2 border border-amber-300 bg-amber-50 text-amber-900 rounded px-3 py-2 text-sm">
-                  <AlertTriangle className="w-4 h-4" />
-                  Comandas duplicadas no dia: <b className="ml-1">{dup.join(", ")}</b>
-                </div>
-              )}
-
-              <div className="grid grid-cols-12 items-start">
-                {/* Toolbar topo */}
-                <div className="flex flex-wrap items-center gap-3 col-span-4">
-                  {(!header?.id || status === "PENDING") && (
-                    <listFx.Form method="post" className="flex items-center gap-2">
-                      <input type="hidden" name="_action" value="openDay" />
-                      <input type="hidden" name="date" value={dateStr} />
-                      <Input name="qty" defaultValue={40} className="h-9 w-20 text-center" />
-                      <Button type="submit" variant="default" disabled={listFx.state !== "idle"} className="bg-blue-800">
-                        {listFx.state !== "idle" ? (
-                          <>
-                            <Loader2 className="w-4 h-4 animate-spin mr-1" /> Abrindo…
-                          </>
-                        ) : (
-                          <>
-                            <PlusCircle className="w-4 h-4 mr-1" />
-                            Abrir dia
-                          </>
-                        )}
-                      </Button>
-                    </listFx.Form>
-                  )}
-
-                  {status === "OPENED" && (
-                    <listFx.Form method="post" className="flex items-center gap-2">
-                      <input type="hidden" name="_action" value="closeDay" />
-                      <input type="hidden" name="date" value={dateStr} />
-                      <Button type="submit" variant="secondary">
-                        <Lock className="w-4 h-4 mr-2" /> Fechar dia
-                      </Button>
-                    </listFx.Form>
-                  )}
-
-                  {status === "REOPENED" && (
-                    <>
-                      <div className="px-3 py-1 rounded border text-sm bg-amber-50 text-amber-900">
-                        Dia reaberto (edição liberada, sem novos registros)
-                        <span className="text-xs text-slate-500 ml-2">(Atalho: pressione <b>M</b> para ver o mês)</span>
-                      </div>
-                      <listFx.Form method="post" className="flex items-center gap-2">
-                        <input type="hidden" name="_action" value="closeDay" />
-                        <input type="hidden" name="date" value={dateStr} />
-                        <Button type="submit" variant="secondary">
-                          <Lock className="w-4 h-4 mr-2" /> Fechar dia
-                        </Button>
-                      </listFx.Form>
-                    </>
-                  )}
-
-                  {status === "CLOSED" && (
-                    <>
-                      <div className="ml-2 px-3 py-1 rounded border text-sm bg-slate-50 flex items-center gap-2">
-                        <Lock className="w-4 h-4" /> Dia fechado (somente leitura)
-                      </div>
-                      <listFx.Form method="post" className="flex items-center gap-2">
-                        <input type="hidden" name="_action" value="reopenDay" />
-                        <input type="hidden" name="date" value={dateStr} />
-                        <Button type="submit" variant="ghost">
-                          <Unlock className="w-4 h-4 mr-2" /> Reabrir dia
-                        </Button>
-                      </listFx.Form>
-                    </>
-                  )}
-                </div>
-
-                {/* Painel-resumo de metas e receita */}
-                <div className={cn("rounded-lg border p-3 col-span-8", statusColor)}>
-                  <div className="flex items-center gap-2 mb-2">
-                    <BadgeDollarSign className="w-5 h-5" />
-                    <div className="font-semibold">Meta financeira do dia</div>
-                    <div className="text-xs opacity-70 ml-auto">
-                      Taxa cartão: {dashboard.cardFeePerc?.toFixed(2)}% · Imposto: {dashboard.taxPerc?.toFixed(2)}% · Taxa Marketplace: {dashboard.marketplaceTaxPerc?.toFixed(2)}%
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 md:grid-cols-6 gap-3 text-sm">
-                    <div>
-                      <div className="opacity-70">Receita Bruta</div>
-                      <div className="font-semibold">{fmtBRL(dashboard.grossAmount)}</div>
-                    </div>
-                    <div>
-                      <div className="opacity-70">Receita Líquida</div>
-                      <div className="font-semibold">{fmtBRL(dashboard.netAmount)}</div>
-                    </div>
-                    <div>
-                      <div className="opacity-70">Meta Mínima (dia)</div>
-                      <div className="font-semibold">{fmtBRL(dashboard.goalMinAmount)}</div>
-                    </div>
-                    <div>
-                      <div className="opacity-70">Meta Target (dia)</div>
-                      <div className="font-semibold">{fmtBRL(dashboard.goalTargetAmount)}</div>
-                    </div>
-                    <div>
-                      <div className="opacity-70">% da Target</div>
-                      <div className="font-semibold">{dashboard.pctOfTarget.toFixed(0)}%</div>
-                    </div>
-                    <div>
-                      <div className="opacity-70">Status</div>
-                      <div className="font-semibold">
-                        {dashboard.status === "hit-target" ? "Atingiu a target" :
-                          dashboard.status === "between" ? "Acima da mínima" :
-                            "Abaixo da mínima"}
-                      </div>
-                    </div>
-                  </div>
-                </div>
+          {status === "REOPENED" && (
+            <>
+              <div className="px-3 py-1 rounded border text-sm bg-amber-50 text-amber-900">
+                Dia reaberto (edição liberada, sem novos registros)
+                <span className="text-xs text-slate-500 ml-2">(Atalho: pressione <b>M</b> para ver o mês)</span>
               </div>
+              <listFx.Form method="post" className="flex items-center gap-2">
+                <input type="hidden" name="_action" value="closeDay" />
+                <input type="hidden" name="date" value={dateStr} />
+                <Button type="submit" variant="secondary">
+                  <Lock className="w-4 h-4 mr-2" /> Fechar dia
+                </Button>
+              </listFx.Form>
+            </>
+          )}
 
-              {/* Venda livre rápida + Filtro de Canal */}
-              {(status === "OPENED" || status === "REOPENED") && (
-                <>
-                  <div className="rounded-lg border p-3 flex flex-wrap items-center justify-between gap-3">
-                    {/* Venda Livre rápida */}
-                    <div className="flex items-center gap-3">
-                      <div className="text-sm font-medium">Venda livre (rápida)</div>
-                      <listFx.Form method="post" className="flex flex-wrap items-center gap-3">
-                        <input type="hidden" name="_action" value="createVL" />
-                        <input type="hidden" name="date" value={dateStr} />
+          {status === "CLOSED" && (
+            <>
+              <div className="ml-2 px-3 py-1 rounded border text-sm bg-slate-50 flex items-center gap-2">
+                <Lock className="w-4 h-4" /> Dia fechado (somente leitura)
+              </div>
+              <listFx.Form method="post" className="flex items-center gap-2">
+                <input type="hidden" name="_action" value="reopenDay" />
+                <input type="hidden" name="date" value={dateStr} />
+                <Button type="submit" variant="ghost">
+                  <Unlock className="w-4 h-4 mr-2" /> Reabrir dia
+                </Button>
+              </listFx.Form>
+            </>
+          )}
+        </div>
 
-                        <MoneyInput name="orderAmount" />
-
-                        {/* hidden para enviar o cartão no submit */}
-                        <input type="hidden" name="isCreditCard" value={vlIsCreditCard ? "on" : ""} />
-
-                        {/* Ícone Cartão (preto ativo / cinza inativo) */}
-                        <button
-                          type="button"
-                          onClick={() => setVlIsCreditCard(v => !v)}
-                          className={`h-9 w-9 grid place-items-center rounded-md border transition
-                                      hover:bg-slate-50
-                                      ${vlIsCreditCard ? "border-blue-800" : "border-slate-200"}`}
-                          title="Pago no cartão"
-                          aria-pressed={vlIsCreditCard}
-                        >
-                          <CreditCard className={`h-6 w-6 ${vlIsCreditCard ? "text-blue-800" : "text-slate-300"}`} />
-                        </button>
-
-                        <Button type="submit" variant="secondary" disabled={listFx.state !== "idle"}>
-                          {listFx.state !== "idle" ? (
-                            <>
-                              <Loader2 className="w-4 h-4 animate-spin mr-1" /> Adicionando…
-                            </>
-                          ) : (
-                            "Adicionar"
-                          )}
-                        </Button>
-                      </listFx.Form>
-                    </div>
-
-                    {/* Filtro por Canal */}
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-slate-600">Filtrar canal:</span>
-                      <Select value={channelFilter} onValueChange={(val) => setChannelFilter(val)}>
-                        <SelectTrigger className="w-[240px] h-9">
-                          <SelectValue placeholder="Todos os canais" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="">Todos</SelectItem>
-                          {CHANNELS.map((c) => (
-                            <SelectItem key={c} value={c}>{c}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  {/* Cabeçalho */}
-                  <div className={COLS_HDR + " py-2 px-1"}>
-                    <div className="text-center">#</div>
-                    <div className="text-center">Pedido (R$)</div>
-                    <div className="text-center">Tamanhos</div>
-                    <div className="text-center">Canal</div>
-                    <div className="text-center">Delivery</div>
-                    <div className="text-center">Retirada</div>
-                    <div className="text-center">Detalhes</div>
-                    <div className="text-center">Ações</div>
-                  </div>
-                </>
-              )}
-
-              {/* Linhas */}
-              <ul className="space-y-1">
-                {filteredRows.map((o) => (
-                  <RowItem
-                    key={o.id}
-                    o={o}
-                    dateStr={dateStr}
-                    readOnly={isClosed}
-                    deliveryZones={deliveryZones as any}
-                    nowMs={nowMs}
-                    predictions={predictions}
-                    rowFx={rowFx}
-                  />
-                ))}
-              </ul>
-
-              {status === "OPENED" && (
-                <>
-                  <Separator className="my-4" />
-                  <listFx.Form method="post" className="flex items-center gap-2">
-                    <input type="hidden" name="_action" value="addMore" />
-                    <input type="hidden" name="date" value={dateStr} />
-                    <Button type="submit" disabled={listFx.state !== "idle"}>
-                      Adicionar mais
-                    </Button>
-                    <Input name="more" defaultValue={20} className="h-9 w-28 text-center" />
-                  </listFx.Form>
-                </>
-              )}
-
-              <OpeningDayOverlay
-                open={opening || !!openError}
-                progress={progress}
-                hasError={!!openError}
-                errorMessage={openError}
-                onClose={() => { setOpening(false); setOpenError(null); }}
-              />
+        {/* Painel-resumo de metas e receita */}
+        <div className={cn("rounded-lg border p-3 col-span-8", statusColor)}>
+          <div className="flex items-center gap-2 mb-2">
+            <BadgeDollarSign className="w-5 h-5" />
+            <div className="font-semibold">Meta financeira do dia</div>
+            <div className="text-xs opacity-70 ml-auto">
+              Taxa cartão: {dashboard.cardFeePerc?.toFixed(2)}% · Imposto: {dashboard.taxPerc?.toFixed(2)}% · Taxa Marketplace: {dashboard.marketplaceTaxPerc?.toFixed(2)}%
             </div>
-          );
-        }}
-      </Await>
-    </Suspense>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-3 text-sm">
+            <div>
+              <div className="opacity-70">Receita Bruta</div>
+              <div className="font-semibold">{fmtBRL(dashboard.grossAmount)}</div>
+            </div>
+            <div>
+              <div className="opacity-70">Receita Líquida</div>
+              <div className="font-semibold">{fmtBRL(dashboard.netAmount)}</div>
+            </div>
+            <div>
+              <div className="opacity-70">Meta Mínima (dia)</div>
+              <div className="font-semibold">{fmtBRL(dashboard.goalMinAmount)}</div>
+            </div>
+            <div>
+              <div className="opacity-70">Meta Target (dia)</div>
+              <div className="font-semibold">{fmtBRL(dashboard.goalTargetAmount)}</div>
+            </div>
+            <div>
+              <div className="opacity-70">% da Target</div>
+              <div className="font-semibold">{dashboard.pctOfTarget.toFixed(0)}%</div>
+            </div>
+            <div>
+              <div className="opacity-70">Status</div>
+              <div className="font-semibold">
+                {dashboard.status === "hit-target" ? "Atingiu a target" :
+                  dashboard.status === "between" ? "Acima da mínima" :
+                    "Abaixo da mínima"}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Venda livre rápida + Filtro de Canal */}
+      {(status === "OPENED" || status === "REOPENED") && (
+        <>
+          <div className="rounded-lg border p-3 flex flex-wrap items-center justify-between gap-3">
+            {/* Venda Livre rápida */}
+            <div className="flex items-center gap-3">
+              <div className="text-sm font-medium">Venda livre (rápida)</div>
+              <listFx.Form method="post" className="flex flex-wrap items-center gap-3">
+                <input type="hidden" name="_action" value="createVL" />
+                <input type="hidden" name="date" value={dateStr} />
+
+                <MoneyInput name="orderAmount" />
+
+                {/* hidden para enviar o cartão no submit */}
+                <input type="hidden" name="isCreditCard" value={vlIsCreditCard ? "on" : ""} />
+
+                {/* Ícone Cartão (preto ativo / cinza inativo) */}
+                <button
+                  type="button"
+                  onClick={() => setVlIsCreditCard(v => !v)}
+                  className={`h-9 w-9 grid place-items-center rounded-md border transition
+                              hover:bg-slate-50
+                              ${vlIsCreditCard ? "border-blue-800" : "border-slate-200"}`}
+                  title="Pago no cartão"
+                  aria-pressed={vlIsCreditCard}
+                >
+                  <CreditCard className={`h-6 w-6 ${vlIsCreditCard ? "text-blue-800" : "text-slate-300"}`} />
+                </button>
+
+                <Button type="submit" variant="secondary" disabled={listFx.state !== "idle"}>
+                  {listFx.state !== "idle" ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin mr-1" /> Adicionando…
+                    </>
+                  ) : (
+                    "Adicionar"
+                  )}
+                </Button>
+              </listFx.Form>
+            </div>
+
+            {/* Filtro por Canal */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-slate-600">Filtrar canal:</span>
+              <Select value={channelFilter} onValueChange={(val) => setChannelFilter(val)}>
+                <SelectTrigger className="w-[240px] h-9">
+                  <SelectValue placeholder="Todos os canais" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Todos</SelectItem>
+                  {CHANNELS.map((c) => (
+                    <SelectItem key={c} value={c}>{c}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Cabeçalho */}
+          <div className={COLS_HDR + " py-2 px-1"}>
+            <div className="text-center">#</div>
+            <div className="text-center">Pedido (R$)</div>
+            <div className="text-center">Tamanhos</div>
+            <div className="text-center">Canal</div>
+            <div className="text-center">Delivery</div>
+            <div className="text-center">Retirada</div>
+            <div className="text-center">Detalhes</div>
+            <div className="text-center">Ações</div>
+          </div>
+        </>
+      )}
+
+      {/* ========== SOMENTE AS LINHAS EM SUSPENSE ==========
+          Ao trocar a data, o topo fica estável e aqui mostramos skeleton */}
+      <Suspense key={dateStr} fallback={<RowsSkeleton />}>
+        <Await resolve={items}>
+          {(rowsDb: OrderRow[]) => {
+            const dup = duplicateCommandNumbers(rowsDb);
+
+            const dzMap = useMemo(() => buildDzMap(dzTimes as any), [dzTimes]);
+            const operatorCount = useMemo(() => getOperatorCountByDate(dateStr), [dateStr]);
+            const riderCount = useMemo(() => getRiderCountByDate(dateStr), [dateStr]);
+
+            const predictions = useMemo(() => {
+              const eligible = rowsDb.filter((o) => {
+                const st = (o as any).status ?? "pendente";
+                const npAt = (o as any).novoPedidoAt ?? null;
+                return st !== "pendente" && !!npAt;
+              });
+              const minimal: MinimalOrderRow[] = eligible.map((o) => ({
+                id: o.id,
+                createdAt: (o as any).novoPedidoAt as any,
+                finalizadoAt: (o as any).finalizadoAt ?? null,
+                size: o.size,
+                hasMoto: (o as any).hasMoto ?? null,
+                takeAway: (o as any).takeAway ?? null,
+                deliveryZoneId: (o as any).deliveryZoneId ?? null,
+              }));
+
+              const ready = predictReadyTimes(minimal, operatorCount, nowMs);
+              const arrive = predictArrivalTimes(ready, riderCount, dzMap);
+
+              const byId = new Map<string, { readyAtMs: number; arriveAtMs: number | null }>();
+              for (const r of ready) byId.set(r.id, { readyAtMs: r.readyAtMs, arriveAtMs: null });
+              for (const a of arrive) {
+                const cur = byId.get(a.id);
+                if (cur) cur.arriveAtMs = a.arriveAtMs;
+              }
+              return byId;
+            }, [rowsDb, operatorCount, riderCount, dzMap, nowMs]);
+
+            const filteredRows = useMemo(() => {
+              if (!channelFilter) return rowsDb;
+              const wanted = channelFilter;
+              return rowsDb.filter((o) => ((o.channel ?? "").trim() === wanted));
+            }, [rowsDb, channelFilter]);
+
+            return (
+              <>
+                {dup.length > 0 && (
+                  <div className="flex items-center gap-2 border border-amber-300 bg-amber-50 text-amber-900 rounded px-3 py-2 text-sm">
+                    <AlertTriangle className="w-4 h-4" />
+                    Comandas duplicadas no dia: <b className="ml-1">{dup.join(", ")}</b>
+                  </div>
+                )}
+
+                {/* Linhas */}
+                <ul className="space-y-1">
+                  {filteredRows.map((o) => (
+                    <RowItem
+                      key={o.id}
+                      o={o}
+                      dateStr={dateStr}
+                      readOnly={isClosed}
+                      deliveryZones={deliveryZones as any}
+                      nowMs={nowMs}
+                      predictions={predictions}
+                      rowFx={rowFx}
+                    />
+                  ))}
+                </ul>
+              </>
+            );
+          }}
+        </Await>
+      </Suspense>
+
+      {status === "OPENED" && (
+        <>
+          <Separator className="my-4" />
+          <listFx.Form method="post" className="flex items-center gap-2">
+            <input type="hidden" name="_action" value="addMore" />
+            <input type="hidden" name="date" value={dateStr} />
+            <Button type="submit" disabled={listFx.state !== "idle"}>
+              Adicionar mais
+            </Button>
+            <Input name="more" defaultValue={20} className="h-9 w-28 text-center" />
+          </listFx.Form>
+        </>
+      )}
+
+      <OpeningDayOverlay
+        open={opening || !!openError}
+        progress={progress}
+        hasError={!!openError}
+        errorMessage={openError}
+        onClose={() => { setOpening(false); setOpenError(null); }}
+      />
+    </div>
   );
 }
