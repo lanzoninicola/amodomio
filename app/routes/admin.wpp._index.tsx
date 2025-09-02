@@ -1,175 +1,135 @@
-import { useEffect, useRef, useState } from "react";
-import { useFetcher } from "@remix-run/react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
-import { Alert, AlertTitle } from "@/components/ui/alert";
+// app/routes/admin.wpp._index.tsx
+import { useState } from "react";
 
-type ApiResult<T = any> = { ok: boolean; status: number; data?: T; error?: string };
+type ApiResp = {
+  ok: boolean;
+  status?: number;
+  error?: string;
+  token?: string;
+  dataUrl?: string;
+  data?: any;
+};
 
-export default function WppPage() {
-  // estados UI
-  const [session, setSession] = useState("amodomio"); // mude se quiser
-  const [qrBase64, setQrBase64] = useState<string | null>(null);
-  const [statusText, setStatusText] = useState<string>("desconhecido");
-  const [isConnected, setIsConnected] = useState<boolean>(false);
-
-  const fetcher = useFetcher<ApiResult>();
-  const pollRef = useRef<number | null>(null);
-
-  // helpers de chamada
-  const call = (op: "start" | "status" | "qr" | "send", payload: Record<string, string>) => {
-    const fd = new FormData();
-    fd.set("op", op);
-    Object.entries(payload).forEach(([k, v]) => fd.set(k, v));
-    fetcher.submit(fd, { method: "post", action: "/api/wpp" });
-  };
-
-  // polling de status + qr
-  useEffect(() => {
-    if (!session) return;
-    // limpa polling anterior
-    if (pollRef.current) window.clearInterval(pollRef.current);
-
-    // dispara 1x
-    call("status", { session });
-    call("qr", { session });
-
-    // revalida a cada 3s
-    pollRef.current = window.setInterval(() => {
-      call("status", { session });
-      call("qr", { session });
-    }, 3000);
-
-    return () => {
-      if (pollRef.current) window.clearInterval(pollRef.current);
-      pollRef.current = null;
-    };
-  }, [session]);
-
-  // trata respostas
-  useEffect(() => {
-    if (fetcher.data) {
-      const d = fetcher.data;
-      // heurísticas simples (ajuste conforme seu server)
-      if (typeof d?.data === "object" && d.data) {
-        // status
-        if ("state" in d.data || "status" in d.data || "connected" in d.data) {
-          const st = (d.data.state ?? d.data.status ?? "").toString().toLowerCase();
-          const conn = Boolean(d.data.connected ?? (st.includes("connected") || st.includes("inchat")));
-          setStatusText(st || (conn ? "connected" : "disconnected"));
-          setIsConnected(conn);
-        }
-        // qr
-        if ("base64" in d.data || "qr" in d.data) {
-          const base64 = (d.data.base64 ?? d.data.qr) as string | undefined;
-          if (base64 && base64.startsWith("data:image")) setQrBase64(base64);
-          else if (base64 && !base64.startsWith("data:image")) setQrBase64(`data:image/png;base64,${base64}`);
-        }
-      }
-      if (!d.ok && d.error) {
-        console.warn("Erro API:", d.error);
-      }
-    }
-  }, [fetcher.data]);
-
-  // envio de mensagem
+export default function AdminWpp() {
+  const [session, setSession] = useState("amodomio");
+  const [token, setToken] = useState("");
+  const [qr, setQr] = useState("");
+  const [last, setLast] = useState<ApiResp | null>(null);
   const [phone, setPhone] = useState("");
   const [message, setMessage] = useState("Ciao! Messaggio di test dal A Modo Mio 🍕");
-  const [sendResult, setSendResult] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  const onSend = async () => {
-    setSendResult(null);
+  async function call(op: "token" | "start" | "qr" | "status" | "send", extra?: Record<string, string>) {
     const fd = new FormData();
-    fd.set("op", "send");
+    fd.set("op", op);
     fd.set("session", session);
-    fd.set("phone", phone.trim());
-    fd.set("message", message);
+    if (token) fd.set("token", token);
+    if (extra) Object.entries(extra).forEach(([k, v]) => fd.set(k, v));
     const res = await fetch("/api/wpp", { method: "POST", body: fd });
-    const data = await res.json();
-    setSendResult(data?.ok ? "Mensagem enviada com sucesso." : `Falhou: ${data?.error || res.status}`);
-  };
+    const json = (await res.json()) as ApiResp;
+    setLast(json);
+    if (json.token) setToken(json.token);
+    if (json.data?.qrcode) setQr(json.data?.qrcode);
+    return json;
+  }
+
+  async function onToken() { setBusy(true); try { await call("token"); } finally { setBusy(false); } }
+  async function onStart() { setBusy(true); try { await call("start"); } finally { setBusy(false); } }
+  async function onQr() { setBusy(true); try { await call("qr"); } finally { setBusy(false); } }
+  async function onStatus() { setBusy(true); try { await call("status"); } finally { setBusy(false); } }
+  async function onFlow() {
+    setBusy(true);
+    try {
+      const t = await call("token");
+      if (!t.ok || !t.token) return;
+      const s = await call("start");
+      if (!s.ok) return;
+      await call("qr");
+    } finally { setBusy(false); }
+  }
+  async function onSend() {
+    setBusy(true);
+    try {
+      await call("send", { phone: phone.trim(), message });
+    } finally { setBusy(false); }
+  }
 
   return (
-    <div className="mx-auto max-w-4xl p-6 space-y-8">
-      <h1 className="text-2xl font-semibold">WPPConnect • Demo de Conexão e Envio</h1>
+    <div style={{ padding: 20, maxWidth: 900, margin: "0 auto", fontFamily: "ui-sans-serif, system-ui" }}>
+      <h2 style={{ margin: 0, fontSize: 20 }}>WPP — Painel simples</h2>
 
-      <Card className="shadow-sm">
-        <CardHeader>
-          <CardTitle>1) Conectar WhatsApp</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-            <div className="md:col-span-1">
-              <Label htmlFor="session">Nome da sessão</Label>
-              <Input id="session" value={session} onChange={(e) => setSession(e.target.value)} placeholder="amodomio" />
-            </div>
-            <div className="flex gap-2">
-              <Button onClick={() => call("start", { session })}>Iniciar sessão</Button>
-              <Button variant="outline" onClick={() => call("status", { session })}>Checar status</Button>
-              <Button variant="outline" onClick={() => call("qr", { session })}>Atualizar QR</Button>
-            </div>
-            <div className="text-sm opacity-80">
-              Status: <span className={isConnected ? "text-green-600" : "text-red-600"}>{statusText}</span>
-            </div>
+      <div style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        <label>session:</label>
+        <input
+          value={session}
+          onChange={(e) => setSession(e.target.value)}
+          placeholder="nome da sessão"
+          style={{ padding: 6, minWidth: 220 }}
+        />
+        <button onClick={onFlow} disabled={busy} style={{ padding: "8px 12px", fontWeight: 600 }}>Fluxo Completo</button>
+        <button onClick={onToken} disabled={busy} style={{ padding: "8px 12px" }}>Gerar token</button>
+        <button onClick={onStart} disabled={busy} style={{ padding: "8px 12px" }}>Start (waitQrCode)</button>
+        <button onClick={onQr} disabled={busy} style={{ padding: "8px 12px" }}>Buscar QR</button>
+        <button onClick={onStatus} disabled={busy} style={{ padding: "8px 12px" }}>Status</button>
+      </div>
+
+      <div style={{ marginTop: 12 }}>
+        <div><b>Token:</b> <code style={{ fontSize: 12 }}>{token || "—"}</code></div>
+      </div>
+
+      <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+        <div>
+          <div style={{ marginBottom: 6, fontSize: 14, opacity: 0.7 }}>QR Code</div>
+          <div style={{
+            width: 320, height: 320, border: "1px solid #e5e7eb",
+            borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", background: "#fff"
+          }}>
+            {qr ? (
+              <img
+                src={qr}
+                alt="QR"
+                style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                onError={() => setQr("")}
+              />
+            ) : (
+              <span style={{ fontSize: 12, opacity: 0.6 }}>QR não carregado</span>
+            )}
           </div>
+        </div>
 
-          <Separator />
+        <div>
+          <div style={{ marginBottom: 6, fontSize: 14, opacity: 0.7 }}>Última resposta</div>
+          <pre style={{
+            whiteSpace: "pre-wrap", wordBreak: "break-word",
+            fontSize: 12, padding: 12, background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 8, minHeight: 320
+          }}>
+            {JSON.stringify(last, null, 2)}
+          </pre>
+        </div>
+      </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <div className="text-sm mb-2">Escaneie o QR no WhatsApp</div>
-              <div className="w-full aspect-square border rounded-xl flex items-center justify-center overflow-hidden bg-white">
-                {qrBase64 ? (
-                  <img alt="QR Code" src={qrBase64} className="w-full h-full object-contain" />
-                ) : (
-                  <div className="text-sm opacity-60 p-4 text-center">
-                    QR não disponível ainda. Clique em “Iniciar sessão” e aguarde o polling.
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <Alert>
-              <AlertTitle className="font-medium">Dicas</AlertTitle>
-              <ul className="list-disc ml-5 mt-2 text-sm">
-                <li>Abra o WhatsApp → Aparelhos Conectados → Conectar um aparelho → aponte para o QR.</li>
-                <li>Se o QR expirar, clique em <b>Atualizar QR</b>.</li>
-                <li>Conectado? O status deve ficar algo como <i>connected</i> / <i>inChat</i>.</li>
-              </ul>
-            </Alert>
+      <div style={{ marginTop: 20, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+        <div>
+          <div style={{ marginBottom: 6, fontSize: 14, opacity: 0.7 }}>Enviar mensagem</div>
+          <div style={{ display: "grid", gap: 8 }}>
+            <input
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="5546999999999"
+              style={{ padding: 6 }}
+            />
+            <input
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              style={{ padding: 6 }}
+            />
+            <button onClick={onSend} disabled={busy || !token} style={{ padding: "8px 12px" }}>
+              Enviar
+            </button>
+            {!token && <small style={{ color: "#b45309" }}>Gere o token e inicie a sessão antes de enviar.</small>}
           </div>
-        </CardContent>
-      </Card>
-
-      <Card className="shadow-sm">
-        <CardHeader>
-          <CardTitle>2) Enviar mensagem</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="phone">Número (WhatsApp)</Label>
-              <Input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="5546999999999" />
-            </div>
-            <div>
-              <Label htmlFor="message">Mensagem</Label>
-              <Input id="message" value={message} onChange={(e) => setMessage(e.target.value)} />
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <Button disabled={!isConnected} onClick={onSend}>Enviar</Button>
-            {!isConnected && <span className="text-sm text-amber-600">Conecte a sessão primeiro.</span>}
-          </div>
-          {sendResult && (
-            <Alert>
-              <AlertTitle>{sendResult}</AlertTitle>
-            </Alert>
-          )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }
