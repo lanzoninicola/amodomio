@@ -1,6 +1,7 @@
 // app/routes/api.wpp.tsx
 import { json } from "@remix-run/node";
 
+
 const BASE =
   process.env.WPP_BASE_URL ||
   process.env.WPP_BASE_URL_DEV ||
@@ -19,7 +20,7 @@ function preferKeysFirst(obj: any, prefer: string[]) {
   return [...prefer.filter((k) => k in (obj || {})), ...keys.filter((k) => !prefer.includes(k))];
 }
 
-// busca profunda pela primeira string plausível de QR
+// Busca profunda pela primeira string plausível de QR
 function pickQrDeep(d: any): string | null {
   const PREFERRED = ["base64", "qr", "qrcode", "qrCode", "code", "image", "result"];
   const q: Array<any> = [d];
@@ -28,7 +29,7 @@ function pickQrDeep(d: any): string | null {
     if (!v) continue;
     if (typeof v === "string" && v.trim()) return v;
     if (typeof v === "object") {
-      for (const k of preferKeysFirst(v, PREFERRED)) q.push(v[k]);
+      for (const k of preferKeysFirst(v, PREFERRED)) q.push((v as any)[k]);
     }
   }
   return null;
@@ -42,6 +43,7 @@ function toDataUrl(val: string): string {
   return s;
 }
 
+// --- WPP helpers --- //
 async function genToken(session: string): Promise<Resp> {
   const res = await fetch(
     `${BASE}/api/${encodeURIComponent(session)}/${encodeURIComponent(SECRET)}/generate-token`,
@@ -62,7 +64,11 @@ async function startSession(session: string, token: string): Promise<Resp> {
   });
   const jsonBody = await res.json().catch(() => ({}));
   if (!res.ok) return { ok: false, status: res.status, error: jsonBody?.message || jsonBody?.error || "START_FAILED" };
-  return { ok: true, status: res.status, data: jsonBody, token };
+
+  // Alguns servidores já devolvem QR no start
+  const raw = pickQrDeep(jsonBody);
+  const qrcode = raw ? toDataUrl(raw) : undefined;
+  return { ok: true, status: res.status, data: { ...jsonBody, ...(qrcode ? { qrcode } : {}) } };
 }
 
 async function getQr(session: string, token: string): Promise<Resp> {
@@ -77,7 +83,8 @@ async function getQr(session: string, token: string): Promise<Resp> {
     return { ok: false, status: res.status, error: "NO_QR", rawKeys: Object.keys(jsonBody || {}) };
   }
 
-  return { ok: true, status: res.status, dataUrl: toDataUrl(raw) };
+  // 🔑 padronização: sempre retornar em data.qrcode
+  return { ok: true, status: res.status, data: { qrcode: toDataUrl(raw) } };
 }
 
 async function getStatus(session: string, token: string): Promise<Resp> {
@@ -86,6 +93,19 @@ async function getStatus(session: string, token: string): Promise<Resp> {
   });
   const jsonBody = await res.json().catch(() => ({}));
   if (!res.ok) return { ok: false, status: res.status, error: jsonBody?.message || jsonBody?.error || "STATUS_FAILED" };
+  return { ok: true, status: res.status, data: jsonBody };
+}
+
+async function logoutSession(session: string, token: string): Promise<Resp> {
+  const res = await fetch(`${BASE}/api/${encodeURIComponent(session)}/logout-session`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: "{}",
+  });
+  const jsonBody = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    return { ok: false, status: res.status, error: jsonBody?.message || jsonBody?.error || "LOGOUT_FAILED" };
+  }
   return { ok: true, status: res.status, data: jsonBody };
 }
 
@@ -128,7 +148,8 @@ export async function action({ request }: { request: Request }) {
       return J({ ...r, token }, r.ok ? 200 : r.status || 500);
     }
 
-    if (op === "qr") {
+    if (op === "qr" || op === "qrcode-session") {
+      // aceita tanto "qr" quanto "qrcode-session"
       const token = await needToken();
       if (!token) return J({ ok: false, error: "NO_TOKEN" }, 401);
       const r = await getQr(session, token);
@@ -139,6 +160,13 @@ export async function action({ request }: { request: Request }) {
       const token = await needToken();
       if (!token) return J({ ok: false, error: "NO_TOKEN" }, 401);
       const r = await getStatus(session, token);
+      return J({ ...r, token }, r.ok ? 200 : r.status || 500);
+    }
+
+    if (op === "logout-session") {
+      const token = await needToken();
+      if (!token) return J({ ok: false, error: "NO_TOKEN" }, 401);
+      const r = await logoutSession(session, token);
       return J({ ...r, token }, r.ok ? 200 : r.status || 500);
     }
 

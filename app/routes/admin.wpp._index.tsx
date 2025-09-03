@@ -6,8 +6,7 @@ type ApiResp = {
   status?: number;
   error?: string;
   token?: string;
-  dataUrl?: string;
-  data?: any;
+  data?: any; // esperamos data.qrcode quando vier QR
 };
 
 export default function AdminWpp() {
@@ -19,7 +18,10 @@ export default function AdminWpp() {
   const [message, setMessage] = useState("Ciao! Messaggio di test dal A Modo Mio 🍕");
   const [busy, setBusy] = useState(false);
 
-  async function call(op: "token" | "start" | "qr" | "status" | "send", extra?: Record<string, string>) {
+  async function call(
+    op: "token" | "start" | "qr" | "qrcode-session" | "status" | "logout-session" | "send",
+    extra?: Record<string, string>
+  ) {
     const fd = new FormData();
     fd.set("op", op);
     fd.set("session", session);
@@ -27,16 +29,30 @@ export default function AdminWpp() {
     if (extra) Object.entries(extra).forEach(([k, v]) => fd.set(k, v));
     const res = await fetch("/api/wpp", { method: "POST", body: fd });
     const json = (await res.json()) as ApiResp;
+
     setLast(json);
     if (json.token) setToken(json.token);
-    if (json.data?.qrcode) setQr(json.data?.qrcode);
+
+    // prioriza data.qrcode
+    const qrcode: string | undefined = json.data?.qrcode;
+    if (qrcode) setQr(qrcode);
+
     return json;
   }
 
   async function onToken() { setBusy(true); try { await call("token"); } finally { setBusy(false); } }
   async function onStart() { setBusy(true); try { await call("start"); } finally { setBusy(false); } }
   async function onQr() { setBusy(true); try { await call("qr"); } finally { setBusy(false); } }
+  async function onQrSess() { setBusy(true); try { await call("qrcode-session"); } finally { setBusy(false); } }
   async function onStatus() { setBusy(true); try { await call("status"); } finally { setBusy(false); } }
+  async function onLogout() {
+    setBusy(true);
+    try {
+      const r = await call("logout-session");
+      // limpamos visualmente o QR
+      if (r.ok) setQr("");
+    } finally { setBusy(false); }
+  }
   async function onFlow() {
     setBusy(true);
     try {
@@ -44,7 +60,7 @@ export default function AdminWpp() {
       if (!t.ok || !t.token) return;
       const s = await call("start");
       if (!s.ok) return;
-      await call("qr");
+      await call("qrcode-session");
     } finally { setBusy(false); }
   }
   async function onSend() {
@@ -55,7 +71,7 @@ export default function AdminWpp() {
   }
 
   return (
-    <div style={{ padding: 20, maxWidth: 900, margin: "0 auto", fontFamily: "ui-sans-serif, system-ui" }}>
+    <div style={{ padding: 20, maxWidth: 1000, margin: "0 auto", fontFamily: "ui-sans-serif, system-ui" }}>
       <h2 style={{ margin: 0, fontSize: 20 }}>WPP — Painel simples</h2>
 
       <div style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
@@ -70,7 +86,11 @@ export default function AdminWpp() {
         <button onClick={onToken} disabled={busy} style={{ padding: "8px 12px" }}>Gerar token</button>
         <button onClick={onStart} disabled={busy} style={{ padding: "8px 12px" }}>Start (waitQrCode)</button>
         <button onClick={onQr} disabled={busy} style={{ padding: "8px 12px" }}>Buscar QR</button>
+        <button onClick={onQrSess} disabled={busy} style={{ padding: "8px 12px" }}>QRCode-session</button>
         <button onClick={onStatus} disabled={busy} style={{ padding: "8px 12px" }}>Status</button>
+        <button onClick={onLogout} disabled={busy} style={{ padding: "8px 12px", color: "#b91c1c", border: "1px solid #ef4444", background: "#fff" }}>
+          Logout-session
+        </button>
       </div>
 
       <div style={{ marginTop: 12 }}>
