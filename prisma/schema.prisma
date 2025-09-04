@@ -1101,3 +1101,13 @@ model DeliveryRider {
 
   @@map("delivery_riders")
 }
+
+model WhatsappSession {
+  id         String   @id @default(uuid())
+  sessionKey String   @unique
+  qrcode     String? // último QRCode (data URL ou texto)
+  isActive   Boolean  @default(false)
+  status     String   @default("pending") // pending | qrcode | connected | logout | error
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}

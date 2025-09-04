@@ -69,6 +69,7 @@ let googleStrategy = new GoogleStrategy(
       name: profile.displayName,
       email: emailInbound,
       avatarURL: profile.photos[0].value,
+      role: "ADMIN",
     };
 
     console.log("google.server.ts", user);
