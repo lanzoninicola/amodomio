@@ -5,7 +5,7 @@ import { json } from "@remix-run/node";
 const BASE =
   process.env.WPP_BASE_URL ||
   process.env.WPP_BASE_URL_DEV ||
-  "https://bot.amodomio.dev";
+  "";
 const SECRET = process.env.WPP_SECRET || "THISISMYSECURETOKEN";
 
 type Resp = { ok: boolean; status?: number; error?: string;[k: string]: any };
@@ -54,6 +54,10 @@ async function genToken(session: string): Promise<Resp> {
     return { ok: false, status: res.status, error: jsonBody?.message || jsonBody?.error || "NO_TOKEN" };
   }
   return { ok: true, status: res.status, token: jsonBody.token };
+}
+
+async function getEnvironment(): Promise<Resp> {
+  return { ok: true, status: 200, data: { url: BASE, secret: SECRET, env: process.env.NODE_ENV || "development" } };
 }
 
 async function startSession(session: string, token: string): Promise<Resp> {
@@ -136,6 +140,9 @@ export async function action({ request }: { request: Request }) {
   const needToken = async () => (tokenFromClient || (await genToken(session)).token || "");
 
   try {
+
+    if (op === "environment") return J(await getEnvironment(), 200)
+
     if (op === "token") {
       const r = await genToken(session);
       return J(r, r.ok ? 200 : r.status || 500);

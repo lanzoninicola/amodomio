@@ -237,6 +237,18 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
       ],
     },
     {
+      title: "BOT",
+      disabled: false,
+      items: [
+        {
+          title: "Test page",
+          href: "/admin/wpp",
+          items: [],
+          disabled: false,
+        },
+      ],
+    },
+    {
       title: "Administração",
       disabled: false,
       items: [
@@ -252,6 +264,7 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
           items: [],
           disabled: false,
         },
+
         {
           title: "Zone de entrega",
           href: "/admin/delivery-zone",

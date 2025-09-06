@@ -1,5 +1,7 @@
 // app/routes/admin.wpp._index.tsx
+import { LoaderFunctionArgs } from "@remix-run/node";
 import { useState } from "react";
+import { ok } from "~/utils/http-response.server";
 
 type ApiResp = {
   ok: boolean;
@@ -8,6 +10,11 @@ type ApiResp = {
   token?: string;
   data?: any; // esperamos data.qrcode quando vier QR
 };
+
+export async function loader({ request }: LoaderFunctionArgs) {
+
+  return ok()
+}
 
 export default function AdminWpp() {
   const [session, setSession] = useState("amodomio");
@@ -19,7 +26,7 @@ export default function AdminWpp() {
   const [busy, setBusy] = useState(false);
 
   async function call(
-    op: "token" | "start" | "qr" | "qrcode-session" | "status" | "logout-session" | "send",
+    op: "environment" | "token" | "start" | "qr" | "qrcode-session" | "status" | "logout-session" | "send",
     extra?: Record<string, string>
   ) {
     const fd = new FormData();
@@ -40,6 +47,7 @@ export default function AdminWpp() {
     return json;
   }
 
+  async function onEnvironment() { setBusy(true); try { await call("environment"); } finally { setBusy(false); } }
   async function onToken() { setBusy(true); try { await call("token"); } finally { setBusy(false); } }
   async function onStart() { setBusy(true); try { await call("start"); } finally { setBusy(false); } }
   async function onQr() { setBusy(true); try { await call("qr"); } finally { setBusy(false); } }
@@ -83,6 +91,8 @@ export default function AdminWpp() {
           style={{ padding: 6, minWidth: 220 }}
         />
         <button onClick={onFlow} disabled={busy} style={{ padding: "8px 12px", fontWeight: 600 }}>Fluxo Completo</button>
+
+        <button onClick={onEnvironment} disabled={busy} style={{ padding: "8px 12px" }}>Ambiente</button>
         <button onClick={onToken} disabled={busy} style={{ padding: "8px 12px" }}>Gerar token</button>
         <button onClick={onStart} disabled={busy} style={{ padding: "8px 12px" }}>Start (waitQrCode)</button>
         <button onClick={onQr} disabled={busy} style={{ padding: "8px 12px" }}>Buscar QR</button>
