@@ -1,6 +1,6 @@
 // app/routes/admin.wpp._index.tsx
 import { LoaderFunctionArgs } from "@remix-run/node";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ok } from "~/utils/http-response.server";
 
 type ApiResp = {
@@ -25,6 +25,12 @@ export default function AdminWpp() {
     "Ciao! Messaggio di test dal A Modo Mio 🍕"
   );
   const [busy, setBusy] = useState(false);
+
+  // Novo: estados para ambiente/status
+  const [envData, setEnvData] = useState<any>(null);
+  const [statusData, setStatusData] = useState<any>(null);
+  const [loadingEnv, setLoadingEnv] = useState(false);
+  const [loadingStatus, setLoadingStatus] = useState(false);
 
   async function call(
     op:
@@ -56,18 +62,67 @@ export default function AdminWpp() {
     return json;
   }
 
-  async function onEnvironment() { setBusy(true); try { await call("environment"); } finally { setBusy(false); } }
-  async function onToken() { setBusy(true); try { await call("token"); } finally { setBusy(false); } }
-  async function onStart() { setBusy(true); try { await call("start"); } finally { setBusy(false); } }
-  async function onQr() { setBusy(true); try { await call("qr"); } finally { setBusy(false); } }
-  async function onQrSess() { setBusy(true); try { await call("qrcode-session"); } finally { setBusy(false); } }
-  async function onStatus() { setBusy(true); try { await call("status"); } finally { setBusy(false); } }
+  async function onEnvironment() {
+    setLoadingEnv(true);
+    try {
+      const r = await call("environment");
+      setEnvData(r?.data ?? r);
+    } finally {
+      setLoadingEnv(false);
+    }
+  }
+
+  async function onStatus() {
+    setLoadingStatus(true);
+    try {
+      const r = await call("status");
+      setStatusData(r?.data ?? r);
+    } finally {
+      setLoadingStatus(false);
+    }
+  }
+
+  async function onToken() {
+    setBusy(true);
+    try {
+      await call("token");
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function onStart() {
+    setBusy(true);
+    try {
+      await call("start");
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function onQr() {
+    setBusy(true);
+    try {
+      await call("qr");
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function onQrSess() {
+    setBusy(true);
+    try {
+      await call("qrcode-session");
+    } finally {
+      setBusy(false);
+    }
+  }
   async function onLogout() {
     setBusy(true);
     try {
       const r = await call("logout-session");
       if (r.ok) setQr("");
-    } finally { setBusy(false); }
+      await onStatus();
+    } finally {
+      setBusy(false);
+    }
   }
   async function onFlow() {
     setBusy(true);
@@ -77,14 +132,45 @@ export default function AdminWpp() {
       const s = await call("start");
       if (!s.ok) return;
       await call("qrcode-session");
-    } finally { setBusy(false); }
+      await onStatus();
+    } finally {
+      setBusy(false);
+    }
   }
   async function onSend() {
     setBusy(true);
     try {
       await call("send", { phone: phone.trim(), message });
-    } finally { setBusy(false); }
+    } finally {
+      setBusy(false);
+    }
   }
+
+  // Carrega ambiente + status ao montar e quando a sessão muda
+  useEffect(() => {
+    onEnvironment();
+    onStatus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session]);
+
+  // Deriva informações mais legíveis para os badges
+  const envBadges = useMemo(() => {
+    const baseUrl =
+      envData?.baseUrl || envData?.BASE_URL || envData?.WPP_BASE_URL;
+    const nodeEnv =
+      envData?.nodeEnv ||
+      envData?.NODE_ENV ||
+      envData?.environment ||
+      envData?.env;
+    const version =
+      envData?.version || envData?.gitVersion || envData?.appVersion;
+
+    return { baseUrl, nodeEnv, version };
+  }, [envData]);
+
+  const isSessionConnected =
+    Boolean(statusData?.connected ?? statusData?.isConnected ?? statusData?.logged) ||
+    false;
 
   return (
     <div className="px-5 py-6 mx-auto max-w-5xl font-sans">
@@ -103,6 +189,87 @@ export default function AdminWpp() {
         </div>
       </div>
 
+      {/* Barra de Ambiente + Status (logo abaixo do título e sessão) */}
+      <div className="mt-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Status da sessão */}
+          <span
+            className={[
+              "inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold",
+              isSessionConnected
+                ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
+                : "bg-rose-50 text-rose-700 ring-1 ring-rose-200",
+            ].join(" ")}
+            title="Status de conexão da sessão"
+          >
+            <span
+              className={[
+                "inline-block h-2 w-2 rounded-full",
+                isSessionConnected ? "bg-emerald-500" : "bg-rose-500",
+              ].join(" ")}
+            />
+            {isSessionConnected ? "Conectado" : "Desconectado"}
+          </span>
+
+          {/* Ambiente */}
+          <span className="inline-flex items-center gap-2 rounded-full bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200">
+            <span className="inline-block h-2 w-2 rounded-full bg-slate-400" />
+            ENV: {loadingEnv ? "carregando…" : envBadges.nodeEnv ?? "—"}
+          </span>
+
+          {/* Base URL */}
+          <span className="inline-flex items-center gap-2 truncate rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700 ring-1 ring-indigo-200 max-w-full">
+            <span className="inline-block h-2 w-2 rounded-full bg-indigo-500" />
+            <span className="truncate">
+              BASE URL: {loadingEnv ? "carregando…" : envBadges.baseUrl ?? "—"}
+            </span>
+          </span>
+
+          {/* Versão (se houver) */}
+          <span className="inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700 ring-1 ring-amber-200">
+            <span className="inline-block h-2 w-2 rounded-full bg-amber-500" />
+            VER: {loadingEnv ? "…" : envBadges.version ?? "—"}
+          </span>
+
+          <button
+            onClick={() => {
+              onEnvironment();
+              onStatus();
+            }}
+            className="ml-auto inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+            disabled={loadingEnv || loadingStatus}
+            title="Atualizar ambiente e status"
+          >
+            {(loadingEnv || loadingStatus) && (
+              <span className="h-3 w-3 animate-spin rounded-full border-2 border-slate-400/60 border-t-transparent" />
+            )}
+            Atualizar
+          </button>
+        </div>
+
+        {/* Fallback de inspeção rápida (opcional/colapsável no futuro) */}
+        {(envData || statusData) && (
+          <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+            <div>
+              <div className="mb-1 text-xs font-medium text-slate-500">
+                Ambiente (raw)
+              </div>
+              <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-md border border-slate-200 bg-slate-50 p-2 text-[11px]">
+                {JSON.stringify(envData, null, 2)}
+              </pre>
+            </div>
+            <div>
+              <div className="mb-1 text-xs font-medium text-slate-500">
+                Status (raw)
+              </div>
+              <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-md border border-slate-200 bg-slate-50 p-2 text-[11px]">
+                {JSON.stringify(statusData, null, 2)}
+              </pre>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Ações */}
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <button
@@ -110,13 +277,15 @@ export default function AdminWpp() {
           disabled={busy}
           className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-3 py-2 text-sm font-semibold text-white shadow hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {busy && <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/60 border-t-transparent" />}
+          {busy && (
+            <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/60 border-t-transparent" />
+          )}
           Fluxo Completo
         </button>
 
         <button
           onClick={onEnvironment}
-          disabled={busy}
+          disabled={busy || loadingEnv}
           className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
         >
           Ambiente
@@ -144,7 +313,7 @@ export default function AdminWpp() {
         </button>
         <button
           onClick={onStatus}
-          disabled={busy}
+          disabled={busy || loadingStatus}
           className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
         >
           Status
@@ -159,11 +328,8 @@ export default function AdminWpp() {
       </div>
 
       {/* Token */}
-      <div className="mt-3">
-        <div className="text-sm">
-          <b>Token:</b>{" "}
-          <code className="text-xs">{token || "—"}</code>
-        </div>
+      <div className="mt-3 text-sm">
+        <b>Token:</b> <code className="text-xs">{token || "—"}</code>
       </div>
 
       {/* QR e Última resposta */}
