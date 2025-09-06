@@ -80,22 +80,26 @@ export default function AdminWpp() {
 
   return (
     <div style={{ padding: 20, maxWidth: 1000, margin: "0 auto", fontFamily: "ui-sans-serif, system-ui" }}>
-      <h2 style={{ margin: 0, fontSize: 20 }}>WPP — Painel simples</h2>
+      <div className="flex justify-between">
+        <h2 style={{ margin: 0, fontSize: 20 }}>WPP — Painel simples</h2>
+        <div className="flex gap-3 items-center justify-end">
+          <label>session:</label>
+          <input
+            value={session}
+            onChange={(e) => setSession(e.target.value)}
+            placeholder="nome da sessão"
+            style={{ padding: 6, minWidth: 220 }}
+          />
+        </div>
+      </div>
 
       <div style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-        <label>session:</label>
-        <input
-          value={session}
-          onChange={(e) => setSession(e.target.value)}
-          placeholder="nome da sessão"
-          style={{ padding: 6, minWidth: 220 }}
-        />
+
         <button onClick={onFlow} disabled={busy} style={{ padding: "8px 12px", fontWeight: 600 }}>Fluxo Completo</button>
 
         <button onClick={onEnvironment} disabled={busy} style={{ padding: "8px 12px" }}>Ambiente</button>
         <button onClick={onToken} disabled={busy} style={{ padding: "8px 12px" }}>Gerar token</button>
-        <button onClick={onStart} disabled={busy} style={{ padding: "8px 12px" }}>Start (waitQrCode)</button>
-        <button onClick={onQr} disabled={busy} style={{ padding: "8px 12px" }}>Buscar QR</button>
+        <button onClick={onStart} disabled={busy} style={{ padding: "8px 12px" }}>Gerar QRCode</button>
         <button onClick={onQrSess} disabled={busy} style={{ padding: "8px 12px" }}>QRCode-session</button>
         <button onClick={onStatus} disabled={busy} style={{ padding: "8px 12px" }}>Status</button>
         <button onClick={onLogout} disabled={busy} style={{ padding: "8px 12px", color: "#b91c1c", border: "1px solid #ef4444", background: "#fff" }}>

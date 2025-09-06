@@ -1,11 +1,9 @@
 // app/routes/api.wpp.tsx
 import { json } from "@remix-run/node";
 
+const env = process.env
 
-const BASE =
-  process.env.WPP_BASE_URL ||
-  process.env.WPP_BASE_URL_DEV ||
-  "";
+const BASE = env.NODE_ENV === "development" ? env.WPP_BASE_URL_DEV : env.WPP_BASE_URL
 const SECRET = process.env.WPP_SECRET || "THISISMYSECURETOKEN";
 
 type Resp = { ok: boolean; status?: number; error?: string;[k: string]: any };
