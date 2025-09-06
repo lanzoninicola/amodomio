@@ -12,8 +12,7 @@ type ApiResp = {
 };
 
 export async function loader({ request }: LoaderFunctionArgs) {
-
-  return ok()
+  return ok();
 }
 
 export default function AdminWpp() {
@@ -22,11 +21,21 @@ export default function AdminWpp() {
   const [qr, setQr] = useState("");
   const [last, setLast] = useState<ApiResp | null>(null);
   const [phone, setPhone] = useState("");
-  const [message, setMessage] = useState("Ciao! Messaggio di test dal A Modo Mio 🍕");
+  const [message, setMessage] = useState(
+    "Ciao! Messaggio di test dal A Modo Mio 🍕"
+  );
   const [busy, setBusy] = useState(false);
 
   async function call(
-    op: "environment" | "token" | "start" | "qr" | "qrcode-session" | "status" | "logout-session" | "send",
+    op:
+      | "environment"
+      | "token"
+      | "start"
+      | "qr"
+      | "qrcode-session"
+      | "status"
+      | "logout-session"
+      | "send",
     extra?: Record<string, string>
   ) {
     const fd = new FormData();
@@ -57,7 +66,6 @@ export default function AdminWpp() {
     setBusy(true);
     try {
       const r = await call("logout-session");
-      // limpamos visualmente o QR
       if (r.ok) setQr("");
     } finally { setBusy(false); }
   }
@@ -79,88 +87,140 @@ export default function AdminWpp() {
   }
 
   return (
-    <div style={{ padding: 20, maxWidth: 1000, margin: "0 auto", fontFamily: "ui-sans-serif, system-ui" }}>
-      <div className="flex justify-between">
-        <h2 style={{ margin: 0, fontSize: 20 }}>WPP — Painel simples</h2>
-        <div className="flex gap-3 items-center justify-end">
-          <label>session:</label>
+    <div className="px-5 py-6 mx-auto max-w-5xl font-sans">
+      {/* Header */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="m-0 text-xl font-semibold">WPP — Painel simples</h2>
+
+        <div className="flex items-center gap-2">
+          <label className="text-sm text-slate-600">session:</label>
           <input
             value={session}
             onChange={(e) => setSession(e.target.value)}
             placeholder="nome da sessão"
-            style={{ padding: 6, minWidth: 220 }}
+            className="w-56 rounded-md border border-slate-300 bg-white px-2 py-1 text-sm shadow-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
           />
         </div>
       </div>
 
-      <div style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+      {/* Ações */}
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <button
+          onClick={onFlow}
+          disabled={busy}
+          className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-3 py-2 text-sm font-semibold text-white shadow hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {busy && <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/60 border-t-transparent" />}
+          Fluxo Completo
+        </button>
 
-        <button onClick={onFlow} disabled={busy} style={{ padding: "8px 12px", fontWeight: 600 }}>Fluxo Completo</button>
-
-        <button onClick={onEnvironment} disabled={busy} style={{ padding: "8px 12px" }}>Ambiente</button>
-        <button onClick={onToken} disabled={busy} style={{ padding: "8px 12px" }}>Gerar token</button>
-        <button onClick={onStart} disabled={busy} style={{ padding: "8px 12px" }}>Gerar QRCode</button>
-        <button onClick={onQrSess} disabled={busy} style={{ padding: "8px 12px" }}>QRCode-session</button>
-        <button onClick={onStatus} disabled={busy} style={{ padding: "8px 12px" }}>Status</button>
-        <button onClick={onLogout} disabled={busy} style={{ padding: "8px 12px", color: "#b91c1c", border: "1px solid #ef4444", background: "#fff" }}>
+        <button
+          onClick={onEnvironment}
+          disabled={busy}
+          className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Ambiente
+        </button>
+        <button
+          onClick={onToken}
+          disabled={busy}
+          className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Gerar token
+        </button>
+        <button
+          onClick={onStart}
+          disabled={busy}
+          className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Gerar QRCode
+        </button>
+        <button
+          onClick={onQrSess}
+          disabled={busy}
+          className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          QRCode-session
+        </button>
+        <button
+          onClick={onStatus}
+          disabled={busy}
+          className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Status
+        </button>
+        <button
+          onClick={onLogout}
+          disabled={busy}
+          className="rounded-md border border-red-300 bg-white px-3 py-2 text-sm font-semibold text-red-700 shadow hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+        >
           Logout-session
         </button>
       </div>
 
-      <div style={{ marginTop: 12 }}>
-        <div><b>Token:</b> <code style={{ fontSize: 12 }}>{token || "—"}</code></div>
+      {/* Token */}
+      <div className="mt-3">
+        <div className="text-sm">
+          <b>Token:</b>{" "}
+          <code className="text-xs">{token || "—"}</code>
+        </div>
       </div>
 
-      <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+      {/* QR e Última resposta */}
+      <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
         <div>
-          <div style={{ marginBottom: 6, fontSize: 14, opacity: 0.7 }}>QR Code</div>
-          <div style={{
-            width: 320, height: 320, border: "1px solid #e5e7eb",
-            borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", background: "#fff"
-          }}>
+          <div className="mb-1 text-sm text-slate-600">QR Code</div>
+          <div className="flex h-80 w-80 items-center justify-center rounded-lg border border-slate-200 bg-white">
             {qr ? (
               <img
                 src={qr}
                 alt="QR"
-                style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                className="h-full w-full object-contain"
                 onError={() => setQr("")}
               />
             ) : (
-              <span style={{ fontSize: 12, opacity: 0.6 }}>QR não carregado</span>
+              <span className="text-xs text-slate-500">QR não carregado</span>
             )}
           </div>
         </div>
 
         <div>
-          <div style={{ marginBottom: 6, fontSize: 14, opacity: 0.7 }}>Última resposta</div>
-          <pre style={{
-            whiteSpace: "pre-wrap", wordBreak: "break-word",
-            fontSize: 12, padding: 12, background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 8, minHeight: 320
-          }}>
+          <div className="mb-1 text-sm text-slate-600">Última resposta</div>
+          <pre className="min-h-[320px] whitespace-pre-wrap break-words rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs">
             {JSON.stringify(last, null, 2)}
           </pre>
         </div>
       </div>
 
-      <div style={{ marginTop: 20, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+      {/* Enviar mensagem */}
+      <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
         <div>
-          <div style={{ marginBottom: 6, fontSize: 14, opacity: 0.7 }}>Enviar mensagem</div>
-          <div style={{ display: "grid", gap: 8 }}>
+          <div className="mb-1 text-sm text-slate-600">Enviar mensagem</div>
+          <div className="grid gap-2">
             <input
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               placeholder="5546999999999"
-              style={{ padding: 6 }}
+              className="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm shadow-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
             />
-            <input
+            <textarea
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              style={{ padding: 6 }}
+              rows={3}
+              className="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm shadow-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
             />
-            <button onClick={onSend} disabled={busy || !token} style={{ padding: "8px 12px" }}>
+            <button
+              onClick={onSend}
+              disabled={busy || !token}
+              className="inline-flex items-center justify-center rounded-md bg-slate-900 px-3 py-2 text-sm font-semibold text-white shadow hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+            >
               Enviar
             </button>
-            {!token && <small style={{ color: "#b45309" }}>Gere o token e inicie a sessão antes de enviar.</small>}
+            {!token && (
+              <small className="text-amber-700">
+                Gere o token e inicie a sessão antes de enviar.
+              </small>
+            )}
           </div>
         </div>
       </div>
