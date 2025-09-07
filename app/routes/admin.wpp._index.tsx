@@ -169,8 +169,9 @@ export default function AdminWpp() {
   }, [envData]);
 
   const isSessionConnected =
-    Boolean(statusData?.connected ?? statusData?.isConnected ?? statusData?.logged) ||
+    Boolean(statusData?.status === true && statusData?.message === "Connected") ||
     false;
+
 
   return (
     <div className="px-5 py-6 mx-auto max-w-5xl font-sans">
