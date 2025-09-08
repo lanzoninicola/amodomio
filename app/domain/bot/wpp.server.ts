@@ -1,79 +1,98 @@
-// app/domain/bot/wpp.server.ts
-type Json = Record<string, any>;
+let cachedToken: string | null = null;
 
-function getBaseUrl() {
-  const url = process.env.WPP_BASE_URL;
-  if (!url) throw new Error("WPP_BASE_URL não configurado");
-  return url.replace(/\/+$/, "");
+const env = process.env;
+
+const SESSION = process.env.WPP_SESSION || "amodomio";
+const BASE_URL =
+  env.NODE_ENV === "development" ? env.WPP_BASE_URL_DEV : env.WPP_BASE_URL;
+const SECRET = process.env.WPP_SECRET || "THISISMYSECURETOKEN";
+
+function baseUrl() {
+  const u = BASE_URL;
+  if (!u) throw new Error("WPP_BASE_URL ausente");
+  return u.replace(/\/+$/, "");
 }
 
-async function wppFetch(path: string, init?: RequestInit) {
-  const res = await fetch(`${getBaseUrl()}${path}`, {
-    headers: { "Content-Type": "application/json", ...(init?.headers || {}) },
+async function generateToken(): Promise<string> {
+  const session = SESSION;
+  const secret = SECRET;
+
+  console.log({ session, secret, baseUrl: baseUrl() });
+
+  const res = await fetch(
+    `${baseUrl()}/api/${encodeURIComponent(session)}/${encodeURIComponent(
+      secret
+    )}/generate-token`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    }
+  );
+  if (!res.ok)
+    throw new Error(`Falha ao gerar token: ${res.status} ${await res.text()}`);
+  const json = await res.json();
+  return json?.token as string; // use o campo 'token' (sem o prefixo)
+}
+
+async function authedFetch(path: string, init?: RequestInit, retry = true) {
+  if (!cachedToken) cachedToken = await generateToken();
+  const res = await fetch(`${baseUrl()}${path}`, {
     ...init,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${cachedToken}`,
+      ...(init?.headers || {}),
+    },
   });
+
+  // Se 401, regenera o token e tenta 1x novamente
+  if (res.status === 401 && retry) {
+    cachedToken = await generateToken();
+    return authedFetch(path, init, false);
+  }
 
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw new Error(`WPP API error ${res.status}: ${text || res.statusText}`);
   }
-  return (await res.json().catch(() => ({}))) as Json;
+  return res.json().catch(() => ({}));
 }
 
-/**
- * Checa/abre sessão — ajuste os paths conforme seu WppConnect.
- * Padrões comuns expostos pelo WppConnect Server:
- *  - GET  /api/:session/status
- *  - POST /api/:session/start-session
- */
-export async function ensureSession(session: string) {
-  try {
-    return await wppFetch(`/api/${encodeURIComponent(session)}/status`);
-  } catch {
-    return await wppFetch(`/api/${encodeURIComponent(session)}/start-session`, {
-      method: "POST",
-      body: JSON.stringify({ session }),
-    });
-  }
-}
-
-/**
- * Envia mensagem de texto simples
- * Padrões comuns:
- *  - POST /api/:session/send-message  { phone, message }
- *  - Em alguns builds, o campo pode se chamar `number` ao invés de `phone`.
- */
 export async function sendText(
   session: string,
   phone: string,
   message: string
 ) {
-  // Tente o caminho padrão:
   try {
-    return await wppFetch(`/api/${encodeURIComponent(session)}/send-message`, {
-      method: "POST",
-      body: JSON.stringify({ phone, message }),
-    });
-  } catch (e) {
-    // Fallback para variantes (ex.: { number, text })
-    return await wppFetch(`/api/${encodeURIComponent(session)}/send-message`, {
-      method: "POST",
-      body: JSON.stringify({ number: phone, text: message }),
-    });
+    return await authedFetch(
+      `/api/${encodeURIComponent(session)}/send-message`,
+      {
+        method: "POST",
+        body: JSON.stringify({ phone, message }),
+      }
+    );
+  } catch {
+    // fallback para variantes { number, text }
+    return await authedFetch(
+      `/api/${encodeURIComponent(session)}/send-message`,
+      {
+        method: "POST",
+        body: JSON.stringify({ number: phone, text: message }),
+      }
+    );
   }
 }
 
-/**
- * (Opcional) Envio de lista/botões — se quiser evoluir para interativo depois
- */
-export async function sendButtons(
-  session: string,
-  phone: string,
-  title: string,
-  buttons: Array<{ id: string; text: string }>
-) {
-  return await wppFetch(`/api/${encodeURIComponent(session)}/send-buttons`, {
-    method: "POST",
-    body: JSON.stringify({ phone, title, buttons }),
-  });
+export async function ensureSession(session: string) {
+  try {
+    return await authedFetch(`/api/${encodeURIComponent(session)}/status`);
+  } catch {
+    return await authedFetch(
+      `/api/${encodeURIComponent(session)}/start-session`,
+      {
+        method: "POST",
+        body: JSON.stringify({ session }),
+      }
+    );
+  }
 }

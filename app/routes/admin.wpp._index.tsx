@@ -1,6 +1,7 @@
 // app/routes/admin.wpp._index.tsx
 import { LoaderFunctionArgs } from "@remix-run/node";
 import { useEffect, useMemo, useState } from "react";
+import { Button } from "~/components/ui/button";
 import { ok } from "~/utils/http-response.server";
 
 type ApiResp = {
@@ -16,6 +17,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 export default function AdminWpp() {
+  const [sessionName, setSessionName] = useState("amodomio");
   const [session, setSession] = useState("amodomio");
   const [token, setToken] = useState("");
   const [qr, setQr] = useState("");
@@ -41,6 +43,7 @@ export default function AdminWpp() {
       | "qrcode-session"
       | "status"
       | "logout-session"
+      | "clear-session"
       | "send",
     extra?: Record<string, string>
   ) {
@@ -124,6 +127,20 @@ export default function AdminWpp() {
       setBusy(false);
     }
   }
+  async function onClear() {
+    setBusy(true);
+    try {
+      const r = await call("clear-session");
+      console.log({ r })
+      if (r.ok) {
+        setQr("");
+        setToken("");
+      }
+      await onStatus();
+    } finally {
+      setBusy(false);
+    }
+  }
   async function onFlow() {
     setBusy(true);
     try {
@@ -156,7 +173,10 @@ export default function AdminWpp() {
   // Deriva informações mais legíveis para os badges
   const envBadges = useMemo(() => {
     const baseUrl =
-      envData?.baseUrl || envData?.BASE_URL || envData?.WPP_BASE_URL;
+      envData?.baseUrl ||
+      envData?.BASE_URL ||
+      envData?.WPP_BASE_URL ||
+      envData?.url;
     const nodeEnv =
       envData?.nodeEnv ||
       envData?.NODE_ENV ||
@@ -169,9 +189,9 @@ export default function AdminWpp() {
   }, [envData]);
 
   const isSessionConnected =
-    Boolean(statusData?.status === true && statusData?.message === "Connected") ||
-    false;
-
+    Boolean(
+      statusData?.status === true && statusData?.message === "Connected"
+    ) || false;
 
   return (
     <div className="px-5 py-6 mx-auto max-w-5xl font-sans">
@@ -182,11 +202,14 @@ export default function AdminWpp() {
         <div className="flex items-center gap-2">
           <label className="text-sm text-slate-600">session:</label>
           <input
-            value={session}
-            onChange={(e) => setSession(e.target.value)}
+            defaultValue={session}
+            onChange={(e) => setSessionName(e.target.value)}
             placeholder="nome da sessão"
             className="w-56 rounded-md border border-slate-300 bg-white px-2 py-1 text-sm shadow-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
           />
+          <Button onClick={() => setSession(sessionName)}>
+            confirma sessao
+          </Button>
         </div>
       </div>
 
@@ -222,7 +245,8 @@ export default function AdminWpp() {
           <span className="inline-flex items-center gap-2 truncate rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700 ring-1 ring-indigo-200 max-w-full">
             <span className="inline-block h-2 w-2 rounded-full bg-indigo-500" />
             <span className="truncate">
-              BASE URL: {loadingEnv ? "carregando…" : envBadges.baseUrl ?? "—"}
+              BASE URL:{" "}
+              {loadingEnv ? "carregando…" : envBadges.baseUrl ?? "—"}
             </span>
           </span>
 
@@ -326,11 +350,20 @@ export default function AdminWpp() {
         >
           Logout-session
         </button>
+        <button
+          onClick={onClear}
+          disabled={busy}
+          className="rounded-md border border-orange-300 bg-white px-3 py-2 text-sm font-semibold text-orange-700 shadow hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-50"
+          title="Apaga dados da sessão no servidor e força novo QR"
+        >
+          Resetar sessão
+        </button>
       </div>
 
       {/* Token */}
       <div className="mt-3 text-sm">
-        <b>Token:</b> <code className="text-xs">{token || "—"}</code>
+        <b>Token:</b>{" "}
+        <code className="text-xs">{token || "—"}</code>
       </div>
 
       {/* QR e Última resposta */}
@@ -346,13 +379,17 @@ export default function AdminWpp() {
                 onError={() => setQr("")}
               />
             ) : (
-              <span className="text-xs text-slate-500">QR não carregado</span>
+              <span className="text-xs text-slate-500">
+                QR não carregado
+              </span>
             )}
           </div>
         </div>
 
         <div>
-          <div className="mb-1 text-sm text-slate-600">Última resposta</div>
+          <div className="mb-1 text-sm text-slate-600">
+            Última resposta
+          </div>
           <pre className="min-h-[320px] whitespace-pre-wrap break-words rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs">
             {JSON.stringify(last, null, 2)}
           </pre>
