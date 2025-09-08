@@ -246,6 +246,12 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
           items: [],
           disabled: false,
         },
+        {
+          title: "Auto Responder",
+          href: "/admin/wpp/auto-responder",
+          items: [],
+          disabled: false,
+        },
       ],
     },
     {

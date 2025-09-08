@@ -1101,3 +1101,63 @@ model DeliveryRider {
 
   @@map("delivery_riders")
 }
+
+/// -------------------------
+/// Regras de resposta automática
+/// -------------------------
+model BotAutoResponseRule {
+  id       String  @id @default(uuid()) @map("id")
+  label    String  @map("label")
+  trigger  String  @map("trigger")
+  isRegex  Boolean @default(false) @map("is_regex")
+  response String  @map("response")
+  priority Int     @default(100) @map("priority")
+  isActive Boolean @default(true) @map("is_active")
+
+  activeFrom DateTime? @map("active_from")
+  activeTo   DateTime? @map("active_to")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  logs BotAutoResponderLog[]
+
+  @@index([isActive, priority], map: "idx_bot_auto_response_rules_active_priority")
+  @@map("bot_auto_response_rules")
+}
+
+/// -------------------------
+/// Logs de respostas
+/// -------------------------
+model BotAutoResponderLog {
+  id           String   @id @default(uuid()) @map("id")
+  ruleId       String?  @map("rule_id")
+  matchedText  String?  @map("matched_text")
+  fromNumber   String?  @map("from_number")
+  toNumber     String?  @map("to_number")
+  inboundBody  String   @map("inbound_body")
+  outboundBody String?  @map("outbound_body")
+  error        String?  @map("error")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  rule BotAutoResponseRule? @relation(fields: [ruleId], references: [id])
+
+  @@index([ruleId], map: "idx_bot_auto_responder_logs_rule_id")
+  @@index([createdAt], map: "idx_bot_auto_responder_logs_created_at")
+  @@map("bot_auto_responder_logs")
+}
+
+/// -------------------------
+/// Configurações gerais do bot
+/// -------------------------
+model BotSetting {
+  id                Int      @id @default(1) @map("id")
+  businessStartHour Int      @default(18) @map("business_start_hour")
+  businessEndHour   Int      @default(22) @map("business_end_hour")
+  businessDays      String   @default("3,4,5,6,0") @map("business_days")
+  offHoursMessage   String   @default("Estamos fora do horário. Voltamos em breve! 🍕") @map("off_hours_message")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  @@map("bot_settings")
+}
