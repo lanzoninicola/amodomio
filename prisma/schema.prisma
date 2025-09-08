@@ -1158,6 +1158,7 @@ model BotSetting {
   offHoursMessage   String   @default("Estamos fora do horário. Voltamos em breve! 🍕") @map("off_hours_message")
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
+  enabled           Boolean  @default(false)
 
   @@map("bot_settings")
 }

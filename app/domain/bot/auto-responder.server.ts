@@ -109,6 +109,12 @@ export async function handleInboundMessage(
 ): Promise<HandleResult> {
   const inboundJson = JSON.stringify(msg);
 
+  const setting = await prismaClient.botSetting.findFirst({ where: { id: 1 } });
+  if (!setting?.enabled) {
+    console.log("Auto-responder está desativado, ignorando mensagem.");
+    return;
+  }
+
   try {
     const { inDay, inHour, setting } = await checkBusinessWindow();
 
