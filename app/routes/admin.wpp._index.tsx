@@ -56,7 +56,14 @@ export default function AdminWpp() {
     const res = await fetch("/api/wpp", { method: "POST", body: fd });
     const json = (await res.json()) as ApiResp;
 
-    setLast(json);
+    setLast({
+      ...json,
+      data: {
+        ...jsonParse(json?.data || ""),
+        qrcode: json?.data?.qrcode
+      }
+
+    });
     if (json.token) setToken(json.token);
 
     // prioriza data.qrcode
@@ -133,7 +140,6 @@ export default function AdminWpp() {
     setBusy(true);
     try {
       const r = await call("clear-session");
-      console.log({ r })
       if (r.ok) {
         setQr("");
         setToken("");

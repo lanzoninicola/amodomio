@@ -125,7 +125,9 @@ async function getQr(session: string, token: string): Promise<Resp> {
       headers: { Authorization: `Bearer ${token}` },
     }
   );
+
   const jsonBody = await res.json().catch(() => ({}));
+
   if (!res.ok)
     return {
       ok: false,

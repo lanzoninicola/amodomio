@@ -101,7 +101,19 @@ async function saveLog({
   }
 }
 
+export async function autoResponderEnabled() {
+  const settings = await prismaClient.botSetting.findFirst({
+    where: { id: 1 },
+  });
+
+  return settings?.enabled ?? false;
+}
+
 export async function handleInboundMessage(session: string, inbound: Inbound) {
+  const arEnabled = await autoResponderEnabled();
+
+  if (!arEnabled) return;
+
   const text = inbound.body || "";
 
   let usedReply: string | null = null;

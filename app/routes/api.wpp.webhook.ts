@@ -31,7 +31,6 @@ export async function action({ request }: ActionFunctionArgs) {
 
   // Precisamos interpretar o corpo como texto primeiro (pode não ser JSON)
   const raw = await request.text();
-  console.log({ raw });
   let payload: any = {};
   try {
     payload = raw ? JSON.parse(raw) : {};
@@ -55,6 +54,8 @@ export async function action({ request }: ActionFunctionArgs) {
       timestamp: payload?.timestamp ?? Date.now(),
       raw: payload,
     };
+
+    console.log({ inbound });
 
     const session =
       payload?.session || process.env.WPP_DEFAULT_SESSION || "amodomio";
