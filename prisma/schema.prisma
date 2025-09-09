@@ -1129,8 +1129,21 @@ model BotAutoResponseRule {
 /// -------------------------
 /// Logs de respostas
 /// -------------------------
+enum BotResponderEngine {
+  MANUAL
+  NLP
+}
+
 model BotAutoResponderLog {
-  id           String   @id @default(uuid()) @map("id")
+  id String @id @default(uuid()) @map("id")
+
+  // NOVOS CAMPOS
+  session String? @map("session")
+  engine  String? @map("engine")
+  intent  String? @map("intent")
+  score   Float?  @map("score")
+
+  // EXISTENTES / RENOMEADOS
   ruleId       String?  @map("rule_id")
   matchedText  String?  @map("matched_text")
   fromNumber   String?  @map("from_number")
@@ -1144,6 +1157,8 @@ model BotAutoResponderLog {
 
   @@index([ruleId], map: "idx_bot_auto_responder_logs_rule_id")
   @@index([createdAt], map: "idx_bot_auto_responder_logs_created_at")
+  @@index([intent], map: "idx_bot_auto_responder_logs_intent")
+  @@index([engine, createdAt], map: "idx_bot_auto_responder_logs_engine_created")
   @@map("bot_auto_responder_logs")
 }
 

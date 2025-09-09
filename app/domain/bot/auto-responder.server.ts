@@ -15,23 +15,10 @@ function normalize(s: string) {
 }
 
 async function fetchActiveRules() {
-  const rows = await prismaClient.$queryRaw<
-    Array<{
-      id: string;
-      label: string | null;
-      trigger: string | null;
-      is_regex: boolean;
-      response: string | null;
-      priority: number | null;
-      is_active: boolean;
-      active_from: Date | null;
-      active_to: Date | null;
-    }>
-  >`SELECT id, label, trigger, is_regex, response, priority, is_active, active_from, active_to
-     FROM bot_auto_response_rules
-     WHERE is_active = true
-     ORDER BY priority DESC NULLS LAST, id ASC`;
-  return rows;
+  return await prismaClient.botAutoResponseRule.findMany({
+    where: { isActive: true },
+    orderBy: { priority: "desc" },
+  });
 }
 
 function isWithinWindow(now: Date, from?: Date | null, to?: Date | null) {
@@ -48,12 +35,12 @@ function findMatchingRule(
   const normText = normalize(text);
 
   for (const r of rules) {
-    if (!isWithinWindow(now, r.active_from, r.active_to)) continue;
+    if (!isWithinWindow(now, r.activeFrom, r.activeTo)) continue;
 
     const trig = r.trigger ?? "";
     if (!trig) continue;
 
-    if (r.is_regex) {
+    if (r.isRegex) {
       try {
         const rx = new RegExp(trig, "iu");
         if (rx.test(text)) return r;
@@ -67,6 +54,8 @@ function findMatchingRule(
   return null;
 }
 
+type Inbound = { from?: string; to?: string; body?: string };
+
 async function saveLog({
   session,
   inbound,
@@ -74,6 +63,9 @@ async function saveLog({
   score,
   matchedRuleId,
   reply,
+  matchedText,
+  error,
+  engine = "NLP", // "MANUAL" | "NLP" (se usar enum)
 }: {
   session: string;
   inbound: Inbound;
@@ -81,23 +73,29 @@ async function saveLog({
   score?: number | null;
   matchedRuleId?: string | null;
   reply?: string | null;
+  matchedText?: string | null;
+  error?: string | null;
+  engine?: "MANUAL" | "NLP";
 }) {
   try {
-    await prismaClient.$executeRawUnsafe(
-      `INSERT INTO bot_auto_responder_logs
-        (id, session, from_number, to_number, body, matched_rule_id, intent, score, reply, created_at)
-       VALUES (uuid_generate_v4(), $1, $2, $3, $4, $5, $6, $7, $8, now())`,
-      session,
-      inbound.from ?? "",
-      inbound.to ?? "",
-      inbound.body ?? "",
-      matchedRuleId ?? null,
-      intent ?? null,
-      score ?? null,
-      reply ?? null
-    );
+    await prismaClient.botAutoResponderLog.create({
+      data: {
+        session, // novo
+        engine, // novo
+        intent: intent ?? null, // novo
+        score: typeof score === "number" ? score : null, // novo
+
+        ruleId: matchedRuleId ?? null,
+        matchedText: matchedText ?? null,
+        fromNumber: inbound.from ?? null,
+        toNumber: inbound.to ?? null,
+        inboundBody: inbound.body ?? "",
+        outboundBody: reply ?? null,
+        error: error ?? null,
+      },
+    });
   } catch {
-    // silencioso se tabela/função não existir
+    // silencioso
   }
 }
 

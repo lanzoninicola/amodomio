@@ -252,6 +252,12 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
           items: [],
           disabled: false,
         },
+        {
+          title: "NLP",
+          href: "/admin/nlp",
+          items: [],
+          disabled: false,
+        },
       ],
     },
     {
