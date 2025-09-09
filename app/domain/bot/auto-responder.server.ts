@@ -54,8 +54,6 @@ function findMatchingRule(
   return null;
 }
 
-type Inbound = { from?: string; to?: string; body?: string };
-
 async function saveLog({
   session,
   inbound,
