@@ -1162,3 +1162,65 @@ model BotSetting {
 
   @@map("bot_settings")
 }
+
+model NlpIntent {
+  id          String         @id @default(cuid())
+  name        String         @unique
+  label       String
+  description String?        @map("description")
+  isActive    Boolean        @default(true) @map("is_active")
+  utterances  NlpUtterance[]
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+
+  @@map("nlp_intent")
+}
+
+model NlpUtterance {
+  id        String    @id @default(cuid())
+  text      String
+  language  String    @default("pt")
+  intentId  String    @map("intent_id")
+  intent    NlpIntent @relation(fields: [intentId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  @@map("nlp_utterance")
+}
+
+model NlpEntity {
+  id          String             @id @default(cuid())
+  name        String             @unique
+  label       String
+  description String?            @map("description")
+  examples    NlpEntityExample[]
+  createdAt   DateTime           @default(now()) @map("created_at")
+  updatedAt   DateTime           @updatedAt @map("updated_at")
+
+  @@map("nlp_entity")
+}
+
+model NlpEntityExample {
+  id        String    @id @default(cuid())
+  value     String
+  synonyms  String[]
+  entityId  String    @map("entity_id")
+  entity    NlpEntity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  @@map("nlp_entity_example")
+}
+
+model NlpModel {
+  id        String   @id @default(cuid())
+  version   Int
+  label     String?
+  isActive  Boolean  @default(false) @map("is_active")
+  language  String   @default("pt")
+  artifact  Json
+  trainedAt DateTime @default(now()) @map("trained_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("nlp_model")
+}

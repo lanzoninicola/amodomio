@@ -1,98 +1,62 @@
-let cachedToken: string | null = null;
+// app/domain/bot/wpp.server.ts
+/**
+ * Cliente mínimo para WppConnect Server
+ * - Usa WPP_BASE_URL (prod) ou WPP_BASE_URL_DEV (dev)
+ * - Suporta header Authorization (WPP_API_TOKEN) se existir
+ */
+const BASE =
+  process.env.WPP_BASE_URL?.replace(/\/+$/, "") ||
+  process.env.WPP_BASE_URL_DEV?.replace(/\/+$/, "") ||
+  "";
 
-const env = process.env;
+const TOKEN = process.env.WPP_API_TOKEN || "";
 
-const SESSION = process.env.WPP_SESSION || "amodomio";
-const BASE_URL =
-  env.NODE_ENV === "development" ? env.WPP_BASE_URL_DEV : env.WPP_BASE_URL;
-const SECRET = process.env.WPP_SECRET || "THISISMYSECURETOKEN";
-
-function baseUrl() {
-  const u = BASE_URL;
-  if (!u) throw new Error("WPP_BASE_URL ausente");
-  return u.replace(/\/+$/, "");
+function authHeaders() {
+  const h: Record<string, string> = { "Content-Type": "application/json" };
+  if (TOKEN) h["Authorization"] = `Bearer ${TOKEN}`;
+  return h;
 }
 
-async function generateToken(): Promise<string> {
-  const session = SESSION;
-  const secret = SECRET;
-
-  console.log({ session, secret, baseUrl: baseUrl() });
-
-  const res = await fetch(
-    `${baseUrl()}/api/${encodeURIComponent(session)}/${encodeURIComponent(
-      secret
-    )}/generate-token`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+/**
+ * Alguns builds do wppconnect-server expõem endpoints diferentes.
+ * Tentamos uma sequência de rotas comuns.
+ */
+async function tryPost(urls: string[], body: any) {
+  let lastErr: any;
+  for (const u of urls) {
+    try {
+      const res = await fetch(u, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify(body),
+      });
+      if (res.ok) return await res.json().catch(() => ({}));
+      lastErr = await res.text();
+    } catch (e) {
+      lastErr = e;
     }
-  );
-  if (!res.ok)
-    throw new Error(`Falha ao gerar token: ${res.status} ${await res.text()}`);
-  const json = await res.json();
-  return json?.token as string; // use o campo 'token' (sem o prefixo)
+  }
+  throw new Error(`WPP API error: ${String(lastErr)}`);
 }
 
-async function authedFetch(path: string, init?: RequestInit, retry = true) {
-  if (!cachedToken) cachedToken = await generateToken();
-  const res = await fetch(`${baseUrl()}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${cachedToken}`,
-      ...(init?.headers || {}),
-    },
-  });
-
-  // Se 401, regenera o token e tenta 1x novamente
-  if (res.status === 401 && retry) {
-    cachedToken = await generateToken();
-    return authedFetch(path, init, false);
-  }
-
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`WPP API error ${res.status}: ${text || res.statusText}`);
-  }
-  return res.json().catch(() => ({}));
-}
-
-export async function sendText(
+export async function sendMessage(
   session: string,
-  phone: string,
+  to: string,
   message: string
 ) {
-  try {
-    return await authedFetch(
-      `/api/${encodeURIComponent(session)}/send-message`,
-      {
-        method: "POST",
-        body: JSON.stringify({ phone, message }),
-      }
-    );
-  } catch {
-    // fallback para variantes { number, text }
-    return await authedFetch(
-      `/api/${encodeURIComponent(session)}/send-message`,
-      {
-        method: "POST",
-        body: JSON.stringify({ number: phone, text: message }),
-      }
-    );
-  }
-}
+  if (!BASE) throw new Error("WPP_BASE_URL/WPP_BASE_URL_DEV não configurado");
 
-export async function ensureSession(session: string) {
-  try {
-    return await authedFetch(`/api/${encodeURIComponent(session)}/status`);
-  } catch {
-    return await authedFetch(
-      `/api/${encodeURIComponent(session)}/start-session`,
-      {
-        method: "POST",
-        body: JSON.stringify({ session }),
-      }
-    );
-  }
+  // normaliza número para formato WhatsApp se necessário
+  const toId = /@/.test(to) ? to : `${to}@c.us`;
+
+  const body = { phone: toId, message };
+
+  // rotas comuns (ajuste conforme seu swagger.json)
+  const urls = [
+    `${BASE}/message/sendText/${session}`, // ex: wppconnect-team/wppconnect-server
+    `${BASE}/api/${session}/send-text`, // variações
+    `${BASE}/api/${session}/sendMessage`, // variações
+  ];
+
+  return tryPost(urls, body);
 }

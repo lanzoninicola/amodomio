@@ -241,7 +241,7 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
       disabled: false,
       items: [
         {
-          title: "Test page",
+          title: "Debug page",
           href: "/admin/wpp",
           items: [],
           disabled: false,

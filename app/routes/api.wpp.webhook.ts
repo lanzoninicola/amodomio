@@ -2,12 +2,11 @@ import { json } from "@remix-run/node";
 import type { ActionFunctionArgs } from "@remix-run/node";
 import { handleInboundMessage } from "~/domain/bot/auto-responder.server";
 
-// Defina sua sessão (pode ser dinâmica depois)
-const SESSION = "amodomio";
 // Nome do header que o wppconnect-server envia
 const WEBHOOK_SECRET_HEADER = "x-webhook-secret";
 
 export async function action({ request }: ActionFunctionArgs) {
+  console.log("WPP webhook running");
   // 1) Aceita apenas POST
   if (request.method !== "POST") {
     return json({ ok: false, error: "Method not allowed" }, { status: 405 });
@@ -30,40 +29,39 @@ export async function action({ request }: ActionFunctionArgs) {
     return json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
 
-  // 3) Parse seguro do JSON (evita crash em payload inválido)
+  // Precisamos interpretar o corpo como texto primeiro (pode não ser JSON)
+  const raw = await request.text();
+  console.log({ raw });
   let payload: any = {};
   try {
-    payload = await request.json();
+    payload = raw ? JSON.parse(raw) : {};
   } catch {
-    // Se não for JSON válido, rejeita
-    return json({ ok: false, error: "Invalid JSON" }, { status: 400 });
+    payload = { data: raw };
   }
 
-  // console.log("webhook triggered from wppconnect-server", payload);
+  console.log({ payload });
 
-  const event = payload?.event;
-
-  // 4) Trate apenas os eventos que você usa (ex.: onmessage)
-  if (event === "onmessage") {
+  const event = payload?.event || payload?.type || "message";
+  if (event === "onmessage" || event === "message") {
     const inbound = {
-      from: payload?.from ?? payload?.sender?.id ?? "",
-      to: payload?.to ?? payload?.recipient?.id ?? "",
-      body: payload?.body ?? payload?.text ?? "",
+      from: payload?.from ?? payload?.sender?.id ?? payload?.sender ?? "",
+      to: payload?.to ?? payload?.recipient?.id ?? payload?.recipient ?? "",
+      body:
+        payload?.body ??
+        payload?.text ??
+        payload?.message?.text ??
+        payload?.message?.body ??
+        "",
       timestamp: payload?.timestamp ?? Date.now(),
+      raw: payload,
     };
 
-    try {
-      await handleInboundMessage(SESSION, inbound);
-    } catch (err) {
-      console.error("Erro ao processar inbound:", err);
-      // Responda 200 para não forçar re-tentativas infinitas do webhook,
-      // mas registre o erro para observabilidade
-    }
+    const session =
+      payload?.session || process.env.WPP_DEFAULT_SESSION || "amodomio";
+    await handleInboundMessage(session, inbound);
   }
 
-  // 5) Sempre responda rápido
   return json({ ok: true });
 }
-
 // GET simples para testar no navegador
 export const loader = () => json({ ok: true, message: "Webhook ativo" });

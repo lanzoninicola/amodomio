@@ -3,6 +3,7 @@ import { LoaderFunctionArgs } from "@remix-run/node";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "~/components/ui/button";
 import { ok } from "~/utils/http-response.server";
+import { jsonParse } from "~/utils/json-helper";
 
 type ApiResp = {
   ok: boolean;
@@ -79,7 +80,8 @@ export default function AdminWpp() {
     setLoadingStatus(true);
     try {
       const r = await call("status");
-      setStatusData(r?.data ?? r);
+      const parsedData = jsonParse(r?.data)
+      setStatusData(parsedData);
     } finally {
       setLoadingStatus(false);
     }
@@ -187,6 +189,8 @@ export default function AdminWpp() {
 
     return { baseUrl, nodeEnv, version };
   }, [envData]);
+
+
 
   const isSessionConnected =
     Boolean(
@@ -297,7 +301,7 @@ export default function AdminWpp() {
 
       {/* Ações */}
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        <button
+        {/* <button
           onClick={onFlow}
           disabled={busy}
           className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-3 py-2 text-sm font-semibold text-white shadow hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
@@ -315,6 +319,7 @@ export default function AdminWpp() {
         >
           Ambiente
         </button>
+        */}
         <button
           onClick={onToken}
           disabled={busy}

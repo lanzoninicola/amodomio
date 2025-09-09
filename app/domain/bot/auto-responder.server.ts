@@ -1,175 +1,178 @@
 // app/domain/bot/auto-responder.server.ts
-import { HandleResult, InboundMessage } from "./auto-responder. types";
-import { sendText } from "./wpp.server";
+
+import { nlpProcess } from "~/domain/bot/nlp.runtime.server";
+import { sendMessage } from "~/domain/bot/wpp.server";
 import prismaClient from "~/lib/prisma/client.server";
+import { Inbound } from "./auto-responder. types";
 
-/**
- * Helper de horário — se precisar, troque para luxon/timezone
- */
-function nowInSaoPaulo(): Date {
-  // O Node costuma rodar em UTC; se você quiser precisão com TZ, use luxon e setZone("America/Sao_Paulo")
-  return new Date();
+const NLP_SCORE_MIN = Number(process.env.NLP_SCORE_MIN ?? "0.6");
+
+function normalize(s: string) {
+  return (s || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
 }
 
-async function getBotSetting() {
-  return prismaClient.botSetting.findFirst({ where: { id: 1 } });
+async function fetchActiveRules() {
+  const rows = await prismaClient.$queryRaw<
+    Array<{
+      id: string;
+      label: string | null;
+      trigger: string | null;
+      is_regex: boolean;
+      response: string | null;
+      priority: number | null;
+      is_active: boolean;
+      active_from: Date | null;
+      active_to: Date | null;
+    }>
+  >`SELECT id, label, trigger, is_regex, response, priority, is_active, active_from, active_to
+     FROM bot_auto_response_rules
+     WHERE is_active = true
+     ORDER BY priority DESC NULLS LAST, id ASC`;
+  return rows;
 }
 
-/**
- * Verifica se estamos dentro do horário configurado.
- * Retorna também a setting para reuso no fallback off-hours.
- */
-async function checkBusinessWindow() {
-  const setting = await getBotSetting();
-  if (!setting) {
-    return { inDay: true, inHour: true, setting: undefined as typeof setting };
-  }
-
-  const now = nowInSaoPaulo();
-  const day = now.getDay(); // 0=Dom, 1=Seg, ...
-  const hour = now.getHours();
-
-  const allowedDays = (setting.businessDays || "3,4,5,6,0")
-    .split(",")
-    .map((v) => parseInt(v.trim(), 10))
-    .filter((v) => !Number.isNaN(v));
-
-  const inDay = allowedDays.includes(day);
-  const inHour =
-    hour >= setting.businessStartHour && hour < setting.businessEndHour;
-  return { inDay, inHour, setting };
+function isWithinWindow(now: Date, from?: Date | null, to?: Date | null) {
+  if (from && now < from) return false;
+  if (to && now > to) return false;
+  return true;
 }
 
-/**
- * Carrega regras ativas ordenadas por prioridade (asc) e data
- */
-async function loadActiveRules() {
-  return prismaClient.botAutoResponseRule.findMany({
-    where: { isActive: true },
-    orderBy: [{ priority: "asc" }, { createdAt: "asc" }],
-  });
-}
-
-/**
- * Tenta casar a mensagem com as regras (regex ou inclusão de substring)
- */
-async function matchRule(body: string) {
-  const txt = (body || "").trim();
-  if (!txt) return undefined;
-
-  const rules = await loadActiveRules();
+function findMatchingRule(
+  rules: Awaited<ReturnType<typeof fetchActiveRules>>,
+  text: string
+) {
+  const now = new Date();
+  const normText = normalize(text);
 
   for (const r of rules) {
-    // Se a regra tiver janela específica, poderia validar r.activeFrom/r.activeTo aqui (opcional)
+    if (!isWithinWindow(now, r.active_from, r.active_to)) continue;
 
-    if (r.isRegex) {
+    const trig = r.trigger ?? "";
+    if (!trig) continue;
+
+    if (r.is_regex) {
       try {
-        const re = new RegExp(r.trigger, "i");
-        if (re.test(txt)) return r;
+        const rx = new RegExp(trig, "iu");
+        if (rx.test(text)) return r;
       } catch {
-        // ignora regex inválida sem quebrar o fluxo
+        continue;
       }
     } else {
-      if (txt.toLowerCase().includes(r.trigger.toLowerCase())) return r;
+      if (normText.includes(normalize(trig))) return r;
     }
   }
-
-  return undefined;
+  return null;
 }
 
-/**
- * Cria log de forma resiliente
- */
-async function createLog(data: {
-  ruleId?: string | null;
-  matchedText?: string | null;
-  fromNumber?: string | null;
-  toNumber?: string | null;
-  inboundBody: string;
-  outboundBody?: string | null;
-  error?: string | null;
+async function saveLog({
+  session,
+  inbound,
+  intent,
+  score,
+  matchedRuleId,
+  reply,
+}: {
+  session: string;
+  inbound: Inbound;
+  intent?: string | null;
+  score?: number | null;
+  matchedRuleId?: string | null;
+  reply?: string | null;
 }) {
   try {
-    await prismaClient.botAutoResponderLog.create({ data });
-  } catch (e) {
-    // Evita quebrar o fluxo por falha de log
-    console.error("Falha ao gravar log do bot:", e);
+    await prismaClient.$executeRawUnsafe(
+      `INSERT INTO bot_auto_responder_logs
+        (id, session, from_number, to_number, body, matched_rule_id, intent, score, reply, created_at)
+       VALUES (uuid_generate_v4(), $1, $2, $3, $4, $5, $6, $7, $8, now())`,
+      session,
+      inbound.from ?? "",
+      inbound.to ?? "",
+      inbound.body ?? "",
+      matchedRuleId ?? null,
+      intent ?? null,
+      score ?? null,
+      reply ?? null
+    );
+  } catch {
+    // silencioso se tabela/função não existir
   }
 }
 
-/**
- * Manipula uma mensagem recebida e dispara o auto-responder se aplicável.
- * - Faz match com regras
- * - Respeita janela off-hours
- * - Gera logs estruturados
- */
-export async function handleInboundMessage(
-  session: string,
-  msg: InboundMessage
-): Promise<HandleResult> {
-  const inboundJson = JSON.stringify(msg);
+export async function handleInboundMessage(session: string, inbound: Inbound) {
+  const text = inbound.body || "";
 
-  const setting = await prismaClient.botSetting.findFirst({ where: { id: 1 } });
-  if (!setting?.enabled) {
-    console.log("Auto-responder está desativado, ignorando mensagem.");
+  let usedReply: string | null = null;
+  let usedIntent: string | null = null;
+  let usedScore: number | null = null;
+  let matchedRuleId: string | null = null;
+
+  // 1) NLP
+  try {
+    const nlp = await nlpProcess(text);
+    usedIntent = nlp?.intent ?? null;
+    usedScore = typeof nlp?.score === "number" ? nlp.score : null;
+
+    if (usedIntent && (usedScore ?? 0) >= NLP_SCORE_MIN) {
+      switch (usedIntent) {
+        case "cardapio.show":
+          usedReply = "🍕 Cardápio: https://amodomio.com.br/menu";
+          break;
+        case "pedido.start":
+          usedReply = "📦 Vamos começar seu pedido! Qual sabor você gostaria?";
+          break;
+        default:
+          break;
+      }
+    }
+  } catch {
+    // ignora erro do NLP
+  }
+
+  if (usedReply) {
+    await sendMessage(session, inbound.from, usedReply);
+    await saveLog({
+      session,
+      inbound,
+      intent: usedIntent,
+      score: usedScore,
+      matchedRuleId,
+      reply: usedReply,
+    });
     return;
   }
 
-  try {
-    const { inDay, inHour, setting } = await checkBusinessWindow();
+  // 2) Regras DB
+  const rules = await fetchActiveRules();
+  const matched = findMatchingRule(rules, text);
+  if (matched?.response) {
+    matchedRuleId = matched.id;
+    usedReply = matched.response;
 
-    // 1) Tenta casar com uma regra
-    const rule = await matchRule(msg.body);
-
-    if (rule) {
-      const outbound = await sendText(session, msg.from, rule.response);
-
-      await createLog({
-        ruleId: rule.id,
-        matchedText: msg.body,
-        fromNumber: msg.from,
-        toNumber: msg.to ?? null,
-        inboundBody: inboundJson,
-        outboundBody: JSON.stringify(outbound),
-      });
-
-      return { matched: true, ruleId: rule.id };
-    }
-
-    // 2) Sem regra: se fora do horário, dispara mensagem de off-hours
-    if (!(inDay && inHour)) {
-      const text =
-        setting?.offHoursMessage ??
-        "Estamos fora do horário. Voltamos em breve! 🍕";
-      const outbound = await sendText(session, msg.from, text);
-
-      await createLog({
-        matchedText: msg.body,
-        fromNumber: msg.from,
-        toNumber: msg.to ?? null,
-        inboundBody: inboundJson,
-        outboundBody: JSON.stringify(outbound),
-      });
-
-      return { matched: true, offHours: true };
-    }
-
-    // 3) Sem ação: apenas loga a entrada para auditoria
-    await createLog({
-      matchedText: msg.body,
-      fromNumber: msg.from,
-      toNumber: msg.to ?? null,
-      inboundBody: inboundJson,
+    await sendMessage(session, inbound.from, usedReply);
+    await saveLog({
+      session,
+      inbound,
+      intent: usedIntent,
+      score: usedScore,
+      matchedRuleId,
+      reply: usedReply,
     });
-
-    return { matched: false };
-  } catch (err: any) {
-    await createLog({
-      inboundBody: inboundJson,
-      error: String(err?.message || err),
-      fromNumber: msg.from ?? null,
-      toNumber: msg.to ?? null,
-    });
-    return { matched: false };
+    return;
   }
+
+  // 3) Fallback
+  usedReply =
+    'Desculpe, não entendi 🤔\nDigite "1" para ver o cardápio, "2" para promoções, ou "ajuda" para falar com um atendente.';
+  await sendMessage(session, inbound.from, usedReply);
+  await saveLog({
+    session,
+    inbound,
+    intent: usedIntent,
+    score: usedScore,
+    matchedRuleId,
+    reply: usedReply,
+  });
 }
