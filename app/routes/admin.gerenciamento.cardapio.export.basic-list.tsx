@@ -93,6 +93,8 @@ export default function AdminGerenciamentoCardapioExportBasicList() {
             applyFilters(currentFilter);
           }, []);
 
+          console.log({ items })
+
 
           return (
             <div className="flex flex-col">
@@ -126,6 +128,8 @@ export default function AdminGerenciamentoCardapioExportBasicList() {
 
               <Separator className="my-4" />
 
+
+
               <ul>
                 {
                   items.map(i => {
@@ -134,7 +138,10 @@ export default function AdminGerenciamentoCardapioExportBasicList() {
                       <li key={i.id} className="grid grid-cols-6 mb-1">
                         <span className="text-sm font-medium">{i.MenuItemGroup?.name}</span>
                         <span className="text-sm font-medium">{i.Category.name}</span>
-                        <span className="text-sm font-medium">{i.name}</span>
+                        <div className="flex flex-col gap-1">
+                          <span className="text-sm font-medium">{i.name}</span>
+                          <span className="text-xs">{i.ingredients}</span>
+                        </div>
                         <span className="text-sm font-medium">{i.MenuItemSellingPriceVariation.filter(spv => spv.MenuItemSize?.key === "pizza-medium").map(r => (
                           <span key={r.id} className="text-sm font-medium">{r.priceAmount}</span>
                         ))}</span>
