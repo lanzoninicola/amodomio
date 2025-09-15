@@ -253,6 +253,12 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
           disabled: false,
         },
         {
+          title: "Configurar Auto Responder",
+          href: "/admin/wpp/auto-responder/settings",
+          items: [],
+          disabled: false,
+        },
+        {
           title: "NLP",
           href: "/admin/nlp",
           items: [],

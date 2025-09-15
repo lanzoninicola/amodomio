@@ -1229,7 +1229,7 @@ model NlpEntityExample {
 
 model NlpModel {
   id        String   @id @default(cuid())
-  version   Int
+  version   BigInt   @db.BigInt
   label     String?
   isActive  Boolean  @default(false) @map("is_active")
   language  String   @default("pt")

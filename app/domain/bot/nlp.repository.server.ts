@@ -47,7 +47,7 @@ export const NlpRepo = {
   // models
   createModelVersion: (artifact: any, label?: string, language = "pt") =>
     prismaClient.nlpModel.create({
-      data: { artifact, label, language, version: Date.now() as any },
+      data: { artifact, label, language, version: BigInt(Date.now()) },
     }),
 
   getActiveModel: () =>
