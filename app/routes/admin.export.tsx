@@ -82,6 +82,7 @@ export const loader: LoaderFunction = async ({ request, params }) => {
         group: i.MenuItemGroup?.name,
         category: i.Category.name,
         name: i.name,
+        ingredients: i.ingredients,
         price: 0,
         upcoming: i.upcoming,
         visible: i.visible,

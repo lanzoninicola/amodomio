@@ -1,6 +1,6 @@
 import { LoaderFunctionArgs } from "@remix-run/node";
 import { Await, Link, defer, useLoaderData } from "@remix-run/react";
-import { ChevronRight, Video } from "lucide-react";
+import { ChevronRight, MessageCircleQuestion, Video } from "lucide-react";
 import { Heart, Instagram, Map, MapPin, MenuSquare, Share2 } from "lucide-react";
 import { Suspense, useState } from "react";
 import TypewriterComponent from "typewriter-effect";
@@ -12,6 +12,7 @@ import WhatsappExternalLink from "~/components/primitives/whatsapp/whatsapp-exte
 import WhatsAppIcon from "~/components/primitives/whatsapp/whatsapp-icon";
 import { Separator } from "~/components/ui/separator";
 import FazerPedidoButton from "~/domain/cardapio/components/fazer-pedido-button/fazer-pedido-button";
+import { fmtYYYMMDD, todayLocalYMD } from "~/domain/kds";
 import GLOBAL_LINKS from "~/domain/website-navigation/global-links.constant";
 import PUBLIC_WEBSITE_NAVIGATION_ITEMS from "~/domain/website-navigation/public/public-website.nav-links";
 import { CloudinaryUtils } from "~/lib/cloudinary";
@@ -33,54 +34,63 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 
 export default function HomePage() {
+    const today = fmtYYYMMDD(new Date())
+    const mktDateTarget = "20250916"
 
     return (
         <>
-            <header className="fixed top-0 left-0 w-screen z-50 transition-all p-4 flex justify-between items-center">
-                <div className="w-[130px] md:w-[150px] ">
-                    <Logo onlyText={true} className="w-full h-full" />
-                </div>
-                <Link to={GLOBAL_LINKS.cardapioPublic.href} className="hidden md:block" >
-                    <div className="bg-black px-2 py-2 rounded-lg w-max flex items-center gap-2">
-                        <span className="font-rubik font-semibold text-white uppercase tracking-wider text-xs">cardápio</span>
+            <section className={
+                cn(
+                    today === mktDateTarget && 'hidden'
+                )
+            }>
+                <header className="fixed top-0 left-0 w-screen z-50 transition-all p-4 flex justify-between items-center">
+                    <div className="w-[130px] md:w-[150px] ">
+                        <Logo onlyText={true} className="w-full h-full" />
                     </div>
-                </Link>
-            </header>
-            <section className="relative">
-                <HomePageVideoBackground />
-                <div className="absolute inset-0 p-4 pt-32">
-                    <div className="flex flex-col">
+                    <Link to={GLOBAL_LINKS.cardapioPublic.href} className="hidden md:block" >
+                        <div className="bg-black px-2 py-2 rounded-lg w-max flex items-center gap-2">
+                            <span className="font-rubik font-semibold text-white uppercase tracking-wider text-xs">cardápio</span>
+                        </div>
+                    </Link>
+                </header>
+                <section className="relative">
+                    <HomePageVideoBackground />
+                    <div className="absolute inset-0 p-4 pt-32">
+                        <div className="flex flex-col">
 
-                        <h1 className="text-white font-rubik font-semibold transition-all
+                            <h1 className="text-white font-rubik font-semibold transition-all
                             text-5xl leading-none tracking-tight mb-6 max-w-[300px]
                             md:text-7xl md:max-w-3xl
                         ">
-                            A pizza mais desejada de Pato Branco
-                        </h1>
+                                A pizza mais desejada de Pato Branco
+                            </h1>
 
-                        <p className="text-white font-rubik font-semibold  tracking-wide max-w-prose transition-all
+                            <p className="text-white font-rubik font-semibold  tracking-wide max-w-prose transition-all
                             text-[1rem] leading-[120%]
                             md:text-xl md:leading-tight
                         ">
-                            Preparada com ingredientes selecionados e técnicas artesanais, nossa pizza combina tradição italiana e inovação para entregar uma experiência única. Crocante, leve e irresistível, ela conquistou Pato Branco e agora espera por você.
-                        </p>
+                                Preparada com ingredientes selecionados e técnicas artesanais, nossa pizza combina tradição italiana e inovação para entregar uma experiência única. Crocante, leve e irresistível, ela conquistou Pato Branco e agora espera por você.
+                            </p>
+
+                        </div>
 
                     </div>
+                </section >
+
+                <div className="fixed right-4 bottom-8">
+
+                    <Link to={GLOBAL_LINKS.cardapioPublic.href} >
+                        <div className="bg-black px-8 py-4 rounded-lg w-max flex items-center gap-2">
+                            <span className="font-rubik font-bold text-white">Vai ao cardápio</span>
+                            <ChevronRight color="#ffffff" />
+                        </div>
+                    </Link>
 
                 </div>
-            </section >
 
-            <div className="fixed right-4 bottom-8">
-
-                <Link to={GLOBAL_LINKS.cardapioPublic.href} >
-                    <div className="bg-black px-8 py-4 rounded-lg w-max flex items-center gap-2">
-                        <span className="font-rubik font-bold text-white">Vai ao cardápio</span>
-                        <ChevronRight color="#ffffff" />
-                    </div>
-                </Link>
-
-            </div>
-
+            </section>
+            <DiaCliente25 targetDate={mktDateTarget} />
         </>
     );
 }
@@ -123,6 +133,77 @@ function HomePageVideoBackground() {
         </>
     );
 }
+
+interface DiaCliente25Props {
+    targetDate: string
+}
+
+import { ClipboardCopy, Info } from "lucide-react"
+import { Dialog, DialogContent, DialogTrigger } from "~/components/ui/dialog"
+import { Button } from "~/components/ui/button"
+import { useToast } from "~/components/ui/use-toast"
+import { QuestionMarkCircledIcon } from "@radix-ui/react-icons";
+
+function DiaCliente25({ targetDate }: DiaCliente25Props) {
+    const [loaded, setLoaded] = useState(false)
+    const { toast } = useToast()
+    const today = fmtYYYMMDD(new Date())
+    const cupomCode = "CLIENTE10" // Exemplo
+
+    const copyToClipboard = () => {
+        navigator.clipboard.writeText(cupomCode)
+        toast({
+            title: "Cupom copiado!",
+            description: `"${cupomCode}" foi copiado para a área de transferência.`,
+        })
+    }
+
+    return (
+        <section className={cn("md:w-[690px] md:mx-auto", today !== targetDate && "hidden")}>
+            <div className="relative w-full h-screen overflow-hidden bg-gray-800">
+                <img
+                    src={"/images/2025_dia_cliente.png"}
+                    alt={"cupom dia do cliente 2025 desconto 10%"}
+                    onLoad={() => setLoaded(true)}
+                    className="absolute w-full h-full object-fill transition-opacity duration-700 ease-in-out"
+                />
+
+
+                <div className="absolute bottom-[5.5rem] right-4 z-10">
+                    <Button
+                        variant="default"
+                        className="rounded-full bg-yellow-500 text-black grid place-items-center w-10 hover:bg-yellow-100"
+                        onClick={copyToClipboard}
+                    >
+                        <ClipboardCopy className="w-6 h-6" />
+                    </Button>
+                </div>
+                <div className="absolute bottom-8 right-4 flex flex-col gap-4 items-center z-10">
+                    <Dialog>
+                        <DialogTrigger asChild>
+                            <Button className="rounded-full bg-yellow-500 text-black grid place-items-center w-10">
+                                <QuestionMarkCircledIcon className="w-6 h-6" />
+                            </Button>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-md mx-auto text-left">
+                            <h2 className="text-lg font-bold mb-2">Regulamento</h2>
+                            <p className="text-md leading-snug">
+                                Promoção válida para compras realizadas no dia 16 de setembro
+                                de 2025. O cupom <span className="font-semibold">CLIENTE10</span> garante 10% de desconto em uma nova
+                                compra realizada até o dia 28 de setembro de 2025. <span className="font-semibold">Válido
+                                    apenas para pedidos pelo nosso cardápio digital.</span> Não cumulativo
+                                com outras promoções.
+                            </p>
+                        </DialogContent>
+                    </Dialog>
+                </div>
+
+            </div>
+        </section>
+    )
+}
+
+
 
 
 // export default function HomePage() {
