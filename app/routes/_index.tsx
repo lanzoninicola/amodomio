@@ -35,7 +35,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export default function HomePage() {
     const today = fmtYYYMMDD(new Date())
-    const mktDateTarget = "20250917"
+    const mktDateTarget = "20250916"
 
     return (
         <>
@@ -159,44 +159,60 @@ function DiaCliente25({ targetDate }: DiaCliente25Props) {
     }
 
     return (
-        <section className={cn("md:w-[690px] md:mx-auto", today !== targetDate && "hidden")}>
-            <div className="relative w-full h-screen overflow-hidden bg-gray-800">
+        <section className={cn(
+            "bg-gray-800 md:mx-auto flex justify-center",
+            today !== targetDate && "hidden"
+        )}>
+            <div className="relative w-full h-screen flex flex-col items-center overflow-hidden p-4 pt-8 md:w-[690px] space-y-12">
                 <img
                     src={"/images/2025_dia_cliente.png"}
                     alt={"cupom dia do cliente 2025 desconto 10%"}
                     onLoad={() => setLoaded(true)}
-                    className="absolute w-full h-full object-fill transition-opacity duration-700 ease-in-out"
+                    className={
+                        cn(
+                            "w-[95%] transition-opacity duration-700 ease-in-out",
+                            "rounded-lg shadow-lg  shadow-white",
+                            "md:absolute md:w-full md:h-full md:object-fill",
+                            loaded && "animate-zoomOnce"
+                        )
+                    }
                 />
-
-
-                <div className="absolute bottom-[5.5rem] right-4 z-10">
-                    <Button
-                        variant="default"
-                        className="rounded-full bg-yellow-500 text-black grid place-items-center w-10 hover:bg-yellow-100"
-                        onClick={copyToClipboard}
-                    >
-                        <ClipboardCopy className="w-6 h-6" />
-                    </Button>
+                <div className="flex flex-col gap-4">
+                    <div className="grid grid-cols-2 gap-4">
+                        <Button
+                            variant="default"
+                            className="flex gap-4 items-center bg-gray-200 text-black hover:bg-gray-100"
+                            onClick={copyToClipboard}
+                        >
+                            <ClipboardCopy className="w-6 h-6" />
+                            <span className="font-neue">Copiar</span>
+                        </Button>
+                        <Dialog>
+                            <DialogTrigger asChild>
+                                <Button className="flex gap-4 items-center bg-gray-100 text-black">
+                                    <QuestionMarkCircledIcon className="w-6 h-6" />
+                                    <span className="font-neue">Regulamento</span>
+                                </Button>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-md mx-auto text-left">
+                                <h2 className="text-lg font-bold mb-2">Regulamento</h2>
+                                <p className="text-md leading-snug">
+                                    Promoção válida para compras realizadas no dia 17 de setembro
+                                    de 2025. O cupom <span className="font-semibold">CLIENTE10</span> garante 10% de desconto em uma nova
+                                    compra realizada até o dia 28 de setembro de 2025. <span className="font-semibold">Válido
+                                        apenas para pedidos pelo nosso cardápio digital.</span> Não cumulativo
+                                    com outras promoções.
+                                </p>
+                            </DialogContent>
+                        </Dialog>
+                    </div>
+                    <Link to={GLOBAL_LINKS.cardapioPublic.href} className="w-full" >
+                        <div className="bg-gray-100 px-2 py-2 rounded-md flex items-center gap-2 justify-center">
+                            <span className="font-neue font-medium text-md uppercase tracking-wide">cardápio</span>
+                        </div>
+                    </Link>
                 </div>
-                <div className="absolute bottom-8 right-4 flex flex-col gap-4 items-center z-10">
-                    <Dialog>
-                        <DialogTrigger asChild>
-                            <Button className="rounded-full bg-yellow-500 text-black grid place-items-center w-10">
-                                <QuestionMarkCircledIcon className="w-6 h-6" />
-                            </Button>
-                        </DialogTrigger>
-                        <DialogContent className="max-w-md mx-auto text-left">
-                            <h2 className="text-lg font-bold mb-2">Regulamento</h2>
-                            <p className="text-md leading-snug">
-                                Promoção válida para compras realizadas no dia 16 de setembro
-                                de 2025. O cupom <span className="font-semibold">CLIENTE10</span> garante 10% de desconto em uma nova
-                                compra realizada até o dia 28 de setembro de 2025. <span className="font-semibold">Válido
-                                    apenas para pedidos pelo nosso cardápio digital.</span> Não cumulativo
-                                com outras promoções.
-                            </p>
-                        </DialogContent>
-                    </Dialog>
-                </div>
+
 
             </div>
         </section>
