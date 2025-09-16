@@ -35,7 +35,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export default function HomePage() {
     const today = fmtYYYMMDD(new Date())
-    const mktDateTarget = "20250916"
+    const mktDateTarget = "20250917"
 
     return (
         <>
