@@ -35,7 +35,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export default function HomePage() {
     const today = fmtYYYMMDD(new Date())
-    const mktDateTarget = "20250917"
+    const mktDateTarget = "20250916"
 
     return (
         <>
@@ -148,7 +148,7 @@ function DiaCliente25({ targetDate }: DiaCliente25Props) {
     const [loaded, setLoaded] = useState(false)
     const { toast } = useToast()
     const today = fmtYYYMMDD(new Date())
-    const cupomCode = "CLIENTE10" // Exemplo
+    const cupomCode = "CLIENTE10"
 
     const copyToClipboard = () => {
         navigator.clipboard.writeText(cupomCode)
@@ -159,49 +159,150 @@ function DiaCliente25({ targetDate }: DiaCliente25Props) {
     }
 
     return (
-        <section className={cn("md:w-[690px] md:mx-auto", today !== targetDate && "hidden")}>
-            <div className="relative w-full h-screen overflow-hidden bg-gray-800">
+        <section
+            className={cn(
+                "relative flex justify-center md:mx-auto",
+                today !== targetDate && "hidden"
+            )}
+        >
+            {/* Fundo com imagem + overlay para contraste */}
+            <div className="relative w-full h-screen md:w-[720px] overflow-hidden">
+
                 <img
-                    src={"/images/2025_dia_cliente.png"}
-                    alt={"cupom dia do cliente 2025 desconto 10%"}
+                    src={"/images/2025_dia_cliente_fundo.png"}
+                    alt="Dia do Cliente — arte promocional"
                     onLoad={() => setLoaded(true)}
-                    className="absolute w-full h-full object-fill transition-opacity duration-700 ease-in-out"
+                    className={cn(
+                        "absolute inset-0 h-full w-full object-cover",
+                        loaded && "animate-zoomOnce"
+                    )}
+                />
+                <div
+                    className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/50 to-black/70"
+                    aria-hidden
                 />
 
+                {/* Conteúdo */}
+                <div className="relative z-10 flex h-full flex-col items-center justify-between p-5 md:p-6">
+                    {/* Topo: logo opcional (se quiser, pode incluir) */}
 
-                <div className="absolute bottom-[5.5rem] right-4 z-10">
-                    <Button
-                        variant="default"
-                        className="rounded-full bg-yellow-500 text-black grid place-items-center w-10 hover:bg-yellow-100"
-                        onClick={copyToClipboard}
-                    >
-                        <ClipboardCopy className="w-6 h-6" />
-                    </Button>
-                </div>
-                <div className="absolute bottom-8 right-4 flex flex-col gap-4 items-center z-10">
-                    <Dialog>
-                        <DialogTrigger asChild>
-                            <Button className="rounded-full bg-yellow-500 text-black grid place-items-center w-10">
-                                <QuestionMarkCircledIcon className="w-6 h-6" />
-                            </Button>
-                        </DialogTrigger>
-                        <DialogContent className="max-w-md mx-auto text-left">
-                            <h2 className="text-lg font-bold mb-2">Regulamento</h2>
-                            <p className="text-md leading-snug">
-                                Promoção válida para compras realizadas no dia 16 de setembro
-                                de 2025. O cupom <span className="font-semibold">CLIENTE10</span> garante 10% de desconto em uma nova
-                                compra realizada até o dia 28 de setembro de 2025. <span className="font-semibold">Válido
-                                    apenas para pedidos pelo nosso cardápio digital.</span> Não cumulativo
-                                com outras promoções.
-                            </p>
-                        </DialogContent>
-                    </Dialog>
-                </div>
+                    {/* Bloco central com hierarquia */}
+                    <div className="flex w-full max-w-[560px] flex-col items-center text-center">
+                        <img
+                            src={"/images/2025_dia_cliente_title.png"}
+                            alt="Dia do Cliente — arte promocional"
+                        />
 
+                        {/* Cartão de Cupom */}
+                        <div className="mt-6 w-full rounded-2xl bg-white/95 p-4 shadow-xl backdrop-blur">
+                            <div className="grid grid-cols-[1fr_auto_1fr] items-stretch">
+                                {/* Perfuração esquerda */}
+                                <div className="relative flex items-center">
+                                    <div className="h-full w-4 -translate-x-2 rounded-r-full bg-gray-100" />
+                                </div>
+
+                                {/* Miolo do cupom */}
+                                <div className="flex flex-col items-center gap-2 border-x border-dashed border-gray-300 px-4 text-gray-900 font-neue">
+                                    <div className="text-xs uppercase tracking-widest text-gray-500">
+                                        Somente hoje
+                                    </div>
+                                    <div className="flex items-baseline gap-2">
+                                        <span className="font-rubik text-5xl font-extrabold leading-none">
+                                            10%
+                                        </span>
+                                        <span className="font-rubik text-base font-semibold">OFF</span>
+                                    </div>
+
+                                    {/* Código + copiar inline */}
+                                    <div className="mt-1 flex w-full items-center justify-center gap-2">
+
+                                        <Button
+                                            variant="secondary"
+                                            size="sm"
+                                            className="h-8 px-3 flex gap-2 items-center"
+                                            onClick={copyToClipboard}
+                                            aria-label="Copiar código do cupom"
+                                            title="Copiar código do cupom"
+                                        >
+                                            <ClipboardCopy className="h-6 w-6" />
+                                            <code className="rounded bg-gray-100 font-mono text-md font-semibold">
+                                                {cupomCode}
+                                            </code>
+                                        </Button>
+                                    </div>
+
+                                    {/* Validade */}
+                                    <div className="mt-2 flex items-center gap-2 text-sm text-gray-600">
+                                        <svg
+                                            xmlns="http://www.w3.org/2000/svg"
+                                            className="h-4 w-4"
+                                            fill="none"
+                                            viewBox="0 0 24 24"
+                                            stroke="currentColor"
+                                            aria-hidden
+                                        >
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                        </svg>
+                                        Válido até 28/09
+                                    </div>
+                                </div>
+
+                                {/* Perfuração direita */}
+                                <div className="relative flex items-center justify-end">
+                                    <div className="h-full w-4 translate-x-2 rounded-l-full bg-gray-100" />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Observação/CTA secundário */}
+                        <p className="mt-3 max-w-[520px] text-balance text-sm text-white tracking-wide font-neue">
+                            Válido somente no cardápio digital. Não cumulativo com outras promoções.
+                        </p>
+
+                        {/* Ações */}
+                        <div className="mt-5 grid w-full max-w-[560px] grid-cols-2 gap-3">
+                            <Dialog>
+                                <DialogTrigger asChild>
+                                    <Button
+                                        variant="outline"
+                                        className="h-12 w-full flex gap-2 justify-center bg-white/90 text-gray-900 hover:bg-white uppercase font-neue"
+                                        aria-label="Abrir regulamento"
+                                    >
+                                        <QuestionMarkCircledIcon className="h-5 w-5" />
+                                        Regulamento
+                                    </Button>
+                                </DialogTrigger>
+                                <DialogContent className="max-w-md text-left">
+                                    <h2 className="text-lg font-bold">Regulamento</h2>
+                                    <p className="mt-2 text-sm leading-snug text-muted-foreground">
+                                        Promoção válida para compras realizadas no dia 17 de setembro de 2025.
+                                        O cupom <span className="font-semibold">CLIENTE10</span> garante 10% de desconto
+                                        em uma nova compra realizada até o dia 28 de setembro de 2025.
+                                        <span className="font-semibold"> Válido apenas para pedidos pelo nosso cardápio digital.</span>
+                                        Não cumulativo com outras promoções.
+                                    </p>
+                                </DialogContent>
+                            </Dialog>
+
+                            <Link to={GLOBAL_LINKS.cardapioPublic.href} className="w-full">
+                                <Button
+                                    className="h-12 w-full justify-center bg-brand-green text-white hover:opacity-90 uppercase font-neue tracking-wide"
+                                    aria-label="Abrir cardápio"
+                                >
+                                    Cardápio
+                                </Button>
+                            </Link>
+                        </div>
+                    </div>
+
+                    {/* Rodapé opcional (placeholder para respiro) */}
+                    <div className="h-10" />
+                </div>
             </div>
         </section>
     )
 }
+
 
 
 
