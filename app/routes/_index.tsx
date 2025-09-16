@@ -35,7 +35,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export default function HomePage() {
     const today = fmtYYYMMDD(new Date())
-    const mktDateTarget = "20250917"
+    const mktDateTarget = "20250916"
 
     return (
         <>
@@ -194,7 +194,9 @@ function DiaCliente25({ targetDate }: DiaCliente25Props) {
                         />
 
                         {/* Cartão de Cupom */}
-                        <div className="mt-6 w-full rounded-2xl bg-white/95 p-4 shadow-xl backdrop-blur">
+                        <div className="mt-6 w-full rounded-2xl bg-white/95 p-4 shadow-xl backdrop-blur"
+                            onClick={copyToClipboard}
+                        >
                             <div className="grid grid-cols-[1fr_auto_1fr] items-stretch">
                                 {/* Perfuração esquerda */}
                                 <div className="relative flex items-center">
@@ -203,9 +205,9 @@ function DiaCliente25({ targetDate }: DiaCliente25Props) {
 
                                 {/* Miolo do cupom */}
                                 <div className="flex flex-col items-center gap-2 border-x border-dashed border-gray-300 px-4 text-gray-900 font-neue">
-                                    <div className="text-xs uppercase tracking-widest text-gray-500">
+                                    {/* <div className="text-xs uppercase tracking-widest text-gray-500">
                                         Somente hoje
-                                    </div>
+                                    </div> */}
                                     <div className="flex items-baseline gap-2">
                                         <span className="font-rubik text-5xl font-extrabold leading-none">
                                             10%
@@ -256,7 +258,7 @@ function DiaCliente25({ targetDate }: DiaCliente25Props) {
 
                         {/* Observação/CTA secundário */}
                         <p className="mt-3 max-w-[520px] text-balance text-sm text-white tracking-wide font-neue">
-                            Válido somente no cardápio digital. Não cumulativo com outras promoções.
+                            Válido somente na proxima compra no cardápio digital. Não cumulativo com outras promoções.
                         </p>
 
                         {/* Ações */}
