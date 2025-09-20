@@ -13,6 +13,10 @@ function baseUrl() {
   return u.replace(/\/+$/, "");
 }
 
+export function getWppSessionName() {
+  return SESSION;
+}
+
 async function generateToken(): Promise<string> {
   const session = SESSION;
   const secret = SECRET;
@@ -56,29 +60,75 @@ async function authedFetch(path: string, init?: RequestInit, retry = true) {
   return res.json().catch(() => ({}));
 }
 
+// export async function sendMessage(
+//   session: string,
+//   phone: string,
+//   message: string
+// ) {
+//   try {
+//     return await authedFetch(
+//       `/api/${encodeURIComponent(session)}/send-message`,
+//       {
+//         method: "POST",
+//         body: JSON.stringify({ phone, message }),
+//       }
+//     );
+//   } catch {
+//     // fallback para variantes { number, text }
+//     return await authedFetch(
+//       `/api/${encodeURIComponent(session)}/send-message`,
+//       {
+//         method: "POST",
+//         body: JSON.stringify({ number: phone, text: message }),
+//       }
+//     );
+//   }
+// }
+
+// ✅ adiciona esse helper
+function pickMessageId(r: any) {
+  return r?.messageId || r?.id || r?.key?.id || null;
+}
+
+// ✅ atualize sendMessage para normalizar e tentar /send-text primeiro
 export async function sendMessage(
   session: string,
   phone: string,
   message: string
 ) {
+  // 1) moderno: /send-text { phone, text }
   try {
-    return await authedFetch(
+    const r = await authedFetch(
+      `/api/${encodeURIComponent(session)}/send-text`,
+      {
+        method: "POST",
+        body: JSON.stringify({ phone, text: message }),
+      }
+    );
+    return pickMessageId(r);
+  } catch {}
+
+  // 2) compat: /send-message { phone, message }
+  try {
+    const r = await authedFetch(
       `/api/${encodeURIComponent(session)}/send-message`,
       {
         method: "POST",
         body: JSON.stringify({ phone, message }),
       }
     );
-  } catch {
-    // fallback para variantes { number, text }
-    return await authedFetch(
-      `/api/${encodeURIComponent(session)}/send-message`,
-      {
-        method: "POST",
-        body: JSON.stringify({ number: phone, text: message }),
-      }
-    );
-  }
+    return pickMessageId(r);
+  } catch {}
+
+  // 3) compat payload: { number, text }
+  const r3 = await authedFetch(
+    `/api/${encodeURIComponent(session)}/send-message`,
+    {
+      method: "POST",
+      body: JSON.stringify({ number: phone, text: message }),
+    }
+  );
+  return pickMessageId(r3);
 }
 
 export async function ensureSession(session: string) {

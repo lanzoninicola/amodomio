@@ -267,6 +267,24 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
       ],
     },
     {
+      title: "Clientes Inativos",
+      disabled: false,
+      items: [
+        {
+          title: "Consolidar clientes",
+          href: "/admin/campanhas/consolidar-cliente",
+          items: [],
+          disabled: false,
+        },
+        {
+          title: "Campanhas",
+          href: "/admin/campanhas/manual",
+          items: [],
+          disabled: false,
+        },
+      ],
+    },
+    {
       title: "Administração",
       disabled: false,
       items: [

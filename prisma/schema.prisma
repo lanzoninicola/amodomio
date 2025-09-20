@@ -1279,3 +1279,130 @@ model ImportMogoVendaPorCliente {
 
   @@map("import_mogo_vendas_por_cliente")
 }
+
+model Customer {
+  id          String    @id @default(uuid())
+  phone       String    @unique
+  name        String?
+  lastOrderAt DateTime? @map("last_order_at")
+  source      String    @default("erp")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  SendLogs   SendLog[]
+  Engagement Engagement?
+  Optout     Optout?
+
+  @@map("customers")
+}
+
+/// Cabeçalho do pedido (não referencia Customer; relação futura por telefone)
+model CustomerOrder {
+  id                  String @id @default(uuid()) @map("id")
+  source              String @default("csv") @map("source")
+  externalOrderNumber String @map("order_number")
+
+  customerName String  @map("customer_name")
+  phoneRaw     String? @map("phone_raw")
+  phoneE164    String? @map("phone_e164")
+
+  paymentType String @map("payment_type")
+
+  // Mantém o original do CSV (útil p/ auditoria)
+  paidAtDate String @map("paid_at_date") // ex.: "31/08/2025"
+  paidAtHour String @map("paid_at_hour") // ex.: "22:04:17"
+
+  // Normalizado (combinação date+hour no fuso -03)
+  paidAt DateTime @map("paid_at")
+
+  tableLabel String? @map("table_label")
+  orderTag   String? @map("order_tag")
+
+  totalAmount Decimal @map("total_amount") @db.Decimal(12, 2)
+
+  items CustomerOrderItem[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Evita duplicar o mesmo pedido dessa fonte (usamos os campos “brutos” do CSV p/ chave estável)
+  @@unique([source, externalOrderNumber, paidAtDate, paidAtHour])
+  @@index([paidAt])
+  @@index([phoneE164])
+  @@index([externalOrderNumber])
+  @@map("customer_orders")
+}
+
+/// Itens/linhas do pedido
+model CustomerOrderItem {
+  id String @id @default(uuid()) @map("id")
+
+  orderId String        @map("order_id")
+  order   CustomerOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  productName String  @map("product_name")
+  quantity    Int     @default(1) @map("quantity")
+  amount      Decimal @map("amount") @db.Decimal(10, 2)
+
+  isFee      Boolean @default(false) @map("is_fee")
+  isDiscount Boolean @default(false) @map("is_discount")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([orderId])
+  @@index([productName])
+  @@map("customer_order_items")
+}
+
+model Optout {
+  phone     String    @id
+  reason    String?
+  createdAt DateTime  @default(now()) @map("created_at")
+  customer  Customer? @relation(fields: [phone], references: [phone], onDelete: Cascade)
+
+  @@map("optouts")
+}
+
+model SendLog {
+  id           String    @id @default(uuid())
+  phone        String
+  customerId   String?   @map("customer_id")
+  message      String
+  status       String // queued|sent|failed
+  wppMessageId String?   @map("wpp_message_id")
+  error        String?
+  sentAt       DateTime? @map("sent_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  @@index([phone])
+  @@index([customerId])
+  @@map("send_logs")
+}
+
+model WppEvent {
+  id        String   @id @default(uuid())
+  phone     String?
+  direction String // inbound|outbound
+  type      String // message|status|delivery
+  payload   Json
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([phone])
+  @@map("wpp_events")
+}
+
+model Engagement {
+  id             String    @id @default(uuid())
+  phone          String    @unique
+  lastInboundAt  DateTime? @map("last_inbound_at")
+  lastOutboundAt DateTime? @map("last_outbound_at")
+  firstOptinAt   DateTime? @map("first_optin_at")
+  lastOptoutAt   DateTime? @map("last_optout_at")
+
+  customer Customer? @relation(fields: [phone], references: [phone], onDelete: Cascade)
+
+  @@map("engagements")
+}
