@@ -271,14 +271,26 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
       disabled: false,
       items: [
         {
-          title: "Consolidar clientes",
-          href: "/admin/campanhas/consolidar-cliente",
+          title: "(1) Importar pedidos",
+          href: "/admin/importer/new/csv",
+          items: [],
+          disabled: false,
+        },
+        {
+          title: "(2) Consolidar pedidos",
+          href: "/admin/clientes-inativos/consolidar-pedidos",
+          items: [],
+          disabled: false,
+        },
+        {
+          title: "(3) Consolidar clientes",
+          href: "/admin/clientes-inativos/consolidar-cliente",
           items: [],
           disabled: false,
         },
         {
           title: "Campanhas",
-          href: "/admin/campanhas/manual",
+          href: "/admin/clientes-inativos/manual",
           items: [],
           disabled: false,
         },
