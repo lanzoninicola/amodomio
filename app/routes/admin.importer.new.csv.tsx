@@ -63,6 +63,9 @@ export const action: ActionFunction = async ({ request }) => {
   const records = jsonParse(values.data as string)
   const importProfileId = values.importProfileId as string
   const destinationTable = values.table as string
+  const importMode = values.importMode as "override" | "append"
+
+  console.log({ importMode })
 
   if (!destinationTable) {
     return badRequest("Selecione a tabela de destino")
@@ -71,7 +74,8 @@ export const action: ActionFunction = async ({ request }) => {
 
   const [err, result] = await tryit(csvImporter.loadMany({
     destinationTable,
-    records
+    records,
+    mode: importMode ?? "override"
   }))
 
   if (err) {
@@ -97,23 +101,21 @@ export default function AdminImporterCSV() {
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
 
 
-
   return (
     <Suspense fallback={<Loading />}>
       <Await resolve={data}>
         {({ tables, tableListWithColumns }: { tables: any, tableListWithColumns: TableWithColumns[] }) => {
 
           const tableColumns = tableListWithColumns.filter((item) => item.table_name === destinationTable) || [];
-
-          console.log({ tableColumns });
-
           return (
             <>
-
               <div className="grid grid-cols-8 gap-4 w-full items-center mb-6">
-                <Label className="col-span-2">
-                  Selecione a tabela
-                </Label>
+                <div className="flex flex-col gap-1 col-span-2">
+                  <Label className="">
+                    Selecione a tabela
+                  </Label>
+                  <span className="text-muted-foreground text-[11px]">Tabelas com prefixo "import_"</span>
+                </div>
                 <Select required onValueChange={setDestinationTable} >
                   <SelectTrigger className="col-span-4 h-fit" >
                     <SelectValue placeholder="Selecionar..." />
@@ -129,6 +131,8 @@ export default function AdminImporterCSV() {
                   </SelectContent>
                 </Select>
               </div>
+
+
 
               {
                 destinationTable !== "" && (
@@ -151,7 +155,7 @@ export default function AdminImporterCSV() {
 
 
         }}
-      </Await>
+      </Await >
     </Suspense>
   )
 }

@@ -16,7 +16,7 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(buildVersion) // para usar no frontend
   },
   server: {
-    https: true,
+    https: false,
     host: 'localhost', // importante manter "localhost"
     port: 3000
   },

@@ -40,7 +40,7 @@ export default function CardapioExport() {
                         <span className="text-[14px] uppercase tracking-wider font-semibold">Preços de venda</span>
                     </div>
                 </Link>
-                <Link to="/admin/gerenciamento/cardapio/export-wall"
+                <Link to="/admin/gerenciamento/cardapio/export/export-wall"
                     className="hover:bg-muted my-4"
                 >
                     <div className={
@@ -54,7 +54,7 @@ export default function CardapioExport() {
                     </div>
                 </Link>
 
-                <Link to="/admin/gerenciamento/cardapio/export-wall-two"
+                <Link to="/admin/gerenciamento/cardapio/export/export-wall-two"
                     className="hover:bg-muted my-4"
                 >
                     <div className={

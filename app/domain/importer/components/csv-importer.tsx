@@ -4,6 +4,7 @@ import { parse } from "csv-parse/browser/esm/sync";
 import { jsonStringify } from "~/utils/json-helper";
 import FormImporter from "./form-importer";
 import ImporterNotificationStatus from "./importer-notification-status";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 
 interface ImporterChildrenProps {
   /** The table where the data will be store */
@@ -14,7 +15,10 @@ interface ImporterChildrenProps {
   description: string;
   submisionStatus: "idle" | "loading" | "success" | "error";
   setSubmissionStatus: (status: "idle" | "loading" | "success" | "error") => void;
+  /** Set the field delimiter. One character only, defaults to comma */
 }
+
+type CSVDelimiter = "," | ";"
 
 export default function CsvImporter({
   destinationTable,
@@ -22,14 +26,17 @@ export default function CsvImporter({
   importProfileId,
   description,
   submisionStatus,
-  setSubmissionStatus
+  setSubmissionStatus,
 }: ImporterChildrenProps) {
   const [csvContent, setCsvContent] = useState<any[]>([]);
+  const [delimiter, setDelimiter] = useState<CSVDelimiter>(",")
+  const [importMode, setImportMode] = useState<"override" | "append">("override")
   const [table, setTable] = useState("");
-  const [notification, setNotification] = useState<{ status: "error" | "success" | "idle"; message: string | null }>({
+  const [notification, setNotification] = useState<{ status: "error" | "success" | "idle"; message: string | null; payload?: any }>({
     status: "idle",
     message: null,
   });
+
 
   const fetcher = useFetcher({ key: "csv-importer" });
 
@@ -41,9 +48,15 @@ export default function CsvImporter({
     })
 
     if (fetcher.data) {
-      const { status, message } = fetcher.data;
+      const { status, message, payload } = fetcher.data;
+      const importedRecordsAmount = payload?.result?.size || 0
+      const notificationPayload = { status, message }
+      notificationPayload.status = status === 200 ? "success" : "error",
+        notificationPayload.message = `${notificationPayload.message} - ${jsonStringify(payload)}`
+
+
       setSubmissionStatus(status);
-      setNotification({ status, message });
+      setNotification(notificationPayload);
     }
   }, [fetcher.data]);
 
@@ -62,8 +75,10 @@ export default function CsvImporter({
       const result = parse(text, {
         columns: true,
         skip_empty_lines: true,
-        trim: true
+        trim: true,
+        delimiter
       });
+
 
       if (result.length === 0) {
         setNotification({ status: "error", message: "Nenhuma linha válida no CSV." });
@@ -104,20 +119,65 @@ export default function CsvImporter({
       importProfileId,
       description,
       table: destinationTable,
-      mode: "override",
+      importMode: importMode,
       _action: "import-csv"
     }, { method: "post" });
   }
 
+  console.log({ notification })
+
   return (
     <div className="flex flex-col gap-4">
       <ImporterNotificationStatus status={notification.status} message={notification.message || ""} />
-      <FormImporter
-        type="csv"
-        handleFileUpload={handleFileUpload}
-        submit={submit}
-        submissionStatus={submisionStatus}
-      />
+      <div className="flex flex-col gap-2">
+        <div className="grid grid-cols-8 gap-6">
+          <Select
+            required
+            value={delimiter}
+            onValueChange={(v) => setDelimiter(v as CSVDelimiter)}
+
+          >
+            <SelectTrigger className="col-span-2 h-fit">
+              <SelectValue placeholder="Selecionar delimitador..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectItem value=",">
+                  <span className="font-semibold font-mono text-sm text-left">,</span>
+                </SelectItem>
+                <SelectItem value=";">
+                  <span className="font-semibold font-mono text-sm text-left">;</span>
+                </SelectItem>
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+          <Select
+            required
+            value={importMode}
+            onValueChange={(v) => setImportMode(v as "override" | "append")}
+          >
+            <SelectTrigger className="col-span-4 h-fit">
+              <SelectValue placeholder="Selecionar modo de iumportar..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectItem value="override">
+                  <span className="font-semibold font-mono text-sm text-left">Sovrascrever</span>
+                </SelectItem>
+                <SelectItem value="append">
+                  <span className="font-semibold font-mono text-sm text-left">Append</span>
+                </SelectItem>
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        </div>
+        <FormImporter
+          type="csv"
+          handleFileUpload={handleFileUpload}
+          submit={submit}
+          submissionStatus={submisionStatus}
+        />
+      </div>
     </div>
   );
 }

@@ -34,6 +34,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const env = process.env?.NODE_ENV
     // const tagParam = getSearchParam({ request, paramName: 'tag' })
 
+
+
     //@ts-ignore
     const items = menuItemPrismaEntity.findAll({
         where: {
@@ -43,6 +45,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
             //         Tag: {
             //             name: tagParam || undefined
             //         }
+
             //     }
             // }
         },

@@ -1101,3 +1101,308 @@ model DeliveryRider {
 
   @@map("delivery_riders")
 }
+
+/// -------------------------
+/// Regras de resposta automática
+/// -------------------------
+model BotAutoResponseRule {
+  id       String  @id @default(uuid()) @map("id")
+  label    String  @map("label")
+  trigger  String  @map("trigger")
+  isRegex  Boolean @default(false) @map("is_regex")
+  response String  @map("response")
+  priority Int     @default(100) @map("priority")
+  isActive Boolean @default(true) @map("is_active")
+
+  activeFrom DateTime? @map("active_from")
+  activeTo   DateTime? @map("active_to")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  logs BotAutoResponderLog[]
+
+  @@index([isActive, priority], map: "idx_bot_auto_response_rules_active_priority")
+  @@map("bot_auto_response_rules")
+}
+
+/// -------------------------
+/// Logs de respostas
+/// -------------------------
+enum BotResponderEngine {
+  MANUAL
+  NLP
+}
+
+model BotAutoResponderLog {
+  id String @id @default(uuid()) @map("id")
+
+  // NOVOS CAMPOS
+  session String? @map("session")
+  engine  String? @map("engine")
+  intent  String? @map("intent")
+  score   Float?  @map("score")
+
+  // EXISTENTES / RENOMEADOS
+  ruleId       String?  @map("rule_id")
+  matchedText  String?  @map("matched_text")
+  fromNumber   String?  @map("from_number")
+  toNumber     String?  @map("to_number")
+  inboundBody  String   @map("inbound_body")
+  outboundBody String?  @map("outbound_body")
+  error        String?  @map("error")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  rule BotAutoResponseRule? @relation(fields: [ruleId], references: [id])
+
+  @@index([ruleId], map: "idx_bot_auto_responder_logs_rule_id")
+  @@index([createdAt], map: "idx_bot_auto_responder_logs_created_at")
+  @@index([intent], map: "idx_bot_auto_responder_logs_intent")
+  @@index([engine, createdAt], map: "idx_bot_auto_responder_logs_engine_created")
+  @@map("bot_auto_responder_logs")
+}
+
+/// -------------------------
+/// Configurações gerais do bot
+/// -------------------------
+model BotSetting {
+  id                Int      @id @default(1) @map("id")
+  businessStartHour Int      @default(18) @map("business_start_hour")
+  businessEndHour   Int      @default(22) @map("business_end_hour")
+  businessDays      String   @default("3,4,5,6,0") @map("business_days")
+  offHoursMessage   String   @default("Estamos fora do horário. Voltamos em breve! 🍕") @map("off_hours_message")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  enabled           Boolean  @default(false)
+
+  @@map("bot_settings")
+}
+
+model NlpIntent {
+  id          String         @id @default(cuid())
+  name        String         @unique
+  label       String
+  description String?        @map("description")
+  isActive    Boolean        @default(true) @map("is_active")
+  utterances  NlpUtterance[]
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+
+  @@map("nlp_intent")
+}
+
+model NlpUtterance {
+  id        String    @id @default(cuid())
+  text      String
+  language  String    @default("pt")
+  intentId  String    @map("intent_id")
+  intent    NlpIntent @relation(fields: [intentId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  @@map("nlp_utterance")
+}
+
+model NlpEntity {
+  id          String             @id @default(cuid())
+  name        String             @unique
+  label       String
+  description String?            @map("description")
+  examples    NlpEntityExample[]
+  createdAt   DateTime           @default(now()) @map("created_at")
+  updatedAt   DateTime           @updatedAt @map("updated_at")
+
+  @@map("nlp_entity")
+}
+
+model NlpEntityExample {
+  id        String    @id @default(cuid())
+  value     String
+  synonyms  String[]
+  entityId  String    @map("entity_id")
+  entity    NlpEntity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  @@map("nlp_entity_example")
+}
+
+model NlpModel {
+  id        String   @id @default(cuid())
+  version   BigInt   @db.BigInt
+  label     String?
+  isActive  Boolean  @default(false) @map("is_active")
+  language  String   @default("pt")
+  artifact  Json
+  trainedAt DateTime @default(now()) @map("trained_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("nlp_model")
+}
+
+/// Registros de vendas por cliente (importados do relatório MOGO)
+model ImportMogoVendaPorCliente {
+  id String @id @default(uuid()) @map("id")
+
+  /// Pedido (ex.: 10440)
+  orderNumber String @map("order_number")
+
+  /// Produto (ex.: "Pizza Tamanho Médio", "Taxa de Serviço")
+  productName String @map("product_name")
+
+  /// Quantidade (ex.: 1)
+  quantity String @map("quantity")
+
+  /// Valor (ex.: 99.90)
+  amount Decimal @map("amount") @db.Decimal(10, 2)
+
+  /// Cliente (ex.: "Diana Nedochetko")
+  customerName String @map("customer_name")
+
+  /// Tipo Pagamento (ex.: "IFood Online", "Aiqfome Online", "Desconto")
+  paymentType String @map("payment_type")
+
+  /// Data Pag
+  paidAtDate String @map("paid_at_date")
+
+  /// Hora
+  paidAtHour String @map("paid_at_hour")
+
+  /// Mesa (texto para cobrir casos não numéricos; ex.: "NaN" -> null)
+  tableLabel String? @map("table_label")
+
+  /// Comanda (pode ser número ou código alfanumérico; armazenado como texto)
+  orderTag String? @map("order_tag")
+
+  /// Celular (como texto para preservar zeros à esquerda e DDD)
+  phone String? @map("phone")
+
+  @@map("import_mogo_vendas_por_cliente")
+}
+
+model Customer {
+  id          String    @id @default(uuid())
+  phone       String    @unique
+  name        String?
+  lastOrderAt DateTime? @map("last_order_at")
+  source      String    @default("erp")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  SendLogs   SendLog[]
+  Engagement Engagement?
+  Optout     Optout?
+
+  @@map("customers")
+}
+
+/// Cabeçalho do pedido (não referencia Customer; relação futura por telefone)
+model CustomerOrder {
+  id                  String @id @default(uuid()) @map("id")
+  source              String @default("csv") @map("source")
+  externalOrderNumber String @map("order_number")
+
+  customerName String  @map("customer_name")
+  phoneRaw     String? @map("phone_raw")
+  phoneE164    String? @map("phone_e164")
+
+  paymentType String @map("payment_type")
+
+  // Mantém o original do CSV (útil p/ auditoria)
+  paidAtDate String @map("paid_at_date") // ex.: "31/08/2025"
+  paidAtHour String @map("paid_at_hour") // ex.: "22:04:17"
+
+  // Normalizado (combinação date+hour no fuso -03)
+  paidAt DateTime @map("paid_at")
+
+  tableLabel String? @map("table_label")
+  orderTag   String? @map("order_tag")
+
+  totalAmount Decimal @map("total_amount") @db.Decimal(12, 2)
+
+  items CustomerOrderItem[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Evita duplicar o mesmo pedido dessa fonte (usamos os campos “brutos” do CSV p/ chave estável)
+  @@unique([source, externalOrderNumber, paidAtDate, paidAtHour])
+  @@index([paidAt])
+  @@index([phoneE164])
+  @@index([externalOrderNumber])
+  @@map("customer_orders")
+}
+
+/// Itens/linhas do pedido
+model CustomerOrderItem {
+  id String @id @default(uuid()) @map("id")
+
+  orderId String        @map("order_id")
+  order   CustomerOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  productName String  @map("product_name")
+  quantity    Int     @default(1) @map("quantity")
+  amount      Decimal @map("amount") @db.Decimal(10, 2)
+
+  isFee      Boolean @default(false) @map("is_fee")
+  isDiscount Boolean @default(false) @map("is_discount")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([orderId])
+  @@index([productName])
+  @@map("customer_order_items")
+}
+
+model Optout {
+  phone     String    @id
+  reason    String?
+  createdAt DateTime  @default(now()) @map("created_at")
+  customer  Customer? @relation(fields: [phone], references: [phone], onDelete: Cascade)
+
+  @@map("optouts")
+}
+
+model SendLog {
+  id           String    @id @default(uuid())
+  phone        String
+  customerId   String?   @map("customer_id")
+  message      String
+  status       String // queued|sent|failed
+  wppMessageId String?   @map("wpp_message_id")
+  error        String?
+  sentAt       DateTime? @map("sent_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  @@index([phone])
+  @@index([customerId])
+  @@map("send_logs")
+}
+
+model WppEvent {
+  id        String   @id @default(uuid())
+  phone     String?
+  direction String // inbound|outbound
+  type      String // message|status|delivery
+  payload   Json
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([phone])
+  @@map("wpp_events")
+}
+
+model Engagement {
+  id             String    @id @default(uuid())
+  phone          String    @unique
+  lastInboundAt  DateTime? @map("last_inbound_at")
+  lastOutboundAt DateTime? @map("last_outbound_at")
+  firstOptinAt   DateTime? @map("first_optin_at")
+  lastOptoutAt   DateTime? @map("last_optout_at")
+
+  customer Customer? @relation(fields: [phone], references: [phone], onDelete: Cascade)
+
+  @@map("engagements")
+}
