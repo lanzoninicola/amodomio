@@ -22,6 +22,7 @@ import prismaClient from "~/lib/prisma/client.server";
 import { DecimalInput } from "~/components/inputs/inputs";
 import formatDecimalPlaces from "~/utils/format-decimal-places";
 import { QuestionMarkCircledIcon } from "@radix-ui/react-icons";
+import formatMoneyString from "~/utils/format-money-string";
 
 /* -------------------------------
    Types
@@ -340,11 +341,43 @@ export async function action({ request }: ActionFunctionArgs) {
 
     if (intent === "snapshot") {
       const description = String(form.get("description") || "Snapshot");
-      await prismaClient.financialSummary.create({
-        data: { ...baseData, isSnapshot: true, description },
+
+      const current = await prismaClient.financialSummary.findFirst({
+        where: { isSnapshot: false },
+        orderBy: { createdAt: "desc" },
       });
-      return json({ ok: true, message: "Snapshot criado." });
+
+      if (!current) {
+        return json({ ok: false, message: "Não há resumo financeiro corrente para tirar snapshot." });
+      }
+
+      await prismaClient.financialSummary.create({
+        data: {
+          isSnapshot: true,
+          description,
+          receitaBrutaAmount: current.receitaBrutaAmount ?? 0,
+          vendaCartaoAmount: current.vendaCartaoAmount ?? 0,
+          vendaCartaoPerc: current.vendaCartaoPerc ?? 0,
+          taxaCartaoPerc: current.taxaCartaoPerc ?? 0,
+          taxaCartaoAmount: current.taxaCartaoAmount ?? 0,
+          impostoPerc: current.impostoPerc ?? 0,
+          impostoAmount: current.impostoAmount ?? 0,
+          vendaMarketplaceAmount: current.vendaMarketplaceAmount ?? 0,
+          taxaMarketplacePerc: current.taxaMarketplacePerc ?? 0,
+          taxaMarketplaceAmount: current.taxaMarketplaceAmount ?? 0,
+          receitaLiquidaAmount: current.receitaLiquidaAmount ?? 0,
+          custoFixoAmount: current.custoFixoAmount ?? 0,
+          custoFixoPerc: current.custoFixoPerc ?? 0,
+          custoVariavelAmount: current.custoVariavelAmount ?? 0,
+          custoVariavelPerc: current.custoVariavelPerc ?? 0,
+          pontoEquilibrioAmount: current.pontoEquilibrioAmount ?? 0,
+          ticketMedio: current.ticketMedio ?? 0,
+        },
+      });
+
+      return json({ ok: true, message: "Snapshot criado a partir do resumo corrente." });
     }
+
 
     return json({ ok: false, message: "Intent desconhecido." });
   } catch (err) {
@@ -818,9 +851,15 @@ export default function AdminFinanceiroResumoFinanceiro() {
                           <li key={s.id}>
                             <div className="grid grid-cols-1 md:grid-cols-8 gap-2 p-3 text-sm">
                               <span className="md:col-span-3 font-medium">{s.description ?? "-"}</span>
-                              <span className="opacity-80">Receita Bruta: {s.receitaBrutaAmount}</span>
-                              <span className="opacity-80">C.Fixo: {s.custoFixoAmount}</span>
-                              <span className="opacity-80">PE: {s.pontoEquilibrioAmount}</span>
+                              <div className="flex flex-col gap-2">
+                                <span className="opacity-80 font-mono text-xs">Receita Bruta: {formatMoneyString(s.receitaBrutaAmount)}</span>
+                                <span className="opacity-80 font-mono text-xs">Receita Liquida: {formatMoneyString(s.receitaLiquidaAmount)}</span>
+                              </div>
+                              <div className="flex flex-col gap-2">
+                                <span className="opacity-80 font-mono text-xs">C.Fixo: {formatMoneyString(s.custoFixoAmount)}</span>
+                                <span className="opacity-80 font-mono text-xs">C.Variaveis: {formatMoneyString(s.custoVariavelAmount)}</span>
+                              </div>
+                              <span className="opacity-80 font-mono text-xs">PE: {formatMoneyString(s.pontoEquilibrioAmount)}</span>
                               <span className="">{new Date(s.createdAt!).toLocaleString()}</span>
                               <Form method="post">
                                 <input type="hidden" name="intent" value="deleteSnapshot" />
