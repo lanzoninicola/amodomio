@@ -24,6 +24,8 @@ import formatDecimalPlaces from "~/utils/format-decimal-places";
 import { QuestionMarkCircledIcon } from "@radix-ui/react-icons";
 import formatMoneyString from "~/utils/format-money-string";
 import { cn } from "~/lib/utils";
+import { FinancialDailyGoal } from "@prisma/client";
+import { fmtYYYMMDD } from "~/domain/kds";
 
 /* -------------------------------
    Types
@@ -82,10 +84,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
     orderBy: { id: "desc" },
   });
 
+  const dailyGoalsPromise = await prismaClient.financialDailyGoal.findMany({
+    orderBy: {
+      createdAt: "desc"
+    }
+  })
+
   return defer({
     current: currentPromise,
     snapshots: snapshotsPromise,
     settings: settingsPromise,
+    dailyGoals: dailyGoalsPromise
   });
 }
 
@@ -641,7 +650,7 @@ export default function AdminFinanceiroResumoFinanceiro() {
                             />
                           </Row>
                           <p className="font-semibold">
-                            A empresa deve alcançar uma receita mínima de R$ {formatDecimalPlaces(current?.pontoEquilibrioAmount ?? 0, 2)} para
+                            A empresa deve alcançar uma receita liquida mínima de R$ {formatMoneyString(current?.pontoEquilibrioAmount ?? 0, 2)} para
                             cobrir todos os custos e atingir o ponto de equilíbrio (lucro zero).
                           </p>
                         </div>
@@ -845,6 +854,51 @@ export default function AdminFinanceiroResumoFinanceiro() {
                       </settingsFetcher.Form>
                     </div>
                   );
+                }}
+              </Await>
+            </React.Suspense>
+
+            <React.Suspense fallback={<p>Carregando metas</p>}>
+              <Await resolve={data.dailyGoals}>
+                {(dailyGoals: Partial<FinancialDailyGoal> | null) => {
+
+                  console.log({ dailyGoals })
+
+                  return (
+
+                    <div className="flex flex-col space-y-4 ">
+                      <Separator />
+                      <h3 className="font-semibold">Historico metas</h3>
+                      <div className="grid grid-cols-6">
+                        <span className="font-semibold text-sm">Criado</span>
+                        <span className="font-semibold text-sm">DIA 1</span>
+                        <span className="font-semibold text-sm">DIA 2</span>
+                        <span className="font-semibold text-sm">DIA 3</span>
+                        <span className="font-semibold text-sm">DIA 4</span>
+                        <span className="font-semibold text-sm">DIA 5</span>
+                      </div>
+                      <ul >
+
+                        {Array.isArray(dailyGoals) && dailyGoals.map((dg: FinancialDailyGoal) => {
+
+
+                          return (
+                            <li key={dg?.id} className="grid grid-cols-6">
+                              <span>{fmtYYYMMDD(new Date(dg?.createdAt))}</span>
+                              <span className="font-mono">{formatMoneyString(dg.minimumGoalDia01Amount)}</span>
+                              <span className="font-mono">{formatMoneyString(dg.minimumGoalDia02Amount)}</span>
+                              <span className="font-mono">{formatMoneyString(dg.minimumGoalDia03Amount)}</span>
+                              <span className="font-mono">{formatMoneyString(dg.minimumGoalDia04Amount)}</span>
+                              <span className="font-mono">{formatMoneyString(dg.minimumGoalDia05Amount)}</span>
+                            </li>
+                          )
+                        })}
+
+                      </ul>
+                    </div>
+                  )
+
+
                 }}
               </Await>
             </React.Suspense>
