@@ -25,7 +25,7 @@ import { QuestionMarkCircledIcon } from "@radix-ui/react-icons";
 import formatMoneyString from "~/utils/format-money-string";
 import { cn } from "~/lib/utils";
 import { FinancialDailyGoal } from "@prisma/client";
-import { fmtYYYMMDD } from "~/domain/kds";
+import { fmtDDMMYY, fmtYYYMMDD } from "~/domain/kds";
 
 /* -------------------------------
    Types
@@ -862,7 +862,6 @@ export default function AdminFinanceiroResumoFinanceiro() {
               <Await resolve={data.dailyGoals}>
                 {(dailyGoals: Partial<FinancialDailyGoal> | null) => {
 
-                  console.log({ dailyGoals })
 
                   return (
 
@@ -884,7 +883,7 @@ export default function AdminFinanceiroResumoFinanceiro() {
 
                           return (
                             <li key={dg?.id} className="grid grid-cols-6">
-                              <span>{fmtYYYMMDD(new Date(dg?.createdAt))}</span>
+                              <span>{fmtDDMMYY(new Date(dg?.createdAt))}</span>
                               <span className="font-mono">{formatMoneyString(dg.minimumGoalDia01Amount)}</span>
                               <span className="font-mono">{formatMoneyString(dg.minimumGoalDia02Amount)}</span>
                               <span className="font-mono">{formatMoneyString(dg.minimumGoalDia03Amount)}</span>
