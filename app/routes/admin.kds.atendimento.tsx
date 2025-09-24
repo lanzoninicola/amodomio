@@ -281,38 +281,52 @@ export default function KdsAtendimento() {
                 </div>
 
                 {/* Toggle Planilha/Kanban */}
-                <div className="flex gap-2">
-                  <Button asChild size="sm" variant={isKanban ? "outline" : "default"}>
-                    <Link
-                      to={`/admin/kds/atendimento/${date ?? clientTodayYMD}/grid`}
-                      prefetch="intent"
-                      className="flex items-center gap-2"
-                    >
-                      <span className="text-sm">Planilha</span>
-                      <Grid3X3 size={16} />
-                    </Link>
-                  </Button>
-                  <Button asChild size="sm" variant={isKanban ? "default" : "outline"}>
-                    <Link
-                      to={`/admin/kds/atendimento/${date ?? clientTodayYMD}/kanban`}
-                      prefetch="intent"
-                      className="flex items-center gap-2"
-                    >
-                      <span className="text-sm">Kanban</span>
-                      <SquareKanban size={16} />
-                    </Link>
-                  </Button>
-                  {/* Link para Relatório */}
-                  <Button asChild size="sm" variant="secondary">
-                    <Link
-                      to={`/admin/kds/atendimento/${selectedDateFromUrl}/relatorio`}
-                      prefetch="intent"
-                      className="ml-auto"
-                    >
-                      <BarChart3 className="w-4 h-4 mr-2" /> Relatório
-                    </Link>
-                  </Button>
-                </div>
+                {
+                  selectedDateFromUrl && (
+                    <div className="flex gap-2">
+                      <Button asChild size="sm" variant={isKanban ? "outline" : "default"}>
+                        <Link
+                          to={`/admin/kds/atendimento/${date ?? clientTodayYMD}/grid`}
+                          prefetch="intent"
+                          className="flex items-center gap-2"
+                        >
+                          <span className="text-sm">Planilha</span>
+                          <Grid3X3 size={16} />
+                        </Link>
+                      </Button>
+                      <Button asChild size="sm" variant={isKanban ? "default" : "outline"}>
+                        <Link
+                          to={`/admin/kds/atendimento/${date ?? clientTodayYMD}/kanban`}
+                          prefetch="intent"
+                          className="flex items-center gap-2"
+                        >
+                          <span className="text-sm">Kanban</span>
+                          <SquareKanban size={16} />
+                        </Link>
+                      </Button>
+                      {/* Link para Relatório */}
+                      <Button asChild size="sm" variant="secondary">
+                        <Link
+                          to={`/admin/kds/atendimento/${selectedDateFromUrl}/relatorio`}
+                          prefetch="intent"
+                          className="ml-auto"
+                        >
+                          <BarChart3 className="w-4 h-4 mr-2" /> Relatório
+                        </Link>
+                      </Button>
+                      {/* Link para Relatório do Mes */}
+                      <Button asChild size="sm" variant="secondary">
+                        <Link
+                          to={`/admin/kds/atendimento/${selectedDateFromUrl}/relatorio-mes`}
+                          prefetch="intent"
+                          className="ml-auto"
+                        >
+                          <BarChart3 className="w-4 h-4 mr-2" /> Relatório Mensal
+                        </Link>
+                      </Button>
+                    </div>
+                  )
+                }
               </div>
 
               {/* Sem key para não desmontar/remontar a cada navegação */}
