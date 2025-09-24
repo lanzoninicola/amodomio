@@ -237,6 +237,66 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
       ],
     },
     {
+      title: "BOT",
+      disabled: false,
+      items: [
+        {
+          title: "Debug page",
+          href: "/admin/wpp",
+          items: [],
+          disabled: false,
+        },
+        {
+          title: "Auto Responder",
+          href: "/admin/wpp/auto-responder",
+          items: [],
+          disabled: false,
+        },
+        {
+          title: "Configurar Auto Responder",
+          href: "/admin/wpp/auto-responder/settings",
+          items: [],
+          disabled: false,
+        },
+        {
+          title: "NLP",
+          href: "/admin/nlp",
+          items: [],
+          disabled: false,
+        },
+      ],
+    },
+    {
+      title: "Clientes Inativos",
+      disabled: false,
+      items: [
+        {
+          title: "(1) Importar pedidos",
+          href: "/admin/importer/new/csv",
+          items: [],
+          disabled: false,
+        },
+        {
+          title: "(2) Consolidar pedidos",
+          href: "/admin/clientes-inativos/consolidar-pedidos",
+          items: [],
+          disabled: false,
+        },
+        {
+          title: "(3) Consolidar clientes",
+          href: "/admin/clientes-inativos/consolidar-cliente",
+          items: [],
+          disabled: false,
+        },
+        {
+          title: "Campanhas",
+          href: "/admin/clientes-inativos/manual",
+          items: [],
+          disabled: false,
+        },
+      ],
+    },
+    {
       title: "Administração",
       disabled: false,
       items: [
@@ -252,6 +312,7 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
           items: [],
           disabled: false,
         },
+
         {
           title: "Zone de entrega",
           href: "/admin/delivery-zone",

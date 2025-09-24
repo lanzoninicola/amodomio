@@ -38,6 +38,12 @@ export const loader: LoaderFunction = async ({ request }: LoaderFunctionArgs) =>
     const environment = process.env.NODE_ENV
     const prismaDbName = prismaClient.dbName
 
+    console.log("revalidate?",
+        request.headers.get("x-remix-revalidate"),
+        "method", request.method,
+        "url", new URL(request.url).toString()
+    );
+
     let user = await authenticator.isAuthenticated(request);
 
     if (!user) {
