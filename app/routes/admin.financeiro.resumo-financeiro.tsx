@@ -331,16 +331,20 @@ export async function action({ request }: ActionFunctionArgs) {
         orderBy: { createdAt: "desc" },
       });
 
+      // se existe congela ele como snapshot
       if (existing) {
         await prismaClient.financialSummary.update({
           where: { id: existing.id },
-          data: { ...baseData, isSnapshot: false },
-        });
-      } else {
-        await prismaClient.financialSummary.create({
-          data: { ...baseData, isSnapshot: false, description: null },
+          data: {
+            isSnapshot: true,
+            description: `${fmtDDMMYY(new Date())}: Criada automaticamente, para atualização do resumo`
+          },
         });
       }
+
+      await prismaClient.financialSummary.create({
+        data: { ...baseData, isSnapshot: false, description: null },
+      });
 
       return json({
         ok: true,
@@ -469,6 +473,7 @@ export default function AdminFinanceiroResumoFinanceiro() {
         } onClick={() => setCurrentSection("snapshots")}>Snapshots</span>
       </div>
       <div className="flex items-center justify-between">
+
         <h2 className="text-xl font-semibold">
           {
             currentSection === "resumo" ? "Resumo financeiro"
@@ -486,7 +491,10 @@ export default function AdminFinanceiroResumoFinanceiro() {
         currentSection === "resumo" && (
 
           <>
-            <div className="flex justify-end">
+            <div className="flex justify-between">
+              <span className="text-sm">
+                Os valores abaixo são a media dos ultímo 3 meses
+              </span>
               <button className=" text-sm underline flex items-center gap-2 font-semibold" onClick={() => setShowGuide(!showGuide)}>
                 <span><QuestionMarkCircledIcon /></span>
                 Receita bruta ou líquida
@@ -533,9 +541,13 @@ export default function AdminFinanceiroResumoFinanceiro() {
                   {(current: Partial<FinancialSummary> | null) => {
                     return (
                       <div className="space-y-4">
+
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <Row>
-                            <Label>Receita Bruta (R$)</Label>
+                            <div className="flex flex-col gap-0">
+                              <Label>Receita Bruta (R$)</Label>
+                              <span className="text-[11px] text-muted-foreground">Média de receita bruta</span>
+                            </div>
                             <DecimalInput name="receitaBrutaAmount" defaultValue={current?.receitaBrutaAmount ?? 0} fractionDigits={2} className="w-full" />
                           </Row>
                         </div>
@@ -639,7 +651,9 @@ export default function AdminFinanceiroResumoFinanceiro() {
 
                         <Separator />
 
+
                         <div className="grid grid-cols-2 gap-x-4">
+
                           <Row>
                             <p className="text-lg font-semibold uppercase tracking-wider font-mono">Ponto de equilíbrio (R$)</p>
                             <DecimalInput
@@ -649,10 +663,13 @@ export default function AdminFinanceiroResumoFinanceiro() {
                               className="w-full font-mono p-3 text-2xl"
                             />
                           </Row>
-                          <p className="font-semibold">
-                            A empresa deve alcançar uma receita liquida mínima de R$ {formatMoneyString(current?.pontoEquilibrioAmount ?? 0, 2)} para
-                            cobrir todos os custos e atingir o ponto de equilíbrio (lucro zero).
-                          </p>
+                          <div className="flex flex-col gap-0">
+                            <span className="text-xs font-mono">{`Ultima atualização  ${fmtDDMMYY(new Date(current?.updatedAt))}`}</span>
+                            <p className="font-semibold">
+                              A empresa deve alcançar uma receita liquida mínima de R$ {formatMoneyString(current?.pontoEquilibrioAmount ?? 0, 2)} para
+                              cobrir todos os custos e atingir o ponto de equilíbrio (lucro zero).
+                            </p>
+                          </div>
                         </div>
 
                         <Separator />
