@@ -968,9 +968,9 @@ export default function GridKdsPage() {
         "bg-rose-50 text-rose-900 border-rose-200";
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 mt-12">
       {/* Toolbar topo + Painel-resumo SEM suspense (feedback imediato) */}
-      <div className="grid grid-cols-12 items-start">
+      <div className="flex flex-col gap-y-4 md:grid md:grid-cols-12 items-start">
         {/* Toolbar topo */}
         <div className="flex flex-wrap items-center gap-3 col-span-4">
           {(!header?.id || status === "PENDING") && (
