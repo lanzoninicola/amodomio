@@ -209,17 +209,17 @@ export default function KdsAtendimento() {
         <Await resolve={data.days}>
           {(days) => (
             <div className="flex flex-col gap-0 ">
-              <div className="flex flex-wrap justify-between mb-6">
+              <div className="flex flex-col gap-8 md:gap-0 md:flex-row justify-between items-center mb-6">
                 {/* ===== Seletor de dias (Select com placeholder) ===== */}
-                <div className="flex flex-row items-center gap-x-4">
-                  <div className="flex items-center gap-2">
+                <div className="flex flex-col md:flex-row items-center gap-y-4 md:gap-y-0 md:gap-x-4 w-full md:w-max">
+                  <div className="flex items-center gap-2 w-full">
                     <Select
                       value={selectedDateFromUrl /* undefined => placeholder */}
                       onValueChange={(val) =>
                         navigate(`/admin/kds/atendimento/${val}/grid${keepMonth}`)
                       }
                     >
-                      <SelectTrigger className={cn("w-[420px] h-12 text-base", isRouteLoading && "ring-1 ring-blue-300")}>
+                      <SelectTrigger className={cn("w-full md:w-[420px] h-12 text-base", isRouteLoading && "ring-1 ring-blue-300")}>
                         <SelectValue placeholder="Selecionar uma data" />
                       </SelectTrigger>
                       <SelectContent className="max-h-[55vh]">
@@ -268,10 +268,9 @@ export default function KdsAtendimento() {
 
                   {/* Refresh */}
                   <Button
-                    size="sm"
                     variant={"outline"}
                     onClick={() => revalidate()}
-                    className={cn("flex flex-row gap-2", state === "loading" && "bg-blue-100")}
+                    className={cn("flex flex-row gap-2 w-full", state === "loading" && "bg-blue-100")}
                   >
                     <span className="text-sm">
                       {`${state === "loading" ? "Atualizando..." : "Atualizar"}`}
@@ -283,7 +282,7 @@ export default function KdsAtendimento() {
                 {/* Toggle Planilha/Kanban */}
                 {
                   selectedDateFromUrl && (
-                    <div className="flex gap-2">
+                    <div className="grid grid-cols-2 w-full gap-4 md:flex md:gap-2 md:w-max">
                       <Button asChild size="sm" variant={isKanban ? "outline" : "default"}>
                         <Link
                           to={`/admin/kds/atendimento/${date ?? clientTodayYMD}/grid`}
@@ -309,7 +308,7 @@ export default function KdsAtendimento() {
                         <Link
                           to={`/admin/kds/atendimento/${selectedDateFromUrl}/relatorio`}
                           prefetch="intent"
-                          className="ml-auto"
+                          className="md:ml-auto"
                         >
                           <BarChart3 className="w-4 h-4 mr-2" /> Relatório
                         </Link>
@@ -319,7 +318,7 @@ export default function KdsAtendimento() {
                         <Link
                           to={`/admin/kds/atendimento/${selectedDateFromUrl}/relatorio-mes`}
                           prefetch="intent"
-                          className="ml-auto"
+                          className="md:ml-auto"
                         >
                           <BarChart3 className="w-4 h-4 mr-2" /> Relatório Mensal
                         </Link>
