@@ -15,6 +15,10 @@ const GLOBAL_LINKS = {
     title: "Mogo Cardapio",
     href: "https://app3.mogomenu.com.br/amodomio",
   },
+  saiposCardapio: {
+    title: "Cardápio Saipos",
+    href: "http://amodomio.saipos.com/",
+  },
   admin: {
     title: "Administração",
     href: "/admin",

@@ -40,7 +40,7 @@ export default function FazerPedidoButton({ cnLabel, variant = "primary" }: Faze
         >
 
             <ExternalLink
-                to={GLOBAL_LINKS.mogoCardapio.href}
+                to={GLOBAL_LINKS.saiposCardapio.href}
                 ariaLabel="Cardápio digital pizzaria A Modo Mio"
             >
                 <div className='flex items-center justify-between px-4 py-2'>

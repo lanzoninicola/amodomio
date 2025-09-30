@@ -271,14 +271,8 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
       disabled: false,
       items: [
         {
-          title: "(1) Importar pedidos",
+          title: "(1) Importar base clientes",
           href: "/admin/importer/new/csv",
-          items: [],
-          disabled: false,
-        },
-        {
-          title: "(2) Consolidar pedidos",
-          href: "/admin/clientes-inativos/consolidar-pedidos",
           items: [],
           disabled: false,
         },
