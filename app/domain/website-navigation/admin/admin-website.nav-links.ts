@@ -76,6 +76,12 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
       title: "Gerenciamento Cardápio",
       items: [
         {
+          title: "Configurações",
+          href: "/admin/gerenciamento/cardapio-settings",
+          items: [],
+          disabled: false,
+        },
+        {
           title: "Cardápio Delivery",
           href: "/admin/gerenciamento/cardapio/main/list",
           items: [],
