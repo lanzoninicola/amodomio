@@ -248,7 +248,7 @@ function CardapioFooter() {
         <footer className="py-6 px-2 fixed bottom-0 w-screen md:max-w-2xl md:-translate-x-1/2 md:left-1/2 ">
             {/* <Separator className="my-4" /> */}
             <div className="px-2 w-full">
-                <ExternalLink to={GLOBAL_LINKS.mogoCardapio.href}
+                <ExternalLink to={GLOBAL_LINKS.saiposCardapio.href}
                     ariaLabel="Cardápio digital pizzaria A Modo Mio"
                     className="flex justify-between font-neue rounded-sm bg-green-400 py-2 px-4"
                 >
