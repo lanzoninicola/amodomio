@@ -1,20 +1,14 @@
 import { LoaderFunctionArgs } from "@remix-run/node";
-import { Await, Link, defer, useLoaderData } from "@remix-run/react";
-import { ChevronRight, MessageCircleQuestion, Video } from "lucide-react";
-import { Heart, Instagram, Map, MapPin, MenuSquare, Share2 } from "lucide-react";
-import { Suspense, useState } from "react";
+import { Link, useLoaderData } from "@remix-run/react";
+import { ChevronRight } from "lucide-react";
+import { Heart, MenuSquare, Share2 } from "lucide-react";
+import { useState } from "react";
 import TypewriterComponent from "typewriter-effect";
-import Container from "~/components/layout/container/container";
-import Loading from "~/components/loading/loading";
-import ExternalLink from "~/components/primitives/external-link/external-link";
 import Logo from "~/components/primitives/logo/logo";
 import WhatsappExternalLink from "~/components/primitives/whatsapp/whatsapp-external-link";
 import WhatsAppIcon from "~/components/primitives/whatsapp/whatsapp-icon";
-import { Separator } from "~/components/ui/separator";
-import FazerPedidoButton from "~/domain/cardapio/components/fazer-pedido-button/fazer-pedido-button";
-import { fmtYYYMMDD, todayLocalYMD } from "~/domain/kds";
+import { fmtYYYMMDD } from "~/domain/kds";
 import GLOBAL_LINKS from "~/domain/website-navigation/global-links.constant";
-import PUBLIC_WEBSITE_NAVIGATION_ITEMS from "~/domain/website-navigation/public/public-website.nav-links";
 import { CloudinaryUtils } from "~/lib/cloudinary";
 import { cn } from "~/lib/utils";
 import { ok } from "~/utils/http-response.server";
@@ -138,10 +132,10 @@ interface DiaCliente25Props {
     targetDate: string
 }
 
-import { ClipboardCopy, Info } from "lucide-react"
-import { Dialog, DialogContent, DialogTrigger } from "~/components/ui/dialog"
-import { Button } from "~/components/ui/button"
-import { useToast } from "~/components/ui/use-toast"
+import { ClipboardCopy } from "lucide-react";
+import { Dialog, DialogContent, DialogTrigger } from "~/components/ui/dialog";
+import { Button } from "~/components/ui/button";
+import { useToast } from "~/components/ui/use-toast";
 import { QuestionMarkCircledIcon } from "@radix-ui/react-icons";
 
 function DiaCliente25({ targetDate }: DiaCliente25Props) {
@@ -357,44 +351,7 @@ interface WebsiteCardHeaderProps {
     children?: React.ReactNode;
 }
 
-function WebsiteCardHeader({ children }: WebsiteCardHeaderProps) {
-    return (
 
-        <>
-            <div className="flex justify-between items-center font-neue p-4">
-                <div className="-py-3 col-span-2">
-                    <Logo color="black" className="w-[90px] h-[30px] md:w-[150px] md:h-[50px]" tagline={false} />
-                </div>
-                <ExternalLink
-                    to="https://www.instagram.com/amodomiopb"
-                    ariaLabel="Instagram"
-                    className="flex justify-self-end"
-                >
-                    <Instagram className="justify-self-end " />
-                </ExternalLink>
-            </div>
-            {children}
-        </>
-    )
-}
-
-function WebsiteCardFooter() {
-    return (
-        <footer className="py-6 px-2">
-            <WebsiteActionBar />
-            <Separator className="my-4" />
-            <div className="px-4 w-full">
-                {/* <ExternalLink to="https://app.mogomenu.com.br/amodomio"
-                    ariaLabel="Cardápio digital pizzaria A Modo Mio"
-                    className="grid place-items-center font-neue text-lg rounded-xl bg-brand-green py-1"
-                >
-                    <span className="uppercase tracking-wide font-semibold">Fazer pedido</span>
-                </ExternalLink> */}
-                <FazerPedidoButton cnLabel="text-2xl tracking-wider" variant="accent" />
-            </div>
-        </footer>
-    )
-}
 
 function WebsiteActionBar() {
 

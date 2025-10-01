@@ -76,6 +76,12 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
       title: "Gerenciamento Cardápio",
       items: [
         {
+          title: "Configurações",
+          href: "/admin/gerenciamento/cardapio-settings",
+          items: [],
+          disabled: false,
+        },
+        {
           title: "Cardápio Delivery",
           href: "/admin/gerenciamento/cardapio/main/list",
           items: [],
@@ -271,14 +277,8 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
       disabled: false,
       items: [
         {
-          title: "(1) Importar pedidos",
+          title: "(1) Importar base clientes",
           href: "/admin/importer/new/csv",
-          items: [],
-          disabled: false,
-        },
-        {
-          title: "(2) Consolidar pedidos",
-          href: "/admin/clientes-inativos/consolidar-pedidos",
           items: [],
           disabled: false,
         },

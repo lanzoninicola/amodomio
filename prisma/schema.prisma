@@ -16,6 +16,18 @@ datasource db {
   /// url      = env("PRISMA_DB_URL")
 }
 
+model CardapioSetting {
+  id    String @id @default(uuid())
+  key   String
+  name  String
+  value String
+
+  createdAt DateTime @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("cardapio_settings")
+}
+
 model Product {
   id                     String                   @id @default(uuid())
   name                   String
@@ -1238,46 +1250,6 @@ model NlpModel {
   createdAt DateTime @default(now()) @map("created_at")
 
   @@map("nlp_model")
-}
-
-/// Registros de vendas por cliente (importados do relatório MOGO)
-model ImportMogoVendaPorCliente {
-  id String @id @default(uuid()) @map("id")
-
-  /// Pedido (ex.: 10440)
-  orderNumber String @map("order_number")
-
-  /// Produto (ex.: "Pizza Tamanho Médio", "Taxa de Serviço")
-  productName String @map("product_name")
-
-  /// Quantidade (ex.: 1)
-  quantity String @map("quantity")
-
-  /// Valor (ex.: 99.90)
-  amount Decimal @map("amount") @db.Decimal(10, 2)
-
-  /// Cliente (ex.: "Diana Nedochetko")
-  customerName String @map("customer_name")
-
-  /// Tipo Pagamento (ex.: "IFood Online", "Aiqfome Online", "Desconto")
-  paymentType String @map("payment_type")
-
-  /// Data Pag
-  paidAtDate String @map("paid_at_date")
-
-  /// Hora
-  paidAtHour String @map("paid_at_hour")
-
-  /// Mesa (texto para cobrir casos não numéricos; ex.: "NaN" -> null)
-  tableLabel String? @map("table_label")
-
-  /// Comanda (pode ser número ou código alfanumérico; armazenado como texto)
-  orderTag String? @map("order_tag")
-
-  /// Celular (como texto para preservar zeros à esquerda e DDD)
-  phone String? @map("phone")
-
-  @@map("import_mogo_vendas_por_cliente")
 }
 
 model Customer {

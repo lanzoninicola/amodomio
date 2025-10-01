@@ -1,9 +1,10 @@
-import { MetaFunction } from "@remix-run/node";
-import { Link, Outlet, matchPath, useLocation } from "@remix-run/react";
-import { Donut, Instagram, MapPin, Proportions, SearchIcon, User, Users } from "lucide-react";
-import { ReactNode, useState } from "react";
+import { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
+import { Await, Link, Outlet, defer, matchPath, useLoaderData, useLocation } from "@remix-run/react";
+import { Divide, Donut, Instagram, MapPin, Proportions, SearchIcon, User, Users } from "lucide-react";
+import { ReactNode, Suspense, useState } from "react";
 
 import ItalyFlag from "~/components/italy-flag/italy-flag";
+import Loading from "~/components/loading/loading";
 import Logo from "~/components/primitives/logo/logo";
 import WhatsappExternalLink from "~/components/primitives/whatsapp/whatsapp-external-link";
 import WhatsAppIcon from "~/components/primitives/whatsapp/whatsapp-icon";
@@ -15,6 +16,7 @@ import { MenuItemWithAssociations } from "~/domain/cardapio/menu-item.prisma.ent
 import { WebsiteNavigationSidebar } from "~/domain/website-navigation/components/website-navigation-sidebar";
 import GLOBAL_LINKS from "~/domain/website-navigation/global-links.constant";
 import PUBLIC_WEBSITE_NAVIGATION_ITEMS from "~/domain/website-navigation/public/public-website.nav-links";
+import prismaClient from "~/lib/prisma/client.server";
 import { cn } from "~/lib/utils";
 
 
@@ -58,7 +60,21 @@ export const meta: MetaFunction = ({ data }) => {
     ];
 };
 
+export async function loader({ request }: LoaderFunctionArgs) {
 
+    const fazerPedidoPublicURL = await prismaClient.cardapioSetting.findFirst({
+        where: {
+            key: "cardapio.fazer_pedido.public.url"
+        }
+    })
+
+    const url = fazerPedidoPublicURL?.value ?? GLOBAL_LINKS.cardapioFallbackURL.href
+
+    return defer({
+        fazerPedidoPublicURL: Promise.resolve(url)
+    })
+
+}
 
 
 
@@ -107,6 +123,8 @@ export default function CardapioWeb() {
 
 function CardapioHeader() {
     const [showSearch, setShowSearch] = useState(false)
+    const { fazerPedidoPublicURL } = useLoaderData<typeof loader>()
+
 
     return (
         <header className="fixed top-0 w-full z-50 md:max-w-6xl md:-translate-x-1/2 md:left-1/2 " >
@@ -138,7 +156,14 @@ function CardapioHeader() {
 
 
                         <div className="pr-4 mb-4">
-                            <FazerPedidoButton cnLabel="text-2xl tracking-wider" />
+                            <Suspense fallback={<Loading />}>
+                                <Await resolve={fazerPedidoPublicURL}>
+                                    {(url) => {
+                                        return <FazerPedidoButton cnLabel="text-2xl tracking-wider" externalLinkURL={url} />
+                                    }}
+                                </Await>
+                            </Suspense>
+
                         </div>
 
                     </WebsiteNavigationSidebar>
@@ -247,7 +272,7 @@ function CompanyInfo() {
 
 
 function CardapioFooter() {
-
+    const { fazerPedidoPublicURL } = useLoaderData<typeof loader>()
     const labels = ["cyuc", "HORÁRIO DE ATENDIMENTO", "QUA-DOM 18:00-22:00"];
 
 
@@ -260,7 +285,15 @@ function CardapioFooter() {
             <footer className="grid grid-cols-4 md:grid-cols-8 gap-x-2 bg-white px-4" >
                 <CardapioSizesDialog />
                 <div className="h-full w-full py-2 col-span-3 md:col-span-6">
-                    <FazerPedidoButton variant="accent" cnLabel="text-2xl tracking-wider" />
+
+
+                    <Suspense fallback={<span>Carregando...</span>}>
+                        <Await resolve={fazerPedidoPublicURL}>
+                            {(url) => {
+                                return <FazerPedidoButton variant="accent" cnLabel="text-2xl tracking-wider" externalLinkURL={url} />
+                            }}
+                        </Await>
+                    </Suspense>
                 </div>
             </footer>
         </div>

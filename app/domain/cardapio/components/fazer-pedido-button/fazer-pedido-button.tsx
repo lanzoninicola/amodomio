@@ -10,9 +10,14 @@ import { cn } from '~/lib/utils';
 interface FazerPedidoButtonProps {
     cnLabel?: string;
     variant?: "primary" | "secondary" | "accent"
+    externalLinkURL?: string
 }
 
-export default function FazerPedidoButton({ cnLabel, variant = "primary" }: FazerPedidoButtonProps) {
+export default function FazerPedidoButton({
+    cnLabel,
+    variant = "primary",
+    externalLinkURL = GLOBAL_LINKS.cardapioFallbackURL.href
+}: FazerPedidoButtonProps) {
     const brandColors = useBrandColors()
 
     let style = {}
@@ -40,7 +45,7 @@ export default function FazerPedidoButton({ cnLabel, variant = "primary" }: Faze
         >
 
             <ExternalLink
-                to={GLOBAL_LINKS.mogoCardapio.href}
+                to={externalLinkURL}
                 ariaLabel="Cardápio digital pizzaria A Modo Mio"
             >
                 <div className='flex items-center justify-between px-4 py-2'>
