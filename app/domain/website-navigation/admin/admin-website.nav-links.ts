@@ -117,6 +117,12 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
       title: "Produção",
       items: [
         {
+          title: "Programação Diaria",
+          href: "/admin/producao/progamacao-diaria",
+          items: [],
+          disabled: false,
+        },
+        {
           title: "Stock Massa",
           href: "/admin/gerenciamento/stock-massa-init",
           items: [],
