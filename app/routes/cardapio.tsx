@@ -109,7 +109,7 @@ export default function CardapioWeb() {
         <>
             <CardapioHeader />
             <div className="md:m-auto md:max-w-6xl">
-                {currentPage === "other" && <CompanyInfo />}
+                {/* {currentPage === "other" && <CompanyInfo />} */}
                 <Outlet />
             </div>
             {currentPage === "other" && <CardapioFooter />}
@@ -128,57 +128,62 @@ function CardapioHeader() {
 
     return (
         <header className="fixed top-0 w-full z-50 md:max-w-6xl md:-translate-x-1/2 md:left-1/2 " >
-            <div className="flex flex-col bg-white px-4 pt-2 py-3 h-[50px] md:h-[70px]">
+            <div className="flex flex-col bg-white px-1 pt-2 py-3 h-[50px] md:h-[70px]">
                 <div className="grid grid-cols-3 items-center w-full">
                     {/* <div className="flex gap-1 items-center" onClick={() => setShowSearch(!showSearch)}>
                         <HamburgerMenuIcon className="w-6 h-6" />
                         <span className="font-neue text-[10px] font-semibold  uppercase">Menu</span>
                     </div> */}
 
-                    <WebsiteNavigationSidebar
-                        homeLink={{ label: GLOBAL_LINKS.cardapioPublic.title, to: GLOBAL_LINKS.cardapioPublic.href }}
-                        navigationLinks={PUBLIC_WEBSITE_NAVIGATION_ITEMS}
-                        buttonTrigger={{
-                            label: "",
-                            classNameLabel: "block font-neue text-[10px] font-semibold uppercase",
-                            classNameButton: "justify-start w-full h-full text-black bg-transparent hover:bg-transparent hover:text-black px-0",
-                        }}
-                        cnLink="font-neue text-xl uppercase tracking-widest"
-
-                    >
-                        <div className="flex flex-col justify-center mb-2 font-neue">
-                            <p className=" font-semibold text-xl leading-relaxed uppercase tracking-wide">Hórarios de funcionamento</p>
-                            <div className="flex flex-col justify-center mb-4">
-                                <p className="text-muted-foreground font-neue text-xl">Quarta - Domingo</p>
-                                <p className="text-muted-foreground font-neue text-xl">18:00 - 22:00</p>
-                            </div>
-                        </div>
-
-
-                        <div className="pr-4 mb-4">
-                            <Suspense fallback={<Loading />}>
-                                <Await resolve={fazerPedidoPublicURL}>
-                                    {(url) => {
-                                        return <FazerPedidoButton cnLabel="text-2xl tracking-wider" externalLinkURL={url} />
-                                    }}
-                                </Await>
-                            </Suspense>
-
-                        </div>
-
-                    </WebsiteNavigationSidebar>
-
-                    <Link to={GLOBAL_LINKS.cardapioPublic.href} className="flex justify-center">
+                    <Link to={GLOBAL_LINKS.cardapioPublic.href} className="flex col-span-2">
                         <div className="px-4 -py-3">
                             <Logo color="black" onlyText={true} className="w-[120px] h-[30px] md:w-[150px] md:h-[50px]" tagline={false} />
                         </div>
                     </Link>
-                    <Link to={'buscar'} className="flex justify-end">
-                        <div className="flex justify-end items-center cursor-pointer" onClick={() => setShowSearch(!showSearch)}>
-                            <SearchIcon color={"black"} />
-                            {/* <span className="font-neue text-[10px] font-semibold  uppercase text-brand-blue">Pesquisar</span> */}
-                        </div>
-                    </Link>
+
+                    <div className="w-full flex items-center gap-x-4 justify-end col-span-1">
+                        <Link to={'buscar'} >
+                            <div className="flex justify-end items-center cursor-pointer" onClick={() => setShowSearch(!showSearch)}>
+                                <SearchIcon color={"black"} />
+                                {/* <span className="font-neue text-[10px] font-semibold  uppercase text-brand-blue">Pesquisar</span> */}
+                            </div>
+                        </Link>
+                        <WebsiteNavigationSidebar
+                            homeLink={{ label: GLOBAL_LINKS.cardapioPublic.title, to: GLOBAL_LINKS.cardapioPublic.href }}
+                            navigationLinks={PUBLIC_WEBSITE_NAVIGATION_ITEMS}
+                            buttonTrigger={{
+                                label: "",
+                                classNameLabel: "block font-neue text-[10px] font-semibold uppercase",
+                                classNameButton: "justify-end h-full text-black bg-transparent hover:bg-transparent hover:text-black px-0",
+                            }}
+                            cnLink="font-neue md:text-xl uppercase tracking-widest"
+                            preMenuContent={
+                                <CompanyInfo />
+                            }
+
+                        >
+                            <div className="flex flex-col justify-center mb-2 font-neue">
+                                <p className=" font-semibold md:text-xl leading-relaxed uppercase tracking-wide">Hórarios de funcionamento</p>
+                                <div className="flex flex-col justify-center mb-4">
+                                    <p className="text-muted-foreground font-neue md:text-xl">Quarta - Domingo</p>
+                                    <p className="text-muted-foreground font-neue md:text-xl">18:00 - 22:00</p>
+                                </div>
+                            </div>
+
+
+                            <div className="pr-4 mb-4">
+                                <Suspense fallback={<Loading />}>
+                                    <Await resolve={fazerPedidoPublicURL}>
+                                        {(url) => {
+                                            return <FazerPedidoButton cnLabel="text-2xl tracking-wider" externalLinkURL={url} />
+                                        }}
+                                    </Await>
+                                </Suspense>
+
+                            </div>
+
+                        </WebsiteNavigationSidebar>
+                    </div>
                 </div>
 
             </div>
@@ -223,14 +228,16 @@ const ScrollingBanner = ({ children, cnContainer, style }: { children?: ReactNod
 
 
 
-function CompanyInfo() {
-
-
-
+function CompanyInfo({ cnContainer }: { cnContainer?: string }) {
 
     return (
         <section>
-            <div className="mt-20 md:mt-28 bg-banner md:bg-banner-md bg-center bg-cover bg-no-repeat min-h-[150px] mb-4 flex items-end justify-end py-2">
+            <div className={
+                cn(
+                    "bg-banner md:bg-banner-md bg-center bg-cover bg-no-repeat min-h-[150px] flex items-end justify-end py-2 mb-2 mr-2",
+                    cnContainer
+                )
+            }>
                 <div className="flex justify-end gap-4 px-4">
 
                     <Link to={GLOBAL_LINKS.instagram.href} aria-label={GLOBAL_LINKS.instagram.title}
@@ -255,13 +262,13 @@ function CompanyInfo() {
                 </div>
             </div>
 
-            <div className="flex flex-col font-neue items-center">
-                <h2 className="font-semibold text-xl tracking-wide uppercase">A Modo Mio | Pizzeria Italiana</h2>
+            <div className="flex flex-col font-neue">
+                <h2 className="font-semibold md:text-xl tracking-wide uppercase">A Modo Mio | Pizzeria Italiana</h2>
                 <h3 className="text-muted-foreground text-sm tracking-wider uppercase">Pizza Al Taglio & Delivery</h3>
             </div>
 
             <div className="text-sm  text-muted-foreground mb-2 font-neue">
-                <p className="text-center">Rua Arariboia 64 - Pato Branco</p>
+                <p>Rua Arariboia 64 - Pato Branco</p>
             </div>
 
 

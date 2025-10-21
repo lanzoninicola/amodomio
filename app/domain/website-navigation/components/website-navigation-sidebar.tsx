@@ -6,6 +6,7 @@ import { cn } from "~/lib/utils"
 import { AlignLeftIcon } from "lucide-react"
 import MobileLink from "./mobile-link"
 import { WebsiteNavigationLinks } from "../website-navigation.type"
+import { Separator } from "~/components/ui/separator"
 
 export interface WebsiteNavigationSidebarProps {
     buttonTrigger?: {
@@ -21,6 +22,7 @@ export interface WebsiteNavigationSidebarProps {
     cnLink?: string;
     navigationLinks: Partial<WebsiteNavigationLinks>;
     children?: React.ReactNode;
+    preMenuContent?: React.ReactNode
 }
 
 
@@ -29,7 +31,8 @@ export function WebsiteNavigationSidebar({
     homeLink,
     navigationLinks,
     children,
-    cnLink
+    cnLink,
+    preMenuContent
 }: WebsiteNavigationSidebarProps) {
     const [open, setOpen] = React.useState(false)
 
@@ -94,7 +97,9 @@ export function WebsiteNavigationSidebar({
                 >
                     <span className="font-bold">{homeLink.label ?? "Iniçio"}</span>
                 </MobileLink>
-                <ScrollArea className="my-4 h-[calc(100vh-10rem)] pl-6">
+                <ScrollArea className="my-4 h-screen md:h-[calc(100vh-10rem)]">
+                    {preMenuContent}
+                    <Separator className="my-3" />
                     <div className="flex flex-col space-y-3">
                         {navigationLinks?.mainNav && navigationLinks.mainNav?.map(
                             (item) =>
@@ -110,7 +115,7 @@ export function WebsiteNavigationSidebar({
                                 )
                         )}
                     </div>
-                    <div className="flex flex-col space-y-2">
+                    <div className="flex flex-col space-y-2 mb-12">
                         {navigationLinks?.sidebarNav && navigationLinks.sidebarNav.map((item, index) => (
                             <div key={index} className="flex flex-col space-y-3 pt-6">
                                 <h4 className="font-semibold">{item.title}</h4>
@@ -139,8 +144,9 @@ export function WebsiteNavigationSidebar({
                             </div>
                         ))}
                     </div>
+                    {children}
                 </ScrollArea>
-                {children}
+
             </SheetContent>
         </Sheet>
     )

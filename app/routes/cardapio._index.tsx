@@ -228,12 +228,12 @@ export default function CardapioWebIndex() {
 
         <section className="flex flex-col mb-24" data-element="cardapio-index">
 
-            <Separator className="my-4" />
+            <Separator className="my-6" />
 
             <div className="flex flex-col  md:flex-row md:gap-12">
 
                 {/* Post Lançamento  */}
-                <Suspense fallback={<Loading />}>
+                {/* <Suspense fallback={<Loading />}>
                     <Await resolve={postFeatured}>
 
                         {(postFeatured) => {
@@ -308,9 +308,9 @@ export default function CardapioWebIndex() {
                             )
                         }}
                     </Await>
-                </Suspense>
+                </Suspense> */}
 
-                <Separator className="my-4 md:hidden" />
+                {/* <Separator className="my-4 md:hidden" /> */}
 
                 <Separator orientation="vertical" className="hidden md:mx-4" />
 
@@ -323,9 +323,7 @@ export default function CardapioWebIndex() {
 
                             return (
                                 <>
-
-                                    <section className="flex flex-col gap-4 mx-2 md:flex-1">
-
+                                    <section id="destaque" className="flex flex-col gap-4 mx-2 md:flex-1 mt-12 md:mt-24">
                                         {/** @ts-ignore */}
                                         <CardapioItemListDestaque items={items} title="Sugestões do chef" tagFilter="em-destaque" />
                                         {/** @ts-ignore */}
@@ -556,73 +554,148 @@ const CardapioItemFullImage = React.forwardRef(({ item }: CardapioItemFullImageP
 
 interface CardapioItemListDestaqueProps {
     title: string
-    items: MenuItemWithAssociations
+    items: MenuItemWithAssociations[]
     tagFilter?: string
     carouselDelay?: number
 }
 
-
-function CardapioItemListDestaque({ title, items, tagFilter, carouselDelay = 2000 }: CardapioItemListDestaqueProps) {
+function CardapioItemListDestaque({
+    title,
+    items,
+    tagFilter,
+    carouselDelay = 2000,
+}: CardapioItemListDestaqueProps) {
     const { playNavigation } = useSoundEffects()
+    const [api, setApi] = React.useState<CarouselApi | null>(null)
+    const [selectedIndex, setSelectedIndex] = React.useState(0)
+
+    // filtra e limita os slides
+    const slides = React.useMemo(() => {
+        return (items || [])
+            .filter(i => (tagFilter ? i.tags?.all?.some(t => t === tagFilter) : true))
+            .slice(0, 4)
+    }, [items, tagFilter])
+
+    // ouvir seleção para atualizar os "dots"
+    React.useEffect(() => {
+        if (!api) return
+        const onSelect = () => setSelectedIndex(api.selectedScrollSnap())
+        api.on("select", onSelect)
+        // posição inicial correta
+        setSelectedIndex(api.selectedScrollSnap())
+        return () => {
+            api.off("select", onSelect)
+        }
+    }, [api])
+
+    // label do selo (ex.: “Mais vendido”)
+    const badge =
+        tagFilter?.toLowerCase() === "mais-vendido"
+            ? "Mais vendido"
+            : tagFilter?.toLowerCase() === "em-destaque"
+                ? "Sugestão do chef"
+                : undefined
+
+    if (!slides.length) return null
 
     return (
-        <div className="rounded-md p-2">
-            <SectionTitle>{title}</SectionTitle>
-            {/* <Carousel>
-                <CarouselContent className="-ml-2 md:-ml-4">
-                    <CarouselItem className="pl-2 md:pl-4">...</CarouselItem>
-                    <CarouselItem className="pl-2 md:pl-4">...</CarouselItem>
-                    <CarouselItem className="pl-2 md:pl-4">...</CarouselItem>
-                </CarouselContent>
-            </Carousel> */}
+        <div className=" p-2">
+            {/* <SectionTitle>{title}</SectionTitle> */}
+
             <Carousel
+                setApi={setApi}
+                opts={{
+                    loop: true,
+                    align: "start",
+                }}
                 plugins={[
                     Autoplay({
                         delay: carouselDelay,
+                        stopOnInteraction: false,
+                        stopOnMouseEnter: true, // pausa no hover
                     }),
                 ]}
+                className="relative"
             >
-                <CarouselContent className="-ml-2 md:-ml-4">
+                <CarouselContent>
+                    {slides.map((i) => {
+                        const featuredImage =
+                            i.MenuItemGalleryImage?.find(img => img.isPrimary) ||
+                            i.MenuItemGalleryImage?.[0]
 
-                    {
-                        // @ts-ignore
-                        items.filter(i => i.tags?.all.some(t => t === tagFilter)).slice(0, 4).map((i: MenuItemWithAssociations) => {
+                        return (
+                            <CarouselItem key={i.id}>
+                                <Link
+                                    to={`/cardapio/${i.slug}`}
+                                    className="block w-full"
+                                    onClick={() => playNavigation()}
+                                >
+                                    {/* HERO SLIDE */}
+                                    <div className="relative h-[320px] md:h-[380px] overflow-hidden rounded-md">
+                                        {/* imagem */}
+                                        <CardapioItemImageSingle
+                                            src={featuredImage?.secureUrl || ""}
+                                            placeholder={i.imagePlaceholderURL || ""}
+                                            placeholderIcon={false}
+                                            cnContainer="h-full w-full"
+                                            enableOverlay={false}
+                                        />
 
-                            const featuredImage = i.MenuItemGalleryImage.filter(img => img.isPrimary)[0];
+                                        {/* gradiente inferior */}
+                                        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black/60 via-black/30 to-transparent" />
 
-                            return (
-                                <CarouselItem key={i.id} className="basis-1/2 md:basis-1/3" data-element="carousel-item">
-                                    <Link to={`/cardapio/${i.slug}`} className="w-full" onClick={() => {
-                                        playNavigation()
-                                    }}>
-
-                                        <div className="relative grid place-items-center rounded-md bg-slate-50 h-[112px] md:h-[250px]">
-                                            <CardapioItemImageSingle
-                                                src={featuredImage?.secureUrl || ""}
-                                                placeholder={i.imagePlaceholderURL || ""}
-
-                                                // placeholderIcon={true}
-
-                                                // placeholderText="Imagem não disponível"
-                                                cnContainer="h-full w-full rounded-md"
-                                                cnPlaceholderText="text-[11px]"
-                                            />
-
-                                            <div className="absolute bottom-2 w-full">
-                                                <p className=" ml-3 font-urw text-sm text-white">{i.name}</p>
+                                        {/* selo topo-esquerda */}
+                                        {badge && (
+                                            <div className="absolute left-3 top-3 rounded-md bg-black/70 px-3 py-1 text-xs font-medium text-white backdrop-blur font-neue">
+                                                {badge}
                                             </div>
+                                        )}
 
+                                        {/* nome + (opcional) preço resumo */}
+                                        <div className="absolute bottom-3 left-3 right-3">
+                                            <h4 className="font-neue text-white text-2xl leading-tight drop-shadow">
+                                                {i.name}
+                                            </h4>
+                                            {/* se quiser um preço curto embaixo, descomente: */}
+                                            {/* <div className="mt-1">
+                          <CardapioItemPrice
+                            prices={i.MenuItemSellingPriceVariation}
+                            cnLabel="text-white/90"
+                            cnValue="text-white font-semibold"
+                            showValuta={false}
+                          />
+                        </div> */}
                                         </div>
-                                    </Link>
-                                </CarouselItem>
-                            )
-
-                        })}
+                                    </div>
+                                </Link>
+                            </CarouselItem>
+                        )
+                    })}
                 </CarouselContent>
+
+                {/* botões (opcionais, como no Instagram não aparecem — deixe se quiser) */}
+                {/* <CarouselPrevious className="left-2" />
+          <CarouselNext className="right-2" /> */}
+
+                {/* DOTS de paginação */}
+                <div className="absolute inset-x-0 -bottom-3 flex items-center justify-center gap-2 md:-bottom-4">
+                    {slides.map((_, idx) => (
+                        <button
+                            key={idx}
+                            aria-label={`Ir para slide ${idx + 1}`}
+                            onClick={() => api?.scrollTo(idx)}
+                            className={[
+                                "h-2 w-2 rounded-full transition-all",
+                                selectedIndex === idx ? "w-6 bg-black/80" : "bg-black/30",
+                            ].join(" ")}
+                        />
+                    ))}
+                </div>
             </Carousel>
         </div>
     )
 }
+
 
 
 interface SectionTitleProps {
