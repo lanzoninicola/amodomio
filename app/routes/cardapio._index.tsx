@@ -7,15 +7,15 @@ import { menuItemLikePrismaEntity } from "~/domain/cardapio/menu-item-like.prism
 import { badRequest, ok } from "~/utils/http-response.server";
 import { menuItemSharePrismaEntity } from "~/domain/cardapio/menu-item-share.prisma.entity.server";
 import ItalyIngredientsStatement from "~/domain/cardapio/components/italy-ingredient-statement/italy-ingredient-statement";
-import CardapioItemActionBar from "~/domain/cardapio/components/cardapio-item-action-bar/cardapio-item-action-bar";
+import { CardapioItemActionBarHorizontal, CardapioItemActionBarVertical, LikeIt, ShareIt } from "~/domain/cardapio/components/cardapio-item-action-bar/cardapio-item-action-bar";
 import { tagPrismaEntity } from "~/domain/tags/tag.prisma.entity.server";
 import Loading from "~/components/loading/loading";
-import FiltersTags from "~/domain/cardapio/components/filter-tags/filter-tags";
+import { FiltersTags, FilterTagSelect } from "~/domain/cardapio/components/filter-tags/filter-tags";
 import { cn } from "~/lib/utils";
 import capitalize from "~/utils/capitalize";
 import AwardBadge from "~/components/award-badge/award-badge";
 import { Separator } from "~/components/ui/separator";
-import CardapioItemPrice from "~/domain/cardapio/components/cardapio-item-price/cardapio-item-price";
+import { CardapioItemPrice, CardapioItemPriceSelect } from "~/domain/cardapio/components/cardapio-item-price/cardapio-item-price";
 import { Carousel, CarouselContent, CarouselItem } from "~/components/ui/carousel";
 import Autoplay from "embla-carousel-autoplay";
 import CardapioItemImageSingle from "~/domain/cardapio/components/cardapio-item-image-single/cardapio-item-image-single";
@@ -37,7 +37,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 
     //@ts-ignore
-    const items = menuItemPrismaEntity.findAll({
+    const items = menuItemPrismaEntity.findAllGroupedByGroup({
         where: {
             visible: true,
             // tags: {
@@ -325,9 +325,9 @@ export default function CardapioWebIndex() {
                                 <>
                                     <section id="destaque" className="flex flex-col gap-4 mx-2 md:flex-1 mt-12 md:mt-24">
                                         {/** @ts-ignore */}
-                                        <CardapioItemListDestaque items={items} title="Sugestões do chef" tagFilter="em-destaque" />
+                                        {/* <CardapioItemListDestaque items={items} title="Sugestões do chef" tagFilter="em-destaque" /> */}
                                         {/** @ts-ignore */}
-                                        <CardapioItemListDestaque items={items} title="Mais vendidos" tagFilter="mais-vendido" carouselDelay={2100} />
+                                        {/* <CardapioItemListDestaque items={items} title="Mais vendidos" tagFilter="mais-vendido" carouselDelay={2100} /> */}
 
                                     </section>
                                 </>
@@ -369,13 +369,22 @@ export default function CardapioWebIndex() {
                         };
 
                         return (
-                            <div className="flex flex-col ">
-                                <FiltersTags
-                                    tags={loadedTags}
-                                    currentTag={currentFilterTag}
-                                    onCurrentTagSelected={onCurrentTagSelected}
-                                />
-                                <CardapioItemList allItems={currentItems} />
+                            <div className="flex flex-col mx-4">
+                                <div className="flex justify-between items-center">
+                                    <h2 className="font-neue text-sm md:text-lg font-semibold tracking-wider">Todos os produtos</h2>
+                                    {/* <FiltersTags
+                                        tags={loadedTags}
+                                        currentTag={currentFilterTag}
+                                        onCurrentTagSelected={onCurrentTagSelected}
+                                    /> */}
+                                    <FilterTagSelect
+                                        tags={loadedTags}
+                                        currentTag={currentFilterTag}
+                                        onCurrentTagSelected={onCurrentTagSelected}
+                                        label="Categorias"
+                                    />
+                                </div>
+                                <CardapioItemsGrid items={currentItems} />
                             </div>
                         );
                     }}
@@ -482,6 +491,75 @@ const CardapioItemList = ({ allItems }: { allItems: MenuItemWithAssociations[] }
     );
 }
 
+// =====================
+// GRID DE ITENS RESPONSIVO (estilo e-commerce)
+// =====================
+function CardapioItemsGrid({ items }: { items: MenuItemWithAssociations[] }) {
+    if (!items?.length) return null
+
+    return (
+        <ul
+            className="
+          mt-4 grid grid-cols-2 gap-3
+          sm:grid-cols-3
+          lg:grid-cols-4
+          xl:grid-cols-5
+        "
+        >
+            {items.map((item) => (
+                <CardapioGridItem key={item.id} item={item} />
+            ))}
+        </ul>
+    )
+}
+
+function CardapioGridItem({ item }: { item: MenuItemWithAssociations }) {
+    const featuredImage =
+        item.MenuItemGalleryImage?.find((img) => img.isPrimary) ||
+        item.MenuItemGalleryImage?.[0]
+
+    return (
+        <li className="flex flex-col gap-0  ">
+            <Link
+                to={`/cardapio/${item.slug}`}
+                className="group block overflow-hidden rounded-tl-md rounded-tr-md relative"
+            >
+                {/* imagem */}
+                <CardapioItemImageSingle
+                    src={featuredImage?.secureUrl || ""}
+                    placeholder={item.imagePlaceholderURL || ""}
+                    placeholderIcon={false}
+                    cnPlaceholderText="text-black font-urw text-sm tracking-tight"
+                    cnPlaceholderContainer="from-zinc-200 via-zinc-100 to-white "
+                    cnContainer="h-[150px] w-full "
+                    enableOverlay={false}
+                />
+
+            </Link>
+            <div className="flex justify-between rounded-bl-md rounded-br-md p-2 shadow-sm" >
+                <ShareIt item={item} />
+                <LikeIt item={item} />
+            </div>
+
+            {/* nome e preço */}
+            <div className="mt-2 px-1 flex flex-col">
+                <span className="font-neue line-clamp-1 font-medium text-xs tracking-wide sm:text-base">
+                    {item.name}
+                </span>
+                <span className="font-neue line-clamp-2 text-xs tracking-wide leading-[110%] sm:text-base mb-2">
+                    {item.ingredients}
+                </span>
+                <CardapioItemPriceSelect
+                    prices={item.MenuItemSellingPriceVariation}
+                // cnLabel="text-muted-foreground text-xs"
+                // cnValue="text-sm font-semibold"
+                />
+            </div>
+        </li>
+    )
+}
+
+
 
 
 interface CardapioItemFullImageProps {
@@ -537,7 +615,7 @@ const CardapioItemFullImage = React.forwardRef(({ item }: CardapioItemFullImageP
 
                             </div>
                         </Link>
-                        <CardapioItemActionBar item={item} />
+                        <CardapioItemActionBarVertical item={item} />
                     </div>
 
 

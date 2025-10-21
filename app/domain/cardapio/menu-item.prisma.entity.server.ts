@@ -36,6 +36,7 @@ import {
   SellingChannelKey,
 } from "./menu-item-selling-channel.entity.server";
 import { slugifyString } from "~/utils/slugify";
+import { group } from "console";
 
 export interface MenuItemWithAssociations extends MenuItem {
   priceVariations: MenuItemPriceVariation[];
@@ -269,6 +270,39 @@ export class MenuItemPrismaEntity {
       .map((categoryName) => ({
         category: categoryName,
         menuItems: groupedByCategory[categoryName],
+      }));
+  }
+
+  async findAllGroupedByGroup(
+    params: MenuItemEntityFindAllParams = {},
+    options = {
+      imageTransform: false,
+      imageScaleWidth: 1280,
+    }
+  ) {
+    // Use the existing findAll function to fetch records
+    const allMenuItems = (await this.findAll(params, options)) || [];
+
+    // Group records by category in memory
+    const groupedByGroup = allMenuItems.reduce((acc, menuItem) => {
+      const groupName = menuItem.MenuItemGroup?.name || "Sem grupo";
+
+      if (!acc[groupName]) {
+        acc[groupName] = [];
+      }
+
+      // @ts-ignore
+      acc[groupName].push(menuItem);
+
+      return acc;
+    }, {} as Record<string, MenuItemWithAssociations[]>);
+
+    // Convert to an ordered array of categories
+    return Object.keys(groupedByGroup)
+      .sort() // Sort categories alphabetically; customize as needed
+      .map((groupName) => ({
+        group: groupName,
+        menuItems: groupedByGroup[groupName],
       }));
   }
 

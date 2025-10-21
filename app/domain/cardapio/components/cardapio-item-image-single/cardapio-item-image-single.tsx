@@ -11,6 +11,7 @@ type Props = {
     cnPlaceholderIcon?: string;
     placeholderText?: string;
     cnPlaceholderText?: string;
+    cnPlaceholderContainer?: string;
     cnContainer?: string;
     enableOverlay?: boolean;
     itemId?: string; // Opcional: para gerar frases diferentes para cada item
@@ -25,6 +26,7 @@ export default function CardapioItemImageSingle({
     cnPlaceholderIcon,
     placeholderText,
     cnPlaceholderText,
+    cnPlaceholderContainer,
     cnContainer,
     enableOverlay = true,
     itemId,
@@ -68,7 +70,14 @@ export default function CardapioItemImageSingle({
                     )}
                 />
             ) : (
-                <div className="absolute inset-0 bg-gradient-to-b from-zinc-900 via-zinc-800 to-black" data-element="image-placeholder">
+                <div className={
+                    cn(
+                        "absolute inset-0 bg-gradient-to-b from-zinc-900 via-zinc-800 to-black",
+                        cnPlaceholderContainer
+                    )
+                }
+
+                    data-element="image-placeholder">
                     <div className="w-full h-full flex items-center justify-center">
                         <div className="flex flex-col items-center justify-center text-center px-4 max-w-md">
                             {placeholderIcon && (
@@ -80,7 +89,7 @@ export default function CardapioItemImageSingle({
                             )}
                             <p
                                 className={cn(
-                                    "text-white text-sm font-mono tracking-wide uppercase opacity-80 leading-tight animate-fade-in mb-8",
+                                    "text-white text-sm font-mono tracking-wide opacity-80 leading-tight animate-fade-in mb-8",
                                     cnPlaceholderText
                                 )}
                                 data-element="item-image-placeholder-text"

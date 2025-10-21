@@ -10,7 +10,7 @@ import { useSoundEffects } from "~/components/sound-effects/use-sound-effects";
 
 interface CardapioItemActionBarProps { item: MenuItemWithAssociations, cnContainer?: string }
 
-export default function CardapioItemActionBar({ item, cnContainer }: CardapioItemActionBarProps) {
+export function CardapioItemActionBarVertical({ item, cnContainer }: CardapioItemActionBarProps) {
 
     const [likeIt, setLikeIt] = useState(false)
     const [likesAmount, setLikesAmount] = useState(item.likes?.amount || 0)
@@ -117,10 +117,8 @@ export default function CardapioItemActionBar({ item, cnContainer }: CardapioIte
     );
 }
 
-/**
- *
- * Barra horizontal
-export default function CardapioItemActionBar({ item }: { item: MenuItemWithAssociations }) {
+
+export function CardapioItemActionBarHorizontal({ item, cnContainer }: CardapioItemActionBarProps) {
     const [likeIt, setLikeIt] = useState(false)
     const [likesAmount, setLikesAmount] = useState(item.likes?.amount || 0)
 
@@ -166,9 +164,6 @@ export default function CardapioItemActionBar({ item }: { item: MenuItemWithAsso
         })
     }
 
-
-
-
     return (
         <div className="flex flex-col gap-0 my-2">
             <div className="grid grid-cols-2 font-neue">
@@ -211,4 +206,88 @@ export default function CardapioItemActionBar({ item }: { item: MenuItemWithAsso
     );
 }
 
- */
+export function ShareIt({ item, size }: { item: MenuItemWithAssociations, size?: number }) {
+
+    const fetcher = useFetcher();
+
+    const shareIt = () => {
+        if (!navigator?.share) {
+            console.log("Navegador não suporta o compartilhamento")
+            return
+        }
+
+        const text = `Essa pizza ${item.name} é a melhor pizza da cidade. Experimente...`
+        navigator.share({
+            title: item.name,
+            text,
+            url: `${GLOBAL_LINKS.cardapioPublic}/#${item.id}`
+        }).then(() => {
+
+            fetcher.submit(
+                {
+                    action: "menu-item-share-it",
+                    itemId: item.id,
+                },
+                { method: 'post' }
+            );
+
+        }).catch((error) => {
+        })
+    }
+    return (
+        <div className="flex flex-col gap-1 cursor-pointer active:bg-black/50 " onClick={shareIt}>
+            <Share2 size={size ?? 16} />
+        </div>
+    )
+}
+
+export function LikeIt({ item, size }: { item: MenuItemWithAssociations, size?: number }) {
+    const [likeIt, setLikeIt] = useState(false)
+    const [likesAmount, setLikesAmount] = useState(item.likes?.amount || 0)
+
+    const fetcher = useFetcher();
+
+    const likingIt = () => {
+
+        setLikeIt(true)
+        setLikesAmount(likesAmount + 1)
+
+        fetcher.submit(
+            {
+                action: "menu-item-like-it",
+                itemId: item.id,
+                likesAmount: String(1),
+            },
+            { method: 'post' }
+        );
+    };
+    return (
+        <div className="flex items-center cursor-pointer active:bg-black/50" onClick={likingIt}>
+            <Heart
+                size={size ?? 16}
+                className={cn(
+                    likeIt ? "fill-red-500" : "fill-none",
+                    likeIt ? "stroke-red-500" : "stroke-black",
+                    item.likes?.amount && item.likes?.amount > 0 ? "stroke-red-500" : "stroke-black"
+                )}
+            />
+            <span className="text-xs font-neue font-medium tracking-widest uppercase pl-1 text-red-500">
+                {likesAmount > 0 && `${likesAmount}`}
+
+            </span>
+        </div>
+    )
+}
+
+export function WhatsAppIt() {
+    return (
+        <WhatsappExternalLink
+            phoneNumber="46991272525"
+            ariaLabel="Envia uma mensagem com WhatsApp"
+            message={"Olá, gostaria fazer um pedido"}
+            className="flex flex-col gap-1 items-end cursor-pointer p-2 active:bg-black/50"
+        >
+            <WhatsAppIcon color="black" />
+        </WhatsappExternalLink>
+    )
+}
