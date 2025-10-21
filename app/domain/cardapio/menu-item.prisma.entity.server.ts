@@ -280,30 +280,47 @@ export class MenuItemPrismaEntity {
       imageScaleWidth: 1280,
     }
   ) {
-    // Use the existing findAll function to fetch records
     const allMenuItems = (await this.findAll(params, options)) || [];
 
-    // Group records by category in memory
-    const groupedByGroup = allMenuItems.reduce((acc, menuItem) => {
-      const groupName = menuItem.MenuItemGroup?.name || "Sem grupo";
+    // direção padrão: asc; se vier "desc", inverte
+    const direction = params.option?.direction === "desc" ? -1 : 1;
 
-      if (!acc[groupName]) {
-        acc[groupName] = [];
+    // Agrupa preservando metadados do grupo
+    const grouped = allMenuItems.reduce((acc, menuItem) => {
+      const g = menuItem.MenuItemGroup;
+      const key = g?.id ?? "__sem_grupo__";
+
+      if (!acc[key]) {
+        acc[key] = {
+          id: key,
+          name: g?.name ?? "Sem grupo",
+          sortOrderIndex:
+            typeof g?.sortOrderIndex === "number"
+              ? g.sortOrderIndex
+              : Number.MAX_SAFE_INTEGER,
+          items: [] as MenuItemWithAssociations[],
+        };
       }
 
-      // @ts-ignore
-      acc[groupName].push(menuItem);
-
+      acc[key].items.push(menuItem);
       return acc;
-    }, {} as Record<string, MenuItemWithAssociations[]>);
+    }, {} as Record<string, { id: string; name: string; sortOrderIndex: number; items: MenuItemWithAssociations[] }>);
 
-    // Convert to an ordered array of categories
-    return Object.keys(groupedByGroup)
-      .sort() // Sort categories alphabetically; customize as needed
-      .map((groupName) => ({
-        group: groupName,
-        menuItems: groupedByGroup[groupName],
+    // Converte em array e ordena pelo índice do grupo
+    const result = Object.values(grouped)
+      .sort(
+        (a, b) =>
+          (a.sortOrderIndex - b.sortOrderIndex) * direction ||
+          a.name.localeCompare(b.name)
+      ) // desempate opcional por nome
+      .map((g) => ({
+        groupId: g.id,
+        group: g.name,
+        sortOrderIndex: g.sortOrderIndex,
+        menuItems: g.items,
       }));
+
+    return result;
   }
 
   /**
