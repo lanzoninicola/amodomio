@@ -9,12 +9,14 @@ import { cn } from '~/lib/utils';
 
 interface FazerPedidoButtonProps {
     cnLabel?: string;
+    cnContainer?: string
     variant?: "primary" | "secondary" | "accent"
     externalLinkURL?: string
 }
 
 export default function FazerPedidoButton({
     cnLabel,
+    cnContainer,
     variant = "primary",
     externalLinkURL = GLOBAL_LINKS.cardapioFallbackURL.href
 }: FazerPedidoButtonProps) {
@@ -38,6 +40,7 @@ export default function FazerPedidoButton({
                 "w-full font-neue rounded-sm shadow-md",
                 variant === 'primary' && 'bg-black text-white',
                 variant === 'secondary' && 'bg-white text-black',
+                cnContainer
             )
         }
             style={style}

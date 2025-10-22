@@ -1,7 +1,7 @@
 import { InstagramLogoIcon } from "@radix-ui/react-icons";
 import { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { Await, Link, Outlet, defer, matchPath, useLoaderData, useLocation } from "@remix-run/react";
-import { Divide, Donut, Instagram, MapPin, Proportions, SearchIcon, User, Users } from "lucide-react";
+import { ArrowRight, Divide, Donut, Info, Instagram, LayoutTemplate, MapPin, Proportions, SearchIcon, User, Users } from "lucide-react";
 import { ReactNode, Suspense, useState } from "react";
 
 import ItalyFlag from "~/components/italy-flag/italy-flag";
@@ -307,36 +307,41 @@ function CompanyInfo({ cnContainer }: { cnContainer?: string }) {
     )
 }
 
-
 function CardapioFooter() {
-    const { fazerPedidoPublicURL } = useLoaderData<typeof loader>()
-    const labels = ["cyuc", "HORÁRIO DE ATENDIMENTO", "QUA-DOM 18:00-22:00"];
-
+    const { fazerPedidoPublicURL } = useLoaderData<typeof loader>();
 
     return (
-        <div className={
-            cn(
-                "fixed bottom-0 w-screen md:max-w-6xl md:-translate-x-1/2 md:left-1/2  shadow-sm z-50",
-            )
-        }>
-            <footer className="grid grid-cols-4 md:grid-cols-8 gap-x-2 bg-white px-4" >
+        <div className="fixed bottom-0 w-full h-[70px] bg-white px-4 flex items-center justify-between border-t border-gray-200">
+            {/* Botão Tamanhos à esquerda */}
+            <div className="flex">
                 <CardapioSizesDialog />
-                <div className="h-full w-full py-2 col-span-3 md:col-span-6">
+            </div>
 
+            {/* Botão flutuante central */}
+            <div className="absolute left-1/2 -translate-x-1/2 -translate-y-8 z-20">
+                <Suspense fallback={<span>Carregando...</span>}>
+                    <Await resolve={fazerPedidoPublicURL}>
+                        {(url) => (
+                            <FazerPedidoButton
+                                // variant="accent"
+                                cnLabel="text-md tracking-wider font-semibold font-neue"
+                                externalLinkURL={url}
+                            />
+                        )}
+                    </Await>
+                </Suspense>
+            </div>
 
-                    <Suspense fallback={<span>Carregando...</span>}>
-                        <Await resolve={fazerPedidoPublicURL}>
-                            {(url) => {
-                                return <FazerPedidoButton variant="accent" cnLabel="text-2xl tracking-wider" externalLinkURL={url} />
-                            }}
-                        </Await>
-                    </Suspense>
-                </div>
-            </footer>
+            {/* Botão Tamanhos à direita (se for necessário) */}
+            <div className="flex">
+                <CardapioSizesDialog />
+            </div>
         </div>
-
-    )
+    );
 }
+
+
+
 
 interface CardapioFooterMenuItemDialogProps {
     children?: React.ReactNode;
@@ -410,7 +415,7 @@ function CardapioSizesDialog() {
         <CardapioFooterMenuItemDialog triggerComponent={
             <div className="flex flex-col gap-0 justify-center items-center">
                 <Proportions className="col-span-1 md:col-span-2" />
-                <span className="font-neue tracking-widest text-sm">Tamanhos</span>
+                <span className="font-neue tracking-widest text-[10px] uppercase">Tamanhos</span>
             </div>}
         >
             <div className="h-[550px] overflow-auto py-4">
