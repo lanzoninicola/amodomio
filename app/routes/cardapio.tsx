@@ -1,3 +1,4 @@
+import { InstagramLogoIcon } from "@radix-ui/react-icons";
 import { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { Await, Link, Outlet, defer, matchPath, useLoaderData, useLocation } from "@remix-run/react";
 import { Divide, Donut, Instagram, MapPin, Proportions, SearchIcon, User, Users } from "lucide-react";
@@ -5,6 +6,7 @@ import { ReactNode, Suspense, useState } from "react";
 
 import ItalyFlag from "~/components/italy-flag/italy-flag";
 import Loading from "~/components/loading/loading";
+import ExternalLink from "~/components/primitives/external-link/external-link";
 import Logo from "~/components/primitives/logo/logo";
 import WhatsappExternalLink from "~/components/primitives/whatsapp/whatsapp-external-link";
 import WhatsAppIcon from "~/components/primitives/whatsapp/whatsapp-icon";
@@ -187,6 +189,34 @@ function CardapioHeader() {
                 </div>
 
             </div>
+
+            {/* Barra de informação de contato */}
+
+            <div className=" bg-white   flex items-center justify-between border-t border-b px-4 py-2">
+                <div className="flex gap-4 items-center">
+                    <ExternalLink to={GLOBAL_LINKS.instagram.href} aria-label={GLOBAL_LINKS.instagram.title} ariaLabel="Link pagina instagram"
+                    >
+                        <InstagramLogoIcon color="black" className="w-[16px] h-[16px] md:w-[24px] md:h-[24px]" />
+                        {/* <span className="font-semibold tracking-wide text-[12px]">Instagram</span> */}
+                    </ExternalLink>
+                    <ExternalLink to={GLOBAL_LINKS.maps.href} aria-label={GLOBAL_LINKS.maps.title} ariaLabel="Link para o google maps"
+                    >
+                        <MapPin color="black" className="w-[16px] h-[16px] md:w-[24px] md:h-[24px]" />
+                        {/* <span className="font-semibold tracking-wide text-[12px]">Maps</span> */}
+                    </ExternalLink>
+                </div>
+
+                <WhatsappExternalLink
+                    phoneNumber="46991272525"
+                    ariaLabel="Envia uma mensagem com WhatsApp"
+                    message={"Olá, gostaria fazer um pedido"}
+                    className="flex flex-col gap-1 items-center cursor-pointer active:bg-black/50"
+                >
+                    <span className="font-mono  text-[.85rem] md:text-lg font-semibold">(46) 99127-2525</span>
+
+                </WhatsappExternalLink>
+            </div>
+
             <ScrollingBanner
                 cnContainer="h-[30px] md:h-[40px] bg-white border-b border-t border-solid border-black flex"
             >

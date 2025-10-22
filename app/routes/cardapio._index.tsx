@@ -323,7 +323,7 @@ export default function CardapioWebIndex() {
 
                             return (
                                 <>
-                                    <section id="destaque" className="flex flex-col gap-4 mx-2 md:flex-1 mt-12 md:mt-24">
+                                    <section id="destaque" className="flex flex-col gap-4 mx-2 md:flex-1 mt-20 md:mt-24">
                                         {/** @ts-ignore */}
                                         <CardapioItemListDestaque items={items} title="Sugestões do chef" tagFilter="em-destaque" />
                                         {/** @ts-ignore */}
@@ -351,21 +351,33 @@ export default function CardapioWebIndex() {
                         const [currentItems, setCurrentItems] = useState(loadedItems);
                         const [currentFilterTag, setCurrentFilterTag] = useState<Tag | null>(null);
 
+                        function isGrouped(arr: any[]): arr is GroupedItems[] {
+                            return Array.isArray(arr) && arr.length > 0 && "menuItems" in (arr[0] as any)
+                        }
+
                         const onCurrentTagSelected = (tag: Tag | null) => {
                             setCurrentFilterTag(tag);
 
-                            if (tag?.id === "all") {
+                            // reset
+                            if (!tag || tag.id === "all") {
                                 setCurrentItems(loadedItems);
-                                return
+                                return;
                             }
 
-                            if (tag) {
-                                const filtered = loadedItems.filter(item =>
-                                    item.tags?.public.some(t => t === tag.name)
-                                );
-                                setCurrentItems(filtered);
+                            const tagName = tag.name;
+                            const hasTag = (i: any) =>
+                                Boolean(i?.tags?.public?.includes?.(tagName) || i?.tags?.all?.includes?.(tagName));
+
+                            if (isGrouped(loadedItems)) {
+                                // mantém a estrutura por grupo e remove grupos vazios
+                                const filteredGroups = (loadedItems as GroupedItems[])
+                                    .map(g => ({ ...g, menuItems: g.menuItems.filter(hasTag) }))
+                                    .filter(g => g.menuItems.length > 0);
+
+                                setCurrentItems(filteredGroups);
                             } else {
-                                setCurrentItems(loadedItems);
+                                const filtered = (loadedItems as MenuItem[]).filter(hasTag);
+                                setCurrentItems(filtered);
                             }
                         };
 
@@ -566,7 +578,7 @@ function CardapioGridItem({ item }: { item: MenuItemWithAssociations }) {
                     />
                     {item.meta.isBestSeller &&
                         (
-                            <div className="absolute left-1 top-1 rounded-md bg-black px-2 py-[2px] text-[10px] font-medium text-white backdrop-blur font-neue tracking-wide">
+                            <div className="absolute left-1 top-2 rounded-sm bg-black px-2 py-[2px] text-[10px] font-medium text-white backdrop-blur font-neue tracking-wide">
                                 <span>Mais vendido</span>
                             </div>
                         )
@@ -574,7 +586,7 @@ function CardapioGridItem({ item }: { item: MenuItemWithAssociations }) {
 
                     {item.tags.all.find(t => t === "produtos-italianos") &&
                         (
-                            <div className="absolute left-1 top-1 rounded-md bg-black px-2 py-[2px] text-[10px] font-medium text-white backdrop-blur font-neue tracking-wide">
+                            <div className="absolute left-1 top-2 rounded-sm bg-black px-2 py-[2px] text-[10px] font-medium text-white backdrop-blur font-neue tracking-wide">
                                 <span>Com produtos italianos</span>
                             </div>
                         )
