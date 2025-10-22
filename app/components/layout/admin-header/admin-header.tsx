@@ -49,7 +49,7 @@ export function AdminHeader({ urlSegment, slug }: AdminHeaderProps) {
                                 <span className="hidden text-foreground/60 transition-colors hover:text-foreground/80 lg:block">Pagina Iniçial</span>
                             </div>
                         </Link>
-                        <Link to={"/"}>
+                        <Link to={"/"} prefetch="none">
                             <div className="flex gap-2 items-center hover:bg-slate-50 rounded-md p-2">
                                 <Globe />
                                 <span className="hidden text-foreground/60 transition-colors hover:text-foreground/80 lg:block">Website</span>

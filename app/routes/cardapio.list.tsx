@@ -2,7 +2,7 @@ import { Await, Link, defer, useLoaderData, useLocation, useSearchParams } from 
 import React, { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { cn } from "~/lib/utils";
-import CardapioItemActionBar from "~/domain/cardapio/components/cardapio-item-action-bar/cardapio-item-action-bar";
+import { CardapioItemActionBarVertical } from "~/domain/cardapio/components/cardapio-item-action-bar/cardapio-item-action-bar";
 import ItalyIngredientsStatement from "~/domain/cardapio/components/italy-ingredient-statement/italy-ingredient-statement";
 import { LayoutTemplate, LayoutList } from "lucide-react";
 import Loading from "~/components/loading/loading";
@@ -10,7 +10,7 @@ import { LoaderFunctionArgs } from "@remix-run/node";
 import { tagPrismaEntity } from "~/domain/tags/tag.prisma.entity.server";
 import { Badge } from "~/components/ui/badge";
 import BadgeTag from "~/domain/tags/components/badge-tag";
-import FiltersTags from "~/domain/cardapio/components/filter-tags/filter-tags";
+import { FiltersTags } from "~/domain/cardapio/components/filter-tags/filter-tags";
 import CardapioTabs from "~/domain/cardapio/components/cardapio-tabs/cardapio-tabs";
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -203,7 +203,7 @@ const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) =>
                     <CardapioItemPrice prices={item?.priceVariations} cnLabel="text-black" />
                 </div>
             </div>
-            <CardapioItemActionBar item={item} />
+            <CardapioItemActionBarVertical item={item} />
 
             {/* </CardapioItemDialog> */}
         </li>

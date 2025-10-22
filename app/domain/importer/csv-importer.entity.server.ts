@@ -15,6 +15,10 @@ class CsvImporter {
       className: "CustomerServicePizzaBiggerCombinations",
       fileName: "import-customer-service-pizza-bigger-combinations",
     },
+    import_mogo_vendas_por_cliente: {
+      className: "ImportMogoVendasPorCliente",
+      fileName: "import-mogo-vendas-por-cliente",
+    },
   } as const;
 
   /**

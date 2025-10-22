@@ -23,6 +23,8 @@ export const LEXICON_PT_BR: Lexicon = {
     aguardandoForno: [
       "forno",
       "aguardando forno",
+      "aguardando o forno",
+      "aguardando",
       "fila do forno",
       "espera forno",
       "vai pro forno",

@@ -1,9 +1,12 @@
-import { MetaFunction } from "@remix-run/node";
-import { Link, Outlet, matchPath, useLocation } from "@remix-run/react";
-import { Donut, Instagram, MapPin, Proportions, SearchIcon, User, Users } from "lucide-react";
-import { ReactNode, useState } from "react";
+import { InstagramLogoIcon } from "@radix-ui/react-icons";
+import { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
+import { Await, Link, Outlet, defer, matchPath, useLoaderData, useLocation } from "@remix-run/react";
+import { ArrowRight, Divide, Donut, Info, Instagram, LayoutTemplate, MapPin, Proportions, SearchIcon, User, Users } from "lucide-react";
+import { ReactNode, Suspense, useState } from "react";
 
 import ItalyFlag from "~/components/italy-flag/italy-flag";
+import Loading from "~/components/loading/loading";
+import ExternalLink from "~/components/primitives/external-link/external-link";
 import Logo from "~/components/primitives/logo/logo";
 import WhatsappExternalLink from "~/components/primitives/whatsapp/whatsapp-external-link";
 import WhatsAppIcon from "~/components/primitives/whatsapp/whatsapp-icon";
@@ -15,6 +18,7 @@ import { MenuItemWithAssociations } from "~/domain/cardapio/menu-item.prisma.ent
 import { WebsiteNavigationSidebar } from "~/domain/website-navigation/components/website-navigation-sidebar";
 import GLOBAL_LINKS from "~/domain/website-navigation/global-links.constant";
 import PUBLIC_WEBSITE_NAVIGATION_ITEMS from "~/domain/website-navigation/public/public-website.nav-links";
+import prismaClient from "~/lib/prisma/client.server";
 import { cn } from "~/lib/utils";
 
 
@@ -58,7 +62,21 @@ export const meta: MetaFunction = ({ data }) => {
     ];
 };
 
+export async function loader({ request }: LoaderFunctionArgs) {
 
+    const fazerPedidoPublicURL = await prismaClient.cardapioSetting.findFirst({
+        where: {
+            key: "cardapio.fazer_pedido.public.url"
+        }
+    })
+
+    const url = fazerPedidoPublicURL?.value ?? GLOBAL_LINKS.cardapioFallbackURL.href
+
+    return defer({
+        fazerPedidoPublicURL: Promise.resolve(url)
+    })
+
+}
 
 
 
@@ -93,7 +111,7 @@ export default function CardapioWeb() {
         <>
             <CardapioHeader />
             <div className="md:m-auto md:max-w-6xl">
-                {currentPage === "other" && <CompanyInfo />}
+                {/* {currentPage === "other" && <CompanyInfo />} */}
                 <Outlet />
             </div>
             {currentPage === "other" && <CardapioFooter />}
@@ -107,34 +125,52 @@ export default function CardapioWeb() {
 
 function CardapioHeader() {
     const [showSearch, setShowSearch] = useState(false)
+    const { fazerPedidoPublicURL } = useLoaderData<typeof loader>()
+
 
     return (
         <header className="fixed top-0 w-full z-50 md:max-w-6xl md:-translate-x-1/2 md:left-1/2 " >
-            <div className="flex flex-col bg-white px-4 pt-2 py-3 h-[50px] md:h-[70px]">
+            <div className="flex flex-col bg-white px-1 pt-2 py-3 h-[50px] md:h-[70px]">
                 <div className="grid grid-cols-3 items-center w-full">
                     {/* <div className="flex gap-1 items-center" onClick={() => setShowSearch(!showSearch)}>
                         <HamburgerMenuIcon className="w-6 h-6" />
                         <span className="font-neue text-[10px] font-semibold  uppercase">Menu</span>
                     </div> */}
 
-                    <WebsiteNavigationSidebar
-                        homeLink={{ label: GLOBAL_LINKS.cardapioPublic.title, to: GLOBAL_LINKS.cardapioPublic.href }}
-                        navigationLinks={PUBLIC_WEBSITE_NAVIGATION_ITEMS}
-                        buttonTrigger={{
-                            label: "",
-                            classNameLabel: "block font-neue text-[10px] font-semibold uppercase",
-                            classNameButton: "justify-start w-full h-full text-black bg-transparent hover:bg-transparent hover:text-black px-0",
-                        }}
-                        cnLink="font-neue text-xl uppercase tracking-widest"
-
-                    >
-                        <div className="flex flex-col justify-center mb-2 font-neue">
-                            <p className=" font-semibold text-xl leading-relaxed uppercase tracking-wide">Hórarios de funcionamento</p>
-                            <div className="flex flex-col justify-center mb-4">
-                                <p className="text-muted-foreground font-neue text-xl">Quarta - Domingo</p>
-                                <p className="text-muted-foreground font-neue text-xl">18:00 - 22:00</p>
-                            </div>
+                    <Link to={GLOBAL_LINKS.cardapioPublic.href} className="flex col-span-2">
+                        <div className="px-4 -py-3">
+                            <Logo color="black" onlyText={true} className="w-[120px] h-[30px] md:w-[150px] md:h-[50px]" tagline={false} />
                         </div>
+                    </Link>
+
+                    <div className="w-full flex items-center gap-x-4 justify-end col-span-1">
+                        <Link to={'buscar'} >
+                            <div className="flex justify-end items-center cursor-pointer" onClick={() => setShowSearch(!showSearch)}>
+                                <SearchIcon color={"black"} />
+                                {/* <span className="font-neue text-[10px] font-semibold  uppercase text-brand-blue">Pesquisar</span> */}
+                            </div>
+                        </Link>
+                        <WebsiteNavigationSidebar
+                            homeLink={{ label: GLOBAL_LINKS.cardapioPublic.title, to: GLOBAL_LINKS.cardapioPublic.href }}
+                            navigationLinks={PUBLIC_WEBSITE_NAVIGATION_ITEMS}
+                            buttonTrigger={{
+                                label: "",
+                                classNameLabel: "block font-neue text-[10px] font-semibold uppercase",
+                                classNameButton: "justify-end h-full text-black bg-transparent hover:bg-transparent hover:text-black px-0",
+                            }}
+                            cnLink="font-neue md:text-xl uppercase tracking-widest"
+                            preMenuContent={
+                                <CompanyInfo />
+                            }
+
+                        >
+                            <div className="flex flex-col justify-center mb-2 font-neue">
+                                <p className=" font-semibold md:text-xl leading-relaxed uppercase tracking-wide">Hórarios de funcionamento</p>
+                                <div className="flex flex-col justify-center mb-4">
+                                    <p className="text-muted-foreground font-neue md:text-xl">Quarta - Domingo</p>
+                                    <p className="text-muted-foreground font-neue md:text-xl">18:00 - 22:00</p>
+                                </div>
+                            </div>
 
                         <div className="w-full py-2 text-xs text-muted-foreground">
                             <span className="opacity-60 font-mono">Versão {__APP_VERSION__}</span>
@@ -142,26 +178,50 @@ function CardapioHeader() {
 
                         <Separator className="my-6" />
 
-                        <div className="pr-4 mb-4">
-                            <FazerPedidoButton cnLabel="text-2xl tracking-wider" />
-                        </div>
+                            <div className="pr-4 mb-4">
+                                <Suspense fallback={<Loading />}>
+                                    <Await resolve={fazerPedidoPublicURL}>
+                                        {(url) => {
+                                            return <FazerPedidoButton cnLabel="text-2xl tracking-wider" externalLinkURL={url} />
+                                        }}
+                                    </Await>
+                                </Suspense>
 
-                    </WebsiteNavigationSidebar>
+                            </div>
 
-                    <Link to={GLOBAL_LINKS.cardapioPublic.href} className="flex justify-center">
-                        <div className="px-4 -py-3">
-                            <Logo color="black" onlyText={true} className="w-[120px] h-[30px] md:w-[150px] md:h-[50px]" tagline={false} />
-                        </div>
-                    </Link>
-                    <Link to={'buscar'} className="flex justify-end">
-                        <div className="flex justify-end items-center cursor-pointer" onClick={() => setShowSearch(!showSearch)}>
-                            <SearchIcon color={"black"} />
-                            {/* <span className="font-neue text-[10px] font-semibold  uppercase text-brand-blue">Pesquisar</span> */}
-                        </div>
-                    </Link>
+                        </WebsiteNavigationSidebar>
+                    </div>
                 </div>
 
             </div>
+
+            {/* Barra de informação de contato */}
+
+            <div className=" bg-white   flex items-center justify-between border-t border-b px-4 py-2">
+                <div className="flex gap-4 items-center">
+                    <ExternalLink to={GLOBAL_LINKS.instagram.href} aria-label={GLOBAL_LINKS.instagram.title} ariaLabel="Link pagina instagram"
+                    >
+                        <InstagramLogoIcon color="black" className="w-[16px] h-[16px] md:w-[24px] md:h-[24px]" />
+                        {/* <span className="font-semibold tracking-wide text-[12px]">Instagram</span> */}
+                    </ExternalLink>
+                    <ExternalLink to={GLOBAL_LINKS.maps.href} aria-label={GLOBAL_LINKS.maps.title} ariaLabel="Link para o google maps"
+                    >
+                        <MapPin color="black" className="w-[16px] h-[16px] md:w-[24px] md:h-[24px]" />
+                        {/* <span className="font-semibold tracking-wide text-[12px]">Maps</span> */}
+                    </ExternalLink>
+                </div>
+
+                <WhatsappExternalLink
+                    phoneNumber="46991272525"
+                    ariaLabel="Envia uma mensagem com WhatsApp"
+                    message={"Olá, gostaria fazer um pedido"}
+                    className="flex flex-col gap-1 items-center cursor-pointer active:bg-black/50"
+                >
+                    <span className="font-mono  text-[.85rem] md:text-lg font-semibold">(46) 99127-2525</span>
+
+                </WhatsappExternalLink>
+            </div>
+
             <ScrollingBanner
                 cnContainer="h-[30px] md:h-[40px] bg-white border-b border-t border-solid border-black flex"
             >
@@ -203,14 +263,16 @@ const ScrollingBanner = ({ children, cnContainer, style }: { children?: ReactNod
 
 
 
-function CompanyInfo() {
-
-
-
+function CompanyInfo({ cnContainer }: { cnContainer?: string }) {
 
     return (
         <section>
-            <div className="mt-20 md:mt-28 bg-banner md:bg-banner-md bg-center bg-cover bg-no-repeat min-h-[150px] mb-4 flex items-end justify-end py-2">
+            <div className={
+                cn(
+                    "bg-banner md:bg-banner-md bg-center bg-cover bg-no-repeat min-h-[150px] flex items-end justify-end py-2 mb-2 mr-2",
+                    cnContainer
+                )
+            }>
                 <div className="flex justify-end gap-4 px-4">
 
                     <Link to={GLOBAL_LINKS.instagram.href} aria-label={GLOBAL_LINKS.instagram.title}
@@ -235,13 +297,13 @@ function CompanyInfo() {
                 </div>
             </div>
 
-            <div className="flex flex-col font-neue items-center">
-                <h2 className="font-semibold text-xl tracking-wide uppercase">A Modo Mio | Pizzeria Italiana</h2>
+            <div className="flex flex-col font-neue">
+                <h2 className="font-semibold md:text-xl tracking-wide uppercase">A Modo Mio | Pizzeria Italiana</h2>
                 <h3 className="text-muted-foreground text-sm tracking-wider uppercase">Pizza Al Taglio & Delivery</h3>
             </div>
 
             <div className="text-sm  text-muted-foreground mb-2 font-neue">
-                <p className="text-center">Rua Arariboia 64 - Pato Branco</p>
+                <p>Rua Arariboia 64 - Pato Branco</p>
             </div>
 
 
@@ -250,28 +312,41 @@ function CompanyInfo() {
     )
 }
 
-
 function CardapioFooter() {
-
-    const labels = ["cyuc", "HORÁRIO DE ATENDIMENTO", "QUA-DOM 18:00-22:00"];
-
+    const { fazerPedidoPublicURL } = useLoaderData<typeof loader>();
 
     return (
-        <div className={
-            cn(
-                "fixed bottom-0 w-screen md:max-w-6xl md:-translate-x-1/2 md:left-1/2  shadow-sm z-50",
-            )
-        }>
-            <footer className="grid grid-cols-4 md:grid-cols-8 gap-x-2 bg-white px-4" >
+        <div className="fixed bottom-0 w-full h-[70px] bg-white px-4 flex items-center justify-between border-t border-gray-200">
+            {/* Botão Tamanhos à esquerda */}
+            <div className="flex">
                 <CardapioSizesDialog />
-                <div className="h-full w-full py-2 col-span-3 md:col-span-6">
-                    <FazerPedidoButton variant="accent" cnLabel="text-2xl tracking-wider" />
-                </div>
-            </footer>
-        </div>
+            </div>
 
-    )
+            {/* Botão flutuante central */}
+            <div className="absolute left-1/2 -translate-x-1/2 -translate-y-8 z-20">
+                <Suspense fallback={<span>Carregando...</span>}>
+                    <Await resolve={fazerPedidoPublicURL}>
+                        {(url) => (
+                            <FazerPedidoButton
+                                // variant="accent"
+                                cnLabel="text-md tracking-wider font-semibold font-neue"
+                                externalLinkURL={url}
+                            />
+                        )}
+                    </Await>
+                </Suspense>
+            </div>
+
+            {/* Botão Tamanhos à direita (se for necessário) */}
+            <div className="flex">
+                <CardapioSizesDialog />
+            </div>
+        </div>
+    );
 }
+
+
+
 
 interface CardapioFooterMenuItemDialogProps {
     children?: React.ReactNode;
@@ -345,7 +420,7 @@ function CardapioSizesDialog() {
         <CardapioFooterMenuItemDialog triggerComponent={
             <div className="flex flex-col gap-0 justify-center items-center">
                 <Proportions className="col-span-1 md:col-span-2" />
-                <span className="font-neue tracking-widest text-sm">Tamanhos</span>
+                <span className="font-neue tracking-widest text-[10px] uppercase">Tamanhos</span>
             </div>}
         >
             <div className="h-[550px] overflow-auto py-4">

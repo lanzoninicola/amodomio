@@ -21,6 +21,7 @@ export default function MobileLink({
         onOpenChange?.(false)
       }}
       className={cn(className)}
+      prefetch={(props as any).prefetch ?? "none"} // garante none por padrão
       {...props}
     >
       {children}

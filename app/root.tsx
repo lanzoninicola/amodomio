@@ -215,7 +215,7 @@ export function ErrorBoundary() {
             </div>
             <div className="flex flex-col items-center justify-center gap-2">
               <ExternalLink
-                to={GLOBAL_LINKS.mogoCardapio.href}
+                to={GLOBAL_LINKS.saiposCardapio.href}
                 ariaLabel="Cardápio digital pizzaria A Modo Mio"
               >
                 <div className='flex gap-2 items-center justify-between px-4 py-2 bg-black rounded-lg'>

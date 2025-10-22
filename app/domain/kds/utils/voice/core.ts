@@ -83,7 +83,8 @@ export type VoiceApi = {
     | "ouvindo"
     | "negado"
     | "erro"
-    | "reconectando";
+    | "reconectando"
+    | "solicitando";
   start: () => void;
   stop: () => void;
 };

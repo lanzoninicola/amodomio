@@ -1,4 +1,4 @@
-import { defer } from "@remix-run/node";
+import { defer, LoaderFunctionArgs } from "@remix-run/node";
 import {
   Await,
   Link,
@@ -8,6 +8,7 @@ import {
   useNavigate,
   useParams,
   useRevalidator,
+  useNavigation,
 } from "@remix-run/react";
 import { Suspense, useEffect, useState } from "react";
 import prismaClient from "~/lib/prisma/client.server";
@@ -18,7 +19,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { BarChart3, Grid3X3, RefreshCw, SquareKanban } from "lucide-react";
+import { BarChart3, Grid3X3, RefreshCw, SquareKanban, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -51,7 +52,7 @@ function endOfMonth(d: Date) {
  * - Se ?mes=1: mês corrente completo
  * - Caso contrário: janela curta (−5 / +3 dias)
  * ============================= */
-export async function loader({ request, params }: { request: Request }) {
+export async function loader({ request, params }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const fullMonth = url.searchParams.get("mes") === "1";
   const dateStr = params.date ?? todayLocalYMD();
@@ -92,6 +93,21 @@ export async function loader({ request, params }: { request: Request }) {
 }
 
 /* =============================
+ * Barra de progresso global
+ * ============================= */
+function RouteProgressBar() {
+  const navigation = useNavigation();
+  const loading = navigation.state !== "idle";
+  return (
+    <div
+      className={`fixed left-0 top-0 h-1 bg-blue-600 transition-all duration-300
+      ${loading ? "w-full opacity-100" : "w-0 opacity-0"}`}
+      style={{ zIndex: 60 }}
+    />
+  );
+}
+
+/* =============================
  * Componente — UI
  * ============================= */
 export default function KdsAtendimento() {
@@ -99,6 +115,9 @@ export default function KdsAtendimento() {
   const params = useParams();
   const navigate = useNavigate();
   const { pathname, search } = useLocation();
+
+  const navigation = useNavigation();
+  const isRouteLoading = navigation.state !== "idle";
 
   // Se não houver :date na URL, Select mostra placeholder
   const selectedDateFromUrl = params.date;
@@ -115,8 +134,8 @@ export default function KdsAtendimento() {
   useHotkeys(
     "ctrl+right",
     () => {
-      const index = data.days.findIndex((d: any) => d.ymd === (selectedDateFromUrl ?? ""));
-      if (index >= 0 && index < data.days.length - 1) {
+      const index = (data.days as any[]).findIndex((d: any) => d.ymd === (selectedDateFromUrl ?? ""));
+      if (index >= 0 && index < (data.days as any[]).length - 1) {
         navigate(`/admin/kds/atendimento/${(data.days as any[])[index + 1].ymd}/grid${keepMonth}`);
       }
     },
@@ -126,7 +145,7 @@ export default function KdsAtendimento() {
   useHotkeys(
     "ctrl+left",
     () => {
-      const index = data.days.findIndex((d: any) => d.ymd === (selectedDateFromUrl ?? ""));
+      const index = (data.days as any[]).findIndex((d: any) => d.ymd === (selectedDateFromUrl ?? ""));
       if (index > 0) {
         navigate(`/admin/kds/atendimento/${(data.days as any[])[index - 1].ymd}/grid${keepMonth}`);
       }
@@ -185,114 +204,132 @@ export default function KdsAtendimento() {
 
   return (
     <div className="mb-12">
+      <RouteProgressBar />
       <Suspense fallback={<div>Carregando dias...</div>}>
         <Await resolve={data.days}>
           {(days) => (
             <div className="flex flex-col gap-0 ">
-              <div className="flex flex-wrap justify-between mb-6">
+              <div className="flex flex-col gap-8 md:gap-0 md:flex-row justify-between items-center mb-6">
                 {/* ===== Seletor de dias (Select com placeholder) ===== */}
-                <div className="flex flex-row items-center gap-x-4">
-                  <Select
-                    value={selectedDateFromUrl /* undefined => placeholder */}
-                    onValueChange={(val) =>
-                      navigate(`/admin/kds/atendimento/${val}/grid${keepMonth}`)
-                    }
-                  >
-                    <SelectTrigger className="w-[420px] h-12 text-base">
-                      <SelectValue placeholder="Selecionar uma data" />
-                    </SelectTrigger>
-                    <SelectContent className="max-h-[55vh]">
-                      {/* Hoje (cliente) em primeiro */}
-                      <SelectItem value={clientTodayYMD}>{clientTodayLabel}</SelectItem>
+                <div className="flex flex-col md:flex-row items-center gap-y-4 md:gap-y-0 md:gap-x-4 w-full md:w-max">
+                  <div className="flex items-center gap-2 w-full">
+                    <Select
+                      value={selectedDateFromUrl /* undefined => placeholder */}
+                      onValueChange={(val) =>
+                        navigate(`/admin/kds/atendimento/${val}/grid${keepMonth}`)
+                      }
+                    >
+                      <SelectTrigger className={cn("w-full md:w-[420px] h-12 text-base", isRouteLoading && "ring-1 ring-blue-300")}>
+                        <SelectValue placeholder="Selecionar uma data" />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-[55vh]">
+                        {/* Hoje (cliente) em primeiro */}
+                        <SelectItem value={clientTodayYMD}>{clientTodayLabel}</SelectItem>
 
-                      {/* Separador visual */}
-                      <div className="my-1 border-t" role="none" />
+                        {/* Separador visual */}
+                        <div className="my-1 border-t" role="none" />
 
-                      {/* Demais dias (exclui hoje do cliente) */}
-                      {(days as any[])
-                        .filter((d) => d.ymd !== clientTodayYMD)
-                        .map((d) => (
-                          <SelectItem key={d.id} value={d.ymd}>
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <span>{renderLabel(d.ymd)}</span>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p>
-                                    {new Date(`${d.ymd}T12:00:00`).toLocaleDateString("pt-BR", {
-                                      weekday: "long",
-                                      day: "2-digit",
-                                      month: "long",
-                                      year: "numeric",
-                                    })}
-                                  </p>
-                                  {d.isHoliday && (
-                                    <p className="text-red-600 text-xs">Feriado</p>
-                                  )}
-                                  {fullMonthUI && (
-                                    <p className="text-xs text-blue-700 mt-1">Modo mês</p>
-                                  )}
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
+                        {/* Demais dias (exclui hoje do cliente) */}
+                        {(days as any[])
+                          .filter((d) => d.ymd !== clientTodayYMD)
+                          .map((d) => (
+                            <SelectItem key={d.id} value={d.ymd}>
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span>{renderLabel(d.ymd)}</span>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>
+                                      {new Date(`${d.ymd}T12:00:00`).toLocaleDateString("pt-BR", {
+                                        weekday: "long",
+                                        day: "2-digit",
+                                        month: "long",
+                                        year: "numeric",
+                                      })}
+                                    </p>
+                                    {d.isHoliday && (
+                                      <p className="text-red-600 text-xs">Feriado</p>
+                                    )}
+                                    {fullMonthUI && (
+                                      <p className="text-xs text-blue-700 mt-1">Modo mês</p>
+                                    )}
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+
+                    {/* Spinner sutil quando navegando */}
+                    {isRouteLoading && <Loader2 className="h-4 w-4 animate-spin text-blue-700" aria-label="Carregando dia..." />}
+                  </div>
 
                   {/* Refresh */}
                   <Button
-                    size="sm"
                     variant={"outline"}
                     onClick={() => revalidate()}
-                    className={
-                      cn(
-                        "flex flex-row gap-2",
-                        state === "loading" && "bg-blue-100"
-                      )
-                    }
+                    className={cn("flex flex-row gap-2 w-full", state === "loading" && "bg-blue-100")}
                   >
                     <span className="text-sm">
                       {`${state === "loading" ? "Atualizando..." : "Atualizar"}`}
                     </span>
-                    <RefreshCw
-                      size={16}
-                      className={`${state === "loading" ? "animate-spin" : ""}`}
-                    />
+                    <RefreshCw size={16} className={`${state === "loading" ? "animate-spin" : ""}`} />
                   </Button>
                 </div>
 
                 {/* Toggle Planilha/Kanban */}
-                <div className="flex gap-2">
-                  <Button asChild size="sm" variant={isKanban ? "outline" : "default"}>
-                    <Link
-                      to={`/admin/kds/atendimento/${date ?? clientTodayYMD}/grid`}
-                      className="flex items-center gap-2"
-                    >
-                      <span className="text-sm">Planilha</span>
-                      <Grid3X3 size={16} />
-                    </Link>
-                  </Button>
-                  <Button asChild size="sm" variant={isKanban ? "default" : "outline"}>
-                    <Link
-                      to={`/admin/kds/atendimento/${date ?? clientTodayYMD}/kanban`}
-                      className="flex items-center gap-2"
-                    >
-                      <span className="text-sm">Kanban</span>
-                      <SquareKanban size={16} />
-                    </Link>
-                  </Button>
-                  {/* Link para Relatório */}
-                  <Button asChild size="sm" variant="secondary">
-                    <Link to={`/admin/kds/atendimento/${selectedDateFromUrl}/relatorio`} className="ml-auto">
-                      <BarChart3 className="w-4 h-4 mr-2" /> Relatório
-                    </Link>
-                  </Button>
-                </div>
+                {
+                  selectedDateFromUrl && (
+                    <div className="grid grid-cols-2 w-full gap-4 md:flex md:gap-2 md:w-max">
+                      <Button asChild size="sm" variant={isKanban ? "outline" : "default"}>
+                        <Link
+                          to={`/admin/kds/atendimento/${date ?? clientTodayYMD}/grid`}
+                          prefetch="intent"
+                          className="flex items-center gap-2"
+                        >
+                          <span className="text-sm">Planilha</span>
+                          <Grid3X3 size={16} />
+                        </Link>
+                      </Button>
+                      <Button asChild size="sm" variant={isKanban ? "default" : "outline"}>
+                        <Link
+                          to={`/admin/kds/atendimento/${date ?? clientTodayYMD}/kanban`}
+                          prefetch="intent"
+                          className="flex items-center gap-2"
+                        >
+                          <span className="text-sm">Kanban</span>
+                          <SquareKanban size={16} />
+                        </Link>
+                      </Button>
+                      {/* Link para Relatório */}
+                      <Button asChild size="sm" variant="secondary">
+                        <Link
+                          to={`/admin/kds/atendimento/${selectedDateFromUrl}/relatorio`}
+                          prefetch="intent"
+                          className="md:ml-auto"
+                        >
+                          <BarChart3 className="w-4 h-4 mr-2" /> Relatório
+                        </Link>
+                      </Button>
+                      {/* Link para Relatório do Mes */}
+                      <Button asChild size="sm" variant="secondary">
+                        <Link
+                          to={`/admin/kds/atendimento/${selectedDateFromUrl}/relatorio-mes`}
+                          prefetch="intent"
+                          className="md:ml-auto"
+                        >
+                          <BarChart3 className="w-4 h-4 mr-2" /> Relatório Mensal
+                        </Link>
+                      </Button>
+                    </div>
+                  )
+                }
               </div>
 
-              <Outlet key={pathname} />
+              {/* Sem key para não desmontar/remontar a cada navegação */}
+              <Outlet />
             </div>
           )}
         </Await>

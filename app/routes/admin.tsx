@@ -38,6 +38,12 @@ export const loader: LoaderFunction = async ({ request }: LoaderFunctionArgs) =>
     const environment = process.env.NODE_ENV
     const prismaDbName = prismaClient.dbName
 
+    console.log("revalidate?",
+        request.headers.get("x-remix-revalidate"),
+        "method", request.method,
+        "url", new URL(request.url).toString()
+    );
+
     let user = await authenticator.isAuthenticated(request);
 
     if (!user) {
@@ -67,7 +73,7 @@ export default function AdminOutlet() {
             <div className="flex flex-col w-screen">
                 <AdminHeader slug={slug} urlSegment={urlSegment} />
                 {/* {env === "development" && <EnvironmentAlert />} */}
-                <div className="mt-6 mr-12" data-element="outer-div-admin-outlet">
+                <div className="mt-6 mr-4 md:mr-12" data-element="outer-div-admin-outlet">
                     <Outlet context={{
                         loggedUser,
                     }} />

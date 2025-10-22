@@ -4,7 +4,7 @@ import { Suspense, useEffect } from "react";
 import Loading from "~/components/loading/loading";
 import { Separator } from "~/components/ui/separator";
 import CardapioItemImageSingle from "~/domain/cardapio/components/cardapio-item-image-single/cardapio-item-image-single";
-import CardapioItemPrice from "~/domain/cardapio/components/cardapio-item-price/cardapio-item-price";
+import { CardapioItemPrice } from "~/domain/cardapio/components/cardapio-item-price/cardapio-item-price";
 import ItalyIngredientsStatement from "~/domain/cardapio/components/italy-ingredient-statement/italy-ingredient-statement";
 import { menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";

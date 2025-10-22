@@ -1,3 +1,5 @@
+import { title } from "process";
+
 const GLOBAL_LINKS = {
   website: {
     title: "Website",
@@ -14,6 +16,14 @@ const GLOBAL_LINKS = {
   mogoCardapio: {
     title: "Mogo Cardapio",
     href: "https://app3.mogomenu.com.br/amodomio",
+  },
+  saiposCardapio: {
+    title: "Cardápio Saipos",
+    href: "http://amodomio.saipos.com/",
+  },
+  cardapioFallbackURL: {
+    title: "Cardápio Fallback URL",
+    href: "https://www.amodomio.com.br/cardapio",
   },
   admin: {
     title: "Administração",

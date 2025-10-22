@@ -7,16 +7,16 @@ import { menuItemLikePrismaEntity } from "~/domain/cardapio/menu-item-like.prism
 import { badRequest, ok } from "~/utils/http-response.server";
 import { menuItemSharePrismaEntity } from "~/domain/cardapio/menu-item-share.prisma.entity.server";
 import ItalyIngredientsStatement from "~/domain/cardapio/components/italy-ingredient-statement/italy-ingredient-statement";
-import CardapioItemActionBar from "~/domain/cardapio/components/cardapio-item-action-bar/cardapio-item-action-bar";
+import { CardapioItemActionBarHorizontal, CardapioItemActionBarVertical, LikeIt, ShareIt } from "~/domain/cardapio/components/cardapio-item-action-bar/cardapio-item-action-bar";
 import { tagPrismaEntity } from "~/domain/tags/tag.prisma.entity.server";
 import Loading from "~/components/loading/loading";
-import FiltersTags from "~/domain/cardapio/components/filter-tags/filter-tags";
+import { FiltersTags, FilterTagSelect } from "~/domain/cardapio/components/filter-tags/filter-tags";
 import { cn } from "~/lib/utils";
 import capitalize from "~/utils/capitalize";
 import AwardBadge from "~/components/award-badge/award-badge";
 import { Separator } from "~/components/ui/separator";
-import CardapioItemPrice from "~/domain/cardapio/components/cardapio-item-price/cardapio-item-price";
-import { Carousel, CarouselContent, CarouselItem } from "~/components/ui/carousel";
+import { CardapioItemPrice, CardapioItemPriceSelect } from "~/domain/cardapio/components/cardapio-item-price/cardapio-item-price";
+import { Carousel, CarouselApi, CarouselContent, CarouselItem } from "~/components/ui/carousel";
 import Autoplay from "embla-carousel-autoplay";
 import CardapioItemImageSingle from "~/domain/cardapio/components/cardapio-item-image-single/cardapio-item-image-single";
 import { SwiperImagesCarousel } from "~/components/swiper-carousel/swiper-images-carousel";
@@ -34,8 +34,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const env = process.env?.NODE_ENV
     // const tagParam = getSearchParam({ request, paramName: 'tag' })
 
+
+
     //@ts-ignore
-    const items = menuItemPrismaEntity.findAll({
+    const items = menuItemPrismaEntity.findAllGroupedByGroup({
         where: {
             visible: true,
             // tags: {
@@ -43,6 +45,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
             //         Tag: {
             //             name: tagParam || undefined
             //         }
+
             //     }
             // }
         },
@@ -225,12 +228,12 @@ export default function CardapioWebIndex() {
 
         <section className="flex flex-col mb-24" data-element="cardapio-index">
 
-            <Separator className="my-4" />
+            <Separator className="my-6" />
 
             <div className="flex flex-col  md:flex-row md:gap-12">
 
                 {/* Post Lançamento  */}
-                <Suspense fallback={<Loading />}>
+                {/* <Suspense fallback={<Loading />}>
                     <Await resolve={postFeatured}>
 
                         {(postFeatured) => {
@@ -305,9 +308,9 @@ export default function CardapioWebIndex() {
                             )
                         }}
                     </Await>
-                </Suspense>
+                </Suspense> */}
 
-                <Separator className="my-4 md:hidden" />
+                {/* <Separator className="my-4 md:hidden" /> */}
 
                 <Separator orientation="vertical" className="hidden md:mx-4" />
 
@@ -320,13 +323,11 @@ export default function CardapioWebIndex() {
 
                             return (
                                 <>
-
-                                    <section className="flex flex-col gap-4 mx-2 md:flex-1">
-
+                                    <section id="destaque" className="flex flex-col gap-4 mx-2 md:flex-1 mt-20 md:mt-24">
                                         {/** @ts-ignore */}
                                         <CardapioItemListDestaque items={items} title="Sugestões do chef" tagFilter="em-destaque" />
                                         {/** @ts-ignore */}
-                                        <CardapioItemListDestaque items={items} title="Mais vendidos" tagFilter="mais-vendido" carouselDelay={2100} />
+                                        {/* <CardapioItemListDestaque items={items} title="Mais vendidos" tagFilter="mais-vendido" carouselDelay={2100} /> */}
 
                                     </section>
                                 </>
@@ -346,35 +347,84 @@ export default function CardapioWebIndex() {
             <Suspense fallback={<Loading />}>
                 <Await resolve={Promise.all([tags, items])}>
                     {([loadedTags, loadedItems]) => {
+
                         const [currentItems, setCurrentItems] = useState(loadedItems);
                         const [currentFilterTag, setCurrentFilterTag] = useState<Tag | null>(null);
+
+                        function isGrouped(arr: any[]): arr is GroupedItems[] {
+                            return Array.isArray(arr) && arr.length > 0 && "menuItems" in (arr[0] as any)
+                        }
 
                         const onCurrentTagSelected = (tag: Tag | null) => {
                             setCurrentFilterTag(tag);
 
-                            if (tag?.id === "all") {
+                            // reset
+                            if (!tag || tag.id === "all") {
                                 setCurrentItems(loadedItems);
-                                return
+                                return;
                             }
 
-                            if (tag) {
-                                const filtered = loadedItems.filter(item =>
-                                    item.tags?.public.some(t => t === tag.name)
-                                );
-                                setCurrentItems(filtered);
+                            const tagName = tag.name;
+                            const hasTag = (i: any) =>
+                                Boolean(i?.tags?.public?.includes?.(tagName) || i?.tags?.all?.includes?.(tagName));
+
+                            if (isGrouped(loadedItems)) {
+                                // mantém a estrutura por grupo e remove grupos vazios
+                                const filteredGroups = (loadedItems as GroupedItems[])
+                                    .map(g => ({ ...g, menuItems: g.menuItems.filter(hasTag) }))
+                                    .filter(g => g.menuItems.length > 0);
+
+                                setCurrentItems(filteredGroups);
                             } else {
-                                setCurrentItems(loadedItems);
+                                const filtered = (loadedItems as MenuItem[]).filter(hasTag);
+                                setCurrentItems(filtered);
                             }
                         };
 
                         return (
-                            <div className="flex flex-col ">
-                                <FiltersTags
-                                    tags={loadedTags}
-                                    currentTag={currentFilterTag}
-                                    onCurrentTagSelected={onCurrentTagSelected}
-                                />
-                                <CardapioItemList allItems={currentItems} />
+                            <div className="flex flex-col mx-4">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h2 className="font-neue text-sm md:text-lg font-semibold tracking-wider">Todos os produtos</h2>
+                                    {/* <FiltersTags
+                                        tags={loadedTags}
+                                        currentTag={currentFilterTag}
+                                        onCurrentTagSelected={onCurrentTagSelected}
+                                    /> */}
+                                    <FilterTagSelect
+                                        tags={loadedTags}
+                                        currentTag={currentFilterTag}
+                                        onCurrentTagSelected={onCurrentTagSelected}
+                                        label="Categorias"
+                                    />
+                                </div>
+                                {/* --- substituir APENAS esta linha ---
+<CardapioItemsGrid items={currentItems} />
+--- pelo bloco abaixo --- */}
+
+                                {/* Render por grupo (com título) */}
+                                {Array.isArray(currentItems) && currentItems.length > 0 && "menuItems" in (currentItems[0] as any)
+                                    ? (currentItems as Array<{
+                                        groupId: string
+                                        group: string
+                                        sortOrderIndex?: number
+                                        menuItems: any[]
+                                    }>)
+                                        .sort((a, b) => (a.sortOrderIndex ?? 0) - (b.sortOrderIndex ?? 0)) // garante a ordem do grupo
+                                        .map((g) => (
+                                            <section key={g.groupId} className="mb-6">
+                                                <h3 className="font-neue text-base md:text-xl font-semibold tracking-wide mb-2 border-b">
+                                                    {g.group}
+                                                </h3>
+                                                <CardapioItemsGrid items={g.menuItems} />
+
+                                            </section>
+                                        ))
+                                    : (
+                                        // fallback caso currentItems seja um array plano de itens (sem agrupamento)
+                                        <CardapioItemsGrid items={currentItems as any[]} />
+                                    )
+                                }
+
                             </div>
                         );
                     }}
@@ -481,6 +531,93 @@ const CardapioItemList = ({ allItems }: { allItems: MenuItemWithAssociations[] }
     );
 }
 
+// =====================
+// GRID DE ITENS RESPONSIVO (estilo e-commerce)
+// =====================
+function CardapioItemsGrid({ items }: { items: MenuItemWithAssociations[] }) {
+    if (!items?.length) return null
+
+    return (
+        <ul
+            className="
+          mt-4 grid grid-cols-2 gap-3
+          sm:grid-cols-3
+          lg:grid-cols-4
+          xl:grid-cols-5
+        "
+        >
+            {items.map((item) => (
+                <CardapioGridItem key={item.id} item={item} />
+            ))}
+        </ul>
+    )
+}
+
+function CardapioGridItem({ item }: { item: MenuItemWithAssociations }) {
+
+    const featuredImage =
+        item.MenuItemGalleryImage?.find((img) => img.isPrimary) ||
+        item.MenuItemGalleryImage?.[0]
+
+    return (
+        <li className="flex flex-col gap-0  ">
+            <Link
+                to={`/cardapio/${item.slug}`}
+                className="group block overflow-hidden rounded-tl-md rounded-tr-md relative"
+            >
+                {/* imagem */}
+                <div className="relative ">
+                    <CardapioItemImageSingle
+                        src={featuredImage?.secureUrl || ""}
+                        placeholder={item.imagePlaceholderURL || ""}
+                        placeholderIcon={false}
+                        cnPlaceholderText="text-black font-urw text-sm tracking-tight"
+                        cnPlaceholderContainer="from-zinc-200 via-zinc-100 to-white "
+                        cnContainer="h-[150px] w-full "
+                        enableOverlay={false}
+                    />
+                    {item.meta.isBestSeller &&
+                        (
+                            <div className="absolute left-1 top-2 rounded-sm bg-black px-2 py-[2px] text-[10px] font-medium text-white backdrop-blur font-neue tracking-wide">
+                                <span>Mais vendido</span>
+                            </div>
+                        )
+                    }
+
+                    {item.tags.all.find(t => t === "produtos-italianos") &&
+                        (
+                            <div className="absolute left-1 top-2 rounded-sm bg-black px-2 py-[2px] text-[10px] font-medium text-white backdrop-blur font-neue tracking-wide">
+                                <span>Com produtos italianos</span>
+                            </div>
+                        )
+                    }
+                </div>
+
+            </Link>
+            <div className="flex justify-between rounded-bl-md rounded-br-md p-2 shadow-sm" >
+                <ShareIt item={item} />
+                <LikeIt item={item} />
+            </div>
+
+            {/* nome e preço */}
+            <div className="mt-2 px-1 flex flex-col">
+                <span className="font-neue line-clamp-1 font-medium text-xs tracking-wide sm:text-base">
+                    {item.name}
+                </span>
+                <span className="font-neue line-clamp-2 text-xs tracking-wide leading-[110%] sm:text-base mb-2">
+                    {item.ingredients}
+                </span>
+                <CardapioItemPriceSelect
+                    prices={item.MenuItemSellingPriceVariation}
+                // cnLabel="text-muted-foreground text-xs"
+                // cnValue="text-sm font-semibold"
+                />
+            </div>
+        </li>
+    )
+}
+
+
 
 
 interface CardapioItemFullImageProps {
@@ -536,7 +673,7 @@ const CardapioItemFullImage = React.forwardRef(({ item }: CardapioItemFullImageP
 
                             </div>
                         </Link>
-                        <CardapioItemActionBar item={item} />
+                        <CardapioItemActionBarVertical item={item} />
                     </div>
 
 
@@ -551,75 +688,242 @@ const CardapioItemFullImage = React.forwardRef(({ item }: CardapioItemFullImageP
 
 
 
-interface CardapioItemListDestaqueProps {
-    title: string
-    items: MenuItemWithAssociations
+type MenuItem = {
+    id: string
+    name: string
+    slug: string
+    imagePlaceholderURL?: string
+    MenuItemGalleryImage?: { isPrimary?: boolean; secureUrl?: string }[]
+    tags?: { all?: string[] }
+    // ...outros campos usados pelo grid
+}
+
+type GroupedItems = {
+    groupId: string
+    group: string
+    sortOrderIndex?: number
+    menuItems: MenuItem[]
+}
+
+type CardapioItemListDestaqueProps = {
+    title?: string
+    items: MenuItem[] | GroupedItems[]
     tagFilter?: string
     carouselDelay?: number
 }
 
+function isGrouped(items: MenuItem[] | GroupedItems[]): items is GroupedItems[] {
+    return Array.isArray(items) && items.length > 0 && "menuItems" in (items[0] as any)
+}
 
-function CardapioItemListDestaque({ title, items, tagFilter, carouselDelay = 2000 }: CardapioItemListDestaqueProps) {
+function CardapioItemListDestaque({
+    title,
+    items,
+    tagFilter,
+    carouselDelay = 2000,
+}: CardapioItemListDestaqueProps) {
     const { playNavigation } = useSoundEffects()
+    const [api, setApi] = React.useState<CarouselApi | null>(null)
+    const [selectedIndex, setSelectedIndex] = React.useState(0)
 
-    return (
-        <div className="rounded-md p-2">
-            <SectionTitle>{title}</SectionTitle>
-            {/* <Carousel>
-                <CarouselContent className="-ml-2 md:-ml-4">
-                    <CarouselItem className="pl-2 md:pl-4">...</CarouselItem>
-                    <CarouselItem className="pl-2 md:pl-4">...</CarouselItem>
-                    <CarouselItem className="pl-2 md:pl-4">...</CarouselItem>
-                </CarouselContent>
-            </Carousel> */}
-            <Carousel
-                plugins={[
-                    Autoplay({
-                        delay: carouselDelay,
-                    }),
-                ]}
-            >
-                <CarouselContent className="-ml-2 md:-ml-4">
+    // badge do selo (ex.: “Mais vendido”)
+    const badge =
+        tagFilter?.toLowerCase() === "mais-vendido"
+            ? "Mais vendido"
+            : tagFilter?.toLowerCase() === "em-destaque"
+                ? "Sugestão do chef"
+                : undefined
 
-                    {
-                        // @ts-ignore
-                        items.filter(i => i.tags?.all.some(t => t === tagFilter)).slice(0, 4).map((i: MenuItemWithAssociations) => {
+    // -------------------------------
+    // MODO 1: LISTA PLANA (comportamento anterior)
+    // -------------------------------
+    if (!isGrouped(items)) {
+        const slides = React.useMemo(() => {
+            return (items || [])
+                .filter(i => (tagFilter ? i.tags?.all?.some(t => t === tagFilter) : true))
+                .slice(0, 4)
+        }, [items, tagFilter])
 
-                            const featuredImage = i.MenuItemGalleryImage.filter(img => img.isPrimary)[0];
+        React.useEffect(() => {
+            if (!api) return
+            const onSelect = () => setSelectedIndex(api.selectedScrollSnap())
+            api.on("select", onSelect)
+            setSelectedIndex(api.selectedScrollSnap())
+            return () => api.off("select", onSelect)
+        }, [api])
+
+        if (!slides.length) return null
+
+        return (
+            <div className="p-2">
+                {title ? (
+                    <h3 className="font-neue text-base md:text-xl font-semibold tracking-wide mb-2">
+                        {title}
+                    </h3>
+                ) : null}
+
+                <Carousel
+                    setApi={setApi}
+                    opts={{ loop: true, align: "start" }}
+                    plugins={[
+                        Autoplay({
+                            delay: carouselDelay,
+                            stopOnInteraction: false,
+                            stopOnMouseEnter: true,
+                        }),
+                    ]}
+                    className="relative"
+                >
+                    <CarouselContent>
+                        {slides.map((i) => {
+                            const featuredImage =
+                                i.MenuItemGalleryImage?.find(img => img.isPrimary) ||
+                                i.MenuItemGalleryImage?.[0]
 
                             return (
-                                <CarouselItem key={i.id} className="basis-1/2 md:basis-1/3" data-element="carousel-item">
-                                    <Link to={`/cardapio/${i.slug}`} className="w-full" onClick={() => {
-                                        playNavigation()
-                                    }}>
-
-                                        <div className="relative grid place-items-center rounded-md bg-slate-50 h-[112px] md:h-[250px]">
+                                <CarouselItem key={i.id}>
+                                    <Link
+                                        to={`/cardapio/${i.slug}`}
+                                        className="block w-full"
+                                        onClick={() => playNavigation()}
+                                    >
+                                        <div className="relative h-[320px] md:h-[380px] overflow-hidden rounded-md">
                                             <CardapioItemImageSingle
                                                 src={featuredImage?.secureUrl || ""}
                                                 placeholder={i.imagePlaceholderURL || ""}
-
-                                                // placeholderIcon={true}
-
-                                                // placeholderText="Imagem não disponível"
-                                                cnContainer="h-full w-full rounded-md"
-                                                cnPlaceholderText="text-[11px]"
+                                                placeholderIcon={false}
+                                                cnContainer="h-full w-full"
+                                                enableOverlay={false}
                                             />
-
-                                            <div className="absolute bottom-2 w-full">
-                                                <p className=" ml-3 font-urw text-sm text-white">{i.name}</p>
+                                            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black/60 via-black/30 to-transparent" />
+                                            {badge && (
+                                                <div className="absolute left-3 top-3 rounded-md bg-black/70 px-3 py-1 text-xs font-medium text-white backdrop-blur font-neue">
+                                                    {badge}
+                                                </div>
+                                            )}
+                                            <div className="absolute bottom-3 left-3 right-3">
+                                                <h4 className="font-neue text-white text-2xl leading-tight drop-shadow">
+                                                    {i.name}
+                                                </h4>
                                             </div>
-
                                         </div>
                                     </Link>
                                 </CarouselItem>
                             )
-
                         })}
-                </CarouselContent>
-            </Carousel>
+                    </CarouselContent>
+
+                    {/* Dots */}
+                    <div className="absolute inset-x-0 -bottom-3 flex items-center justify-center gap-2 md:-bottom-4">
+                        {slides.map((_, idx) => (
+                            <button
+                                key={idx}
+                                aria-label={`Ir para slide ${idx + 1}`}
+                                onClick={() => api?.scrollTo(idx)}
+                                className={[
+                                    "h-2 w-2 rounded-full transition-all",
+                                    selectedIndex === idx ? "w-6 bg-black/80" : "bg-black/30",
+                                ].join(" ")}
+                            />
+                        ))}
+                    </div>
+                </Carousel>
+            </div>
+        )
+    }
+
+    // -------------------------------
+    // MODO 2: AGRUPADO — um carrossel por grupo
+    // -------------------------------
+    const groups = React.useMemo(
+        () =>
+            (items as GroupedItems[])
+                .map(g => ({
+                    ...g,
+                    slides: (g.menuItems || [])
+                        .filter(i => (tagFilter ? i.tags?.all?.some(t => t === tagFilter) : true))
+                        .slice(0, 4),
+                }))
+                .filter(g => g.slides.length > 0)
+                .sort((a, b) => (a.sortOrderIndex ?? 0) - (b.sortOrderIndex ?? 0)),
+        [items, tagFilter]
+    )
+
+    if (!groups.length) return null
+
+    return (
+        <div className="p-2">
+            {title ? (
+                <h3 className="font-neue text-base md:text-xl font-semibold tracking-wide mb-2">
+                    {title}
+                </h3>
+            ) : null}
+
+            <div className="flex flex-col gap-6">
+                {groups.map((group) => (
+                    <section key={group.groupId}>
+
+                        {/* Para cada grupo, instanciamos um carrossel independente */}
+                        <Carousel
+                            opts={{ loop: true, align: "start" }}
+                            plugins={[
+                                Autoplay({
+                                    delay: carouselDelay,
+                                    stopOnInteraction: false,
+                                    stopOnMouseEnter: true,
+                                }),
+                            ]}
+                            className="relative"
+                        >
+                            <CarouselContent>
+                                {group.slides.map((i) => {
+                                    const featuredImage =
+                                        i.MenuItemGalleryImage?.find(img => img.isPrimary) ||
+                                        i.MenuItemGalleryImage?.[0]
+
+                                    return (
+                                        <CarouselItem key={i.id}>
+                                            <Link
+                                                to={`/cardapio/${i.slug}`}
+                                                className="block w-full"
+                                                onClick={() => playNavigation()}
+                                            >
+                                                <div className="relative h-[320px] md:h-[380px] overflow-hidden rounded-md">
+                                                    <CardapioItemImageSingle
+                                                        src={featuredImage?.secureUrl || ""}
+                                                        placeholder={i.imagePlaceholderURL || ""}
+                                                        placeholderIcon={false}
+                                                        cnContainer="h-full w-full"
+                                                        enableOverlay={false}
+                                                    />
+                                                    <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black/60 via-black/30 to-transparent" />
+                                                    {badge && (
+                                                        <div className="absolute left-3 top-3 rounded-md bg-black/70 px-3 py-1 text-xs font-medium text-white backdrop-blur font-neue">
+                                                            {badge}
+                                                        </div>
+                                                    )}
+                                                    <div className="absolute bottom-3 left-3 right-3">
+                                                        <h5 className="font-neue text-white text-2xl leading-tight drop-shadow">
+                                                            {i.name}
+                                                        </h5>
+                                                    </div>
+                                                </div>
+                                            </Link>
+                                        </CarouselItem>
+                                    )
+                                })}
+                            </CarouselContent>
+                        </Carousel>
+                    </section>
+                ))}
+            </div>
         </div>
     )
 }
+
+
+
+
 
 
 interface SectionTitleProps {
