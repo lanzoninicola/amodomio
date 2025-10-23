@@ -105,7 +105,7 @@ export function CardapioItemPriceSelect({
     const [current, setCurrent] = React.useState<PriceVar | null>(() => {
         if (!list.length) return null
         const found = list.find(p => p.id === defaultSelectedId)
-        return found ?? list[1]
+        return found ?? list[2]
     })
 
     function handleSelect(v: PriceVar) {

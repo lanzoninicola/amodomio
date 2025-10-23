@@ -51,7 +51,7 @@ export default function FazerPedidoButton({
                 to={externalLinkURL}
                 ariaLabel="Cardápio digital pizzaria A Modo Mio"
             >
-                <div className='flex items-center justify-between px-4 py-2'>
+                <div className='flex items-center justify-between gap-4 px-4 py-2'>
                     <span className={
                         cn(
                             "uppercase tracking-wide font-semibold",
