@@ -376,120 +376,179 @@ function CardapioFooterMenuItemDialog({ children, triggerComponent }: CardapioFo
     )
 }
 
-type SizesSelection = "individual" | "medio" | "familia"
 
-function CardapioSizesDialog() {
+type SizesSelection = "individual" | "pequeno" | "medio" | "familia";
 
-    const [currentSize, setCurrentSize] = useState<SizesSelection>("individual")
+const SIZE_ORDER: SizesSelection[] = ["individual", "pequeno", "medio", "familia"];
 
-    const ButtonSelection = ({ size }: { size: SizesSelection }) => {
+const sizeConfig: Record<
+    SizesSelection,
+    {
+        label: string;
+        serves: string;
+        flavors: string;
+        dims: string;
+        donuts: number;
+        imgW: string;
+    }
+> = {
+    individual: {
+        label: "Individual",
+        serves: "Serve até 1 pessoa",
+        flavors: "Máximo 1 sabor",
+        dims: "aprox. 25x15cm",
+        donuts: 1,
+        imgW: "w-[50px]",
+    },
+    pequeno: {
+        // por enquanto, exatamente igual ao "Individual"
+        label: "Pequeno",
+        serves: "Serve até 1 pessoa",
+        flavors: "Máximo 1 sabor",
+        dims: "aprox. metade de uma média",
+        donuts: 1,
+        imgW: "w-[60px]", // levemente maior para diferenciar visualmente
+    },
+    medio: {
+        label: "Médio",
+        serves: "Serve até 2 pessoas",
+        flavors: "Máximo 2 sabores",
+        dims: "aprox. 40x20cm (8 fatias)",
+        donuts: 2,
+        imgW: "w-[80px]",
+    },
+    familia: {
+        label: "Família",
+        serves: "Serve até 6 pessoas",
+        flavors: "Máximo 4 sabores",
+        dims: "aprox. 60x40cm (16 fatias)",
+        donuts: 4,
+        imgW: "w-[120px]",
+    },
+};
+
+export function CardapioSizesDialog() {
+    const [currentSize, setCurrentSize] = useState<SizesSelection>("individual");
+
+    const onKeySelect: React.KeyboardEventHandler<HTMLButtonElement> = (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+            (e.currentTarget as HTMLButtonElement).click();
+            e.preventDefault();
+        }
+    };
+
+    function ButtonSelection({ size }: { size: SizesSelection }) {
+        const cfg = sizeConfig[size];
+        const active = currentSize === size;
+
         return (
             <button
-                className={cn(
-                    "grid grid-rows-4 justify-items-center items-center rounded-md p-1",
-                    currentSize === size && "border-2 border-brand-blue"
-                )}
+                type="button"
+                role="tab"
+                aria-pressed={active}
+                aria-selected={active}
+                onKeyDown={onKeySelect}
                 onClick={() => setCurrentSize(size)}
+                className={cn(
+                    "group relative flex flex-col items-center justify-center gap-y-4 rounded-xl border transition h-[130px]",
+                    "hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40",
+                    active
+                        ? "border-brand-blue bg-brand-blue/5"
+                        : "border-zinc-200 bg-white"
+                )}
             >
-                <img src="/images/cardapio-web-app/pizza-placeholder-sm.png" alt={`Tamanho ${size}`}
-                    className={
-                        cn(
-                            "w-[50px] row-span-3",
-                            size === "medio" && "w-[75px]",
-                            size === "familia" && "w-[150px]"
-                        )
-                    }
+                <img
+                    src="/images/cardapio-web-app/pizza-placeholder-sm.png"
+                    alt={`Tamanho ${cfg.label}`}
+                    className={cn(cfg.imgW, "h-auto")}
+                    draggable={false}
                 />
-                <span className="font-neue tracking-wider font-semibold row-span-1">
-                    {
-                        size === "individual" ? "Individual" :
-                            size === "medio" ? "Médio" :
-                                size === "familia" ? "Família" : "Tamanho"
-                    }
+                <span className="mt-2 font-neue text-sm font-semibold tracking-wide uppercase">
+                    {cfg.label}
                 </span>
+
+                {active && (
+                    <span className="absolute -top-2 right-2 rounded-full bg-brand-blue px-2 py-0.5 text-[10px] font-semibold uppercase text-white">
+                        Selecionado
+                    </span>
+                )}
             </button>
-        )
+        );
     }
 
+    const current = sizeConfig[currentSize];
+
     return (
-        <CardapioFooterMenuItemDialog triggerComponent={
-            <div className="flex flex-col gap-0 justify-center items-center">
-                <Proportions className="col-span-1 md:col-span-2" />
-                <span className="font-neue tracking-widest text-[10px] uppercase">Tamanhos</span>
-            </div>}
+        <CardapioFooterMenuItemDialog
+            triggerComponent={
+                <div className="flex flex-col items-center justify-center">
+                    <Proportions className="col-span-1 md:col-span-2" />
+                    <span className="font-neue text-[10px] uppercase tracking-widest">Tamanhos</span>
+                </div>
+            }
         >
-            <div className="h-[550px] overflow-auto py-4">
+            <div className="h-[580px] overflow-auto py-4">
                 <div className="mb-6">
-                    <h3 className="font-semibold text-2xl uppercase font-neue tracking-wider">
-                        Tamanhos disponiveis
+                    <h3 className="font-neue text-2xl font-semibold tracking-tight">
+                        Tamanhos disponíveis
                     </h3>
-                    <span className="text-sm">Seleciona o tamanho para visualizar os detalhes</span>
+                    <span className="text-sm text-zinc-600">
+                        Selecione o tamanho para visualizar os detalhes
+                    </span>
                 </div>
-                <div className="grid grid-cols-3 gap-4">
 
-                    <ButtonSelection size="individual" />
-                    <ButtonSelection size="medio" />
-                    <ButtonSelection size="familia" />
-
+                {/* Botões de tamanho */}
+                <div
+                    role="tablist"
+                    aria-label="Selecionar tamanho"
+                    className="grid grid-cols-2 gap-3 sm:grid-cols-4"
+                >
+                    {SIZE_ORDER.map((s) => (
+                        <ButtonSelection key={s} size={s} />
+                    ))}
                 </div>
+
                 <Separator className="my-6" />
 
-                <div className="flex flex-col justify-center gap-y-4">
-                    <h4 className="font-neue tracking-widest font-semibold text-lg uppercase text-center mb-4">
-                        Tamanho {
-                            currentSize === "individual" ? "Individual" :
-                                currentSize === "medio" ? "Médio" :
-                                    currentSize === "familia" ? "Família" : "Tamanho"
-                        }
+                {/* Detalhes do tamanho */}
+                <div className="mx-auto flex max-w-sm flex-col items-center gap-y-2 text-center">
+                    <h4 className="mb-2 font-neue text-lg font-semibold uppercase ">
+                        Tamanho {current.label}
                     </h4>
-                    <div className="grid grid-rows-3 gap-y-6">
-                        <div className="flex flex-col gap-0 items-center">
-                            {
-                                currentSize === "individual" ? <User size={32} /> : <Users size={32} />
-                            }
-                            <span>Serve até {
-                                currentSize === "individual" ? "1 pessoa" :
-                                    currentSize === "medio" ? "2 pessoas" :
-                                        currentSize === "familia" ? "6 pessoas" : "Tamanho"
-                            }</span>
-                        </div>
-                        <div className="flex flex-col gap-0 items-center">
-                            {
-                                currentSize === "individual" ? <Donut size={32} /> :
-                                    currentSize === "medio" ? <div className="flex gap-x-2">
-                                        <Donut size={32} />
-                                        <Donut size={32} />
-                                    </div> :
-                                        currentSize === "familia" ?
-                                            <div className="flex gap-x-2">
-                                                <Donut size={32} />
-                                                <Donut size={32} />
-                                                <Donut size={32} />
-                                                <Donut size={32} />
-                                            </div> : "Tamanho"
-                            }
-                            <span>Máximo {
-                                currentSize === "individual" ? "1 sabor" :
-                                    currentSize === "medio" ? "2 sabores" :
-                                        currentSize === "familia" ? "4 sabores" : "Tamanho"
-                            }</span>
 
+                    <div className="grid grid-cols-3 gap-x-4 font-neue">
+
+                        {/* Serve */}
+                        <div className="flex flex-col items-center gap-2 leading-tight text-sm">
+                            {currentSize === "familia" || currentSize === "medio" ? (
+                                <Users size={32} />
+                            ) : (
+                                <User size={32} />
+                            )}
+                            <span>{current.serves}</span>
                         </div>
-                        <div className="flex flex-col gap-0 items-center">
+
+                        {/* Sabores */}
+                        <div className="flex flex-col items-center gap-2 leading-tight text-sm">
+                            <div className="flex gap-1">
+                                {Array.from({ length: current.donuts }).map((_, i) => (
+                                    <Donut key={i} size={32} />
+                                ))}
+                            </div>
+                            <span>{current.flavors}</span>
+                        </div>
+
+                        {/* Dimensões */}
+                        <div className="flex flex-col items-center gap-2 leading-tight text-sm">
                             <Proportions size={32} />
-                            <span>{
-                                currentSize === "individual" ? "aprox. 25x15cm " :
-                                    currentSize === "medio" ? "aprox. 40x20cm (8 fatias)" :
-                                        currentSize === "familia" ? "aprox. 60x40cm (16 fatias)" : "Tamanho"
-                            }</span>
-
+                            <span>{current.dims}</span>
                         </div>
+
                     </div>
-
                 </div>
-
             </div>
-        </CardapioFooterMenuItemDialog >
-    )
+        </CardapioFooterMenuItemDialog>
+    );
 }
+
 

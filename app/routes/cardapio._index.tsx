@@ -31,29 +31,15 @@ export const headers: HeadersFunction = () => ({
 });
 
 export async function loader({ request }: LoaderFunctionArgs) {
-    const env = process.env?.NODE_ENV
-    // const tagParam = getSearchParam({ request, paramName: 'tag' })
-
-
-
     //@ts-ignore
     const items = menuItemPrismaEntity.findAllGroupedByGroup({
         where: {
             visible: true,
-            // tags: {
-            //     some: {
-            //         Tag: {
-            //             name: tagParam || undefined
-            //         }
-
-            //     }
-            // }
         },
         option: {
             sorted: true,
             direction: "asc"
         },
-        // mock: env === "development"
     }, {
         imageTransform: true,
         imageScaleWidth: 375,
