@@ -675,11 +675,6 @@ function CardapioGridItem({
                     </div>
                 </div>
 
-                {/* Barra de ações compacta (sempre visível) */}
-                <div className="flex justify-between p-2 shadow-sm bg-white">
-                    <ShareIt item={item} />
-                    <LikeIt item={item} />
-                </div>
 
                 {/* ======= BLOCO SEMPRE VISÍVEL (como o original) ======= */}
                 <div className="px-1 pb-2 pt-1 flex flex-col bg-white rounded-b-md">
@@ -710,6 +705,28 @@ function CardapioGridItem({
             </div>
 
             <CardapioItemPriceSelect prices={item.MenuItemSellingPriceVariation} />
+
+
+            {/* Barra de ações compacta (sempre visível) */}
+            <div className="flex justify-between shadow-sm bg-white">
+
+                <ShareIt item={item} size={
+                    isExpanded === true ? 20 : 16
+                }
+                    cnContainer={cn("px-2 ", isExpanded && "my-2 border border-black")}
+                >
+
+                    {isExpanded && <span className="font-neue text-sm">Compartilhar</span>}
+                </ShareIt>
+
+                <LikeIt item={item} size={
+                    isExpanded === true ? 20 : 16
+                }
+                    cnContainer={cn("px-2 ", isExpanded && "my-2 border border-red-500")}
+                >
+                    {isExpanded && <span className="font-neue text-sm text-red-500 mr-2">Gostei</span>}
+                </LikeIt>
+            </div>
 
             {/* ======= BLOCO EXPANSÍVEL EXTRA (aparece no mobile quando expandido) ======= */}
             <div
