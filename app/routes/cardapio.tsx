@@ -318,15 +318,23 @@ function CardapioFooter() {
             </div>
 
             {/* Botão flutuante central */}
-            <div className="absolute left-1/2 -translate-x-1/2 -translate-y-8 z-20">
+            <div className="absolute left-1/2 -translate-x-1/2 -translate-y-6 z-20">
                 <Suspense fallback={<span>Carregando...</span>}>
                     <Await resolve={fazerPedidoPublicURL}>
                         {(url) => (
-                            <FazerPedidoButton
-                                // variant="accent"
-                                cnLabel="text-md tracking-wider font-semibold font-neue"
-                                externalLinkURL={url}
-                            />
+                            <div className="flex flex-col gap-1">
+                                <FazerPedidoButton
+                                    // variant="accent"
+                                    cnLabel="text-md tracking-wider font-semibold font-neue"
+                                    externalLinkURL={url}
+                                />
+                                <div className="flex flex-col justify-center items-center ">
+                                    <p className="font-neue font-semibold text-xs">Hórarios de funcionamento</p>
+                                    <div className="flex flex-col justify-center">
+                                        <p className="text-muted-foreground font-neue text-xs ">QUA a DOM das 18h às 22h</p>
+                                    </div>
+                                </div>
+                            </div>
                         )}
                     </Await>
                 </Suspense>
