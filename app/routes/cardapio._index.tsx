@@ -798,6 +798,7 @@ function CardapioItemListDestaque({
                                                 src={featuredImage?.secureUrl || ""}
                                                 placeholder={i.imagePlaceholderURL || ""}
                                                 placeholderIcon={false}
+                                                cnPlaceholderContainer="from-zinc-200 via-zinc-100 to-white "
                                                 cnContainer="h-full w-full"
                                                 enableOverlay={false}
                                             />
@@ -901,6 +902,8 @@ function CardapioItemListDestaque({
                                                         placeholderIcon={false}
                                                         cnContainer="h-full w-full"
                                                         enableOverlay={false}
+                                                        cnPlaceholderContainer="from-white via-zinc-100 to-zinc-200 "
+                                                        cnPlaceholderText="text-black font-urw text-xl tracking-tighter"
                                                     />
                                                     <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black/60 via-black/30 to-transparent" />
                                                     {badge && (

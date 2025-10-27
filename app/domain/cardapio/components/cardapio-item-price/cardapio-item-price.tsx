@@ -23,7 +23,7 @@ interface CardapioItemPriceProps {
 export function CardapioItemPrice({ prices, cnLabel, cnValue, showValuta = true }: CardapioItemPriceProps) {
 
     const lastIndex = prices.length - 1
-    const colsNumber = prices.length
+    const colsNumber = prices.filter(p => p.showOnCardapio === true).length
 
     return (
         <div className={

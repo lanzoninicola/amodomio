@@ -241,7 +241,7 @@ export function ShareIt({ item, size }: { item: MenuItemWithAssociations, size?:
     )
 }
 
-export function LikeIt({ item, size }: { item: MenuItemWithAssociations, size?: number }) {
+export function LikeIt({ item, size, cnLabel }: { item: MenuItemWithAssociations, size?: number, cnLabel?: string }) {
     const [likeIt, setLikeIt] = useState(false)
     const [likesAmount, setLikesAmount] = useState(item.likes?.amount || 0)
 
@@ -271,7 +271,12 @@ export function LikeIt({ item, size }: { item: MenuItemWithAssociations, size?: 
                     item.likes?.amount && item.likes?.amount > 0 ? "stroke-red-500" : "stroke-black"
                 )}
             />
-            <span className="text-xs font-neue font-medium tracking-widest uppercase pl-1 text-red-500">
+            <span className={
+                cn(
+                    "text-xs font-neue font-medium tracking-widest uppercase pl-1 text-red-500",
+                    cnLabel
+                )
+            }>
                 {likesAmount > 0 && `${likesAmount}`}
 
             </span>
