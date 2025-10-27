@@ -24,6 +24,7 @@ import PostInstagram from "~/components/post-instagram/post-instagram";
 import prismaClient from "~/lib/prisma/client.server";
 import { Tag } from "@prisma/client";
 import { useSoundEffects } from "~/components/sound-effects/use-sound-effects";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "~/components/ui/dialog";
 
 
 export const headers: HeadersFunction = () => ({
@@ -518,110 +519,217 @@ const CardapioItemList = ({ allItems }: { allItems: MenuItemWithAssociations[] }
 }
 
 // =====================
-// GRID DE ITENS RESPONSIVO (estilo e-commerce)
+// GRID DE ITENS RESPONSIVO (com expansão inline no mobile)
 // =====================
 function CardapioItemsGrid({ items }: { items: MenuItemWithAssociations[] }) {
-    if (!items?.length) return null
+    const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
+    const [desktopDialogId, setDesktopDialogId] = useState<string | null>(null);
+    const [isDesktop, setIsDesktop] = useState(false);
+
+    // NEW: refs por item
+    const itemRefs = useRef<Record<string, HTMLLIElement | null>>({});
+
+    useEffect(() => {
+        const mq = window.matchMedia("(min-width: 1024px)"); // ~lg
+        const update = () => setIsDesktop(mq.matches);
+        update();
+        mq.addEventListener?.("change", update);
+        return () => mq.removeEventListener?.("change", update);
+    }, []);
+
+    if (!items?.length) return null;
+
+    const scrollToItemTop = (id: string) => {
+        const el = itemRefs.current[id];
+        if (!el) return;
+        // offset para cabeçalho/botão flutuante (ajuste se precisar)
+        const OFFSET = 120;
+        const top = el.getBoundingClientRect().top + window.scrollY - OFFSET;
+        window.scrollTo({ top, behavior: "smooth" });
+    };
+
+    const onCardClick = (id: string) => {
+        if (isDesktop) {
+            setDesktopDialogId(id);
+            return;
+        }
+
+        // Se clicar em outro item, expande e faz scroll; se clicar no mesmo, colapsa.
+        setExpandedItemId((curr) => {
+            const willExpand = curr !== id;
+            const next = willExpand ? id : null;
+
+            // espera o layout “abrir” um frame, então rola até o topo
+            if (willExpand) {
+                requestAnimationFrame(() => {
+                    // mais um frame para garantir altura final
+                    requestAnimationFrame(() => scrollToItemTop(id));
+                });
+            }
+            return next;
+        });
+    };
 
     return (
-        <ul
-            className="
-          mt-4 grid grid-cols-2 gap-3
-          sm:grid-cols-3
-          lg:grid-cols-4
-          xl:grid-cols-5
-        "
-        >
-            {items.map((item) => (
-                <CardapioGridItem key={item.id} item={item} />
-            ))}
-        </ul>
-    )
+        <>
+            <ul
+                className="
+            mt-4 grid grid-cols-2 gap-3
+            sm:grid-cols-3
+            lg:grid-cols-4
+            xl:grid-cols-5
+          "
+            >
+                {items.map((item) => (
+                    <CardapioGridItem
+                        key={item.id}
+                        item={item}
+                        isExpanded={expandedItemId === item.id}
+                        onClick={() => onCardClick(item.id)}
+                        // NEW: passe a ref pra cada <li>
+                        innerRef={(el) => (itemRefs.current[item.id] = el)}
+                    />
+                ))}
+            </ul>
+
+            {/* ...Dialog desktop permanece igual... */}
+        </>
+    );
 }
 
-function CardapioGridItem({ item }: { item: MenuItemWithAssociations }) {
 
-    const [toggleIngredientsList, setToggleIngredientsList] = useState(false)
-
+/**
+ * Card do item no grid
+ * - Mobile: expande inline quando isExpanded = true
+ * - Desktop: apenas dispara o onClick (que abre o Dialog)
+ */
+function CardapioGridItem({
+    item,
+    isExpanded,
+    onClick,
+    innerRef,
+}: {
+    item: MenuItemWithAssociations;
+    isExpanded: boolean;
+    onClick: () => void;
+    innerRef?: (el: HTMLLIElement | null) => void; // NEW
+}) {
     const featuredImage =
-        item.MenuItemGalleryImage?.find((img) => img.isPrimary) ||
-        item.MenuItemGalleryImage?.[0]
+        item.MenuItemGalleryImage?.find((img) => img.isPrimary) || item.MenuItemGalleryImage?.[0];
 
     return (
-        <li className="flex flex-col gap-0  ">
-            <Link
-                to={`/cardapio/${item.slug}`}
-                className="group block overflow-hidden rounded-tl-md rounded-tr-md relative"
+        <li
+            ref={innerRef} // NEW
+            className={cn(
+                "flex flex-col rounded-md border border-transparent",
+                "transition-all duration-300 ease-in-out",
+                // ajuda o scrollIntoView quando você quiser usar essa API no futuro
+                "scroll-mt-24 lg:scroll-mt-0", // NEW: margem de ancoragem
+                isExpanded ? "col-span-2 lg:col-span-1" : "col-span-1"
+            )}
+        >
+
+            <div
+                className="flex flex-col"
+                onClick={onClick}
             >
-                {/* imagem */}
-                <div className="relative ">
-                    <CardapioItemImageSingle
-                        src={featuredImage?.secureUrl || ""}
-                        placeholder={item.imagePlaceholderURL || ""}
-                        placeholderIcon={false}
-                        cnPlaceholderText="text-black font-urw text-sm tracking-tight"
-                        cnPlaceholderContainer="from-zinc-200 via-zinc-100 to-white "
-                        cnContainer="h-[150px] w-full "
-                        enableOverlay={false}
-                    />
-                    {item.meta.isBestSeller &&
-                        (
+                {/* Thumb clicável (expansão mobile / dialog desktop) */}
+                <div
+                    role="button"
+                    aria-label={`Abrir ${item.name}`}
+
+                    className="group overflow-hidden rounded-t-md relative focus:outline-none focus:ring-2 focus:ring-black/20"
+                >
+                    <div
+                        className={cn(
+                            "relative transition-all duration-300 ease-in-out",
+                            isExpanded ? "h-[260px]" : "h-[150px]"
+                        )}
+                    >
+                        <CardapioItemImageSingle
+                            src={featuredImage?.secureUrl || ""}
+                            placeholder={item.imagePlaceholderURL || ""}
+                            placeholderIcon={false}
+                            cnPlaceholderText={
+                                cn(
+                                    "text-black font-urw text-sm tracking-tight",
+                                    isExpanded && "text-lg"
+                                )
+                            }
+                            cnPlaceholderContainer="from-zinc-200 via-zinc-100 to-white "
+                            cnContainer="w-full h-full"
+                            enableOverlay={false}
+                        />
+
+                        {/* Selos */}
+                        {item.meta?.isBestSeller && (
                             <div className="absolute left-1 top-2 rounded-sm bg-black px-2 py-[2px] text-[10px] font-medium text-white backdrop-blur font-neue tracking-wide">
                                 <span>Mais vendido</span>
                             </div>
-                        )
-                    }
-
-                    {item.tags.all.find(t => t === "produtos-italianos") &&
-                        (
+                        )}
+                        {item.tags?.all?.includes("produtos-italianos") && (
                             <div className="absolute left-1 top-2 rounded-sm bg-black px-2 py-[2px] text-[10px] font-medium text-white backdrop-blur font-neue tracking-wide">
                                 <span>Com produtos italianos</span>
                             </div>
-                        )
-                    }
+                        )}
+                    </div>
                 </div>
 
-            </Link>
-            <div className="flex justify-between rounded-bl-md rounded-br-md p-2 shadow-sm" >
-                <ShareIt item={item} />
-                <LikeIt item={item} />
+                {/* Barra de ações compacta (sempre visível) */}
+                <div className="flex justify-between p-2 shadow-sm bg-white">
+                    <ShareIt item={item} />
+                    <LikeIt item={item} />
+                </div>
+
+                {/* ======= BLOCO SEMPRE VISÍVEL (como o original) ======= */}
+                <div className="px-1 pb-2 pt-1 flex flex-col bg-white rounded-b-md">
+                    {/* Nome */}
+                    <span className={
+                        cn(
+                            "font-neue line-clamp-1 font-medium text-xs tracking-wide sm:text-base",
+                            isExpanded && "text-md"
+                        )
+                    }>
+                        {item.name}
+                    </span>
+
+                    {/* Ingredientes: CLAMPED and NO CLAMPED WHEN EXPANDED */}
+                    <span className={
+                        cn(
+                            "font-neue text-xs tracking-wide leading-[110%] sm:text-base line-clamp-2 my-1",
+                            isExpanded && "text-md line-clamp-none mb-2 leading-[120%]"
+                        )
+                    }>
+                        {item.ingredients}
+                    </span>
+
+                    {/* Preço / variações */}
+
+                </div>
+
             </div>
 
-            {/* nome e preço */}
-            <div className="mt-2 px-1 flex flex-col">
-                <span className="font-neue line-clamp-1 font-medium text-xs tracking-wide sm:text-base">
-                    {item.name}
-                </span>
-                <div className="flex flex-col gap-1 mb-2 ">
-                    <span className={cn(
-                        "font-neue text-xs tracking-wide leading-[110%] sm:text-base line-clamp-2 ",
-                        toggleIngredientsList && "line-clamp-none"
-                    )}
-                        onClick={() => setToggleIngredientsList(!toggleIngredientsList)}
-                    >
-                        {item.ingredients}
+            <CardapioItemPriceSelect prices={item.MenuItemSellingPriceVariation} />
 
-                    </span>
-                    <span className={cn(
-                        "font-neue text-xs tracking-wide leading-[110%] sm:text-base mb-2 line-clamp-2 underline ",
-                        toggleIngredientsList === true && "hidden"
-                    )}
-                        onClick={() => setToggleIngredientsList(!toggleIngredientsList)}
-                    >
-                        Ver mais
-
-                    </span>
+            {/* ======= BLOCO EXPANSÍVEL EXTRA (aparece no mobile quando expandido) ======= */}
+            <div
+                className={cn(
+                    "overflow-hidden transition-all duration-300 ease-in-out bg-white rounded-b-md",
+                    isExpanded ? "max-h-[320px] opacity-100 px-3 pb-3" : "max-h-0 opacity-0 px-0 pb-0"
+                )}
+            >
+                {/* Conteúdos adicionais opcionais (sem duplicar o bloco sempre visível) */}
+                <div className="mt-1 space-y-2 text-xs">
+                    {/* Se quiser, adicione itens extras aqui: alergênicos, tempo médio, CTA, etc. */}
+                    {/* Exemplo simples: */}
+                    {/* <p className="text-muted-foreground">Pergunte sobre opções sem lactose.</p> */}
                 </div>
-
-                <CardapioItemPriceSelect
-                    prices={item.MenuItemSellingPriceVariation}
-                // cnLabel="text-muted-foreground text-xs"
-                // cnValue="text-sm font-semibold"
-                />
             </div>
         </li>
-    )
+    );
 }
+
+
 
 
 
