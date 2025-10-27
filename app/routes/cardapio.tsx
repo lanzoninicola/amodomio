@@ -328,11 +328,9 @@ function CardapioFooter() {
                                     cnLabel="text-md tracking-wider font-semibold font-neue"
                                     externalLinkURL={url}
                                 />
-                                <div className="flex flex-col justify-center items-center ">
-                                    <p className="font-neue font-semibold text-xs">Hórarios de funcionamento</p>
-                                    <div className="flex flex-col justify-center">
-                                        <p className="text-muted-foreground font-neue text-xs ">QUA a DOM das 18h às 22h</p>
-                                    </div>
+                                <div className="flex flex-col justify-center items-center gap-0 ">
+                                    <p className="font-neue font-semibold text-[10px]">Hórarios de funcionamento</p>
+                                    <p className="text-muted-foreground font-neue text-xs ">QUA a DOM das 18h às 22h</p>
                                 </div>
                             </div>
                         )}
