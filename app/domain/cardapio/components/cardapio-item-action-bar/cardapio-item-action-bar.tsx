@@ -7,6 +7,7 @@ import WhatsappExternalLink from "~/components/primitives/whatsapp/whatsapp-exte
 import WhatsAppIcon from "~/components/primitives/whatsapp/whatsapp-icon";
 import { cn } from "~/lib/utils";
 import { useSoundEffects } from "~/components/sound-effects/use-sound-effects";
+import { Button } from "~/components/ui/button";
 
 interface CardapioItemActionBarProps { item: MenuItemWithAssociations, cnContainer?: string }
 
@@ -206,7 +207,7 @@ export function CardapioItemActionBarHorizontal({ item, cnContainer }: CardapioI
     );
 }
 
-export function ShareIt({ item, size }: { item: MenuItemWithAssociations, size?: number }) {
+export function ShareIt({ item, size, children, cnContainer }: { item: MenuItemWithAssociations, size?: number, children?: React.ReactNode, cnContainer?: string }) {
 
     const fetcher = useFetcher();
 
@@ -235,13 +236,21 @@ export function ShareIt({ item, size }: { item: MenuItemWithAssociations, size?:
         })
     }
     return (
-        <div className="flex flex-col gap-1 cursor-pointer active:bg-black/50 " onClick={shareIt}>
+        <Button
+            variant="ghost"
+            className={
+                cn(
+                    "flex gap-2 ",
+                    cnContainer
+                )
+            } onClick={shareIt}>
             <Share2 size={size ?? 16} />
-        </div>
+            {children}
+        </Button>
     )
 }
 
-export function LikeIt({ item, size, cnLabel }: { item: MenuItemWithAssociations, size?: number, cnLabel?: string }) {
+export function LikeIt({ item, size, cnLabel, children, cnContainer }: { item: MenuItemWithAssociations, size?: number, cnLabel?: string, children?: React.ReactNode, cnContainer?: string }) {
     const [likeIt, setLikeIt] = useState(false)
     const [likesAmount, setLikesAmount] = useState(item.likes?.amount || 0)
 
@@ -262,7 +271,10 @@ export function LikeIt({ item, size, cnLabel }: { item: MenuItemWithAssociations
         );
     };
     return (
-        <div className="flex items-center cursor-pointer active:bg-black/50" onClick={likingIt}>
+        <Button
+            variant={"ghost"}
+            className={cn("flex items-center cursor-pointer", cnContainer)} onClick={likingIt}>
+            {children}
             <Heart
                 size={size ?? 16}
                 className={cn(
@@ -280,7 +292,7 @@ export function LikeIt({ item, size, cnLabel }: { item: MenuItemWithAssociations
                 {likesAmount > 0 && `${likesAmount}`}
 
             </span>
-        </div>
+        </Button>
     )
 }
 
