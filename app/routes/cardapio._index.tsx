@@ -541,6 +541,8 @@ function CardapioItemsGrid({ items }: { items: MenuItemWithAssociations[] }) {
 
 function CardapioGridItem({ item }: { item: MenuItemWithAssociations }) {
 
+    const [toggleIngredientsList, setToggleIngredientsList] = useState(false)
+
     const featuredImage =
         item.MenuItemGalleryImage?.find((img) => img.isPrimary) ||
         item.MenuItemGalleryImage?.[0]
@@ -590,9 +592,27 @@ function CardapioGridItem({ item }: { item: MenuItemWithAssociations }) {
                 <span className="font-neue line-clamp-1 font-medium text-xs tracking-wide sm:text-base">
                     {item.name}
                 </span>
-                <span className="font-neue line-clamp-2 text-xs tracking-wide leading-[110%] sm:text-base mb-2">
-                    {item.ingredients}
-                </span>
+                <div className="flex flex-col gap-1 mb-2 ">
+                    <span className={cn(
+                        "font-neue text-xs tracking-wide leading-[110%] sm:text-base line-clamp-2 ",
+                        toggleIngredientsList && "line-clamp-none"
+                    )}
+                        onClick={() => setToggleIngredientsList(!toggleIngredientsList)}
+                    >
+                        {item.ingredients}
+
+                    </span>
+                    <span className={cn(
+                        "font-neue text-xs tracking-wide leading-[110%] sm:text-base mb-2 line-clamp-2 underline ",
+                        toggleIngredientsList === true && "hidden"
+                    )}
+                        onClick={() => setToggleIngredientsList(!toggleIngredientsList)}
+                    >
+                        Ver mais
+
+                    </span>
+                </div>
+
                 <CardapioItemPriceSelect
                     prices={item.MenuItemSellingPriceVariation}
                 // cnLabel="text-muted-foreground text-xs"
