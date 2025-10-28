@@ -162,7 +162,7 @@ const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) =>
             <h3 className="font-neue text-sm font-semibold uppercase mb-2">{item.name}</h3>
             <p className="font-neue leading-tight">{item.ingredients}</p>
         </div>
-        <CardapioItemActionBar item={item} />
+        <CardapioItemActionBarVertical item={item} />
         <Separator className="my-4" />
     </li>
 ));
@@ -249,7 +249,7 @@ function CardapioItemPrice({ prices }: CardapioItemPriceProps) {
     )
 }
 
-function CardapioItemActionBar({ item }: { item: MenuItemWithAssociations }) {
+function CardapioItemActionBarVertical({ item }: { item: MenuItemWithAssociations }) {
     const [likeIt, setLikeIt] = useState(false)
     const [likesAmount, setLikesAmount] = useState(item.likes?.amount || 0)
 

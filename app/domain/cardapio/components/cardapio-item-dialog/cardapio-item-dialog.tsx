@@ -2,7 +2,7 @@ import { Dialog, DialogContent, DialogTrigger, DialogClose } from "~/components/
 import { MenuItemWithAssociations } from "../../menu-item.prisma.entity.server";
 import { Button } from "~/components/ui/button";
 import CardapioItemImage from "../cardapio-item-image/cardapio-item-image";
-import CardapioItemPrice from "../cardapio-item-price/cardapio-item-price";
+import { CardapioItemPrice } from "../cardapio-item-price/cardapio-item-price";
 import ItalyIngredientsStatement from "../italy-ingredient-statement/italy-ingredient-statement";
 import isItalyProduct from "~/utils/is-italy-product";
 import capitalize from "~/utils/capitalize";

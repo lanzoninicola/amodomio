@@ -3,9 +3,9 @@ import React, { useState, useRef, useCallback, useEffect } from "react";
 import { MenuItemWithAssociations } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import CardapioItemDialog from "~/domain/cardapio/components/cardapio-item-dialog/cardapio-item-dialog";
 import ItalyIngredientsStatement from "~/domain/cardapio/components/italy-ingredient-statement/italy-ingredient-statement";
-import CardapioItemActionBar from "~/domain/cardapio/components/cardapio-item-action-bar/cardapio-item-action-bar";
+import { CardapioItemActionBarVertical } from "~/domain/cardapio/components/cardapio-item-action-bar/cardapio-item-action-bar";
 import CardapioItemImage from "~/domain/cardapio/components/cardapio-item-image/cardapio-item-image";
-import CardapioItemPrice from "~/domain/cardapio/components/cardapio-item-price/cardapio-item-price";
+import { CardapioItemPrice } from "~/domain/cardapio/components/cardapio-item-price/cardapio-item-price";
 import Loading from "~/components/loading/loading";
 
 const CardapioItemList = ({ allItems }: { allItems: MenuItemWithAssociations[] }) => {
@@ -116,7 +116,7 @@ const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) =>
                 }
                 <p className="font-neue leading-tight text-left">{item.ingredients}</p>
             </div>
-            <CardapioItemActionBar item={item} />
+            <CardapioItemActionBarVertical item={item} />
             {/* <Separator className="my-4" /> */}
         </li>
     )

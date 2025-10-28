@@ -1,175 +1,184 @@
 import { jsonStringify } from "~/utils/json-helper";
 import { MenuItemWithAssociations } from "../../menu-item.prisma.entity.server";
-import { Check } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Check, Star, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { CloudinaryUploadWidget } from "~/lib/cloudinary";
 import { Button } from "~/components/ui/button";
 import { Separator } from "~/components/ui/separator";
-import { Form } from "@remix-run/react";
-import SubmitButton from "~/components/primitives/submit-button/submit-button";
+import { Form, useFetcher } from "@remix-run/react";
 import { cn } from "~/lib/utils";
-import { image } from "@cloudinary/url-gen/qualifiers/source";
 
 interface MenuItemGalleryImagesProps {
   item?: MenuItemWithAssociations;
-  /** array of images */
   images: MenuItemWithAssociations["MenuItemGalleryImage"];
 }
 
-export default function MenuItemGalleryImagesForm({ item, images }: MenuItemGalleryImagesProps) {
-  const [imagesUploaded, setImagesUploaded] = useState<MenuItemWithAssociations["MenuItemGalleryImage"]>([]);
-  const [uploadError, setUploadError] = useState<string | null>(null);
+export default function MenuItemGalleryImagesForm({
+  item,
+  images,
+}: MenuItemGalleryImagesProps) {
+  const fetcher = useFetcher();
+  const [gallery, setGallery] =
+    useState<MenuItemWithAssociations["MenuItemGalleryImage"]>(images || []);
+  const isSaving = fetcher.state !== "idle";
 
+  // mantém estado local sincronizado quando voltar do servidor
+  useEffect(() => {
+    setGallery(images || []);
+  }, [images]);
 
+  // helpers
+  const submitUpdate = (next: typeof gallery) => {
+    setGallery(next);
+    fetcher.submit(
+      {
+        _action: "menu-item-gallery-images-update",
+        itemId: item?.id || "",
+        itemGalleryImages: jsonStringify(next),
+      },
+      { method: "post" }
+    );
+  };
 
+  const handleSetPrimary = (imageId: string) => {
+    // otimista: marca localmente
+    const next = gallery.map((g) => ({ ...g, isPrimary: g.id === imageId }));
+    setGallery(next);
+
+    fetcher.submit(
+      {
+        _action: "menu-item-gallery-images-set-primary",
+        itemId: item?.id || "",
+        imageId,
+      },
+      { method: "post" }
+    );
+  };
+
+  const handleDelete = (imageId: string) => {
+    // otimista: remove local
+    const next = gallery.filter((g) => g.id !== imageId);
+    setGallery(next);
+
+    fetcher.submit(
+      {
+        _action: "menu-item-gallery-images-delete",
+        itemId: item?.id || "",
+        imageId,
+      },
+      { method: "post" }
+    );
+  };
 
   return (
     <>
-
-      <div className="flex flex-col gap-4 w-full border py-2 px-4 rounded-lg
-      md:grid md:grid-cols-8 md:gap-y-0 md:gap-x-4">
-
-        <div className="md:col-span-5  flex items-start gap-2">
-          {
-            images.map((image, index) => {
-              return (
-                <div key={image.id} className="flex flex-col items-center justify-center gap-1">
-
-                  <div className="flex flex-col gap-x-4 justify-center items-center relative">
-
-                    <div className="w-16 h-16 bg-muted rounded-lg bg-center bg-no-repeat bg-cover"
-                      style={{ backgroundImage: `url(${image.thumbnailUrl || ""})` }}></div>
-                    <span className="text-[10px] text-muted-foreground">
-                      {image.displayName || image.originalFileName}
-                    </span>
-                    {
-                      image.isPrimary && (
-
-                        <div className="absolute top-1 right-1 bg-black w-5 h-5 p-[.15rem] rounded-full flex items-center justify-center cursor-pointer">
-                          <Check color="white" />
-                        </div>
-
-                      )
-                    }
-                    <Form method="post">
-                      <input type="hidden" name="imageId" value={image.id} />
-                      <input type="hidden" name="itemId" value={item?.id} />
-                      <button
-                        type="submit"
-                        name="_action"
-                        value="menu-item-gallery-images-delete"
-                        className="absolute top-1 left-1 bg-red-500 w-4 h-4 p-[.15rem] rounded-full flex items-center justify-center cursor-pointer"
-                        title="Remover Imagem">
-                        <span className="text-white text-[11px] font-semibold">X</span>
-                      </button>
-                    </Form>
-
+      {/* Galeria */}
+      <div className="border rounded-md p-4 md:grid grid-cols-4 md:col-span-5 flex flex-wrap items-start flex-1 gap-3 mb-4">
+        {gallery?.map((img) => {
+          const isPrimary = !!img.isPrimary;
+          return (
+            <div
+              key={img.id}
+              className={cn(
+                "relative flex flex-col items-center gap-1 rounded-lg p-2 border",
+                isPrimary ? "border-blue-600" : "border-transparent"
+              )}
+            >
+              <div className="relative">
+                <div
+                  className="w-16 h-16 rounded-md bg-center bg-no-repeat bg-cover"
+                  style={{
+                    backgroundImage: `url(${img.thumbnailUrl || img.secureUrl || ""})`,
+                  }}
+                  aria-label={img.displayName || img.originalFileName || "Imagem"}
+                />
+                {/* ícone: principal */}
+                {isPrimary && (
+                  <div className="absolute -top-2 -right-2 bg-blue-600 w-6 h-6 rounded-full flex items-center justify-center shadow">
+                    <Check className="w-4 h-4 text-white" />
                   </div>
-                  <Form method="post">
-                    <input type="hidden" name="imageId" value={image.id} />
-                    <input type="hidden" name="itemId" value={item?.id} />
-                    <button
-                      type="submit"
-                      name="_action"
-                      value="menu-item-gallery-images-set-primary"
-                      className={
-                        cn(
-                          "bg-blue-500 rounded-md px-2 py-1 flex items-center justify-center cursor-pointer",
-                          image.isPrimary ? "bg-blue-600 cursor-not-allowed" : "",
-                          "hover:bg-blue-600 transition-colors duration-200",
-                          image.isPrimary ? "hidden" : "block"
-                        )
-                      }
-                      title="Definir como Imagem Principal">
-                      <p className="text-white text-[10px] font-semibold leading-none uppercase tracking-widest">
-                        principal
-                      </p>
-                    </button>
-                  </Form>
-                </div>
-              )
-            }
-            )
-          }
-        </div>
-        <Separator orientation="vertical" className="hidden md:h-12 md:block md:col-span-1" />
-        <div className="md:col-span-2 flex gap-4 items-center">
-          <ImageUploader
-            setImagesUploaded={setImagesUploaded}
-            setUploadError={setUploadError}
+                )}
+              </div>
 
-          />
-        </div>
+              <span className="text-[10px] text-muted-foreground max-w-20 text-center break-words">
+                {img.displayName || img.originalFileName}
+              </span>
+
+              <div className="flex flex-col gap-1">
+                {/* Tornar principal */}
+                {!isPrimary && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="h-6 px-2"
+                    onClick={() => handleSetPrimary(img.id!)}
+                    title="Tornar principal"
+                  >
+                    <Star className="w-3.5 h-3.5 mr-1" />
+                    <span className="text-[10px] font-semibold uppercase tracking-widest">
+                      Tornar principal
+                    </span>
+                  </Button>
+                )}
+
+                {/* Remover */}
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  className="h-6 px-2"
+                  onClick={() => handleDelete(img.id!)}
+                  title="Remover imagem"
+                >
+                  <Trash2 className="w-3.5 h-3.5 mr-1" />
+                  <span className="text-[10px] font-semibold uppercase tracking-widest">
+                    Remover
+                  </span>
+                </Button>
+              </div>
+            </div>
+          );
+        })}
       </div>
 
+      {/* Upload */}
+      <div className="md:col-span-2 flex items-center">
+        <ImageUploader
+          disabled={!item?.id}
+          onComplete={(uploaded) => {
+            // adiciona ao fim e salva automaticamente
+            const next = [...gallery, ...uploaded];
+            submitUpdate(next);
+          }}
+        />
+      </div>
 
-      <Form method="post" className="flex flex-col gap-2 w-full">
-        <input type="hidden" name="itemId" value={item?.id} />
-        <input type="hidden" id="itemGalleryImages" name="itemGalleryImages" defaultValue={jsonStringify(
-          [
-            ...images,
-            ...imagesUploaded,
-          ]
-        )} />
-        <div className="flex flex-col w-full">
-          {uploadError && (
-            <div className="text-red-500 text-sm mt-2">
-              Erro ao fazer upload da imagem: {uploadError}
-            </div>
-          )}
-          {
-            imagesUploaded && imagesUploaded.length > 0 && (
-              <div className="text-xs text-muted-foreground mt-2">
-                {imagesUploaded.length} imagem{imagesUploaded.length > 1 ? "s" : ""} carregada{imagesUploaded.length > 1 ? "s" : ""}
-              </div>
-            )
-          }
-          <SubmitButton
-            actionName="menu-item-gallery-images-update"
-            className="mt-4 w-full uppercase font-body tracking-widest font-semibold text-[10px]"
-            idleText="Salvar Imagens"
-            loadingText="Salvando Imagens..."
-            disabled={imagesUploaded?.length === 0 || !item?.id}
-          />
-        </div>
-      </Form>
+      {/* Barra de status */}
+      <div className="mt-2 text-md text-muted-foreground font-neue">
+        {isSaving ? "Salvando alterações…" : "Alterações salvas"}
+      </div>
     </>
-  )
+  );
 }
 
 interface ImageUploaderProps {
-  setImagesUploaded?: (images: MenuItemWithAssociations["MenuItemGalleryImage"]) => void;
-  setUploadError?: (error: string) => void;
+  onComplete?: (
+    images: MenuItemWithAssociations["MenuItemGalleryImage"]
+  ) => void;
   disabled?: boolean;
 }
 
-/**
- *  The button that opens the Cloudinary upload widget and handles the image upload.
- */
-export function ImageUploader({
-  setImagesUploaded = (images: MenuItemWithAssociations["MenuItemGalleryImage"]) => console.log(images),
-  setUploadError = (error: string) => console.error(error),
-  disabled = false
-}: ImageUploaderProps) {
-
+/** Botão que abre o widget da Cloudinary e, ao concluir, retorna as imagens processadas */
+export function ImageUploader({ onComplete, disabled }: ImageUploaderProps) {
   // @ts-ignore
   function onUpload(error, result, widget) {
-
-    console.log("onUpload", { error, result });
-
-    // the "Browse" button is clicked and the upload starts to upload the image to the cloudinary server
-
     if (error) {
-      setUploadError(error);
-      widget.close({
-        quiet: true,
-      });
+      widget.close({ quiet: true });
       return;
     }
 
-    const cloudinaryResponsePayloadInfoFiles = result?.info?.files || []
-
-    const uploadInfoFiles = cloudinaryResponsePayloadInfoFiles.map((file: any) => {
+    const files = result?.info?.files || [];
+    const uploaded = files.map((file: any) => {
       return {
         assetId: file.uploadInfo.asset_id || null,
         secureUrl: file.uploadInfo.secure_url || null,
@@ -180,35 +189,28 @@ export function ImageUploader({
         width: file.uploadInfo.width || null,
         thumbnailUrl: file.uploadInfo.thumbnail_url || null,
         format: file.uploadInfo.format || null,
-        publicId: file.uploadInfo.public_id || null
+        publicId: file.uploadInfo.public_id || null,
+        // não precisa setar isPrimary aqui; o servidor já lida quando é a 1ª imagem
       } as unknown as MenuItemWithAssociations["MenuItemGalleryImage"];
     });
 
-    setImagesUploaded(uploadInfoFiles);
-
+    onComplete?.(uploaded);
   }
 
   return (
-    <CloudinaryUploadWidget
-      presetName="admin-cardapio"
-      onUpload={onUpload}
-    >
-
+    <CloudinaryUploadWidget presetName="admin-cardapio" onUpload={onUpload}>
       {
         // @ts-ignore
-        ({ open }) => {
-          return <Button
-            variant={"outline"}
+        ({ open }) => (
+          <Button
             onClick={open}
-            className="uppercase font-body tracking-wider font-semibold text-xs"
+            className="uppercase font-body tracking-wider font-semibold"
             disabled={disabled}
           >
-
             Upload Image
-          </Button>;
-        }
+          </Button>
+        )
       }
     </CloudinaryUploadWidget>
-
-  )
+  );
 }
