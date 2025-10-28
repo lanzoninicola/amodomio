@@ -207,6 +207,8 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
           const [items, setItems] = useState<MenuItemWithSellPriceVariations[]>(menuItemsWithSellPriceVariations || [])
 
           const [accordionItemOpened, setAccordionItemOpened] = useState<string | null>(null)
+
+
           return (
 
             <div className="flex flex-col" >
@@ -280,7 +282,7 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
 
                             <AccordionContent>
 
-                              <ul className="grid grid-cols-5 gap-x-1">
+                              <ul className="grid grid-cols-5 gap-x-12">
                                 {menuItem.sellPriceVariations.map((record) => (
 
                                   <section key={randomReactKey()} className="mb-6">

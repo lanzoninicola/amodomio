@@ -36,6 +36,7 @@ import {
   SellingChannelKey,
 } from "./menu-item-selling-channel.entity.server";
 import { slugifyString } from "~/utils/slugify";
+import { group } from "console";
 
 export interface MenuItemWithAssociations extends MenuItem {
   priceVariations: MenuItemPriceVariation[];
@@ -270,6 +271,56 @@ export class MenuItemPrismaEntity {
         category: categoryName,
         menuItems: groupedByCategory[categoryName],
       }));
+  }
+
+  async findAllGroupedByGroup(
+    params: MenuItemEntityFindAllParams = {},
+    options = {
+      imageTransform: false,
+      imageScaleWidth: 1280,
+    }
+  ) {
+    const allMenuItems = (await this.findAll(params, options)) || [];
+
+    // direção padrão: asc; se vier "desc", inverte
+    const direction = params.option?.direction === "desc" ? -1 : 1;
+
+    // Agrupa preservando metadados do grupo
+    const grouped = allMenuItems.reduce((acc, menuItem) => {
+      const g = menuItem.MenuItemGroup;
+      const key = g?.id ?? "__sem_grupo__";
+
+      if (!acc[key]) {
+        acc[key] = {
+          id: key,
+          name: g?.name ?? "Sem grupo",
+          sortOrderIndex:
+            typeof g?.sortOrderIndex === "number"
+              ? g.sortOrderIndex
+              : Number.MAX_SAFE_INTEGER,
+          items: [] as MenuItemWithAssociations[],
+        };
+      }
+
+      acc[key].items.push(menuItem);
+      return acc;
+    }, {} as Record<string, { id: string; name: string; sortOrderIndex: number; items: MenuItemWithAssociations[] }>);
+
+    // Converte em array e ordena pelo índice do grupo
+    const result = Object.values(grouped)
+      .sort(
+        (a, b) =>
+          (a.sortOrderIndex - b.sortOrderIndex) * direction ||
+          a.name.localeCompare(b.name)
+      ) // desempate opcional por nome
+      .map((g) => ({
+        groupId: g.id,
+        group: g.name,
+        sortOrderIndex: g.sortOrderIndex,
+        menuItems: g.items,
+      }));
+
+    return result;
   }
 
   /**
