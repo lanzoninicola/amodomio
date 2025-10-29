@@ -7,24 +7,21 @@ import { menuItemLikePrismaEntity } from "~/domain/cardapio/menu-item-like.prism
 import { badRequest, ok } from "~/utils/http-response.server";
 import { menuItemSharePrismaEntity } from "~/domain/cardapio/menu-item-share.prisma.entity.server";
 import ItalyIngredientsStatement from "~/domain/cardapio/components/italy-ingredient-statement/italy-ingredient-statement";
-import { CardapioItemActionBarHorizontal, CardapioItemActionBarVertical, LikeIt, ShareIt } from "~/domain/cardapio/components/cardapio-item-action-bar/cardapio-item-action-bar";
+import { CardapioItemActionBarVertical, LikeIt, ShareIt } from "~/domain/cardapio/components/cardapio-item-action-bar/cardapio-item-action-bar";
 import { tagPrismaEntity } from "~/domain/tags/tag.prisma.entity.server";
 import Loading from "~/components/loading/loading";
-import { FiltersTags, FilterTagSelect } from "~/domain/cardapio/components/filter-tags/filter-tags";
+import { FilterTagSelect } from "~/domain/cardapio/components/filter-tags/filter-tags";
 import { cn } from "~/lib/utils";
 import capitalize from "~/utils/capitalize";
 import AwardBadge from "~/components/award-badge/award-badge";
 import { Separator } from "~/components/ui/separator";
 import { CardapioItemPrice, CardapioItemPriceSelect } from "~/domain/cardapio/components/cardapio-item-price/cardapio-item-price";
-import { Carousel, CarouselApi, CarouselContent, CarouselItem } from "~/components/ui/carousel";
+import { Carousel, CarouselApi, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "~/components/ui/carousel";
 import Autoplay from "embla-carousel-autoplay";
 import CardapioItemImageSingle from "~/domain/cardapio/components/cardapio-item-image-single/cardapio-item-image-single";
-import { SwiperImagesCarousel } from "~/components/swiper-carousel/swiper-images-carousel";
-import PostInstagram from "~/components/post-instagram/post-instagram";
 import prismaClient from "~/lib/prisma/client.server";
 import { Tag } from "@prisma/client";
 import { useSoundEffects } from "~/components/sound-effects/use-sound-effects";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "~/components/ui/dialog";
 
 
 export const headers: HeadersFunction = () => ({
@@ -208,7 +205,7 @@ export default function CardapioWebIndex() {
 
 
 
-    const imageUrls = Array.from({ length: 7 }, (_, i) => `/images/criacoes-inverno/criacoes-inverno-0${i + 1}.png`);
+    const imageUrls = Array.from({ length: 4 }, (_, i) => `/images/halloween/halloween_25_${i + 1}.png`);
 
     return (
 
@@ -299,7 +296,30 @@ export default function CardapioWebIndex() {
 
                 {/* <Separator className="my-4 md:hidden" /> */}
 
-                <Separator orientation="vertical" className="hidden md:mx-4" />
+                <Suspense fallback={<Loading />}>
+                    <Await resolve={items}>
+                        {(items) => {
+                            const imageUrls = Array.from(
+                                { length: 4 },
+                                (_, i) => `/images/halloween/halloween_25_${i + 1}.png`
+                            );
+                            return (
+                                <section
+                                    id="halloween"
+                                    className="flex flex-col mx-2 md:flex-1 mt-24"
+                                >
+                                    <h3 className="font-neue text-base md:text-xl font-semibold tracking-wide p-2">
+                                        Sabores da semana de Halloween 🎃
+                                    </h3>
+                                    <ImagesCarousel imageUrls={imageUrls} autoplay intervalMs={3500} />
+                                </section>
+                            );
+                        }}
+                    </Await>
+                </Suspense>
+
+
+                <Separator className="m-4" />
 
                 {/* destaques */}
 
@@ -310,7 +330,7 @@ export default function CardapioWebIndex() {
 
                             return (
                                 <>
-                                    <section id="destaque" className="flex flex-col gap-4 mx-2 md:flex-1 mt-20 md:mt-24">
+                                    <section id="destaque" className="flex flex-col gap-4 mx-2 md:flex-1 ">
                                         {/** @ts-ignore */}
                                         <CardapioItemListDestaque items={items} title="Sugestões do chef" tagFilter="em-destaque" />
                                         {/** @ts-ignore */}
@@ -325,7 +345,7 @@ export default function CardapioWebIndex() {
 
             </div>
 
-            <Separator className="my-4" />
+            <Separator className="m-4" />
 
 
 
@@ -420,6 +440,60 @@ export default function CardapioWebIndex() {
         </section >
 
 
+    );
+}
+
+// app/components/shared/images-carousel.tsx
+"use client";
+
+
+
+type ImagesCarouselProps = {
+    imageUrls: string[];
+    className?: string;
+    autoplay?: boolean;
+    intervalMs?: number;
+};
+
+function ImagesCarousel({
+    imageUrls,
+    className,
+    autoplay = true,
+    intervalMs = 3500,
+}: ImagesCarouselProps) {
+    const plugin = React.useRef(
+        Autoplay({ delay: intervalMs, stopOnInteraction: false })
+    );
+
+    return (
+        <Carousel
+            className={className}
+            plugins={autoplay ? [plugin.current] : []}
+            opts={{ loop: true, align: "start" }}
+        >
+            <CarouselContent>
+                {imageUrls.map((src, i) => (
+                    <CarouselItem
+                        key={src ?? i}
+                        className="basis-full md:basis-1/2 lg:basis-1/3"
+                    >
+                        <div className="p-2">
+                            <div className="overflow-hidden shadow">
+                                <img
+                                    src={src}
+                                    alt={`Imagem ${i + 1}`}
+                                    loading="lazy"
+                                    className="h-auto w-full object-cover"
+                                />
+                            </div>
+                        </div>
+                    </CarouselItem>
+                ))}
+            </CarouselContent>
+
+            <CarouselPrevious className="left-2" />
+            <CarouselNext className="right-2" />
+        </Carousel>
     );
 }
 

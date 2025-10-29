@@ -240,7 +240,7 @@ const EditablePriceCell = React.memo(function EditablePriceCellInner({
     >
       {/* Cabeçalho: tamanho + preço atual */}
       <div className="flex items-center justify-between mb-2">
-        <div className="text-[10px] uppercase tracking-wider">
+        <div className="text-[10px] uppercase tracking-wider font-neue">
           {variation.sizeName}
         </div>
         <div className="text-[11px] font-mono bg-slate-100 rounded px-1.5 py-0.5">
@@ -450,7 +450,7 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
                         Sabor ({currentSellingChannel.name})
                       </th>
                       {sizeColumns.map((sz) => (
-                        <th key={sz.id} className="text-center px-2 py-2 min-w-[220px]">
+                        <th key={sz.id} className="text-center px-2 py-2 min-w-[220px] font-neue">
                           {sz.name}
                         </th>
                       ))}
@@ -461,7 +461,7 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
                       <tr key={mi.menuItemId} className="border-b hover:bg-slate-50">
                         <td className="px-3 py-3 align-top">
                           <div className="flex flex-col">
-                            <span className="font-semibold">{mi.name}</span>
+                            <span className="font-semibold font-neue">{mi.name}</span>
                             <span className="text-[11px] text-muted-foreground">
                               ID: {mi.menuItemId.slice(0, 8)}…
                             </span>
