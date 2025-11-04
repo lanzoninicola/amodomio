@@ -1,8 +1,7 @@
 import type {
-  Bairro,
   DeliveryFee,
-  DistanceToPizzeria,
-  PizzeriaLocation,
+  DeliveryZone,
+  DeliveryZoneDistance,
   PrismaClient,
 } from "@prisma/client";
 
@@ -15,16 +14,16 @@ interface PrismaEntityProps {
 /**
  * Bairro com taxa de entrega e distância específicas para uma unidade
  */
-export interface BairroWithFeeAndDistance extends Bairro {
+export interface BairroWithFeeAndDistance extends DeliveryZone {
   deliveryFee: DeliveryFee | null;
-  distance: DistanceToPizzeria | null;
+  distance: DeliveryZoneDistance | null;
 }
 
 /**
  * Bairro mais próximo da unidade, com dados adicionais de distância
  */
 export interface ClosestBairro {
-  bairro: Bairro;
+  bairro: DeliveryZone | null;
   distanceInKm: number;
   estimatedTimeInMin: number | null;
 }
@@ -52,14 +51,14 @@ class BairroEntity {
    * @returns a sede principal
    */
   async mainLocation() {
-    return await this.client.pizzeriaLocation.findFirst({
+    return await this.client.companyLocation.findFirst({
       where: { mainLocation: true },
     });
   }
 
   /**
    * Retorna todos os bairros com a taxa de entrega e a distância em km
-   * relativas a uma determinada unidade (pizzeriaLocationId).
+   * relativas a uma determinada unidade (companyLocationId).
    */
   async findManyWithFees(
     fromLocationId: string | null = null
@@ -70,13 +69,13 @@ class BairroEntity {
       fromLocationId = mainLocation?.id || "";
     }
 
-    const bairros = await this.client.bairro.findMany({
+    const bairros = await this.client.deliveryZone.findMany({
       include: {
         deliveryFees: {
-          where: { pizzeriaLocationId: fromLocationId },
+          where: { companyLocationId: fromLocationId },
         },
         distances: {
-          where: { pizzeriaLocationId: fromLocationId },
+          where: { companyLocationId: fromLocationId },
         },
       },
     });
@@ -93,7 +92,7 @@ class BairroEntity {
    * e distâncias cadastradas para qualquer unidade.
    */
   async findById(id: string) {
-    return this.client.bairro.findUnique({
+    return this.client.deliveryZone.findUnique({
       where: { id },
       include: {
         deliveryFees: true,
@@ -106,19 +105,19 @@ class BairroEntity {
    * Lista apenas os bairros atendidos por uma unidade específica,
    * ou seja, que têm uma taxa de entrega cadastrada para essa unidade.
    */
-  async findServedByLocation(pizzeriaLocationId: string) {
-    return this.client.bairro.findMany({
+  async findServedByLocation(companyLocationId: string) {
+    return this.client.deliveryZone.findMany({
       where: {
         deliveryFees: {
-          some: { pizzeriaLocationId },
+          some: { companyLocationId },
         },
       },
       include: {
         deliveryFees: {
-          where: { pizzeriaLocationId },
+          where: { companyLocationId },
         },
         distances: {
-          where: { pizzeriaLocationId },
+          where: { companyLocationId },
         },
       },
     });
@@ -129,20 +128,20 @@ class BairroEntity {
    * distância registrada em quilômetros.
    */
   async findClosestTo(
-    pizzeriaLocationId: string
+    companyLocationId: string
   ): Promise<ClosestBairro | null> {
-    const result = await this.client.distanceToPizzeria.findFirst({
-      where: { pizzeriaLocationId },
+    const result = await this.client.deliveryZoneDistance.findFirst({
+      where: { companyLocationId },
       orderBy: { distanceInKm: "asc" },
       include: {
-        bairro: true,
+        DeliveryZone: true,
       },
     });
 
     if (!result) return null;
 
     return {
-      bairro: result.bairro,
+      bairro: result.DeliveryZone ?? null,
       distanceInKm: result.distanceInKm,
       estimatedTimeInMin: result.estimatedTimeInMin,
     };
@@ -153,10 +152,10 @@ class BairroEntity {
    * média, mínimo, máximo e total de registros.
    */
   async calculateDeliverySummary(
-    pizzeriaLocationId: string
+    companyLocationId: string
   ): Promise<DeliveryFeeSummary | null> {
     const fees = await this.client.deliveryFee.findMany({
-      where: { pizzeriaLocationId },
+      where: { companyLocationId },
       select: { amount: true },
     });
 
@@ -181,7 +180,7 @@ class BairroEntity {
    * Ideal para autocomplete ou filtros por nome digitado.
    */
   async searchByName(term: string) {
-    return this.client.bairro.findMany({
+    return this.client.deliveryZone.findMany({
       where: {
         name: {
           contains: term,

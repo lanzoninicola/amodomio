@@ -82,6 +82,12 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
           disabled: false,
         },
         {
+          title: "Grupos",
+          href: "/admin/gerenciamento/cardapio/groups",
+          items: [],
+          disabled: false,
+        },
+        {
           title: "Cardápio Delivery",
           href: "/admin/gerenciamento/cardapio/main/list",
           items: [],
