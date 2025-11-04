@@ -1,13 +1,28 @@
+// app/routes/cardapio._index.tsx
+
 import { HeadersFunction, LoaderFunctionArgs } from "@remix-run/node";
 import { Await, Link, defer, useLoaderData, useSearchParams } from "@remix-run/react";
-import React, { useState, useRef, useCallback, useEffect, Suspense } from "react";
-import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
+import React, {
+    useState,
+    useRef,
+    useCallback,
+    useEffect,
+    Suspense
+} from "react";
+import {
+    MenuItemWithAssociations,
+    menuItemPrismaEntity
+} from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { menuItemLikePrismaEntity } from "~/domain/cardapio/menu-item-like.prisma.entity.server";
 import { badRequest, ok } from "~/utils/http-response.server";
 import { menuItemSharePrismaEntity } from "~/domain/cardapio/menu-item-share.prisma.entity.server";
 import ItalyIngredientsStatement from "~/domain/cardapio/components/italy-ingredient-statement/italy-ingredient-statement";
-import { CardapioItemActionBarVertical, LikeIt, ShareIt } from "~/domain/cardapio/components/cardapio-item-action-bar/cardapio-item-action-bar";
+import {
+    CardapioItemActionBarVertical,
+    LikeIt,
+    ShareIt
+} from "~/domain/cardapio/components/cardapio-item-action-bar/cardapio-item-action-bar";
 import { tagPrismaEntity } from "~/domain/tags/tag.prisma.entity.server";
 import Loading from "~/components/loading/loading";
 import { FilterTagSelect } from "~/domain/cardapio/components/filter-tags/filter-tags";
@@ -15,287 +30,229 @@ import { cn } from "~/lib/utils";
 import capitalize from "~/utils/capitalize";
 import AwardBadge from "~/components/award-badge/award-badge";
 import { Separator } from "~/components/ui/separator";
-import { CardapioItemPrice, CardapioItemPriceSelect } from "~/domain/cardapio/components/cardapio-item-price/cardapio-item-price";
-import { Carousel, CarouselApi, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "~/components/ui/carousel";
+import {
+    CardapioItemPrice,
+    CardapioItemPriceSelect
+} from "~/domain/cardapio/components/cardapio-item-price/cardapio-item-price";
+import {
+    Carousel,
+    CarouselApi,
+    CarouselContent,
+    CarouselItem,
+    CarouselNext,
+    CarouselPrevious
+} from "~/components/ui/carousel";
 import Autoplay from "embla-carousel-autoplay";
 import CardapioItemImageSingle from "~/domain/cardapio/components/cardapio-item-image-single/cardapio-item-image-single";
 import prismaClient from "~/lib/prisma/client.server";
 import { Tag } from "@prisma/client";
 import { useSoundEffects } from "~/components/sound-effects/use-sound-effects";
 
-
 export const headers: HeadersFunction = () => ({
-    'Cache-Control': 's-maxage=1, stale-while-revalidate=59',
+    "Cache-Control": "s-maxage=1, stale-while-revalidate=59"
 });
 
+// ======================================================
+// LOADER
+// ======================================================
 export async function loader({ request }: LoaderFunctionArgs) {
-    //@ts-ignore
-    const items = menuItemPrismaEntity.findAllGroupedByGroup({
-        where: {
-            visible: true,
+    // itens agrupados do cardápio
+    // @ts-ignore
+    const items = menuItemPrismaEntity.findAllGroupedByGroup(
+        {
+            where: {
+                visible: true
+            },
+            option: {
+                sorted: true,
+                direction: "asc"
+            }
         },
-        option: {
-            sorted: true,
-            direction: "asc"
-        },
-    }, {
-        imageTransform: true,
-        imageScaleWidth: 375,
-    })
+        {
+            imageTransform: true,
+            imageScaleWidth: 375
+        }
+    );
 
-
+    // tags públicas (filtros)
     const tags = tagPrismaEntity.findAll({
         public: true
-    })
+    });
 
+    // post em destaque (já estava no teu arquivo)
     const postFeatured = await prismaClient.post.findFirst({
         where: {
-            featured: true,
+            featured: true
         },
         select: {
             id: true,
-            title: true, // ou quaisquer outros campos que você queira do post
+            title: true,
             _count: {
                 select: {
                     PostLike: true,
-                    PostShare: true,
-                },
-            },
-        },
-    })
-
+                    PostShare: true
+                }
+            }
+        }
+    });
 
     return defer({
         items,
         tags,
         postFeatured
-
-    })
-
-
+    });
 }
 
+// ======================================================
+// ACTION
+// (mantive igual ao teu arquivo, só organizado)
+// ======================================================
 export async function action({ request }: LoaderFunctionArgs) {
-    let formData = await request.formData();
+    const formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);
 
-
+    // like de item do cardápio
     if (values?.action === "menu-item-like-it") {
-        const itemId = values?.itemId as string
-        let amount = 0
+        const itemId = values?.itemId as string;
+        let amount = 0;
 
-        amount = isNaN(Number(values?.likesAmount)) ? 1 : Number(values?.likesAmount)
+        amount = isNaN(Number(values?.likesAmount)) ? 1 : Number(values?.likesAmount);
 
-        const [err, likeAmount] = await prismaIt(menuItemLikePrismaEntity.create({
-            createdAt: new Date().toISOString(),
-            amount,
-            MenuItem: {
-                connect: {
-                    id: itemId,
-                },
-            }
-        }));
+        const [err, likeAmount] = await prismaIt(
+            menuItemLikePrismaEntity.create({
+                createdAt: new Date().toISOString(),
+                amount,
+                MenuItem: {
+                    connect: {
+                        id: itemId
+                    }
+                }
+            })
+        );
 
         if (err) {
             return badRequest({
                 action: "menu-item-like-it",
                 likeAmount
-            })
+            });
         }
 
         return ok({
             action: "menu-item-like-it",
             likeAmount
-        })
-
+        });
     }
 
+    // share de item do cardápio
     if (values?.action === "menu-item-share-it") {
-        const itemId = values?.itemId as string
+        const itemId = values?.itemId as string;
 
-        const [err, likeAmount] = await prismaIt(menuItemSharePrismaEntity.create({
-            createdAt: new Date().toISOString(),
-            MenuItem: {
-                connect: {
-                    id: itemId,
-                },
-            }
-        }));
+        const [err, shareAmount] = await prismaIt(
+            menuItemSharePrismaEntity.create({
+                createdAt: new Date().toISOString(),
+                MenuItem: {
+                    connect: {
+                        id: itemId
+                    }
+                }
+            })
+        );
 
         if (err) {
             return badRequest({
                 action: "menu-item-share-it",
-                likeAmount
-            })
+                shareAmount
+            });
         }
 
         return ok({
             action: "menu-item-share-it",
-            likeAmount
-        })
-
+            shareAmount
+        });
     }
 
+    // like de post
     if (values?.action === "post-like-it") {
-        const postId = values?.postId as string
-        let amount = 0
+        const postId = values?.postId as string;
+        let amount = 0;
 
-        amount = isNaN(Number(values?.likesAmount)) ? 1 : Number(values?.likesAmount)
+        amount = isNaN(Number(values?.likesAmount)) ? 1 : Number(values?.likesAmount);
 
-        const [err, likeAmount] = await prismaIt(prismaClient.postLike.create({
-            data: {
-                createdAt: new Date().toISOString(),
-                amount,
-                Post: {
-                    connect: {
-                        id: postId
+        const [err, likeAmount] = await prismaIt(
+            prismaClient.postLike.create({
+                data: {
+                    createdAt: new Date().toISOString(),
+                    amount,
+                    Post: {
+                        connect: {
+                            id: postId
+                        }
                     }
                 }
-            }
-        }))
+            })
+        );
 
         if (err) {
             return badRequest({
                 action: "post-like-it",
                 likeAmount
-            })
+            });
         }
 
         return ok({
             action: "post-like-it",
             likeAmount
-        })
-
+        });
     }
 
+    // share de post
     if (values?.action === "post-share-it") {
-        const postId = values?.postId as string
+        const postId = values?.postId as string;
 
-        const [err, shareAmount] = await prismaIt(prismaClient.postShare.create({
-            data: {
-                createdAt: new Date().toISOString(),
-                Post: {
-                    connect: {
-                        id: postId
+        const [err, shareAmount] = await prismaIt(
+            prismaClient.postShare.create({
+                data: {
+                    createdAt: new Date().toISOString(),
+                    Post: {
+                        connect: {
+                            id: postId
+                        }
                     }
                 }
-            }
-        }))
-
+            })
+        );
 
         if (err) {
             return badRequest({
                 action: "post-share-it",
                 shareAmount
-            })
+            });
         }
 
         return ok({
             action: "post-share-it",
             shareAmount
-        })
-
+        });
     }
 
-    return null
+    return null;
 }
 
+// ======================================================
+// PAGE
+// ======================================================
 export default function CardapioWebIndex() {
-    const { items, tags, postFeatured } = useLoaderData<typeof loader>()
-
-
+    const { items, tags, postFeatured } = useLoaderData<typeof loader>();
 
     const imageUrls = Array.from({ length: 4 }, (_, i) => `/images/halloween/halloween_25_${i + 1}.png`);
 
     return (
-
-
         <section className="flex flex-col mb-24" data-element="cardapio-index">
+            <Separator className="my-6 md:hidden" />
 
-            <Separator className="my-6" />
-
-            <div className="flex flex-col  md:flex-row md:gap-12">
-
-                {/* Post Lançamento  */}
-                {/* <Suspense fallback={<Loading />}>
-                    <Await resolve={postFeatured}>
-
-                        {(postFeatured) => {
-
-                            return (
-                                <section id="post-lancamento" className="p-4" >
-                                    <SectionTitle>Alerta de novidade</SectionTitle>
-                                    <div className="grid place-items-center ">
-                                        <PostInstagram
-                                            postId={postFeatured?.id || ""}
-                                            likesAmount={postFeatured?._count.PostLike || 0}
-                                            sharesAmount={postFeatured?._count.PostShare || 0}
-                                            content={
-                                                <SwiperImagesCarousel slides={imageUrls || []} />
-                                            }
-                                            captionPreview={
-                                                <div className="flex flex-col gap-4 mb-4">
-                                                    <p className="text-sm font-neue"><span className="text-sm font-semibold">@amodomiopb </span>
-                                                        Lançamento de inverno no ar! ❄️ Novas criações com sabores que aquecem, direto das montanhas italianas. 🇮🇹🔥
-
-                                                    </p>
-                                                    <p className="font-neue">*** Sabores disponíveis somente no cardápio A Modo Mio ou via WhatsApp (46) 99127 2525</p>
-                                                </div>
-                                            }
-                                            captionFull={
-                                                <section className="p-2 space-y-6 font-neue">
-                                                    <h2 className="text-lg font-semibold">Lançamento de inverno no ar! ❄️</h2>
-                                                    <p>Novas criações com sabores que aquecem, direto das montanhas italianas. 🇮🇹🔥</p>
-                                                    <h3 className="block text-md">
-                                                        Sabores invernais com inspiração nas Montanhas Italianas
-                                                    </h3>
-
-                                                    <article className="space-y-2">
-                                                        <h4 className="text-lg font-semibold font-mono">🏔️ TRENTINA</h4>
-                                                        <p><span className="font-semibold">Ingredientes:</span> Molho de tomate italiano, muçarela, gorgonzola, bacon defumado e parmesão.</p>
-                                                        <p><span className="font-semibold">Perfil:</span> 👉 Intensa, cremosa e crocante.</p>
-                                                        <p><span className="font-semibold">Inspiração:</span> Homenagem direta ao Trentino, terra de montanhas, neve, queijos fortes e sabores defumados. Um sabor que transmite o espírito dos refúgios alpinos da região, conforto e tradição.</p>
-                                                    </article>
-
-                                                    <article className="space-y-2">
-                                                        <h4 className="text-lg font-semibold font-mono">🏔️ ETNA</h4>
-                                                        <p><span className="font-semibold fontmo">Ingredientes:</span> Molho de tomate italiano, muçarela, abobrinha assada, provolone defumado, nozes e geleia apimentada.</p>
-                                                        <p><span className="font-semibold">Perfil:</span> 👉 Vegetariana, surpreendente e levemente adocicada.</p>
-                                                        <p><span className="font-semibold">Inspiração:</span> O vulcão ativo da Sicília inspira uma pizza cheia de energia e calor, com notas defumadas, doces e crocantes. Uma verdadeira explosão de sabores.</p>
-                                                    </article>
-
-                                                    <article className="space-y-2">
-                                                        <h4 className="text-lg font-semibold font-mono">🏔️ MARMOLADA</h4>
-                                                        <p><span className="font-semibold">Ingredientes:</span> Molho de tomate italiano, muçarela, cogumelos salteados, brie, presunto cru e molho pesto artesanal.</p>
-                                                        <p><span className="font-semibold">Perfil:</span> 👉 Sofisticada, aromática e cheia de personalidade.</p>
-                                                        <p><span className="font-semibold">Inspiração:</span> A Marmolada é a Rainha das Dolomitas. Seus bosques e trilhas inspiram uma pizza rica em sabores da montanha: cogumelos, queijos e ervas.</p>
-                                                    </article>
-
-                                                    <article className="space-y-2">
-                                                        <h4 className="text-lg font-semibold font-mono">🏔️ GRAN PARADISO</h4>
-                                                        <p><span className="font-semibold">Ingredientes:</span> Molho de tomate italiano, muçarela, bacon defumado, brie, nozes e geleia de damasco.</p>
-                                                        <p><span className="font-semibold">Perfil:</span> 👉 Doce, salgada e crocante.</p>
-                                                        <p><span className="font-semibold">Inspiração:</span> Uma montanha símbolo de equilíbrio e natureza preservada. Esta pizza traduz esse conceito com uma combinação harmoniosa de doce, salgado e crocância.</p>
-                                                    </article>
-
-                                                    <div className="bg-green-700 text-white font-neue px-2 py-1 space-y-2 rounded-md">
-                                                        <p>Sabores disponíveis somente no cardápio A Modo Mio ou via WhatsApp (46) 99127 2525</p>
-                                                    </div>
-                                                </section>
-
-
-                                            }
-                                        />
-                                    </div>
-
-                                </section>
-                            )
-                        }}
-                    </Await>
-                </Suspense> */}
-
-                {/* <Separator className="my-4 md:hidden" /> */}
-
+            {/* TOPO: Halloween + Destaques (igual ao teu) */}
+            <div className="flex flex-col md:grid md:grid-cols-2 md:items-start md:mt-40">
+                {/* Bloco Halloween */}
                 <Suspense fallback={<Loading />}>
                     <Await resolve={items}>
                         {(items) => {
@@ -304,10 +261,7 @@ export default function CardapioWebIndex() {
                                 (_, i) => `/images/halloween/halloween_25_${i + 1}.png`
                             );
                             return (
-                                <section
-                                    id="halloween"
-                                    className="flex flex-col mx-2 md:flex-1 mt-24"
-                                >
+                                <section id="halloween" className="flex flex-col mx-2 md:flex-1 mt-24 md:mt-0">
                                     <h3 className="font-neue text-base md:text-xl font-semibold tracking-wide p-2">
                                         Sabores da semana de Halloween 🎃
                                     </h3>
@@ -318,50 +272,63 @@ export default function CardapioWebIndex() {
                     </Await>
                 </Suspense>
 
+                <Separator className="m-4 md:hidden" />
 
-                <Separator className="m-4" />
-
-                {/* destaques */}
-
+                {/* Destaques */}
                 <Suspense fallback={<Loading />}>
                     <Await resolve={items}>
-
                         {(items) => {
-
                             return (
-                                <>
-                                    <section id="destaque" className="flex flex-col gap-4 mx-2 md:flex-1 ">
-                                        {/** @ts-ignore */}
-                                        <CardapioItemListDestaque items={items} title="Sugestões do chef" tagFilter="em-destaque" />
-                                        {/** @ts-ignore */}
-                                        {/* <CardapioItemListDestaque items={items} title="Mais vendidos" tagFilter="mais-vendido" carouselDelay={2100} /> */}
-
-                                    </section>
-                                </>
-                            )
+                                <section id="destaque" className="flex flex-col gap-4 mx-2 md:flex-1 ">
+                                    {/* @ts-ignore */}
+                                    <CardapioItemListDestaque items={items} title="Sugestões do chef" tagFilter="em-destaque" />
+                                </section>
+                            );
                         }}
                     </Await>
                 </Suspense>
-
             </div>
 
             <Separator className="m-4" />
 
-
-
-            {/* Lista items */}
-
+            {/* ===================================================== */}
+            {/* LISTA PRINCIPAL DO CARDÁPIO COM FILTRO + BARRA DE GRUPOS */}
+            {/* ===================================================== */}
             <Suspense fallback={<Loading />}>
                 <Await resolve={Promise.all([tags, items])}>
                     {([loadedTags, loadedItems]) => {
-
                         const [currentItems, setCurrentItems] = useState(loadedItems);
                         const [currentFilterTag, setCurrentFilterTag] = useState<Tag | null>(null);
 
-                        function isGrouped(arr: any[]): arr is GroupedItems[] {
-                            return Array.isArray(arr) && arr.length > 0 && "menuItems" in (arr[0] as any)
-                        }
+                        // --- NOVO: refs dos grupos para scroll
+                        const groupRefs = useRef<Record<string, HTMLElement | null>>({});
 
+                        const scrollToGroup = (groupId: string) => {
+                            const el = groupRefs.current[groupId];
+                            if (!el) return;
+                            const OFFSET = 110; // ajusta conforme teu header/footer
+                            const top = el.getBoundingClientRect().top + window.scrollY - OFFSET;
+                            window.scrollTo({
+                                top,
+                                behavior: "smooth"
+                            });
+                        };
+
+                        const isGrouped =
+                            Array.isArray(currentItems) &&
+                            currentItems.length > 0 &&
+                            "menuItems" in (currentItems[0] as any);
+
+                        const orderedGroups = isGrouped
+                            ? (currentItems as Array<{
+                                groupId: string;
+                                group: string;
+                                sortOrderIndex?: number;
+                                menuItems: any[];
+                            }>).sort((a, b) => (a.sortOrderIndex ?? 0) - (b.sortOrderIndex ?? 0))
+                            : [];
+
+                        // filtro de tag
                         const onCurrentTagSelected = (tag: Tag | null) => {
                             setCurrentFilterTag(tag);
 
@@ -373,13 +340,18 @@ export default function CardapioWebIndex() {
 
                             const tagName = tag.name;
                             const hasTag = (i: any) =>
-                                Boolean(i?.tags?.public?.includes?.(tagName) || i?.tags?.all?.includes?.(tagName));
+                                Boolean(
+                                    i?.tags?.public?.includes?.(tagName) || i?.tags?.all?.includes?.(tagName)
+                                );
 
-                            if (isGrouped(loadedItems)) {
-                                // mantém a estrutura por grupo e remove grupos vazios
+                            if (isGrouped) {
+                                // mantém estrutura por grupo
                                 const filteredGroups = (loadedItems as GroupedItems[])
-                                    .map(g => ({ ...g, menuItems: g.menuItems.filter(hasTag) }))
-                                    .filter(g => g.menuItems.length > 0);
+                                    .map((g) => ({
+                                        ...g,
+                                        menuItems: g.menuItems.filter(hasTag)
+                                    }))
+                                    .filter((g) => g.menuItems.length > 0);
 
                                 setCurrentItems(filteredGroups);
                             } else {
@@ -390,13 +362,11 @@ export default function CardapioWebIndex() {
 
                         return (
                             <div className="flex flex-col mx-4">
+                                {/* linha título + filtro */}
                                 <div className="flex justify-between items-center mb-4">
-                                    <h2 className="font-neue text-sm md:text-lg font-semibold tracking-wider">Todos os produtos</h2>
-                                    {/* <FiltersTags
-                                        tags={loadedTags}
-                                        currentTag={currentFilterTag}
-                                        onCurrentTagSelected={onCurrentTagSelected}
-                                    /> */}
+                                    <h2 className="font-neue text-sm md:text-lg font-semibold tracking-wider">
+                                        Todos os produtos
+                                    </h2>
                                     <FilterTagSelect
                                         tags={loadedTags}
                                         currentTag={currentFilterTag}
@@ -404,50 +374,51 @@ export default function CardapioWebIndex() {
                                         label="Categorias"
                                     />
                                 </div>
-                                {/* --- substituir APENAS esta linha ---
-<CardapioItemsGrid items={currentItems} />
---- pelo bloco abaixo --- */}
 
-                                {/* Render por grupo (com título) */}
-                                {Array.isArray(currentItems) && currentItems.length > 0 && "menuItems" in (currentItems[0] as any)
-                                    ? (currentItems as Array<{
-                                        groupId: string
-                                        group: string
-                                        sortOrderIndex?: number
-                                        menuItems: any[]
-                                    }>)
-                                        .sort((a, b) => (a.sortOrderIndex ?? 0) - (b.sortOrderIndex ?? 0)) // garante a ordem do grupo
-                                        .map((g) => (
-                                            <section key={g.groupId} className="mb-6">
-                                                <h3 className="font-neue text-base md:text-xl font-semibold tracking-wide mb-2 border-b">
-                                                    {g.group}
-                                                </h3>
-                                                <CardapioItemsGrid items={g.menuItems} />
+                                {/* ===== NOVO: BARRA HORIZONTAL DESLIZÁVEL ===== */}
+                                {isGrouped && orderedGroups.length > 0 && (
+                                    <div className="flex gap-2 overflow-x-auto pb-2 mt-1 mb-3 no-scrollbar">
+                                        {orderedGroups.map((g) => (
+                                            <button
+                                                key={g.groupId}
+                                                onClick={() => scrollToGroup(g.groupId)}
+                                                className="whitespace-nowrap px-3 py-1 rounded-full bg-zinc-100 text-xs md:text-sm font-neue hover:bg-zinc-200 transition"
+                                            >
+                                                {g.group}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
 
-                                            </section>
-                                        ))
+                                {/* ===== LISTA POR GRUPO ===== */}
+                                {isGrouped
+                                    ? orderedGroups.map((g) => (
+                                        <section
+                                            key={g.groupId}
+                                            ref={(el) => (groupRefs.current[g.groupId] = el)}
+                                            className="mb-6 scroll-mt-28"
+                                        >
+                                            <h3 className="font-neue text-base md:text-xl font-semibold tracking-wide mb-2 border-b">
+                                                {g.group}
+                                            </h3>
+                                            <CardapioItemsGrid items={g.menuItems} />
+                                        </section>
+                                    ))
                                     : (
-                                        // fallback caso currentItems seja um array plano de itens (sem agrupamento)
                                         <CardapioItemsGrid items={currentItems as any[]} />
-                                    )
-                                }
-
+                                    )}
                             </div>
                         );
                     }}
                 </Await>
             </Suspense>
-        </section >
-
-
+        </section>
     );
 }
 
-// app/components/shared/images-carousel.tsx
-"use client";
-
-
-
+// ======================================================
+// CARROSSEL DE IMAGENS (já estava no teu arquivo)
+// ======================================================
 type ImagesCarouselProps = {
     imageUrls: string[];
     className?: string;
@@ -459,7 +430,7 @@ function ImagesCarousel({
     imageUrls,
     className,
     autoplay = true,
-    intervalMs = 3500,
+    intervalMs = 3500
 }: ImagesCarouselProps) {
     const plugin = React.useRef(
         Autoplay({ delay: intervalMs, stopOnInteraction: false })
@@ -473,10 +444,7 @@ function ImagesCarousel({
         >
             <CarouselContent>
                 {imageUrls.map((src, i) => (
-                    <CarouselItem
-                        key={src ?? i}
-                        className="basis-full md:basis-1/2 lg:basis-1/3"
-                    >
+                    <CarouselItem key={src ?? i} className="basis-full lg:basis-1/3">
                         <div className="p-2">
                             <div className="overflow-hidden shadow">
                                 <img
@@ -497,9 +465,9 @@ function ImagesCarousel({
     );
 }
 
-
-
-
+// ======================================================
+// LISTA COM INFINITE SCROLL (mantida)
+// ======================================================
 const CardapioItemList = ({ allItems }: { allItems: MenuItemWithAssociations[] }) => {
     const [searchParams] = useSearchParams();
     const currentFilterTag = searchParams.get("tag");
@@ -510,25 +478,22 @@ const CardapioItemList = ({ allItems }: { allItems: MenuItemWithAssociations[] }
     const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     useEffect(() => {
-        // Clear previous timeout if it exists
         if (loadingTimeoutRef.current) {
             clearTimeout(loadingTimeoutRef.current);
         }
 
-        // Set loading to true and simulate a 300ms delay
         setIsLoading(true);
 
         loadingTimeoutRef.current = setTimeout(() => {
             const itemsFiltered = currentFilterTag
-                ? allItems.filter(i => i.tags?.public.some(t => t === currentFilterTag))
+                ? allItems.filter((i) => i.tags?.public.some((t) => t === currentFilterTag))
                 : allItems;
 
             setItems(itemsFiltered.slice(0, 10));
             setHasMore(itemsFiltered.length > 10);
-            setIsLoading(false); // Stop loading after data is set
+            setIsLoading(false);
         }, 300);
 
-        // Cleanup timeout on unmount or filter change
         return () => {
             if (loadingTimeoutRef.current) {
                 clearTimeout(loadingTimeoutRef.current);
@@ -546,7 +511,7 @@ const CardapioItemList = ({ allItems }: { allItems: MenuItemWithAssociations[] }
                 if (entries[0].isIntersecting && hasMore) {
                     setItems((prevItems) => {
                         const itemsFiltered = currentFilterTag
-                            ? allItems.filter(i => i.tags?.public.some(t => t === currentFilterTag))
+                            ? allItems.filter((i) => i.tags?.public.some((t) => t === currentFilterTag))
                             : allItems;
 
                         const newItems = itemsFiltered.slice(prevItems.length, prevItems.length + 10);
@@ -566,45 +531,41 @@ const CardapioItemList = ({ allItems }: { allItems: MenuItemWithAssociations[] }
             <div className="my-8">
                 <Loading />
             </div>
-        )
+        );
     }
 
     return (
         <div className="flex flex-col gap-4">
-
             <section>
                 <ul className="flex flex-col overflow-y-auto md:overflow-y-auto snap-mandatory mt-4 md:grid md:grid-cols-2 md:gap-x-4">
                     {items.map((item, index) => {
                         const isLastItem = items.length === index + 1;
                         return (
-
                             <CardapioItemFullImage
                                 ref={isLastItem ? lastItemRef : null}
                                 key={item.id}
                                 item={item}
                             />
-
                         );
                     })}
                 </ul>
             </section>
         </div>
     );
-}
+};
 
-// =====================
-// GRID DE ITENS RESPONSIVO (com expansão inline no mobile)
-// =====================
+// ======================================================
+// GRID DE ITENS (teu componente atualizado)
+// ======================================================
 function CardapioItemsGrid({ items }: { items: MenuItemWithAssociations[] }) {
     const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
     const [desktopDialogId, setDesktopDialogId] = useState<string | null>(null);
     const [isDesktop, setIsDesktop] = useState(false);
 
-    // NEW: refs por item
     const itemRefs = useRef<Record<string, HTMLLIElement | null>>({});
 
     useEffect(() => {
-        const mq = window.matchMedia("(min-width: 1024px)"); // ~lg
+        const mq = window.matchMedia("(min-width: 1024px)");
         const update = () => setIsDesktop(mq.matches);
         update();
         mq.addEventListener?.("change", update);
@@ -616,7 +577,6 @@ function CardapioItemsGrid({ items }: { items: MenuItemWithAssociations[] }) {
     const scrollToItemTop = (id: string) => {
         const el = itemRefs.current[id];
         if (!el) return;
-        // offset para cabeçalho/botão flutuante (ajuste se precisar)
         const OFFSET = 120;
         const top = el.getBoundingClientRect().top + window.scrollY - OFFSET;
         window.scrollTo({ top, behavior: "smooth" });
@@ -628,15 +588,12 @@ function CardapioItemsGrid({ items }: { items: MenuItemWithAssociations[] }) {
             return;
         }
 
-        // Se clicar em outro item, expande e faz scroll; se clicar no mesmo, colapsa.
         setExpandedItemId((curr) => {
             const willExpand = curr !== id;
             const next = willExpand ? id : null;
 
-            // espera o layout “abrir” um frame, então rola até o topo
             if (willExpand) {
                 requestAnimationFrame(() => {
-                    // mais um frame para garantir altura final
                     requestAnimationFrame(() => scrollToItemTop(id));
                 });
             }
@@ -648,11 +605,11 @@ function CardapioItemsGrid({ items }: { items: MenuItemWithAssociations[] }) {
         <>
             <ul
                 className="
-            mt-4 grid grid-cols-2 gap-3
-            sm:grid-cols-3
-            lg:grid-cols-4
-            xl:grid-cols-5
-          "
+          mt-4 grid grid-cols-2 gap-3
+          sm:grid-cols-3
+          lg:grid-cols-4
+          xl:grid-cols-5
+        "
             >
                 {items.map((item) => (
                     <CardapioGridItem
@@ -660,58 +617,44 @@ function CardapioItemsGrid({ items }: { items: MenuItemWithAssociations[] }) {
                         item={item}
                         isExpanded={expandedItemId === item.id}
                         onClick={() => onCardClick(item.id)}
-                        // NEW: passe a ref pra cada <li>
                         innerRef={(el) => (itemRefs.current[item.id] = el)}
                     />
                 ))}
             </ul>
-
-            {/* ...Dialog desktop permanece igual... */}
+            {/* se tiver dialog desktop, ele entra aqui (você pode manter o seu) */}
         </>
     );
 }
 
-
-/**
- * Card do item no grid
- * - Mobile: expande inline quando isExpanded = true
- * - Desktop: apenas dispara o onClick (que abre o Dialog)
- */
 function CardapioGridItem({
     item,
     isExpanded,
     onClick,
-    innerRef,
+    innerRef
 }: {
     item: MenuItemWithAssociations;
     isExpanded: boolean;
     onClick: () => void;
-    innerRef?: (el: HTMLLIElement | null) => void; // NEW
+    innerRef?: (el: HTMLLIElement | null) => void;
 }) {
     const featuredImage =
-        item.MenuItemGalleryImage?.find((img) => img.isPrimary) || item.MenuItemGalleryImage?.[0];
+        item.MenuItemGalleryImage?.find((img) => img.isPrimary) ||
+        item.MenuItemGalleryImage?.[0];
 
     return (
         <li
-            ref={innerRef} // NEW
+            ref={innerRef}
             className={cn(
                 "flex flex-col rounded-md border border-transparent",
                 "transition-all duration-300 ease-in-out",
-                // ajuda o scrollIntoView quando você quiser usar essa API no futuro
-                "scroll-mt-24 lg:scroll-mt-0", // NEW: margem de ancoragem
+                "scroll-mt-24 lg:scroll-mt-0",
                 isExpanded ? "col-span-2 lg:col-span-1" : "col-span-1"
             )}
         >
-
-            <div
-                className="flex flex-col"
-                onClick={onClick}
-            >
-                {/* Thumb clicável (expansão mobile / dialog desktop) */}
+            <div className="flex flex-col" onClick={onClick}>
                 <div
                     role="button"
                     aria-label={`Abrir ${item.name}`}
-
                     className="group overflow-hidden rounded-t-md relative focus:outline-none focus:ring-2 focus:ring-black/20"
                 >
                     <div
@@ -724,18 +667,15 @@ function CardapioGridItem({
                             src={featuredImage?.secureUrl || ""}
                             placeholder={item.imagePlaceholderURL || ""}
                             placeholderIcon={false}
-                            cnPlaceholderText={
-                                cn(
-                                    "text-black font-urw text-sm tracking-tight",
-                                    isExpanded && "text-lg"
-                                )
-                            }
+                            cnPlaceholderText={cn(
+                                "text-black font-urw text-sm tracking-tight",
+                                isExpanded && "text-lg"
+                            )}
                             cnPlaceholderContainer="from-zinc-200 via-zinc-100 to-white "
                             cnContainer="w-full h-full"
                             enableOverlay={false}
                         />
 
-                        {/* Selos */}
                         {item.meta?.isBestSeller && (
                             <div className="absolute left-1 top-2 rounded-sm bg-black px-2 py-[2px] text-[10px] font-medium text-white backdrop-blur font-neue tracking-wide">
                                 <span>Mais vendido</span>
@@ -749,215 +689,200 @@ function CardapioGridItem({
                     </div>
                 </div>
 
-
-                {/* ======= BLOCO SEMPRE VISÍVEL (como o original) ======= */}
                 <div className="px-1 pb-2 pt-1 flex flex-col bg-white rounded-b-md">
-                    {/* Nome */}
-                    <span className={
-                        cn(
+                    <span
+                        className={cn(
                             "font-neue line-clamp-1 font-medium text-xs tracking-wide sm:text-base",
                             isExpanded && "text-md"
-                        )
-                    }>
+                        )}
+                    >
                         {item.name}
                     </span>
 
-                    {/* Ingredientes: CLAMPED and NO CLAMPED WHEN EXPANDED */}
-                    <span className={
-                        cn(
+                    <span
+                        className={cn(
                             "font-neue text-xs tracking-wide leading-[110%] sm:text-base line-clamp-2 my-1",
                             isExpanded && "text-md line-clamp-none mb-2 leading-[120%]"
-                        )
-                    }>
+                        )}
+                    >
                         {item.ingredients}
                     </span>
-
-                    {/* Preço / variações */}
-
                 </div>
-
             </div>
 
             <CardapioItemPriceSelect prices={item.MenuItemSellingPriceVariation} />
 
-
-            {/* Barra de ações compacta (sempre visível) */}
             <div className="flex justify-between shadow-sm bg-white">
-
-                <ShareIt item={item} size={
-                    isExpanded === true ? 20 : 16
-                }
+                <ShareIt
+                    item={item}
+                    size={isExpanded === true ? 20 : 16}
                     cnContainer={cn("px-2 ", isExpanded && "my-2 border border-black")}
                 >
-
                     {isExpanded && <span className="font-neue text-sm">Compartilhar</span>}
                 </ShareIt>
 
-                <LikeIt item={item} size={
-                    isExpanded === true ? 20 : 16
-                }
+                <LikeIt
+                    item={item}
+                    size={isExpanded === true ? 20 : 16}
                     cnContainer={cn("px-2 ", isExpanded && "my-2 border border-red-500")}
                 >
                     {isExpanded && <span className="font-neue text-sm text-red-500 mr-2">Gostei</span>}
                 </LikeIt>
             </div>
 
-            {/* ======= BLOCO EXPANSÍVEL EXTRA (aparece no mobile quando expandido) ======= */}
             <div
                 className={cn(
                     "overflow-hidden transition-all duration-300 ease-in-out bg-white rounded-b-md",
                     isExpanded ? "max-h-[320px] opacity-100 px-3 pb-3" : "max-h-0 opacity-0 px-0 pb-0"
                 )}
             >
-                {/* Conteúdos adicionais opcionais (sem duplicar o bloco sempre visível) */}
-                <div className="mt-1 space-y-2 text-xs">
-                    {/* Se quiser, adicione itens extras aqui: alergênicos, tempo médio, CTA, etc. */}
-                    {/* Exemplo simples: */}
-                    {/* <p className="text-muted-foreground">Pergunte sobre opções sem lactose.</p> */}
-                </div>
+                <div className="mt-1 space-y-2 text-xs">{/* extra se quiser */}</div>
             </div>
         </li>
     );
 }
 
-
-
-
-
-
+// ======================================================
+// CARD DE LISTA COMPLETA (full image)
+// ======================================================
 interface CardapioItemFullImageProps {
     item: MenuItemWithAssociations;
 }
 
-const CardapioItemFullImage = React.forwardRef(({ item }: CardapioItemFullImageProps, ref: any) => {
-    const { playNavigation } = useSoundEffects()
-    const italyProduct = item.tags?.public.some(t => t.toLocaleLowerCase() === "produtos-italianos")
-    const bestMonthlySeller = item.tags?.all.some(t => t.toLocaleLowerCase() === "mais-vendido-mes")
-    const bestSeller = item.tags?.all.some(t => t.toLocaleLowerCase() === "mais-vendido")
+const CardapioItemFullImage = React.forwardRef(
+    ({ item }: CardapioItemFullImageProps, ref: any) => {
+        const { playNavigation } = useSoundEffects();
+        const italyProduct = item.tags?.public.some(
+            (t) => t.toLocaleLowerCase() === "produtos-italianos"
+        );
+        const bestMonthlySeller = item.tags?.all.some(
+            (t) => t.toLocaleLowerCase() === "mais-vendido-mes"
+        );
+        const bestSeller = item.tags?.all.some(
+            (t) => t.toLocaleLowerCase() === "mais-vendido"
+        );
 
-    const featuredImage = item.MenuItemGalleryImage.filter(img => img.isPrimary)[0];
+        const featuredImage = item.MenuItemGalleryImage.filter((img) => img.isPrimary)[0];
 
-    return (
-        <li className="snap-start border-b py-[0.15rem]" id={item.id} ref={ref}>
-            <div className="relative h-[350px]">
+        return (
+            <li className="snap-start border-b py-[0.15rem]" id={item.id} ref={ref}>
+                <div className="relative h-[350px]">
+                    <CardapioItemImageSingle
+                        src={featuredImage?.secureUrl || ""}
+                        placeholder={item.imagePlaceholderURL || ""}
+                        placeholderIcon={false}
+                        cnContainer="w-full h-full"
+                    />
 
-                <CardapioItemImageSingle
-                    src={featuredImage?.secureUrl || ""}
-                    placeholder={item.imagePlaceholderURL || ""}
-                    placeholderIcon={false}
+                    <div className="absolute inset-0">
+                        <div className="grid grid-cols-8 h-full">
+                            <Link
+                                to={`/cardapio/${item.slug}`}
+                                className="flex flex-col mb-2 px-4 text-white  justify-end items-end w-full col-span-7"
+                                onClick={() => {
+                                    playNavigation();
+                                }}
+                            >
+                                <div className="flex flex-col gap-0">
+                                    <div className="flex items-center gap-2">
+                                        {italyProduct && <ItalyIngredientsStatement showText={false} />}
+                                        <h3 className="font-urw text-xl">{item.name}</h3>
+                                    </div>
 
-                    cnContainer="w-full h-full"
-                />
+                                    <div className="flex flex-col gap-2">
+                                        {bestSeller && <AwardBadge>A mais desejada</AwardBadge>}
+                                        {bestMonthlySeller && <AwardBadge>Mais vendida do mes</AwardBadge>}
+                                    </div>
 
-
-                <div className="absolute inset-0" >
-
-                    <div className="grid grid-cols-8 h-full">
-                        <Link to={`/cardapio/${item.slug}`}
-                            className="flex flex-col mb-2 px-4 text-white  justify-end items-end w-full col-span-7"
-                            onClick={() => {
-                                playNavigation()
-                            }}
-                        >
-                            <div className="flex flex-col gap-0">
-                                <div className="flex items-center gap-2">
-                                    {italyProduct && <ItalyIngredientsStatement showText={false} />}
-                                    <h3 className="font-urw text-xl">{item.name}</h3>
+                                    <div className="flex flex-col gap-0 ">
+                                        <p className="font-neue leading-tight text-[15px] mt-1 mb-4 tracking-wide">
+                                            {capitalize(item.ingredients)}
+                                        </p>
+                                        <CardapioItemPrice
+                                            prices={item?.MenuItemSellingPriceVariation}
+                                            cnLabel="text-white"
+                                            cnValue="text-white font-semibold"
+                                            showValuta={false}
+                                        />
+                                    </div>
                                 </div>
-
-                                <div className="flex flex-col gap-2">
-                                    {bestSeller && <AwardBadge>A mais desejada</AwardBadge>}
-                                    {bestMonthlySeller && <AwardBadge>Mais vendida do mes</AwardBadge>}
-                                </div>
-
-
-                                <div className="flex flex-col gap-0 ">
-                                    <p className="font-neue leading-tight text-[15px] mt-1 mb-4 tracking-wide">{capitalize(item.ingredients)}</p>
-                                    <CardapioItemPrice prices={item?.MenuItemSellingPriceVariation} cnLabel="text-white" cnValue="text-white font-semibold" showValuta={false} />
-                                </div>
-
-                            </div>
-                        </Link>
-                        <CardapioItemActionBarVertical item={item} />
+                            </Link>
+                            <CardapioItemActionBarVertical item={item} />
+                        </div>
                     </div>
-
-
                 </div>
-            </div>
+            </li>
+        );
+    }
+);
 
-        </li>
-
-    )
-})
-
-
-
-
+// ======================================================
+// TIPOS / HELPERS
+// ======================================================
 type MenuItem = {
-    id: string
-    name: string
-    slug: string
-    imagePlaceholderURL?: string
-    MenuItemGalleryImage?: { isPrimary?: boolean; secureUrl?: string }[]
-    tags?: { all?: string[] }
-    // ...outros campos usados pelo grid
-}
+    id: string;
+    name: string;
+    slug: string;
+    imagePlaceholderURL?: string;
+    MenuItemGalleryImage?: { isPrimary?: boolean; secureUrl?: string }[];
+    tags?: { all?: string[]; public?: string[] };
+};
 
 type GroupedItems = {
-    groupId: string
-    group: string
-    sortOrderIndex?: number
-    menuItems: MenuItem[]
-}
+    groupId: string;
+    group: string;
+    sortOrderIndex?: number;
+    menuItems: MenuItem[];
+};
 
 type CardapioItemListDestaqueProps = {
-    title?: string
-    items: MenuItem[] | GroupedItems[]
-    tagFilter?: string
-    carouselDelay?: number
-}
+    title?: string;
+    items: MenuItem[] | GroupedItems[];
+    tagFilter?: string;
+    carouselDelay?: number;
+};
 
 function isGrouped(items: MenuItem[] | GroupedItems[]): items is GroupedItems[] {
-    return Array.isArray(items) && items.length > 0 && "menuItems" in (items[0] as any)
+    return Array.isArray(items) && items.length > 0 && "menuItems" in (items[0] as any);
 }
 
+// ======================================================
+// DESTAQUES (mantido)
+// ======================================================
 function CardapioItemListDestaque({
     title,
     items,
     tagFilter,
-    carouselDelay = 2000,
+    carouselDelay = 2000
 }: CardapioItemListDestaqueProps) {
-    const { playNavigation } = useSoundEffects()
-    const [api, setApi] = React.useState<CarouselApi | null>(null)
-    const [selectedIndex, setSelectedIndex] = React.useState(0)
+    const { playNavigation } = useSoundEffects();
+    const [api, setApi] = React.useState<CarouselApi | null>(null);
+    const [selectedIndex, setSelectedIndex] = React.useState(0);
 
-    // badge do selo (ex.: “Mais vendido”)
     const badge =
         tagFilter?.toLowerCase() === "mais-vendido"
             ? "Mais vendido"
             : tagFilter?.toLowerCase() === "em-destaque"
                 ? "Sugestão do chef"
-                : undefined
+                : undefined;
 
-    // -------------------------------
-    // MODO 1: LISTA PLANA (comportamento anterior)
-    // -------------------------------
+    // MODO 1: lista plana
     if (!isGrouped(items)) {
         const slides = React.useMemo(() => {
             return (items || [])
-                .filter(i => (tagFilter ? i.tags?.all?.some(t => t === tagFilter) : true))
-                .slice(0, 4)
-        }, [items, tagFilter])
+                .filter((i) => (tagFilter ? i.tags?.all?.some((t) => t === tagFilter) : true))
+                .slice(0, 4);
+        }, [items, tagFilter]);
 
         React.useEffect(() => {
-            if (!api) return
-            const onSelect = () => setSelectedIndex(api.selectedScrollSnap())
-            api.on("select", onSelect)
-            setSelectedIndex(api.selectedScrollSnap())
-            return () => api.off("select", onSelect)
-        }, [api])
+            if (!api) return;
+            const onSelect = () => setSelectedIndex(api.selectedScrollSnap());
+            api.on("select", onSelect);
+            setSelectedIndex(api.selectedScrollSnap());
+            return () => api.off("select", onSelect);
+        }, [api]);
 
-        if (!slides.length) return null
+        if (!slides.length) return null;
 
         return (
             <div className="p-2">
@@ -974,16 +899,16 @@ function CardapioItemListDestaque({
                         Autoplay({
                             delay: carouselDelay,
                             stopOnInteraction: false,
-                            stopOnMouseEnter: true,
-                        }),
+                            stopOnMouseEnter: true
+                        })
                     ]}
                     className="relative"
                 >
                     <CarouselContent>
                         {slides.map((i) => {
                             const featuredImage =
-                                i.MenuItemGalleryImage?.find(img => img.isPrimary) ||
-                                i.MenuItemGalleryImage?.[0]
+                                i.MenuItemGalleryImage?.find((img) => img.isPrimary) ||
+                                i.MenuItemGalleryImage?.[0];
 
                             return (
                                 <CarouselItem key={i.id}>
@@ -1015,11 +940,10 @@ function CardapioItemListDestaque({
                                         </div>
                                     </Link>
                                 </CarouselItem>
-                            )
+                            );
                         })}
                     </CarouselContent>
 
-                    {/* Dots */}
                     <div className="absolute inset-x-0 -bottom-3 flex items-center justify-center gap-2 md:-bottom-4">
                         {slides.map((_, idx) => (
                             <button
@@ -1028,34 +952,32 @@ function CardapioItemListDestaque({
                                 onClick={() => api?.scrollTo(idx)}
                                 className={[
                                     "h-2 w-2 rounded-full transition-all",
-                                    selectedIndex === idx ? "w-6 bg-black/80" : "bg-black/30",
+                                    selectedIndex === idx ? "w-6 bg-black/80" : "bg-black/30"
                                 ].join(" ")}
                             />
                         ))}
                     </div>
                 </Carousel>
             </div>
-        )
+        );
     }
 
-    // -------------------------------
-    // MODO 2: AGRUPADO — um carrossel por grupo
-    // -------------------------------
+    // MODO 2: agrupado
     const groups = React.useMemo(
         () =>
             (items as GroupedItems[])
-                .map(g => ({
+                .map((g) => ({
                     ...g,
                     slides: (g.menuItems || [])
-                        .filter(i => (tagFilter ? i.tags?.all?.some(t => t === tagFilter) : true))
-                        .slice(0, 4),
+                        .filter((i) => (tagFilter ? i.tags?.all?.some((t) => t === tagFilter) : true))
+                        .slice(0, 4)
                 }))
-                .filter(g => g.slides.length > 0)
+                .filter((g) => g.slides.length > 0)
                 .sort((a, b) => (a.sortOrderIndex ?? 0) - (b.sortOrderIndex ?? 0)),
         [items, tagFilter]
-    )
+    );
 
-    if (!groups.length) return null
+    if (!groups.length) return null;
 
     return (
         <div className="p-2">
@@ -1068,24 +990,22 @@ function CardapioItemListDestaque({
             <div className="flex flex-col gap-6">
                 {groups.map((group) => (
                     <section key={group.groupId}>
-
-                        {/* Para cada grupo, instanciamos um carrossel independente */}
                         <Carousel
                             opts={{ loop: true, align: "start" }}
                             plugins={[
                                 Autoplay({
                                     delay: carouselDelay,
                                     stopOnInteraction: false,
-                                    stopOnMouseEnter: true,
-                                }),
+                                    stopOnMouseEnter: true
+                                })
                             ]}
                             className="relative"
                         >
                             <CarouselContent>
                                 {group.slides.map((i) => {
                                     const featuredImage =
-                                        i.MenuItemGalleryImage?.find(img => img.isPrimary) ||
-                                        i.MenuItemGalleryImage?.[0]
+                                        i.MenuItemGalleryImage?.find((img) => img.isPrimary) ||
+                                        i.MenuItemGalleryImage?.[0];
 
                                     return (
                                         <CarouselItem key={i.id}>
@@ -1118,7 +1038,7 @@ function CardapioItemListDestaque({
                                                 </div>
                                             </Link>
                                         </CarouselItem>
-                                    )
+                                    );
                                 })}
                             </CarouselContent>
                         </Carousel>
@@ -1126,24 +1046,5 @@ function CardapioItemListDestaque({
                 ))}
             </div>
         </div>
-    )
+    );
 }
-
-
-
-
-
-
-interface SectionTitleProps {
-    children: React.ReactNode,
-    cnContainer?: string
-}
-
-function SectionTitle({ children, cnContainer }: SectionTitleProps) {
-    return (
-        <h3 className={cn("font-medium text-xl tracking-tight mb-4 font-neue", cnContainer)}>{children}</h3>
-    )
-}
-
-
-
