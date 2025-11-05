@@ -249,7 +249,7 @@ export default function CardapioWebIndex() {
             <Separator className="my-6 md:hidden" />
 
             {/* TOPO: Halloween + Destaques (igual ao teu) */}
-            <div className="flex flex-col mt-24 md:grid md:grid-cols-2 md:items-start">
+            <div className="flex flex-col mt-24 md:grid md:grid-cols-2 md:items-start md:mt-40 md:justify-center">
                 {/* Bloco Halloween */}
                 {/* <Suspense fallback={<Loading />}>
                     <Await resolve={items}>
