@@ -244,16 +244,14 @@ export async function action({ request }: LoaderFunctionArgs) {
 export default function CardapioWebIndex() {
     const { items, tags, postFeatured } = useLoaderData<typeof loader>();
 
-    const imageUrls = Array.from({ length: 4 }, (_, i) => `/images/halloween/halloween_25_${i + 1}.png`);
-
     return (
         <section className="flex flex-col mb-24" data-element="cardapio-index">
             <Separator className="my-6 md:hidden" />
 
             {/* TOPO: Halloween + Destaques (igual ao teu) */}
-            <div className="flex flex-col md:grid md:grid-cols-2 md:items-start md:mt-40">
+            <div className="flex flex-col mt-24 md:grid md:grid-cols-2 md:items-start">
                 {/* Bloco Halloween */}
-                <Suspense fallback={<Loading />}>
+                {/* <Suspense fallback={<Loading />}>
                     <Await resolve={items}>
                         {(items) => {
                             const imageUrls = Array.from(
@@ -272,7 +270,7 @@ export default function CardapioWebIndex() {
                     </Await>
                 </Suspense>
 
-                <Separator className="m-4 md:hidden" />
+                <Separator className="m-4 md:hidden" /> */}
 
                 {/* Destaques */}
                 <Suspense fallback={<Loading />}>
