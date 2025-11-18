@@ -20,3 +20,14 @@ x-api-key: 3PjN!u9g@r5XzE1fQw7H
 ###
 GET https://www.amodomio.com.br/api/orcamento
 x-api-key: 3PjN!u9g@r5XzE1fQw7H
+
+
+###
+GET https://a-modo-mio-evolutionapi-3478d0-69-62-91-94.traefik.me/
+
+
+###
+GET https://a-modo-mio-evolutionapi-wursz4-9b618c-69-62-91-94.traefik.me
+
+###
+GET https://evolution-api.amodomio.dev
