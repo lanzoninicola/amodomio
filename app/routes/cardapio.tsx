@@ -2,7 +2,7 @@ import { InstagramLogoIcon } from "@radix-ui/react-icons";
 import { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { Await, Link, Outlet, defer, matchPath, useLoaderData, useLocation } from "@remix-run/react";
 import { ArrowRight, Divide, Donut, Info, Instagram, LayoutTemplate, MapPin, Proportions, SearchIcon, User, Users } from "lucide-react";
-import React, { ReactNode, Suspense, useState } from "react";
+import React, { ReactNode, Suspense, useEffect, useState } from "react";
 
 import ItalyFlag from "~/components/italy-flag/italy-flag";
 import Loading from "~/components/loading/loading";
@@ -120,10 +120,21 @@ export default function CardapioWeb() {
     );
 }
 
+function shouldShowBanner(date: Date = new Date()) {
+    const day = date.getDay(); // 0 = domingo, 1 = segunda, ... 6 = sábado
+    return day === 1 || day === 2; // mostra apenas segunda e terça
+}
 
 function BannerFechado() {
 
     const text = "Estamos fechado agora! Nosso horarío de funcionamento: Quarta a domingo, das 18h às 22h"
+    const [isClosed, setIsClosed] = useState<boolean | null>(null);
+
+    useEffect(() => {
+        setIsClosed(shouldShowBanner());
+    }, []);
+
+    if (!isClosed) return null;
 
     return (
         <>
@@ -582,4 +593,3 @@ export function CardapioSizesDialog() {
         </CardapioFooterMenuItemDialog>
     );
 }
-
