@@ -2,7 +2,7 @@ import { InstagramLogoIcon } from "@radix-ui/react-icons";
 import { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { Await, Link, Outlet, defer, matchPath, useLoaderData, useLocation } from "@remix-run/react";
 import { ArrowRight, Divide, Donut, Info, Instagram, LayoutTemplate, MapPin, Proportions, SearchIcon, User, Users } from "lucide-react";
-import { ReactNode, Suspense, useState } from "react";
+import React, { ReactNode, Suspense, useEffect, useState } from "react";
 
 import ItalyFlag from "~/components/italy-flag/italy-flag";
 import Loading from "~/components/loading/loading";
@@ -109,6 +109,7 @@ export default function CardapioWeb() {
 
     return (
         <>
+            <BannerFechado />
             <CardapioHeader />
             <div className="md:m-auto md:max-w-6xl">
                 {/* {currentPage === "other" && <CompanyInfo />} */}
@@ -119,6 +120,33 @@ export default function CardapioWeb() {
     );
 }
 
+function shouldShowBanner(date: Date = new Date()) {
+    const day = date.getDay(); // 0 = domingo, 1 = segunda, ... 6 = sábado
+    return day === 1 || day === 2; // mostra apenas segunda e terça
+}
+
+function BannerFechado() {
+
+    const text = "Estamos fechado agora! Nosso horarío de funcionamento: Quarta a domingo, das 18h às 22h"
+    const [isClosed, setIsClosed] = useState<boolean | null>(null);
+
+    useEffect(() => {
+        setIsClosed(shouldShowBanner());
+    }, []);
+
+    if (!isClosed) return null;
+
+    return (
+        <>
+            <ScrollingBanner cnContainer="fixed top-0 inset-x-0 w-screen bg-red-500 z-50" data-element="banner-fechado">
+                <span className="font-neue text-white  font-semibold uppercase tracking-wide">{text}</span>
+            </ScrollingBanner>
+            <ScrollingBanner cnContainer="fixed bottom-0 w-screen bg-red-500 z-50" data-element="banner-fechado">
+                <span className="font-neue text-white font-semibold uppercase tracking-wide">{text}</span>
+            </ScrollingBanner>
+        </>
+    )
+}
 
 
 
@@ -129,7 +157,7 @@ function CardapioHeader() {
 
 
     return (
-        <header className="fixed top-0 w-full z-50 md:max-w-6xl md:-translate-x-1/2 md:left-1/2 " >
+        <header className="fixed top-0 w-full z-10 md:max-w-6xl md:-translate-x-1/2 md:left-1/2 " >
             <div className="flex flex-col bg-white px-1 pt-2 py-3 h-[50px] md:h-[70px]">
                 <div className="grid grid-cols-3 items-center w-full">
                     {/* <div className="flex gap-1 items-center" onClick={() => setShowSearch(!showSearch)}>
@@ -236,6 +264,12 @@ function CardapioHeader() {
 
 
 const ScrollingBanner = ({ children, cnContainer, style }: { children?: ReactNode, cnContainer?: string, style?: React.CSSProperties }) => {
+    const content = (
+        <div className="flex items-center gap-4 px-6">
+            {children}
+        </div>
+    );
+
     return (
         <div className={
             cn(
@@ -247,9 +281,12 @@ const ScrollingBanner = ({ children, cnContainer, style }: { children?: ReactNod
             style={style}
         >
             <div
-                className="text-center px-10 text-lg font-semibold text-black animate-scrollingText whitespace-nowrap flex"
+                className="text-center text-lg font-semibold text-black animate-scrollingText whitespace-nowrap flex w-max"
             >
-                {children}
+                {content}
+                <div aria-hidden="true">
+                    {content}
+                </div>
             </div>
         </div>
     );
@@ -556,5 +593,3 @@ export function CardapioSizesDialog() {
         </CardapioFooterMenuItemDialog>
     );
 }
-
-
