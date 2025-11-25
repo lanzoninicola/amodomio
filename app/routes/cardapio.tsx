@@ -348,7 +348,9 @@ function CardapioFooter() {
     const { fazerPedidoPublicURL } = useLoaderData<typeof loader>();
 
     return (
-        <div className="fixed bottom-0 w-full h-[70px] bg-white px-4 flex items-center justify-between border-t border-gray-200">
+        <footer className="fixed bottom-0 w-full h-[70px] bg-white px-4 flex items-center justify-between border-t border-gray-200
+        z-10 md:max-w-6xl md:-translate-x-1/2 md:left-1/2
+        ">
             {/* Botão Tamanhos à esquerda */}
             <div className="flex">
                 <CardapioSizesDialog />
@@ -379,7 +381,7 @@ function CardapioFooter() {
             <div className="flex">
                 <CardapioSizesDialog />
             </div>
-        </div>
+        </footer>
     );
 }
 
