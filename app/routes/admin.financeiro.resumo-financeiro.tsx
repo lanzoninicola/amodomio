@@ -180,6 +180,13 @@ export async function action({ request }: ActionFunctionArgs) {
        Recalcular metas (usa settings) - também via fetcher
     ------------------------------------------------------ */
     if (intent === "generateDailyGoals") {
+      const monthlyClose = await prismaClient.financialMonthlyClose.findFirst({
+        orderBy: [
+          { referenceYear: "desc" },
+          { referenceMonth: "desc" },
+        ],
+      });
+
       const summary = await prismaClient.financialSummary.findFirst({
         where: { isSnapshot: false },
         orderBy: { createdAt: "desc" },
@@ -202,7 +209,13 @@ export async function action({ request }: ActionFunctionArgs) {
         });
       }
 
-      const pe = summary.pontoEquilibrioAmount ?? 0;
+      const pe = monthlyClose?.pontoEquilibrioAmount ?? summary.pontoEquilibrioAmount ?? 0;
+      if (pe <= 0) {
+        return json({
+          ok: false,
+          message: "Não foi possível calcular o ponto de equilíbrio a partir do fechamento mensal ou resumo atual.",
+        });
+      }
       const p1 = settings.participacaoDia01Perc ?? 0;
       const p2 = settings.participacaoDia02Perc ?? 0;
       const p3 = settings.participacaoDia03Perc ?? 0;

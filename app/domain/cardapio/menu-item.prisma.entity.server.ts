@@ -498,6 +498,7 @@ export class MenuItemPrismaEntity {
         group: item.MenuItemGroup,
         category: item.Category,
         name: item.name,
+        sortOrderIndex: item.sortOrderIndex,
         ingredients: item.ingredients,
         visible: item.visible,
         active: item.active,
