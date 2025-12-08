@@ -1102,6 +1102,17 @@ model KdsDailyOrderDetail {
   @@map("kds_daily_order_details")
 }
 
+model DoughDailyStock {
+  id        String   @id @default(uuid())
+  date      DateTime
+  dateInt   Int      @unique @map("date_int")
+  size      String?  @map("size")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("dough_daily_stock")
+}
+
 model DeliveryZone {
   id        String   @id @default(uuid())
   name      String
