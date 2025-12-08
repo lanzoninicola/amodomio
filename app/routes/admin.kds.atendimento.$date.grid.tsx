@@ -1198,7 +1198,7 @@ type PredictionData = {
   realTimelineBuckets: TimelineBucket[];
   realLastReadyAt: number | null;
 
-  // Previsão teórica (ignora fila/operadores; apenas criadoAt + tempo médio)
+  // Previsão teórica (fila ideal desde o primeiro pedido)
   theoreticalReadyMap: ReadyAtMap;
   theoreticalTimelineReadyMap: ReadyAtMap;
   theoreticalTimelineBuckets: TimelineBucket[];
@@ -1206,27 +1206,6 @@ type PredictionData = {
 
   orderLabelMap: Map<string, string>;
 };
-
-function calcTheoreticalReadyMap(
-  orders: MinimalOrderRow[]
-): ReadyAtMap {
-  const map: ReadyAtMap = new Map();
-  for (const o of orders) {
-    if (!o.createdAt) continue;
-    const createdMs = new Date(o.createdAt as any).getTime();
-    if (!Number.isFinite(createdMs)) continue;
-    const counts = parseSizeSafe(o.size);
-    const prepMinutes =
-      (counts.P ?? 0) * PREP_MINUTES_PER_SIZE.P +
-      (counts.M ?? 0) * PREP_MINUTES_PER_SIZE.M +
-      (counts.F ?? 0) * PREP_MINUTES_PER_SIZE.F +
-      (counts.I ?? 0) * PREP_MINUTES_PER_SIZE.I +
-      (counts.FT ?? 0) * PREP_MINUTES_PER_SIZE.FT;
-    const readyAtMs = createdMs + Math.max(1, prepMinutes) * 60_000;
-    map.set(o.id, readyAtMs);
-  }
-  return map;
-}
 
 function computePredictionData(
   rowsDb: OrderRow[],
@@ -1267,7 +1246,6 @@ function computePredictionData(
   });
 
   const inProduction = minimal.filter((o) => !o.finalizadoAt);
-  const timelineOrders = inProduction.filter((o) => o.hasMoto === true);
 
   const readyMap = computeReadyAtMap({
     orders: inProduction,
@@ -1275,17 +1253,21 @@ function computePredictionData(
     prepMinutesPerSize: PREP_MINUTES_PER_SIZE,
     nowMs,
   });
-  const timelineReadyMap = computeReadyAtMap({
-    orders: timelineOrders,
+  const baseMs =
+    inProduction.length > 0
+      ? Math.min(
+        ...inProduction.map((o) =>
+          o.createdAt ? new Date(o.createdAt as any).getTime() : Number.POSITIVE_INFINITY
+        )
+      )
+      : nowMs;
+
+  const theoreticalReadyMap = computeReadyAtMap({
+    orders: inProduction,
     operatorCount,
     prepMinutesPerSize: PREP_MINUTES_PER_SIZE,
-    nowMs,
+    nowMs: baseMs,
   });
-
-  // Teórico deve usar o horário de entrada na produção (novoPedidoAt), por isso usamos `minimal`
-  // em vez de `eligible` (que traria createdAt do banco).
-  const theoreticalReadyMap = calcTheoreticalReadyMap(minimal);
-  const theoreticalTimelineReadyMap = calcTheoreticalReadyMap(timelineOrders);
 
   let realLastReadyAt: number | null = null;
   for (const ts of readyMap.values()) {
@@ -1296,6 +1278,20 @@ function computePredictionData(
   for (const ts of theoreticalReadyMap.values()) {
     if (theoreticalLastReadyAt === null || ts > theoreticalLastReadyAt) theoreticalLastReadyAt = ts;
   }
+
+  const timelineOrders = minimal; // inclui todos os pedidos em produção na timeline
+  const timelineReadyMap = computeReadyAtMap({
+    orders: timelineOrders,
+    operatorCount,
+    prepMinutesPerSize: PREP_MINUTES_PER_SIZE,
+    nowMs,
+  });
+  const theoreticalTimelineReadyMap = computeReadyAtMap({
+    orders: timelineOrders,
+    operatorCount,
+    prepMinutesPerSize: PREP_MINUTES_PER_SIZE,
+    nowMs: baseMs,
+  });
 
   const timelineBuckets = buildTimelineBuckets(timelineReadyMap, {
     nowMs,
@@ -1342,7 +1338,7 @@ export default function GridKdsPage() {
 
   const [channelFilter, setChannelFilter] = useState<string>("");
   const [timelineOpen, setTimelineOpen] = useState(false);
-  const [predictionMode, setPredictionMode] = useState<"real" | "theoretical">("real");
+  const [predictionMode, setPredictionMode] = useState<"real" | "theoretical">("theoretical");
 
   // ← estado do botão de cartão na Venda Livre rápida
   const [vlIsCreditCard, setVlIsCreditCard] = useState(false);
@@ -1543,8 +1539,18 @@ export default function GridKdsPage() {
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="real">Real (fila + operadores)</SelectItem>
-                            <SelectItem value="theoretical">Teórico (sem fila)</SelectItem>
+                            <SelectItem value="real">
+                              <div className="flex flex-col gap-1">
+                                <span className="text-xs">Horário atual</span>
+                                <span className="text-xs font-muted-foreground">Fila atual a partir de nowMs</span>
+                              </div>
+                            </SelectItem>
+                            <SelectItem value="theoretical">
+                              <div className="flex flex-col gap-1">
+                                <span className="text-xs">Horário primeiro pedido</span>
+                                <span className="text-xs font-muted-foreground">Fila ideal desde o primeiro pedido</span>
+                              </div>
+                            </SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
