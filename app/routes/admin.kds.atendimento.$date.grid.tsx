@@ -73,6 +73,7 @@ import { computeNetRevenueAmount } from "~/domain/finance/compute-net-revenue-am
 import { setOrderStatus } from "~/domain/kds/server/repository.server";
 import { MoneyInput } from "~/components/money-input/MoneyInput";
 import { getAvailableDoughSizes, getDoughStock, normalizeCounts, saveDoughStock, type DoughSizeOption } from "~/domain/kds/dough-stock.server";
+import { Link } from "@remix-run/react";
 
 /* ===========================
    Meta
@@ -1040,7 +1041,7 @@ export default function GridKdsPage() {
     return base;
   }, [availableSizes]);
 
-  const [showStockPanel, setShowStockPanel] = useState(() => !!doughStock);
+  const [showStockPanel, setShowStockPanel] = useState(() => true);
   const [floatingTop, setFloatingTop] = useState(160);
   const [dragging, setDragging] = useState(false);
 
@@ -1172,13 +1173,14 @@ export default function GridKdsPage() {
           )}
         </div>
 
-        {/* Painel-resumo de metas e receita */}
+        {/* Painel-resumo de metas e receita + link estoque */}
         <div className={cn("rounded-lg border p-3 col-span-8", statusColor)}>
           <div className="flex items-center gap-2 mb-2">
             <BadgeDollarSign className="w-5 h-5" />
             <div className="font-semibold">Meta financeira do dia</div>
-            <div className="text-xs opacity-70 ml-auto">
-              Taxa cartão: {dashboard.cardFeePerc?.toFixed(2)}% · Imposto: {dashboard.taxPerc?.toFixed(2)}% · Taxa Marketplace: {dashboard.marketplaceTaxPerc?.toFixed(2)}%
+            <div className="ml-auto flex items-center gap-3 text-xs opacity-70">
+              <span>Taxa cartão: {dashboard.cardFeePerc?.toFixed(2)}% · Imposto: {dashboard.taxPerc?.toFixed(2)}% · Taxa Marketplace: {dashboard.marketplaceTaxPerc?.toFixed(2)}%</span>
+
             </div>
           </div>
 
@@ -1212,119 +1214,13 @@ export default function GridKdsPage() {
               </div>
             </div>
           </div>
-      </div>
-      </div>
-
-      <div className="flex items-center gap-3">
-        <Button
-          type="button"
-          variant={showStockPanel ? "outline" : "secondary"}
-          size="sm"
-          onClick={() => setShowStockPanel((v) => !v)}
-        >
-          {showStockPanel ? "Esconder estoque do dia" : "Mostrar estoque do dia"}
-        </Button>
-        {!doughStock && (
-          <span className="text-xs text-slate-500">Defina o estoque inicial para exibir contadores.</span>
-        )}
+        </div>
       </div>
 
       <Suspense fallback={<div className="rounded-lg border p-3 text-sm text-slate-500">Carregando estoque de massa…</div>}>
         <Await resolve={doughUsage}>
           {(used: SizeCounts) => {
-            if (!showStockPanel) return null;
-
-            const sizeOrder = (availableSizes as DoughSizeOption[]) ?? [];
-
-            const remaining = calcRemaining(stockDraft, used);
-            const totalStock = stockDraft.F + stockDraft.M + stockDraft.P + stockDraft.I + stockDraft.FT;
-            const noStock = totalStock > 0
-              ? sizeOrder.filter((s) => remaining[s.key] <= 0).map((s) => s.key)
-              : [];
-
-            return (
-              <div className="rounded-lg border p-3 space-y-3">
-                <div className="flex flex-wrap items-center gap-3">
-                  <div className="flex items-center gap-2">
-                    <Pizza className="w-5 h-5 text-orange-600" />
-                    <div>
-                      <div className="text-sm font-semibold">Estoque de massa (dia)</div>
-                      <div className="text-xs text-slate-500">Defina os discos disponíveis por tamanho para o atendimento.</div>
-                    </div>
-                  </div>
-
-                  <div className="ml-auto flex items-center gap-2 text-xs text-slate-600">
-                    {stockFx.state !== "idle" && (
-                      <span className="inline-flex items-center gap-1 text-blue-700">
-                        <Loader2 className="w-4 h-4 animate-spin" /> Salvando…
-                      </span>
-                    )}
-                    {stockFx.state === "idle" && (stockFx.data as any)?.ok && (
-                      <span className="text-emerald-700 font-medium">Estoque atualizado</span>
-                    )}
-                  </div>
-                </div>
-
-                <stockFx.Form method="post" className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                  <input type="hidden" name="_action" value="saveDoughStock" />
-                  <input type="hidden" name="date" value={dateStr} />
-
-                  {(availableSizes as DoughSizeOption[]).map(({ key, label, abbr }) => {
-                    const remainingForSize = remaining[key];
-                    return (
-                      <div key={key} className="rounded border p-3 bg-white flex flex-col gap-2 shadow-[0_1px_0_rgba(0,0,0,0.02)]">
-                        <div className="flex items-center justify-between text-sm font-semibold">
-                          <span>{label}</span>
-                          <span className="text-xs text-slate-400">{abbr || key}</span>
-                        </div>
-
-                        <Input
-                          name={`stock${key}`}
-                          value={stockDraft[key]}
-                          onChange={(e) => updateStockDraft(key, e.target.value)}
-                          className="h-10 text-center text-lg"
-                          inputMode="numeric"
-                        />
-
-                        <div className="text-[11px] text-slate-600 flex items-center justify-between">
-                          <span>Usado: {used[key]}</span>
-                          <span className={cn("font-semibold", remainingForSize <= 0 ? "text-red-600" : "text-emerald-700")}>
-                            Saldo: {Math.max(0, remainingForSize)}
-                          </span>
-                        </div>
-
-                        {remainingForSize < 0 && (
-                          <div className="text-[11px] text-red-600">Déficit: {Math.abs(remainingForSize)}</div>
-                        )}
-                      </div>
-                    );
-                  })}
-
-                  <div className="col-span-full flex items-center gap-3">
-                    <Button type="submit" variant="outline" disabled={stockFx.state !== "idle"}>
-                      <Save className="w-4 h-4 mr-2" /> Salvar estoque do dia
-                    </Button>
-                    <div className="text-xs text-slate-500">
-                      O saldo mostrado no atendimento reduz automaticamente quando o pedido é salvo.
-                    </div>
-                  </div>
-                </stockFx.Form>
-
-                {totalStock === 0 && (
-                  <div className="text-xs text-slate-500 flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4 text-amber-500" />
-                    Defina o estoque inicial para habilitar os avisos de falta de massa.
-                  </div>
-                )}
-
-                {noStock.length > 0 && (
-                  <div className="text-xs text-red-600 flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4" />
-                    Sem estoque para: <b>{noStock.map((k) => sizeLabelMap[k]).join(", ")}</b>
-                  </div>
-                )}
-              </div>
-            );
+            return null; // estoque inicial é gerido na página dedicada
           }}
         </Await>
       </Suspense>
