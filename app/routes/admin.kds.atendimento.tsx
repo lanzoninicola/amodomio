@@ -209,7 +209,7 @@ export default function KdsAtendimento() {
         <Await resolve={data.days}>
           {(days) => (
             <div className="flex flex-col gap-0 ">
-              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between mb-6">
+              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                 {/* ===== Seletor de dias (Select com placeholder) ===== */}
                 <div className="flex flex-col gap-3 w-full md:max-w-lg">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center">

@@ -37,7 +37,12 @@ import {
   getRiderCountByDate,
   predictReadyTimes,
   predictArrivalTimes,
+  computeReadyAtMap,
+  buildTimelineBuckets,
+  PREP_MINUTES_PER_SIZE,
   type MinimalOrderRow,
+  type TimelineBucket,
+  type ReadyAtMap,
 } from "@/domain/kds/delivery-prediction";
 
 import { Button } from "@/components/ui/button";
@@ -70,6 +75,8 @@ import {
   CrossIcon,
   X,
   LogOutIcon,
+  Clock4,
+  Bike,
 } from "lucide-react";
 import { Separator } from "~/components/ui/separator";
 import { cn } from "~/lib/utils";
@@ -81,6 +88,10 @@ import { getAvailableDoughSizes, getDoughStock, normalizeCounts, saveDoughStock,
 import { Link } from "@remix-run/react";
 import { NumericInput } from "~/components/numeric-input/numeric-input";
 import { ExitIcon } from "@radix-ui/react-icons";
+import { Badge } from "@/components/ui/badge";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import type { DzMap } from "@/domain/kds/delivery-prediction/delivery-time";
 
 /* ===========================
    Meta
@@ -1025,6 +1036,218 @@ function RowsSkeleton() {
 }
 
 /* ===========================
+   Timeline (Sheet)
+   =========================== */
+function TimelineSidebar({
+  buckets,
+  lastReadyAt,
+  nowMs,
+  orderLabels,
+  readyAtMap,
+}: {
+  buckets: TimelineBucket[];
+  lastReadyAt: number | null;
+  nowMs: number;
+  orderLabels: Map<string, string>;
+  readyAtMap: Map<string, number>;
+}) {
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+
+  const slots = useMemo(() => {
+    return buckets
+      .map((b) => {
+        const ids = b.orderIds.filter((id) => !dismissed.has(id));
+        return { ...b, orderIds: ids, count: ids.length };
+      })
+      .filter((b) => b.orderIds.length > 0 || buckets.length <= 0);
+  }, [buckets, dismissed]);
+
+  const handleDismiss = (id: string) => {
+    setDismissed((prev) => {
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+  };
+
+  return (
+    <div className="flex h-full flex-col">
+      <SheetHeader>
+        <SheetTitle className="flex items-center gap-2 text-lg">
+          <Clock4 className="h-5 w-5 text-blue-700" />
+          Linha do tempo de saída
+        </SheetTitle>
+      </SheetHeader>
+
+      <div className="mt-4 space-y-4 flex-1 flex flex-col">
+        <div className="rounded-lg border bg-slate-50 p-4">
+          <div className="text-sm text-slate-600">Último pedido previsto para sair às:</div>
+          <div className="text-2xl font-semibold text-blue-700 leading-tight">
+            {lastReadyAt ? fmtHHMM(lastReadyAt) : "Nenhum pedido em produção"}
+          </div>
+          <div className="text-xs text-slate-500 mt-1">
+            Baseado no tempo médio por tamanho e nº de operadores. Agora: {fmtHHMM(nowMs)}
+          </div>
+        </div>
+
+        <ScrollArea className="flex-1 pr-3">
+          <div className="space-y-3 pb-6">
+            {slots.length === 0 && (
+              <div className="rounded-lg border border-dashed p-4 text-sm text-slate-500 bg-white">
+                Nenhum pedido em produção no momento.
+              </div>
+            )}
+
+            {slots.map((slot) => {
+              const labels = slot.orderIds.map((id) => ({
+                id,
+                label: orderLabels.get(id) ?? "#?",
+                readyAt: readyAtMap.get(id) ?? null,
+              }));
+              const isCurrentSlot = slot.isCurrent;
+
+              return (
+                <div
+                  key={slot.slotStartMs}
+                  className={cn(
+                    "relative rounded-md p-3 transition-colors",
+                    isCurrentSlot ? "border-emerald-300 bg-emerald-50" : "bg-white"
+                  )}
+                >
+                  <div className="absolute left-3 top-0 bottom-0 border-l border-dashed border-slate-200" aria-hidden />
+
+                  <div className="flex items-center justify-between gap-3 ml-2">
+                    <div className="flex items-center gap-2">
+                      <div className="text-sm font-semibold text-slate-900">{slot.label}</div>
+                      {isCurrentSlot && <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" aria-label="Horário atual" />}
+                      {slot.isPast && !slot.isCurrent && (
+                        <span className="text-[11px] uppercase tracking-wide text-slate-400">Passado</span>
+                      )}
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      {slot.count} pedido{slot.count === 1 ? "" : "s"} neste slot
+                    </div>
+                  </div>
+
+                  <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
+                    {labels.length === 0 ? (
+                      <span className="text-xs text-slate-400">Sem pedidos</span>
+                    ) : (
+                      labels.map((l, idx) => (
+                        <Badge
+                          key={`${slot.slotStartMs}-${l.id}-${idx}`}
+                          variant="outline"
+                          className={cn(
+                            "flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold",
+                            isCurrentSlot
+                              ? "border-emerald-400 bg-white text-emerald-700"
+                              : "border-amber-400 bg-amber-50 text-amber-700"
+                          )}
+                        >
+                          <span>{l.label}</span>
+                          {l.readyAt && (
+                            <span className="text-[10px] text-slate-500">· {fmtHHMM(l.readyAt)}</span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleDismiss(l.id)}
+                            className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 hover:bg-slate-100"
+                            title="Marcar como entregue"
+                          >
+                            <Bike className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      ))
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </ScrollArea>
+      </div>
+    </div>
+  );
+}
+
+type PredictionData = {
+  predictions: Map<string, { readyAtMs: number; arriveAtMs: number | null }>;
+  readyMap: ReadyAtMap;
+  timelineReadyMap: ReadyAtMap;
+  timelineBuckets: TimelineBucket[];
+  lastReadyAt: number | null;
+  orderLabelMap: Map<string, string>;
+};
+
+function computePredictionData(
+  rowsDb: OrderRow[],
+  operatorCount: number,
+  riderCount: number,
+  dzMap: DzMap,
+  nowMs: number
+): PredictionData {
+  const eligible = rowsDb.filter((o) => {
+    const st = (o as any).status ?? "pendente";
+    const npAt = (o as any).novoPedidoAt ?? null;
+    return st !== "pendente" && !!npAt;
+  });
+  const minimal: MinimalOrderRow[] = eligible.map((o) => ({
+    id: o.id,
+    createdAt: (o as any).novoPedidoAt as any,
+    finalizadoAt: (o as any).finalizadoAt ?? null,
+    size: o.size,
+    hasMoto: (o as any).hasMoto ?? null,
+    takeAway: (o as any).takeAway ?? null,
+    deliveryZoneId: (o as any).deliveryZoneId ?? null,
+  }));
+
+  const ready = predictReadyTimes(minimal, operatorCount, nowMs, PREP_MINUTES_PER_SIZE);
+  const arrive = predictArrivalTimes(ready, riderCount, dzMap);
+
+  const byId = new Map<string, { readyAtMs: number; arriveAtMs: number | null }>();
+  for (const r of ready) byId.set(r.id, { readyAtMs: r.readyAtMs, arriveAtMs: null });
+  for (const a of arrive) {
+    const cur = byId.get(a.id);
+    if (cur) cur.arriveAtMs = a.arriveAtMs;
+  }
+
+  const orderLabelMap = new Map<string, string>();
+  rowsDb.forEach((o) => {
+    const label = o.commandNumber ? `#${o.commandNumber}` : "VL";
+    orderLabelMap.set(o.id, label);
+  });
+
+  const inProduction = minimal.filter((o) => !o.finalizadoAt);
+  const timelineOrders = inProduction.filter((o) => o.hasMoto === true);
+
+  const readyMap = computeReadyAtMap({
+    orders: inProduction,
+    operatorCount,
+    prepMinutesPerSize: PREP_MINUTES_PER_SIZE,
+    nowMs,
+  });
+  const timelineReadyMap = computeReadyAtMap({
+    orders: timelineOrders,
+    operatorCount,
+    prepMinutesPerSize: PREP_MINUTES_PER_SIZE,
+    nowMs,
+  });
+
+  let lastReadyAt: number | null = null;
+  for (const ts of readyMap.values()) {
+    if (lastReadyAt === null || ts > lastReadyAt) lastReadyAt = ts;
+  }
+
+  const timelineBuckets = buildTimelineBuckets(timelineReadyMap, {
+    nowMs,
+    slotMinutes: 30,
+    minSlots: 6,
+  });
+
+  return { predictions: byId, readyMap, timelineBuckets, lastReadyAt, orderLabelMap, timelineReadyMap };
+}
+
+/* ===========================
    Página (Grid)
    =========================== */
 export default function GridKdsPage() {
@@ -1042,6 +1265,7 @@ export default function GridKdsPage() {
   const [openError, setOpenError] = useState<string | null>(null);
 
   const [channelFilter, setChannelFilter] = useState<string>("");
+  const [timelineOpen, setTimelineOpen] = useState(false);
 
   // ← estado do botão de cartão na Venda Livre rápida
   const [vlIsCreditCard, setVlIsCreditCard] = useState(false);
@@ -1119,6 +1343,10 @@ export default function GridKdsPage() {
 
   const nowMs = Date.now();
 
+  const dzMap = useMemo(() => buildDzMap(dzTimes as any), [dzTimes]);
+  const operatorCount = useMemo(() => getOperatorCountByDate(dateStr), [dateStr]);
+  const riderCount = useMemo(() => getRiderCountByDate(dateStr), [dateStr]);
+
   // Cores do status de meta
   const statusColor =
     dashboard.status === "hit-target" ? "bg-emerald-50 text-emerald-900 border-emerald-200" :
@@ -1126,47 +1354,34 @@ export default function GridKdsPage() {
         "bg-rose-50 text-rose-900 border-rose-200";
 
   return (
-    <div className="space-y-4 mt-12">
+    <div className="space-y-4 mt-6">
       {/* Toolbar topo + Painel-resumo SEM suspense (feedback imediato) */}
-      <div className="flex flex-col gap-y-4 md:grid md:grid-cols-12 items-start">
-        {/* Toolbar topo */}
-        <div className="flex flex-wrap items-center gap-3 col-span-4">
-          {(!header?.id || status === "PENDING") && (
-            <listFx.Form method="post" className="flex items-center gap-2">
-              <input type="hidden" name="_action" value="openDay" />
-              <input type="hidden" name="date" value={dateStr} />
-              <Input name="qty" defaultValue={40} className="h-9 w-20 text-center" />
-              <Button type="submit" variant="default" disabled={listFx.state !== "idle"} className="bg-blue-800">
-                {listFx.state !== "idle" ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin mr-1" /> Abrindo…
-                  </>
-                ) : (
-                  <>
-                    <PlusCircle className="w-4 h-4 mr-1" />
-                    Abrir dia
-                  </>
-                )}
-              </Button>
-            </listFx.Form>
-          )}
+      <div className="flex flex-col gap-4  md:grid md:grid-cols-12 items-start">
 
-          {status === "OPENED" && (
-            <listFx.Form method="post" className="flex items-center gap-2">
-              <input type="hidden" name="_action" value="closeDay" />
-              <input type="hidden" name="date" value={dateStr} />
-              <Button type="submit" variant="secondary">
-                <Lock className="w-4 h-4 mr-2" /> Fechar dia
-              </Button>
-            </listFx.Form>
-          )}
+        <div className="flex flex-col gap-3 col-span-4">
+          {/* Toolbar topo */}
+          <div className="flex flex-wrap items-center">
+            {(!header?.id || status === "PENDING") && (
+              <listFx.Form method="post" className="flex items-center gap-2">
+                <input type="hidden" name="_action" value="openDay" />
+                <input type="hidden" name="date" value={dateStr} />
+                <Input name="qty" defaultValue={40} className="h-9 w-20 text-center" />
+                <Button type="submit" variant="default" disabled={listFx.state !== "idle"} className="bg-blue-800">
+                  {listFx.state !== "idle" ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin mr-1" /> Abrindo…
+                    </>
+                  ) : (
+                    <>
+                      <PlusCircle className="w-4 h-4 mr-1" />
+                      Abrir dia
+                    </>
+                  )}
+                </Button>
+              </listFx.Form>
+            )}
 
-          {status === "REOPENED" && (
-            <>
-              <div className="px-3 py-1 rounded border text-sm bg-amber-50 text-amber-900">
-                Dia reaberto (edição liberada, sem novos registros)
-                <span className="text-xs text-slate-500 ml-2">(Atalho: pressione <b>M</b> para ver o mês)</span>
-              </div>
+            {status === "OPENED" && (
               <listFx.Form method="post" className="flex items-center gap-2">
                 <input type="hidden" name="_action" value="closeDay" />
                 <input type="hidden" name="date" value={dateStr} />
@@ -1174,27 +1389,94 @@ export default function GridKdsPage() {
                   <Lock className="w-4 h-4 mr-2" /> Fechar dia
                 </Button>
               </listFx.Form>
-            </>
-          )}
+            )}
 
-          {status === "CLOSED" && (
-            <>
-              <div className="ml-2 px-3 py-1 rounded border text-sm bg-slate-50 flex items-center gap-2">
-                <Lock className="w-4 h-4" /> Dia fechado (somente leitura)
-              </div>
-              <listFx.Form method="post" className="flex items-center gap-2">
-                <input type="hidden" name="_action" value="reopenDay" />
-                <input type="hidden" name="date" value={dateStr} />
-                <Button type="submit" variant="ghost">
-                  <Unlock className="w-4 h-4 mr-2" /> Reabrir dia
-                </Button>
-              </listFx.Form>
-            </>
-          )}
+            {status === "REOPENED" && (
+              <>
+                <div className="px-3 py-1 rounded border text-sm bg-amber-50 text-amber-900">
+                  Dia reaberto (edição liberada, sem novos registros)
+                  <span className="text-xs text-slate-500 ml-2">(Atalho: pressione <b>M</b> para ver o mês)</span>
+                </div>
+                <listFx.Form method="post" className="flex items-center gap-2">
+                  <input type="hidden" name="_action" value="closeDay" />
+                  <input type="hidden" name="date" value={dateStr} />
+                  <Button type="submit" variant="secondary">
+                    <Lock className="w-4 h-4 mr-2" /> Fechar dia
+                  </Button>
+                </listFx.Form>
+              </>
+            )}
+
+            {status === "CLOSED" && (
+              <>
+                <div className="ml-2 px-3 py-1 rounded border text-sm bg-slate-50 flex items-center gap-2">
+                  <Lock className="w-4 h-4" /> Dia fechado (somente leitura)
+                </div>
+                <listFx.Form method="post" className="flex items-center gap-2">
+                  <input type="hidden" name="_action" value="reopenDay" />
+                  <input type="hidden" name="date" value={dateStr} />
+                  <Button type="submit" variant="ghost">
+                    <Unlock className="w-4 h-4 mr-2" /> Reabrir dia
+                  </Button>
+                </listFx.Form>
+              </>
+            )}
+          </div>
+
+          {/* previsao de saida */}
+          <Suspense
+            key={`timeline-summary-${dateStr}`}
+            fallback={<div className="rounded-lg border bg-white p-3 text-sm text-slate-500">Carregando previsão de saída…</div>}
+          >
+            <Await resolve={items}>
+              {(rowsDb: OrderRow[]) => {
+                const predictionData = useMemo(
+                  () => computePredictionData(rowsDb, operatorCount, riderCount, dzMap, nowMs),
+                  [rowsDb, operatorCount, riderCount, dzMap, nowMs]
+                );
+
+                return (
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+
+                    <div className="flex flex-col ">
+                      <span className="text-base font-semibold text-slate-800">
+                        {predictionData.lastReadyAt
+                          ? `Previsão saida último pedido`
+                          : "Nenhum pedido em produção no momento"}
+                      </span>
+                      <span className="text-2xl">
+                        {predictionData.lastReadyAt
+                          && `${fmtHHMM(predictionData.lastReadyAt)}`
+                        }
+                      </span>
+                    </div>
+
+                    <Sheet open={timelineOpen} onOpenChange={setTimelineOpen}>
+                      <SheetTrigger asChild>
+                        <Button variant="outline" size="sm" disabled={!predictionData.timelineBuckets.length}>
+                          Ver linha do tempo
+                        </Button>
+                      </SheetTrigger>
+                      <SheetContent side="right" className="sm:max-w-md w-full p-6">
+                        <TimelineSidebar
+                          buckets={predictionData.timelineBuckets}
+                          lastReadyAt={predictionData.lastReadyAt}
+                          nowMs={nowMs}
+                          orderLabels={predictionData.orderLabelMap}
+                          readyAtMap={predictionData.timelineReadyMap}
+                        />
+                      </SheetContent>
+                    </Sheet>
+                  </div>
+                );
+              }}
+            </Await>
+          </Suspense>
+
         </div>
 
         {/* Painel-resumo de metas e receita + link estoque */}
-        <div className={cn("rounded-lg border p-3 col-span-8", statusColor)}>
+        <div className={cn("rounded-lg border p-3 col-span-7 col-start-7", statusColor)}>
           <div className="flex items-center gap-2 mb-2">
             <BadgeDollarSign className="w-5 h-5" />
             <div className="font-semibold">Meta financeira do dia</div>
@@ -1237,14 +1519,7 @@ export default function GridKdsPage() {
         </div>
       </div>
 
-      <Suspense fallback={<div className="rounded-lg border p-3 text-sm text-slate-500">Carregando estoque de massa…</div>}>
-        <Await resolve={doughUsage}>
-          {(used: SizeCounts) => {
-            return null; // estoque inicial é gerido na página dedicada
-          }}
-        </Await>
-      </Suspense>
-
+      {/* Barra contador do estoque */}
       <Suspense fallback={null}>
         <Await resolve={doughUsage}>
           {(used: SizeCounts) => {
@@ -1265,7 +1540,6 @@ export default function GridKdsPage() {
               const init = effectiveCounts[k];
               if (init <= 0) return "border border-slate-200 text-slate-500 bg-white";
               const ratio = remaining[k] / init;
-              console.log({ init, remaining: remaining[k], ratio })
               if (remaining[k] === 0) return "bg-rose-500 text-white"; // crítico
               if (remaining[k] <= 2) return "bg-amber-400 text-slate-900"; // alerta
               if (remaining[k] < 3) return "border border-rose-500 text-rose-600 bg-white";
@@ -1383,11 +1657,13 @@ export default function GridKdsPage() {
         </Await>
       </Suspense>
 
+      <Separator className="my-12" />
+
       {/* Venda livre rápida + Filtro de Canal */}
       {(status === "OPENED" || status === "REOPENED") && (
         <>
 
-          <div className="rounded-lg border p-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             {/* Venda Livre rápida */}
             <div className="flex items-center gap-3">
               <div className="text-sm font-medium">Venda livre (rápida)</div>
@@ -1442,6 +1718,9 @@ export default function GridKdsPage() {
             </div>
           </div>
 
+          <Separator className="my-12" />
+
+
           {/* Cabeçalho */}
           <div className={COLS_HDR + " py-2 px-1"}>
             <div className="text-center">#</div>
@@ -1468,7 +1747,7 @@ export default function GridKdsPage() {
             const operatorCount = useMemo(() => getOperatorCountByDate(dateStr), [dateStr]);
             const riderCount = useMemo(() => getRiderCountByDate(dateStr), [dateStr]);
 
-            const predictions = useMemo(() => {
+            const predictionData = useMemo(() => {
               const eligible = rowsDb.filter((o) => {
                 const st = (o as any).status ?? "pendente";
                 const npAt = (o as any).novoPedidoAt ?? null;
@@ -1484,7 +1763,7 @@ export default function GridKdsPage() {
                 deliveryZoneId: (o as any).deliveryZoneId ?? null,
               }));
 
-              const ready = predictReadyTimes(minimal, operatorCount, nowMs);
+              const ready = predictReadyTimes(minimal, operatorCount, nowMs, PREP_MINUTES_PER_SIZE);
               const arrive = predictArrivalTimes(ready, riderCount, dzMap);
 
               const byId = new Map<string, { readyAtMs: number; arriveAtMs: number | null }>();
@@ -1493,8 +1772,47 @@ export default function GridKdsPage() {
                 const cur = byId.get(a.id);
                 if (cur) cur.arriveAtMs = a.arriveAtMs;
               }
-              return byId;
+
+              const orderLabelMap = new Map<string, string>();
+              rowsDb.forEach((o) => {
+                const label = o.commandNumber ? `#${o.commandNumber}` : "VL";
+                orderLabelMap.set(o.id, label);
+              });
+
+              const inProduction = minimal.filter((o) => !o.finalizadoAt);
+              const timelineOrders = inProduction.filter((o) => o.hasMoto === true);
+              const readyMap = computeReadyAtMap({
+                orders: inProduction,
+                operatorCount,
+                prepMinutesPerSize: PREP_MINUTES_PER_SIZE,
+                nowMs,
+              });
+              const timelineReadyMap = computeReadyAtMap({
+                orders: timelineOrders,
+                operatorCount,
+                prepMinutesPerSize: PREP_MINUTES_PER_SIZE,
+                nowMs,
+              });
+
+              let lastReadyAt: number | null = null;
+              for (const ts of readyMap.values()) {
+                if (lastReadyAt === null || ts > lastReadyAt) lastReadyAt = ts;
+              }
+
+              const timelineBuckets = buildTimelineBuckets(timelineReadyMap, {
+                nowMs,
+                slotMinutes: 30,
+                minSlots: 6,
+              });
+
+              return { predictions: byId, readyMap, timelineBuckets, lastReadyAt, orderLabelMap, timelineReadyMap };
             }, [rowsDb, operatorCount, riderCount, dzMap, nowMs]);
+
+            const predictions = predictionData.predictions;
+            const timelineBuckets = predictionData.timelineBuckets;
+            const lastReadyAt = predictionData.lastReadyAt;
+            const orderLabels = predictionData.orderLabelMap;
+            const timelineReadyMap = predictionData.timelineReadyMap;
 
             const filteredRows = useMemo(() => {
               if (!channelFilter) return rowsDb;

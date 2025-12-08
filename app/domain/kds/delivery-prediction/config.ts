@@ -2,13 +2,17 @@
 import type { SizeCounts } from "./types";
 
 // Tempo médio (produção + forno) por tamanho (min) — ajuste livre
-export const AVG_PROD_MIN: Record<keyof SizeCounts, number> = {
+// Mantido como constante para facilitar migração futura para o banco (Prisma)
+export const PREP_MINUTES_PER_SIZE: Record<keyof SizeCounts, number> = {
   P: 8,
   M: 12,
   F: 15,
   I: 6,
   FT: 18,
 };
+
+// Alias legado (mantido para usos existentes)
+export const AVG_PROD_MIN = PREP_MINUTES_PER_SIZE;
 
 // Tempo de corte/embalagem/expedição por pedido (min)
 export const HANDOFF_MIN = 2;
