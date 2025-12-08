@@ -43,7 +43,9 @@ import {
   type MinimalOrderRow,
   type TimelineBucket,
   type ReadyAtMap,
+  parseSizeSafe,
 } from "@/domain/kds/delivery-prediction";
+import { calcProductionMinutes } from "@/domain/kds/delivery-prediction/production-time";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -169,6 +171,15 @@ const sizeSummary = (c: SizeCounts) =>
     .filter(k => c[k] > 0)
     .map(k => `${k}:${c[k]}`)
     .join("  ");
+
+function fmtMinutesHHMM(totalMin: number) {
+  const safe = Math.max(0, Math.round(totalMin));
+  const hh = Math.floor(safe / 60)
+    .toString()
+    .padStart(2, "0");
+  const mm = (safe % 60).toString().padStart(2, "0");
+  return `${hh}:${mm}`;
+}
 
 const SIZE_LABELS: Record<keyof SizeCounts, string> = {
   F: "Família",
@@ -712,6 +723,10 @@ function RowItem({
   sizeLimit?: SizeCounts | null;
 }) {
   const sizeCounts = parseSize(o.size);
+  const prepMinutes = useMemo(
+    () => calcProductionMinutes(sizeCounts, PREP_MINUTES_PER_SIZE),
+    [sizeCounts]
+  );
 
   // estados por linha
   const [openConfirmId, setOpenConfirmId] = useState(false);
@@ -971,6 +986,11 @@ function RowItem({
             <span className="text-muted-foreground">Criado: </span>
             <span className="font-semibold">{fmtHHMM(npAt as any)}</span>
 
+            <span>
+              <span className="text-muted-foreground">Tempo de preparo: </span>
+              <span className="font-semibold">{fmtMinutesHHMM(prepMinutes)}</span>
+            </span>
+
             {(() => {
               const diffMin = Math.floor((nowMs - npAt.getTime()) / 60000);
               let color = "text-slate-500";
@@ -1171,13 +1191,42 @@ function TimelineSidebar({
 }
 
 type PredictionData = {
-  predictions: Map<string, { readyAtMs: number; arriveAtMs: number | null }>;
-  readyMap: ReadyAtMap;
-  timelineReadyMap: ReadyAtMap;
-  timelineBuckets: TimelineBucket[];
-  lastReadyAt: number | null;
+  // Previsão real (considera fila e operadores)
+  realPredictions: Map<string, { readyAtMs: number; arriveAtMs: number | null }>;
+  realReadyMap: ReadyAtMap;
+  realTimelineReadyMap: ReadyAtMap;
+  realTimelineBuckets: TimelineBucket[];
+  realLastReadyAt: number | null;
+
+  // Previsão teórica (ignora fila/operadores; apenas criadoAt + tempo médio)
+  theoreticalReadyMap: ReadyAtMap;
+  theoreticalTimelineReadyMap: ReadyAtMap;
+  theoreticalTimelineBuckets: TimelineBucket[];
+  theoreticalLastReadyAt: number | null;
+
   orderLabelMap: Map<string, string>;
 };
+
+function calcTheoreticalReadyMap(
+  orders: MinimalOrderRow[]
+): ReadyAtMap {
+  const map: ReadyAtMap = new Map();
+  for (const o of orders) {
+    if (!o.createdAt) continue;
+    const createdMs = new Date(o.createdAt as any).getTime();
+    if (!Number.isFinite(createdMs)) continue;
+    const counts = parseSizeSafe(o.size);
+    const prepMinutes =
+      (counts.P ?? 0) * PREP_MINUTES_PER_SIZE.P +
+      (counts.M ?? 0) * PREP_MINUTES_PER_SIZE.M +
+      (counts.F ?? 0) * PREP_MINUTES_PER_SIZE.F +
+      (counts.I ?? 0) * PREP_MINUTES_PER_SIZE.I +
+      (counts.FT ?? 0) * PREP_MINUTES_PER_SIZE.FT;
+    const readyAtMs = createdMs + Math.max(1, prepMinutes) * 60_000;
+    map.set(o.id, readyAtMs);
+  }
+  return map;
+}
 
 function computePredictionData(
   rowsDb: OrderRow[],
@@ -1233,9 +1282,19 @@ function computePredictionData(
     nowMs,
   });
 
-  let lastReadyAt: number | null = null;
+  // Teórico deve usar o horário de entrada na produção (novoPedidoAt), por isso usamos `minimal`
+  // em vez de `eligible` (que traria createdAt do banco).
+  const theoreticalReadyMap = calcTheoreticalReadyMap(minimal);
+  const theoreticalTimelineReadyMap = calcTheoreticalReadyMap(timelineOrders);
+
+  let realLastReadyAt: number | null = null;
   for (const ts of readyMap.values()) {
-    if (lastReadyAt === null || ts > lastReadyAt) lastReadyAt = ts;
+    if (realLastReadyAt === null || ts > realLastReadyAt) realLastReadyAt = ts;
+  }
+
+  let theoreticalLastReadyAt: number | null = null;
+  for (const ts of theoreticalReadyMap.values()) {
+    if (theoreticalLastReadyAt === null || ts > theoreticalLastReadyAt) theoreticalLastReadyAt = ts;
   }
 
   const timelineBuckets = buildTimelineBuckets(timelineReadyMap, {
@@ -1244,7 +1303,24 @@ function computePredictionData(
     minSlots: 6,
   });
 
-  return { predictions: byId, readyMap, timelineBuckets, lastReadyAt, orderLabelMap, timelineReadyMap };
+  const theoreticalTimelineBuckets = buildTimelineBuckets(theoreticalTimelineReadyMap, {
+    nowMs,
+    slotMinutes: 30,
+    minSlots: 6,
+  });
+
+  return {
+    realPredictions: byId,
+    realReadyMap: readyMap,
+    realTimelineReadyMap: timelineReadyMap,
+    realTimelineBuckets: timelineBuckets,
+    realLastReadyAt,
+    theoreticalReadyMap,
+    theoreticalTimelineReadyMap,
+    theoreticalTimelineBuckets,
+    theoreticalLastReadyAt,
+    orderLabelMap,
+  };
 }
 
 /* ===========================
@@ -1266,6 +1342,7 @@ export default function GridKdsPage() {
 
   const [channelFilter, setChannelFilter] = useState<string>("");
   const [timelineOpen, setTimelineOpen] = useState(false);
+  const [predictionMode, setPredictionMode] = useState<"real" | "theoretical">("real");
 
   // ← estado do botão de cartão na Venda Livre rápida
   const [vlIsCreditCard, setVlIsCreditCard] = useState(false);
@@ -1434,36 +1511,58 @@ export default function GridKdsPage() {
                   () => computePredictionData(rowsDb, operatorCount, riderCount, dzMap, nowMs),
                   [rowsDb, operatorCount, riderCount, dzMap, nowMs]
                 );
+                const activeLastReady =
+                  predictionMode === "real"
+                    ? predictionData.realLastReadyAt
+                    : predictionData.theoreticalLastReadyAt;
+                const activeBuckets =
+                  predictionMode === "real"
+                    ? predictionData.realTimelineBuckets
+                    : predictionData.theoreticalTimelineBuckets;
+                const activeReadyMap =
+                  predictionMode === "real"
+                    ? predictionData.realTimelineReadyMap
+                    : predictionData.theoreticalTimelineReadyMap;
 
                 return (
                   <div className="flex flex-wrap items-start justify-between gap-3">
-
-                    <div className="flex flex-col ">
+                    <div className="flex flex-col gap-1">
                       <span className="text-base font-semibold text-slate-800">
-                        {predictionData.lastReadyAt
-                          ? `Previsão saida último pedido`
-                          : "Nenhum pedido em produção no momento"}
+                        Previsão saída último pedido
                       </span>
                       <span className="text-2xl">
-                        {predictionData.lastReadyAt
-                          && `${fmtHHMM(predictionData.lastReadyAt)}`
-                        }
+                        {activeLastReady ? fmtHHMM(activeLastReady) : "--:--"}
                       </span>
+                      <div className="text-xs text-slate-500 flex items-center gap-2">
+                        <span>Modo de previsão:</span>
+                        <Select
+                          value={predictionMode}
+                          onValueChange={(val) => setPredictionMode(val as "real" | "theoretical")}
+                        >
+                          <SelectTrigger className="h-8 w-[180px]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="real">Real (fila + operadores)</SelectItem>
+                            <SelectItem value="theoretical">Teórico (sem fila)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
 
                     <Sheet open={timelineOpen} onOpenChange={setTimelineOpen}>
                       <SheetTrigger asChild>
-                        <Button variant="outline" size="sm" disabled={!predictionData.timelineBuckets.length}>
+                        <Button variant="outline" size="sm" disabled={!activeBuckets.length}>
                           Ver linha do tempo
                         </Button>
                       </SheetTrigger>
                       <SheetContent side="right" className="sm:max-w-md w-full p-6">
                         <TimelineSidebar
-                          buckets={predictionData.timelineBuckets}
-                          lastReadyAt={predictionData.lastReadyAt}
+                          buckets={activeBuckets}
+                          lastReadyAt={activeLastReady}
                           nowMs={nowMs}
                           orderLabels={predictionData.orderLabelMap}
-                          readyAtMap={predictionData.timelineReadyMap}
+                          readyAtMap={activeReadyMap}
                         />
                       </SheetContent>
                     </Sheet>
@@ -1799,20 +1898,11 @@ export default function GridKdsPage() {
                 if (lastReadyAt === null || ts > lastReadyAt) lastReadyAt = ts;
               }
 
-              const timelineBuckets = buildTimelineBuckets(timelineReadyMap, {
-                nowMs,
-                slotMinutes: 30,
-                minSlots: 6,
-              });
-
-              return { predictions: byId, readyMap, timelineBuckets, lastReadyAt, orderLabelMap, timelineReadyMap };
+              return computePredictionData(rowsDb, operatorCount, riderCount, dzMap, nowMs);
             }, [rowsDb, operatorCount, riderCount, dzMap, nowMs]);
 
-            const predictions = predictionData.predictions;
-            const timelineBuckets = predictionData.timelineBuckets;
-            const lastReadyAt = predictionData.lastReadyAt;
+            const predictions = predictionData.realPredictions;
             const orderLabels = predictionData.orderLabelMap;
-            const timelineReadyMap = predictionData.timelineReadyMap;
 
             const filteredRows = useMemo(() => {
               if (!channelFilter) return rowsDb;
