@@ -79,6 +79,7 @@ import {
   LogOutIcon,
   Clock4,
   Bike,
+  Settings as SettingsIcon,
 } from "lucide-react";
 import { Separator } from "~/components/ui/separator";
 import { cn } from "~/lib/utils";
@@ -94,6 +95,8 @@ import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { DzMap } from "@/domain/kds/delivery-prediction/delivery-time";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 
 /* ===========================
    Meta
@@ -180,6 +183,18 @@ function fmtMinutesHHMM(totalMin: number) {
   const mm = (safe % 60).toString().padStart(2, "0");
   return `${hh}:${mm}`;
 }
+
+type PredictionSettings = {
+  mode: "real" | "theoretical";
+  prepMinutes: Record<keyof SizeCounts, number>;
+  operatorCount: number;
+};
+
+const DEFAULT_PREDICTION_SETTINGS: PredictionSettings = {
+  mode: "theoretical",
+  prepMinutes: PREP_MINUTES_PER_SIZE,
+  operatorCount: 2,
+};
 
 const SIZE_LABELS: Record<keyof SizeCounts, string> = {
   F: "Família",
@@ -355,6 +370,29 @@ export async function loader({ params }: LoaderFunctionArgs) {
   const doughUsage = listPromise.then((rows) => sumSizes(rows));
   const availableSizes = await getAvailableDoughSizes();
 
+  const settingsRow = await prisma.setting.findFirst({
+    where: { context: "kds_prediction", name: "config" },
+  });
+  let predictionSettings = {
+    ...DEFAULT_PREDICTION_SETTINGS,
+    operatorCount: getOperatorCountByDate(dateStr),
+  };
+  if (settingsRow?.value) {
+    try {
+      const parsed = JSON.parse(settingsRow.value);
+      predictionSettings = {
+        mode: parsed?.mode === "theoretical" ? "theoretical" : "real",
+        prepMinutes: {
+          ...PREP_MINUTES_PER_SIZE,
+          ...parsed?.prepMinutes,
+        },
+        operatorCount: Number(parsed?.operatorCount) || getOperatorCountByDate(dateStr),
+      };
+    } catch {
+      // fallback permanece
+    }
+  }
+
   const dashboard: DashboardMeta = {
     grossAmount,
     cardAmount,
@@ -379,6 +417,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
     doughStock,
     doughUsage,
     availableSizes,
+    predictionSettings,
   });
 }
 
@@ -466,6 +505,49 @@ export async function action({ request, params }: ActionFunctionArgs) {
         data: { operationStatus: "REOPENED" },
       });
       return json({ ok: true, status: "REOPENED" });
+    }
+
+    if (_action === "savePredictionSettings") {
+      const modeRaw = String(form.get("mode") ?? "real");
+      const operatorCount = Math.max(1, Number(form.get("operatorCount") ?? 1) || 1);
+      const prepMinutes = {
+        F: Number(form.get("prepF") ?? PREP_MINUTES_PER_SIZE.F) || PREP_MINUTES_PER_SIZE.F,
+        M: Number(form.get("prepM") ?? PREP_MINUTES_PER_SIZE.M) || PREP_MINUTES_PER_SIZE.M,
+        P: Number(form.get("prepP") ?? PREP_MINUTES_PER_SIZE.P) || PREP_MINUTES_PER_SIZE.P,
+        I: Number(form.get("prepI") ?? PREP_MINUTES_PER_SIZE.I) || PREP_MINUTES_PER_SIZE.I,
+        FT: Number(form.get("prepFT") ?? PREP_MINUTES_PER_SIZE.FT) || PREP_MINUTES_PER_SIZE.FT,
+      };
+
+      const payload = {
+        mode: modeRaw === "theoretical" ? "theoretical" : "real",
+        operatorCount,
+        prepMinutes,
+      };
+
+      const existing = await prisma.setting.findFirst({
+        where: { context: "kds_prediction", name: "config" },
+      });
+      if (existing?.id) {
+        await prisma.setting.update({
+          where: { id: existing.id },
+          data: {
+            type: "json",
+            value: JSON.stringify(payload),
+          },
+        });
+      } else {
+        await prisma.setting.create({
+          data: {
+            context: "kds_prediction",
+            name: "config",
+            type: "json",
+            value: JSON.stringify(payload),
+            createdAt: new Date(),
+          },
+        });
+      }
+
+      return json({ ok: true, settings: payload });
     }
 
     if (_action === "saveDoughStock") {
@@ -712,6 +794,7 @@ function RowItem({
   predictions,
   rowFx,
   sizeLimit,
+  prepMinutesPerSize,
 }: {
   o: OrderRow;
   dateStr: string;
@@ -721,11 +804,12 @@ function RowItem({
   predictions: Map<string, { readyAtMs: number; arriveAtMs: number | null }>;
   rowFx: ReturnType<typeof useFetcher>;
   sizeLimit?: SizeCounts | null;
+  prepMinutesPerSize: Record<keyof SizeCounts, number>;
 }) {
   const sizeCounts = parseSize(o.size);
   const prepMinutes = useMemo(
-    () => calcProductionMinutes(sizeCounts, PREP_MINUTES_PER_SIZE),
-    [sizeCounts]
+    () => calcProductionMinutes(sizeCounts, prepMinutesPerSize),
+    [sizeCounts, prepMinutesPerSize]
   );
 
   // estados por linha
@@ -1199,6 +1283,7 @@ type PredictionData = {
   realLastReadyAt: number | null;
 
   // Previsão teórica (fila ideal desde o primeiro pedido)
+  theoreticalPredictions: Map<string, { readyAtMs: number; arriveAtMs: number | null }>;
   theoreticalReadyMap: ReadyAtMap;
   theoreticalTimelineReadyMap: ReadyAtMap;
   theoreticalTimelineBuckets: TimelineBucket[];
@@ -1212,7 +1297,8 @@ function computePredictionData(
   operatorCount: number,
   riderCount: number,
   dzMap: DzMap,
-  nowMs: number
+  nowMs: number,
+  prepMinutesPerSize: Record<keyof SizeCounts, number>
 ): PredictionData {
   const eligible = rowsDb.filter((o) => {
     const st = (o as any).status ?? "pendente";
@@ -1229,7 +1315,7 @@ function computePredictionData(
     deliveryZoneId: (o as any).deliveryZoneId ?? null,
   }));
 
-  const ready = predictReadyTimes(minimal, operatorCount, nowMs, PREP_MINUTES_PER_SIZE);
+  const ready = predictReadyTimes(minimal, operatorCount, nowMs, prepMinutesPerSize);
   const arrive = predictArrivalTimes(ready, riderCount, dzMap);
 
   const byId = new Map<string, { readyAtMs: number; arriveAtMs: number | null }>();
@@ -1250,7 +1336,7 @@ function computePredictionData(
   const readyMap = computeReadyAtMap({
     orders: inProduction,
     operatorCount,
-    prepMinutesPerSize: PREP_MINUTES_PER_SIZE,
+    prepMinutesPerSize,
     nowMs,
   });
   const baseMs =
@@ -1265,7 +1351,7 @@ function computePredictionData(
   const theoreticalReadyMap = computeReadyAtMap({
     orders: inProduction,
     operatorCount,
-    prepMinutesPerSize: PREP_MINUTES_PER_SIZE,
+    prepMinutesPerSize,
     nowMs: baseMs,
   });
 
@@ -1283,15 +1369,29 @@ function computePredictionData(
   const timelineReadyMap = computeReadyAtMap({
     orders: timelineOrders,
     operatorCount,
-    prepMinutesPerSize: PREP_MINUTES_PER_SIZE,
+    prepMinutesPerSize,
     nowMs,
   });
   const theoreticalTimelineReadyMap = computeReadyAtMap({
     orders: timelineOrders,
     operatorCount,
-    prepMinutesPerSize: PREP_MINUTES_PER_SIZE,
+    prepMinutesPerSize,
     nowMs: baseMs,
   });
+
+  const theoreticalPredictions = new Map<string, { readyAtMs: number; arriveAtMs: number | null }>();
+  const theoreticalReadyList = minimal.map((o) => ({
+    id: o.id,
+    readyAtMs: theoreticalReadyMap.get(o.id) ?? nowMs,
+    isDelivery: o.takeAway !== true && o.hasMoto === true,
+    dzId: o.deliveryZoneId ?? null,
+  }));
+  const theoreticalArrivals = predictArrivalTimes(theoreticalReadyList, riderCount, dzMap);
+  for (const r of theoreticalReadyList) theoreticalPredictions.set(r.id, { readyAtMs: r.readyAtMs, arriveAtMs: null });
+  for (const a of theoreticalArrivals) {
+    const cur = theoreticalPredictions.get(a.id);
+    if (cur) cur.arriveAtMs = a.arriveAtMs;
+  }
 
   const timelineBuckets = buildTimelineBuckets(timelineReadyMap, {
     nowMs,
@@ -1311,6 +1411,7 @@ function computePredictionData(
     realTimelineReadyMap: timelineReadyMap,
     realTimelineBuckets: timelineBuckets,
     realLastReadyAt,
+    theoreticalPredictions,
     theoreticalReadyMap,
     theoreticalTimelineReadyMap,
     theoreticalTimelineBuckets,
@@ -1323,10 +1424,11 @@ function computePredictionData(
    Página (Grid)
    =========================== */
 export default function GridKdsPage() {
-  const { dateStr, items, header, deliveryZones, dzTimes, dashboard, doughStock, doughUsage, availableSizes } = useLoaderData<typeof loader>();
+  const { dateStr, items, header, deliveryZones, dzTimes, dashboard, doughStock, doughUsage, availableSizes, predictionSettings } = useLoaderData<typeof loader>();
   const listFx = useFetcher();
   const rowFx = useFetcher();
   const stockFx = useFetcher<{ ok: boolean; stock: DoughStockSnapshot }>();
+  const settingsFx = useFetcher<{ ok: boolean; settings: PredictionSettings }>();
 
   const status = (header?.operationStatus ?? "PENDING") as "PENDING" | "OPENED" | "CLOSED" | "REOPENED";
   const isClosed = status === "CLOSED";
@@ -1338,7 +1440,14 @@ export default function GridKdsPage() {
 
   const [channelFilter, setChannelFilter] = useState<string>("");
   const [timelineOpen, setTimelineOpen] = useState(false);
-  const [predictionMode, setPredictionMode] = useState<"real" | "theoretical">("theoretical");
+  const [predictionMode, setPredictionMode] = useState<"real" | "theoretical">(predictionSettings.mode ?? "theoretical");
+  const [prepMinutesConfig, setPrepMinutesConfig] = useState<Record<keyof SizeCounts, number>>(
+    predictionSettings.prepMinutes ?? PREP_MINUTES_PER_SIZE
+  );
+  const [operatorCountSetting, setOperatorCountSetting] = useState<number>(
+    predictionSettings.operatorCount ?? getOperatorCountByDate(dateStr)
+  );
+  const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
 
   // ← estado do botão de cartão na Venda Livre rápida
   const [vlIsCreditCard, setVlIsCreditCard] = useState(false);
@@ -1419,6 +1528,24 @@ export default function GridKdsPage() {
   const dzMap = useMemo(() => buildDzMap(dzTimes as any), [dzTimes]);
   const operatorCount = useMemo(() => getOperatorCountByDate(dateStr), [dateStr]);
   const riderCount = useMemo(() => getRiderCountByDate(dateStr), [dateStr]);
+  const operatorCountActive = operatorCountSetting || operatorCount;
+  const prepMinutesActive = prepMinutesConfig || PREP_MINUTES_PER_SIZE;
+
+  useEffect(() => {
+    setPredictionMode(predictionSettings.mode ?? "real");
+    setPrepMinutesConfig(predictionSettings.prepMinutes ?? PREP_MINUTES_PER_SIZE);
+    setOperatorCountSetting(predictionSettings.operatorCount ?? getOperatorCountByDate(dateStr));
+  }, [predictionSettings, dateStr]);
+
+  useEffect(() => {
+    if (settingsFx.state === "idle" && settingsFx.data?.ok) {
+      const cfg = settingsFx.data.settings;
+      setPredictionMode(cfg.mode ?? "real");
+      setPrepMinutesConfig(cfg.prepMinutes ?? PREP_MINUTES_PER_SIZE);
+      setOperatorCountSetting(cfg.operatorCount ?? getOperatorCountByDate(dateStr));
+      setSettingsDialogOpen(false);
+    }
+  }, [settingsFx.state, settingsFx.data, dateStr]);
 
   // Cores do status de meta
   const statusColor =
@@ -1504,8 +1631,8 @@ export default function GridKdsPage() {
             <Await resolve={items}>
               {(rowsDb: OrderRow[]) => {
                 const predictionData = useMemo(
-                  () => computePredictionData(rowsDb, operatorCount, riderCount, dzMap, nowMs),
-                  [rowsDb, operatorCount, riderCount, dzMap, nowMs]
+                  () => computePredictionData(rowsDb, operatorCountActive, riderCount, dzMap, nowMs, prepMinutesActive),
+                  [rowsDb, operatorCountActive, riderCount, dzMap, nowMs, prepMinutesActive]
                 );
                 const activeLastReady =
                   predictionMode === "real"
@@ -1523,37 +1650,92 @@ export default function GridKdsPage() {
                 return (
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="flex flex-col gap-1">
-                      <span className="text-base font-semibold text-slate-800">
-                        Previsão saída último pedido
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-base font-semibold text-slate-800">
+                          Previsão saída último pedido
+                        </span>
+                        <Dialog open={settingsDialogOpen} onOpenChange={setSettingsDialogOpen}>
+                          <DialogTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <SettingsIcon className="h-4 w-4" />
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent className="max-w-3xl">
+                            <DialogHeader>
+                              <DialogTitle>Configurar previsão de saída</DialogTitle>
+                            </DialogHeader>
+                            <settingsFx.Form method="post" className="space-y-6">
+                              <input type="hidden" name="_action" value="savePredictionSettings" />
+                              <div className="space-y-2">
+                                <Label htmlFor="mode" className="text-sm font-semibold">Modalidade de cálculo</Label>
+                                <Select name="mode" defaultValue={predictionMode}>
+                                  <SelectTrigger id="mode">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="real">Real (fila + operadores a partir de agora)</SelectItem>
+                                    <SelectItem value="theoretical">Teórico (fila ideal desde o primeiro pedido)</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <p className="text-[11px] text-slate-600">
+                                  Real: usa o backlog atual com operadores. Teórico: reinicia a fila no horário do primeiro pedido para visualizar capacidade ideal.
+                                </p>
+                              </div>
+
+                              <Separator className="my-2" />
+
+                              <div className="space-y-2">
+                                <Label htmlFor="operatorCount" className="text-sm font-semibold">Nº de operadores</Label>
+                                <Input
+                                  id="operatorCount"
+                                  name="operatorCount"
+                                  type="number"
+                                  min={1}
+                                  defaultValue={operatorCountActive}
+                                />
+                                <p className="text-[11px] text-slate-600">Usado tanto no cálculo real quanto teórico.</p>
+                              </div>
+
+                              <Separator className="my-2" />
+
+                              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                                {(["F", "M", "P", "I", "FT"] as (keyof SizeCounts)[]).map((k) => (
+                                  <div key={k} className="space-y-1">
+                                    <Label htmlFor={`prep-${k}`}>Tempo {k} (min)</Label>
+                                    <Input
+                                      id={`prep-${k}`}
+                                      name={`prep${k}`}
+                                      type="number"
+                                      min={1}
+                                      defaultValue={prepMinutesActive[k]}
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+
+                              <DialogFooter className="gap-2">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  onClick={() => setSettingsDialogOpen(false)}
+                                >
+                                  Cancelar
+                                </Button>
+                                <Button type="submit" disabled={settingsFx.state !== "idle"}>
+                                  {settingsFx.state !== "idle" ? (
+                                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                  ) : null}
+                                  Salvar
+                                </Button>
+                              </DialogFooter>
+                            </settingsFx.Form>
+                          </DialogContent>
+                        </Dialog>
+                      </div>
                       <span className="text-2xl">
                         {activeLastReady ? fmtHHMM(activeLastReady) : "--:--"}
                       </span>
-                      <div className="text-xs text-slate-500 flex items-center gap-2">
-                        <span>Modo de previsão:</span>
-                        <Select
-                          value={predictionMode}
-                          onValueChange={(val) => setPredictionMode(val as "real" | "theoretical")}
-                        >
-                          <SelectTrigger className="h-8 w-[180px]">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="real">
-                              <div className="flex flex-col gap-1">
-                                <span className="text-xs">Horário atual</span>
-                                <span className="text-xs font-muted-foreground">Fila atual a partir de nowMs</span>
-                              </div>
-                            </SelectItem>
-                            <SelectItem value="theoretical">
-                              <div className="flex flex-col gap-1">
-                                <span className="text-xs">Horário primeiro pedido</span>
-                                <span className="text-xs font-muted-foreground">Fila ideal desde o primeiro pedido</span>
-                              </div>
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
+
                     </div>
 
                     <Sheet open={timelineOpen} onOpenChange={setTimelineOpen}>
@@ -1848,66 +2030,15 @@ export default function GridKdsPage() {
             const dup = duplicateCommandNumbers(rowsDb);
             const globalUsage = useMemo(() => sumSizes(rowsDb), [rowsDb]);
 
-            const dzMap = useMemo(() => buildDzMap(dzTimes as any), [dzTimes]);
-            const operatorCount = useMemo(() => getOperatorCountByDate(dateStr), [dateStr]);
-            const riderCount = useMemo(() => getRiderCountByDate(dateStr), [dateStr]);
+            const predictionData = useMemo(
+              () => computePredictionData(rowsDb, operatorCountActive, riderCount, dzMap, nowMs, prepMinutesActive),
+              [rowsDb, operatorCountActive, riderCount, dzMap, nowMs, prepMinutesActive]
+            );
 
-            const predictionData = useMemo(() => {
-              const eligible = rowsDb.filter((o) => {
-                const st = (o as any).status ?? "pendente";
-                const npAt = (o as any).novoPedidoAt ?? null;
-                return st !== "pendente" && !!npAt;
-              });
-              const minimal: MinimalOrderRow[] = eligible.map((o) => ({
-                id: o.id,
-                createdAt: (o as any).novoPedidoAt as any,
-                finalizadoAt: (o as any).finalizadoAt ?? null,
-                size: o.size,
-                hasMoto: (o as any).hasMoto ?? null,
-                takeAway: (o as any).takeAway ?? null,
-                deliveryZoneId: (o as any).deliveryZoneId ?? null,
-              }));
-
-              const ready = predictReadyTimes(minimal, operatorCount, nowMs, PREP_MINUTES_PER_SIZE);
-              const arrive = predictArrivalTimes(ready, riderCount, dzMap);
-
-              const byId = new Map<string, { readyAtMs: number; arriveAtMs: number | null }>();
-              for (const r of ready) byId.set(r.id, { readyAtMs: r.readyAtMs, arriveAtMs: null });
-              for (const a of arrive) {
-                const cur = byId.get(a.id);
-                if (cur) cur.arriveAtMs = a.arriveAtMs;
-              }
-
-              const orderLabelMap = new Map<string, string>();
-              rowsDb.forEach((o) => {
-                const label = o.commandNumber ? `#${o.commandNumber}` : "VL";
-                orderLabelMap.set(o.id, label);
-              });
-
-              const inProduction = minimal.filter((o) => !o.finalizadoAt);
-              const timelineOrders = inProduction.filter((o) => o.hasMoto === true);
-              const readyMap = computeReadyAtMap({
-                orders: inProduction,
-                operatorCount,
-                prepMinutesPerSize: PREP_MINUTES_PER_SIZE,
-                nowMs,
-              });
-              const timelineReadyMap = computeReadyAtMap({
-                orders: timelineOrders,
-                operatorCount,
-                prepMinutesPerSize: PREP_MINUTES_PER_SIZE,
-                nowMs,
-              });
-
-              let lastReadyAt: number | null = null;
-              for (const ts of readyMap.values()) {
-                if (lastReadyAt === null || ts > lastReadyAt) lastReadyAt = ts;
-              }
-
-              return computePredictionData(rowsDb, operatorCount, riderCount, dzMap, nowMs);
-            }, [rowsDb, operatorCount, riderCount, dzMap, nowMs]);
-
-            const predictions = predictionData.realPredictions;
+            const predictions =
+              predictionMode === "real"
+                ? predictionData.realPredictions
+                : predictionData.theoreticalPredictions;
             const orderLabels = predictionData.orderLabelMap;
 
             const filteredRows = useMemo(() => {
@@ -1951,6 +2082,7 @@ export default function GridKdsPage() {
                         predictions={predictions}
                         rowFx={rowFx}
                         sizeLimit={sizeLimit}
+                        prepMinutesPerSize={prepMinutesActive}
                       />
                     );
                   })}
