@@ -8,19 +8,53 @@ type DoughStockRecord = {
   size: string | null;
 };
 
-function parseCounts(value?: string | null): SizeCounts {
+export type DoughStockSnapshot = {
+  base: SizeCounts;        // estoque informado (ex.: discos boleados)
+  adjustment: SizeCounts;  // valor manual
+  effective: SizeCounts;   // saldo atual que a aplicação deve usar
+  adjustmentMode?: "loss" | "override";
+};
+
+function computeEffective(
+  mode: DoughStockSnapshot["adjustmentMode"],
+  base: SizeCounts,
+  adjustment: SizeCounts
+): SizeCounts {
+  if (mode === "override") {
+    // modo novo: ajuste é o saldo atual desejado
+    return normalizeCounts(adjustment);
+  }
+
+  // modo legado: ajuste é perda (base - ajuste)
+  return {
+    F: Math.max(0, base.F - adjustment.F),
+    M: Math.max(0, base.M - adjustment.M),
+    P: Math.max(0, base.P - adjustment.P),
+    I: Math.max(0, base.I - adjustment.I),
+    FT: Math.max(0, base.FT - adjustment.FT),
+  };
+}
+
+function parseCounts(value?: string | null): DoughStockSnapshot {
   try {
     const raw = value ? JSON.parse(String(value)) : {};
+    const baseRaw = raw?.base ?? raw; // retrocompatibilidade: JSON antigo só com F/M/P/I/FT
+    const adjustmentRaw = raw?.adjustment ?? defaultSizeCounts();
+    const adjustmentMode: DoughStockSnapshot["adjustmentMode"] =
+      raw?.adjustmentMode === "override" ? "override" : "loss";
+
+    const base = normalizeCounts(baseRaw);
+    const adjustment = normalizeCounts(adjustmentRaw);
+
     return {
-      ...defaultSizeCounts(),
-      F: Number(raw?.F) || 0,
-      M: Number(raw?.M) || 0,
-      P: Number(raw?.P) || 0,
-      I: Number(raw?.I) || 0,
-      FT: Number(raw?.FT) || 0,
+      base,
+      adjustment,
+      effective: computeEffective(adjustmentMode, base, adjustment),
+      adjustmentMode,
     };
   } catch (_e) {
-    return defaultSizeCounts();
+    const empty = defaultSizeCounts();
+    return { base: empty, adjustment: empty, effective: empty, adjustmentMode: "override" };
   }
 }
 
@@ -35,7 +69,7 @@ export function normalizeCounts(counts: Partial<SizeCounts> | null | undefined):
   };
 }
 
-export async function getDoughStock(dateInt: number): Promise<SizeCounts | null> {
+export async function getDoughStock(dateInt: number): Promise<DoughStockSnapshot | null> {
   const row = await prisma.doughDailyStock.findUnique({
     where: { dateInt },
     select: { size: true },
@@ -45,11 +79,19 @@ export async function getDoughStock(dateInt: number): Promise<SizeCounts | null>
   return parseCounts(row.size);
 }
 
-export async function saveDoughStock(dateInt: number, date: Date, counts: SizeCounts) {
+export async function saveDoughStock(dateInt: number, date: Date, counts: SizeCounts, adjustment?: SizeCounts): Promise<DoughStockSnapshot> {
+  const base = normalizeCounts(counts);
+  const adjustmentSafe = normalizeCounts(adjustment);
+  const adjustmentMode: DoughStockSnapshot["adjustmentMode"] = "override";
+
   const payload = {
     dateInt,
     date,
-    size: JSON.stringify(counts),
+    size: JSON.stringify({
+      base,
+      adjustment: adjustmentSafe,
+      adjustmentMode,
+    }),
   };
 
   await prisma.doughDailyStock.upsert({
@@ -58,7 +100,12 @@ export async function saveDoughStock(dateInt: number, date: Date, counts: SizeCo
     create: payload,
   });
 
-  return counts;
+  return {
+    base,
+    adjustment: adjustmentSafe,
+    adjustmentMode,
+    effective: computeEffective(adjustmentMode, base, adjustmentSafe),
+  };
 }
 
 export type DoughSizeOption = {

@@ -65,6 +65,11 @@ import {
   ChevronUp,
   ChevronDown,
   GripVertical,
+  PencilLine,
+  SaveIcon,
+  CrossIcon,
+  X,
+  LogOutIcon,
 } from "lucide-react";
 import { Separator } from "~/components/ui/separator";
 import { cn } from "~/lib/utils";
@@ -72,8 +77,10 @@ import DeliveryZoneCombobox from "~/domain/kds/components/delivery-zone-combobox
 import { computeNetRevenueAmount } from "~/domain/finance/compute-net-revenue-amount.server";
 import { setOrderStatus } from "~/domain/kds/server/repository.server";
 import { MoneyInput } from "~/components/money-input/MoneyInput";
-import { getAvailableDoughSizes, getDoughStock, normalizeCounts, saveDoughStock, type DoughSizeOption } from "~/domain/kds/dough-stock.server";
+import { getAvailableDoughSizes, getDoughStock, normalizeCounts, saveDoughStock, type DoughSizeOption, type DoughStockSnapshot } from "~/domain/kds/dough-stock.server";
 import { Link } from "@remix-run/react";
+import { NumericInput } from "~/components/numeric-input/numeric-input";
+import { ExitIcon } from "@radix-ui/react-icons";
 
 /* ===========================
    Meta
@@ -448,9 +455,17 @@ export async function action({ request, params }: ActionFunctionArgs) {
         FT: form.get("stockFT"),
       } as any);
 
-      await saveDoughStock(dateInt, ymdToUtcNoon(dateStr), counts);
+      const adjustment = normalizeCounts({
+        F: form.get("adjustF"),
+        M: form.get("adjustM"),
+        P: form.get("adjustP"),
+        I: form.get("adjustI"),
+        FT: form.get("adjustFT"),
+      } as any);
 
-      return json({ ok: true, stock: counts });
+      const snapshot = await saveDoughStock(dateInt, ymdToUtcNoon(dateStr), counts, adjustment);
+
+      return json({ ok: true, stock: snapshot });
     }
 
     // bloqueia alterações quando fechado
@@ -555,7 +570,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         });
 
         const usedWithoutCurrent = sumSizes(rowsForDay.filter((r) => r.id !== id));
-        const remaining = calcRemaining(doughStock, usedWithoutCurrent);
+        const remaining = calcRemaining(doughStock.effective, usedWithoutCurrent);
 
         const shortages = (Object.keys(sizeCounts) as (keyof SizeCounts)[])
           .filter((k) => sizeCounts[k] > remaining[k]);
@@ -1016,7 +1031,7 @@ export default function GridKdsPage() {
   const { dateStr, items, header, deliveryZones, dzTimes, dashboard, doughStock, doughUsage, availableSizes } = useLoaderData<typeof loader>();
   const listFx = useFetcher();
   const rowFx = useFetcher();
-  const stockFx = useFetcher();
+  const stockFx = useFetcher<{ ok: boolean; stock: DoughStockSnapshot }>();
 
   const status = (header?.operationStatus ?? "PENDING") as "PENDING" | "OPENED" | "CLOSED" | "REOPENED";
   const isClosed = status === "CLOSED";
@@ -1031,7 +1046,12 @@ export default function GridKdsPage() {
   // ← estado do botão de cartão na Venda Livre rápida
   const [vlIsCreditCard, setVlIsCreditCard] = useState(false);
 
-  const [stockDraft, setStockDraft] = useState<SizeCounts>(doughStock ?? defaultSizeCounts());
+  const stockSnapshot: DoughStockSnapshot | null =
+    (stockFx.data?.stock as DoughStockSnapshot | undefined) ?? (doughStock as DoughStockSnapshot | null);
+  const baseStock = stockSnapshot?.base ?? defaultSizeCounts();
+  const effectiveStock = stockSnapshot?.effective ?? defaultSizeCounts();
+  const [adjustmentDraft, setAdjustmentDraft] = useState<SizeCounts>(effectiveStock);
+  const [editingBar, setEditingBar] = useState(false);
 
   const sizeLabelMap = useMemo(() => {
     const base = { ...SIZE_LABELS } as Record<keyof SizeCounts, string>;
@@ -1063,13 +1083,13 @@ export default function GridKdsPage() {
   }, [dragging]);
 
   useEffect(() => {
-    setStockDraft(doughStock ?? defaultSizeCounts());
-  }, [doughStock, dateStr]);
+    setAdjustmentDraft(stockSnapshot?.effective ?? defaultSizeCounts());
+  }, [stockSnapshot, dateStr]);
 
-  function updateStockDraft(key: keyof SizeCounts, value: number | string) {
+  function setAdjustmentValue(key: keyof SizeCounts, value: number | string) {
     const numeric = Number(value);
     const safe = Number.isFinite(numeric) ? Math.max(0, Math.floor(numeric)) : 0;
-    setStockDraft((prev) => ({ ...prev, [key]: safe }));
+    setAdjustmentDraft((prev) => ({ ...prev, [key]: safe }));
   }
 
   useEffect(() => {
@@ -1228,17 +1248,27 @@ export default function GridKdsPage() {
       <Suspense fallback={null}>
         <Await resolve={doughUsage}>
           {(used: SizeCounts) => {
-            const baseStock = doughStock ?? stockDraft ?? defaultSizeCounts();
-            const remaining = calcRemaining(baseStock, used);
+            const effectiveCounts = stockSnapshot?.effective ?? defaultSizeCounts();
+            const baseCounts = baseStock ?? defaultSizeCounts();
+            const remaining = calcRemaining(effectiveCounts, used);
             const ordered = (availableSizes as DoughSizeOption[]) ?? [];
+            const manual = effectiveCounts;
+            const hasManualInfo = (["F", "M", "P", "I", "FT"] as (keyof SizeCounts)[])
+              .some((k) => manual[k] > 0);
+            const manualText = ordered
+              .map(({ key, abbr }) => ({ key, abbr, value: manual[key] ?? 0 }))
+              .filter((item) => item.value > 0)
+              .map((item) => `${item.abbr || item.key}: ${item.value}`)
+              .join(" · ");
 
             function chipClasses(k: keyof SizeCounts) {
-              const init = baseStock[k];
+              const init = effectiveCounts[k];
               if (init <= 0) return "border border-slate-200 text-slate-500 bg-white";
               const ratio = remaining[k] / init;
-              if (ratio <= 0) return "border border-rose-500 text-rose-600 bg-white";
-              if (ratio <= 0.2) return "bg-rose-500 text-white"; // crítico
-              if (ratio <= 0.4) return "bg-amber-400 text-slate-900"; // alerta
+              console.log({ init, remaining: remaining[k], ratio })
+              if (remaining[k] === 0) return "bg-rose-500 text-white"; // crítico
+              if (remaining[k] <= 2) return "bg-amber-400 text-slate-900"; // alerta
+              if (remaining[k] < 3) return "border border-rose-500 text-rose-600 bg-white";
               return "bg-emerald-500 text-white"; // ok
             }
 
@@ -1247,28 +1277,106 @@ export default function GridKdsPage() {
                 className="fixed right-5 z-40"
                 style={{ top: `${floatingTop}px` }}
               >
-                <div
-                  className="rounded-full border bg-white shadow-lg px-3 py-2 flex items-center gap-2 backdrop-blur"
-                  onMouseDown={(e) => { setDragging(true); e.preventDefault(); }}
-                  role="presentation"
+                <stockFx.Form
+                  method="post"
+                  className="rounded-full border bg-white shadow-lg px-3 py-2 flex items-center gap-3 backdrop-blur"
+                  onSubmit={() => setEditingBar(false)}
                 >
-                  <div className="flex items-center justify-center w-7 h-7 rounded-full border bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-grab active:cursor-grabbing">
+                  <input type="hidden" name="_action" value="saveDoughStock" />
+                  <input type="hidden" name="date" value={dateStr} />
+
+                  <div
+                    className="flex items-center justify-center w-7 h-7 rounded text-slate-600 hover:bg-slate-200 cursor-grab active:cursor-grabbing"
+                    onMouseDown={(e) => { setDragging(true); e.preventDefault(); }}
+                    role="presentation"
+                  >
                     <GripVertical className="w-4 h-4" />
                   </div>
 
                   <div className="flex items-center gap-2">
                     {ordered.map(({ key, label, abbr }) => (
-                      <div key={key} className="flex flex-col items-center gap-0.5 min-w-[46px]">
+                      <div key={key} className="flex flex-col items-center gap-1 min-w-[60px]">
+                        <input type="hidden" name={`stock${key}`} value={baseCounts[key]} />
+                        <input type="hidden" name={`adjust${key}`} value={adjustmentDraft[key]} />
+
                         <div
                           className={`w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-semibold ${chipClasses(key)}`}
                           title={`${label}: ${Math.max(0, remaining[key])}`}
                         >
                           {abbr || key} {Math.max(0, remaining[key])}
                         </div>
+
+                        {editingBar && (
+                          <div className="flex items-center gap-0 text-[11px] text-slate-600">
+                            <button
+                              type="button"
+                              className="h-6 w-6 rounded-full border border-slate-200 hover:bg-slate-50 font-semibold"
+                              onClick={() => setAdjustmentValue(key, (adjustmentDraft[key] ?? 0) - 1)}
+                            >
+                              –
+                            </button>
+                            <NumericInput
+                              min={0}
+                              step={1}
+                              className="h-6 w-12 text-center rounded bg-white text-xs font-semibold border-none"
+                              value={adjustmentDraft[key]}
+                              onChange={(e) => setAdjustmentValue(key, e.target.value)}
+                              aria-label={`Ajuste ${label}`}
+                            />
+                            <button
+                              type="button"
+                              className="h-6 w-6 rounded-full border border-slate-200 hover:bg-slate-50"
+                              onClick={() => setAdjustmentValue(key, (adjustmentDraft[key] ?? 0) + 1)}
+                            >
+                              +
+                            </button>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
-                </div>
+
+                  {/* {hasManualInfo && !editingBar && (
+                    <div className="text-[11px] text-slate-500 ml-1">
+                      Saldo manual: {manualText}
+                    </div>
+                  )} */}
+
+                  {editingBar ? (
+                    <div className="flex items-center gap-2">
+                      <Button type="submit" size="sm" variant="secondary" disabled={stockFx.state !== "idle"}>
+                        {stockFx.state !== "idle" ? (
+                          <>
+                            <Loader2 className="w-3 h-3 animate-spin mr-1" /> Salvando…
+                          </>
+                        ) : (
+                          "Salvar"
+                        )}
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          setAdjustmentDraft(stockSnapshot?.effective ?? defaultSizeCounts());
+                          setEditingBar(false);
+                        }}
+                      >
+                        Cancelar
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setEditingBar(true)}
+                      className="text-slate-700"
+                    >
+                      <PencilLine className="w-4 h-4 mr-1" />
+                    </Button>
+                  )}
+                </stockFx.Form>
               </div>
             );
           }}
@@ -1278,6 +1386,7 @@ export default function GridKdsPage() {
       {/* Venda livre rápida + Filtro de Canal */}
       {(status === "OPENED" || status === "REOPENED") && (
         <>
+
           <div className="rounded-lg border p-3 flex flex-wrap items-center justify-between gap-3">
             {/* Venda Livre rápida */}
             <div className="flex items-center gap-3">
@@ -1406,14 +1515,14 @@ export default function GridKdsPage() {
                 <ul className="space-y-1">
                   {filteredRows.map((o) => {
                     const sizeLimit = (() => {
-                      if (!doughStock) return null;
+                      if (!stockSnapshot?.effective) return null;
                       const currentSize = parseSize(o.size);
                       return {
-                        F: Math.max(0, doughStock.F - (globalUsage.F - currentSize.F)),
-                        M: Math.max(0, doughStock.M - (globalUsage.M - currentSize.M)),
-                        P: Math.max(0, doughStock.P - (globalUsage.P - currentSize.P)),
-                        I: Math.max(0, doughStock.I - (globalUsage.I - currentSize.I)),
-                        FT: Math.max(0, doughStock.FT - (globalUsage.FT - currentSize.FT)),
+                        F: Math.max(0, stockSnapshot.effective.F - (globalUsage.F - currentSize.F)),
+                        M: Math.max(0, stockSnapshot.effective.M - (globalUsage.M - currentSize.M)),
+                        P: Math.max(0, stockSnapshot.effective.P - (globalUsage.P - currentSize.P)),
+                        I: Math.max(0, stockSnapshot.effective.I - (globalUsage.I - currentSize.I)),
+                        FT: Math.max(0, stockSnapshot.effective.FT - (globalUsage.FT - currentSize.FT)),
                       } as SizeCounts;
                     })();
 
