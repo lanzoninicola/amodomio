@@ -158,6 +158,12 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
           disabled: false,
         },
         {
+          title: "Fechamento mensal",
+          href: "/admin/financeiro/fechamento-mensal",
+          items: [],
+          disabled: false,
+        },
+        {
           title: "Fechamento do dia",
           href: "/admin/financeiro/fechamento-dia",
           items: [],

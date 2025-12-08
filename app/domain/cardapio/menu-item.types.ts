@@ -63,6 +63,7 @@ export interface MenuItemWithSellPriceVariations {
   group: MenuItemGroup;
   category: Category;
   name: string;
+  sortOrderIndex?: number | null;
   ingredients?: string;
   visible: boolean;
   active: boolean;

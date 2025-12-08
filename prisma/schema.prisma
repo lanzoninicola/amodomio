@@ -191,6 +191,7 @@ model MenuItem {
   id                                 String                               @id @default(uuid())
   name                               String
   description                        String
+  longDescription                    String?                              @map("long_description")
   ingredients                        String
   categoryId                         String                               @map("category_id")
   Category                           Category                             @relation(fields: [categoryId], references: [id])
@@ -486,6 +487,65 @@ model FinancialDailyGoal {
   // Para consultas por resumo (histórico/relatório):
   @@index([financialSummaryId, createdAt], map: "fdg_summary_created_at_idx")
   @@map("financial_daily_goals")
+}
+
+model FinancialMonthlyClose {
+  id String @id @default(uuid())
+
+  referenceMonth Int @map("reference_month")
+  referenceYear  Int @map("reference_year")
+
+  receitaBrutaAmount     Float @default(0) @map("receita_bruta_amount")
+  vendaCartaoAmount      Float @default(0) @map("venda_cartao_amount")
+  vendaCartaoPerc        Float @default(0) @map("venda_cartao_perc")
+  taxaCartaoPerc         Float @default(0) @map("taxa_cartao_perc")
+  taxaCartaoAmount       Float @default(0) @map("taxa_cartao_amount")
+  impostoPerc            Float @default(0) @map("imposto_perc")
+  impostoAmount          Float @default(0) @map("imposto_amount")
+  vendaMarketplaceAmount Float @default(0) @map("venda_marketplace_amount")
+  taxaMarketplacePerc    Float @default(0) @map("taxa_marketplace_perc")
+  taxaMarketplaceAmount  Float @default(0) @map("taxa_marketplace_amount")
+  receitaLiquidaAmount   Float @default(0) @map("receita_liquida_amount")
+
+  // Custos fixos principais
+  custoFixoFolhaAmount    Float @default(0) @map("custo_fixo_folha_amount")
+  custoFixoFolhaFuncionariosAmount Float @default(0) @map("custo_fixo_folha_funcionarios_amount")
+  custoFixoProlaboreAmount Float @default(0) @map("custo_fixo_prolabore_amount")
+  custoFixoAluguelAmount  Float @default(0) @map("custo_fixo_aluguel_amount")
+  custoFixoEnergiaAmount  Float @default(0) @map("custo_fixo_energia_amount")
+  custoFixoSoftwareAmount Float @default(0) @map("custo_fixo_software_amount")
+  custoFixoMarketingAmount Float @default(0) @map("custo_fixo_marketing_amount")
+  custoFixoFaturaCartaoAmount Float @default(0) @map("custo_fixo_fatura_cartao_amount")
+  custoFixoOutrosAmount   Float @default(0) @map("custo_fixo_outros_amount")
+  custoFixoRetiradaLucroAmount Float @default(0) @map("custo_fixo_retirada_lucro_amount")
+  custoFixoParcelaFinanciamentoAmount Float @default(0) @map("custo_fixo_parcela_financiamento_amount")
+  custoFixoRetiradaProlaboreAmount Float @default(0) @map("custo_fixo_retirada_prolabore_amount")
+  custoFixoRetiradaResultadoAmount Float @default(0) @map("custo_fixo_retirada_resultado_amount")
+
+  // Custos variáveis principais
+  custoVariavelInsumosAmount    Float @default(0) @map("custo_variavel_insumos_amount")
+  custoVariavelEmbalagensAmount Float @default(0) @map("custo_variavel_embalagens_amount")
+  custoVariavelEntregaAmount    Float @default(0) @map("custo_variavel_entrega_amount")
+  custoVariavelMarketingAmount  Float @default(0) @map("custo_variavel_marketing_amount")
+  custoVariavelImpostosAmount   Float @default(0) @map("custo_variavel_impostos_amount")
+  custoVariavelOutrosAmount     Float @default(0) @map("custo_variavel_outros_amount")
+
+  custoFixoTotalAmount     Float @default(0) @map("custo_fixo_total_amount")
+  custoVariavelTotalAmount Float @default(0) @map("custo_variavel_total_amount")
+  custoFixoPerc            Float @default(0) @map("custo_fixo_perc")
+  custoVariavelPerc        Float @default(0) @map("custo_variavel_perc")
+  pontoEquilibrioAmount    Float @default(0) @map("ponto_equilibrio_amount")
+  margemContribAmount      Float @default(0) @map("margem_contrib_amount")
+  margemContribPerc        Float @default(0) @map("margem_contrib_perc")
+  resultadoLiquidoAmount   Float @default(0) @map("resultado_liquido_amount")
+  resultadoLiquidoPerc     Float @default(0) @map("resultado_liquido_perc")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([referenceYear, referenceMonth], map: "fmc_year_month_unique")
+  @@index([referenceYear, referenceMonth], map: "fmc_year_month_idx")
+  @@map("financial_monthly_closes")
 }
 
 model MenuItemSize {
@@ -1040,6 +1100,17 @@ model KdsDailyOrderDetail {
   @@index([commandNumber])
   @@index([orderId])
   @@map("kds_daily_order_details")
+}
+
+model DoughDailyStock {
+  id        String   @id @default(uuid())
+  date      DateTime
+  dateInt   Int      @unique @map("date_int")
+  size      String?  @map("size")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("dough_daily_stock")
 }
 
 model DeliveryZone {

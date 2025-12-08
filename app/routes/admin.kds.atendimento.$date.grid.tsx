@@ -61,6 +61,15 @@ import {
   Unlock,
   CreditCard,
   BadgeDollarSign,
+  Pizza,
+  ChevronUp,
+  ChevronDown,
+  GripVertical,
+  PencilLine,
+  SaveIcon,
+  CrossIcon,
+  X,
+  LogOutIcon,
 } from "lucide-react";
 import { Separator } from "~/components/ui/separator";
 import { cn } from "~/lib/utils";
@@ -68,6 +77,10 @@ import DeliveryZoneCombobox from "~/domain/kds/components/delivery-zone-combobox
 import { computeNetRevenueAmount } from "~/domain/finance/compute-net-revenue-amount.server";
 import { setOrderStatus } from "~/domain/kds/server/repository.server";
 import { MoneyInput } from "~/components/money-input/MoneyInput";
+import { getAvailableDoughSizes, getDoughStock, normalizeCounts, saveDoughStock, type DoughSizeOption, type DoughStockSnapshot } from "~/domain/kds/dough-stock.server";
+import { Link } from "@remix-run/react";
+import { NumericInput } from "~/components/numeric-input/numeric-input";
+import { ExitIcon } from "@radix-ui/react-icons";
 
 /* ===========================
    Meta
@@ -145,6 +158,37 @@ const sizeSummary = (c: SizeCounts) =>
     .filter(k => c[k] > 0)
     .map(k => `${k}:${c[k]}`)
     .join("  ");
+
+const SIZE_LABELS: Record<keyof SizeCounts, string> = {
+  F: "Família",
+  M: "Média",
+  P: "Pequena",
+  I: "Individual",
+  FT: "Fatia",
+};
+
+function sumSizes(list: { size?: any }[]): SizeCounts {
+  return list.reduce((acc, item) => {
+    const parsed = parseSize(item?.size);
+    acc.F += parsed.F;
+    acc.M += parsed.M;
+    acc.P += parsed.P;
+    acc.I += parsed.I;
+    acc.FT += parsed.FT;
+    return acc;
+  }, defaultSizeCounts());
+}
+
+function calcRemaining(stock: SizeCounts | null, used: SizeCounts): SizeCounts {
+  const base = stock ?? defaultSizeCounts();
+  return {
+    F: base.F - used.F,
+    M: base.M - used.M,
+    P: base.P - used.P,
+    I: base.I - used.I,
+    FT: base.FT - used.FT,
+  };
+}
 
 /* ===========================
    Loader
@@ -285,6 +329,10 @@ export async function loader({ params }: LoaderFunctionArgs) {
   const pctOfTarget =
     goalTargetAmount > 0 ? Math.min(100, (netAmount / goalTargetAmount) * 100) : 0;
 
+  const doughStock = await getDoughStock(dateInt);
+  const doughUsage = listPromise.then((rows) => sumSizes(rows));
+  const availableSizes = await getAvailableDoughSizes();
+
   const dashboard: DashboardMeta = {
     grossAmount,
     cardAmount,
@@ -306,6 +354,9 @@ export async function loader({ params }: LoaderFunctionArgs) {
     deliveryZones,
     dzTimes,
     dashboard,
+    doughStock,
+    doughUsage,
+    availableSizes,
   });
 }
 
@@ -393,6 +444,28 @@ export async function action({ request, params }: ActionFunctionArgs) {
         data: { operationStatus: "REOPENED" },
       });
       return json({ ok: true, status: "REOPENED" });
+    }
+
+    if (_action === "saveDoughStock") {
+      const counts = normalizeCounts({
+        F: form.get("stockF"),
+        M: form.get("stockM"),
+        P: form.get("stockP"),
+        I: form.get("stockI"),
+        FT: form.get("stockFT"),
+      } as any);
+
+      const adjustment = normalizeCounts({
+        F: form.get("adjustF"),
+        M: form.get("adjustM"),
+        P: form.get("adjustP"),
+        I: form.get("adjustI"),
+        FT: form.get("adjustFT"),
+      } as any);
+
+      const snapshot = await saveDoughStock(dateInt, ymdToUtcNoon(dateStr), counts, adjustment);
+
+      return json({ ok: true, stock: snapshot });
     }
 
     // bloqueia alterações quando fechado
@@ -488,6 +561,32 @@ export async function action({ request, params }: ActionFunctionArgs) {
         I: Number(form.get("sizeI") ?? 0) || 0,
         FT: Number(form.get("sizeFT") ?? 0) || 0,
       };
+
+      const doughStock = await getDoughStock(dateInt);
+      if (doughStock) {
+        const rowsForDay = await prisma.kdsDailyOrderDetail.findMany({
+          where: { dateInt },
+          select: { id: true, size: true },
+        });
+
+        const usedWithoutCurrent = sumSizes(rowsForDay.filter((r) => r.id !== id));
+        const remaining = calcRemaining(doughStock.effective, usedWithoutCurrent);
+
+        const shortages = (Object.keys(sizeCounts) as (keyof SizeCounts)[])
+          .filter((k) => sizeCounts[k] > remaining[k]);
+
+        if (shortages.length > 0) {
+          const sizeOptions = await getAvailableDoughSizes();
+          const labelMap = { ...SIZE_LABELS } as Record<keyof SizeCounts, string>;
+          sizeOptions.forEach((s) => { labelMap[s.key] = s.label || s.key; });
+
+          const msg = shortages
+            .map((k) => `${labelMap[k] ?? k} sem estoque (restam ${Math.max(0, remaining[k])})`)
+            .join("; ");
+
+          return json({ ok: false, error: msg, rowId: id, shortages }, { status: 400 });
+        }
+      }
 
       const amountDecimal = toDecimal(form.get("orderAmount"));
 
@@ -590,6 +689,7 @@ function RowItem({
   nowMs,
   predictions,
   rowFx,
+  sizeLimit,
 }: {
   o: OrderRow;
   dateStr: string;
@@ -598,6 +698,7 @@ function RowItem({
   nowMs: number;
   predictions: Map<string, { readyAtMs: number; arriveAtMs: number | null }>;
   rowFx: ReturnType<typeof useFetcher>;
+  sizeLimit?: SizeCounts | null;
 }) {
   const sizeCounts = parseSize(o.size);
 
@@ -620,6 +721,11 @@ function RowItem({
   const [sizes, setSizes] = useState<SizeCounts>(sizeCounts);
   const statusText = (o as any).status ?? "pendente";
   const npAt = (o as any).novoPedidoAt ? new Date((o as any).novoPedidoAt as any) : null;
+
+  const rowError =
+    rowFx.data && typeof (rowFx.data as any) === "object" && (rowFx.data as any).rowId === o.id
+      ? ((rowFx.data as any).error as string | null)
+      : null;
 
   const fxState =
     rowFx.state !== "idle" &&
@@ -682,6 +788,7 @@ function RowItem({
               <div className={`origin-center ${readOnly ? "opacity-60 pointer-events-none" : "scale-[0.95]"}`}>
                 <SizeSelector
                   counts={sizes}
+                  limit={sizeLimit ?? undefined}
                   onChange={(next) => {
                     setSizes(next);
                     const formEl = document.getElementById(`row-form-${o.id}`) as HTMLFormElement | null;
@@ -896,6 +1003,10 @@ function RowItem({
       </div>
 
       <Separator className="my-1" />
+
+      {rowError && (
+        <div className="px-2 pb-1 text-xs text-red-600">{rowError}</div>
+      )}
     </li>
   );
 }
@@ -917,9 +1028,10 @@ function RowsSkeleton() {
    Página (Grid)
    =========================== */
 export default function GridKdsPage() {
-  const { dateStr, items, header, deliveryZones, dzTimes, dashboard } = useLoaderData<typeof loader>();
+  const { dateStr, items, header, deliveryZones, dzTimes, dashboard, doughStock, doughUsage, availableSizes } = useLoaderData<typeof loader>();
   const listFx = useFetcher();
   const rowFx = useFetcher();
+  const stockFx = useFetcher<{ ok: boolean; stock: DoughStockSnapshot }>();
 
   const status = (header?.operationStatus ?? "PENDING") as "PENDING" | "OPENED" | "CLOSED" | "REOPENED";
   const isClosed = status === "CLOSED";
@@ -933,6 +1045,52 @@ export default function GridKdsPage() {
 
   // ← estado do botão de cartão na Venda Livre rápida
   const [vlIsCreditCard, setVlIsCreditCard] = useState(false);
+
+  const stockSnapshot: DoughStockSnapshot | null =
+    (stockFx.data?.stock as DoughStockSnapshot | undefined) ?? (doughStock as DoughStockSnapshot | null);
+  const baseStock = stockSnapshot?.base ?? defaultSizeCounts();
+  const effectiveStock = stockSnapshot?.effective ?? defaultSizeCounts();
+  const [adjustmentDraft, setAdjustmentDraft] = useState<SizeCounts>(effectiveStock);
+  const [editingBar, setEditingBar] = useState(false);
+
+  const sizeLabelMap = useMemo(() => {
+    const base = { ...SIZE_LABELS } as Record<keyof SizeCounts, string>;
+    (availableSizes as DoughSizeOption[]).forEach((s) => {
+      base[s.key] = s.label || s.key;
+    });
+    return base;
+  }, [availableSizes]);
+
+  const [showStockPanel, setShowStockPanel] = useState(() => true);
+  const [floatingTop, setFloatingTop] = useState(160);
+  const [dragging, setDragging] = useState(false);
+
+  useEffect(() => {
+    function onMove(e: MouseEvent) {
+      if (!dragging) return;
+      const next = Math.min(Math.max(80, e.clientY - 30), window.innerHeight - 140);
+      setFloatingTop(next);
+    }
+    function onUp() { setDragging(false); }
+    if (dragging) {
+      window.addEventListener("mousemove", onMove);
+      window.addEventListener("mouseup", onUp);
+    }
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [dragging]);
+
+  useEffect(() => {
+    setAdjustmentDraft(stockSnapshot?.effective ?? defaultSizeCounts());
+  }, [stockSnapshot, dateStr]);
+
+  function setAdjustmentValue(key: keyof SizeCounts, value: number | string) {
+    const numeric = Number(value);
+    const safe = Number.isFinite(numeric) ? Math.max(0, Math.floor(numeric)) : 0;
+    setAdjustmentDraft((prev) => ({ ...prev, [key]: safe }));
+  }
 
   useEffect(() => {
     let t: any;
@@ -1035,13 +1193,14 @@ export default function GridKdsPage() {
           )}
         </div>
 
-        {/* Painel-resumo de metas e receita */}
+        {/* Painel-resumo de metas e receita + link estoque */}
         <div className={cn("rounded-lg border p-3 col-span-8", statusColor)}>
           <div className="flex items-center gap-2 mb-2">
             <BadgeDollarSign className="w-5 h-5" />
             <div className="font-semibold">Meta financeira do dia</div>
-            <div className="text-xs opacity-70 ml-auto">
-              Taxa cartão: {dashboard.cardFeePerc?.toFixed(2)}% · Imposto: {dashboard.taxPerc?.toFixed(2)}% · Taxa Marketplace: {dashboard.marketplaceTaxPerc?.toFixed(2)}%
+            <div className="ml-auto flex items-center gap-3 text-xs opacity-70">
+              <span>Taxa cartão: {dashboard.cardFeePerc?.toFixed(2)}% · Imposto: {dashboard.taxPerc?.toFixed(2)}% · Taxa Marketplace: {dashboard.marketplaceTaxPerc?.toFixed(2)}%</span>
+
             </div>
           </div>
 
@@ -1078,9 +1237,156 @@ export default function GridKdsPage() {
         </div>
       </div>
 
+      <Suspense fallback={<div className="rounded-lg border p-3 text-sm text-slate-500">Carregando estoque de massa…</div>}>
+        <Await resolve={doughUsage}>
+          {(used: SizeCounts) => {
+            return null; // estoque inicial é gerido na página dedicada
+          }}
+        </Await>
+      </Suspense>
+
+      <Suspense fallback={null}>
+        <Await resolve={doughUsage}>
+          {(used: SizeCounts) => {
+            const effectiveCounts = stockSnapshot?.effective ?? defaultSizeCounts();
+            const baseCounts = baseStock ?? defaultSizeCounts();
+            const remaining = calcRemaining(effectiveCounts, used);
+            const ordered = (availableSizes as DoughSizeOption[]) ?? [];
+            const manual = effectiveCounts;
+            const hasManualInfo = (["F", "M", "P", "I", "FT"] as (keyof SizeCounts)[])
+              .some((k) => manual[k] > 0);
+            const manualText = ordered
+              .map(({ key, abbr }) => ({ key, abbr, value: manual[key] ?? 0 }))
+              .filter((item) => item.value > 0)
+              .map((item) => `${item.abbr || item.key}: ${item.value}`)
+              .join(" · ");
+
+            function chipClasses(k: keyof SizeCounts) {
+              const init = effectiveCounts[k];
+              if (init <= 0) return "border border-slate-200 text-slate-500 bg-white";
+              const ratio = remaining[k] / init;
+              console.log({ init, remaining: remaining[k], ratio })
+              if (remaining[k] === 0) return "bg-rose-500 text-white"; // crítico
+              if (remaining[k] <= 2) return "bg-amber-400 text-slate-900"; // alerta
+              if (remaining[k] < 3) return "border border-rose-500 text-rose-600 bg-white";
+              return "bg-emerald-500 text-white"; // ok
+            }
+
+            return (
+              <div
+                className="fixed right-5 z-40"
+                style={{ top: `${floatingTop}px` }}
+              >
+                <stockFx.Form
+                  method="post"
+                  className="rounded-full border bg-white shadow-lg px-3 py-2 flex items-center gap-3 backdrop-blur"
+                  onSubmit={() => setEditingBar(false)}
+                >
+                  <input type="hidden" name="_action" value="saveDoughStock" />
+                  <input type="hidden" name="date" value={dateStr} />
+
+                  <div
+                    className="flex items-center justify-center w-7 h-7 rounded text-slate-600 hover:bg-slate-200 cursor-grab active:cursor-grabbing"
+                    onMouseDown={(e) => { setDragging(true); e.preventDefault(); }}
+                    role="presentation"
+                  >
+                    <GripVertical className="w-4 h-4" />
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {ordered.map(({ key, label, abbr }) => (
+                      <div key={key} className="flex flex-col items-center gap-1 min-w-[60px]">
+                        <input type="hidden" name={`stock${key}`} value={baseCounts[key]} />
+                        <input type="hidden" name={`adjust${key}`} value={adjustmentDraft[key]} />
+
+                        <div
+                          className={`w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-semibold ${chipClasses(key)}`}
+                          title={`${label}: ${Math.max(0, remaining[key])}`}
+                        >
+                          {abbr || key} {Math.max(0, remaining[key])}
+                        </div>
+
+                        {editingBar && (
+                          <div className="flex items-center gap-0 text-[11px] text-slate-600">
+                            <button
+                              type="button"
+                              className="h-6 w-6 rounded-full border border-slate-200 hover:bg-slate-50 font-semibold"
+                              onClick={() => setAdjustmentValue(key, (adjustmentDraft[key] ?? 0) - 1)}
+                            >
+                              –
+                            </button>
+                            <NumericInput
+                              min={0}
+                              step={1}
+                              className="h-6 w-12 text-center rounded bg-white text-xs font-semibold border-none"
+                              value={adjustmentDraft[key]}
+                              onChange={(e) => setAdjustmentValue(key, e.target.value)}
+                              aria-label={`Ajuste ${label}`}
+                            />
+                            <button
+                              type="button"
+                              className="h-6 w-6 rounded-full border border-slate-200 hover:bg-slate-50"
+                              onClick={() => setAdjustmentValue(key, (adjustmentDraft[key] ?? 0) + 1)}
+                            >
+                              +
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* {hasManualInfo && !editingBar && (
+                    <div className="text-[11px] text-slate-500 ml-1">
+                      Saldo manual: {manualText}
+                    </div>
+                  )} */}
+
+                  {editingBar ? (
+                    <div className="flex items-center gap-2">
+                      <Button type="submit" size="sm" variant="secondary" disabled={stockFx.state !== "idle"}>
+                        {stockFx.state !== "idle" ? (
+                          <>
+                            <Loader2 className="w-3 h-3 animate-spin mr-1" /> Salvando…
+                          </>
+                        ) : (
+                          "Salvar"
+                        )}
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          setAdjustmentDraft(stockSnapshot?.effective ?? defaultSizeCounts());
+                          setEditingBar(false);
+                        }}
+                      >
+                        Cancelar
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setEditingBar(true)}
+                      className="text-slate-700"
+                    >
+                      <PencilLine className="w-4 h-4 mr-1" />
+                    </Button>
+                  )}
+                </stockFx.Form>
+              </div>
+            );
+          }}
+        </Await>
+      </Suspense>
+
       {/* Venda livre rápida + Filtro de Canal */}
       {(status === "OPENED" || status === "REOPENED") && (
         <>
+
           <div className="rounded-lg border p-3 flex flex-wrap items-center justify-between gap-3">
             {/* Venda Livre rápida */}
             <div className="flex items-center gap-3">
@@ -1156,6 +1462,7 @@ export default function GridKdsPage() {
         <Await resolve={items}>
           {(rowsDb: OrderRow[]) => {
             const dup = duplicateCommandNumbers(rowsDb);
+            const globalUsage = useMemo(() => sumSizes(rowsDb), [rowsDb]);
 
             const dzMap = useMemo(() => buildDzMap(dzTimes as any), [dzTimes]);
             const operatorCount = useMemo(() => getOperatorCountByDate(dateStr), [dateStr]);
@@ -1206,18 +1513,33 @@ export default function GridKdsPage() {
 
                 {/* Linhas */}
                 <ul className="space-y-1">
-                  {filteredRows.map((o) => (
-                    <RowItem
-                      key={o.id}
-                      o={o}
-                      dateStr={dateStr}
-                      readOnly={isClosed}
-                      deliveryZones={deliveryZones as any}
-                      nowMs={nowMs}
-                      predictions={predictions}
-                      rowFx={rowFx}
-                    />
-                  ))}
+                  {filteredRows.map((o) => {
+                    const sizeLimit = (() => {
+                      if (!stockSnapshot?.effective) return null;
+                      const currentSize = parseSize(o.size);
+                      return {
+                        F: Math.max(0, stockSnapshot.effective.F - (globalUsage.F - currentSize.F)),
+                        M: Math.max(0, stockSnapshot.effective.M - (globalUsage.M - currentSize.M)),
+                        P: Math.max(0, stockSnapshot.effective.P - (globalUsage.P - currentSize.P)),
+                        I: Math.max(0, stockSnapshot.effective.I - (globalUsage.I - currentSize.I)),
+                        FT: Math.max(0, stockSnapshot.effective.FT - (globalUsage.FT - currentSize.FT)),
+                      } as SizeCounts;
+                    })();
+
+                    return (
+                      <RowItem
+                        key={o.id}
+                        o={o}
+                        dateStr={dateStr}
+                        readOnly={isClosed}
+                        deliveryZones={deliveryZones as any}
+                        nowMs={nowMs}
+                        predictions={predictions}
+                        rowFx={rowFx}
+                        sizeLimit={sizeLimit}
+                      />
+                    );
+                  })}
                 </ul>
               </>
             );

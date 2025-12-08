@@ -199,6 +199,8 @@ const EditablePriceCell = React.memo(function EditablePriceCellInner({
   const margemAlvo = Number(cspb?.channel?.targetMarginPerc ?? 0);
   const anterior = variation.previousPriceAmount ?? 0;
   const atual = variation.priceAmount ?? 0;
+  const lucroPerc = variation.profitActualPerc ?? 0;
+  const lucroValor = (atual * lucroPerc) / 100;
 
   // custos e mínimos
   const custoFT = Number(cspb?.custoFichaTecnica ?? 0);
@@ -308,6 +310,16 @@ const EditablePriceCell = React.memo(function EditablePriceCellInner({
           <div className="flex items-center justify-between">
             <span className="text-muted-foreground">Mínimo (Break-even):</span>
             <span className="font-mono">R$ {formatDecimalPlaces(minBreakEven)}</span>
+          </div>
+        </div>
+
+        {/* Lucro atual (percentual e valor) */}
+        <div className="text-[10px]">
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">Lucro atual:</span>
+            <span className="font-mono">
+              {formatDecimalPlaces(lucroPerc)}% | R$ {formatDecimalPlaces(lucroValor)}
+            </span>
           </div>
         </div>
 
