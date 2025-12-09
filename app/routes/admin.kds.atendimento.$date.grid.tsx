@@ -1556,32 +1556,47 @@ export default function GridKdsPage() {
   return (
     <div className="space-y-4 mt-6">
       {/* Toolbar topo + Painel-resumo SEM suspense (feedback imediato) */}
-      <div className="flex flex-col gap-4  md:grid md:grid-cols-12 items-start">
 
-        <div className="flex flex-col gap-3 col-span-4">
-          {/* Toolbar topo */}
-          <div className="flex flex-wrap items-center">
-            {(!header?.id || status === "PENDING") && (
-              <listFx.Form method="post" className="flex items-center gap-2">
-                <input type="hidden" name="_action" value="openDay" />
-                <input type="hidden" name="date" value={dateStr} />
-                <Input name="qty" defaultValue={40} className="h-9 w-20 text-center" />
-                <Button type="submit" variant="default" disabled={listFx.state !== "idle"} className="bg-blue-800">
-                  {listFx.state !== "idle" ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin mr-1" /> Abrindo…
-                    </>
-                  ) : (
-                    <>
-                      <PlusCircle className="w-4 h-4 mr-1" />
-                      Abrir dia
-                    </>
-                  )}
-                </Button>
-              </listFx.Form>
-            )}
 
-            {status === "OPENED" && (
+      <div className="flex flex-col gap-3 col-span-4">
+        {/* Toolbar topo */}
+        <div className="flex flex-wrap items-center">
+          {(!header?.id || status === "PENDING") && (
+            <listFx.Form method="post" className="flex items-center gap-2">
+              <input type="hidden" name="_action" value="openDay" />
+              <input type="hidden" name="date" value={dateStr} />
+              <Input name="qty" defaultValue={40} className="h-9 w-20 text-center" />
+              <Button type="submit" variant="default" disabled={listFx.state !== "idle"} className="bg-blue-800">
+                {listFx.state !== "idle" ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin mr-1" /> Abrindo…
+                  </>
+                ) : (
+                  <>
+                    <PlusCircle className="w-4 h-4 mr-1" />
+                    Abrir dia
+                  </>
+                )}
+              </Button>
+            </listFx.Form>
+          )}
+
+          {status === "OPENED" && (
+            <listFx.Form method="post" className="flex items-center gap-2">
+              <input type="hidden" name="_action" value="closeDay" />
+              <input type="hidden" name="date" value={dateStr} />
+              <Button type="submit" variant="secondary">
+                <Lock className="w-4 h-4 mr-2" /> Fechar dia
+              </Button>
+            </listFx.Form>
+          )}
+
+          {status === "REOPENED" && (
+            <>
+              <div className="px-3 py-1 rounded border text-sm bg-amber-50 text-amber-900">
+                Dia reaberto (edição liberada, sem novos registros)
+                <span className="text-xs text-slate-500 ml-2">(Atalho: pressione <b>M</b> para ver o mês)</span>
+              </div>
               <listFx.Form method="post" className="flex items-center gap-2">
                 <input type="hidden" name="_action" value="closeDay" />
                 <input type="hidden" name="date" value={dateStr} />
@@ -1589,83 +1604,70 @@ export default function GridKdsPage() {
                   <Lock className="w-4 h-4 mr-2" /> Fechar dia
                 </Button>
               </listFx.Form>
-            )}
+            </>
+          )}
 
-            {status === "REOPENED" && (
-              <>
-                <div className="px-3 py-1 rounded border text-sm bg-amber-50 text-amber-900">
-                  Dia reaberto (edição liberada, sem novos registros)
-                  <span className="text-xs text-slate-500 ml-2">(Atalho: pressione <b>M</b> para ver o mês)</span>
-                </div>
-                <listFx.Form method="post" className="flex items-center gap-2">
-                  <input type="hidden" name="_action" value="closeDay" />
-                  <input type="hidden" name="date" value={dateStr} />
-                  <Button type="submit" variant="secondary">
-                    <Lock className="w-4 h-4 mr-2" /> Fechar dia
-                  </Button>
-                </listFx.Form>
-              </>
-            )}
+          {status === "CLOSED" && (
+            <>
+              <div className="ml-2 px-3 py-1 rounded border text-sm bg-slate-50 flex items-center gap-2">
+                <Lock className="w-4 h-4" /> Dia fechado (somente leitura)
+              </div>
+              <listFx.Form method="post" className="flex items-center gap-2">
+                <input type="hidden" name="_action" value="reopenDay" />
+                <input type="hidden" name="date" value={dateStr} />
+                <Button type="submit" variant="ghost">
+                  <Unlock className="w-4 h-4 mr-2" /> Reabrir dia
+                </Button>
+              </listFx.Form>
+            </>
+          )}
+        </div>
 
-            {status === "CLOSED" && (
-              <>
-                <div className="ml-2 px-3 py-1 rounded border text-sm bg-slate-50 flex items-center gap-2">
-                  <Lock className="w-4 h-4" /> Dia fechado (somente leitura)
-                </div>
-                <listFx.Form method="post" className="flex items-center gap-2">
-                  <input type="hidden" name="_action" value="reopenDay" />
-                  <input type="hidden" name="date" value={dateStr} />
-                  <Button type="submit" variant="ghost">
-                    <Unlock className="w-4 h-4 mr-2" /> Reabrir dia
-                  </Button>
-                </listFx.Form>
-              </>
-            )}
-          </div>
+        {/* previsao de saida */}
+        <Suspense
+          key={`timeline-summary-${dateStr}`}
+          fallback={<div className="rounded-lg border bg-white p-3 text-sm text-slate-500">Carregando previsão de saída…</div>}
+        >
+          <Await resolve={items}>
+            {(rowsDb: OrderRow[]) => {
+              const predictionData = useMemo(
+                () => computePredictionData(rowsDb, operatorCountActive, riderCount, dzMap, nowMs, prepMinutesActive),
+                [rowsDb, operatorCountActive, riderCount, dzMap, nowMs, prepMinutesActive]
+              );
+              const activeLastReady =
+                predictionMode === "real"
+                  ? predictionData.realLastReadyAt
+                  : predictionData.theoreticalLastReadyAt;
+              const activeBuckets =
+                predictionMode === "real"
+                  ? predictionData.realTimelineBuckets
+                  : predictionData.theoreticalTimelineBuckets;
+              const activeReadyMap =
+                predictionMode === "real"
+                  ? predictionData.realTimelineReadyMap
+                  : predictionData.theoreticalTimelineReadyMap;
 
-          {/* previsao de saida */}
-          <Suspense
-            key={`timeline-summary-${dateStr}`}
-            fallback={<div className="rounded-lg border bg-white p-3 text-sm text-slate-500">Carregando previsão de saída…</div>}
-          >
-            <Await resolve={items}>
-              {(rowsDb: OrderRow[]) => {
-                const predictionData = useMemo(
-                  () => computePredictionData(rowsDb, operatorCountActive, riderCount, dzMap, nowMs, prepMinutesActive),
-                  [rowsDb, operatorCountActive, riderCount, dzMap, nowMs, prepMinutesActive]
-                );
-                const activeLastReady =
-                  predictionMode === "real"
-                    ? predictionData.realLastReadyAt
-                    : predictionData.theoreticalLastReadyAt;
-                const activeBuckets =
-                  predictionMode === "real"
-                    ? predictionData.realTimelineBuckets
-                    : predictionData.theoreticalTimelineBuckets;
-                const activeReadyMap =
-                  predictionMode === "real"
-                    ? predictionData.realTimelineReadyMap
-                    : predictionData.theoreticalTimelineReadyMap;
-
-                return (
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="flex flex-col gap-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-base font-semibold text-slate-800">
-                          Previsão saída último pedido
-                        </span>
-                        <Dialog open={settingsDialogOpen} onOpenChange={setSettingsDialogOpen}>
-                          <DialogTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                              <SettingsIcon className="h-4 w-4" />
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent className="max-w-3xl">
-                            <DialogHeader>
-                              <DialogTitle>Configurar previsão de saída</DialogTitle>
-                            </DialogHeader>
-                            <settingsFx.Form method="post" className="space-y-6">
-                              <input type="hidden" name="_action" value="savePredictionSettings" />
+              return (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full">
+                  {/* Card previsão */}
+                  <div className="rounded-xl border bg-white shadow-sm p-4 flex flex-col gap-3">
+                    <div className="flex items-center justify-between text-sm font-semibold text-slate-800">
+                      <span className="flex items-center gap-2">
+                        <Clock4 className="h-4 w-4" /> Previsão saída último pedido
+                      </span>
+                      <Dialog open={settingsDialogOpen} onOpenChange={setSettingsDialogOpen}>
+                        <DialogTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <SettingsIcon className="h-4 w-4" />
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-3xl">
+                          <DialogHeader>
+                            <DialogTitle>Configurar previsão de saída</DialogTitle>
+                          </DialogHeader>
+                          <settingsFx.Form method="post" className="space-y-6">
+                            <input type="hidden" name="_action" value="savePredictionSettings" />
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 border rounded-lg p-4">
                               <div className="space-y-2">
                                 <Label htmlFor="mode" className="text-sm font-semibold">Modalidade de cálculo</Label>
                                 <Select name="mode" defaultValue={predictionMode}>
@@ -1678,12 +1680,9 @@ export default function GridKdsPage() {
                                   </SelectContent>
                                 </Select>
                                 <p className="text-[11px] text-slate-600">
-                                  Real: usa o backlog atual com operadores. Teórico: reinicia a fila no horário do primeiro pedido para visualizar capacidade ideal.
+                                  Real: usa o backlog atual com operadores. Teórico: reinicia a fila no horário do primeiro pedido.
                                 </p>
                               </div>
-
-                              <Separator className="my-2" />
-
                               <div className="space-y-2">
                                 <Label htmlFor="operatorCount" className="text-sm font-semibold">Nº de operadores</Label>
                                 <Input
@@ -1693,118 +1692,146 @@ export default function GridKdsPage() {
                                   min={1}
                                   defaultValue={operatorCountActive}
                                 />
-                                <p className="text-[11px] text-slate-600">Usado tanto no cálculo real quanto teórico.</p>
+                                <p className="text-[11px] text-slate-600">Usado em ambos os modos.</p>
                               </div>
+                            </div>
 
-                              <Separator className="my-2" />
+                            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                              {(["F", "M", "P", "I", "FT"] as (keyof SizeCounts)[]).map((k) => (
+                                <div key={k} className="space-y-1">
+                                  <Label htmlFor={`prep-${k}`}>Tempo {k} (min)</Label>
+                                  <Input
+                                    id={`prep-${k}`}
+                                    name={`prep${k}`}
+                                    type="number"
+                                    min={1}
+                                    defaultValue={prepMinutesActive[k]}
+                                  />
+                                </div>
+                              ))}
+                            </div>
 
-                              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                                {(["F", "M", "P", "I", "FT"] as (keyof SizeCounts)[]).map((k) => (
-                                  <div key={k} className="space-y-1">
-                                    <Label htmlFor={`prep-${k}`}>Tempo {k} (min)</Label>
-                                    <Input
-                                      id={`prep-${k}`}
-                                      name={`prep${k}`}
-                                      type="number"
-                                      min={1}
-                                      defaultValue={prepMinutesActive[k]}
-                                    />
-                                  </div>
-                                ))}
-                              </div>
-
-                              <DialogFooter className="gap-2">
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  onClick={() => setSettingsDialogOpen(false)}
-                                >
-                                  Cancelar
-                                </Button>
-                                <Button type="submit" disabled={settingsFx.state !== "idle"}>
-                                  {settingsFx.state !== "idle" ? (
-                                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                                  ) : null}
-                                  Salvar
-                                </Button>
-                              </DialogFooter>
-                            </settingsFx.Form>
-                          </DialogContent>
-                        </Dialog>
-                      </div>
-                      <span className="text-2xl">
-                        {activeLastReady ? fmtHHMM(activeLastReady) : "--:--"}
-                      </span>
-
+                            <DialogFooter className="gap-2">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                onClick={() => setSettingsDialogOpen(false)}
+                              >
+                                Cancelar
+                              </Button>
+                              <Button type="submit" disabled={settingsFx.state !== "idle"}>
+                                {settingsFx.state !== "idle" ? (
+                                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                ) : null}
+                                Salvar
+                              </Button>
+                            </DialogFooter>
+                          </settingsFx.Form>
+                        </DialogContent>
+                      </Dialog>
                     </div>
 
-                    <Sheet open={timelineOpen} onOpenChange={setTimelineOpen}>
-                      <SheetTrigger asChild>
-                        <Button variant="outline" size="sm" disabled={!activeBuckets.length}>
-                          Ver linha do tempo
-                        </Button>
-                      </SheetTrigger>
-                      <SheetContent side="right" className="sm:max-w-md w-full p-6">
-                        <TimelineSidebar
-                          buckets={activeBuckets}
-                          lastReadyAt={activeLastReady}
-                          nowMs={nowMs}
-                          orderLabels={predictionData.orderLabelMap}
-                          readyAtMap={activeReadyMap}
-                        />
-                      </SheetContent>
-                    </Sheet>
+                    <div className="text-5xl font-extrabold text-slate-900">{activeLastReady ? fmtHHMM(activeLastReady) : "--:--"}</div>
+                    <div className="text-xs text-slate-500 space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span>Modo:</span>
+                        <Select
+                          value={predictionMode}
+                          onValueChange={(val) => setPredictionMode(val as "real" | "theoretical")}
+                        >
+                          <SelectTrigger className="h-8">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="real">Real (fila atual começando agora)</SelectItem>
+                            <SelectItem value="theoretical">Teórico (fila ideal desde o 1º pedido)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="text-[11px] text-slate-500">
+                        Real: backlog a partir de agora. Teórico: mesma fila iniciando no primeiro pedido.
+                      </div>
+                    </div>
+                    <Button
+                      variant="link"
+                      className="p-0 h-auto text-slate-800 font-semibold"
+                      onClick={() => setTimelineOpen(true)}
+                      disabled={!activeBuckets.length}
+                    >
+                      Ver linha do tempo
+                    </Button>
                   </div>
-                );
-              }}
-            </Await>
-          </Suspense>
 
-        </div>
+                  {/* Card financeiro */}
+                  <div className="rounded-xl border bg-white shadow-sm p-4 flex flex-col gap-2">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                      <BadgeDollarSign className="h-4 w-4" /> Meta financeira do dia
+                    </div>
 
-        {/* Painel-resumo de metas e receita + link estoque */}
-        <div className={cn("rounded-lg border p-3 col-span-7 col-start-7", statusColor)}>
-          <div className="flex items-center gap-2 mb-2">
-            <BadgeDollarSign className="w-5 h-5" />
-            <div className="font-semibold">Meta financeira do dia</div>
-            <div className="ml-auto flex items-center gap-3 text-xs opacity-70">
-              <span>Taxa cartão: {dashboard.cardFeePerc?.toFixed(2)}% · Imposto: {dashboard.taxPerc?.toFixed(2)}% · Taxa Marketplace: {dashboard.marketplaceTaxPerc?.toFixed(2)}%</span>
+                    <div className="flex flex-col md:grid md:items-center md:grid-cols-2 gap-x-6">
 
-            </div>
-          </div>
+                      <div className="flex flex-col justify-center items-center gap-4 text-sm text-slate-600 font-mono">
+                        <span>Receita Liquida</span>
+                        <span className="text-3xl font-bold text-emerald-600">{fmtBRL(dashboard.netAmount)}</span>
+                      </div>
+                      <div className="flex flex-col justify-center items-center gap-4 text-sm text-slate-600 font-mono">
+                        <span>Receita Bruta</span>
+                        <span className="text-3xl ">{fmtBRL(dashboard.grossAmount)}</span>
+                      </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-3 text-sm">
-            <div>
-              <div className="opacity-70">Receita Bruta</div>
-              <div className="font-semibold">{fmtBRL(dashboard.grossAmount)}</div>
-            </div>
-            <div>
-              <div className="opacity-70">Receita Líquida</div>
-              <div className="font-semibold">{fmtBRL(dashboard.netAmount)}</div>
-            </div>
-            <div>
-              <div className="opacity-70">Meta Mínima (dia)</div>
-              <div className="font-semibold">{fmtBRL(dashboard.goalMinAmount)}</div>
-            </div>
-            <div>
-              <div className="opacity-70">Meta Target (dia)</div>
-              <div className="font-semibold">{fmtBRL(dashboard.goalTargetAmount)}</div>
-            </div>
-            <div>
-              <div className="opacity-70">% da Target</div>
-              <div className="font-semibold">{dashboard.pctOfTarget.toFixed(0)}%</div>
-            </div>
-            <div>
-              <div className="opacity-70">Status</div>
-              <div className="font-semibold">
-                {dashboard.status === "hit-target" ? "Atingiu a target" :
-                  dashboard.status === "between" ? "Acima da mínima" :
-                    "Abaixo da mínima"}
-              </div>
-            </div>
-          </div>
-        </div>
+
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      Taxas: Cartão {dashboard.cardFeePerc?.toFixed(2)}% · Imposto {dashboard.taxPerc?.toFixed(2)}% · Marketplace {dashboard.marketplaceTaxPerc?.toFixed(2)}%
+                    </div>
+
+                  </div>
+
+                  {/* Card status */}
+                  <div className="rounded-xl border bg-white shadow-sm p-4 flex flex-col gap-2">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                      <span className="text-emerald-600">●</span> Status do dia
+                    </div>
+                    <div className="text-3xl font-bold text-emerald-600 leading-tight">
+                      {dashboard.status === "hit-target"
+                        ? "Acima da meta"
+                        : dashboard.status === "between"
+                          ? "Acima da mínima"
+                          : "Abaixo da mínima"}
+                    </div>
+                    <div className="text-sm text-emerald-600 mb-6">{dashboard.pctOfTarget.toFixed(0)}% da Target</div>
+
+                    <div className="flex flex-col gap-2">
+                      <div className="text-sm text-slate-500">
+                        Meta Mínima (dia): {fmtBRL(dashboard.goalMinAmount)}
+                      </div>
+                      <div className="text-sm text-slate-500">
+                        Meta Target (dia): {fmtBRL(dashboard.goalTargetAmount)}
+                      </div>
+                    </div>
+                  </div>
+
+                  <Sheet open={timelineOpen} onOpenChange={setTimelineOpen}>
+                    <SheetContent side="right" className="sm:max-w-md w-full p-6">
+                      <TimelineSidebar
+                        buckets={activeBuckets}
+                        lastReadyAt={activeLastReady}
+                        nowMs={nowMs}
+                        orderLabels={predictionData.orderLabelMap}
+                        readyAtMap={activeReadyMap}
+                      />
+                    </SheetContent>
+                  </Sheet>
+                </div>
+              );
+            }}
+          </Await>
+        </Suspense>
+
       </div>
+
+
+
 
       {/* Barra contador do estoque */}
       <Suspense fallback={null}>
