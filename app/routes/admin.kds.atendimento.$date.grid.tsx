@@ -1175,7 +1175,7 @@ function TimelineSidebar({
   };
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col ">
       <SheetHeader>
         <SheetTitle className="flex items-center gap-2 text-lg">
           <Clock4 className="h-5 w-5 text-blue-700" />
@@ -1194,8 +1194,8 @@ function TimelineSidebar({
           </div>
         </div>
 
-        <ScrollArea className="flex-1 pr-3">
-          <div className="space-y-3 pb-6">
+        <ScrollArea className="flex-1 pr-3 overflow-y-scroll">
+          <div className="space-y-3 pb-6 h-[calc(100vh-8rem)]">
             {slots.length === 0 && (
               <div className="rounded-lg border border-dashed p-4 text-sm text-slate-500 bg-white">
                 Nenhum pedido em produção no momento.
@@ -1214,7 +1214,7 @@ function TimelineSidebar({
                 <div
                   key={slot.slotStartMs}
                   className={cn(
-                    "relative rounded-md p-3 transition-colors",
+                    "relative p-3 transition-colors border-b-1 mb-2 hover:bg-slate-100",
                     isCurrentSlot ? "border-emerald-300 bg-emerald-50" : "bg-white"
                   )}
                 >
@@ -1222,7 +1222,7 @@ function TimelineSidebar({
 
                   <div className="flex items-center justify-between gap-3 ml-2">
                     <div className="flex items-center gap-2">
-                      <div className="text-sm font-semibold text-slate-900">{slot.label}</div>
+                      <div className="text-sm font-semibold text-slate-900 font-mono">{slot.label}</div>
                       {isCurrentSlot && <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" aria-label="Horário atual" />}
                       {slot.isPast && !slot.isCurrent && (
                         <span className="text-[11px] uppercase tracking-wide text-slate-400">Passado</span>
@@ -1250,13 +1250,13 @@ function TimelineSidebar({
                         >
                           <span>{l.label}</span>
                           {l.readyAt && (
-                            <span className="text-[10px] text-slate-500">· {fmtHHMM(l.readyAt)}</span>
+                            <span className="text-[10px] text-slate-500 font-mono">· {fmtHHMM(l.readyAt)}</span>
                           )}
                           <button
                             type="button"
                             onClick={() => handleDismiss(l.id)}
-                            className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 hover:bg-slate-100"
-                            title="Marcar como entregue"
+                            className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full hover:bg-slate-100"
+                            title="Pedido despachado"
                           >
                             <Bike className="h-3 w-3" />
                           </button>
@@ -1731,7 +1731,12 @@ export default function GridKdsPage() {
                       </Dialog>
                     </div>
 
-                    <div className="text-5xl font-extrabold text-slate-900">{activeLastReady ? fmtHHMM(activeLastReady) : "--:--"}</div>
+                    <div className="md:grid md:grid-cols-2">
+                      {/* <div className="text-5xl text-slate-900">{fmtHHMM(nowMs)}</div> */}
+                      <div className="text-5xl font-extrabold text-slate-900">{activeLastReady ? fmtHHMM(activeLastReady) : "--:--"}</div>
+                    </div>
+
+
                     <div className="text-xs text-slate-500 space-y-1">
                       <div className="flex items-center gap-2">
                         <span>Modo:</span>
@@ -1803,16 +1808,16 @@ export default function GridKdsPage() {
 
                     <div className="flex flex-col gap-2">
                       <div className="text-sm text-slate-500">
-                        Meta Mínima (dia): {fmtBRL(dashboard.goalMinAmount)}
+                        Meta Mínima (dia): <span className="font-mono">{fmtBRL(dashboard.goalMinAmount)}</span>
                       </div>
                       <div className="text-sm text-slate-500">
-                        Meta Target (dia): {fmtBRL(dashboard.goalTargetAmount)}
+                        Meta Target (dia): <span className="font-mono">{fmtBRL(dashboard.goalTargetAmount)}</span>
                       </div>
                     </div>
                   </div>
 
                   <Sheet open={timelineOpen} onOpenChange={setTimelineOpen}>
-                    <SheetContent side="right" className="sm:max-w-md w-full p-6">
+                    <SheetContent side="right" className="sm:max-w-md w-full p-6 h-full flex flex-col">
                       <TimelineSidebar
                         buckets={activeBuckets}
                         lastReadyAt={activeLastReady}

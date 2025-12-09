@@ -96,71 +96,73 @@ export default function EstoqueMassaPage() {
   const effective = useMemo<SizeCounts>(() => ({ ...draftManual }), [draftManual]);
 
   return (
-    <div className="mx-auto max-w-xl space-y-4">
+    <div className="mx-auto max-w-6xl space-y-4 mt-6">
       <header className="space-y-1">
         <div className="text-xs text-slate-500">Data</div>
         <div className="text-lg font-semibold">{dateStr}</div>
         <p className="text-sm text-slate-600">Informe o total de discos prontos por tamanho assim que finalizar o boleamento. Essa tela foi pensada para o operador no celular.</p>
       </header>
 
-      <fx.Form method="post" className="space-y-4">
+      <fx.Form method="post" className="space-y-4 ">
         <input type="hidden" name="date" value={dateStr} />
 
-        <section className="space-y-2">
-          <div className="flex flex-col gap-0.5">
-            <div className="text-sm font-semibold">Estoque inicial (auto)</div>
-            <p className="text-sm text-slate-600">Informe o total de discos prontos por tamanho assim que finalizar o boleamento.</p>
-          </div>
+        <div className="flex flex-col gap-4 md:gap-x-16 md:grid md:grid-cols-2">
+          <section className="space-y-2">
+            <div className="flex flex-col gap-0.5">
+              <div className="text-sm font-semibold">Estoque inicial (auto)</div>
+              <p className="text-sm text-slate-600">Informe o total de discos prontos por tamanho assim que finalizar o boleamento.</p>
+            </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            {inputs.map((k) => {
-              const size = sizes.find((s) => s.key === k)!;
-              return (
-                <label key={k} className="flex flex-col gap-2 rounded-lg border p-3 bg-white shadow-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold">{size.label}</span>
-                    <span className="text-xs text-slate-500">{size.abbr || size.key}</span>
-                  </div>
-                  <NumericInput
-                    name={`stock${k}`}
-                    value={draftBase[k]}
-                    onChange={(e) => onChangeBase(k, e.target.value)}
-                    inputMode="numeric"
-                    className="h-12 text-center text-xl font-mono"
-                  />
-                </label>
-              );
-            })}
-          </div>
-        </section>
+            <div className="grid grid-cols-2 gap-3">
+              {inputs.map((k) => {
+                const size = sizes.find((s) => s.key === k)!;
+                return (
+                  <label key={k} className="flex flex-col gap-2 rounded-lg border p-3 bg-white shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-semibold">{size.label}</span>
+                      <span className="text-xs text-slate-500">{size.abbr || size.key}</span>
+                    </div>
+                    <NumericInput
+                      name={`stock${k}`}
+                      value={draftBase[k]}
+                      onChange={(e) => onChangeBase(k, e.target.value)}
+                      inputMode="numeric"
+                      className="h-12 text-center text-xl font-mono"
+                    />
+                  </label>
+                );
+              })}
+            </div>
+          </section>
 
-        <section className="space-y-2">
-          <div className="flex flex-col gap-0.5">
-            <div className="text-sm font-semibold">Saldo manual</div>
-            <p className="text-sm text-slate-600">Defina o saldo atual. Use quando o número real de discos mudar (perdas, queima, doações, etc.).</p>
-          </div>
+          <section className="space-y-2">
+            <div className="flex flex-col gap-0.5">
+              <div className="text-sm font-semibold">Saldo manual</div>
+              <p className="text-sm text-slate-600">Defina o saldo atual. Use quando o número real de discos mudar (perdas, queima, doações, etc.).</p>
+            </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            {inputs.map((k) => {
-              const size = sizes.find((s) => s.key === k)!;
-              return (
-                <label key={k} className="flex flex-col gap-2 rounded-lg border p-3 bg-white shadow-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold">{size.label}</span>
-                    <span className="text-xs text-slate-500">{size.abbr || size.key}</span>
-                  </div>
-                  <NumericInput
-                    name={`adjust${k}`}
-                    value={draftManual[k]}
-                    onChange={(e) => onChangeManual(k, e.target.value)}
-                    inputMode="numeric"
-                    className="h-12 text-center text-xl font-mono"
-                  />
-                </label>
-              );
-            })}
-          </div>
-        </section>
+            <div className="grid grid-cols-2 gap-3">
+              {inputs.map((k) => {
+                const size = sizes.find((s) => s.key === k)!;
+                return (
+                  <label key={k} className="flex flex-col gap-2 rounded-lg border p-3 bg-white shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-semibold">{size.label}</span>
+                      <span className="text-xs text-slate-500">{size.abbr || size.key}</span>
+                    </div>
+                    <NumericInput
+                      name={`adjust${k}`}
+                      value={draftManual[k]}
+                      onChange={(e) => onChangeManual(k, e.target.value)}
+                      inputMode="numeric"
+                      className="h-12 text-center text-xl font-mono"
+                    />
+                  </label>
+                );
+              })}
+            </div>
+          </section>
+        </div>
 
         <div className="rounded-lg border bg-slate-50 p-3">
           <div className="text-xs text-slate-500">Saldo atual (manual)</div>
