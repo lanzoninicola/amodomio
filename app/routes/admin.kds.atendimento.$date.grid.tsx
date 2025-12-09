@@ -1671,80 +1671,80 @@ export default function GridKdsPage() {
                         <Badge variant="outline" className="text-[11px] font-semibold tracking-wide uppercase">
                           {predictionMode === "real" ? "Real" : "Teórico"}
                         </Badge>
-                      <Dialog open={settingsDialogOpen} onOpenChange={setSettingsDialogOpen}>
-                        <DialogTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <SettingsIcon className="h-4 w-4" />
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent className="max-w-3xl">
-                          <DialogHeader>
-                            <DialogTitle>Configurar previsão de saída</DialogTitle>
-                          </DialogHeader>
-                          <settingsFx.Form method="post" className="space-y-6">
-                            <input type="hidden" name="_action" value="savePredictionSettings" />
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 border rounded-lg p-4">
-                              <div className="space-y-2">
-                                <Label htmlFor="mode" className="text-sm font-semibold">Modalidade de cálculo</Label>
-                                <Select name="mode" defaultValue={predictionMode}>
-                                  <SelectTrigger id="mode">
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="real">Real (fila + operadores a partir de agora)</SelectItem>
-                                    <SelectItem value="theoretical">Teórico (fila ideal desde o primeiro pedido)</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                                <p className="text-[11px] text-slate-600">
-                                  Real: usa o backlog atual com operadores. Teórico: reinicia a fila no horário do primeiro pedido.
-                                </p>
-                              </div>
-                              <div className="space-y-2">
-                                <Label htmlFor="operatorCount" className="text-sm font-semibold">Nº de operadores</Label>
-                                <Input
-                                  id="operatorCount"
-                                  name="operatorCount"
-                                  type="number"
-                                  min={1}
-                                  defaultValue={operatorCountActive}
-                                />
-                                <p className="text-[11px] text-slate-600">Usado em ambos os modos.</p>
-                              </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                              {(["F", "M", "P", "I", "FT"] as (keyof SizeCounts)[]).map((k) => (
-                                <div key={k} className="space-y-1">
-                                  <Label htmlFor={`prep-${k}`}>Tempo {k} (min)</Label>
+                        <Dialog open={settingsDialogOpen} onOpenChange={setSettingsDialogOpen}>
+                          <DialogTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <SettingsIcon className="h-4 w-4" />
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent className="max-w-3xl">
+                            <DialogHeader>
+                              <DialogTitle>Configurar previsão de saída</DialogTitle>
+                            </DialogHeader>
+                            <settingsFx.Form method="post" className="space-y-6">
+                              <input type="hidden" name="_action" value="savePredictionSettings" />
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 border rounded-lg p-4">
+                                <div className="space-y-2">
+                                  <Label htmlFor="mode" className="text-sm font-semibold">Modalidade de cálculo</Label>
+                                  <Select name="mode" defaultValue={predictionMode}>
+                                    <SelectTrigger id="mode">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="real">Real (fila + operadores a partir de agora)</SelectItem>
+                                      <SelectItem value="theoretical">Teórico (fila ideal desde o primeiro pedido)</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                  <p className="text-[11px] text-slate-600">
+                                    Real: usa o backlog atual com operadores. Teórico: reinicia a fila no horário do primeiro pedido.
+                                  </p>
+                                </div>
+                                <div className="space-y-2">
+                                  <Label htmlFor="operatorCount" className="text-sm font-semibold">Nº de operadores</Label>
                                   <Input
-                                    id={`prep-${k}`}
-                                    name={`prep${k}`}
+                                    id="operatorCount"
+                                    name="operatorCount"
                                     type="number"
                                     min={1}
-                                    defaultValue={prepMinutesActive[k]}
+                                    defaultValue={operatorCountActive}
                                   />
+                                  <p className="text-[11px] text-slate-600">Usado em ambos os modos.</p>
                                 </div>
-                              ))}
-                            </div>
+                              </div>
 
-                            <DialogFooter className="gap-2">
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                onClick={() => setSettingsDialogOpen(false)}
-                              >
-                                Cancelar
-                              </Button>
-                              <Button type="submit" disabled={settingsFx.state !== "idle"}>
-                                {settingsFx.state !== "idle" ? (
-                                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                                ) : null}
-                                Salvar
-                              </Button>
-                            </DialogFooter>
-                          </settingsFx.Form>
-                        </DialogContent>
-                      </Dialog>
+                              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                                {(["F", "M", "P", "I", "FT"] as (keyof SizeCounts)[]).map((k) => (
+                                  <div key={k} className="space-y-1">
+                                    <Label htmlFor={`prep-${k}`}>Tempo {k} (min)</Label>
+                                    <Input
+                                      id={`prep-${k}`}
+                                      name={`prep${k}`}
+                                      type="number"
+                                      min={1}
+                                      defaultValue={prepMinutesActive[k]}
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+
+                              <DialogFooter className="gap-2">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  onClick={() => setSettingsDialogOpen(false)}
+                                >
+                                  Cancelar
+                                </Button>
+                                <Button type="submit" disabled={settingsFx.state !== "idle"}>
+                                  {settingsFx.state !== "idle" ? (
+                                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                  ) : null}
+                                  Salvar
+                                </Button>
+                              </DialogFooter>
+                            </settingsFx.Form>
+                          </DialogContent>
+                        </Dialog>
                       </div>
                     </div>
 
@@ -1753,26 +1753,7 @@ export default function GridKdsPage() {
                       <span className="text-[11px] uppercase tracking-wide text-slate-500 font-semibold">hora prevista</span>
                     </div>
 
-                    <div className="space-y-2">
-                      <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
-                        <span className="font-semibold text-slate-700">Modo</span>
-                        <Select
-                          value={predictionMode}
-                          onValueChange={(val) => setPredictionMode(val as "real" | "theoretical")}
-                        >
-                          <SelectTrigger className="h-9 min-w-[220px]">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="real">Real (fila atual começando agora)</SelectItem>
-                            <SelectItem value="theoretical">Teórico (fila ideal desde o 1º pedido)</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="text-[11px] text-slate-500">
-                        Real: backlog a partir de agora. Teórico: mesma fila iniciando no primeiro pedido.
-                      </div>
-                    </div>
+
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <Button
                         variant="outline"
