@@ -1552,6 +1552,15 @@ export default function GridKdsPage() {
     dashboard.status === "hit-target" ? "bg-emerald-50 text-emerald-900 border-emerald-200" :
       dashboard.status === "between" ? "bg-amber-50 text-amber-900 border-amber-200" :
         "bg-rose-50 text-rose-900 border-rose-200";
+  const summaryCardClass = "rounded-2xl border border-slate-200 bg-white shadow-sm p-5 flex flex-col gap-4 h-full";
+  const statusDot =
+    dashboard.status === "hit-target" ? "bg-emerald-500" :
+      dashboard.status === "between" ? "bg-amber-500" :
+        "bg-rose-500";
+  const statusTextColor =
+    dashboard.status === "hit-target" ? "text-emerald-700" :
+      dashboard.status === "between" ? "text-amber-700" :
+        "text-rose-700";
 
   return (
     <div className="space-y-4 mt-6">
@@ -1648,13 +1657,20 @@ export default function GridKdsPage() {
                   : predictionData.theoreticalTimelineReadyMap;
 
               return (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full items-stretch">
                   {/* Card previsão */}
-                  <div className="rounded-xl border bg-white shadow-sm p-4 flex flex-col gap-3">
-                    <div className="flex items-center justify-between text-sm font-semibold text-slate-800">
-                      <span className="flex items-center gap-2">
-                        <Clock4 className="h-4 w-4" /> Previsão saída último pedido
-                      </span>
+                  <div className={summaryCardClass}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          <Clock4 className="h-4 w-4" /> Previsão de saída
+                        </div>
+                        <p className="text-sm font-semibold text-slate-800">Último pedido</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-[11px] font-semibold tracking-wide uppercase">
+                          {predictionMode === "real" ? "Real" : "Teórico"}
+                        </Badge>
                       <Dialog open={settingsDialogOpen} onOpenChange={setSettingsDialogOpen}>
                         <DialogTrigger asChild>
                           <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -1729,22 +1745,22 @@ export default function GridKdsPage() {
                           </settingsFx.Form>
                         </DialogContent>
                       </Dialog>
+                      </div>
                     </div>
 
-                    <div className="md:grid md:grid-cols-2">
-                      {/* <div className="text-5xl text-slate-900">{fmtHHMM(nowMs)}</div> */}
-                      <div className="text-5xl font-extrabold text-slate-900">{activeLastReady ? fmtHHMM(activeLastReady) : "--:--"}</div>
+                    <div className="flex items-baseline gap-3">
+                      <div className="text-5xl font-black text-slate-900 tabular-nums">{activeLastReady ? fmtHHMM(activeLastReady) : "--:--"}</div>
+                      <span className="text-[11px] uppercase tracking-wide text-slate-500 font-semibold">hora prevista</span>
                     </div>
 
-
-                    <div className="text-xs text-slate-500 space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span>Modo:</span>
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                        <span className="font-semibold text-slate-700">Modo</span>
                         <Select
                           value={predictionMode}
                           onValueChange={(val) => setPredictionMode(val as "real" | "theoretical")}
                         >
-                          <SelectTrigger className="h-8">
+                          <SelectTrigger className="h-9 min-w-[220px]">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -1757,61 +1773,79 @@ export default function GridKdsPage() {
                         Real: backlog a partir de agora. Teórico: mesma fila iniciando no primeiro pedido.
                       </div>
                     </div>
-                    <Button
-                      variant="link"
-                      className="p-0 h-auto text-slate-800 font-semibold"
-                      onClick={() => setTimelineOpen(true)}
-                      disabled={!activeBuckets.length}
-                    >
-                      Ver linha do tempo
-                    </Button>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="font-semibold"
+                        onClick={() => setTimelineOpen(true)}
+                        disabled={!activeBuckets.length}
+                      >
+                        Ver linha do tempo
+                      </Button>
+                      <div className="text-[11px] text-slate-500">
+                        Operadores considerados: <span className="font-semibold text-slate-700">{operatorCountActive}</span>
+                      </div>
+                    </div>
                   </div>
 
                   {/* Card financeiro */}
-                  <div className="rounded-xl border bg-white shadow-sm p-4 flex flex-col gap-2">
-                    <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                      <BadgeDollarSign className="h-4 w-4" /> Meta financeira do dia
+                  <div className={summaryCardClass}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        <BadgeDollarSign className="h-4 w-4" /> Meta financeira do dia
+                      </div>
+                      <Badge variant="outline" className="text-[11px] font-semibold uppercase tracking-wide">
+                        Receita
+                      </Badge>
                     </div>
 
-                    <div className="flex flex-col md:grid md:items-center md:grid-cols-2 gap-x-6">
-
-                      <div className="flex flex-col justify-center items-center gap-4 text-sm text-slate-600 font-mono">
-                        <span>Receita Liquida</span>
-                        <span className="text-3xl font-bold text-emerald-600">{fmtBRL(dashboard.netAmount)}</span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-center space-y-1">
+                        <div className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Receita Líquida</div>
+                        <div className="text-3xl font-extrabold text-emerald-700 tabular-nums">{fmtBRL(dashboard.netAmount)}</div>
                       </div>
-                      <div className="flex flex-col justify-center items-center gap-4 text-sm text-slate-600 font-mono">
-                        <span>Receita Bruta</span>
-                        <span className="text-3xl ">{fmtBRL(dashboard.grossAmount)}</span>
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-center space-y-1">
+                        <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Receita Bruta</div>
+                        <div className="text-3xl font-bold text-slate-800 tabular-nums">{fmtBRL(dashboard.grossAmount)}</div>
                       </div>
-
-
                     </div>
-                    <div className="text-xs text-slate-500">
-                      Taxas: Cartão {dashboard.cardFeePerc?.toFixed(2)}% · Imposto {dashboard.taxPerc?.toFixed(2)}% · Marketplace {dashboard.marketplaceTaxPerc?.toFixed(2)}%
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-slate-600">
+                      <span className="font-semibold text-slate-700">Taxas</span>
+                      <span>Cartão {dashboard.cardFeePerc?.toFixed(2)}%</span>
+                      <span>Imposto {dashboard.taxPerc?.toFixed(2)}%</span>
+                      <span>Marketplace {dashboard.marketplaceTaxPerc?.toFixed(2)}%</span>
                     </div>
 
                   </div>
 
                   {/* Card status */}
-                  <div className="rounded-xl border bg-white shadow-sm p-4 flex flex-col gap-2">
-                    <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                      <span className="text-emerald-600">●</span> Status do dia
+                  <div className={cn(summaryCardClass, statusColor)}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide">
+                        <span className={`inline-flex h-2.5 w-2.5 rounded-full ${statusDot}`} aria-hidden />
+                        Status do dia
+                      </div>
+                      <Badge variant="outline" className="text-[11px] font-semibold uppercase tracking-wide bg-white/70">
+                        {dashboard.pctOfTarget.toFixed(0)}% da Target
+                      </Badge>
                     </div>
-                    <div className="text-3xl font-bold text-emerald-600 leading-tight">
+                    <div className={`text-3xl font-black leading-tight ${statusTextColor} tabular-nums`}>
                       {dashboard.status === "hit-target"
                         ? "Acima da meta"
                         : dashboard.status === "between"
                           ? "Acima da mínima"
                           : "Abaixo da mínima"}
                     </div>
-                    <div className="text-sm text-emerald-600 mb-6">{dashboard.pctOfTarget.toFixed(0)}% da Target</div>
 
-                    <div className="flex flex-col gap-2">
-                      <div className="text-sm text-slate-500">
-                        Meta Mínima (dia): <span className="font-mono">{fmtBRL(dashboard.goalMinAmount)}</span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="rounded-lg border border-white/60 bg-white/80 px-3 py-2">
+                        <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-500">Meta Mínima (dia)</div>
+                        <div className="font-mono text-base text-slate-800 tabular-nums">{fmtBRL(dashboard.goalMinAmount)}</div>
                       </div>
-                      <div className="text-sm text-slate-500">
-                        Meta Target (dia): <span className="font-mono">{fmtBRL(dashboard.goalTargetAmount)}</span>
+                      <div className="rounded-lg border border-white/60 bg-white/80 px-3 py-2">
+                        <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-500">Meta Target (dia)</div>
+                        <div className="font-mono text-base text-slate-800 tabular-nums">{fmtBRL(dashboard.goalTargetAmount)}</div>
                       </div>
                     </div>
                   </div>
