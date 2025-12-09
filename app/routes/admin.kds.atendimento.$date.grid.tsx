@@ -37,8 +37,15 @@ import {
   getRiderCountByDate,
   predictReadyTimes,
   predictArrivalTimes,
+  computeReadyAtMap,
+  buildTimelineBuckets,
+  PREP_MINUTES_PER_SIZE,
   type MinimalOrderRow,
+  type TimelineBucket,
+  type ReadyAtMap,
+  parseSizeSafe,
 } from "@/domain/kds/delivery-prediction";
+import { calcProductionMinutes } from "@/domain/kds/delivery-prediction/production-time";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -70,6 +77,9 @@ import {
   CrossIcon,
   X,
   LogOutIcon,
+  Clock4,
+  Bike,
+  Settings as SettingsIcon,
 } from "lucide-react";
 import { Separator } from "~/components/ui/separator";
 import { cn } from "~/lib/utils";
@@ -81,6 +91,12 @@ import { getAvailableDoughSizes, getDoughStock, normalizeCounts, saveDoughStock,
 import { Link } from "@remix-run/react";
 import { NumericInput } from "~/components/numeric-input/numeric-input";
 import { ExitIcon } from "@radix-ui/react-icons";
+import { Badge } from "@/components/ui/badge";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import type { DzMap } from "@/domain/kds/delivery-prediction/delivery-time";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 
 /* ===========================
    Meta
@@ -158,6 +174,27 @@ const sizeSummary = (c: SizeCounts) =>
     .filter(k => c[k] > 0)
     .map(k => `${k}:${c[k]}`)
     .join("  ");
+
+function fmtMinutesHHMM(totalMin: number) {
+  const safe = Math.max(0, Math.round(totalMin));
+  const hh = Math.floor(safe / 60)
+    .toString()
+    .padStart(2, "0");
+  const mm = (safe % 60).toString().padStart(2, "0");
+  return `${hh}:${mm}`;
+}
+
+type PredictionSettings = {
+  mode: "real" | "theoretical";
+  prepMinutes: Record<keyof SizeCounts, number>;
+  operatorCount: number;
+};
+
+const DEFAULT_PREDICTION_SETTINGS: PredictionSettings = {
+  mode: "theoretical",
+  prepMinutes: PREP_MINUTES_PER_SIZE,
+  operatorCount: 2,
+};
 
 const SIZE_LABELS: Record<keyof SizeCounts, string> = {
   F: "Família",
@@ -333,6 +370,29 @@ export async function loader({ params }: LoaderFunctionArgs) {
   const doughUsage = listPromise.then((rows) => sumSizes(rows));
   const availableSizes = await getAvailableDoughSizes();
 
+  const settingsRow = await prisma.setting.findFirst({
+    where: { context: "kds_prediction", name: "config" },
+  });
+  let predictionSettings = {
+    ...DEFAULT_PREDICTION_SETTINGS,
+    operatorCount: getOperatorCountByDate(dateStr),
+  };
+  if (settingsRow?.value) {
+    try {
+      const parsed = JSON.parse(settingsRow.value);
+      predictionSettings = {
+        mode: parsed?.mode === "theoretical" ? "theoretical" : "real",
+        prepMinutes: {
+          ...PREP_MINUTES_PER_SIZE,
+          ...parsed?.prepMinutes,
+        },
+        operatorCount: Number(parsed?.operatorCount) || getOperatorCountByDate(dateStr),
+      };
+    } catch {
+      // fallback permanece
+    }
+  }
+
   const dashboard: DashboardMeta = {
     grossAmount,
     cardAmount,
@@ -357,6 +417,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
     doughStock,
     doughUsage,
     availableSizes,
+    predictionSettings,
   });
 }
 
@@ -444,6 +505,49 @@ export async function action({ request, params }: ActionFunctionArgs) {
         data: { operationStatus: "REOPENED" },
       });
       return json({ ok: true, status: "REOPENED" });
+    }
+
+    if (_action === "savePredictionSettings") {
+      const modeRaw = String(form.get("mode") ?? "real");
+      const operatorCount = Math.max(1, Number(form.get("operatorCount") ?? 1) || 1);
+      const prepMinutes = {
+        F: Number(form.get("prepF") ?? PREP_MINUTES_PER_SIZE.F) || PREP_MINUTES_PER_SIZE.F,
+        M: Number(form.get("prepM") ?? PREP_MINUTES_PER_SIZE.M) || PREP_MINUTES_PER_SIZE.M,
+        P: Number(form.get("prepP") ?? PREP_MINUTES_PER_SIZE.P) || PREP_MINUTES_PER_SIZE.P,
+        I: Number(form.get("prepI") ?? PREP_MINUTES_PER_SIZE.I) || PREP_MINUTES_PER_SIZE.I,
+        FT: Number(form.get("prepFT") ?? PREP_MINUTES_PER_SIZE.FT) || PREP_MINUTES_PER_SIZE.FT,
+      };
+
+      const payload = {
+        mode: modeRaw === "theoretical" ? "theoretical" : "real",
+        operatorCount,
+        prepMinutes,
+      };
+
+      const existing = await prisma.setting.findFirst({
+        where: { context: "kds_prediction", name: "config" },
+      });
+      if (existing?.id) {
+        await prisma.setting.update({
+          where: { id: existing.id },
+          data: {
+            type: "json",
+            value: JSON.stringify(payload),
+          },
+        });
+      } else {
+        await prisma.setting.create({
+          data: {
+            context: "kds_prediction",
+            name: "config",
+            type: "json",
+            value: JSON.stringify(payload),
+            createdAt: new Date(),
+          },
+        });
+      }
+
+      return json({ ok: true, settings: payload });
     }
 
     if (_action === "saveDoughStock") {
@@ -690,6 +794,7 @@ function RowItem({
   predictions,
   rowFx,
   sizeLimit,
+  prepMinutesPerSize,
 }: {
   o: OrderRow;
   dateStr: string;
@@ -699,8 +804,13 @@ function RowItem({
   predictions: Map<string, { readyAtMs: number; arriveAtMs: number | null }>;
   rowFx: ReturnType<typeof useFetcher>;
   sizeLimit?: SizeCounts | null;
+  prepMinutesPerSize: Record<keyof SizeCounts, number>;
 }) {
   const sizeCounts = parseSize(o.size);
+  const prepMinutes = useMemo(
+    () => calcProductionMinutes(sizeCounts, prepMinutesPerSize),
+    [sizeCounts, prepMinutesPerSize]
+  );
 
   // estados por linha
   const [openConfirmId, setOpenConfirmId] = useState(false);
@@ -960,6 +1070,11 @@ function RowItem({
             <span className="text-muted-foreground">Criado: </span>
             <span className="font-semibold">{fmtHHMM(npAt as any)}</span>
 
+            <span>
+              <span className="text-muted-foreground">Tempo de preparo: </span>
+              <span className="font-semibold">{fmtMinutesHHMM(prepMinutes)}</span>
+            </span>
+
             {(() => {
               const diffMin = Math.floor((nowMs - npAt.getTime()) / 60000);
               let color = "text-slate-500";
@@ -1025,13 +1140,295 @@ function RowsSkeleton() {
 }
 
 /* ===========================
+   Timeline (Sheet)
+   =========================== */
+function TimelineSidebar({
+  buckets,
+  lastReadyAt,
+  nowMs,
+  orderLabels,
+  readyAtMap,
+}: {
+  buckets: TimelineBucket[];
+  lastReadyAt: number | null;
+  nowMs: number;
+  orderLabels: Map<string, string>;
+  readyAtMap: Map<string, number>;
+}) {
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+
+  const slots = useMemo(() => {
+    return buckets
+      .map((b) => {
+        const ids = b.orderIds.filter((id) => !dismissed.has(id));
+        return { ...b, orderIds: ids, count: ids.length };
+      })
+      .filter((b) => b.orderIds.length > 0 || buckets.length <= 0);
+  }, [buckets, dismissed]);
+
+  const handleDismiss = (id: string) => {
+    setDismissed((prev) => {
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+  };
+
+  return (
+    <div className="flex h-full flex-col ">
+      <SheetHeader>
+        <SheetTitle className="flex items-center gap-2 text-lg">
+          <Clock4 className="h-5 w-5 text-blue-700" />
+          Linha do tempo de saída
+        </SheetTitle>
+      </SheetHeader>
+
+      <div className="mt-4 space-y-4 flex-1 flex flex-col">
+        <div className="rounded-lg border bg-slate-50 p-4">
+          <div className="text-sm text-slate-600">Último pedido previsto para sair às:</div>
+          <div className="text-2xl font-semibold text-blue-700 leading-tight">
+            {lastReadyAt ? fmtHHMM(lastReadyAt) : "Nenhum pedido em produção"}
+          </div>
+          <div className="text-xs text-slate-500 mt-1">
+            Baseado no tempo médio por tamanho e nº de operadores. Agora: {fmtHHMM(nowMs)}
+          </div>
+        </div>
+
+        <ScrollArea className="flex-1 pr-3 overflow-y-scroll">
+          <div className="space-y-3 pb-6 h-[calc(100vh-8rem)]">
+            {slots.length === 0 && (
+              <div className="rounded-lg border border-dashed p-4 text-sm text-slate-500 bg-white">
+                Nenhum pedido em produção no momento.
+              </div>
+            )}
+
+            {slots.map((slot) => {
+              const labels = slot.orderIds.map((id) => ({
+                id,
+                label: orderLabels.get(id) ?? "#?",
+                readyAt: readyAtMap.get(id) ?? null,
+              }));
+              const isCurrentSlot = slot.isCurrent;
+
+              return (
+                <div
+                  key={slot.slotStartMs}
+                  className={cn(
+                    "relative p-3 transition-colors border-b-1 mb-2 hover:bg-slate-100",
+                    isCurrentSlot ? "border-emerald-300 bg-emerald-50" : "bg-white"
+                  )}
+                >
+                  <div className="absolute left-3 top-0 bottom-0 border-l border-dashed border-slate-200" aria-hidden />
+
+                  <div className="flex items-center justify-between gap-3 ml-2">
+                    <div className="flex items-center gap-2">
+                      <div className="text-sm font-semibold text-slate-900 font-mono">{slot.label}</div>
+                      {isCurrentSlot && <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" aria-label="Horário atual" />}
+                      {slot.isPast && !slot.isCurrent && (
+                        <span className="text-[11px] uppercase tracking-wide text-slate-400">Passado</span>
+                      )}
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      {slot.count} pedido{slot.count === 1 ? "" : "s"} neste slot
+                    </div>
+                  </div>
+
+                  <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
+                    {labels.length === 0 ? (
+                      <span className="text-xs text-slate-400">Sem pedidos</span>
+                    ) : (
+                      labels.map((l, idx) => (
+                        <Badge
+                          key={`${slot.slotStartMs}-${l.id}-${idx}`}
+                          variant="outline"
+                          className={cn(
+                            "flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold",
+                            isCurrentSlot
+                              ? "border-emerald-400 bg-white text-emerald-700"
+                              : "border-amber-400 bg-amber-50 text-amber-700"
+                          )}
+                        >
+                          <span>{l.label}</span>
+                          {l.readyAt && (
+                            <span className="text-[10px] text-slate-500 font-mono">· {fmtHHMM(l.readyAt)}</span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleDismiss(l.id)}
+                            className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full hover:bg-slate-100"
+                            title="Pedido despachado"
+                          >
+                            <Bike className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      ))
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </ScrollArea>
+      </div>
+    </div>
+  );
+}
+
+type PredictionData = {
+  // Previsão real (considera fila e operadores)
+  realPredictions: Map<string, { readyAtMs: number; arriveAtMs: number | null }>;
+  realReadyMap: ReadyAtMap;
+  realTimelineReadyMap: ReadyAtMap;
+  realTimelineBuckets: TimelineBucket[];
+  realLastReadyAt: number | null;
+
+  // Previsão teórica (fila ideal desde o primeiro pedido)
+  theoreticalPredictions: Map<string, { readyAtMs: number; arriveAtMs: number | null }>;
+  theoreticalReadyMap: ReadyAtMap;
+  theoreticalTimelineReadyMap: ReadyAtMap;
+  theoreticalTimelineBuckets: TimelineBucket[];
+  theoreticalLastReadyAt: number | null;
+
+  orderLabelMap: Map<string, string>;
+};
+
+function computePredictionData(
+  rowsDb: OrderRow[],
+  operatorCount: number,
+  riderCount: number,
+  dzMap: DzMap,
+  nowMs: number,
+  prepMinutesPerSize: Record<keyof SizeCounts, number>
+): PredictionData {
+  const eligible = rowsDb.filter((o) => {
+    const st = (o as any).status ?? "pendente";
+    const npAt = (o as any).novoPedidoAt ?? null;
+    return st !== "pendente" && !!npAt;
+  });
+  const minimal: MinimalOrderRow[] = eligible.map((o) => ({
+    id: o.id,
+    createdAt: (o as any).novoPedidoAt as any,
+    finalizadoAt: (o as any).finalizadoAt ?? null,
+    size: o.size,
+    hasMoto: (o as any).hasMoto ?? null,
+    takeAway: (o as any).takeAway ?? null,
+    deliveryZoneId: (o as any).deliveryZoneId ?? null,
+  }));
+
+  const ready = predictReadyTimes(minimal, operatorCount, nowMs, prepMinutesPerSize);
+  const arrive = predictArrivalTimes(ready, riderCount, dzMap);
+
+  const byId = new Map<string, { readyAtMs: number; arriveAtMs: number | null }>();
+  for (const r of ready) byId.set(r.id, { readyAtMs: r.readyAtMs, arriveAtMs: null });
+  for (const a of arrive) {
+    const cur = byId.get(a.id);
+    if (cur) cur.arriveAtMs = a.arriveAtMs;
+  }
+
+  const orderLabelMap = new Map<string, string>();
+  rowsDb.forEach((o) => {
+    const label = o.commandNumber ? `#${o.commandNumber}` : "VL";
+    orderLabelMap.set(o.id, label);
+  });
+
+  const inProduction = minimal.filter((o) => !o.finalizadoAt);
+
+  const readyMap = computeReadyAtMap({
+    orders: inProduction,
+    operatorCount,
+    prepMinutesPerSize,
+    nowMs,
+  });
+  const baseMs =
+    inProduction.length > 0
+      ? Math.min(
+        ...inProduction.map((o) =>
+          o.createdAt ? new Date(o.createdAt as any).getTime() : Number.POSITIVE_INFINITY
+        )
+      )
+      : nowMs;
+
+  const theoreticalReadyMap = computeReadyAtMap({
+    orders: inProduction,
+    operatorCount,
+    prepMinutesPerSize,
+    nowMs: baseMs,
+  });
+
+  let realLastReadyAt: number | null = null;
+  for (const ts of readyMap.values()) {
+    if (realLastReadyAt === null || ts > realLastReadyAt) realLastReadyAt = ts;
+  }
+
+  let theoreticalLastReadyAt: number | null = null;
+  for (const ts of theoreticalReadyMap.values()) {
+    if (theoreticalLastReadyAt === null || ts > theoreticalLastReadyAt) theoreticalLastReadyAt = ts;
+  }
+
+  const timelineOrders = minimal; // inclui todos os pedidos em produção na timeline
+  const timelineReadyMap = computeReadyAtMap({
+    orders: timelineOrders,
+    operatorCount,
+    prepMinutesPerSize,
+    nowMs,
+  });
+  const theoreticalTimelineReadyMap = computeReadyAtMap({
+    orders: timelineOrders,
+    operatorCount,
+    prepMinutesPerSize,
+    nowMs: baseMs,
+  });
+
+  const theoreticalPredictions = new Map<string, { readyAtMs: number; arriveAtMs: number | null }>();
+  const theoreticalReadyList = minimal.map((o) => ({
+    id: o.id,
+    readyAtMs: theoreticalReadyMap.get(o.id) ?? nowMs,
+    isDelivery: o.takeAway !== true && o.hasMoto === true,
+    dzId: o.deliveryZoneId ?? null,
+  }));
+  const theoreticalArrivals = predictArrivalTimes(theoreticalReadyList, riderCount, dzMap);
+  for (const r of theoreticalReadyList) theoreticalPredictions.set(r.id, { readyAtMs: r.readyAtMs, arriveAtMs: null });
+  for (const a of theoreticalArrivals) {
+    const cur = theoreticalPredictions.get(a.id);
+    if (cur) cur.arriveAtMs = a.arriveAtMs;
+  }
+
+  const timelineBuckets = buildTimelineBuckets(timelineReadyMap, {
+    nowMs,
+    slotMinutes: 30,
+    minSlots: 6,
+  });
+
+  const theoreticalTimelineBuckets = buildTimelineBuckets(theoreticalTimelineReadyMap, {
+    nowMs,
+    slotMinutes: 30,
+    minSlots: 6,
+  });
+
+  return {
+    realPredictions: byId,
+    realReadyMap: readyMap,
+    realTimelineReadyMap: timelineReadyMap,
+    realTimelineBuckets: timelineBuckets,
+    realLastReadyAt,
+    theoreticalPredictions,
+    theoreticalReadyMap,
+    theoreticalTimelineReadyMap,
+    theoreticalTimelineBuckets,
+    theoreticalLastReadyAt,
+    orderLabelMap,
+  };
+}
+
+/* ===========================
    Página (Grid)
    =========================== */
 export default function GridKdsPage() {
-  const { dateStr, items, header, deliveryZones, dzTimes, dashboard, doughStock, doughUsage, availableSizes } = useLoaderData<typeof loader>();
+  const { dateStr, items, header, deliveryZones, dzTimes, dashboard, doughStock, doughUsage, availableSizes, predictionSettings } = useLoaderData<typeof loader>();
   const listFx = useFetcher();
   const rowFx = useFetcher();
   const stockFx = useFetcher<{ ok: boolean; stock: DoughStockSnapshot }>();
+  const settingsFx = useFetcher<{ ok: boolean; settings: PredictionSettings }>();
 
   const status = (header?.operationStatus ?? "PENDING") as "PENDING" | "OPENED" | "CLOSED" | "REOPENED";
   const isClosed = status === "CLOSED";
@@ -1042,6 +1439,15 @@ export default function GridKdsPage() {
   const [openError, setOpenError] = useState<string | null>(null);
 
   const [channelFilter, setChannelFilter] = useState<string>("");
+  const [timelineOpen, setTimelineOpen] = useState(false);
+  const [predictionMode, setPredictionMode] = useState<"real" | "theoretical">(predictionSettings.mode ?? "theoretical");
+  const [prepMinutesConfig, setPrepMinutesConfig] = useState<Record<keyof SizeCounts, number>>(
+    predictionSettings.prepMinutes ?? PREP_MINUTES_PER_SIZE
+  );
+  const [operatorCountSetting, setOperatorCountSetting] = useState<number>(
+    predictionSettings.operatorCount ?? getOperatorCountByDate(dateStr)
+  );
+  const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
 
   // ← estado do botão de cartão na Venda Livre rápida
   const [vlIsCreditCard, setVlIsCreditCard] = useState(false);
@@ -1119,6 +1525,28 @@ export default function GridKdsPage() {
 
   const nowMs = Date.now();
 
+  const dzMap = useMemo(() => buildDzMap(dzTimes as any), [dzTimes]);
+  const operatorCount = useMemo(() => getOperatorCountByDate(dateStr), [dateStr]);
+  const riderCount = useMemo(() => getRiderCountByDate(dateStr), [dateStr]);
+  const operatorCountActive = operatorCountSetting || operatorCount;
+  const prepMinutesActive = prepMinutesConfig || PREP_MINUTES_PER_SIZE;
+
+  useEffect(() => {
+    setPredictionMode(predictionSettings.mode ?? "real");
+    setPrepMinutesConfig(predictionSettings.prepMinutes ?? PREP_MINUTES_PER_SIZE);
+    setOperatorCountSetting(predictionSettings.operatorCount ?? getOperatorCountByDate(dateStr));
+  }, [predictionSettings, dateStr]);
+
+  useEffect(() => {
+    if (settingsFx.state === "idle" && settingsFx.data?.ok) {
+      const cfg = settingsFx.data.settings;
+      setPredictionMode(cfg.mode ?? "real");
+      setPrepMinutesConfig(cfg.prepMinutes ?? PREP_MINUTES_PER_SIZE);
+      setOperatorCountSetting(cfg.operatorCount ?? getOperatorCountByDate(dateStr));
+      setSettingsDialogOpen(false);
+    }
+  }, [settingsFx.state, settingsFx.data, dateStr]);
+
   // Cores do status de meta
   const statusColor =
     dashboard.status === "hit-target" ? "bg-emerald-50 text-emerald-900 border-emerald-200" :
@@ -1126,11 +1554,13 @@ export default function GridKdsPage() {
         "bg-rose-50 text-rose-900 border-rose-200";
 
   return (
-    <div className="space-y-4 mt-12">
+    <div className="space-y-4 mt-6">
       {/* Toolbar topo + Painel-resumo SEM suspense (feedback imediato) */}
-      <div className="flex flex-col gap-y-4 md:grid md:grid-cols-12 items-start">
+
+
+      <div className="flex flex-col gap-3 col-span-4">
         {/* Toolbar topo */}
-        <div className="flex flex-wrap items-center gap-3 col-span-4">
+        <div className="flex flex-wrap items-center">
           {(!header?.id || status === "PENDING") && (
             <listFx.Form method="post" className="flex items-center gap-2">
               <input type="hidden" name="_action" value="openDay" />
@@ -1193,58 +1623,222 @@ export default function GridKdsPage() {
           )}
         </div>
 
-        {/* Painel-resumo de metas e receita + link estoque */}
-        <div className={cn("rounded-lg border p-3 col-span-8", statusColor)}>
-          <div className="flex items-center gap-2 mb-2">
-            <BadgeDollarSign className="w-5 h-5" />
-            <div className="font-semibold">Meta financeira do dia</div>
-            <div className="ml-auto flex items-center gap-3 text-xs opacity-70">
-              <span>Taxa cartão: {dashboard.cardFeePerc?.toFixed(2)}% · Imposto: {dashboard.taxPerc?.toFixed(2)}% · Taxa Marketplace: {dashboard.marketplaceTaxPerc?.toFixed(2)}%</span>
+        {/* previsao de saida */}
+        <Suspense
+          key={`timeline-summary-${dateStr}`}
+          fallback={<div className="rounded-lg border bg-white p-3 text-sm text-slate-500">Carregando previsão de saída…</div>}
+        >
+          <Await resolve={items}>
+            {(rowsDb: OrderRow[]) => {
+              const predictionData = useMemo(
+                () => computePredictionData(rowsDb, operatorCountActive, riderCount, dzMap, nowMs, prepMinutesActive),
+                [rowsDb, operatorCountActive, riderCount, dzMap, nowMs, prepMinutesActive]
+              );
+              const activeLastReady =
+                predictionMode === "real"
+                  ? predictionData.realLastReadyAt
+                  : predictionData.theoreticalLastReadyAt;
+              const activeBuckets =
+                predictionMode === "real"
+                  ? predictionData.realTimelineBuckets
+                  : predictionData.theoreticalTimelineBuckets;
+              const activeReadyMap =
+                predictionMode === "real"
+                  ? predictionData.realTimelineReadyMap
+                  : predictionData.theoreticalTimelineReadyMap;
 
-            </div>
-          </div>
+              return (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full">
+                  {/* Card previsão */}
+                  <div className="rounded-xl border bg-white shadow-sm p-4 flex flex-col gap-3">
+                    <div className="flex items-center justify-between text-sm font-semibold text-slate-800">
+                      <span className="flex items-center gap-2">
+                        <Clock4 className="h-4 w-4" /> Previsão saída último pedido
+                      </span>
+                      <Dialog open={settingsDialogOpen} onOpenChange={setSettingsDialogOpen}>
+                        <DialogTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <SettingsIcon className="h-4 w-4" />
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-3xl">
+                          <DialogHeader>
+                            <DialogTitle>Configurar previsão de saída</DialogTitle>
+                          </DialogHeader>
+                          <settingsFx.Form method="post" className="space-y-6">
+                            <input type="hidden" name="_action" value="savePredictionSettings" />
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 border rounded-lg p-4">
+                              <div className="space-y-2">
+                                <Label htmlFor="mode" className="text-sm font-semibold">Modalidade de cálculo</Label>
+                                <Select name="mode" defaultValue={predictionMode}>
+                                  <SelectTrigger id="mode">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="real">Real (fila + operadores a partir de agora)</SelectItem>
+                                    <SelectItem value="theoretical">Teórico (fila ideal desde o primeiro pedido)</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <p className="text-[11px] text-slate-600">
+                                  Real: usa o backlog atual com operadores. Teórico: reinicia a fila no horário do primeiro pedido.
+                                </p>
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor="operatorCount" className="text-sm font-semibold">Nº de operadores</Label>
+                                <Input
+                                  id="operatorCount"
+                                  name="operatorCount"
+                                  type="number"
+                                  min={1}
+                                  defaultValue={operatorCountActive}
+                                />
+                                <p className="text-[11px] text-slate-600">Usado em ambos os modos.</p>
+                              </div>
+                            </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-3 text-sm">
-            <div>
-              <div className="opacity-70">Receita Bruta</div>
-              <div className="font-semibold">{fmtBRL(dashboard.grossAmount)}</div>
-            </div>
-            <div>
-              <div className="opacity-70">Receita Líquida</div>
-              <div className="font-semibold">{fmtBRL(dashboard.netAmount)}</div>
-            </div>
-            <div>
-              <div className="opacity-70">Meta Mínima (dia)</div>
-              <div className="font-semibold">{fmtBRL(dashboard.goalMinAmount)}</div>
-            </div>
-            <div>
-              <div className="opacity-70">Meta Target (dia)</div>
-              <div className="font-semibold">{fmtBRL(dashboard.goalTargetAmount)}</div>
-            </div>
-            <div>
-              <div className="opacity-70">% da Target</div>
-              <div className="font-semibold">{dashboard.pctOfTarget.toFixed(0)}%</div>
-            </div>
-            <div>
-              <div className="opacity-70">Status</div>
-              <div className="font-semibold">
-                {dashboard.status === "hit-target" ? "Atingiu a target" :
-                  dashboard.status === "between" ? "Acima da mínima" :
-                    "Abaixo da mínima"}
-              </div>
-            </div>
-          </div>
-        </div>
+                            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                              {(["F", "M", "P", "I", "FT"] as (keyof SizeCounts)[]).map((k) => (
+                                <div key={k} className="space-y-1">
+                                  <Label htmlFor={`prep-${k}`}>Tempo {k} (min)</Label>
+                                  <Input
+                                    id={`prep-${k}`}
+                                    name={`prep${k}`}
+                                    type="number"
+                                    min={1}
+                                    defaultValue={prepMinutesActive[k]}
+                                  />
+                                </div>
+                              ))}
+                            </div>
+
+                            <DialogFooter className="gap-2">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                onClick={() => setSettingsDialogOpen(false)}
+                              >
+                                Cancelar
+                              </Button>
+                              <Button type="submit" disabled={settingsFx.state !== "idle"}>
+                                {settingsFx.state !== "idle" ? (
+                                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                ) : null}
+                                Salvar
+                              </Button>
+                            </DialogFooter>
+                          </settingsFx.Form>
+                        </DialogContent>
+                      </Dialog>
+                    </div>
+
+                    <div className="md:grid md:grid-cols-2">
+                      {/* <div className="text-5xl text-slate-900">{fmtHHMM(nowMs)}</div> */}
+                      <div className="text-5xl font-extrabold text-slate-900">{activeLastReady ? fmtHHMM(activeLastReady) : "--:--"}</div>
+                    </div>
+
+
+                    <div className="text-xs text-slate-500 space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span>Modo:</span>
+                        <Select
+                          value={predictionMode}
+                          onValueChange={(val) => setPredictionMode(val as "real" | "theoretical")}
+                        >
+                          <SelectTrigger className="h-8">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="real">Real (fila atual começando agora)</SelectItem>
+                            <SelectItem value="theoretical">Teórico (fila ideal desde o 1º pedido)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="text-[11px] text-slate-500">
+                        Real: backlog a partir de agora. Teórico: mesma fila iniciando no primeiro pedido.
+                      </div>
+                    </div>
+                    <Button
+                      variant="link"
+                      className="p-0 h-auto text-slate-800 font-semibold"
+                      onClick={() => setTimelineOpen(true)}
+                      disabled={!activeBuckets.length}
+                    >
+                      Ver linha do tempo
+                    </Button>
+                  </div>
+
+                  {/* Card financeiro */}
+                  <div className="rounded-xl border bg-white shadow-sm p-4 flex flex-col gap-2">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                      <BadgeDollarSign className="h-4 w-4" /> Meta financeira do dia
+                    </div>
+
+                    <div className="flex flex-col md:grid md:items-center md:grid-cols-2 gap-x-6">
+
+                      <div className="flex flex-col justify-center items-center gap-4 text-sm text-slate-600 font-mono">
+                        <span>Receita Liquida</span>
+                        <span className="text-3xl font-bold text-emerald-600">{fmtBRL(dashboard.netAmount)}</span>
+                      </div>
+                      <div className="flex flex-col justify-center items-center gap-4 text-sm text-slate-600 font-mono">
+                        <span>Receita Bruta</span>
+                        <span className="text-3xl ">{fmtBRL(dashboard.grossAmount)}</span>
+                      </div>
+
+
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      Taxas: Cartão {dashboard.cardFeePerc?.toFixed(2)}% · Imposto {dashboard.taxPerc?.toFixed(2)}% · Marketplace {dashboard.marketplaceTaxPerc?.toFixed(2)}%
+                    </div>
+
+                  </div>
+
+                  {/* Card status */}
+                  <div className="rounded-xl border bg-white shadow-sm p-4 flex flex-col gap-2">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                      <span className="text-emerald-600">●</span> Status do dia
+                    </div>
+                    <div className="text-3xl font-bold text-emerald-600 leading-tight">
+                      {dashboard.status === "hit-target"
+                        ? "Acima da meta"
+                        : dashboard.status === "between"
+                          ? "Acima da mínima"
+                          : "Abaixo da mínima"}
+                    </div>
+                    <div className="text-sm text-emerald-600 mb-6">{dashboard.pctOfTarget.toFixed(0)}% da Target</div>
+
+                    <div className="flex flex-col gap-2">
+                      <div className="text-sm text-slate-500">
+                        Meta Mínima (dia): <span className="font-mono">{fmtBRL(dashboard.goalMinAmount)}</span>
+                      </div>
+                      <div className="text-sm text-slate-500">
+                        Meta Target (dia): <span className="font-mono">{fmtBRL(dashboard.goalTargetAmount)}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <Sheet open={timelineOpen} onOpenChange={setTimelineOpen}>
+                    <SheetContent side="right" className="sm:max-w-md w-full p-6 h-full flex flex-col">
+                      <TimelineSidebar
+                        buckets={activeBuckets}
+                        lastReadyAt={activeLastReady}
+                        nowMs={nowMs}
+                        orderLabels={predictionData.orderLabelMap}
+                        readyAtMap={activeReadyMap}
+                      />
+                    </SheetContent>
+                  </Sheet>
+                </div>
+              );
+            }}
+          </Await>
+        </Suspense>
+
       </div>
 
-      <Suspense fallback={<div className="rounded-lg border p-3 text-sm text-slate-500">Carregando estoque de massa…</div>}>
-        <Await resolve={doughUsage}>
-          {(used: SizeCounts) => {
-            return null; // estoque inicial é gerido na página dedicada
-          }}
-        </Await>
-      </Suspense>
 
+
+
+      {/* Barra contador do estoque */}
       <Suspense fallback={null}>
         <Await resolve={doughUsage}>
           {(used: SizeCounts) => {
@@ -1265,7 +1859,6 @@ export default function GridKdsPage() {
               const init = effectiveCounts[k];
               if (init <= 0) return "border border-slate-200 text-slate-500 bg-white";
               const ratio = remaining[k] / init;
-              console.log({ init, remaining: remaining[k], ratio })
               if (remaining[k] === 0) return "bg-rose-500 text-white"; // crítico
               if (remaining[k] <= 2) return "bg-amber-400 text-slate-900"; // alerta
               if (remaining[k] < 3) return "border border-rose-500 text-rose-600 bg-white";
@@ -1383,11 +1976,13 @@ export default function GridKdsPage() {
         </Await>
       </Suspense>
 
+      <Separator className="my-12" />
+
       {/* Venda livre rápida + Filtro de Canal */}
       {(status === "OPENED" || status === "REOPENED") && (
         <>
 
-          <div className="rounded-lg border p-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             {/* Venda Livre rápida */}
             <div className="flex items-center gap-3">
               <div className="text-sm font-medium">Venda livre (rápida)</div>
@@ -1442,6 +2037,9 @@ export default function GridKdsPage() {
             </div>
           </div>
 
+          <Separator className="my-12" />
+
+
           {/* Cabeçalho */}
           <div className={COLS_HDR + " py-2 px-1"}>
             <div className="text-center">#</div>
@@ -1464,37 +2062,16 @@ export default function GridKdsPage() {
             const dup = duplicateCommandNumbers(rowsDb);
             const globalUsage = useMemo(() => sumSizes(rowsDb), [rowsDb]);
 
-            const dzMap = useMemo(() => buildDzMap(dzTimes as any), [dzTimes]);
-            const operatorCount = useMemo(() => getOperatorCountByDate(dateStr), [dateStr]);
-            const riderCount = useMemo(() => getRiderCountByDate(dateStr), [dateStr]);
+            const predictionData = useMemo(
+              () => computePredictionData(rowsDb, operatorCountActive, riderCount, dzMap, nowMs, prepMinutesActive),
+              [rowsDb, operatorCountActive, riderCount, dzMap, nowMs, prepMinutesActive]
+            );
 
-            const predictions = useMemo(() => {
-              const eligible = rowsDb.filter((o) => {
-                const st = (o as any).status ?? "pendente";
-                const npAt = (o as any).novoPedidoAt ?? null;
-                return st !== "pendente" && !!npAt;
-              });
-              const minimal: MinimalOrderRow[] = eligible.map((o) => ({
-                id: o.id,
-                createdAt: (o as any).novoPedidoAt as any,
-                finalizadoAt: (o as any).finalizadoAt ?? null,
-                size: o.size,
-                hasMoto: (o as any).hasMoto ?? null,
-                takeAway: (o as any).takeAway ?? null,
-                deliveryZoneId: (o as any).deliveryZoneId ?? null,
-              }));
-
-              const ready = predictReadyTimes(minimal, operatorCount, nowMs);
-              const arrive = predictArrivalTimes(ready, riderCount, dzMap);
-
-              const byId = new Map<string, { readyAtMs: number; arriveAtMs: number | null }>();
-              for (const r of ready) byId.set(r.id, { readyAtMs: r.readyAtMs, arriveAtMs: null });
-              for (const a of arrive) {
-                const cur = byId.get(a.id);
-                if (cur) cur.arriveAtMs = a.arriveAtMs;
-              }
-              return byId;
-            }, [rowsDb, operatorCount, riderCount, dzMap, nowMs]);
+            const predictions =
+              predictionMode === "real"
+                ? predictionData.realPredictions
+                : predictionData.theoreticalPredictions;
+            const orderLabels = predictionData.orderLabelMap;
 
             const filteredRows = useMemo(() => {
               if (!channelFilter) return rowsDb;
@@ -1537,6 +2114,7 @@ export default function GridKdsPage() {
                         predictions={predictions}
                         rowFx={rowFx}
                         sizeLimit={sizeLimit}
+                        prepMinutesPerSize={prepMinutesActive}
                       />
                     );
                   })}

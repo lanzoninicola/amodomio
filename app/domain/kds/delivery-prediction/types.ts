@@ -24,3 +24,25 @@ export type ArrivalPrediction = {
   id: string;
   arriveAtMs: number | null;
 };
+
+export type MinimalOrderRow = {
+  id: string;
+  createdAt: string | Date;
+  finalizadoAt?: string | Date | null;
+  size: any;
+  hasMoto?: boolean | null;
+  takeAway?: boolean | null;
+  deliveryZoneId?: string | null;
+};
+
+export type ReadyAtMap = Map<string, number>;
+
+export type TimelineBucket = {
+  slotStartMs: number;
+  slotEndMs: number;
+  label: string;
+  orderIds: string[];
+  count: number;
+  isPast: boolean;
+  isCurrent: boolean;
+};
