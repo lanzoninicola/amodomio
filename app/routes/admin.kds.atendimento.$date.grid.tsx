@@ -1552,6 +1552,15 @@ export default function GridKdsPage() {
     dashboard.status === "hit-target" ? "bg-emerald-50 text-emerald-900 border-emerald-200" :
       dashboard.status === "between" ? "bg-amber-50 text-amber-900 border-amber-200" :
         "bg-rose-50 text-rose-900 border-rose-200";
+  const summaryCardClass = "rounded-2xl border border-slate-200 bg-white shadow-sm p-5 flex flex-col gap-4 h-full";
+  const statusDot =
+    dashboard.status === "hit-target" ? "bg-emerald-500" :
+      dashboard.status === "between" ? "bg-amber-500" :
+        "bg-rose-500";
+  const statusTextColor =
+    dashboard.status === "hit-target" ? "text-emerald-700" :
+      dashboard.status === "between" ? "text-amber-700" :
+        "text-rose-700";
 
   return (
     <div className="space-y-4 mt-6">
@@ -1648,170 +1657,176 @@ export default function GridKdsPage() {
                   : predictionData.theoreticalTimelineReadyMap;
 
               return (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full items-stretch">
                   {/* Card previsão */}
-                  <div className="rounded-xl border bg-white shadow-sm p-4 flex flex-col gap-3">
-                    <div className="flex items-center justify-between text-sm font-semibold text-slate-800">
-                      <span className="flex items-center gap-2">
-                        <Clock4 className="h-4 w-4" /> Previsão saída último pedido
-                      </span>
-                      <Dialog open={settingsDialogOpen} onOpenChange={setSettingsDialogOpen}>
-                        <DialogTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <SettingsIcon className="h-4 w-4" />
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent className="max-w-3xl">
-                          <DialogHeader>
-                            <DialogTitle>Configurar previsão de saída</DialogTitle>
-                          </DialogHeader>
-                          <settingsFx.Form method="post" className="space-y-6">
-                            <input type="hidden" name="_action" value="savePredictionSettings" />
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 border rounded-lg p-4">
-                              <div className="space-y-2">
-                                <Label htmlFor="mode" className="text-sm font-semibold">Modalidade de cálculo</Label>
-                                <Select name="mode" defaultValue={predictionMode}>
-                                  <SelectTrigger id="mode">
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="real">Real (fila + operadores a partir de agora)</SelectItem>
-                                    <SelectItem value="theoretical">Teórico (fila ideal desde o primeiro pedido)</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                                <p className="text-[11px] text-slate-600">
-                                  Real: usa o backlog atual com operadores. Teórico: reinicia a fila no horário do primeiro pedido.
-                                </p>
-                              </div>
-                              <div className="space-y-2">
-                                <Label htmlFor="operatorCount" className="text-sm font-semibold">Nº de operadores</Label>
-                                <Input
-                                  id="operatorCount"
-                                  name="operatorCount"
-                                  type="number"
-                                  min={1}
-                                  defaultValue={operatorCountActive}
-                                />
-                                <p className="text-[11px] text-slate-600">Usado em ambos os modos.</p>
-                              </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                              {(["F", "M", "P", "I", "FT"] as (keyof SizeCounts)[]).map((k) => (
-                                <div key={k} className="space-y-1">
-                                  <Label htmlFor={`prep-${k}`}>Tempo {k} (min)</Label>
+                  <div className={summaryCardClass}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          <Clock4 className="h-4 w-4" /> Previsão de saída
+                        </div>
+                        <p className="text-sm font-semibold text-slate-800">Último pedido</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-[11px] font-semibold tracking-wide uppercase">
+                          {predictionMode === "real" ? "Real" : "Teórico"}
+                        </Badge>
+                        <Dialog open={settingsDialogOpen} onOpenChange={setSettingsDialogOpen}>
+                          <DialogTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <SettingsIcon className="h-4 w-4" />
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent className="max-w-3xl">
+                            <DialogHeader>
+                              <DialogTitle>Configurar previsão de saída</DialogTitle>
+                            </DialogHeader>
+                            <settingsFx.Form method="post" className="space-y-6">
+                              <input type="hidden" name="_action" value="savePredictionSettings" />
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 border rounded-lg p-4">
+                                <div className="space-y-2">
+                                  <Label htmlFor="mode" className="text-sm font-semibold">Modalidade de cálculo</Label>
+                                  <Select name="mode" defaultValue={predictionMode}>
+                                    <SelectTrigger id="mode">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="real">Real (fila + operadores a partir de agora)</SelectItem>
+                                      <SelectItem value="theoretical">Teórico (fila ideal desde o primeiro pedido)</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                  <p className="text-[11px] text-slate-600">
+                                    Real: usa o backlog atual com operadores. Teórico: reinicia a fila no horário do primeiro pedido.
+                                  </p>
+                                </div>
+                                <div className="space-y-2">
+                                  <Label htmlFor="operatorCount" className="text-sm font-semibold">Nº de operadores</Label>
                                   <Input
-                                    id={`prep-${k}`}
-                                    name={`prep${k}`}
+                                    id="operatorCount"
+                                    name="operatorCount"
                                     type="number"
                                     min={1}
-                                    defaultValue={prepMinutesActive[k]}
+                                    defaultValue={operatorCountActive}
                                   />
+                                  <p className="text-[11px] text-slate-600">Usado em ambos os modos.</p>
                                 </div>
-                              ))}
-                            </div>
+                              </div>
 
-                            <DialogFooter className="gap-2">
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                onClick={() => setSettingsDialogOpen(false)}
-                              >
-                                Cancelar
-                              </Button>
-                              <Button type="submit" disabled={settingsFx.state !== "idle"}>
-                                {settingsFx.state !== "idle" ? (
-                                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                                ) : null}
-                                Salvar
-                              </Button>
-                            </DialogFooter>
-                          </settingsFx.Form>
-                        </DialogContent>
-                      </Dialog>
-                    </div>
+                              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                                {(["F", "M", "P", "I", "FT"] as (keyof SizeCounts)[]).map((k) => (
+                                  <div key={k} className="space-y-1">
+                                    <Label htmlFor={`prep-${k}`}>Tempo {k} (min)</Label>
+                                    <Input
+                                      id={`prep-${k}`}
+                                      name={`prep${k}`}
+                                      type="number"
+                                      min={1}
+                                      defaultValue={prepMinutesActive[k]}
+                                    />
+                                  </div>
+                                ))}
+                              </div>
 
-                    <div className="md:grid md:grid-cols-2">
-                      {/* <div className="text-5xl text-slate-900">{fmtHHMM(nowMs)}</div> */}
-                      <div className="text-5xl font-extrabold text-slate-900">{activeLastReady ? fmtHHMM(activeLastReady) : "--:--"}</div>
-                    </div>
-
-
-                    <div className="text-xs text-slate-500 space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span>Modo:</span>
-                        <Select
-                          value={predictionMode}
-                          onValueChange={(val) => setPredictionMode(val as "real" | "theoretical")}
-                        >
-                          <SelectTrigger className="h-8">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="real">Real (fila atual começando agora)</SelectItem>
-                            <SelectItem value="theoretical">Teórico (fila ideal desde o 1º pedido)</SelectItem>
-                          </SelectContent>
-                        </Select>
+                              <DialogFooter className="gap-2">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  onClick={() => setSettingsDialogOpen(false)}
+                                >
+                                  Cancelar
+                                </Button>
+                                <Button type="submit" disabled={settingsFx.state !== "idle"}>
+                                  {settingsFx.state !== "idle" ? (
+                                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                  ) : null}
+                                  Salvar
+                                </Button>
+                              </DialogFooter>
+                            </settingsFx.Form>
+                          </DialogContent>
+                        </Dialog>
                       </div>
+                    </div>
+
+                    <div className="flex items-baseline gap-3">
+                      <div className="text-5xl font-black text-slate-900 tabular-nums">{activeLastReady ? fmtHHMM(activeLastReady) : "--:--"}</div>
+                      <span className="text-[11px] uppercase tracking-wide text-slate-500 font-semibold">hora prevista</span>
+                    </div>
+
+
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="font-semibold"
+                        onClick={() => setTimelineOpen(true)}
+                        disabled={!activeBuckets.length}
+                      >
+                        Ver linha do tempo
+                      </Button>
                       <div className="text-[11px] text-slate-500">
-                        Real: backlog a partir de agora. Teórico: mesma fila iniciando no primeiro pedido.
+                        Operadores considerados: <span className="font-semibold text-slate-700">{operatorCountActive}</span>
                       </div>
                     </div>
-                    <Button
-                      variant="link"
-                      className="p-0 h-auto text-slate-800 font-semibold"
-                      onClick={() => setTimelineOpen(true)}
-                      disabled={!activeBuckets.length}
-                    >
-                      Ver linha do tempo
-                    </Button>
                   </div>
 
                   {/* Card financeiro */}
-                  <div className="rounded-xl border bg-white shadow-sm p-4 flex flex-col gap-2">
-                    <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                      <BadgeDollarSign className="h-4 w-4" /> Meta financeira do dia
+                  <div className={summaryCardClass}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        <BadgeDollarSign className="h-4 w-4" /> Meta financeira do dia
+                      </div>
+                      <Badge variant="outline" className="text-[11px] font-semibold uppercase tracking-wide">
+                        Receita
+                      </Badge>
                     </div>
 
-                    <div className="flex flex-col md:grid md:items-center md:grid-cols-2 gap-x-6">
-
-                      <div className="flex flex-col justify-center items-center gap-4 text-sm text-slate-600 font-mono">
-                        <span>Receita Liquida</span>
-                        <span className="text-3xl font-bold text-emerald-600">{fmtBRL(dashboard.netAmount)}</span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-center space-y-1">
+                        <div className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Receita Líquida</div>
+                        <div className="text-3xl font-extrabold text-emerald-700 tabular-nums">{fmtBRL(dashboard.netAmount)}</div>
                       </div>
-                      <div className="flex flex-col justify-center items-center gap-4 text-sm text-slate-600 font-mono">
-                        <span>Receita Bruta</span>
-                        <span className="text-3xl ">{fmtBRL(dashboard.grossAmount)}</span>
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-center space-y-1">
+                        <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Receita Bruta</div>
+                        <div className="text-3xl font-bold text-slate-800 tabular-nums">{fmtBRL(dashboard.grossAmount)}</div>
                       </div>
-
-
                     </div>
-                    <div className="text-xs text-slate-500">
-                      Taxas: Cartão {dashboard.cardFeePerc?.toFixed(2)}% · Imposto {dashboard.taxPerc?.toFixed(2)}% · Marketplace {dashboard.marketplaceTaxPerc?.toFixed(2)}%
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-slate-600">
+                      <span className="font-semibold text-slate-700">Taxas</span>
+                      <span>Cartão {dashboard.cardFeePerc?.toFixed(2)}%</span>
+                      <span>Imposto {dashboard.taxPerc?.toFixed(2)}%</span>
+                      <span>Marketplace {dashboard.marketplaceTaxPerc?.toFixed(2)}%</span>
                     </div>
 
                   </div>
 
                   {/* Card status */}
-                  <div className="rounded-xl border bg-white shadow-sm p-4 flex flex-col gap-2">
-                    <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                      <span className="text-emerald-600">●</span> Status do dia
+                  <div className={cn(summaryCardClass, statusColor)}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide">
+                        <span className={`inline-flex h-2.5 w-2.5 rounded-full ${statusDot}`} aria-hidden />
+                        Status do dia
+                      </div>
+                      <Badge variant="outline" className="text-[11px] font-semibold uppercase tracking-wide bg-white/70">
+                        {dashboard.pctOfTarget.toFixed(0)}% da Target
+                      </Badge>
                     </div>
-                    <div className="text-3xl font-bold text-emerald-600 leading-tight">
+                    <div className={`text-3xl font-black leading-tight ${statusTextColor} tabular-nums`}>
                       {dashboard.status === "hit-target"
                         ? "Acima da meta"
                         : dashboard.status === "between"
                           ? "Acima da mínima"
                           : "Abaixo da mínima"}
                     </div>
-                    <div className="text-sm text-emerald-600 mb-6">{dashboard.pctOfTarget.toFixed(0)}% da Target</div>
 
-                    <div className="flex flex-col gap-2">
-                      <div className="text-sm text-slate-500">
-                        Meta Mínima (dia): <span className="font-mono">{fmtBRL(dashboard.goalMinAmount)}</span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="rounded-lg border border-white/60 bg-white/80 px-3 py-2">
+                        <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-500">Meta Mínima (dia)</div>
+                        <div className="font-mono text-base text-slate-800 tabular-nums">{fmtBRL(dashboard.goalMinAmount)}</div>
                       </div>
-                      <div className="text-sm text-slate-500">
-                        Meta Target (dia): <span className="font-mono">{fmtBRL(dashboard.goalTargetAmount)}</span>
+                      <div className="rounded-lg border border-white/60 bg-white/80 px-3 py-2">
+                        <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-500">Meta Target (dia)</div>
+                        <div className="font-mono text-base text-slate-800 tabular-nums">{fmtBRL(dashboard.goalTargetAmount)}</div>
                       </div>
                     </div>
                   </div>
@@ -1838,149 +1853,151 @@ export default function GridKdsPage() {
 
 
 
-      {/* Barra contador do estoque */}
-      <Suspense fallback={null}>
-        <Await resolve={doughUsage}>
-          {(used: SizeCounts) => {
-            const effectiveCounts = stockSnapshot?.effective ?? defaultSizeCounts();
-            const baseCounts = baseStock ?? defaultSizeCounts();
-            const remaining = calcRemaining(effectiveCounts, used);
-            const ordered = (availableSizes as DoughSizeOption[]) ?? [];
-            const manual = effectiveCounts;
-            const hasManualInfo = (["F", "M", "P", "I", "FT"] as (keyof SizeCounts)[])
-              .some((k) => manual[k] > 0);
-            const manualText = ordered
-              .map(({ key, abbr }) => ({ key, abbr, value: manual[key] ?? 0 }))
-              .filter((item) => item.value > 0)
-              .map((item) => `${item.abbr || item.key}: ${item.value}`)
-              .join(" · ");
 
-            function chipClasses(k: keyof SizeCounts) {
-              const init = effectiveCounts[k];
-              if (init <= 0) return "border border-slate-200 text-slate-500 bg-white";
-              const ratio = remaining[k] / init;
-              if (remaining[k] === 0) return "bg-rose-500 text-white"; // crítico
-              if (remaining[k] <= 2) return "bg-amber-400 text-slate-900"; // alerta
-              if (remaining[k] < 3) return "border border-rose-500 text-rose-600 bg-white";
-              return "bg-emerald-500 text-white"; // ok
-            }
-
-            return (
-              <div
-                className="fixed right-5 z-40"
-                style={{ top: `${floatingTop}px` }}
-              >
-                <stockFx.Form
-                  method="post"
-                  className="rounded-full border bg-white shadow-lg px-3 py-2 flex items-center gap-3 backdrop-blur"
-                  onSubmit={() => setEditingBar(false)}
-                >
-                  <input type="hidden" name="_action" value="saveDoughStock" />
-                  <input type="hidden" name="date" value={dateStr} />
-
-                  <div
-                    className="flex items-center justify-center w-7 h-7 rounded text-slate-600 hover:bg-slate-200 cursor-grab active:cursor-grabbing"
-                    onMouseDown={(e) => { setDragging(true); e.preventDefault(); }}
-                    role="presentation"
-                  >
-                    <GripVertical className="w-4 h-4" />
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    {ordered.map(({ key, label, abbr }) => (
-                      <div key={key} className="flex flex-col items-center gap-1 min-w-[60px]">
-                        <input type="hidden" name={`stock${key}`} value={baseCounts[key]} />
-                        <input type="hidden" name={`adjust${key}`} value={adjustmentDraft[key]} />
-
-                        <div
-                          className={`w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-semibold ${chipClasses(key)}`}
-                          title={`${label}: ${Math.max(0, remaining[key])}`}
-                        >
-                          {abbr || key} {Math.max(0, remaining[key])}
-                        </div>
-
-                        {editingBar && (
-                          <div className="flex items-center gap-0 text-[11px] text-slate-600">
-                            <button
-                              type="button"
-                              className="h-6 w-6 rounded-full border border-slate-200 hover:bg-slate-50 font-semibold"
-                              onClick={() => setAdjustmentValue(key, (adjustmentDraft[key] ?? 0) - 1)}
-                            >
-                              –
-                            </button>
-                            <NumericInput
-                              min={0}
-                              step={1}
-                              className="h-6 w-12 text-center rounded bg-white text-xs font-semibold border-none"
-                              value={adjustmentDraft[key]}
-                              onChange={(e) => setAdjustmentValue(key, e.target.value)}
-                              aria-label={`Ajuste ${label}`}
-                            />
-                            <button
-                              type="button"
-                              className="h-6 w-6 rounded-full border border-slate-200 hover:bg-slate-50"
-                              onClick={() => setAdjustmentValue(key, (adjustmentDraft[key] ?? 0) + 1)}
-                            >
-                              +
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* {hasManualInfo && !editingBar && (
-                    <div className="text-[11px] text-slate-500 ml-1">
-                      Saldo manual: {manualText}
-                    </div>
-                  )} */}
-
-                  {editingBar ? (
-                    <div className="flex items-center gap-2">
-                      <Button type="submit" size="sm" variant="secondary" disabled={stockFx.state !== "idle"}>
-                        {stockFx.state !== "idle" ? (
-                          <>
-                            <Loader2 className="w-3 h-3 animate-spin mr-1" /> Salvando…
-                          </>
-                        ) : (
-                          "Salvar"
-                        )}
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => {
-                          setAdjustmentDraft(stockSnapshot?.effective ?? defaultSizeCounts());
-                          setEditingBar(false);
-                        }}
-                      >
-                        Cancelar
-                      </Button>
-                    </div>
-                  ) : (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => setEditingBar(true)}
-                      className="text-slate-700"
-                    >
-                      <PencilLine className="w-4 h-4 mr-1" />
-                    </Button>
-                  )}
-                </stockFx.Form>
-              </div>
-            );
-          }}
-        </Await>
-      </Suspense>
 
       <Separator className="my-12" />
 
       {/* Venda livre rápida + Filtro de Canal */}
       {(status === "OPENED" || status === "REOPENED") && (
         <>
+
+          {/* Barra contador do estoque */}
+          <Suspense fallback={null}>
+            <Await resolve={doughUsage}>
+              {(used: SizeCounts) => {
+                const effectiveCounts = stockSnapshot?.effective ?? defaultSizeCounts();
+                const baseCounts = baseStock ?? defaultSizeCounts();
+                const remaining = calcRemaining(effectiveCounts, used);
+                const ordered = (availableSizes as DoughSizeOption[]) ?? [];
+                const manual = effectiveCounts;
+                const hasManualInfo = (["F", "M", "P", "I", "FT"] as (keyof SizeCounts)[])
+                  .some((k) => manual[k] > 0);
+                const manualText = ordered
+                  .map(({ key, abbr }) => ({ key, abbr, value: manual[key] ?? 0 }))
+                  .filter((item) => item.value > 0)
+                  .map((item) => `${item.abbr || item.key}: ${item.value}`)
+                  .join(" · ");
+
+                function chipClasses(k: keyof SizeCounts) {
+                  const init = effectiveCounts[k];
+                  if (init <= 0) return "border border-slate-200 text-slate-500 bg-white";
+                  const ratio = remaining[k] / init;
+                  if (remaining[k] === 0) return "bg-rose-500 text-white"; // crítico
+                  if (remaining[k] <= 2) return "bg-amber-400 text-slate-900"; // alerta
+                  if (remaining[k] < 3) return "border border-rose-500 text-rose-600 bg-white";
+                  return "bg-emerald-500 text-white"; // ok
+                }
+
+                return (
+                  <div
+                    className="fixed right-5 z-40"
+                    style={{ top: `${floatingTop}px` }}
+                  >
+                    <stockFx.Form
+                      method="post"
+                      className="rounded-full border bg-white shadow-lg px-3 py-2 flex items-center gap-3 backdrop-blur"
+                      onSubmit={() => setEditingBar(false)}
+                    >
+                      <input type="hidden" name="_action" value="saveDoughStock" />
+                      <input type="hidden" name="date" value={dateStr} />
+
+                      <div
+                        className="flex items-center justify-center w-7 h-7 rounded text-slate-600 hover:bg-slate-200 cursor-grab active:cursor-grabbing"
+                        onMouseDown={(e) => { setDragging(true); e.preventDefault(); }}
+                        role="presentation"
+                      >
+                        <GripVertical className="w-4 h-4" />
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {ordered.map(({ key, label, abbr }) => (
+                          <div key={key} className="flex flex-col items-center gap-1 min-w-[60px]">
+                            <input type="hidden" name={`stock${key}`} value={baseCounts[key]} />
+                            <input type="hidden" name={`adjust${key}`} value={adjustmentDraft[key]} />
+
+                            <div
+                              className={`w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-semibold ${chipClasses(key)}`}
+                              title={`${label}: ${Math.max(0, remaining[key])}`}
+                            >
+                              {abbr || key} {Math.max(0, remaining[key])}
+                            </div>
+
+                            {editingBar && (
+                              <div className="flex items-center gap-0 text-[11px] text-slate-600">
+                                <button
+                                  type="button"
+                                  className="h-6 w-6 rounded-full border border-slate-200 hover:bg-slate-50 font-semibold"
+                                  onClick={() => setAdjustmentValue(key, (adjustmentDraft[key] ?? 0) - 1)}
+                                >
+                                  –
+                                </button>
+                                <NumericInput
+                                  min={0}
+                                  step={1}
+                                  className="h-6 w-12 text-center rounded bg-white text-xs font-semibold border-none"
+                                  value={adjustmentDraft[key]}
+                                  onChange={(e) => setAdjustmentValue(key, e.target.value)}
+                                  aria-label={`Ajuste ${label}`}
+                                />
+                                <button
+                                  type="button"
+                                  className="h-6 w-6 rounded-full border border-slate-200 hover:bg-slate-50"
+                                  onClick={() => setAdjustmentValue(key, (adjustmentDraft[key] ?? 0) + 1)}
+                                >
+                                  +
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* {hasManualInfo && !editingBar && (
+                    <div className="text-[11px] text-slate-500 ml-1">
+                      Saldo manual: {manualText}
+                    </div>
+                  )} */}
+
+                      {editingBar ? (
+                        <div className="flex items-center gap-2">
+                          <Button type="submit" size="sm" variant="secondary" disabled={stockFx.state !== "idle"}>
+                            {stockFx.state !== "idle" ? (
+                              <>
+                                <Loader2 className="w-3 h-3 animate-spin mr-1" /> Salvando…
+                              </>
+                            ) : (
+                              "Salvar"
+                            )}
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setAdjustmentDraft(stockSnapshot?.effective ?? defaultSizeCounts());
+                              setEditingBar(false);
+                            }}
+                          >
+                            Cancelar
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setEditingBar(true)}
+                          className="text-slate-700"
+                        >
+                          <PencilLine className="w-4 h-4 mr-1" />
+                        </Button>
+                      )}
+                    </stockFx.Form>
+                  </div>
+                );
+              }}
+            </Await>
+          </Suspense>
 
           <div className="flex flex-wrap items-center justify-between gap-3">
             {/* Venda Livre rápida */}
