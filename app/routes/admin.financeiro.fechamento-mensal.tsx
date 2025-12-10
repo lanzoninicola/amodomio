@@ -292,6 +292,36 @@ function calcTotals(c?: Partial<FinancialMonthlyClose> | null) {
   };
 }
 
+type StatusTone = "good" | "warn" | "bad";
+
+function badgeClasses(tone: StatusTone) {
+  if (tone === "good") return "bg-emerald-100 text-emerald-700";
+  if (tone === "warn") return "bg-amber-100 text-amber-800";
+  return "bg-red-100 text-red-700";
+}
+
+function ratePercent(value: number, kind: "margem" | "resultado") {
+  const good = kind === "margem" ? 35 : 15;
+  const warn = kind === "margem" ? 20 : 5;
+  if (value >= good) {
+    return { label: "Saudável", tone: "good" as StatusTone, text: "Acima da referência: boa folga." };
+  }
+  if (value >= warn) {
+    return { label: "Atenção", tone: "warn" as StatusTone, text: "Ok, mas acompanhe custos e receita." };
+  }
+  return { label: "Crítico", tone: "bad" as StatusTone, text: "Abaixo do ideal: reveja custos/receita." };
+}
+
+function rateCobertura(coveragePerc: number) {
+  if (coveragePerc >= 110) {
+    return { label: "Coberto", tone: "good" as StatusTone, text: "Receita cobre o ponto de equilíbrio." };
+  }
+  if (coveragePerc >= 90) {
+    return { label: "No limite", tone: "warn" as StatusTone, text: "Quase lá: mantenha foco em margem." };
+  }
+  return { label: "Descoberto", tone: "bad" as StatusTone, text: "Falta receita ou reduzir custos." };
+}
+
 export default function AdminFinanceiroFechamentoMensal() {
   const { closes, monthlyCloseRepoMissing } = useLoaderData<typeof loader>();
   const action = useActionData<ActionData>();
@@ -360,10 +390,15 @@ export default function AdminFinanceiroFechamentoMensal() {
   const custoFixoTotalPreview = custoFixoTotalEdit;
   const custoVariavelTotalPreview = custoVarTotalEdit;
   const custoFixoOutrosPreview = custoFixoTotalEdit - (custoFixoFolha + custoFixoFolhaFuncionarios + custoFixoProlabore + custoFixoRetiradaProlabore + custoFixoRetiradaResultado + custoFixoFinanciamento + custoFixoMarketing + custoFixoFaturaCartao);
-  const custoVariavelOutrosPreview = custoVarTotalEdit - (custoVarInsumos + custoVarEntrega + custoVarImpostos);
+  const custoVariavelOutrosPreview = custoVarTotalEdit - (custoVarInsumos + custoVarEntrega + custoVarImpostos + custoVarMarketing);
   const margemContribPreview = receitaBruta - custoVariavelTotalPreview;
   const resultadoLiquidoPreview = margemContribPreview - custoFixoTotalPreview;
   const resultadoLiquidoPercPreview = receitaBruta > 0 ? (resultadoLiquidoPreview / receitaBruta) * 100 : 0;
+  const coberturaPreview = totals.pontoEquilibrio > 0 ? (totals.receitaBruta / totals.pontoEquilibrio) * 100 : 0;
+
+  const margemStatus = ratePercent(totals.margemContribPerc, "margem");
+  const resultadoStatus = ratePercent(totals.resultadoLiquidoPercBruta, "resultado");
+  const coberturaStatus = rateCobertura(coberturaPreview);
 
   return (
     <div className="space-y-6 mb-12">
@@ -399,15 +434,21 @@ export default function AdminFinanceiroFechamentoMensal() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Margem de contribuição</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            <p className="text-xs text-muted-foreground">
-              Receita de caixa menos custos variáveis. É o que sobra para pagar os fixos.
-            </p>
-            <div className="flex justify-between">
-              <span>Valor</span>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">Margem de contribuição</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              <div className="flex items-start justify-between gap-2">
+                <span className={`inline-flex items-center rounded-full px-2 py-1 text-[11px] font-medium ${badgeClasses(margemStatus.tone)}`}>
+                  {margemStatus.label}
+                </span>
+                <span className="text-xs text-muted-foreground text-right">{margemStatus.text}</span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Receita de caixa menos custos variáveis. É o que sobra para pagar os fixos.
+              </p>
+              <div className="flex justify-between">
+                <span>Valor</span>
               <span className="font-mono">{formatMoneyString(totals.margemContrib, 2)}</span>
             </div>
             <div className="flex justify-between">
@@ -418,15 +459,21 @@ export default function AdminFinanceiroFechamentoMensal() {
         </Card>
 
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Resultado líquido</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            <p className="text-xs text-muted-foreground">
-              Margem de contribuição menos custos fixos. Lucro/prejuízo do mês.
-            </p>
-            <div className="flex justify-between">
-              <span>Valor</span>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">Resultado líquido</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              <div className="flex items-start justify-between gap-2">
+                <span className={`inline-flex items-center rounded-full px-2 py-1 text-[11px] font-medium ${badgeClasses(resultadoStatus.tone)}`}>
+                  {resultadoStatus.label}
+                </span>
+                <span className="text-xs text-muted-foreground text-right">{resultadoStatus.text}</span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Margem de contribuição menos custos fixos. Lucro/prejuízo do mês.
+              </p>
+              <div className="flex justify-between">
+                <span>Valor</span>
               <span className="font-mono">{formatMoneyString(totals.resultadoLiquido, 2)}</span>
             </div>
             <div className="flex justify-between">
@@ -439,15 +486,21 @@ export default function AdminFinanceiroFechamentoMensal() {
         </Card>
 
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Ponto de equilíbrio</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            <p className="text-xs text-muted-foreground">
-              Receita de caixa mínima para zerar lucro. Cobertura mostra o quanto a receita atual alcança do PE.
-            </p>
-            <div className="flex justify-between">
-              <span>Valor</span>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">Ponto de equilíbrio</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              <div className="flex items-start justify-between gap-2">
+                <span className={`inline-flex items-center rounded-full px-2 py-1 text-[11px] font-medium ${badgeClasses(coberturaStatus.tone)}`}>
+                  {coberturaStatus.label}
+                </span>
+                <span className="text-xs text-muted-foreground text-right">{coberturaStatus.text}</span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Receita de caixa mínima para zerar lucro. Cobertura mostra o quanto a receita atual alcança do PE.
+              </p>
+              <div className="flex justify-between">
+                <span>Valor</span>
               <span className="font-mono">{formatMoneyString(totals.pontoEquilibrio, 2)}</span>
             </div>
             <div className="flex justify-between">
@@ -639,7 +692,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                     name="custoVariavelTotalAmount"
                     defaultValue={custoVarTotalEdit}
                     fractionDigits={2}
-                    className="w-32"
+                    className="w-48 font-mono text-lg font-semibold"
                     onChange={(e: any) => setCustoVarTotalEdit(Number(e?.target?.value ?? 0))}
                   />
                 </div>
@@ -714,7 +767,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                     name="custoFixoTotalAmount"
                     defaultValue={custoFixoTotalEdit}
                     fractionDigits={2}
-                    className="w-32"
+                    className="w-48 font-mono text-lg font-semibold"
                     onChange={(e: any) => setCustoFixoTotalEdit(Number(e?.target?.value ?? 0))}
                   />
                 </div>
