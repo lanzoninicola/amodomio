@@ -101,7 +101,7 @@ export async function action({ request }: ActionFunctionArgs) {
     const taxaMarketplacePerc = num("taxaMarketplacePerc");
 
     // Custos fixos
-    const custoFixoFolhaAmount = num("custoFixoFolhaAmount");
+    const custoFixoPlanoSaudeAmount = num("custoFixoPlanoSaudeAmount");
     const custoFixoFolhaFuncionariosAmount = num("custoFixoFolhaFuncionariosAmount");
     const custoFixoProlaboreAmount = num("custoFixoProlaboreAmount");
     const custoFixoRetiradaProlaboreAmount = num("custoFixoRetiradaProlaboreAmount");
@@ -109,30 +109,30 @@ export async function action({ request }: ActionFunctionArgs) {
     const custoFixoParcelaFinanciamentoAmount = num("custoFixoParcelaFinanciamentoAmount");
     const custoFixoMarketingAmount = num("custoFixoMarketingAmount");
     const custoFixoFaturaCartaoAmount = num("custoFixoFaturaCartaoAmount");
+    const custoFixoTrafegoPagoAmount = num("custoFixoTrafegoPagoAmount");
     const custoFixoTotalAmount = num("custoFixoTotalAmount");
     const custoFixoOutrosAmount =
       custoFixoTotalAmount -
-      (custoFixoFolhaAmount +
+      (custoFixoPlanoSaudeAmount +
         custoFixoFolhaFuncionariosAmount +
         custoFixoProlaboreAmount +
         custoFixoRetiradaProlaboreAmount +
         custoFixoRetiradaResultadoAmount +
         custoFixoParcelaFinanciamentoAmount +
         custoFixoMarketingAmount +
+        custoFixoTrafegoPagoAmount +
         custoFixoFaturaCartaoAmount);
 
     // Custos variáveis (todos manuais)
     const custoVariavelInsumosAmount = num("custoVariavelInsumosAmount");
     const custoVariavelEntregaAmount = num("custoVariavelEntregaAmount");
     const custoVariavelImpostosAmount = num("custoVariavelImpostosAmount");
-    const custoVariavelMarketingAmount = num("custoVariavelMarketingAmount"); // Tráfego pago (Meta)
     const custoVariavelTotalAmount = num("custoVariavelTotalAmount");
     const custoVariavelOutrosAmount =
       custoVariavelTotalAmount -
       (custoVariavelInsumosAmount +
         custoVariavelEntregaAmount +
-        custoVariavelImpostosAmount +
-        custoVariavelMarketingAmount);
+        custoVariavelImpostosAmount);
 
     const vendaCartaoPerc = receitaBrutaAmount > 0 ? (vendaCartaoAmount / receitaBrutaAmount) * 100 : 0;
     const taxaCartaoAmount = vendaCartaoAmount > 0 ? (vendaCartaoAmount * taxaCartaoPerc) / 100 : 0;
@@ -170,20 +170,20 @@ export async function action({ request }: ActionFunctionArgs) {
       taxaMarketplaceAmount,
       receitaLiquidaAmount,
 
-      custoFixoFolhaAmount,
+      custoFixoPlanoSaudeAmount,
       custoFixoFolhaFuncionariosAmount,
       custoFixoProlaboreAmount,
       custoFixoRetiradaProlaboreAmount,
       custoFixoRetiradaResultadoAmount,
       custoFixoParcelaFinanciamentoAmount,
       custoFixoMarketingAmount,
+      custoVariavelMarketingAmount: custoFixoTrafegoPagoAmount,
       custoFixoFaturaCartaoAmount,
       custoFixoOutrosAmount,
 
       custoVariavelInsumosAmount,
       custoVariavelEntregaAmount,
       custoVariavelImpostosAmount,
-      custoVariavelMarketingAmount,
       custoVariavelOutrosAmount,
 
       custoFixoTotalAmount: custoFixoTotalAmountNormalized,
@@ -242,12 +242,13 @@ function calcTotals(c?: Partial<FinancialMonthlyClose> | null) {
 
   const custoFixoTotal =
     c.custoFixoTotalAmount ??
-    ((c.custoFixoFolhaAmount ?? 0) +
+    ((c.custoFixoFolhaAmount ?? 0) + // aqui passa a representar plano de saúde
       (c.custoFixoFolhaFuncionariosAmount ?? 0) +
       (c.custoFixoProlaboreAmount ?? 0) +
       (c.custoFixoRetiradaProlaboreAmount ?? c.custoFixoRetiradaLucroAmount ?? 0) +
       (c.custoFixoRetiradaResultadoAmount ?? 0) +
       (c.custoFixoMarketingAmount ?? 0) +
+      (c.custoVariavelMarketingAmount ?? 0) +
       (c.custoFixoFaturaCartaoAmount ?? 0) +
       (c.custoFixoParcelaFinanciamentoAmount ?? 0) +
       (c.custoFixoOutrosAmount ?? 0));
@@ -257,7 +258,6 @@ function calcTotals(c?: Partial<FinancialMonthlyClose> | null) {
     ((c.custoVariavelInsumosAmount ?? 0) +
       (c.custoVariavelEntregaAmount ?? 0) +
       (c.custoVariavelImpostosAmount ?? 0) +
-      (c.custoVariavelMarketingAmount ?? 0) +
       (c.custoVariavelOutrosAmount ?? 0));
 
   const margemContrib =
@@ -343,21 +343,19 @@ export default function AdminFinanceiroFechamentoMensal() {
   const [taxaCartaoPerc, setTaxaCartaoPerc] = React.useState<number>(currentDefaults?.taxaCartaoPerc ?? 0);
   const [vendaMarketplaceAmount, setVendaMarketplaceAmount] = React.useState<number>(currentDefaults?.vendaMarketplaceAmount ?? 0);
   const [taxaMarketplacePerc, setTaxaMarketplacePerc] = React.useState<number>(currentDefaults?.taxaMarketplacePerc ?? 0);
-  const [custoFixoFolha, setCustoFixoFolha] = React.useState<number>(currentDefaults?.custoFixoFolhaAmount ?? 0);
+  const [custoFixoPlanoSaude, setCustoFixoPlanoSaude] = React.useState<number>(currentDefaults?.custoFixoFolhaAmount ?? 0);
   const [custoFixoFolhaFuncionarios, setCustoFixoFolhaFuncionarios] = React.useState<number>(currentDefaults?.custoFixoFolhaFuncionariosAmount ?? 0);
   const [custoFixoProlabore, setCustoFixoProlabore] = React.useState<number>(currentDefaults?.custoFixoProlaboreAmount ?? 0);
   const [custoFixoRetiradaProlabore, setCustoFixoRetiradaProlabore] = React.useState<number>(currentDefaults?.custoFixoRetiradaProlaboreAmount ?? 0);
   const [custoFixoRetiradaResultado, setCustoFixoRetiradaResultado] = React.useState<number>(currentDefaults?.custoFixoRetiradaResultadoAmount ?? 0);
   const [custoFixoFinanciamento, setCustoFixoFinanciamento] = React.useState<number>(currentDefaults?.custoFixoParcelaFinanciamentoAmount ?? 0);
   const [custoFixoMarketing, setCustoFixoMarketing] = React.useState<number>(currentDefaults?.custoFixoMarketingAmount ?? 0);
+  const [custoFixoTrafegoPago, setCustoFixoTrafegoPago] = React.useState<number>(currentDefaults?.custoVariavelMarketingAmount ?? 0);
   const [custoFixoFaturaCartao, setCustoFixoFaturaCartao] = React.useState<number>(currentDefaults?.custoFixoFaturaCartaoAmount ?? 0);
-  const [custoFixoOutros, setCustoFixoOutros] = React.useState<number>(currentDefaults?.custoFixoOutrosAmount ?? 0);
   const [custoFixoTotalEdit, setCustoFixoTotalEdit] = React.useState<number>(currentDefaults?.custoFixoTotalAmount ?? 0);
   const [custoVarInsumos, setCustoVarInsumos] = React.useState<number>(currentDefaults?.custoVariavelInsumosAmount ?? 0);
   const [custoVarEntrega, setCustoVarEntrega] = React.useState<number>(currentDefaults?.custoVariavelEntregaAmount ?? 0);
   const [custoVarImpostos, setCustoVarImpostos] = React.useState<number>(currentDefaults?.custoVariavelImpostosAmount ?? 0);
-  const [custoVarMarketing, setCustoVarMarketing] = React.useState<number>(currentDefaults?.custoVariavelMarketingAmount ?? 0); // Trafego Pago (Meta)
-  const [custoVarOutros, setCustoVarOutros] = React.useState<number>(currentDefaults?.custoVariavelOutrosAmount ?? 0);
   const [custoVarTotalEdit, setCustoVarTotalEdit] = React.useState<number>(currentDefaults?.custoVariavelTotalAmount ?? 0);
 
   React.useEffect(() => {
@@ -367,21 +365,19 @@ export default function AdminFinanceiroFechamentoMensal() {
     setTaxaCartaoPerc(currentDefaults?.taxaCartaoPerc ?? 0);
     setVendaMarketplaceAmount(currentDefaults?.vendaMarketplaceAmount ?? 0);
     setTaxaMarketplacePerc(currentDefaults?.taxaMarketplacePerc ?? 0);
-    setCustoFixoFolha(currentDefaults?.custoFixoFolhaAmount ?? 0);
+    setCustoFixoPlanoSaude(currentDefaults?.custoFixoFolhaAmount ?? 0);
     setCustoFixoFolhaFuncionarios(currentDefaults?.custoFixoFolhaFuncionariosAmount ?? 0);
     setCustoFixoProlabore(currentDefaults?.custoFixoProlaboreAmount ?? 0);
     setCustoFixoRetiradaProlabore(currentDefaults?.custoFixoRetiradaProlaboreAmount ?? 0);
     setCustoFixoRetiradaResultado(currentDefaults?.custoFixoRetiradaResultadoAmount ?? 0);
     setCustoFixoFinanciamento(currentDefaults?.custoFixoParcelaFinanciamentoAmount ?? 0);
     setCustoFixoMarketing(currentDefaults?.custoFixoMarketingAmount ?? 0);
+    setCustoFixoTrafegoPago(currentDefaults?.custoVariavelMarketingAmount ?? 0);
     setCustoFixoFaturaCartao(currentDefaults?.custoFixoFaturaCartaoAmount ?? 0);
-    setCustoFixoOutros(currentDefaults?.custoFixoOutrosAmount ?? 0);
     setCustoFixoTotalEdit(currentDefaults?.custoFixoTotalAmount ?? 0);
     setCustoVarInsumos(currentDefaults?.custoVariavelInsumosAmount ?? 0);
     setCustoVarEntrega(currentDefaults?.custoVariavelEntregaAmount ?? 0);
     setCustoVarImpostos(currentDefaults?.custoVariavelImpostosAmount ?? 0);
-    setCustoVarMarketing(currentDefaults?.custoVariavelMarketingAmount ?? 0);
-    setCustoVarOutros(currentDefaults?.custoVariavelOutrosAmount ?? 0);
     setCustoVarTotalEdit(currentDefaults?.custoVariavelTotalAmount ?? 0);
   }, [currentDefaults?.id, currentDefaults?.referenceMonth, currentDefaults?.referenceYear]);
 
@@ -389,8 +385,11 @@ export default function AdminFinanceiroFechamentoMensal() {
   const taxaMarketplaceAmountPreview = vendaMarketplaceAmount > 0 ? (vendaMarketplaceAmount * taxaMarketplacePerc) / 100 : 0;
   const custoFixoTotalPreview = custoFixoTotalEdit;
   const custoVariavelTotalPreview = custoVarTotalEdit;
-  const custoFixoOutrosPreview = custoFixoTotalEdit - (custoFixoFolha + custoFixoFolhaFuncionarios + custoFixoProlabore + custoFixoRetiradaProlabore + custoFixoRetiradaResultado + custoFixoFinanciamento + custoFixoMarketing + custoFixoFaturaCartao);
-  const custoVariavelOutrosPreview = custoVarTotalEdit - (custoVarInsumos + custoVarEntrega + custoVarImpostos + custoVarMarketing);
+  const custoFixoOutrosPreview = custoFixoTotalEdit - (custoFixoPlanoSaude + custoFixoFolhaFuncionarios + custoFixoProlabore + custoFixoRetiradaProlabore + custoFixoRetiradaResultado + custoFixoFinanciamento + custoFixoMarketing + custoFixoTrafegoPago + custoFixoFaturaCartao);
+  const custoVariavelOutrosPreview = custoVarTotalEdit - (custoVarInsumos + custoVarEntrega + custoVarImpostos);
+  const despesasPessoalTotal = custoFixoPlanoSaude + custoFixoFolhaFuncionarios + custoFixoProlabore + custoFixoRetiradaProlabore + custoFixoRetiradaResultado;
+  const marketingTotal = custoFixoMarketing + custoFixoTrafegoPago;
+  const servicoDividaTotal = custoFixoFinanciamento + custoFixoFaturaCartao;
   const margemContribPreview = receitaBruta - custoVariavelTotalPreview;
   const resultadoLiquidoPreview = margemContribPreview - custoFixoTotalPreview;
   const resultadoLiquidoPercPreview = receitaBruta > 0 ? (resultadoLiquidoPreview / receitaBruta) * 100 : 0;
@@ -434,21 +433,21 @@ export default function AdminFinanceiroFechamentoMensal() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">Margem de contribuição</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm">
-              <div className="flex items-start justify-between gap-2">
-                <span className={`inline-flex items-center rounded-full px-2 py-1 text-[11px] font-medium ${badgeClasses(margemStatus.tone)}`}>
-                  {margemStatus.label}
-                </span>
-                <span className="text-xs text-muted-foreground text-right">{margemStatus.text}</span>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Receita de caixa menos custos variáveis. É o que sobra para pagar os fixos.
-              </p>
-              <div className="flex justify-between">
-                <span>Valor</span>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">Margem de contribuição</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            <div className="flex items-start justify-between gap-2">
+              <span className={`inline-flex items-center rounded-full px-2 py-1 text-[11px] font-medium ${badgeClasses(margemStatus.tone)}`}>
+                {margemStatus.label}
+              </span>
+              <span className="text-xs text-muted-foreground text-right">{margemStatus.text}</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Receita de caixa menos custos variáveis. É o que sobra para pagar os fixos.
+            </p>
+            <div className="flex justify-between">
+              <span>Valor</span>
               <span className="font-mono">{formatMoneyString(totals.margemContrib, 2)}</span>
             </div>
             <div className="flex justify-between">
@@ -459,21 +458,21 @@ export default function AdminFinanceiroFechamentoMensal() {
         </Card>
 
         <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">Resultado líquido</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm">
-              <div className="flex items-start justify-between gap-2">
-                <span className={`inline-flex items-center rounded-full px-2 py-1 text-[11px] font-medium ${badgeClasses(resultadoStatus.tone)}`}>
-                  {resultadoStatus.label}
-                </span>
-                <span className="text-xs text-muted-foreground text-right">{resultadoStatus.text}</span>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Margem de contribuição menos custos fixos. Lucro/prejuízo do mês.
-              </p>
-              <div className="flex justify-between">
-                <span>Valor</span>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">Resultado líquido</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            <div className="flex items-start justify-between gap-2">
+              <span className={`inline-flex items-center rounded-full px-2 py-1 text-[11px] font-medium ${badgeClasses(resultadoStatus.tone)}`}>
+                {resultadoStatus.label}
+              </span>
+              <span className="text-xs text-muted-foreground text-right">{resultadoStatus.text}</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Margem de contribuição menos custos fixos. Lucro/prejuízo do mês.
+            </p>
+            <div className="flex justify-between">
+              <span>Valor</span>
               <span className="font-mono">{formatMoneyString(totals.resultadoLiquido, 2)}</span>
             </div>
             <div className="flex justify-between">
@@ -486,21 +485,21 @@ export default function AdminFinanceiroFechamentoMensal() {
         </Card>
 
         <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">Ponto de equilíbrio</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm">
-              <div className="flex items-start justify-between gap-2">
-                <span className={`inline-flex items-center rounded-full px-2 py-1 text-[11px] font-medium ${badgeClasses(coberturaStatus.tone)}`}>
-                  {coberturaStatus.label}
-                </span>
-                <span className="text-xs text-muted-foreground text-right">{coberturaStatus.text}</span>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Receita de caixa mínima para zerar lucro. Cobertura mostra o quanto a receita atual alcança do PE.
-              </p>
-              <div className="flex justify-between">
-                <span>Valor</span>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">Ponto de equilíbrio</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            <div className="flex items-start justify-between gap-2">
+              <span className={`inline-flex items-center rounded-full px-2 py-1 text-[11px] font-medium ${badgeClasses(coberturaStatus.tone)}`}>
+                {coberturaStatus.label}
+              </span>
+              <span className="text-xs text-muted-foreground text-right">{coberturaStatus.text}</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Receita de caixa mínima para zerar lucro. Cobertura mostra o quanto a receita atual alcança do PE.
+            </p>
+            <div className="flex justify-between">
+              <span>Valor</span>
               <span className="font-mono">{formatMoneyString(totals.pontoEquilibrio, 2)}</span>
             </div>
             <div className="flex justify-between">
@@ -729,16 +728,6 @@ export default function AdminFinanceiroFechamentoMensal() {
                   onChange={(e: any) => setCustoVarEntrega(Number(e?.target?.value ?? 0))}
                 />
               </div>
-              <div className="flex flex-col gap-2">
-                <Label>Tráfego Pago (Meta) (R$)</Label>
-                <DecimalInput
-                  name="custoVariavelMarketingAmount"
-                  defaultValue={currentDefaults?.custoVariavelMarketingAmount ?? 0}
-                  fractionDigits={2}
-                  className="w-full"
-                  onChange={(e: any) => setCustoVarMarketing(Number(e?.target?.value ?? 0))}
-                />
-              </div>
               <div className="md:col-span-2">
                 <Separator />
               </div>
@@ -773,82 +762,129 @@ export default function AdminFinanceiroFechamentoMensal() {
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="flex flex-col gap-2">
-                <Label>Folha funcionários (R$)</Label>
-                <DecimalInput
-                  name="custoFixoFolhaFuncionariosAmount"
-                  defaultValue={currentDefaults?.custoFixoFolhaFuncionariosAmount ?? 0}
-                  fractionDigits={2}
-                  className="w-full"
-                  onChange={(e: any) => setCustoFixoFolhaFuncionarios(Number(e?.target?.value ?? 0))}
-                />
+            <CardContent className="space-y-6">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between text-sm font-medium text-muted-foreground">
+                  <span className="uppercase">Despesas com pessoal</span>
+                  <span className="font-mono font-semibold text-foreground">{formatMoneyString(despesasPessoalTotal, 2)}</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="flex flex-col gap-2">
+                    <Label>Folha funcionários (R$)</Label>
+                    <DecimalInput
+                      name="custoFixoFolhaFuncionariosAmount"
+                      defaultValue={currentDefaults?.custoFixoFolhaFuncionariosAmount ?? 0}
+                      fractionDigits={2}
+                      className="w-full"
+                      onChange={(e: any) => setCustoFixoFolhaFuncionarios(Number(e?.target?.value ?? 0))}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label>Pró-labore (R$)</Label>
+                    <DecimalInput
+                      name="custoFixoProlaboreAmount"
+                      defaultValue={currentDefaults?.custoFixoProlaboreAmount ?? 0}
+                      fractionDigits={2}
+                      className="w-full"
+                      onChange={(e: any) => setCustoFixoProlabore(Number(e?.target?.value ?? 0))}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label>Retirada de lucro / pró-labore (R$)</Label>
+                    <DecimalInput
+                      name="custoFixoRetiradaProlaboreAmount"
+                      defaultValue={currentDefaults?.custoFixoRetiradaProlaboreAmount ?? 0}
+                      fractionDigits={2}
+                      className="w-full"
+                      onChange={(e: any) => setCustoFixoRetiradaProlabore(Number(e?.target?.value ?? 0))}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label>Retirada de lucro / resultado (R$)</Label>
+                    <DecimalInput
+                      name="custoFixoRetiradaResultadoAmount"
+                      defaultValue={currentDefaults?.custoFixoRetiradaResultadoAmount ?? 0}
+                      fractionDigits={2}
+                      className="w-full"
+                      onChange={(e: any) => setCustoFixoRetiradaResultado(Number(e?.target?.value ?? 0))}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label>Plano de saúde (R$)</Label>
+                    <DecimalInput
+                      name="custoFixoPlanoSaudeAmount"
+                      defaultValue={currentDefaults?.custoFixoFolhaAmount ?? 0}
+                      fractionDigits={2}
+                      className="w-full"
+                      onChange={(e: any) => setCustoFixoPlanoSaude(Number(e?.target?.value ?? 0))}
+                    />
+                  </div>
+                </div>
               </div>
-              <div className="flex flex-col gap-2">
-                <Label>Pró-labore (R$)</Label>
-                <DecimalInput
-                  name="custoFixoProlaboreAmount"
-                  defaultValue={currentDefaults?.custoFixoProlaboreAmount ?? 0}
-                  fractionDigits={2}
-                  className="w-full"
-                  onChange={(e: any) => setCustoFixoProlabore(Number(e?.target?.value ?? 0))}
-                />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label>Retirada de lucro / pró-labore (R$)</Label>
-                <DecimalInput
-                  name="custoFixoRetiradaProlaboreAmount"
-                  defaultValue={currentDefaults?.custoFixoRetiradaProlaboreAmount ?? 0}
-                  fractionDigits={2}
-                  className="w-full"
-                  onChange={(e: any) => setCustoFixoRetiradaProlabore(Number(e?.target?.value ?? 0))}
-                />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label>Retirada de lucro / resultado (R$)</Label>
-                <DecimalInput
-                  name="custoFixoRetiradaResultadoAmount"
-                  defaultValue={currentDefaults?.custoFixoRetiradaResultadoAmount ?? 0}
-                  fractionDigits={2}
-                  className="w-full"
-                  onChange={(e: any) => setCustoFixoRetiradaResultado(Number(e?.target?.value ?? 0))}
-                />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label>Parcela financiamento (R$)</Label>
-                <DecimalInput
-                  name="custoFixoParcelaFinanciamentoAmount"
-                  defaultValue={currentDefaults?.custoFixoParcelaFinanciamentoAmount ?? 0}
-                  fractionDigits={2}
-                  className="w-full"
-                  onChange={(e: any) => setCustoFixoFinanciamento(Number(e?.target?.value ?? 0))}
-                />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label>Fatura cartão crédito (R$)</Label>
-                <DecimalInput
-                  name="custoFixoFaturaCartaoAmount"
-                  defaultValue={currentDefaults?.custoFixoFaturaCartaoAmount ?? 0}
-                  fractionDigits={2}
-                  className="w-full"
-                  onChange={(e: any) => setCustoFixoFaturaCartao(Number(e?.target?.value ?? 0))}
-                />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label>Marketing (R$)</Label>
-                <DecimalInput
-                  name="custoFixoMarketingAmount"
-                  defaultValue={currentDefaults?.custoFixoMarketingAmount ?? 0}
-                  fractionDigits={2}
-                  className="w-full"
-                  onChange={(e: any) => setCustoFixoMarketing(Number(e?.target?.value ?? 0))}
-                />
-              </div>
-              <div className="md:col-span-2">
-                <Separator />
+              <Separator className="my-2" />
+              <div className="space-y-3">
+                <div className="flex items-center justify-between text-sm font-medium text-muted-foreground">
+                  <span className="uppercase">Marketing</span>
+                  <span className="font-mono font-semibold text-foreground">{formatMoneyString(marketingTotal, 2)}</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="flex flex-col gap-2">
+                    <Label>Assessoria (R$)</Label>
+                    <DecimalInput
+                      name="custoFixoMarketingAmount"
+                      defaultValue={currentDefaults?.custoFixoMarketingAmount ?? 0}
+                      fractionDigits={2}
+                      className="w-full"
+                      onChange={(e: any) => setCustoFixoMarketing(Number(e?.target?.value ?? 0))}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label>Tráfego pago (R$)</Label>
+                    <DecimalInput
+                      name="custoFixoTrafegoPagoAmount"
+                      defaultValue={currentDefaults?.custoVariavelMarketingAmount ?? 0}
+                      fractionDigits={2}
+                      className="w-full"
+                      onChange={(e: any) => setCustoFixoTrafegoPago(Number(e?.target?.value ?? 0))}
+                    />
+                  </div>
+                </div>
               </div>
 
-              <div className="flex flex-col gap-2">
+              <Separator className="my-2" />
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between text-sm font-medium text-muted-foreground">
+                  <span className="uppercase">Serviço da dívida</span>
+                  <span className="font-mono font-semibold text-foreground">{formatMoneyString(servicoDividaTotal, 2)}</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="flex flex-col gap-2">
+                    <Label>Parcela financiamento (R$)</Label>
+                    <DecimalInput
+                      name="custoFixoParcelaFinanciamentoAmount"
+                      defaultValue={currentDefaults?.custoFixoParcelaFinanciamentoAmount ?? 0}
+                      fractionDigits={2}
+                      className="w-full"
+                      onChange={(e: any) => setCustoFixoFinanciamento(Number(e?.target?.value ?? 0))}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label>Fatura cartão crédito (R$)</Label>
+                    <DecimalInput
+                      name="custoFixoFaturaCartaoAmount"
+                      defaultValue={currentDefaults?.custoFixoFaturaCartaoAmount ?? 0}
+                      fractionDigits={2}
+                      className="w-full"
+                      onChange={(e: any) => setCustoFixoFaturaCartao(Number(e?.target?.value ?? 0))}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              <div className="flex flex-col gap-2 md:max-w-md">
                 <Label>Outros fixos (R$)</Label>
                 <DecimalInput
                   key={`outros-fixo-${custoFixoOutrosPreview}`}
