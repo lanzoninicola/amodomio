@@ -91,7 +91,9 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     // Base de caixa: receita do mês (já líquida das operadoras) menos custos variáveis manuais
-    const receitaBrutaAmount = num("receitaBrutaAmount");
+    const receitaExtratoBancoAmount = num("receitaExtratoBancoAmount");
+    const receitaDinheiroAmount = num("receitaDinheiroAmount");
+    const receitaBrutaAmount = receitaExtratoBancoAmount + receitaDinheiroAmount;
 
     // Dados informativos (não entram no cálculo)
     const vendaCartaoAmount = num("vendaCartaoAmount");
@@ -107,7 +109,7 @@ export async function action({ request }: ActionFunctionArgs) {
     const custoFixoRetiradaProlaboreAmount = num("custoFixoRetiradaProlaboreAmount");
     const custoFixoRetiradaResultadoAmount = num("custoFixoRetiradaResultadoAmount");
     const custoFixoParcelaFinanciamentoAmount = num("custoFixoParcelaFinanciamentoAmount");
-    const custoFixoMarketingAmount = num("custoFixoMarketingAmount");
+    const custoFixoAssessoriaMarketingAmount = num("custoFixoAssessoriaMarketingAmount");
     const custoFixoFaturaCartaoAmount = num("custoFixoFaturaCartaoAmount");
     const custoFixoTrafegoPagoAmount = num("custoFixoTrafegoPagoAmount");
     const custoFixoTotalAmount = num("custoFixoTotalAmount");
@@ -119,7 +121,7 @@ export async function action({ request }: ActionFunctionArgs) {
         custoFixoRetiradaProlaboreAmount +
         custoFixoRetiradaResultadoAmount +
         custoFixoParcelaFinanciamentoAmount +
-        custoFixoMarketingAmount +
+        custoFixoAssessoriaMarketingAmount +
         custoFixoTrafegoPagoAmount +
         custoFixoFaturaCartaoAmount);
 
@@ -158,6 +160,8 @@ export async function action({ request }: ActionFunctionArgs) {
     const data = {
       referenceMonth,
       referenceYear,
+      receitaExtratoBancoAmount,
+      receitaDinheiroAmount,
       receitaBrutaAmount,
       vendaCartaoAmount,
       vendaCartaoPerc,
@@ -176,7 +180,7 @@ export async function action({ request }: ActionFunctionArgs) {
       custoFixoRetiradaProlaboreAmount,
       custoFixoRetiradaResultadoAmount,
       custoFixoParcelaFinanciamentoAmount,
-      custoFixoMarketingAmount,
+      custoFixoAssessoriaMarketingAmount,
       custoVariavelMarketingAmount: custoFixoTrafegoPagoAmount,
       custoFixoFaturaCartaoAmount,
       custoFixoOutrosAmount,
@@ -237,7 +241,10 @@ function calcTotals(c?: Partial<FinancialMonthlyClose> | null) {
     };
   }
 
-  const receitaBruta = c.receitaBrutaAmount ?? 0;
+  const receitaExtrato = (c as any).receitaExtratoBancoAmount ?? 0;
+  const receitaDinheiro = (c as any).receitaDinheiroAmount ?? 0;
+  const receitaBrutaParts = receitaExtrato + receitaDinheiro;
+  const receitaBruta = receitaBrutaParts > 0 ? receitaBrutaParts : c.receitaBrutaAmount ?? 0;
   const receitaLiquida = c.receitaLiquidaAmount ?? receitaBruta - (c.custoVariavelTotalAmount ?? 0);
 
   const custoFixoTotal =
@@ -247,7 +254,7 @@ function calcTotals(c?: Partial<FinancialMonthlyClose> | null) {
       (c.custoFixoProlaboreAmount ?? 0) +
       (c.custoFixoRetiradaProlaboreAmount ?? c.custoFixoRetiradaLucroAmount ?? 0) +
       (c.custoFixoRetiradaResultadoAmount ?? 0) +
-      (c.custoFixoMarketingAmount ?? 0) +
+      (c.custoFixoAssessoriaMarketingAmount ?? 0) +
       (c.custoVariavelMarketingAmount ?? 0) +
       (c.custoFixoFaturaCartaoAmount ?? 0) +
       (c.custoFixoParcelaFinanciamentoAmount ?? 0) +
@@ -337,7 +344,24 @@ export default function AdminFinanceiroFechamentoMensal() {
     closes[0];
   const totals = calcTotals(currentDefaults);
 
-  const [receitaBruta, setReceitaBruta] = React.useState<number>(currentDefaults?.receitaBrutaAmount ?? 0);
+  const receitaBase = React.useMemo(() => {
+    const extrato = (currentDefaults as any)?.receitaExtratoBancoAmount ?? 0;
+    const dinheiro = (currentDefaults as any)?.receitaDinheiroAmount ?? 0;
+    const receitaBrutaAmount = currentDefaults?.receitaBrutaAmount ?? 0;
+    const hasSplit = (extrato ?? 0) + (dinheiro ?? 0) > 0;
+    return {
+      extrato: hasSplit ? extrato : receitaBrutaAmount,
+      dinheiro: hasSplit ? dinheiro : 0,
+      bruta: receitaBrutaAmount,
+    };
+  }, [currentDefaults]);
+
+  const [receitaExtratoBanco, setReceitaExtratoBanco] = React.useState<number>(
+    receitaBase.extrato,
+  );
+  const [receitaDinheiro, setReceitaDinheiro] = React.useState<number>(
+    receitaBase.dinheiro,
+  );
   const [impostoPerc, setImpostoPerc] = React.useState<number>(currentDefaults?.impostoPerc ?? 0);
   const [vendaCartaoAmount, setVendaCartaoAmount] = React.useState<number>(currentDefaults?.vendaCartaoAmount ?? 0);
   const [taxaCartaoPerc, setTaxaCartaoPerc] = React.useState<number>(currentDefaults?.taxaCartaoPerc ?? 0);
@@ -349,7 +373,7 @@ export default function AdminFinanceiroFechamentoMensal() {
   const [custoFixoRetiradaProlabore, setCustoFixoRetiradaProlabore] = React.useState<number>(currentDefaults?.custoFixoRetiradaProlaboreAmount ?? 0);
   const [custoFixoRetiradaResultado, setCustoFixoRetiradaResultado] = React.useState<number>(currentDefaults?.custoFixoRetiradaResultadoAmount ?? 0);
   const [custoFixoFinanciamento, setCustoFixoFinanciamento] = React.useState<number>(currentDefaults?.custoFixoParcelaFinanciamentoAmount ?? 0);
-  const [custoFixoMarketing, setCustoFixoMarketing] = React.useState<number>(currentDefaults?.custoFixoMarketingAmount ?? 0);
+  const [custoFixoMarketing, setCustoFixoMarketing] = React.useState<number>(currentDefaults?.custoFixoAssessoriaMarketingAmount ?? 0);
   const [custoFixoTrafegoPago, setCustoFixoTrafegoPago] = React.useState<number>(currentDefaults?.custoVariavelMarketingAmount ?? 0);
   const [custoFixoFaturaCartao, setCustoFixoFaturaCartao] = React.useState<number>(currentDefaults?.custoFixoFaturaCartaoAmount ?? 0);
   const [custoFixoTotalEdit, setCustoFixoTotalEdit] = React.useState<number>(currentDefaults?.custoFixoTotalAmount ?? 0);
@@ -359,7 +383,13 @@ export default function AdminFinanceiroFechamentoMensal() {
   const [custoVarTotalEdit, setCustoVarTotalEdit] = React.useState<number>(currentDefaults?.custoVariavelTotalAmount ?? 0);
 
   React.useEffect(() => {
-    setReceitaBruta(currentDefaults?.receitaBrutaAmount ?? 0);
+    const extrato = (currentDefaults as any)?.receitaExtratoBancoAmount ?? 0;
+    const dinheiro = (currentDefaults as any)?.receitaDinheiroAmount ?? 0;
+    const receitaBrutaAmount = currentDefaults?.receitaBrutaAmount ?? 0;
+    const hasSplit = (extrato ?? 0) + (dinheiro ?? 0) > 0;
+
+    setReceitaExtratoBanco(hasSplit ? extrato : receitaBrutaAmount);
+    setReceitaDinheiro(hasSplit ? dinheiro : 0);
     setImpostoPerc(currentDefaults?.impostoPerc ?? 0);
     setVendaCartaoAmount(currentDefaults?.vendaCartaoAmount ?? 0);
     setTaxaCartaoPerc(currentDefaults?.taxaCartaoPerc ?? 0);
@@ -371,7 +401,7 @@ export default function AdminFinanceiroFechamentoMensal() {
     setCustoFixoRetiradaProlabore(currentDefaults?.custoFixoRetiradaProlaboreAmount ?? 0);
     setCustoFixoRetiradaResultado(currentDefaults?.custoFixoRetiradaResultadoAmount ?? 0);
     setCustoFixoFinanciamento(currentDefaults?.custoFixoParcelaFinanciamentoAmount ?? 0);
-    setCustoFixoMarketing(currentDefaults?.custoFixoMarketingAmount ?? 0);
+    setCustoFixoMarketing(currentDefaults?.custoFixoAssessoriaMarketingAmount ?? 0);
     setCustoFixoTrafegoPago(currentDefaults?.custoVariavelMarketingAmount ?? 0);
     setCustoFixoFaturaCartao(currentDefaults?.custoFixoFaturaCartaoAmount ?? 0);
     setCustoFixoTotalEdit(currentDefaults?.custoFixoTotalAmount ?? 0);
@@ -381,6 +411,7 @@ export default function AdminFinanceiroFechamentoMensal() {
     setCustoVarTotalEdit(currentDefaults?.custoVariavelTotalAmount ?? 0);
   }, [currentDefaults?.id, currentDefaults?.referenceMonth, currentDefaults?.referenceYear]);
 
+  const receitaBruta = receitaExtratoBanco + receitaDinheiro;
   const taxaCartaoAmountPreview = vendaCartaoAmount > 0 ? (vendaCartaoAmount * taxaCartaoPerc) / 100 : 0;
   const taxaMarketplaceAmountPreview = vendaMarketplaceAmount > 0 ? (vendaMarketplaceAmount * taxaMarketplacePerc) / 100 : 0;
   const custoFixoTotalPreview = custoFixoTotalEdit;
@@ -562,25 +593,41 @@ export default function AdminFinanceiroFechamentoMensal() {
         <div className="grid grid-cols-1 lg:grid-cols-8 gap-4">
           <Card className="lg:col-span-3" >
             <CardHeader className="flex flex-col gap-1">
-              <div className="flex items-start justify-between gap-2 flex-wrap">
-                <div>
-                  <CardTitle className="text-sm font-semibold">Receita (caixa)</CardTitle>
-                  <p className="text-sm text-muted-foreground">
-                    Use o valor que entrou na conta no mês, já líquido de taxas de cartão e marketplace.
-                  </p>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-semibold">Receita</CardTitle>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <span>Total:</span>
+                  <DecimalInput
+                    name="receitaBrutaAmount"
+                    defaultValue={receitaBruta}
+                    fractionDigits={2}
+                    className="w-48 font-mono text-lg font-semibold"
+                    onChange={(e: any) => setCustoVarTotalEdit(Number(e?.target?.value ?? 0))}
+                    readOnly={true}
+                  />
                 </div>
-
               </div>
+
             </CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="flex flex-col gap-2">
-                <Label>Receita de caixa do mês (R$)</Label>
+                <Label>Receita extrato banco (R$)</Label>
                 <DecimalInput
-                  name="receitaBrutaAmount"
-                  defaultValue={currentDefaults?.receitaBrutaAmount ?? 0}
+                  name="receitaExtratoBancoAmount"
+                  defaultValue={receitaBase.extrato}
                   fractionDigits={2}
                   className="w-full"
-                  onChange={(e: any) => setReceitaBruta(Number(e?.target?.value ?? 0))}
+                  onChange={(e: any) => setReceitaExtratoBanco(Number(e?.target?.value ?? 0))}
+                />
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label>Receita dinheiro (R$)</Label>
+                <DecimalInput
+                  name="receitaDinheiroAmount"
+                  defaultValue={receitaBase.dinheiro}
+                  fractionDigits={2}
+                  className="w-full"
+                  onChange={(e: any) => setReceitaDinheiro(Number(e?.target?.value ?? 0))}
                 />
               </div>
             </CardContent>
@@ -831,8 +878,8 @@ export default function AdminFinanceiroFechamentoMensal() {
                   <div className="flex flex-col gap-2">
                     <Label>Assessoria (R$)</Label>
                     <DecimalInput
-                      name="custoFixoMarketingAmount"
-                      defaultValue={currentDefaults?.custoFixoMarketingAmount ?? 0}
+                      name="custoFixoAssessoriaMarketingAmount"
+                      defaultValue={currentDefaults?.custoFixoAssessoriaMarketingAmount ?? 0}
                       fractionDigits={2}
                       className="w-full"
                       onChange={(e: any) => setCustoFixoMarketing(Number(e?.target?.value ?? 0))}
