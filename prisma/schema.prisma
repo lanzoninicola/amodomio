@@ -498,6 +498,7 @@ model FinancialMonthlyClose {
   receitaExtratoBancoAmount Float @default(0) @map("receita_extrato_banco_amount")
   receitaDinheiroAmount     Float @default(0) @map("receita_dinheiro_amount")
   receitaBrutaAmount     Float @default(0) @map("receita_bruta_amount")
+  faturamentoMensalAmount Float @default(0) @map("faturamento_mensal_amount")
   vendaCartaoAmount      Float @default(0) @map("venda_cartao_amount")
   vendaCartaoPerc        Float @default(0) @map("venda_cartao_perc")
   taxaCartaoPerc         Float @default(0) @map("taxa_cartao_perc")
@@ -544,6 +545,8 @@ model FinancialMonthlyClose {
   margemContribPerc        Float @default(0) @map("margem_contrib_perc")
   resultadoLiquidoAmount   Float @default(0) @map("resultado_liquido_amount")
   resultadoLiquidoPerc     Float @default(0) @map("resultado_liquido_perc")
+
+  notes String? @db.Text @map("notes")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
