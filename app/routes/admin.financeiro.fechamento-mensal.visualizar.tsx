@@ -17,6 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Switch } from "@/components/ui/switch";
 
 import prismaClient from "~/lib/prisma/client.server";
 import formatMoneyString from "~/utils/format-money-string";
@@ -66,12 +67,10 @@ const MAIN_METRICS: MetricRow[] = [
   { key: "custoVariavel", label: "Custo variável total", kind: "money", getValue: (c) => c?.custoVariavelTotal },
   // Margem de contribuição
   { key: "margemContrib", label: "Margem de contribuição", kind: "money", getValue: (c) => c?.margemContrib },
-  { key: "margemContribPerc", label: "Margem de contribuição (%)", kind: "percent", getValue: (c) => c?.margemContribPerc },
   // Custos fixos
   { key: "custoFixo", label: "Custo fixo total", kind: "money", getValue: (c) => c?.custoFixoTotal },
   // Resultado
   { key: "resultadoLiquido", label: "Resultado líquido", kind: "money", getValue: (c) => c?.resultadoLiquido },
-  { key: "resultadoLiquidoPerc", label: "Resultado líquido (%)", kind: "percent", getValue: (c) => c?.resultadoLiquidoPercBruta },
   // Ponto de equilíbrio
   { key: "pontoEquilibrio", label: "Ponto de equilíbrio", kind: "money", getValue: (c) => c?.pontoEquilibrio },
   {
@@ -164,6 +163,7 @@ export default function AdminFinanceiroFechamentoMensalVisualizar() {
 
   const monthsWithData = closes.map((c) => c.referenceMonth);
   const hasData = closes.length > 0 && selectedYear != null;
+  const [showNumericDiffs, setShowNumericDiffs] = React.useState(false);
 
   const normalizedAll = React.useMemo(() => {
     const map: Record<string, NormalizedMonthlyClose> = {};
@@ -188,7 +188,7 @@ export default function AdminFinanceiroFechamentoMensalVisualizar() {
     month: number,
     metric: MetricRow,
   ) => {
-    if (!selectedYear) return { prevMonth: null, prevYear: null };
+    if (!selectedYear) return { prevMonth: null, prevYear: null, prevMonthBase: null, prevYearBase: null };
     const prevMonthKey = month === 1 ? `${selectedYear - 1}-12` : `${selectedYear}-${month - 1}`;
     const prevYearKey = `${selectedYear - 1}-${month}`;
 
@@ -199,6 +199,8 @@ export default function AdminFinanceiroFechamentoMensalVisualizar() {
     return {
       prevMonth: currentValue != null && prevMonthValue != null ? currentValue - prevMonthValue : null,
       prevYear: currentValue != null && prevYearValue != null ? currentValue - prevYearValue : null,
+      prevMonthBase: prevMonthValue ?? null,
+      prevYearBase: prevYearValue ?? null,
     };
   };
 
@@ -272,6 +274,14 @@ export default function AdminFinanceiroFechamentoMensalVisualizar() {
             ) : (
               <p className="text-xs text-muted-foreground">Nenhum fechamento salvo para este ano.</p>
             )}
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span>Mostrar valores absolutos</span>
+              <Switch
+                checked={showNumericDiffs}
+                onCheckedChange={setShowNumericDiffs}
+                className="scale-90"
+              />
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -282,15 +292,15 @@ export default function AdminFinanceiroFechamentoMensalVisualizar() {
               <MetricsTable
                 metrics={TOP_METRICS}
                 monthlyData={monthlyData}
-                monthsWithData={monthsWithData}
                 getDiffs={getDiffs}
+                showNumeric={showNumericDiffs}
               />
               <Separator className="my-4" />
               <MetricsTable
                 metrics={MAIN_METRICS}
                 monthlyData={monthlyData}
-                monthsWithData={monthsWithData}
                 getDiffs={getDiffs}
+                showNumeric={showNumericDiffs}
               />
 
               <Separator className="my-4" />
@@ -308,14 +318,27 @@ export default function AdminFinanceiroFechamentoMensalVisualizar() {
 function MetricsTable({
   metrics,
   monthlyData,
-  monthsWithData,
   getDiffs,
+  showNumeric,
 }: {
   metrics: MetricRow[];
   monthlyData: Record<number, NormalizedMonthlyClose | null>;
-  monthsWithData: number[];
-  getDiffs: (month: number, metric: MetricRow) => { prevMonth: number | null; prevYear: number | null };
+  getDiffs: (month: number, metric: MetricRow) => { prevMonth: number | null; prevYear: number | null; prevMonthBase: number | null; prevYearBase: number | null };
+  showNumeric: boolean;
 }) {
+  const getInlinePercent = (
+    rowKey: string,
+    month: number,
+    data: Record<number, NormalizedMonthlyClose | null>,
+  ): number | null => {
+    const close = data[month];
+    if (!close) return null;
+    if (rowKey === "margemContrib") return close.margemContribPerc ?? null;
+    if (rowKey === "resultadoLiquido") return close.resultadoLiquidoPercBruta ?? null;
+    if (rowKey === "coberturaPe") return close.pontoEquilibrio > 0 ? (close.receitaBruta / close.pontoEquilibrio) * 100 : null;
+    return null;
+  };
+
   return (
     <div className="overflow-x-auto">
       <Table className="min-w-[1100px]">
@@ -335,59 +358,117 @@ function MetricsTable({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {metrics.map((row) => (
-            <TableRow key={row.key}>
-              <TableCell className="bg-background sticky left-0 z-10 text-sm font-semibold">
-                {row.label}
-              </TableCell>
-              {MONTH_OPTIONS.map((month) => {
-                const close = monthlyData[month.value];
-                const rawValue = row.getValue(close);
-                const { prevMonth, prevYear } = getDiffs(month.value, row);
-                return (
-                  <TableCell
-                    key={`${row.key}-${month.value}`}
-                    className="text-right"
-                  >
-                    <div className="flex flex-col items-end gap-1">
-                      <span className="font-mono font-medium text-foreground">
-                        {formatCellValue(rawValue, row.kind)}
-                      </span>
-                      <div className="flex flex-col items-end gap-1 text-[11px]">
-                        <DiffPill diff={prevMonth} kind={row.kind} />
-                        <DiffPill diff={prevYear} kind={row.kind} />
+          {metrics.map((row) => {
+            const isMargem = row.key === "margemContrib";
+            const isResultado = row.key === "resultadoLiquido";
+            const rowBg = isMargem ? "bg-amber-50/60" : isResultado ? "bg-amber-100/60" : "";
+            return (
+              <TableRow key={row.key} className={rowBg}>
+                <TableCell className={`bg-background sticky left-0 z-10 text-sm font-semibold ${rowBg}`}>
+                  {row.label}
+                </TableCell>
+                {MONTH_OPTIONS.map((month) => {
+                  const close = monthlyData[month.value];
+                  const rawValue = row.getValue(close);
+                  const { prevMonth, prevYear, prevMonthBase, prevYearBase } = getDiffs(month.value, row);
+                  const inlinePercent = getInlinePercent(row.key, month.value, monthlyData);
+                  const isCobertura = row.key === "coberturaPe";
+                  const isMargemRow = row.key === "margemContrib";
+                  const isResultadoRow = row.key === "resultadoLiquido";
+                  const isHighlightRow = isMargemRow || isResultadoRow;
+                  const showDiffs = (!inlinePercent || isResultadoRow) && !isCobertura && !isMargemRow;
+                  const showMarginPrevMonth = isMargemRow;
+                  const invertTone = ["custoVariavel", "custoFixo", "pontoEquilibrio"].includes(row.key);
+                  const displayValue = row.kind === "percent" && inlinePercent != null
+                    ? `${inlinePercent.toFixed(2)}%`
+                    : formatCellValue(rawValue, row.kind);
+                  return (
+                    <TableCell
+                      key={`${row.key}-${month.value}`}
+                      className="text-right"
+                    >
+                      <div className="flex flex-col items-end gap-1">
+                        <div className="flex items-center gap-2">
+                          <span className={`font-mono text-foreground ${isHighlightRow ? "font-semibold" : "font-medium"}`}>
+                            {displayValue}
+                          </span>
+                          {inlinePercent != null && row.kind !== "percent" && (
+                            <span className={`text-[11px] text-muted-foreground ${isHighlightRow ? "font-semibold" : ""}`}>
+                              {inlinePercent.toFixed(2)}%
+                            </span>
+                          )}
+                        </div>
+                        {showDiffs && (
+                          <div className="flex flex-col items-end gap-1 text-[11px]">
+                            <DiffPill diff={prevMonth} base={prevMonthBase} kind={row.kind} invert={invertTone} showNumeric={showNumeric} />
+                            <DiffPill diff={prevYear} base={prevYearBase} kind={row.kind} invert={invertTone} showNumeric={showNumeric} />
+                          </div>
+                        )}
+                        {showMarginPrevMonth && (
+                          <div className="flex flex-col items-end gap-1 text-[11px]">
+                            <DiffPill diff={prevMonth} base={prevMonthBase} kind="money" showNumeric={showNumeric} />
+                            {prevMonth != null && (
+                              <span className="text-[11px] text-muted-foreground text-right leading-snug">
+                                {prevMonth < 0 ? "menos" : "mais"} p/ fixos e lucro
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  </TableCell>
-                );
-              })}
-            </TableRow>
-          ))}
+                    </TableCell>
+                  );
+                })}
+              </TableRow>
+            );
+          })}
         </TableBody>
       </Table>
     </div>
   );
 }
 
-function DiffPill({
-  diff,
-  kind,
-}: {
+type DiffPillProps = {
   diff: number | null;
   kind: "money" | "percent";
-}) {
+  invert?: boolean;
+  base?: number | null;
+  showNumeric?: boolean;
+};
+
+const DiffPill = React.forwardRef<HTMLSpanElement, DiffPillProps>(({ diff, kind, invert, base, showNumeric = true }, ref) => {
   if (diff == null) {
-    return <span className="text-muted-foreground">—</span>;
+    return <span ref={ref} className="text-muted-foreground">—</span>;
   }
   const positive = diff > 0;
   const negative = diff < 0;
-  const tone = positive ? "text-emerald-700 bg-emerald-50" : negative ? "text-red-700 bg-red-50" : "text-muted-foreground bg-muted";
+  const tonePositive = invert ? "text-red-700 bg-red-50" : "text-emerald-700 bg-emerald-50";
+  const toneNegative = invert ? "text-emerald-700 bg-emerald-50" : "text-red-700 bg-red-50";
+  const tone = positive ? tonePositive : negative ? toneNegative : "text-muted-foreground bg-muted";
   const arrow = positive ? "▲" : negative ? "▼" : "•";
   const formatted = kind === "percent" ? `${diff.toFixed(2)}%` : formatMoneyString(diff, 2);
+  const percentChange = base != null && base !== 0 ? (diff / base) * 100 : null;
+  const percentTone = percentChange != null
+    ? percentChange > 0
+      ? tonePositive
+      : percentChange < 0
+        ? toneNegative
+        : "text-muted-foreground bg-muted"
+    : "text-muted-foreground bg-muted";
   return (
-    <span className={`inline-flex items-center gap-1 rounded-md px-2 py-1 font-mono ${tone}`}>
+    <span ref={ref} className={`inline-flex items-center gap-1 rounded-md px-2 py-1 ${tone}`}>
       <span aria-hidden>{arrow}</span>
-      <span className="font-semibold">{formatted}</span>
+      {showNumeric && (
+        <span className="font-mono font-semibold">{formatted}</span>
+      )}
+      {percentChange != null && (
+        <span className={`text-[11px] rounded px-1 py-[1px] font-mono font-semibold ${percentTone}`}>
+          {percentChange > 0 ? "+" : ""}{percentChange.toFixed(1)}%
+        </span>
+      )}
+      {!showNumeric && percentChange == null && (
+        <span className="text-[11px] text-muted-foreground">—</span>
+      )}
     </span>
   );
-}
+});
+DiffPill.displayName = "DiffPill";

@@ -1,7 +1,7 @@
 // app/routes/admin.financeiro.fechamento-mensal.tsx
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { Form, Link, useActionData, useLoaderData, useNavigation } from "@remix-run/react";
+import { Form, Link, useActionData, useLoaderData, useNavigation, useSubmit } from "@remix-run/react";
 import { Loader2 } from "lucide-react";
 import * as React from "react";
 
@@ -286,6 +286,8 @@ export default function AdminFinanceiroFechamentoMensal() {
   const { closes, monthlyCloseRepoMissing } = useLoaderData<typeof loader>();
   const action = useActionData<ActionData>();
   const nav = useNavigation();
+  const submit = useSubmit();
+  const formRef = React.useRef<HTMLFormElement>(null);
   const saving = nav.state !== "idle";
   const { toast } = useToast();
 
@@ -500,6 +502,20 @@ export default function AdminFinanceiroFechamentoMensal() {
     });
   }, [action, toast]);
 
+  const handleSaveShortcut = React.useCallback((event: KeyboardEvent) => {
+    if (!(event.ctrlKey || event.metaKey)) return;
+    if (event.key.toLowerCase() !== "s") return;
+    event.preventDefault();
+    if (formHidden || saving) return;
+    if (!formRef.current) return;
+    submit(formRef.current);
+  }, [formHidden, saving, submit]);
+
+  React.useEffect(() => {
+    window.addEventListener("keydown", handleSaveShortcut);
+    return () => window.removeEventListener("keydown", handleSaveShortcut);
+  }, [handleSaveShortcut]);
+
   React.useEffect(() => {
     if (!monthlyCloseRepoMissing) return;
     toast({
@@ -515,6 +531,7 @@ export default function AdminFinanceiroFechamentoMensal() {
       <Form
         method="post"
         className="space-y-6"
+        ref={formRef}
       >
         <input type="hidden" name="intent" value="save" />
 
@@ -611,11 +628,11 @@ export default function AdminFinanceiroFechamentoMensal() {
               </p>
               <div className="flex justify-between">
                 <span>Valor</span>
-                <span className="font-mono">{formatMoneyString(totals.margemContrib, 2)}</span>
+                <span className="font-mono ">{formatMoneyString(totals.margemContrib, 2)}</span>
               </div>
               <div className="flex justify-between">
                 <span>% sobre receita de caixa</span>
-                <span className="font-mono">{totals.margemContribPerc.toFixed(2)}%</span>
+                <span className="font-mono ">{totals.margemContribPerc.toFixed(2)}%</span>
               </div>
             </CardContent>
           </Card>
@@ -636,11 +653,11 @@ export default function AdminFinanceiroFechamentoMensal() {
               </p>
               <div className="flex justify-between">
                 <span>Valor</span>
-                <span className="font-mono">{formatMoneyString(totals.resultadoLiquido, 2)}</span>
+                <span className="font-mono ">{formatMoneyString(totals.resultadoLiquido, 2)}</span>
               </div>
               <div className="flex justify-between">
                 <span>% sobre receita bruta</span>
-                <span className={`font-mono ${totals.resultadoLiquido >= 0 ? "text-green-600" : "text-red-600"}`}>
+                <span className={`font-mono  ${totals.resultadoLiquido >= 0 ? "text-green-600" : "text-red-600"}`}>
                   {totals.resultadoLiquidoPercBruta.toFixed(2)}%
                 </span>
               </div>
@@ -723,7 +740,6 @@ export default function AdminFinanceiroFechamentoMensal() {
                         defaultValue={receitaBruta}
                         fractionDigits={2}
                         className="w-48 font-mono text-lg font-semibold"
-                        onChange={(e: any) => setCustoVarTotalEdit(Number(e?.target?.value ?? 0))}
                         readOnly={true}
                       />
                     </div>
@@ -738,7 +754,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                       defaultValue={receitaExtratoBanco}
                       fractionDigits={2}
                       className="w-full"
-                      onChange={(e: any) => setReceitaExtratoBanco(Number(e?.target?.value ?? 0))}
+                      onValueChange={setReceitaExtratoBanco}
                     />
                   </div>
                   <div className="flex flex-col gap-2">
@@ -748,7 +764,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                       defaultValue={receitaDinheiro}
                       fractionDigits={2}
                       className="w-full"
-                      onChange={(e: any) => setReceitaDinheiro(Number(e?.target?.value ?? 0))}
+                      onValueChange={setReceitaDinheiro}
                     />
                   </div>
                   <div className="md:col-span-2">
@@ -766,7 +782,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                       defaultValue={faturamentoMensal}
                       fractionDigits={2}
                       className="w-full"
-                      onChange={(e: any) => setFaturamentoMensal(Number(e?.target?.value ?? 0))}
+                      onValueChange={setFaturamentoMensal}
                     />
                     <p className="text-xs text-muted-foreground">Registro manual do faturamento. Não entra nos cálculos.</p>
                   </div>
@@ -791,7 +807,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                           defaultValue={taxaCartaoPerc}
                           fractionDigits={2}
                           className="w-full"
-                          onChange={(e: any) => setTaxaCartaoPerc(Number(e?.target?.value ?? 0))}
+                          onValueChange={setTaxaCartaoPerc}
                         />
 
 
@@ -803,7 +819,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                           defaultValue={taxaMarketplacePerc}
                           fractionDigits={2}
                           className="w-full"
-                          onChange={(e: any) => setTaxaMarketplacePerc(Number(e?.target?.value ?? 0))}
+                          onValueChange={setTaxaMarketplacePerc}
                         />
 
                       </div>
@@ -836,7 +852,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                         defaultValue={vendaCartaoAmount}
                         fractionDigits={2}
                         className="w-full"
-                        onChange={(e: any) => setVendaCartaoAmount(Number(e?.target?.value ?? 0))}
+                        onValueChange={setVendaCartaoAmount}
                       />
                     </div>
 
@@ -860,7 +876,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                         defaultValue={vendaMarketplaceAmount}
                         fractionDigits={2}
                         className="w-full"
-                        onChange={(e: any) => setVendaMarketplaceAmount(Number(e?.target?.value ?? 0))}
+                        onValueChange={setVendaMarketplaceAmount}
                       />
                     </div>
 
@@ -930,7 +946,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                         defaultValue={custoVarTotalEdit}
                         fractionDigits={2}
                         className="w-48 font-mono text-lg font-semibold"
-                        onChange={(e: any) => setCustoVarTotalEdit(Number(e?.target?.value ?? 0))}
+                        onValueChange={setCustoVarTotalEdit}
                       />
                     </div>
                   </div>
@@ -943,7 +959,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                       defaultValue={custoVarImpostos}
                       fractionDigits={2}
                       className="w-full"
-                      onChange={(e: any) => setCustoVarImpostos(Number(e?.target?.value ?? 0))}
+                      onValueChange={setCustoVarImpostos}
                     />
                   </div>
                   <div className="flex flex-col gap-2">
@@ -953,7 +969,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                       defaultValue={custoVarInsumos}
                       fractionDigits={2}
                       className="w-full"
-                      onChange={(e: any) => setCustoVarInsumos(Number(e?.target?.value ?? 0))}
+                      onValueChange={setCustoVarInsumos}
                     />
                   </div>
                   <div className="flex flex-col gap-2">
@@ -963,7 +979,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                       defaultValue={custoVarEntrega}
                       fractionDigits={2}
                       className="w-full"
-                      onChange={(e: any) => setCustoVarEntrega(Number(e?.target?.value ?? 0))}
+                      onValueChange={setCustoVarEntrega}
                     />
                   </div>
                   <div className="md:col-span-2">
@@ -995,7 +1011,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                         defaultValue={custoFixoTotalEdit}
                         fractionDigits={2}
                         className="w-48 font-mono text-lg font-semibold"
-                        onChange={(e: any) => setCustoFixoTotalEdit(Number(e?.target?.value ?? 0))}
+                        onValueChange={setCustoFixoTotalEdit}
                       />
                     </div>
                   </div>
@@ -1014,7 +1030,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                           defaultValue={custoFixoFolhaFuncionarios}
                           fractionDigits={2}
                           className="w-full"
-                          onChange={(e: any) => setCustoFixoFolhaFuncionarios(Number(e?.target?.value ?? 0))}
+                          onValueChange={setCustoFixoFolhaFuncionarios}
                         />
                       </div>
                       <div className="flex flex-col gap-2">
@@ -1024,7 +1040,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                           defaultValue={custoFixoProlabore}
                           fractionDigits={2}
                           className="w-full"
-                          onChange={(e: any) => setCustoFixoProlabore(Number(e?.target?.value ?? 0))}
+                          onValueChange={setCustoFixoProlabore}
                         />
                       </div>
                       <div className="flex flex-col gap-2">
@@ -1034,7 +1050,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                           defaultValue={custoFixoRetiradaProlabore}
                           fractionDigits={2}
                           className="w-full"
-                          onChange={(e: any) => setCustoFixoRetiradaProlabore(Number(e?.target?.value ?? 0))}
+                          onValueChange={setCustoFixoRetiradaProlabore}
                         />
                       </div>
                       <div className="flex flex-col gap-2">
@@ -1044,7 +1060,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                           defaultValue={custoFixoRetiradaResultado}
                           fractionDigits={2}
                           className="w-full"
-                          onChange={(e: any) => setCustoFixoRetiradaResultado(Number(e?.target?.value ?? 0))}
+                          onValueChange={setCustoFixoRetiradaResultado}
                         />
                       </div>
                       <div className="flex flex-col gap-2">
@@ -1054,7 +1070,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                           defaultValue={custoFixoPlanoSaude}
                           fractionDigits={2}
                           className="w-full"
-                          onChange={(e: any) => setCustoFixoPlanoSaude(Number(e?.target?.value ?? 0))}
+                          onValueChange={setCustoFixoPlanoSaude}
                         />
                       </div>
                     </div>
@@ -1073,7 +1089,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                           defaultValue={custoFixoMarketing}
                           fractionDigits={2}
                           className="w-full"
-                          onChange={(e: any) => setCustoFixoMarketing(Number(e?.target?.value ?? 0))}
+                          onValueChange={setCustoFixoMarketing}
                         />
                       </div>
                       <div className="flex flex-col gap-2">
@@ -1083,7 +1099,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                           defaultValue={custoFixoTrafegoPago}
                           fractionDigits={2}
                           className="w-full"
-                          onChange={(e: any) => setCustoFixoTrafegoPago(Number(e?.target?.value ?? 0))}
+                          onValueChange={setCustoFixoTrafegoPago}
                         />
                       </div>
                     </div>
@@ -1104,7 +1120,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                           defaultValue={custoFixoFinanciamento}
                           fractionDigits={2}
                           className="w-full"
-                          onChange={(e: any) => setCustoFixoFinanciamento(Number(e?.target?.value ?? 0))}
+                          onValueChange={setCustoFixoFinanciamento}
                         />
                       </div>
                       <div className="flex flex-col gap-2">
@@ -1114,7 +1130,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                           defaultValue={custoFixoFaturaCartao}
                           fractionDigits={2}
                           className="w-full"
-                          onChange={(e: any) => setCustoFixoFaturaCartao(Number(e?.target?.value ?? 0))}
+                          onValueChange={setCustoFixoFaturaCartao}
                         />
                       </div>
                     </div>
