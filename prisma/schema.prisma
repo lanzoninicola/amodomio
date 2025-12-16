@@ -537,6 +537,9 @@ model FinancialMonthlyClose {
   custoVariavelTotalAmount     Float @default(0) @map("custo_variavel_total_amount")
   custoVariavelMarketingAmount Float @default(0) @map("custo_variavel_marketing_amount")
 
+  entradasNaoOperacionaisAmount Float @default(0) @map("entrada_nao_operacional_amount")
+  saidasNaoOperacionaisAmount   Float @default(0) @map("saida_nao_operacional_amount")
+
   custoFixoTotalAmount     Float @default(0) @map("custo_fixo_total_amount")
   custoFixoPerc            Float @default(0) @map("custo_fixo_perc")
   custoVariavelPerc        Float @default(0) @map("custo_variavel_perc")

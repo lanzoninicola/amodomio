@@ -153,6 +153,9 @@ export async function action({ request }: ActionFunctionArgs) {
       ? Number(((impostoAmount / receitaBrutaAmount) * 100).toFixed(2))
       : 0;
 
+    const entradasNaoOperacionaisAmount = num("entradasNaoOperacionaisAmount");
+    const saidasNaoOperacionaisAmount = num("saidasNaoOperacionaisAmount");
+
     const vendaCartaoPerc = receitaBrutaAmount > 0 ? (vendaCartaoAmount / receitaBrutaAmount) * 100 : 0;
     const receitaBrutaCartao = receitaBrutaAmount > 0 ? (receitaBrutaAmount * vendaCartaoPerc) / 100 : 0;
     const taxaCartaoAmount = receitaBrutaCartao > 0 ? (receitaBrutaCartao * taxaCartaoPerc) / 100 : 0;
@@ -178,7 +181,8 @@ export async function action({ request }: ActionFunctionArgs) {
 
     const margemContribAmount = receitaBrutaAmount - custoVariavelTotalAmountNormalized;
     const margemContribPerc = receitaBrutaAmount > 0 ? (margemContribAmount / receitaBrutaAmount) * 100 : 0;
-    const resultadoLiquidoAmount = margemContribAmount - custoFixoTotalAmountNormalized;
+    const resultadoNaoOperacionalAmount = entradasNaoOperacionaisAmount - saidasNaoOperacionaisAmount;
+    const resultadoLiquidoAmount = (margemContribAmount - custoFixoTotalAmountNormalized) + resultadoNaoOperacionalAmount;
     const resultadoLiquidoPerc = receitaBrutaAmount > 0 ? (resultadoLiquidoAmount / receitaBrutaAmount) * 100 : 0;
 
     const data = {
@@ -222,6 +226,8 @@ export async function action({ request }: ActionFunctionArgs) {
       pontoEquilibrioAmount,
       margemContribAmount,
       margemContribPerc,
+      entradasNaoOperacionaisAmount,
+      saidasNaoOperacionaisAmount,
       resultadoLiquidoAmount,
       resultadoLiquidoPerc,
       notes: notes || null,
@@ -337,6 +343,8 @@ export default function AdminFinanceiroFechamentoMensal() {
   const [custoVarEntrega, setCustoVarEntrega] = React.useState<number>(currentDefaults?.custoVariavelEntregaAmount ?? 0);
   const [custoVarImpostos, setCustoVarImpostos] = React.useState<number>(currentDefaults?.custoVariavelImpostosAmount ?? 0);
   const [custoVarTotalEdit, setCustoVarTotalEdit] = React.useState<number>(currentDefaults?.custoVariavelTotalAmount ?? 0);
+  const [entradasNaoOperacionais, setEntradasNaoOperacionais] = React.useState<number>((currentDefaults as any)?.entradasNaoOperacionaisAmount ?? 0);
+  const [saidasNaoOperacionais, setSaidasNaoOperacionais] = React.useState<number>((currentDefaults as any)?.saidasNaoOperacionaisAmount ?? 0);
   const [notes, setNotes] = React.useState<string>(currentDefaults?.notes ?? "");
   const [loadStatus, setLoadStatus] = React.useState<"idle" | "loading" | "ok" | "notfound">("idle");
   const [isSwitchingPeriod, setIsSwitchingPeriod] = React.useState(false);
@@ -363,6 +371,8 @@ export default function AdminFinanceiroFechamentoMensal() {
     setCustoVarEntrega(0);
     setCustoVarImpostos(0);
     setCustoVarTotalEdit(0);
+    setEntradasNaoOperacionais(0);
+    setSaidasNaoOperacionais(0);
     setNotes("");
   }, []);
 
@@ -394,6 +404,8 @@ export default function AdminFinanceiroFechamentoMensal() {
     setCustoVarEntrega(close?.custoVariavelEntregaAmount ?? 0);
     setCustoVarImpostos(close?.custoVariavelImpostosAmount ?? 0);
     setCustoVarTotalEdit(close?.custoVariavelTotalAmount ?? 0);
+    setEntradasNaoOperacionais((close as any)?.entradasNaoOperacionaisAmount ?? 0);
+    setSaidasNaoOperacionais((close as any)?.saidasNaoOperacionaisAmount ?? 0);
     setNotes(close?.notes ?? "");
   }, []);
 
@@ -459,7 +471,8 @@ export default function AdminFinanceiroFechamentoMensal() {
   const marketingTotal = custoFixoMarketing + custoFixoTrafegoPago;
   const servicoDividaTotal = custoFixoFinanciamento + custoFixoFaturaCartao;
   const margemContribPreview = receitaBruta - custoVariavelTotalPreview;
-  const resultadoLiquidoPreview = margemContribPreview - custoFixoTotalPreview;
+  const resultadoNaoOperacionalPreview = entradasNaoOperacionais - saidasNaoOperacionais;
+  const resultadoLiquidoPreview = (margemContribPreview - custoFixoTotalPreview) + resultadoNaoOperacionalPreview;
   const resultadoLiquidoPercPreview = receitaBruta > 0 ? (resultadoLiquidoPreview / receitaBruta) * 100 : 0;
   const coberturaPreview = totals.pontoEquilibrio > 0 ? (totals.receitaBruta / totals.pontoEquilibrio) * 100 : 0;
   const diferencaFaturamentoReceitaBruta = faturamentoMensal - receitaBruta;
@@ -654,6 +667,12 @@ export default function AdminFinanceiroFechamentoMensal() {
               <div className="flex justify-between">
                 <span>Valor</span>
                 <span className="font-mono ">{formatMoneyString(totals.resultadoLiquido, 2)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Ajuste não operacional</span>
+                <span className="font-mono ">
+                  {formatMoneyString(totals.entradasNaoOperacionais - totals.saidasNaoOperacionais, 2)}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span>% sobre receita bruta</span>
@@ -1156,7 +1175,51 @@ export default function AdminFinanceiroFechamentoMensal() {
 
             </div>
 
-
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold">Movimentos não operacionais</CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  Entradas/saídas fora da operação do mês. Elas ajustam diretamente o resultado líquido.
+                </p>
+              </CardHeader>
+              <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                <div className="flex flex-col gap-2">
+                  <Label>Entradas não operacionais (R$)</Label>
+                  <DecimalInput
+                    name="entradasNaoOperacionaisAmount"
+                    defaultValue={entradasNaoOperacionais}
+                    fractionDigits={2}
+                    className="w-full"
+                    onValueChange={setEntradasNaoOperacionais}
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label>Saídas não operacionais (R$)</Label>
+                  <DecimalInput
+                    name="saidasNaoOperacionaisAmount"
+                    defaultValue={saidasNaoOperacionais}
+                    fractionDigits={2}
+                    className="w-full"
+                    onValueChange={setSaidasNaoOperacionais}
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <Label>Impacto no resultado (R$)</Label>
+                  <DecimalInput
+                    key={`impacto-nao-operacional-${resultadoNaoOperacionalPreview}`}
+                    name="resultadoNaoOperacionalPreview"
+                    defaultValue={resultadoNaoOperacionalPreview}
+                    fractionDigits={2}
+                    className="w-full bg-muted text-muted-foreground font-mono"
+                    disabled
+                    readOnly
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Entradas menos saídas; somado ao lucro/prejuízo operacional.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
 
             <div className="flex justify-end">
               <Button type="submit" disabled={saving}>

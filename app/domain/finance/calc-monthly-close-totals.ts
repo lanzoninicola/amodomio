@@ -5,6 +5,8 @@ export type MonthlyCloseTotals = {
   receitaLiquida: number;
   custoFixoTotal: number;
   custoVariavelTotal: number;
+  entradasNaoOperacionais: number;
+  saidasNaoOperacionais: number;
   margemContrib: number;
   margemContribPerc: number;
   resultadoLiquido: number;
@@ -21,6 +23,8 @@ export function calcMonthlyCloseTotals(
       receitaLiquida: 0,
       custoFixoTotal: 0,
       custoVariavelTotal: 0,
+      entradasNaoOperacionais: 0,
+      saidasNaoOperacionais: 0,
       margemContrib: 0,
       margemContribPerc: 0,
       resultadoLiquido: 0,
@@ -72,6 +76,9 @@ export function calcMonthlyCloseTotals(
       (c.custoVariavelImpostosAmount ?? 0) +
       (c.custoVariavelOutrosAmount ?? 0));
 
+  const entradasNaoOperacionais = (c as any).entradasNaoOperacionaisAmount ?? 0;
+  const saidasNaoOperacionais = (c as any).saidasNaoOperacionaisAmount ?? 0;
+
   const margemContrib =
     c.margemContribAmount ??
     receitaBruta - custoVariavelTotal;
@@ -81,7 +88,7 @@ export function calcMonthlyCloseTotals(
 
   const resultadoLiquido =
     c.resultadoLiquidoAmount ??
-    margemContrib - custoFixoTotal;
+    (margemContrib - custoFixoTotal) + entradasNaoOperacionais - saidasNaoOperacionais;
   const resultadoLiquidoPercBruta =
     c.resultadoLiquidoPerc ??
     (receitaBruta > 0 ? (resultadoLiquido / receitaBruta) * 100 : 0);
@@ -96,6 +103,8 @@ export function calcMonthlyCloseTotals(
     receitaLiquida,
     custoFixoTotal,
     custoVariavelTotal,
+    entradasNaoOperacionais,
+    saidasNaoOperacionais,
     margemContrib,
     margemContribPerc,
     resultadoLiquido,

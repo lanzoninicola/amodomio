@@ -65,10 +65,18 @@ const MAIN_METRICS: MetricRow[] = [
   { key: "receitaBruta", label: "Receita bruta (caixa)", kind: "money", getValue: (c) => c?.receitaBruta },
   // Custos variáveis
   { key: "custoVariavel", label: "Custo variável total", kind: "money", getValue: (c) => c?.custoVariavelTotal },
+
   // Margem de contribuição
   { key: "margemContrib", label: "Margem de contribuição", kind: "money", getValue: (c) => c?.margemContrib },
   // Custos fixos
   { key: "custoFixo", label: "Custo fixo total", kind: "money", getValue: (c) => c?.custoFixoTotal },
+  // Resultado não operacional (entra antes do resultado líquido)
+  {
+    key: "resultadoNaoOperacional",
+    label: "Resultado não operacional",
+    kind: "money",
+    getValue: (c) => (c ? (c.entradasNaoOperacionais ?? 0) - (c.saidasNaoOperacionais ?? 0) : null),
+  },
   // Resultado
   { key: "resultadoLiquido", label: "Resultado líquido", kind: "money", getValue: (c) => c?.resultadoLiquido },
   // Ponto de equilíbrio
@@ -343,6 +351,7 @@ function MetricsTable({
     let total = 0;
     let count = 0;
     let hasValue = false;
+    const valuesForAverage: number[] = [];
 
     MONTH_OPTIONS.forEach((month) => {
       const close = monthlyData[month.value];
@@ -356,11 +365,18 @@ function MetricsTable({
       hasValue = true;
       total += value;
       if (value !== 0) count += 1;
+      if (value !== 0) valuesForAverage.push(value);
     });
+
+    const recentValues = valuesForAverage.slice(-3);
+    const recentAverage = recentValues.length > 0
+      ? recentValues.reduce((acc, val) => acc + val, 0) / recentValues.length
+      : null;
 
     return {
       total: hasValue ? total : null,
       average: count > 0 ? total / count : null,
+      lastThreeAverage: recentAverage,
     };
   };
 
@@ -455,6 +471,11 @@ function MetricsTable({
                     <span className="text-[11px] text-muted-foreground">
                       Média: {totals.average != null
                         ? (row.kind === "percent" ? `${totals.average.toFixed(2)}%` : formatMoneyString(totals.average, 2))
+                        : "—"}
+                    </span>
+                    <span className="text-[11px] text-muted-foreground">
+                      Média 3m: {totals.lastThreeAverage != null
+                        ? (row.kind === "percent" ? `${totals.lastThreeAverage.toFixed(2)}%` : formatMoneyString(totals.lastThreeAverage, 2))
                         : "—"}
                     </span>
                   </div>
