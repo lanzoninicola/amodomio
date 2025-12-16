@@ -148,6 +148,16 @@ function formatCellValue(
   return formatMoneyString(value, 2);
 }
 
+function getNumericValue(value: number | string | null | undefined, kind: MetricRow["kind"]) {
+  if (value == null) return null;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (kind === "percent") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
 export default function AdminFinanceiroFechamentoMensalVisualizar() {
   const { closes, years, selectedYear, monthlyCloseRepoMissing, allCloses } = useLoaderData<typeof loader>();
   const submit = useSubmit();
@@ -173,16 +183,6 @@ export default function AdminFinanceiroFechamentoMensalVisualizar() {
     });
     return map;
   }, [allCloses]);
-
-  const getNumericValue = (value: number | string | null | undefined, kind: MetricRow["kind"]) => {
-    if (value == null) return null;
-    if (typeof value === "number") return value;
-    if (kind === "percent") {
-      const parsed = Number(value);
-      return Number.isFinite(parsed) ? parsed : null;
-    }
-    return null;
-  };
 
   const getDiffs = (
     month: number,
@@ -339,9 +339,34 @@ function MetricsTable({
     return null;
   };
 
+  const calculateTotals = (row: MetricRow) => {
+    let total = 0;
+    let count = 0;
+    let hasValue = false;
+
+    MONTH_OPTIONS.forEach((month) => {
+      const close = monthlyData[month.value];
+      const inlinePercent = getInlinePercent(row.key, month.value, monthlyData);
+      const rawValue = row.getValue(close);
+      const value = row.kind === "percent"
+        ? inlinePercent ?? getNumericValue(rawValue, row.kind)
+        : getNumericValue(rawValue, row.kind);
+
+      if (value == null) return;
+      hasValue = true;
+      total += value;
+      if (value !== 0) count += 1;
+    });
+
+    return {
+      total: hasValue ? total : null,
+      average: count > 0 ? total / count : null,
+    };
+  };
+
   return (
     <div className="overflow-x-auto">
-      <Table className="min-w-[1100px]">
+      <Table className="min-w-[1200px]">
         <TableHeader>
           <TableRow>
             <TableHead className="w-56 bg-background sticky left-0 z-20">Indicador</TableHead>
@@ -355,16 +380,17 @@ function MetricsTable({
                 </div>
               </TableHead>
             ))}
+            <TableHead className="text-center">Total / Média</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {metrics.map((row) => {
             const isMargem = row.key === "margemContrib";
             const isResultado = row.key === "resultadoLiquido";
-            const rowBg = isMargem ? "bg-amber-50/60" : isResultado ? "bg-amber-100/60" : "";
+            const totals = calculateTotals(row);
             return (
-              <TableRow key={row.key} className={rowBg}>
-                <TableCell className={`bg-background sticky left-0 z-10 text-sm font-semibold ${rowBg}`}>
+              <TableRow key={row.key}>
+                <TableCell className={`bg-background sticky left-0 z-10 text-sm ${isMargem || isResultado ? "font-semibold" : ""}`}>
                   {row.label}
                 </TableCell>
                 {MONTH_OPTIONS.map((month) => {
@@ -376,6 +402,9 @@ function MetricsTable({
                   const isMargemRow = row.key === "margemContrib";
                   const isResultadoRow = row.key === "resultadoLiquido";
                   const isHighlightRow = isMargemRow || isResultadoRow;
+                  const numericValue = getNumericValue(rawValue, row.kind);
+                  const isNegativeResult = isResultadoRow && numericValue != null && numericValue < 0;
+                  const valueTone = isNegativeResult ? "text-red-600" : "text-foreground";
                   const showDiffs = (!inlinePercent || isResultadoRow) && !isCobertura && !isMargemRow;
                   const showMarginPrevMonth = isMargemRow;
                   const invertTone = ["custoVariavel", "custoFixo", "pontoEquilibrio"].includes(row.key);
@@ -389,7 +418,7 @@ function MetricsTable({
                     >
                       <div className="flex flex-col items-end gap-1">
                         <div className="flex items-center gap-2">
-                          <span className={`font-mono text-foreground ${isHighlightRow ? "font-semibold" : "font-medium"}`}>
+                          <span className={`font-mono ${valueTone} ${isHighlightRow ? "font-semibold" : "font-medium"}`}>
                             {displayValue}
                           </span>
                           {inlinePercent != null && row.kind !== "percent" && (
@@ -418,6 +447,18 @@ function MetricsTable({
                     </TableCell>
                   );
                 })}
+                <TableCell className="text-right" key={`${row.key}-totals`}>
+                  <div className="flex flex-col items-end gap-1">
+                    <span className={`font-mono ${isMargem || isResultado ? "font-semibold" : "font-medium"} ${isResultado && totals.total != null && totals.total < 0 ? "text-red-600" : "text-foreground"}`}>
+                      {formatCellValue(totals.total, row.kind)}
+                    </span>
+                    <span className="text-[11px] text-muted-foreground">
+                      Média: {totals.average != null
+                        ? (row.kind === "percent" ? `${totals.average.toFixed(2)}%` : formatMoneyString(totals.average, 2))
+                        : "—"}
+                    </span>
+                  </div>
+                </TableCell>
               </TableRow>
             );
           })}
@@ -446,7 +487,8 @@ const DiffPill = React.forwardRef<HTMLSpanElement, DiffPillProps>(({ diff, kind,
   const tone = positive ? tonePositive : negative ? toneNegative : "text-muted-foreground bg-muted";
   const arrow = positive ? "▲" : negative ? "▼" : "•";
   const formatted = kind === "percent" ? `${diff.toFixed(2)}%` : formatMoneyString(diff, 2);
-  const percentChange = base != null && base !== 0 ? (diff / base) * 100 : null;
+  // Use absolute base to avoid flipping the sign when comparing with a negative prior value (e.g. -2k -> +7k).
+  const percentChange = base != null && base !== 0 ? (diff / Math.abs(base)) * 100 : null;
   const percentTone = percentChange != null
     ? percentChange > 0
       ? tonePositive
