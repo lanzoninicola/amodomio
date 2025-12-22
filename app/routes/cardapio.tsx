@@ -109,7 +109,7 @@ export default function CardapioWeb() {
 
     return (
         <>
-            <BannerFechado />
+            {/* <BannerFechado /> */}
             <CardapioHeader />
             <div className="md:m-auto md:max-w-6xl">
                 {/* {currentPage === "other" && <CompanyInfo />} */}
