@@ -182,7 +182,7 @@ function CardapioHeader() {
 
                     <Link to={GLOBAL_LINKS.cardapioPublic.href} className="flex col-span-2">
                         <div className="px-4 -py-3">
-                            <Logo color="black" onlyText={true} className="w-[120px] h-[30px] md:w-[150px] md:h-[50px]" tagline={false} />
+                            <Logo color="black" onlyText={true} className="w-[120px] h-[30px] md:w-[150px] md:h-[50px]" tagline={false} showSantaHat />
                         </div>
                     </Link>
 

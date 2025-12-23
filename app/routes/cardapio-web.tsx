@@ -217,7 +217,7 @@ function CardapioHeader({ items, tags }: CardapioHeaderProps) {
                     </WebsiteNavigationSidebar>
 
                     <Link to="/cardapio-web" className="flex justify-center">
-                        <Logo color="black" className="w-[60px]" tagline={false} />
+                        <Logo color="black" className="w-[60px]" tagline={false} showSantaHat />
                     </Link>
                     <div className="flex justify-end items-center cursor-pointer" onClick={() => setShowSearch(!showSearch)}>
                         <SearchIcon />
