@@ -20,6 +20,7 @@ import GLOBAL_LINKS from "~/domain/website-navigation/global-links.constant";
 import PUBLIC_WEBSITE_NAVIGATION_ITEMS from "~/domain/website-navigation/public/public-website.nav-links";
 import prismaClient from "~/lib/prisma/client.server";
 import { cn } from "~/lib/utils";
+import { parseBooleanSetting } from "~/utils/parse-boolean-setting";
 
 
 /**
@@ -64,16 +65,28 @@ export const meta: MetaFunction = ({ data }) => {
 
 export async function loader({ request }: LoaderFunctionArgs) {
 
-    const fazerPedidoPublicURL = await prismaClient.cardapioSetting.findFirst({
-        where: {
-            key: "cardapio.fazer_pedido.public.url"
-        }
-    })
+    const requestedKeys = [
+        "cardapio.fazer_pedido.public.url",
+        "cardapio.aviso_loja_fechada.yesno",
+    ] as const;
 
-    const url = fazerPedidoPublicURL?.value ?? GLOBAL_LINKS.cardapioFallbackURL.href
+    const cardapioSettings = await prismaClient.cardapioSetting.findMany({
+        where: { key: { in: [...requestedKeys] } },
+        select: { key: true, value: true },
+    });
+
+    const settingsMap = cardapioSettings.reduce<Record<string, string | null>>((acc, setting) => {
+        acc[setting.key] = setting.value;
+        return acc;
+    }, {});
+
+    const fPUrl = settingsMap[requestedKeys[0]] ?? GLOBAL_LINKS.cardapioFallbackURL.href;
+
+    const showLojaFechadaMessage = parseBooleanSetting(settingsMap[requestedKeys[1]], true);
 
     return defer({
-        fazerPedidoPublicURL: Promise.resolve(url)
+        fazerPedidoPublicURL: fPUrl,
+        showLojaFechadaMessage,
     })
 
 }
@@ -97,6 +110,8 @@ export default function CardapioWeb() {
             ? "single"
             : "other";
 
+    const { showLojaFechadaMessage } = useLoaderData<typeof loader>()
+
     // const sessionId = useClientSessionId();
 
     // // Controle de renderização no cliente
@@ -109,7 +124,7 @@ export default function CardapioWeb() {
 
     return (
         <>
-            <BannerFechado />
+            {showLojaFechadaMessage && <BannerFechado />}
             <CardapioHeader />
             <div className="md:m-auto md:max-w-6xl">
                 {/* {currentPage === "other" && <CompanyInfo />} */}
@@ -167,7 +182,7 @@ function CardapioHeader() {
 
                     <Link to={GLOBAL_LINKS.cardapioPublic.href} className="flex col-span-2">
                         <div className="px-4 -py-3">
-                            <Logo color="black" onlyText={true} className="w-[120px] h-[30px] md:w-[150px] md:h-[50px]" tagline={false} />
+                            <Logo color="black" onlyText={true} className="w-[120px] h-[30px] md:w-[150px] md:h-[50px]" tagline={false} showSantaHat />
                         </div>
                     </Link>
 
