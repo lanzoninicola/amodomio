@@ -1,6 +1,6 @@
 import { InstagramLogoIcon } from "@radix-ui/react-icons";
 import { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
-import { Await, Link, Outlet, defer, matchPath, useLoaderData, useLocation } from "@remix-run/react";
+import { Await, Link, Outlet, defer, useLoaderData } from "@remix-run/react";
 import { ArrowRight, Divide, Donut, Info, Instagram, LayoutTemplate, MapPin, Proportions, SearchIcon, User, Users } from "lucide-react";
 import React, { ReactNode, Suspense, useEffect, useState } from "react";
 
@@ -21,6 +21,8 @@ import PUBLIC_WEBSITE_NAVIGATION_ITEMS from "~/domain/website-navigation/public/
 import prismaClient from "~/lib/prisma/client.server";
 import { cn } from "~/lib/utils";
 import { parseBooleanSetting } from "~/utils/parse-boolean-setting";
+import { PushOptIn } from "~/domain/push/components/push-opt-in";
+import useCurrentPage from "~/hooks/use-current-page";
 
 
 /**
@@ -87,6 +89,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     return defer({
         fazerPedidoPublicURL: fPUrl,
         showLojaFechadaMessage,
+        vapidPublicKey: process.env.VAPID_PUBLIC_KEY ?? null,
     })
 
 }
@@ -95,22 +98,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 
 export default function CardapioWeb() {
-    const location = useLocation();
-    const pathname = location?.pathname;
+    const currentPage = useCurrentPage();
 
-    const searchPagePath = "/cardapio/buscar";
-    const singleItemPattern = "/cardapio/:id";
-
-    const isSearchPage = pathname === searchPagePath;
-    const isSingleItemPage = matchPath(singleItemPattern, pathname);
-
-    const currentPage = isSearchPage
-        ? "busca"
-        : isSingleItemPage
-            ? "single"
-            : "other";
-
-    const { showLojaFechadaMessage } = useLoaderData<typeof loader>()
+    const { showLojaFechadaMessage, vapidPublicKey } = useLoaderData<typeof loader>()
 
     // const sessionId = useClientSessionId();
 
@@ -126,9 +116,11 @@ export default function CardapioWeb() {
         <>
             {showLojaFechadaMessage && <BannerFechado />}
             <CardapioHeader />
+
             <div className="md:m-auto md:max-w-6xl">
                 {/* {currentPage === "other" && <CompanyInfo />} */}
                 <Outlet />
+
             </div>
             {currentPage === "other" && <CardapioFooter />}
         </>
@@ -167,9 +159,9 @@ function BannerFechado() {
 
 
 function CardapioHeader() {
+    const currentPage = useCurrentPage()
     const [showSearch, setShowSearch] = useState(false)
-    const { fazerPedidoPublicURL } = useLoaderData<typeof loader>()
-
+    const { fazerPedidoPublicURL, vapidPublicKey } = useLoaderData<typeof loader>()
 
     return (
         <header className="fixed top-0 w-full z-10 md:max-w-6xl md:-translate-x-1/2 md:left-1/2 " >
@@ -272,6 +264,7 @@ function CardapioHeader() {
                 </div>
 
             </ScrollingBanner>
+            {currentPage === "other" && <PushOptIn vapidPublicKey={vapidPublicKey} />}
 
         </header>
     )
