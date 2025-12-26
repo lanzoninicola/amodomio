@@ -96,7 +96,7 @@ export function PushOptIn({ vapidPublicKey, forceShow = false }: Props) {
   if (!vapidPublicKey || !shouldShow) return null;
 
   return (
-    <div className="flex justify-center px-2">
+    <div className="flex justify-center px-2 bg-white">
       <div className="w-full max-w-2xl overflow-hidden rounded-lg bg-gradient-to-br text-slate-900 shadow-md ring-1 ring-white/50">
         <div className="flex flex-col divide-y divide-white/40">
           <div className="flex items-start gap-3 px-5 py-5 sm:px-6 sm:py-6">
@@ -140,7 +140,7 @@ export function PushOptIn({ vapidPublicKey, forceShow = false }: Props) {
             >
               {status === "done" && <Check className="mr-2 h-4 w-4" />}
               {status === "working" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {status === "done" ? "Manter ativo" : status === "working" ? "Ativando..." : "Manter..."}
+              {status === "done" ? "Notificações ativas" : status === "working" ? "Ativando..." : "Ativar notificações"}
             </Button>
 
 
