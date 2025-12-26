@@ -54,12 +54,13 @@ export function PushOptIn({ vapidPublicKey, forceShow = false }: Props) {
       });
   }, []);
 
-  const buttonLabel = useMemo(() => {
-    if (status === "done") return "Ativado";
-    if (status === "working") return "Ativando...";
-    if (isBlocked) return "Permissão negada";
-    return "Quero receber";
-  }, [isBlocked, status]);
+  const displayTime = useMemo(() => {
+    try {
+      return new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    } catch {
+      return "";
+    }
+  }, []);
 
   async function handleSubscribe() {
     if (isBlocked) {
@@ -95,56 +96,77 @@ export function PushOptIn({ vapidPublicKey, forceShow = false }: Props) {
   if (!vapidPublicKey || !shouldShow) return null;
 
   return (
-    <div className="relative bg-slate-50 px-4">
+    <div className="flex justify-center px-2">
+      <div className="w-full max-w-2xl overflow-hidden rounded-lg bg-gradient-to-br text-slate-900 shadow-md ring-1 ring-white/50">
+        <div className="flex flex-col divide-y divide-white/40">
+          <div className="flex items-start gap-3 px-5 py-5 sm:px-6 sm:py-6">
+            <div className="relative">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-200/90 shadow-md ring-1 ring-amber-100">
+                {status === "done" ? <Check className="h-6 w-6 text-amber-900" /> : <Bell className="h-6 w-6 text-amber-900" />}
+              </div>
+              <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-fuchsia-200 text-[11px] font-bold shadow ring-2 ring-white">
+                6
+              </span>
+            </div>
 
-      <div className="flex flex-col gap-3 pr-4 py-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-start gap-3">
-          <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-white/10 ring-1 ring-white/15">
-            {status === "done" ? <Check className="h-5 w-5" /> : <Bell className="h-5 w-5" />}
+            <div className="flex-1 space-y-1">
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-lg font-semibold leading-tight">Receber notificações</p>
+                {displayTime && <span className="text-sm font-semibold text-slate-700/80">{displayTime}</span>}
+              </div>
+
+              <p className="text-xs leading-snug text-slate-800/90">
+                Aproveite alertas rápidos sobre novidades e ofertas relâmpago. Nada de spam, só o essencial.
+              </p>
+            </div>
           </div>
 
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
 
-              <p className="text-sm font-semibold uppercase">Receber notificações</p>
 
-            </div>
-            <p className="text-xs ">Avisa quando abrirmos e para promos relâmpago. Sem spam.</p>
-            {supportError && <p className="text-xs text-red-500">{supportError}</p>}
+          <div className="grid grid-cols-2 gap-x-4">
+            <Button
+              variant="ghost"
+              className="font-neue h-12 text-slate-600 transition hover:bg-slate-900/10"
+              onClick={handleDismiss}
+              type="button"
+            >
+              {isBlocked ? "Fechar" : "Agora não"}
+            </Button>
+            <Button
+              className="h-12 rounded-lg"
+              onClick={handleSubscribe}
+              disabled={status === "working" || status === "done" || !!supportError}
+              variant="secondary"
+            >
+              {status === "done" && <Check className="mr-2 h-4 w-4" />}
+              {status === "working" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {status === "done" ? "Manter ativo" : status === "working" ? "Ativando..." : "Manter..."}
+            </Button>
+
+
+          </div>
+        </div>
+
+        {(error || supportError || isBlocked || status === "done") && (
+          <div className="space-y-1 px-6 pb-5 text-[12px] leading-snug text-slate-800/90">
+            {supportError && <p className="text-red-700">{supportError}</p>}
             {isBlocked && (
-              <p className="text-xs text-amber-600">
+              <p className="text-amber-800">
                 Permissão negada no navegador. Libere em &ldquo;Configurações do site &gt; Notificações&rdquo; para ativar.
               </p>
             )}
+            {error && (
+              <p className="text-red-700" role="status">
+                {error}
+              </p>
+            )}
+            {status === "done" && !error && (
+              <p className="text-emerald-900" role="status">
+                Tudo certo! Você receberá notificações.
+              </p>
+            )}
           </div>
-        </div>
-
-        <div className="flex w-full flex-col gap-2 sm:w-auto sm:min-w-[180px]">
-          <Button
-            className="w-full font-semibold shadow-lg "
-            onClick={handleSubscribe}
-            disabled={status === "working" || status === "done" || !!supportError}
-            variant={status === "done" ? "secondary" : "default"}
-          >
-            {status === "done" && <Check className="mr-2 h-4 w-4" />}
-            {status === "working" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {buttonLabel}
-          </Button>
-
-          {error && (
-            <p className="text-[11px] text-red-200" role="status">
-              {error}
-            </p>
-          )}
-          {status === "done" && (
-            <p className="text-[11px] text-emerald-100" role="status">
-              Tudo certo! Você receberá notificações.
-            </p>
-          )}
-          <Button variant="link" className="justify-start px-0 text-xs" onClick={handleDismiss}>
-            Agora não
-          </Button>
-        </div>
+        )}
       </div>
     </div>
   );

@@ -1,10 +1,11 @@
 import { useRouteLoaderData } from "@remix-run/react";
-import { Bell, Check, Inbox, Settings, Trash2 } from "lucide-react";
+import { Bell, Check, Settings, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Separator } from "~/components/ui/separator";
 import { PushOptIn } from "~/domain/push/components/push-opt-in";
 import { useNotificationCenter } from "~/domain/push/notification-center-context";
+import { NotificationFeed } from "~/domain/push/components/notification-feed";
 import { removePushSubscription } from "~/domain/push/push-client";
 import { useToast } from "~/components/ui/use-toast";
 import {
@@ -88,8 +89,8 @@ export default function CardapioNotificationsRoute() {
             </DialogTrigger>
             <DialogContent>
               <DialogHeader className="space-y-2">
-                <DialogTitle>Preferências</DialogTitle>
-                <DialogDescription>Ações rápidas da sua central de notificações.</DialogDescription>
+                <DialogTitle className="font-neue">Preferências</DialogTitle>
+                <DialogDescription className="font-neue">Ações rápidas da sua central de notificações.</DialogDescription>
               </DialogHeader>
               <div className="flex flex-col gap-2">
                 <Button
@@ -99,6 +100,7 @@ export default function CardapioNotificationsRoute() {
                     setPreferencesOpen(false);
                   }}
                   disabled={!unreadCount || !hasItems}
+                  className="font-neue"
                 >
                   <Check className="mr-2 h-4 w-4" />
                   Marcar todas como lidas
@@ -110,15 +112,17 @@ export default function CardapioNotificationsRoute() {
                     setPreferencesOpen(false);
                   }}
                   disabled={!hasItems}
+                  className="font-neue"
                 >
                   <Trash2 className="mr-2 h-4 w-4" />
                   Limpar todas
                 </Button>
-                <Separator />
+                <Separator className="mt-8 mb-2" />
                 <Button
                   variant="destructive"
                   onClick={handleRemoveSubscription}
                   disabled={removingSubscription}
+                  className="font-neue tracking-wide"
                 >
                   {removingSubscription ? "Removendo..." : "Parar de receber notificações"}
                 </Button>
@@ -131,55 +135,14 @@ export default function CardapioNotificationsRoute() {
 
       <Separator className="my-4" />
 
-      {!initialized && <p className="text-sm text-muted-foreground">Sincronizando com seu navegador…</p>}
-
-      {initialized && !hasItems && (
-        <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-          <Inbox className="h-8 w-8" />
-          <p>Ainda não há notificações.</p>
-        </div>
-      )}
-
-      {hasItems && (
-        <div className="flex flex-col gap-3">
-          {items.map((item) => (
-            <article
-              key={item.id}
-              className="rounded-lg border border-slate-200/60 bg-white/80 p-3 shadow-sm"
-              role="article"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-sm font-semibold leading-tight">{item.title}</h2>
-                    {!item.read && (
-                      <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
-                        Novo
-                      </span>
-                    )}
-                  </div>
-                  {item.body && <p className="text-xs text-slate-600">{item.body}</p>}
-                  <p className="text-[11px] text-slate-500">{new Date(item.ts).toLocaleString("pt-BR")}</p>
-                </div>
-                <div className="flex flex-col gap-1">
-                  {item.url && (
-                    <Button asChild variant="link" size="sm" className="h-7 px-0 text-xs">
-                      <a href={item.url} onClick={() => markAsRead(item.id)}>
-                        Abrir
-                      </a>
-                    </Button>
-                  )}
-                  {!item.read && (
-                    <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => markAsRead(item.id)}>
-                      Marcar lida
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </article>
-          ))}
-        </div>
-      )}
+      <NotificationFeed
+        items={items}
+        initialized={initialized}
+        onMarkAsRead={markAsRead}
+        loadingMessage="Sincronizando com seu navegador…"
+        emptyTitle="Ainda não há notificações."
+        emptyDescription="Quando chegarem, suas notificações aparecem aqui."
+      />
     </section>
   );
 }
