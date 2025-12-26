@@ -25,6 +25,7 @@ import { MenuItemVisibilityFilterOption } from "./admin.gerenciamento.cardapio.m
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "~/components/ui/accordion";
 import prismaClient from "~/lib/prisma/client.server";
 import { MenuItemsFilters } from "~/domain/cardapio/components/menu-items-filters/menu-items-filters";
+import { MoneyInput } from "~/components/money-input/MoneyInput";
 
 
 
@@ -281,7 +282,7 @@ export default function AdminGerenciamentoCardapioCostManagementIndex() {
                                                                                                                 <div className="flex flex-col gap-1 items-center">
                                                                                                                     <div className="flex flex-col gap-y-0">
                                                                                                                         <span className="text-muted-foreground text-[11px]">Novo custo:</span>
-                                                                                                                        <NumericInput name="costAmount" defaultValue={record.costAmount} />
+                                                                                                                        <MoneyInput name="costAmount" defaultValue={record.costAmount} className="w-full font-mono" />
                                                                                                                     </div>
 
                                                                                                                     <SubmitButton
@@ -299,7 +300,10 @@ export default function AdminGerenciamentoCardapioCostManagementIndex() {
                                                                                                                 <div className="flex flex-col gap-1 items-center">
                                                                                                                     <div className="flex flex-col gap-y-0 w-ma">
                                                                                                                         <span className="text-muted-foreground text-[11px]">Valor proposto</span>
-                                                                                                                        <NumericInput name="recommendedCostAmount" defaultValue={record.recommendedCostAmount} readOnly />
+                                                                                                                        <MoneyInput name="recommendedCostAmount" defaultValue={record.recommendedCostAmount}
+                                                                                                                            className="w-full font-mono"
+                                                                                                                            readOnly
+                                                                                                                        />
                                                                                                                     </div>
                                                                                                                     <SubmitButton
                                                                                                                         actionName="menu-item-cost-variation-upsert-proposed-input"

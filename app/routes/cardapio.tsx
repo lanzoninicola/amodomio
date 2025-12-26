@@ -1,8 +1,8 @@
 import { InstagramLogoIcon } from "@radix-ui/react-icons";
 import { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
-import { Await, Link, Outlet, defer, matchPath, useLoaderData, useLocation } from "@remix-run/react";
-import { ArrowRight, Divide, Donut, Info, Instagram, LayoutTemplate, MapPin, Proportions, SearchIcon, User, Users } from "lucide-react";
-import { ReactNode, Suspense, useState } from "react";
+import { Await, Link, Outlet, defer, useLoaderData } from "@remix-run/react";
+import { ArrowRight, Bell, Divide, Donut, Info, Instagram, LayoutTemplate, MapPin, Proportions, SearchIcon, User, Users } from "lucide-react";
+import React, { ReactNode, Suspense, useEffect, useState } from "react";
 
 import ItalyFlag from "~/components/italy-flag/italy-flag";
 import Loading from "~/components/loading/loading";
@@ -20,6 +20,10 @@ import GLOBAL_LINKS from "~/domain/website-navigation/global-links.constant";
 import PUBLIC_WEBSITE_NAVIGATION_ITEMS from "~/domain/website-navigation/public/public-website.nav-links";
 import prismaClient from "~/lib/prisma/client.server";
 import { cn } from "~/lib/utils";
+import { parseBooleanSetting } from "~/utils/parse-boolean-setting";
+import { PushOptIn } from "~/domain/push/components/push-opt-in";
+import useCurrentPage from "~/hooks/use-current-page";
+import { NotificationCenterProvider, useNotificationCenter } from "~/domain/push/notification-center-context";
 
 
 /**
@@ -64,16 +68,29 @@ export const meta: MetaFunction = ({ data }) => {
 
 export async function loader({ request }: LoaderFunctionArgs) {
 
-    const fazerPedidoPublicURL = await prismaClient.cardapioSetting.findFirst({
-        where: {
-            key: "cardapio.fazer_pedido.public.url"
-        }
-    })
+    const requestedKeys = [
+        "cardapio.fazer_pedido.public.url",
+        "cardapio.aviso_loja_fechada.yesno",
+    ] as const;
 
-    const url = fazerPedidoPublicURL?.value ?? GLOBAL_LINKS.cardapioFallbackURL.href
+    const cardapioSettings = await prismaClient.cardapioSetting.findMany({
+        where: { key: { in: [...requestedKeys] } },
+        select: { key: true, value: true },
+    });
+
+    const settingsMap = cardapioSettings.reduce<Record<string, string | null>>((acc, setting) => {
+        acc[setting.key] = setting.value;
+        return acc;
+    }, {});
+
+    const fPUrl = settingsMap[requestedKeys[0]] ?? GLOBAL_LINKS.cardapioFallbackURL.href;
+
+    const showLojaFechadaMessage = parseBooleanSetting(settingsMap[requestedKeys[1]], true);
 
     return defer({
-        fazerPedidoPublicURL: Promise.resolve(url)
+        fazerPedidoPublicURL: fPUrl,
+        showLojaFechadaMessage,
+        vapidPublicKey: process.env.VAPID_PUBLIC_KEY ?? null,
     })
 
 }
@@ -82,20 +99,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 
 export default function CardapioWeb() {
-    const location = useLocation();
-    const pathname = location?.pathname;
+    const currentPage = useCurrentPage();
 
-    const searchPagePath = "/cardapio/buscar";
-    const singleItemPattern = "/cardapio/:id";
-
-    const isSearchPage = pathname === searchPagePath;
-    const isSingleItemPage = matchPath(singleItemPattern, pathname);
-
-    const currentPage = isSearchPage
-        ? "busca"
-        : isSingleItemPage
-            ? "single"
-            : "other";
+    const { showLojaFechadaMessage, vapidPublicKey } = useLoaderData<typeof loader>()
 
     // const sessionId = useClientSessionId();
 
@@ -108,28 +114,59 @@ export default function CardapioWeb() {
     // if (!isClient) return null; // ou um spinner, se quiser
 
     return (
-        <>
+        <NotificationCenterProvider>
+            {showLojaFechadaMessage && <BannerFechado />}
             <CardapioHeader />
+
             <div className="md:m-auto md:max-w-6xl">
                 {/* {currentPage === "other" && <CompanyInfo />} */}
                 <Outlet />
+
             </div>
             {currentPage === "other" && <CardapioFooter />}
-        </>
+        </NotificationCenterProvider>
     );
+}
+
+function shouldShowBanner(date: Date = new Date()) {
+    const day = date.getDay(); // 0 = domingo, 1 = segunda, ... 6 = sábado
+    return day === 1 || day === 2; // mostra apenas segunda e terça
+}
+
+function BannerFechado() {
+
+    const text = "Estamos fechado agora! Nosso horarío de funcionamento: Quarta a domingo, das 18h às 22h"
+    const [isClosed, setIsClosed] = useState<boolean | null>(null);
+
+    useEffect(() => {
+        setIsClosed(shouldShowBanner());
+    }, []);
+
+    if (!isClosed) return null;
+
+    return (
+        <>
+            <ScrollingBanner cnContainer="fixed top-0 inset-x-0 w-screen bg-red-500 z-50" data-element="banner-fechado">
+                <span className="font-neue text-white  font-semibold uppercase tracking-wide">{text}</span>
+            </ScrollingBanner>
+            <ScrollingBanner cnContainer="fixed bottom-0 w-screen bg-red-500 z-50" data-element="banner-fechado">
+                <span className="font-neue text-white font-semibold uppercase tracking-wide">{text}</span>
+            </ScrollingBanner>
+        </>
+    )
 }
 
 
 
 
-
 function CardapioHeader() {
+    const currentPage = useCurrentPage()
     const [showSearch, setShowSearch] = useState(false)
-    const { fazerPedidoPublicURL } = useLoaderData<typeof loader>()
-
+    const { fazerPedidoPublicURL, vapidPublicKey } = useLoaderData<typeof loader>()
+    const { unreadCount } = useNotificationCenter()
 
     return (
-        <header className="fixed top-0 w-full z-50 md:max-w-6xl md:-translate-x-1/2 md:left-1/2 " >
+        <header className="fixed top-0 w-full z-10 md:max-w-6xl md:-translate-x-1/2 md:left-1/2 " >
             <div className="flex flex-col bg-white px-1 pt-2 py-3 h-[50px] md:h-[70px]">
                 <div className="grid grid-cols-3 items-center w-full">
                     {/* <div className="flex gap-1 items-center" onClick={() => setShowSearch(!showSearch)}>
@@ -139,14 +176,27 @@ function CardapioHeader() {
 
                     <Link to={GLOBAL_LINKS.cardapioPublic.href} className="flex col-span-2">
                         <div className="px-4 -py-3">
-                            <Logo color="black" onlyText={true} className="w-[120px] h-[30px] md:w-[150px] md:h-[50px]" tagline={false} />
+                            <Logo color="black" onlyText={true} className="w-[120px] h-[30px] md:w-[150px] md:h-[50px]" tagline={false} showSantaHat />
                         </div>
                     </Link>
 
-                    <div className="w-full flex items-center gap-x-4 justify-end col-span-1">
+                    <div className="w-full flex items-center gap-x-2 justify-end col-span-1">
+                        <Link to="/cardapio/notificacoes" prefetch="intent">
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="relative h-10 w-10 p-0 inline-flex items-center justify-center align-middle"
+                                aria-label="Notificações"
+                            >
+                                <Bell className="h-5 w-5" />
+                                {unreadCount > 0 && (
+                                    <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white" />
+                                )}
+                            </Button>
+                        </Link>
                         <Link to={'buscar'} >
-                            <div className="flex justify-end items-center cursor-pointer" onClick={() => setShowSearch(!showSearch)}>
-                                <SearchIcon color={"black"} />
+                            <div className="flex h-10 w-10 items-center justify-center cursor-pointer" onClick={() => setShowSearch(!showSearch)}>
+                                <SearchIcon color={"black"} className="h-5 w-5" />
                                 {/* <span className="font-neue text-[10px] font-semibold  uppercase text-brand-blue">Pesquisar</span> */}
                             </div>
                         </Link>
@@ -234,6 +284,7 @@ function CardapioHeader() {
                 </div>
 
             </ScrollingBanner>
+            {currentPage === "other" && <PushOptIn vapidPublicKey={vapidPublicKey} />}
 
         </header>
     )
@@ -241,6 +292,12 @@ function CardapioHeader() {
 
 
 const ScrollingBanner = ({ children, cnContainer, style }: { children?: ReactNode, cnContainer?: string, style?: React.CSSProperties }) => {
+    const content = (
+        <div className="flex items-center gap-4 px-6">
+            {children}
+        </div>
+    );
+
     return (
         <div className={
             cn(
@@ -252,9 +309,12 @@ const ScrollingBanner = ({ children, cnContainer, style }: { children?: ReactNod
             style={style}
         >
             <div
-                className="text-center px-10 text-lg font-semibold text-black animate-scrollingText whitespace-nowrap flex"
+                className="text-center text-lg font-semibold text-black animate-scrollingText whitespace-nowrap flex w-max"
             >
-                {children}
+                {content}
+                <div aria-hidden="true">
+                    {content}
+                </div>
             </div>
         </div>
     );
@@ -316,7 +376,9 @@ function CardapioFooter() {
     const { fazerPedidoPublicURL } = useLoaderData<typeof loader>();
 
     return (
-        <div className="fixed bottom-0 w-full h-[70px] bg-white px-4 flex items-center justify-between border-t border-gray-200">
+        <footer className="fixed bottom-0 w-full h-[70px] bg-white px-4 flex items-center justify-between border-t border-gray-200
+        z-10 md:max-w-6xl md:-translate-x-1/2 md:left-1/2
+        ">
             {/* Botão Tamanhos à esquerda */}
             <div className="flex">
                 <CardapioSizesDialog />
@@ -347,7 +409,7 @@ function CardapioFooter() {
             <div className="flex">
                 <CardapioSizesDialog />
             </div>
-        </div>
+        </footer>
     );
 }
 
@@ -561,5 +623,3 @@ export function CardapioSizesDialog() {
         </CardapioFooterMenuItemDialog>
     );
 }
-
-

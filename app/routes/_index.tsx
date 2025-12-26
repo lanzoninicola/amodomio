@@ -40,7 +40,7 @@ export default function HomePage() {
             }>
                 <header className="fixed top-0 left-0 w-screen z-50 transition-all p-4 flex justify-between items-center">
                     <div className="w-[130px] md:w-[150px] ">
-                        <Logo onlyText={true} className="w-full h-full" />
+                        <Logo onlyText={true} className="w-full h-full" showSantaHat />
                     </div>
                     <Link to={GLOBAL_LINKS.cardapioPublic.href} className="hidden md:block" >
                         <div className="bg-black px-2 py-2 rounded-lg w-max flex items-center gap-2">
@@ -417,6 +417,5 @@ function WebsiteActionBar() {
         </div>
     )
 }
-
 
 

@@ -52,7 +52,7 @@ export default function CardapioSearch() {
     const [currentItems, setCurrentItems] = useState<MenuItemWithAssociations[]>([]);
 
     return (
-        <section className="mt-20 p-4">
+        <section className="mt-32 p-4">
 
             <div className="flex flex-col gap-4 mb-6">
                 <Suspense fallback={<Loading />}>
@@ -112,12 +112,12 @@ function SearchFiltersTags({ tags, setSearchedTerm }: {
 }) {
 
     return (
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-3">
             {tags.map(tag => {
 
                 return (
                     <div key={tag.id} className="bg-black p-2 rounded-md flex items-center cursor-pointer" onClick={() => setSearchedTerm(tag.name)}>
-                        <span className="font-neue text-md lg:text-lg text-white uppercase tracking-wide font-semibold">{capitalize(tag.name)}</span>
+                        <span className="font-neue text-xs lg:text-lg text-white uppercase tracking-wide font-semibold">{capitalize(tag.name)}</span>
                     </div>
                 )
             })}

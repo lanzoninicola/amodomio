@@ -7,7 +7,6 @@ import prisma from "~/lib/prisma/client.server";
 import { Prisma } from "@prisma/client";
 
 import {
-  MoneyInput,
   SizeSelector,
   ConfirmDeleteDialog,
   DetailsDialog,
@@ -38,8 +37,15 @@ import {
   getRiderCountByDate,
   predictReadyTimes,
   predictArrivalTimes,
+  computeReadyAtMap,
+  buildTimelineBuckets,
+  PREP_MINUTES_PER_SIZE,
   type MinimalOrderRow,
+  type TimelineBucket,
+  type ReadyAtMap,
+  parseSizeSafe,
 } from "@/domain/kds/delivery-prediction";
+import { calcProductionMinutes } from "@/domain/kds/delivery-prediction/production-time";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -62,12 +68,36 @@ import {
   Unlock,
   CreditCard,
   BadgeDollarSign,
+  Pizza,
+  ChevronUp,
+  ChevronDown,
+  GripVertical,
+  PencilLine,
+  SaveIcon,
+  CrossIcon,
+  X,
+  LogOutIcon,
+  Clock4,
+  Bike,
+  Settings as SettingsIcon,
+  CalendarClock,
 } from "lucide-react";
 import { Separator } from "~/components/ui/separator";
 import { cn } from "~/lib/utils";
 import DeliveryZoneCombobox from "~/domain/kds/components/delivery-zone-combobox";
-import { computeNetRevenueAmount } from "~/domain/finance/compute-net-revenue-amount.server";
+import { computeNetRevenueAmount } from "~/domain/finance/compute-net-revenue-amount";
 import { setOrderStatus } from "~/domain/kds/server/repository.server";
+import { MoneyInput } from "~/components/money-input/MoneyInput";
+import { getAvailableDoughSizes, getDoughStock, normalizeCounts, saveDoughStock, type DoughSizeOption, type DoughStockSnapshot } from "~/domain/kds/dough-stock.server";
+import { Link } from "@remix-run/react";
+import { NumericInput } from "~/components/numeric-input/numeric-input";
+import { ExitIcon } from "@radix-ui/react-icons";
+import { Badge } from "@/components/ui/badge";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import type { DzMap } from "@/domain/kds/delivery-prediction/delivery-time";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 
 /* ===========================
    Meta
@@ -145,6 +175,58 @@ const sizeSummary = (c: SizeCounts) =>
     .filter(k => c[k] > 0)
     .map(k => `${k}:${c[k]}`)
     .join("  ");
+
+function fmtMinutesHHMM(totalMin: number) {
+  const safe = Math.max(0, Math.round(totalMin));
+  const hh = Math.floor(safe / 60)
+    .toString()
+    .padStart(2, "0");
+  const mm = (safe % 60).toString().padStart(2, "0");
+  return `${hh}:${mm}`;
+}
+
+type PredictionSettings = {
+  mode: "real" | "theoretical";
+  prepMinutes: Record<keyof SizeCounts, number>;
+  operatorCount: number;
+};
+
+const DEFAULT_PREDICTION_SETTINGS: PredictionSettings = {
+  mode: "theoretical",
+  prepMinutes: PREP_MINUTES_PER_SIZE,
+  operatorCount: 2,
+};
+
+const SIZE_LABELS: Record<keyof SizeCounts, string> = {
+  F: "Família",
+  M: "Média",
+  P: "Pequena",
+  I: "Individual",
+  FT: "Fatia",
+};
+
+function sumSizes(list: { size?: any }[]): SizeCounts {
+  return list.reduce((acc, item) => {
+    const parsed = parseSize(item?.size);
+    acc.F += parsed.F;
+    acc.M += parsed.M;
+    acc.P += parsed.P;
+    acc.I += parsed.I;
+    acc.FT += parsed.FT;
+    return acc;
+  }, defaultSizeCounts());
+}
+
+function calcRemaining(stock: SizeCounts | null, used: SizeCounts): SizeCounts {
+  const base = stock ?? defaultSizeCounts();
+  return {
+    F: base.F - used.F,
+    M: base.M - used.M,
+    P: base.P - used.P,
+    I: base.I - used.I,
+    FT: base.FT - used.FT,
+  };
+}
 
 /* ===========================
    Loader
@@ -285,6 +367,33 @@ export async function loader({ params }: LoaderFunctionArgs) {
   const pctOfTarget =
     goalTargetAmount > 0 ? Math.min(100, (netAmount / goalTargetAmount) * 100) : 0;
 
+  const doughStock = await getDoughStock(dateInt);
+  const doughUsage = listPromise.then((rows) => sumSizes(rows));
+  const availableSizes = await getAvailableDoughSizes();
+
+  const settingsRow = await prisma.setting.findFirst({
+    where: { context: "kds_prediction", name: "config" },
+  });
+  let predictionSettings = {
+    ...DEFAULT_PREDICTION_SETTINGS,
+    operatorCount: getOperatorCountByDate(dateStr),
+  };
+  if (settingsRow?.value) {
+    try {
+      const parsed = JSON.parse(settingsRow.value);
+      predictionSettings = {
+        mode: parsed?.mode === "theoretical" ? "theoretical" : "real",
+        prepMinutes: {
+          ...PREP_MINUTES_PER_SIZE,
+          ...parsed?.prepMinutes,
+        },
+        operatorCount: Number(parsed?.operatorCount) || getOperatorCountByDate(dateStr),
+      };
+    } catch {
+      // fallback permanece
+    }
+  }
+
   const dashboard: DashboardMeta = {
     grossAmount,
     cardAmount,
@@ -306,6 +415,10 @@ export async function loader({ params }: LoaderFunctionArgs) {
     deliveryZones,
     dzTimes,
     dashboard,
+    doughStock,
+    doughUsage,
+    availableSizes,
+    predictionSettings,
   });
 }
 
@@ -393,6 +506,71 @@ export async function action({ request, params }: ActionFunctionArgs) {
         data: { operationStatus: "REOPENED" },
       });
       return json({ ok: true, status: "REOPENED" });
+    }
+
+    if (_action === "savePredictionSettings") {
+      const modeRaw = String(form.get("mode") ?? "real");
+      const operatorCount = Math.max(1, Number(form.get("operatorCount") ?? 1) || 1);
+      const prepMinutes = {
+        F: Number(form.get("prepF") ?? PREP_MINUTES_PER_SIZE.F) || PREP_MINUTES_PER_SIZE.F,
+        M: Number(form.get("prepM") ?? PREP_MINUTES_PER_SIZE.M) || PREP_MINUTES_PER_SIZE.M,
+        P: Number(form.get("prepP") ?? PREP_MINUTES_PER_SIZE.P) || PREP_MINUTES_PER_SIZE.P,
+        I: Number(form.get("prepI") ?? PREP_MINUTES_PER_SIZE.I) || PREP_MINUTES_PER_SIZE.I,
+        FT: Number(form.get("prepFT") ?? PREP_MINUTES_PER_SIZE.FT) || PREP_MINUTES_PER_SIZE.FT,
+      };
+
+      const payload = {
+        mode: modeRaw === "theoretical" ? "theoretical" : "real",
+        operatorCount,
+        prepMinutes,
+      };
+
+      const existing = await prisma.setting.findFirst({
+        where: { context: "kds_prediction", name: "config" },
+      });
+      if (existing?.id) {
+        await prisma.setting.update({
+          where: { id: existing.id },
+          data: {
+            type: "json",
+            value: JSON.stringify(payload),
+          },
+        });
+      } else {
+        await prisma.setting.create({
+          data: {
+            context: "kds_prediction",
+            name: "config",
+            type: "json",
+            value: JSON.stringify(payload),
+            createdAt: new Date(),
+          },
+        });
+      }
+
+      return json({ ok: true, settings: payload });
+    }
+
+    if (_action === "saveDoughStock") {
+      const counts = normalizeCounts({
+        F: form.get("stockF"),
+        M: form.get("stockM"),
+        P: form.get("stockP"),
+        I: form.get("stockI"),
+        FT: form.get("stockFT"),
+      } as any);
+
+      const adjustment = normalizeCounts({
+        F: form.get("adjustF"),
+        M: form.get("adjustM"),
+        P: form.get("adjustP"),
+        I: form.get("adjustI"),
+        FT: form.get("adjustFT"),
+      } as any);
+
+      const snapshot = await saveDoughStock(dateInt, ymdToUtcNoon(dateStr), counts, adjustment);
+
+      return json({ ok: true, stock: snapshot });
     }
 
     // bloqueia alterações quando fechado
@@ -488,6 +666,32 @@ export async function action({ request, params }: ActionFunctionArgs) {
         I: Number(form.get("sizeI") ?? 0) || 0,
         FT: Number(form.get("sizeFT") ?? 0) || 0,
       };
+
+      const doughStock = await getDoughStock(dateInt);
+      if (doughStock) {
+        const rowsForDay = await prisma.kdsDailyOrderDetail.findMany({
+          where: { dateInt },
+          select: { id: true, size: true },
+        });
+
+        const usedWithoutCurrent = sumSizes(rowsForDay.filter((r) => r.id !== id));
+        const remaining = calcRemaining(doughStock.effective, usedWithoutCurrent);
+
+        const shortages = (Object.keys(sizeCounts) as (keyof SizeCounts)[])
+          .filter((k) => sizeCounts[k] > remaining[k]);
+
+        if (shortages.length > 0) {
+          const sizeOptions = await getAvailableDoughSizes();
+          const labelMap = { ...SIZE_LABELS } as Record<keyof SizeCounts, string>;
+          sizeOptions.forEach((s) => { labelMap[s.key] = s.label || s.key; });
+
+          const msg = shortages
+            .map((k) => `${labelMap[k] ?? k} sem estoque (restam ${Math.max(0, remaining[k])})`)
+            .join("; ");
+
+          return json({ ok: false, error: msg, rowId: id, shortages }, { status: 400 });
+        }
+      }
 
       const amountDecimal = toDecimal(form.get("orderAmount"));
 
@@ -590,6 +794,8 @@ function RowItem({
   nowMs,
   predictions,
   rowFx,
+  sizeLimit,
+  prepMinutesPerSize,
 }: {
   o: OrderRow;
   dateStr: string;
@@ -598,8 +804,14 @@ function RowItem({
   nowMs: number;
   predictions: Map<string, { readyAtMs: number; arriveAtMs: number | null }>;
   rowFx: ReturnType<typeof useFetcher>;
+  sizeLimit?: SizeCounts | null;
+  prepMinutesPerSize: Record<keyof SizeCounts, number>;
 }) {
   const sizeCounts = parseSize(o.size);
+  const prepMinutes = useMemo(
+    () => calcProductionMinutes(sizeCounts, prepMinutesPerSize),
+    [sizeCounts, prepMinutesPerSize]
+  );
 
   // estados por linha
   const [openConfirmId, setOpenConfirmId] = useState(false);
@@ -620,6 +832,11 @@ function RowItem({
   const [sizes, setSizes] = useState<SizeCounts>(sizeCounts);
   const statusText = (o as any).status ?? "pendente";
   const npAt = (o as any).novoPedidoAt ? new Date((o as any).novoPedidoAt as any) : null;
+
+  const rowError =
+    rowFx.data && typeof (rowFx.data as any) === "object" && (rowFx.data as any).rowId === o.id
+      ? ((rowFx.data as any).error as string | null)
+      : null;
 
   const fxState =
     rowFx.state !== "idle" &&
@@ -682,6 +899,7 @@ function RowItem({
               <div className={`origin-center ${readOnly ? "opacity-60 pointer-events-none" : "scale-[0.95]"}`}>
                 <SizeSelector
                   counts={sizes}
+                  limit={sizeLimit ?? undefined}
                   onChange={(next) => {
                     setSizes(next);
                     const formEl = document.getElementById(`row-form-${o.id}`) as HTMLFormElement | null;
@@ -853,6 +1071,11 @@ function RowItem({
             <span className="text-muted-foreground">Criado: </span>
             <span className="font-semibold">{fmtHHMM(npAt as any)}</span>
 
+            <span>
+              <span className="text-muted-foreground">Tempo de preparo: </span>
+              <span className="font-semibold">{fmtMinutesHHMM(prepMinutes)}</span>
+            </span>
+
             {(() => {
               const diffMin = Math.floor((nowMs - npAt.getTime()) / 60000);
               let color = "text-slate-500";
@@ -896,6 +1119,10 @@ function RowItem({
       </div>
 
       <Separator className="my-1" />
+
+      {rowError && (
+        <div className="px-2 pb-1 text-xs text-red-600">{rowError}</div>
+      )}
     </li>
   );
 }
@@ -914,12 +1141,295 @@ function RowsSkeleton() {
 }
 
 /* ===========================
+   Timeline (Sheet)
+   =========================== */
+function TimelineSidebar({
+  buckets,
+  lastReadyAt,
+  nowMs,
+  orderLabels,
+  readyAtMap,
+}: {
+  buckets: TimelineBucket[];
+  lastReadyAt: number | null;
+  nowMs: number;
+  orderLabels: Map<string, string>;
+  readyAtMap: Map<string, number>;
+}) {
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+
+  const slots = useMemo(() => {
+    return buckets
+      .map((b) => {
+        const ids = b.orderIds.filter((id) => !dismissed.has(id));
+        return { ...b, orderIds: ids, count: ids.length };
+      })
+      .filter((b) => b.orderIds.length > 0 || buckets.length <= 0);
+  }, [buckets, dismissed]);
+
+  const handleDismiss = (id: string) => {
+    setDismissed((prev) => {
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+  };
+
+  return (
+    <div className="flex h-full flex-col ">
+      <SheetHeader>
+        <SheetTitle className="flex items-center gap-2 text-lg">
+          <Clock4 className="h-5 w-5 text-blue-700" />
+          Linha do tempo de saída
+        </SheetTitle>
+      </SheetHeader>
+
+      <div className="mt-4 space-y-4 flex-1 flex flex-col">
+        <div className="rounded-lg border bg-slate-50 p-4">
+          <div className="text-sm text-slate-600">Último pedido previsto para sair às:</div>
+          <div className="text-2xl font-semibold text-blue-700 leading-tight">
+            {lastReadyAt ? fmtHHMM(lastReadyAt) : "Nenhum pedido em produção"}
+          </div>
+          <div className="text-xs text-slate-500 mt-1">
+            Baseado no tempo médio por tamanho e nº de operadores. Agora: {fmtHHMM(nowMs)}
+          </div>
+        </div>
+
+        <ScrollArea className="flex-1 pr-3 overflow-y-scroll">
+          <div className="space-y-3 pb-6 h-[calc(100vh-8rem)]">
+            {slots.length === 0 && (
+              <div className="rounded-lg border border-dashed p-4 text-sm text-slate-500 bg-white">
+                Nenhum pedido em produção no momento.
+              </div>
+            )}
+
+            {slots.map((slot) => {
+              const labels = slot.orderIds.map((id) => ({
+                id,
+                label: orderLabels.get(id) ?? "#?",
+                readyAt: readyAtMap.get(id) ?? null,
+              }));
+              const isCurrentSlot = slot.isCurrent;
+
+              return (
+                <div
+                  key={slot.slotStartMs}
+                  className={cn(
+                    "relative p-3 transition-colors border-b-1 mb-2 hover:bg-slate-100",
+                    isCurrentSlot ? "border-emerald-300 bg-emerald-50" : "bg-white"
+                  )}
+                >
+                  <div className="absolute left-3 top-0 bottom-0 border-l border-dashed border-slate-200" aria-hidden />
+
+                  <div className="flex items-center justify-between gap-3 ml-2">
+                    <div className="flex items-center gap-2">
+                      <div className="text-sm font-semibold text-slate-900 font-mono">{slot.label}</div>
+                      {isCurrentSlot && <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" aria-label="Horário atual" />}
+                      {slot.isPast && !slot.isCurrent && (
+                        <span className="text-[11px] uppercase tracking-wide text-slate-400">Passado</span>
+                      )}
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      {slot.count} pedido{slot.count === 1 ? "" : "s"} neste slot
+                    </div>
+                  </div>
+
+                  <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
+                    {labels.length === 0 ? (
+                      <span className="text-xs text-slate-400">Sem pedidos</span>
+                    ) : (
+                      labels.map((l, idx) => (
+                        <Badge
+                          key={`${slot.slotStartMs}-${l.id}-${idx}`}
+                          variant="outline"
+                          className={cn(
+                            "flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold",
+                            isCurrentSlot
+                              ? "border-emerald-400 bg-white text-emerald-700"
+                              : "border-amber-400 bg-amber-50 text-amber-700"
+                          )}
+                        >
+                          <span>{l.label}</span>
+                          {l.readyAt && (
+                            <span className="text-[10px] text-slate-500 font-mono">· {fmtHHMM(l.readyAt)}</span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleDismiss(l.id)}
+                            className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full hover:bg-slate-100"
+                            title="Pedido despachado"
+                          >
+                            <Bike className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      ))
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </ScrollArea>
+      </div>
+    </div>
+  );
+}
+
+type PredictionData = {
+  // Previsão real (considera fila e operadores)
+  realPredictions: Map<string, { readyAtMs: number; arriveAtMs: number | null }>;
+  realReadyMap: ReadyAtMap;
+  realTimelineReadyMap: ReadyAtMap;
+  realTimelineBuckets: TimelineBucket[];
+  realLastReadyAt: number | null;
+
+  // Previsão teórica (fila ideal desde o primeiro pedido)
+  theoreticalPredictions: Map<string, { readyAtMs: number; arriveAtMs: number | null }>;
+  theoreticalReadyMap: ReadyAtMap;
+  theoreticalTimelineReadyMap: ReadyAtMap;
+  theoreticalTimelineBuckets: TimelineBucket[];
+  theoreticalLastReadyAt: number | null;
+
+  orderLabelMap: Map<string, string>;
+};
+
+function computePredictionData(
+  rowsDb: OrderRow[],
+  operatorCount: number,
+  riderCount: number,
+  dzMap: DzMap,
+  nowMs: number,
+  prepMinutesPerSize: Record<keyof SizeCounts, number>
+): PredictionData {
+  const eligible = rowsDb.filter((o) => {
+    const st = (o as any).status ?? "pendente";
+    const npAt = (o as any).novoPedidoAt ?? null;
+    return st !== "pendente" && !!npAt;
+  });
+  const minimal: MinimalOrderRow[] = eligible.map((o) => ({
+    id: o.id,
+    createdAt: (o as any).novoPedidoAt as any,
+    finalizadoAt: (o as any).finalizadoAt ?? null,
+    size: o.size,
+    hasMoto: (o as any).hasMoto ?? null,
+    takeAway: (o as any).takeAway ?? null,
+    deliveryZoneId: (o as any).deliveryZoneId ?? null,
+  }));
+
+  const ready = predictReadyTimes(minimal, operatorCount, nowMs, prepMinutesPerSize);
+  const arrive = predictArrivalTimes(ready, riderCount, dzMap);
+
+  const byId = new Map<string, { readyAtMs: number; arriveAtMs: number | null }>();
+  for (const r of ready) byId.set(r.id, { readyAtMs: r.readyAtMs, arriveAtMs: null });
+  for (const a of arrive) {
+    const cur = byId.get(a.id);
+    if (cur) cur.arriveAtMs = a.arriveAtMs;
+  }
+
+  const orderLabelMap = new Map<string, string>();
+  rowsDb.forEach((o) => {
+    const label = o.commandNumber ? `#${o.commandNumber}` : "VL";
+    orderLabelMap.set(o.id, label);
+  });
+
+  const inProduction = minimal.filter((o) => !o.finalizadoAt);
+
+  const readyMap = computeReadyAtMap({
+    orders: inProduction,
+    operatorCount,
+    prepMinutesPerSize,
+    nowMs,
+  });
+  const baseMs =
+    inProduction.length > 0
+      ? Math.min(
+        ...inProduction.map((o) =>
+          o.createdAt ? new Date(o.createdAt as any).getTime() : Number.POSITIVE_INFINITY
+        )
+      )
+      : nowMs;
+
+  const theoreticalReadyMap = computeReadyAtMap({
+    orders: inProduction,
+    operatorCount,
+    prepMinutesPerSize,
+    nowMs: baseMs,
+  });
+
+  let realLastReadyAt: number | null = null;
+  for (const ts of readyMap.values()) {
+    if (realLastReadyAt === null || ts > realLastReadyAt) realLastReadyAt = ts;
+  }
+
+  let theoreticalLastReadyAt: number | null = null;
+  for (const ts of theoreticalReadyMap.values()) {
+    if (theoreticalLastReadyAt === null || ts > theoreticalLastReadyAt) theoreticalLastReadyAt = ts;
+  }
+
+  const timelineOrders = minimal; // inclui todos os pedidos em produção na timeline
+  const timelineReadyMap = computeReadyAtMap({
+    orders: timelineOrders,
+    operatorCount,
+    prepMinutesPerSize,
+    nowMs,
+  });
+  const theoreticalTimelineReadyMap = computeReadyAtMap({
+    orders: timelineOrders,
+    operatorCount,
+    prepMinutesPerSize,
+    nowMs: baseMs,
+  });
+
+  const theoreticalPredictions = new Map<string, { readyAtMs: number; arriveAtMs: number | null }>();
+  const theoreticalReadyList = minimal.map((o) => ({
+    id: o.id,
+    readyAtMs: theoreticalReadyMap.get(o.id) ?? nowMs,
+    isDelivery: o.takeAway !== true && o.hasMoto === true,
+    dzId: o.deliveryZoneId ?? null,
+  }));
+  const theoreticalArrivals = predictArrivalTimes(theoreticalReadyList, riderCount, dzMap);
+  for (const r of theoreticalReadyList) theoreticalPredictions.set(r.id, { readyAtMs: r.readyAtMs, arriveAtMs: null });
+  for (const a of theoreticalArrivals) {
+    const cur = theoreticalPredictions.get(a.id);
+    if (cur) cur.arriveAtMs = a.arriveAtMs;
+  }
+
+  const timelineBuckets = buildTimelineBuckets(timelineReadyMap, {
+    nowMs,
+    slotMinutes: 30,
+    minSlots: 6,
+  });
+
+  const theoreticalTimelineBuckets = buildTimelineBuckets(theoreticalTimelineReadyMap, {
+    nowMs,
+    slotMinutes: 30,
+    minSlots: 6,
+  });
+
+  return {
+    realPredictions: byId,
+    realReadyMap: readyMap,
+    realTimelineReadyMap: timelineReadyMap,
+    realTimelineBuckets: timelineBuckets,
+    realLastReadyAt,
+    theoreticalPredictions,
+    theoreticalReadyMap,
+    theoreticalTimelineReadyMap,
+    theoreticalTimelineBuckets,
+    theoreticalLastReadyAt,
+    orderLabelMap,
+  };
+}
+
+/* ===========================
    Página (Grid)
    =========================== */
 export default function GridKdsPage() {
-  const { dateStr, items, header, deliveryZones, dzTimes, dashboard } = useLoaderData<typeof loader>();
+  const { dateStr, items, header, deliveryZones, dzTimes, dashboard, doughStock, doughUsage, availableSizes, predictionSettings } = useLoaderData<typeof loader>();
   const listFx = useFetcher();
   const rowFx = useFetcher();
+  const stockFx = useFetcher<{ ok: boolean; stock: DoughStockSnapshot }>();
+  const settingsFx = useFetcher<{ ok: boolean; settings: PredictionSettings }>();
 
   const status = (header?.operationStatus ?? "PENDING") as "PENDING" | "OPENED" | "CLOSED" | "REOPENED";
   const isClosed = status === "CLOSED";
@@ -930,9 +1440,64 @@ export default function GridKdsPage() {
   const [openError, setOpenError] = useState<string | null>(null);
 
   const [channelFilter, setChannelFilter] = useState<string>("");
+  const [timelineOpen, setTimelineOpen] = useState(false);
+  const [predictionMode, setPredictionMode] = useState<"real" | "theoretical">(predictionSettings.mode ?? "theoretical");
+  const [prepMinutesConfig, setPrepMinutesConfig] = useState<Record<keyof SizeCounts, number>>(
+    predictionSettings.prepMinutes ?? PREP_MINUTES_PER_SIZE
+  );
+  const [operatorCountSetting, setOperatorCountSetting] = useState<number>(
+    predictionSettings.operatorCount ?? getOperatorCountByDate(dateStr)
+  );
+  const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
 
   // ← estado do botão de cartão na Venda Livre rápida
   const [vlIsCreditCard, setVlIsCreditCard] = useState(false);
+
+  const stockSnapshot: DoughStockSnapshot | null =
+    (stockFx.data?.stock as DoughStockSnapshot | undefined) ?? (doughStock as DoughStockSnapshot | null);
+  const baseStock = stockSnapshot?.base ?? defaultSizeCounts();
+  const effectiveStock = stockSnapshot?.effective ?? defaultSizeCounts();
+  const [adjustmentDraft, setAdjustmentDraft] = useState<SizeCounts>(effectiveStock);
+  const [editingBar, setEditingBar] = useState(false);
+
+  const sizeLabelMap = useMemo(() => {
+    const base = { ...SIZE_LABELS } as Record<keyof SizeCounts, string>;
+    (availableSizes as DoughSizeOption[]).forEach((s) => {
+      base[s.key] = s.label || s.key;
+    });
+    return base;
+  }, [availableSizes]);
+
+  const [showStockPanel, setShowStockPanel] = useState(() => true);
+  const [floatingTop, setFloatingTop] = useState(160);
+  const [dragging, setDragging] = useState(false);
+
+  useEffect(() => {
+    function onMove(e: MouseEvent) {
+      if (!dragging) return;
+      const next = Math.min(Math.max(80, e.clientY - 30), window.innerHeight - 140);
+      setFloatingTop(next);
+    }
+    function onUp() { setDragging(false); }
+    if (dragging) {
+      window.addEventListener("mousemove", onMove);
+      window.addEventListener("mouseup", onUp);
+    }
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [dragging]);
+
+  useEffect(() => {
+    setAdjustmentDraft(stockSnapshot?.effective ?? defaultSizeCounts());
+  }, [stockSnapshot, dateStr]);
+
+  function setAdjustmentValue(key: keyof SizeCounts, value: number | string) {
+    const numeric = Number(value);
+    const safe = Number.isFinite(numeric) ? Math.max(0, Math.floor(numeric)) : 0;
+    setAdjustmentDraft((prev) => ({ ...prev, [key]: safe }));
+  }
 
   useEffect(() => {
     let t: any;
@@ -961,127 +1526,505 @@ export default function GridKdsPage() {
 
   const nowMs = Date.now();
 
+  const dzMap = useMemo(() => buildDzMap(dzTimes as any), [dzTimes]);
+  const operatorCount = useMemo(() => getOperatorCountByDate(dateStr), [dateStr]);
+  const riderCount = useMemo(() => getRiderCountByDate(dateStr), [dateStr]);
+  const operatorCountActive = operatorCountSetting || operatorCount;
+  const prepMinutesActive = prepMinutesConfig || PREP_MINUTES_PER_SIZE;
+
+  useEffect(() => {
+    setPredictionMode(predictionSettings.mode ?? "real");
+    setPrepMinutesConfig(predictionSettings.prepMinutes ?? PREP_MINUTES_PER_SIZE);
+    setOperatorCountSetting(predictionSettings.operatorCount ?? getOperatorCountByDate(dateStr));
+  }, [predictionSettings, dateStr]);
+
+  useEffect(() => {
+    if (settingsFx.state === "idle" && settingsFx.data?.ok) {
+      const cfg = settingsFx.data.settings;
+      setPredictionMode(cfg.mode ?? "real");
+      setPrepMinutesConfig(cfg.prepMinutes ?? PREP_MINUTES_PER_SIZE);
+      setOperatorCountSetting(cfg.operatorCount ?? getOperatorCountByDate(dateStr));
+      setSettingsDialogOpen(false);
+    }
+  }, [settingsFx.state, settingsFx.data, dateStr]);
+
   // Cores do status de meta
   const statusColor =
     dashboard.status === "hit-target" ? "bg-emerald-50 text-emerald-900 border-emerald-200" :
       dashboard.status === "between" ? "bg-amber-50 text-amber-900 border-amber-200" :
         "bg-rose-50 text-rose-900 border-rose-200";
+  const summaryCardClass = "rounded-2xl border border-slate-200 bg-white shadow-sm p-5 flex flex-col gap-4 h-full";
+  const statusDot =
+    dashboard.status === "hit-target" ? "bg-emerald-500" :
+      dashboard.status === "between" ? "bg-amber-500" :
+        "bg-rose-500";
+  const statusTextColor =
+    dashboard.status === "hit-target" ? "text-emerald-700" :
+      dashboard.status === "between" ? "text-amber-700" :
+        "text-rose-700";
+  const dayStatusBadge =
+    status === "OPENED" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+      status === "REOPENED" ? "bg-amber-50 text-amber-700 border-amber-200" :
+        status === "CLOSED" ? "bg-slate-100 text-slate-700 border-slate-200" :
+          "bg-slate-100 text-slate-700 border-slate-200";
+  const dayStatusLabel =
+    status === "OPENED" ? "Dia aberto" :
+      status === "REOPENED" ? "Dia reaberto" :
+        status === "CLOSED" ? "Dia fechado" :
+          "Aguardando abertura";
 
   return (
-    <div className="space-y-4 mt-12">
+    <div className="space-y-4 mt-6">
       {/* Toolbar topo + Painel-resumo SEM suspense (feedback imediato) */}
-      <div className="flex flex-col gap-y-4 md:grid md:grid-cols-12 items-start">
-        {/* Toolbar topo */}
-        <div className="flex flex-wrap items-center gap-3 col-span-4">
-          {(!header?.id || status === "PENDING") && (
-            <listFx.Form method="post" className="flex items-center gap-2">
-              <input type="hidden" name="_action" value="openDay" />
-              <input type="hidden" name="date" value={dateStr} />
-              <Input name="qty" defaultValue={40} className="h-9 w-20 text-center" />
-              <Button type="submit" variant="default" disabled={listFx.state !== "idle"} className="bg-blue-800">
-                {listFx.state !== "idle" ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin mr-1" /> Abrindo…
-                  </>
-                ) : (
-                  <>
-                    <PlusCircle className="w-4 h-4 mr-1" />
-                    Abrir dia
-                  </>
-                )}
-              </Button>
-            </listFx.Form>
-          )}
 
-          {status === "OPENED" && (
-            <listFx.Form method="post" className="flex items-center gap-2">
-              <input type="hidden" name="_action" value="closeDay" />
-              <input type="hidden" name="date" value={dateStr} />
-              <Button type="submit" variant="secondary">
-                <Lock className="w-4 h-4 mr-2" /> Fechar dia
-              </Button>
-            </listFx.Form>
-          )}
 
-          {status === "REOPENED" && (
-            <>
-              <div className="px-3 py-1 rounded border text-sm bg-amber-50 text-amber-900">
-                Dia reaberto (edição liberada, sem novos registros)
-                <span className="text-xs text-slate-500 ml-2">(Atalho: pressione <b>M</b> para ver o mês)</span>
-              </div>
-              <listFx.Form method="post" className="flex items-center gap-2">
-                <input type="hidden" name="_action" value="closeDay" />
+      <div className="grid gap-4 xl:grid-cols-8 items-stretch">
+        <div className={`${summaryCardClass} xl:col-span-1`}>
+          <div className="flex flex-col items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <CalendarClock className="h-4 w-4" /> Controle do dia
+            </div>
+            <div className={`text-[11px] font-semibold uppercase tracking-wide ${dayStatusBadge} w-full text-center`}>
+              {dayStatusLabel}
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            {(!header?.id || status === "PENDING") && (
+              <listFx.Form method="post" className="flex flex-col sm:flex-row sm:items-center gap-3">
+                <input type="hidden" name="_action" value="openDay" />
                 <input type="hidden" name="date" value={dateStr} />
-                <Button type="submit" variant="secondary">
-                  <Lock className="w-4 h-4 mr-2" /> Fechar dia
-                </Button>
+                <div className="flex flex-col items-center gap-2">
+                  <Button type="submit" variant="default" disabled={listFx.state !== "idle"} className="bg-blue-800 w-full justify-center">
+                    {listFx.state !== "idle" ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin mr-1" /> Abrindo…
+                      </>
+                    ) : (
+                      <>
+                        <PlusCircle className="w-4 h-4 mr-1" />
+                        Abrir dia
+                      </>
+                    )}
+                  </Button>
+                  <NumericInput name="qty" defaultValue={40} className="h-10 w-full text-center" />
+                </div>
               </listFx.Form>
-            </>
-          )}
+            )}
 
-          {status === "CLOSED" && (
-            <>
-              <div className="ml-2 px-3 py-1 rounded border text-sm bg-slate-50 flex items-center gap-2">
-                <Lock className="w-4 h-4" /> Dia fechado (somente leitura)
+            {status === "OPENED" && (
+              <div className="flex flex-col gap-2">
+                <listFx.Form method="post" className="flex flex-wrap items-center gap-2">
+                  <input type="hidden" name="_action" value="closeDay" />
+                  <input type="hidden" name="date" value={dateStr} />
+                  <Button type="submit" variant="secondary" className="w-full">
+                    <Lock className="w-4 h-4 mr-2" /> Fechar dia
+                  </Button>
+                </listFx.Form>
               </div>
-              <listFx.Form method="post" className="flex items-center gap-2">
-                <input type="hidden" name="_action" value="reopenDay" />
-                <input type="hidden" name="date" value={dateStr} />
-                <Button type="submit" variant="ghost">
-                  <Unlock className="w-4 h-4 mr-2" /> Reabrir dia
-                </Button>
-              </listFx.Form>
-            </>
-          )}
+            )}
+
+            {status === "REOPENED" && (
+              <div className="space-y-3">
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                  <div className="font-semibold flex items-center gap-2">
+                    <Unlock className="w-4 h-4" /> Dia reaberto
+                  </div>
+                  <div className="text-xs text-amber-800">
+                    Edição liberada, sem novos registros.{" "}
+                    <span className="text-slate-700">Atalho: pressione <b>M</b> para ver o mês.</span>
+                  </div>
+                </div>
+                <listFx.Form method="post" className="flex items-center gap-2">
+                  <input type="hidden" name="_action" value="closeDay" />
+                  <input type="hidden" name="date" value={dateStr} />
+                  <Button type="submit" variant="secondary" className="w-full">
+                    <Lock className="w-4 h-4 mr-2" /> Fechar dia
+                  </Button>
+                </listFx.Form>
+              </div>
+            )}
+
+            {status === "CLOSED" && (
+              <div className="space-y-3">
+
+                <listFx.Form method="post" className="flex flex-wrap items-center">
+                  <input type="hidden" name="_action" value="reopenDay" />
+                  <input type="hidden" name="date" value={dateStr} />
+                  <Button type="submit" variant="secondary" className="justify-start w-full">
+                    <Unlock className="w-4 h-4 mr-2" /> Reabrir dia
+                  </Button>
+                </listFx.Form>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Painel-resumo de metas e receita */}
-        <div className={cn("rounded-lg border p-3 col-span-8", statusColor)}>
-          <div className="flex items-center gap-2 mb-2">
-            <BadgeDollarSign className="w-5 h-5" />
-            <div className="font-semibold">Meta financeira do dia</div>
-            <div className="text-xs opacity-70 ml-auto">
-              Taxa cartão: {dashboard.cardFeePerc?.toFixed(2)}% · Imposto: {dashboard.taxPerc?.toFixed(2)}% · Taxa Marketplace: {dashboard.marketplaceTaxPerc?.toFixed(2)}%
-            </div>
-          </div>
+        <div className="xl:col-span-7">
+          {/* previsao de saida + cards financeiros */}
+          <Suspense
+            key={`timeline-summary-${dateStr}`}
+            fallback={<div className="rounded-lg border bg-white p-3 text-sm text-slate-500">Carregando previsão de saída…</div>}
+          >
+            <Await resolve={items}>
+              {(rowsDb: OrderRow[]) => {
+                const predictionData = useMemo(
+                  () => computePredictionData(rowsDb, operatorCountActive, riderCount, dzMap, nowMs, prepMinutesActive),
+                  [rowsDb, operatorCountActive, riderCount, dzMap, nowMs, prepMinutesActive]
+                );
+                const activeLastReady =
+                  predictionMode === "real"
+                    ? predictionData.realLastReadyAt
+                    : predictionData.theoreticalLastReadyAt;
+                const activeBuckets =
+                  predictionMode === "real"
+                    ? predictionData.realTimelineBuckets
+                    : predictionData.theoreticalTimelineBuckets;
+                const activeReadyMap =
+                  predictionMode === "real"
+                    ? predictionData.realTimelineReadyMap
+                    : predictionData.theoreticalTimelineReadyMap;
 
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-3 text-sm">
-            <div>
-              <div className="opacity-70">Receita Bruta</div>
-              <div className="font-semibold">{fmtBRL(dashboard.grossAmount)}</div>
-            </div>
-            <div>
-              <div className="opacity-70">Receita Líquida</div>
-              <div className="font-semibold">{fmtBRL(dashboard.netAmount)}</div>
-            </div>
-            <div>
-              <div className="opacity-70">Meta Mínima (dia)</div>
-              <div className="font-semibold">{fmtBRL(dashboard.goalMinAmount)}</div>
-            </div>
-            <div>
-              <div className="opacity-70">Meta Target (dia)</div>
-              <div className="font-semibold">{fmtBRL(dashboard.goalTargetAmount)}</div>
-            </div>
-            <div>
-              <div className="opacity-70">% da Target</div>
-              <div className="font-semibold">{dashboard.pctOfTarget.toFixed(0)}%</div>
-            </div>
-            <div>
-              <div className="opacity-70">Status</div>
-              <div className="font-semibold">
-                {dashboard.status === "hit-target" ? "Atingiu a target" :
-                  dashboard.status === "between" ? "Acima da mínima" :
-                    "Abaixo da mínima"}
-              </div>
-            </div>
-          </div>
+                return (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full items-stretch">
+                    {/* Card previsão */}
+                    <div className={summaryCardClass}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            <Clock4 className="h-4 w-4" /> Previsão de saída
+                          </div>
+                          <p className="text-sm font-semibold text-slate-800">Último pedido</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="text-[11px] font-semibold tracking-wide uppercase">
+                            {predictionMode === "real" ? "Real" : "Teórico"}
+                          </Badge>
+                          <Dialog open={settingsDialogOpen} onOpenChange={setSettingsDialogOpen}>
+                            <DialogTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8">
+                                <SettingsIcon className="h-4 w-4" />
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-3xl">
+                              <DialogHeader>
+                                <DialogTitle>Configurar previsão de saída</DialogTitle>
+                              </DialogHeader>
+                              <settingsFx.Form method="post" className="space-y-6">
+                                <input type="hidden" name="_action" value="savePredictionSettings" />
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 border rounded-lg p-4">
+                                  <div className="space-y-2">
+                                    <Label htmlFor="mode" className="text-sm font-semibold">Modalidade de cálculo</Label>
+                                    <Select name="mode" defaultValue={predictionMode}>
+                                      <SelectTrigger id="mode">
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="real">Real (fila + operadores a partir de agora)</SelectItem>
+                                        <SelectItem value="theoretical">Teórico (fila ideal desde o primeiro pedido)</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                    <p className="text-[11px] text-slate-600">
+                                      Real: usa o backlog atual com operadores. Teórico: reinicia a fila no horário do primeiro pedido.
+                                    </p>
+                                  </div>
+                                  <div className="space-y-2">
+                                    <Label htmlFor="operatorCount" className="text-sm font-semibold">Nº de operadores</Label>
+                                    <Input
+                                      id="operatorCount"
+                                      name="operatorCount"
+                                      type="number"
+                                      min={1}
+                                      defaultValue={operatorCountActive}
+                                    />
+                                    <p className="text-[11px] text-slate-600">Usado em ambos os modos.</p>
+                                  </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                                  {(["F", "M", "P", "I", "FT"] as (keyof SizeCounts)[]).map((k) => (
+                                    <div key={k} className="space-y-1">
+                                      <Label htmlFor={`prep-${k}`}>Tempo {k} (min)</Label>
+                                      <Input
+                                        id={`prep-${k}`}
+                                        name={`prep${k}`}
+                                        type="number"
+                                        min={1}
+                                        defaultValue={prepMinutesActive[k]}
+                                      />
+                                    </div>
+                                  ))}
+                                </div>
+
+                                <DialogFooter className="gap-2">
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    onClick={() => setSettingsDialogOpen(false)}
+                                  >
+                                    Cancelar
+                                  </Button>
+                                  <Button type="submit" disabled={settingsFx.state !== "idle"}>
+                                    {settingsFx.state !== "idle" ? (
+                                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                    ) : null}
+                                    Salvar
+                                  </Button>
+                                </DialogFooter>
+                              </settingsFx.Form>
+                            </DialogContent>
+                          </Dialog>
+                        </div>
+                      </div>
+
+                      <div className="flex items-baseline gap-3">
+                        <div className="text-5xl font-black text-slate-900 tabular-nums">{activeLastReady ? fmtHHMM(activeLastReady) : "--:--"}</div>
+                        <span className="text-[11px] uppercase tracking-wide text-slate-500 font-semibold">hora prevista</span>
+                      </div>
+
+
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="font-semibold"
+                          onClick={() => setTimelineOpen(true)}
+                          disabled={!activeBuckets.length}
+                        >
+                          Ver linha do tempo
+                        </Button>
+                        <div className="text-[11px] text-slate-500">
+                          Operadores considerados: <span className="font-semibold text-slate-700">{operatorCountActive}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Card financeiro */}
+                    <div className={summaryCardClass}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          <BadgeDollarSign className="h-4 w-4" /> Meta financeira do dia
+                        </div>
+                        <Badge variant="outline" className="text-[11px] font-semibold uppercase tracking-wide">
+                          Receita
+                        </Badge>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-center space-y-1">
+                          <div className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Receita Líquida</div>
+                          <div className="text-3xl font-extrabold text-emerald-700 tabular-nums">{fmtBRL(dashboard.netAmount)}</div>
+                        </div>
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-center space-y-1">
+                          <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Receita Bruta</div>
+                          <div className="text-3xl font-bold text-slate-800 tabular-nums">{fmtBRL(dashboard.grossAmount)}</div>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-slate-600">
+                        <span className="font-semibold text-slate-700">Taxas</span>
+                        <span>Cartão {dashboard.cardFeePerc?.toFixed(2)}%</span>
+                        <span>Imposto {dashboard.taxPerc?.toFixed(2)}%</span>
+                        <span>Marketplace {dashboard.marketplaceTaxPerc?.toFixed(2)}%</span>
+                      </div>
+
+                    </div>
+
+                    {/* Card status */}
+                    <div className={cn(summaryCardClass, statusColor)}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide">
+                          <span className={`inline-flex h-2.5 w-2.5 rounded-full ${statusDot}`} aria-hidden />
+                          Status do dia
+                        </div>
+                        <Badge variant="outline" className="text-[11px] font-semibold uppercase tracking-wide bg-white/70">
+                          {dashboard.pctOfTarget.toFixed(0)}% da Target
+                        </Badge>
+                      </div>
+                      <div className={`text-3xl font-black leading-tight ${statusTextColor} tabular-nums`}>
+                        {dashboard.status === "hit-target"
+                          ? "Acima da meta"
+                          : dashboard.status === "between"
+                            ? "Acima da mínima"
+                            : "Abaixo da mínima"}
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="rounded-lg border border-white/60 bg-white/80 px-3 py-2">
+                          <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-500">Meta Mínima (dia)</div>
+                          <div className="font-mono text-base text-slate-800 tabular-nums">{fmtBRL(dashboard.goalMinAmount)}</div>
+                        </div>
+                        <div className="rounded-lg border border-white/60 bg-white/80 px-3 py-2">
+                          <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-500">Meta Target (dia)</div>
+                          <div className="font-mono text-base text-slate-800 tabular-nums">{fmtBRL(dashboard.goalTargetAmount)}</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <Sheet open={timelineOpen} onOpenChange={setTimelineOpen}>
+                      <SheetContent side="right" className="sm:max-w-md w-full p-6 h-full flex flex-col">
+                        <TimelineSidebar
+                          buckets={activeBuckets}
+                          lastReadyAt={activeLastReady}
+                          nowMs={nowMs}
+                          orderLabels={predictionData.orderLabelMap}
+                          readyAtMap={activeReadyMap}
+                        />
+                      </SheetContent>
+                    </Sheet>
+                  </div>
+                );
+              }}
+            </Await>
+          </Suspense>
+
         </div>
       </div>
+
+      <Separator className="my-12" />
 
       {/* Venda livre rápida + Filtro de Canal */}
       {(status === "OPENED" || status === "REOPENED") && (
         <>
-          <div className="rounded-lg border p-3 flex flex-wrap items-center justify-between gap-3">
+
+          {/* Barra contador do estoque */}
+          <Suspense fallback={null}>
+            <Await resolve={doughUsage}>
+              {(used: SizeCounts) => {
+                const effectiveCounts = stockSnapshot?.effective ?? defaultSizeCounts();
+                const baseCounts = baseStock ?? defaultSizeCounts();
+                const remaining = calcRemaining(effectiveCounts, used);
+                const ordered = (availableSizes as DoughSizeOption[]) ?? [];
+                const manual = effectiveCounts;
+                const hasManualInfo = (["F", "M", "P", "I", "FT"] as (keyof SizeCounts)[])
+                  .some((k) => manual[k] > 0);
+                const manualText = ordered
+                  .map(({ key, abbr }) => ({ key, abbr, value: manual[key] ?? 0 }))
+                  .filter((item) => item.value > 0)
+                  .map((item) => `${item.abbr || item.key}: ${item.value}`)
+                  .join(" · ");
+
+                function chipClasses(k: keyof SizeCounts) {
+                  const init = effectiveCounts[k];
+                  if (init <= 0) return "border border-slate-200 text-slate-500 bg-white";
+                  const ratio = remaining[k] / init;
+                  if (remaining[k] === 0) return "bg-rose-500 text-white"; // crítico
+                  if (remaining[k] <= 2) return "bg-amber-400 text-slate-900"; // alerta
+                  if (remaining[k] < 3) return "border border-rose-500 text-rose-600 bg-white";
+                  return "bg-emerald-500 text-white"; // ok
+                }
+
+                return (
+                  <div
+                    className="fixed right-5 z-40"
+                    style={{ top: `${floatingTop}px` }}
+                  >
+                    <stockFx.Form
+                      method="post"
+                      className="rounded-full border bg-white shadow-lg px-3 py-2 flex items-center gap-3 backdrop-blur"
+                      onSubmit={() => setEditingBar(false)}
+                    >
+                      <input type="hidden" name="_action" value="saveDoughStock" />
+                      <input type="hidden" name="date" value={dateStr} />
+
+                      <div
+                        className="flex items-center justify-center w-7 h-7 rounded text-slate-600 hover:bg-slate-200 cursor-grab active:cursor-grabbing"
+                        onMouseDown={(e) => { setDragging(true); e.preventDefault(); }}
+                        role="presentation"
+                      >
+                        <GripVertical className="w-4 h-4" />
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {ordered.map(({ key, label, abbr }) => (
+                          <div key={key} className="flex flex-col items-center gap-1 min-w-[60px]">
+                            <input type="hidden" name={`stock${key}`} value={baseCounts[key]} />
+                            <input type="hidden" name={`adjust${key}`} value={adjustmentDraft[key]} />
+
+                            <div
+                              className={`w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-semibold ${chipClasses(key)}`}
+                              title={`${label}: ${Math.max(0, remaining[key])}`}
+                            >
+                              {abbr || key} {Math.max(0, remaining[key])}
+                            </div>
+
+                            {editingBar && (
+                              <div className="flex items-center gap-0 text-[11px] text-slate-600">
+                                <button
+                                  type="button"
+                                  className="h-6 w-6 rounded-full border border-slate-200 hover:bg-slate-50 font-semibold"
+                                  onClick={() => setAdjustmentValue(key, (adjustmentDraft[key] ?? 0) - 1)}
+                                >
+                                  –
+                                </button>
+                                <NumericInput
+                                  min={0}
+                                  step={1}
+                                  className="h-6 w-12 text-center rounded bg-white text-xs font-semibold border-none"
+                                  value={adjustmentDraft[key]}
+                                  onChange={(e) => setAdjustmentValue(key, e.target.value)}
+                                  aria-label={`Ajuste ${label}`}
+                                />
+                                <button
+                                  type="button"
+                                  className="h-6 w-6 rounded-full border border-slate-200 hover:bg-slate-50"
+                                  onClick={() => setAdjustmentValue(key, (adjustmentDraft[key] ?? 0) + 1)}
+                                >
+                                  +
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* {hasManualInfo && !editingBar && (
+                    <div className="text-[11px] text-slate-500 ml-1">
+                      Saldo manual: {manualText}
+                    </div>
+                  )} */}
+
+                      {editingBar ? (
+                        <div className="flex items-center gap-2">
+                          <Button type="submit" size="sm" variant="secondary" disabled={stockFx.state !== "idle"}>
+                            {stockFx.state !== "idle" ? (
+                              <>
+                                <Loader2 className="w-3 h-3 animate-spin mr-1" /> Salvando…
+                              </>
+                            ) : (
+                              "Salvar"
+                            )}
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setAdjustmentDraft(stockSnapshot?.effective ?? defaultSizeCounts());
+                              setEditingBar(false);
+                            }}
+                          >
+                            Cancelar
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setEditingBar(true)}
+                          className="text-slate-700"
+                        >
+                          <PencilLine className="w-4 h-4 mr-1" />
+                        </Button>
+                      )}
+                    </stockFx.Form>
+                  </div>
+                );
+              }}
+            </Await>
+          </Suspense>
+
+          <div className="flex flex-wrap items-center justify-between gap-3">
             {/* Venda Livre rápida */}
             <div className="flex items-center gap-3">
               <div className="text-sm font-medium">Venda livre (rápida)</div>
@@ -1136,6 +2079,9 @@ export default function GridKdsPage() {
             </div>
           </div>
 
+          <Separator className="my-12" />
+
+
           {/* Cabeçalho */}
           <div className={COLS_HDR + " py-2 px-1"}>
             <div className="text-center">#</div>
@@ -1156,38 +2102,18 @@ export default function GridKdsPage() {
         <Await resolve={items}>
           {(rowsDb: OrderRow[]) => {
             const dup = duplicateCommandNumbers(rowsDb);
+            const globalUsage = useMemo(() => sumSizes(rowsDb), [rowsDb]);
 
-            const dzMap = useMemo(() => buildDzMap(dzTimes as any), [dzTimes]);
-            const operatorCount = useMemo(() => getOperatorCountByDate(dateStr), [dateStr]);
-            const riderCount = useMemo(() => getRiderCountByDate(dateStr), [dateStr]);
+            const predictionData = useMemo(
+              () => computePredictionData(rowsDb, operatorCountActive, riderCount, dzMap, nowMs, prepMinutesActive),
+              [rowsDb, operatorCountActive, riderCount, dzMap, nowMs, prepMinutesActive]
+            );
 
-            const predictions = useMemo(() => {
-              const eligible = rowsDb.filter((o) => {
-                const st = (o as any).status ?? "pendente";
-                const npAt = (o as any).novoPedidoAt ?? null;
-                return st !== "pendente" && !!npAt;
-              });
-              const minimal: MinimalOrderRow[] = eligible.map((o) => ({
-                id: o.id,
-                createdAt: (o as any).novoPedidoAt as any,
-                finalizadoAt: (o as any).finalizadoAt ?? null,
-                size: o.size,
-                hasMoto: (o as any).hasMoto ?? null,
-                takeAway: (o as any).takeAway ?? null,
-                deliveryZoneId: (o as any).deliveryZoneId ?? null,
-              }));
-
-              const ready = predictReadyTimes(minimal, operatorCount, nowMs);
-              const arrive = predictArrivalTimes(ready, riderCount, dzMap);
-
-              const byId = new Map<string, { readyAtMs: number; arriveAtMs: number | null }>();
-              for (const r of ready) byId.set(r.id, { readyAtMs: r.readyAtMs, arriveAtMs: null });
-              for (const a of arrive) {
-                const cur = byId.get(a.id);
-                if (cur) cur.arriveAtMs = a.arriveAtMs;
-              }
-              return byId;
-            }, [rowsDb, operatorCount, riderCount, dzMap, nowMs]);
+            const predictions =
+              predictionMode === "real"
+                ? predictionData.realPredictions
+                : predictionData.theoreticalPredictions;
+            const orderLabels = predictionData.orderLabelMap;
 
             const filteredRows = useMemo(() => {
               if (!channelFilter) return rowsDb;
@@ -1206,18 +2132,34 @@ export default function GridKdsPage() {
 
                 {/* Linhas */}
                 <ul className="space-y-1">
-                  {filteredRows.map((o) => (
-                    <RowItem
-                      key={o.id}
-                      o={o}
-                      dateStr={dateStr}
-                      readOnly={isClosed}
-                      deliveryZones={deliveryZones as any}
-                      nowMs={nowMs}
-                      predictions={predictions}
-                      rowFx={rowFx}
-                    />
-                  ))}
+                  {filteredRows.map((o) => {
+                    const sizeLimit = (() => {
+                      if (!stockSnapshot?.effective) return null;
+                      const currentSize = parseSize(o.size);
+                      return {
+                        F: Math.max(0, stockSnapshot.effective.F - (globalUsage.F - currentSize.F)),
+                        M: Math.max(0, stockSnapshot.effective.M - (globalUsage.M - currentSize.M)),
+                        P: Math.max(0, stockSnapshot.effective.P - (globalUsage.P - currentSize.P)),
+                        I: Math.max(0, stockSnapshot.effective.I - (globalUsage.I - currentSize.I)),
+                        FT: Math.max(0, stockSnapshot.effective.FT - (globalUsage.FT - currentSize.FT)),
+                      } as SizeCounts;
+                    })();
+
+                    return (
+                      <RowItem
+                        key={o.id}
+                        o={o}
+                        dateStr={dateStr}
+                        readOnly={isClosed}
+                        deliveryZones={deliveryZones as any}
+                        nowMs={nowMs}
+                        predictions={predictions}
+                        rowFx={rowFx}
+                        sizeLimit={sizeLimit}
+                        prepMinutesPerSize={prepMinutesActive}
+                      />
+                    );
+                  })}
                 </ul>
               </>
             );

@@ -22,6 +22,9 @@ import OptionTab from "~/components/layout/option-tab/option-tab";
 import MenuItemSwitchActivationSubmit from "~/domain/cardapio/components/menu-item-switch-activation.tsx/menu-item-switch-activation-submit";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { MenuItemSellingPriceVariation } from "@prisma/client";
+import { Badge } from "~/components/ui/badge";
+import formatDecimalPlaces from "~/utils/format-decimal-places";
+import formatMoneyString from "~/utils/format-money-string";
 
 
 export const loader = async () => {
@@ -139,6 +142,8 @@ export default function AdminAtendimentoGerenciamentoSabores() {
             const [items] = useState<MenuItemWithAssociations[]>(cardapioItems) // original completo
             const [filteredItems, setFilteredItems] = useState<MenuItemWithAssociations[]>(cardapioItems.filter(i => i.visible === true && i.active === true) || [])
 
+            const [isSearching, setIsSearching] = useState(false)
+
 
             const [visible, setVisible] = useState(false)
             const [active, setActive] = useState(false)
@@ -159,7 +164,7 @@ export default function AdminAtendimentoGerenciamentoSabores() {
                   <h1 className="text-lg font-bold tracking-tighter md:text-lg col-span-2">
                     Gerençiamento sabores
                   </h1>
-                  <CardapioItemSearch items={items} setFilteredItems={setFilteredItems} />
+                  <CardapioItemSearch items={items} setFilteredItems={setFilteredItems} setIsSearching={setIsSearching} />
 
                   <Select
                     onValueChange={(value) => {
@@ -194,6 +199,7 @@ export default function AdminAtendimentoGerenciamentoSabores() {
                             visible={visible}
                             active={active}
                             setActive={setActive}
+                            isSearching={isSearching}
                           />
 
                         )
@@ -225,9 +231,10 @@ interface CardapioItemProps {
   active: boolean
   setActive: React.Dispatch<React.SetStateAction<boolean>>
   showExpandButton?: boolean
+  isSearching?: boolean
 }
 
-function CardapioItem({ item, setVisible, visible, active, setActive, showExpandButton = true }: CardapioItemProps) {
+function CardapioItem({ item, setVisible, visible, active, setActive, showExpandButton = true, isSearching = false }: CardapioItemProps) {
 
 
   return (
@@ -242,12 +249,20 @@ function CardapioItem({ item, setVisible, visible, active, setActive, showExpand
         <div className="flex justify-between items-center">
           <h2 className="text-xs uppercase font-semibold tracking-wide">{item.name}</h2>
           <div className="flex gap-2 items-center">
+            {isSearching && (
+              <Badge
+                variant={item.visible ? "secondary" : "destructive"}
+                className="text-[10px] font-semibold uppercase tracking-wide"
+              >
+                {item.visible ? "Visível" : "Oculto"}
+              </Badge>
+            )}
             {
               showExpandButton === true && (
                 <CardapioItemDialog key={item.id} triggerComponent={
                   <ExpandIcon size={16} />
                 }>
-                  <CardapioItem item={item} setVisible={setVisible} visible={visible} active={active} setActive={setActive} showExpandButton={false} />
+                  <CardapioItem item={item} setVisible={setVisible} visible={visible} active={active} setActive={setActive} showExpandButton={false} isSearching={isSearching} />
                 </CardapioItemDialog>
               )
             }
@@ -265,12 +280,12 @@ function CardapioItem({ item, setVisible, visible, active, setActive, showExpand
 
       </div>
 
-      <ul className="grid grid-cols-3 items-end mb-2">
+      <ul className="grid grid-cols-4 items-end mb-2">
         {
           item.MenuItemSellingPriceVariation.filter(spv => spv.priceAmount > 0).map((spv) => {
             return (
               <li className="flex flex-col" key={spv.id}>
-                <p className="text-xs text-left">{spv.MenuItemSize.nameAbbreviated}: <span className="font-semibold">{spv.priceAmount}</span></p>
+                <p className="text-xs text-left">{spv.MenuItemSize.nameAbbreviated}: <span className="font-semibold font-mono">{formatMoneyString(spv.priceAmount)}</span></p>
               </li>
             )
           })
@@ -329,9 +344,11 @@ function CardapioItemDialog({ children, triggerComponent }: CardapioItemDialogPr
 function CardapioItemSearch({
   items,
   setFilteredItems,
+  setIsSearching,
 }: {
   items: MenuItemWithAssociations[],
-  setFilteredItems: React.Dispatch<React.SetStateAction<MenuItemWithAssociations[]>>
+  setFilteredItems: React.Dispatch<React.SetStateAction<MenuItemWithAssociations[]>>,
+  setIsSearching: React.Dispatch<React.SetStateAction<boolean>>
 }) {
   const [search, setSearch] = useState("")
 
@@ -340,11 +357,14 @@ function CardapioItemSearch({
     setSearch(value)
 
     if (!value) {
+      setIsSearching(false)
       return setFilteredItems(items.filter(i => i.visible === true && i.active === true))
     }
 
+    setIsSearching(true)
+
     const searchedItems = items
-      .filter(item => item.visible === true && item.active === true)
+      .filter(item => item.active === true)
       .filter(item => {
         const tags = item?.tags?.public || []
 

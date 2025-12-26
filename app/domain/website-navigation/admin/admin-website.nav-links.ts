@@ -82,6 +82,12 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
           disabled: false,
         },
         {
+          title: "Grupos",
+          href: "/admin/gerenciamento/cardapio/groups",
+          items: [],
+          disabled: false,
+        },
+        {
           title: "Cardápio Delivery",
           href: "/admin/gerenciamento/cardapio/main/list",
           items: [],
@@ -151,6 +157,13 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
           items: [],
           disabled: false,
         },
+        {
+          title: "Fechamento mensal",
+          href: "/admin/financeiro/fechamento-mensal",
+          items: [],
+          disabled: false,
+        },
+
         {
           title: "Fechamento do dia",
           href: "/admin/financeiro/fechamento-dia",
@@ -328,6 +341,18 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
         {
           title: "Zone de entrega - Distançias",
           href: "/admin/delivery-zone-distance",
+          items: [],
+          disabled: false,
+        },
+      ],
+    },
+    {
+      title: "Marketing",
+      disabled: false,
+      items: [
+        {
+          title: "Notificações (Push)",
+          href: "/admin/push-notifications",
           items: [],
           disabled: false,
         },

@@ -10,6 +10,7 @@ import { cn } from "~/lib/utils";
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from "~/components/ui/dialog";
 import { Button } from "~/components/ui/button";
 import { Switch } from "~/components/ui/switch";
+import { MoneyInput } from "~/components/money-input/MoneyInput";
 
 
 interface MenuItemSellPriceFormProps {
@@ -49,7 +50,7 @@ export default function MenuItemSellPriceForm({ menuItemId, sellPriceVariation, 
           <div className="flex flex-col gap-1 items-center">
             <div className="flex flex-col gap-y-0">
               <span className="text-muted-foreground text-[11px]">Novo preço:</span>
-              <NumericInput name="priceAmount" defaultValue={sellPriceVariation.priceAmount} />
+              <MoneyInput name="priceAmount" defaultValue={sellPriceVariation.priceAmount} />
             </div>
             <SubmitButton
               actionName="upsert-by-user-input"

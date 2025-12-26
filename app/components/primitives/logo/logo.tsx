@@ -1,4 +1,4 @@
-import { BrandColors } from "~/hooks/use-brand-colors"
+import type { ReactNode } from "react"
 import { cn } from "~/lib/utils"
 
 
@@ -8,38 +8,61 @@ interface LogoProps {
     tagline?: boolean
     onlyText?: boolean
     circle?: boolean
+    showSantaHat?: boolean
 }
 
 
-export default function Logo({ color = "white", className, tagline = true, onlyText = false, circle = false }: LogoProps) {
+export default function Logo({ color = "white", className, tagline = true, onlyText = false, circle = false, showSantaHat = false }: LogoProps) {
+    let logoNode: ReactNode;
 
     if (onlyText && circle === false) {
-        return <LogoOnlyText color={color} className={className} />
-    }
-
-    if (tagline && circle === false) {
-        return (
-
-            <LogoTagline color={color} className={className} />
-
+        logoNode = <LogoOnlyText color={color} className={className} />
+    } else if (tagline && circle === false) {
+        logoNode = <LogoTagline color={color} className={className} />
+    } else if (circle) {
+        logoNode = (
+            <div className={cn(
+                "rounded-full p-2",
+                color === "white" && "bg-black",
+                color === "black" && "bg-white",
+                className
+            )}>
+                <img src={`/images/logos/logo-redondo-${color}.svg`} alt="Logo A Modo Mio" />
+            </div>
         )
-
-
+    } else {
+        logoNode = <LogoSvg color={color} className={className} />
     }
 
-    if (circle) {
-        return <div className={cn(
-            "rounded-full p-2",
-            color === "white" && "bg-black",
-            color === "black" && "bg-white",
-            className
-        )}>
-            <img src={`/images/logos/logo-redondo-${color}.svg`} alt="Logo A Modo Mio" />
-        </div>
+    if (!showSantaHat) {
+        return logoNode
     }
 
-    return <LogoSvg color={color} className={className} />
+    return (
+        <span className="relative inline-flex items-start">
+            <SantaHat className="absolute -top-3 left-1/2 -translate-x-1/2 w-10 md:w-12 pointer-events-none select-none drop-shadow-md" />
+            {logoNode}
+        </span>
+    )
 }
+
+const SantaHat = ({ className }: { className?: string }) => (
+    <svg
+        viewBox="0 0 64 48"
+        className={cn("drop-shadow-sm", className)}
+        fill="none"
+        aria-hidden="true"
+        focusable="false"
+    >
+        <g transform="rotate(-12 28 18)">
+            <path d="M12 34L30 8C37 10 44 16 46 24L54 34Z" fill="#dc2626" />
+            <path d="M14 33.5C18 23 25.5 16.5 36 13L42.5 27.5L45 33.5Z" fill="#ef4444" />
+            <rect x="12" y="32" width="40" height="10" rx="5" fill="#f8fafc" />
+            <rect x="14" y="34" width="36" height="6" rx="3" fill="#e5e7eb" />
+            <circle cx="30" cy="8" r="5.5" fill="#f8fafc" stroke="#e5e7eb" strokeWidth="1" />
+        </g>
+    </svg>
+)
 
 
 const LogoTagline = ({ color = "white", className }: LogoProps) => {
@@ -153,5 +176,4 @@ const LogoOnlyText = ({ color = "black", className }: LogoProps) => {
     )
 
 }
-
 
