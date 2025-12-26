@@ -146,7 +146,10 @@ export async function registerPushSubscription(vapidPublicKey: string) {
 export async function removePushSubscription(): Promise<{ ok: boolean; error?: string }> {
   if (typeof window === "undefined") return { ok: false, error: "Ambiente sem window." };
   const support = getPushSupport();
-  if (!support.supported) return { ok: false, error: support.reason };
+  if (!support.supported) {
+    clearLocalPushFlags();
+    return { ok: true };
+  }
 
   try {
     const registration = await navigator.serviceWorker.getRegistration("/push-sw.js");
