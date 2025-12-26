@@ -53,6 +53,12 @@ export async function saveSubscription(params: {
   });
 }
 
+export async function removeSubscription(endpoint: string) {
+  if (!endpoint) return { deleted: 0 };
+  const result = await prismaClient.pushSubscription.deleteMany({ where: { endpoint } });
+  return { deleted: result.count };
+}
+
 export async function createCampaign(data: {
   title: string;
   body: string;

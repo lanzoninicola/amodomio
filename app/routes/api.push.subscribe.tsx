@@ -15,17 +15,27 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   if (!body?.endpoint || !body?.keys?.p256dh || !body?.keys?.auth) {
+    console.error("[push] subscribe missing fields", { hasEndpoint: !!body?.endpoint, hasKeys: !!body?.keys });
     return json({ error: "Missing push subscription fields" }, { status: 400 });
   }
 
   const userAgent = request.headers.get("user-agent");
 
-  await saveSubscription({
-    endpoint: body.endpoint,
-    expirationTime: body.expirationTime,
-    keys: { p256dh: body.keys.p256dh, auth: body.keys.auth },
-    userAgent,
-  });
+  try {
+    await saveSubscription({
+      endpoint: body.endpoint,
+      expirationTime: body.expirationTime,
+      keys: { p256dh: body.keys.p256dh, auth: body.keys.auth },
+      userAgent,
+    });
+    console.info("[push] subscription stored", {
+      ua: userAgent,
+      endpointTail: body.endpoint?.slice(-20),
+    });
+  } catch (error) {
+    console.error("[push] failed to save subscription", { error, ua: userAgent });
+    return json({ error: "Failed to save subscription" }, { status: 500 });
+  }
 
   return json({ ok: true });
 }

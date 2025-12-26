@@ -1,7 +1,7 @@
 import { InstagramLogoIcon } from "@radix-ui/react-icons";
 import { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { Await, Link, Outlet, defer, useLoaderData } from "@remix-run/react";
-import { ArrowRight, Divide, Donut, Info, Instagram, LayoutTemplate, MapPin, Proportions, SearchIcon, User, Users } from "lucide-react";
+import { ArrowRight, Bell, Divide, Donut, Info, Instagram, LayoutTemplate, MapPin, Proportions, SearchIcon, User, Users } from "lucide-react";
 import React, { ReactNode, Suspense, useEffect, useState } from "react";
 
 import ItalyFlag from "~/components/italy-flag/italy-flag";
@@ -23,6 +23,7 @@ import { cn } from "~/lib/utils";
 import { parseBooleanSetting } from "~/utils/parse-boolean-setting";
 import { PushOptIn } from "~/domain/push/components/push-opt-in";
 import useCurrentPage from "~/hooks/use-current-page";
+import { NotificationCenterProvider, useNotificationCenter } from "~/domain/push/notification-center-context";
 
 
 /**
@@ -113,7 +114,7 @@ export default function CardapioWeb() {
     // if (!isClient) return null; // ou um spinner, se quiser
 
     return (
-        <>
+        <NotificationCenterProvider>
             {showLojaFechadaMessage && <BannerFechado />}
             <CardapioHeader />
 
@@ -123,7 +124,7 @@ export default function CardapioWeb() {
 
             </div>
             {currentPage === "other" && <CardapioFooter />}
-        </>
+        </NotificationCenterProvider>
     );
 }
 
@@ -162,6 +163,7 @@ function CardapioHeader() {
     const currentPage = useCurrentPage()
     const [showSearch, setShowSearch] = useState(false)
     const { fazerPedidoPublicURL, vapidPublicKey } = useLoaderData<typeof loader>()
+    const { unreadCount } = useNotificationCenter()
 
     return (
         <header className="fixed top-0 w-full z-10 md:max-w-6xl md:-translate-x-1/2 md:left-1/2 " >
@@ -178,10 +180,23 @@ function CardapioHeader() {
                         </div>
                     </Link>
 
-                    <div className="w-full flex items-center gap-x-4 justify-end col-span-1">
+                    <div className="w-full flex items-center gap-x-2 justify-end col-span-1">
+                        <Link to="/cardapio/notificacoes" prefetch="intent">
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="relative h-10 w-10 p-0 inline-flex items-center justify-center align-middle"
+                                aria-label="Notificações"
+                            >
+                                <Bell className="h-5 w-5" />
+                                {unreadCount > 0 && (
+                                    <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white" />
+                                )}
+                            </Button>
+                        </Link>
                         <Link to={'buscar'} >
-                            <div className="flex justify-end items-center cursor-pointer" onClick={() => setShowSearch(!showSearch)}>
-                                <SearchIcon color={"black"} />
+                            <div className="flex h-10 w-10 items-center justify-center cursor-pointer" onClick={() => setShowSearch(!showSearch)}>
+                                <SearchIcon color={"black"} className="h-5 w-5" />
                                 {/* <span className="font-neue text-[10px] font-semibold  uppercase text-brand-blue">Pesquisar</span> */}
                             </div>
                         </Link>
