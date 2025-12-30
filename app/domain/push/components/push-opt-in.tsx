@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Bell, Check, Loader2 } from "lucide-react";
+import { ArrowRight, Bell, Check, Loader2, Star } from "lucide-react";
 import { PushSupport, getExistingPushSubscription, getPushSupport, registerPushSubscription } from "../push-client";
 import { Button } from "~/components/ui/button";
 
@@ -111,49 +111,48 @@ export function PushOptIn({ vapidPublicKey, forceShow = false }: Props) {
   if (!shouldShow) return null;
 
   return (
-    <div className="flex justify-center px-2 bg-white">
-      <div className="w-full max-w-2xl overflow-hidden rounded-lg bg-gradient-to-br text-slate-900 shadow-md ring-1 ring-white/50">
+    <div className="flex justify-center bg-slate-900/95">
+      <div className="w-full max-w-2xl overflow-hidden rounded-lg bg-gradient-to-br text-slate-900 shadow-md ">
         <div className="flex flex-col divide-y divide-white/40">
-          <div className="flex items-start gap-3 px-5 py-5 sm:px-6 sm:py-6">
-            <div className="relative">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-200/90 shadow-md ring-1 ring-amber-100">
-                {status === "done" ? <Check className="h-6 w-6 text-amber-900" /> : <Bell className="h-6 w-6 text-amber-900" />}
-              </div>
-              <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-fuchsia-200 text-[11px] font-bold shadow ring-2 ring-white">
-                6
-              </span>
-            </div>
+          <div className="flex items-start gap-3 px-4 py-5 sm:px-6 sm:py-6">
 
             <div className="flex-1 space-y-1">
               <div className="flex items-start justify-between gap-2">
-                <p className="text-lg font-semibold leading-tight">Receber notificações</p>
-                {displayTime && <span className="text-sm font-semibold text-slate-700/80">{displayTime}</span>}
+                <div className="flex items-center gap-x-4">
+                  <PushOptInIcon />
+                  <p className="font-neue text-white uppercase  leading-tight tracking-wide">Receber notificações</p>
+                </div>
+                {displayTime && <span className="text-sm font-neue  font-semibold text-slate-100/80 tracking-wide">{displayTime}</span>}
               </div>
 
-              <p className="text-xs leading-snug text-slate-800/90">{descriptionText}</p>
+              <p className="font-neue tracking-wide text-xs leading-snug text-white">{descriptionText}</p>
             </div>
           </div>
 
 
 
-          <div className="grid grid-cols-2 gap-x-4">
+          <div className="grid grid-cols-8">
             <Button
               variant="ghost"
-              className="font-neue h-12 text-slate-600 transition hover:bg-slate-900/10"
+              className="font-neue text-xs tracking-wide h-8 text-slate-100 transition hover:bg-slate-900/10 uppercase outline-none font-normal col-span-3"
               onClick={handleDismiss}
               type="button"
             >
               {isBlocked ? "Fechar" : "Agora não"}
             </Button>
             <Button
-              className="h-12 rounded-lg"
+              className="h-8 text-sm rounded-none uppercase tracking-wide font-semibold col-span-5"
               onClick={handleSubscribe}
               disabled={status === "working" || status === "done"}
               variant="secondary"
             >
               {status === "done" && <Check className="mr-2 h-4 w-4" />}
               {status === "working" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {actionLabel}
+              <span className="flex items-center gap-x-1">
+
+                {actionLabel}
+                <ArrowRight className="h-4 w-4" />
+              </span>
             </Button>
 
 
@@ -182,4 +181,18 @@ export function PushOptIn({ vapidPublicKey, forceShow = false }: Props) {
       </div>
     </div>
   );
+}
+
+
+function PushOptInIcon() {
+  return (
+    <div className="relative">
+      <div className="flex h-6 w-6 items-center justify-center rounded-2xl bg-white shadow-md ring-1 ring-black-100">
+        <Bell className="h-4 w-4 text-black" />
+      </div>
+      <span className="absolute -right-1 -top-1 flex h-3 w-3 items-center justify-center rounded-full bg-slate-200 text-[11px] font-bold shadow ring-2 ring-white">
+        6
+      </span>
+    </div>
+  )
 }

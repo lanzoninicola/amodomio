@@ -28,6 +28,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 
 export default function HomePage() {
+    const loaderData = useLoaderData<typeof loader>();
+    const videoURLs = loaderData.payload?.videoURLs;
     const today = fmtYYYMMDD(new Date())
     const mktDateTarget = "20250917"
 
@@ -38,50 +40,58 @@ export default function HomePage() {
                     today === mktDateTarget && 'hidden'
                 )
             }>
-                <header className="fixed top-0 left-0 w-screen z-50 transition-all p-4 flex justify-between items-center">
+                <header className="fixed top-0 left-0 w-screen z-50 transition-all p-4 flex justify-between items-center bg-white/90 backdrop-blur-md shadow-sm border-b border-black/5">
                     <div className="w-[130px] md:w-[150px] ">
-                        <Logo onlyText={true} className="w-full h-full" showSantaHat />
+                        <Logo onlyText={true} className="w-full h-full" color="black" />
                     </div>
                     <Link to={GLOBAL_LINKS.cardapioPublic.href} className="hidden md:block" >
-                        <div className="bg-black px-2 py-2 rounded-lg w-max flex items-center gap-2">
-                            <span className="font-rubik font-semibold text-white uppercase tracking-wider text-xs">cardápio</span>
+                        <div className="bg-black px-2 py-2 rounded-lg w-max flex items-center gap-2 shadow-sm">
+                            <span className="font-neue font-semibold text-white uppercase tracking-wider text-xs">cardápio</span>
                         </div>
                     </Link>
                 </header>
-                <section className="relative">
-                    <HomePageVideoBackground />
-                    <div className="absolute inset-0 p-4 pt-32">
-                        <div className="flex flex-col">
+                <section className="relative bg-white overflow-hidden">
 
-                            <h1 className="text-white font-rubik font-semibold transition-all
-                            text-5xl leading-none tracking-tight mb-6 max-w-[300px]
-                            md:text-7xl md:max-w-3xl
-                        ">
-                                A pizza mais desejada de Pato Branco
-                            </h1>
+                    <div className="relative grid grid-cols-1 md:grid-cols-[1.05fr_0.95fr] gap-6 md:gap-8 px-5 pt-24 pb-14 md:px-52 md:pt-28 md:pb-16 items-center">
+                        <div className="flex flex-col gap-5">
 
-                            <p className="text-white font-rubik font-semibold  tracking-wide max-w-prose transition-all
-                            text-[1rem] leading-[120%]
-                            md:text-xl md:leading-tight
-                        ">
-                                Preparada com ingredientes selecionados e técnicas artesanais, nossa pizza combina tradição italiana e inovação para entregar uma experiência única. Crocante, leve e irresistível, ela conquistou Pato Branco e agora espera por você.
-                            </p>
+                            <div className="space-y-4">
+                                <div className="flex items-center gap-2 text-black font-neue text-xs tracking-[0.18em] uppercase">
+                                    <span className="text-sm">[</span>
+                                    <span>Autêntica Pizza romana</span>
+                                    <span className="text-sm">]</span>
+                                </div>
+                                <h1 className="text-black uppercase font-neue font-semibold text-[2.8rem] leading-[1.05] tracking-tight md:text-6xl flex flex-col">
+                                    <span>A pizza mais desejada de </span>
+                                    <span className="text-black/60" >Pato Branco</span>
+                                </h1>
+                                <p className="text-black/90 font-neue tracking-wide text-[1rem] leading-[1.6] max-w-[36ch] md:text-[1.05rem]">
+                                    Ingredientes selecionados, técnica artesanal e fermentação lenta para um sabor que fala por si. Crocante, leve e autêntica — sua próxima pizza inesquecível começa aqui.
+                                </p>
+                            </div>
 
+                            <div className="mt-2 flex flex-wrap items-center gap-3">
+                                <Link to={GLOBAL_LINKS.cardapioPublic.href} >
+                                    <div className="group relative overflow-hidden rounded-xl border border-black bg-black px-6 py-3.5 text-white shadow-[0_10px_30px_rgba(0,0,0,0.25)] transition-all duration-150 hover:-translate-y-0.5 hover:shadow-[0_16px_40px_rgba(0,0,0,0.28)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black">
+                                        <div className="absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-10 bg-white" aria-hidden />
+                                        <div className="relative flex items-center gap-3 font-neue font-bold uppercase tracking-wide">
+                                            <span>Ver cardápio</span>
+                                            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white">
+                                                <ChevronRight color="#ffffff" />
+                                            </span>
+                                        </div>
+                                    </div>
+                                </Link>
+                            </div>
                         </div>
 
+                        <div className="relative flex justify-center ">
+                            <div className="relative overflow-hidden rounded-[28px] border-[3px] border-black/10 shadow-[0_18px_60px_rgba(0,0,0,0.18)] rotate-[-2deg] bg-black/80">
+                                <HeroVideo videoURLs={videoURLs} />
+                            </div>
+                        </div>
                     </div>
                 </section >
-
-                <div className="fixed right-4 bottom-8">
-
-                    <Link to={GLOBAL_LINKS.cardapioPublic.href} >
-                        <div className="bg-black px-8 py-4 rounded-lg w-max flex items-center gap-2">
-                            <span className="font-rubik font-bold text-white">Vai ao cardápio</span>
-                            <ChevronRight color="#ffffff" />
-                        </div>
-                    </Link>
-
-                </div>
 
             </section>
             <DiaCliente25 targetDate={mktDateTarget} />
@@ -91,40 +101,30 @@ export default function HomePage() {
 
 
 
-function HomePageVideoBackground() {
-    const loaderData = useLoaderData<typeof loader>();
-    const videoURLs = loaderData.payload?.videoURLs
+interface HeroVideoProps {
+    videoURLs?: {
+        video480?: string;
+        video1080?: string;
+    }
+}
 
+function HeroVideo({ videoURLs }: HeroVideoProps) {
     return (
-        <>
-            <div className="md:hidden">
-                <video
-                    autoPlay
-                    loop
-                    muted
-                    playsInline
-                    className="w-screen h-screen object-cover z-[-1]"
-                    poster="/images/cardapio-web-app/amodomio-hero-f000000.png"
-                >
-                    <source src={videoURLs.video480} type="video/mp4" />
-                </video>
-            </div>
-            <div className="hidden md:block">
-                <video
-                    autoPlay
-                    loop
-                    muted
-                    playsInline
-                    className="w-screen h-screen object-cover z-[-1]"
-                    poster="/images/cardapio-web-app/amodomio-hero-f000000.png"
-                >
-                    <source src={videoURLs.video1080} type="video/mp4" />
-                </video>
-            </div>
-            <div className="absolute inset-0 overflow-hidden rotate-0 opacity-40 bg-black"
-                data-element="hero-overlay"
-            />
-        </>
+        <div className="relative h-[420px] w-full md:h-[520px] aspect-[3/4] bg-black overflow-hidden">
+            <video
+                autoPlay
+                loop
+                muted
+                playsInline
+                preload="metadata"
+                className="absolute inset-0 h-full w-full object-cover"
+                poster="/images/cardapio-web-app/amodomio-hero-f000000.webp"
+            >
+                <source src={videoURLs?.video480} type="video/mp4" media="(max-width: 480px) and (max-device-pixel-ratio: 1.5)" />
+                <source src={videoURLs?.video1080} type="video/mp4" />
+            </video>
+            <div className="absolute inset-0 bg-gradient-to-b from-transparent via-black/10 to-black/30 pointer-events-none" aria-hidden />
+        </div>
     );
 }
 
@@ -203,10 +203,10 @@ function DiaCliente25({ targetDate }: DiaCliente25Props) {
                                         Somente hoje
                                     </div> */}
                                     <div className="flex items-baseline gap-2">
-                                        <span className="font-rubik text-5xl font-extrabold leading-none">
+                                        <span className="font-neue text-5xl font-extrabold leading-none">
                                             10%
                                         </span>
-                                        <span className="font-rubik text-base font-semibold">OFF</span>
+                                        <span className="font-neue text-base font-semibold">OFF</span>
                                     </div>
 
                                     {/* Código + copiar inline */}
@@ -417,5 +417,3 @@ function WebsiteActionBar() {
         </div>
     )
 }
-
-
