@@ -1,13 +1,14 @@
-import type { LinkDescriptor, LinksFunction, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
+import type { LinksFunction, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import {
+  Link,
   Links,
   Meta,
   Outlet,
   Scripts,
   ScrollRestoration,
-  isRouteErrorResponse,
   useLoaderData,
   useRouteError,
+  useLocation,
 } from "@remix-run/react";
 import { Toaster } from "./components/ui/toaster";
 import stylesheet from "~/tailwind.css?url";
@@ -15,11 +16,6 @@ import GoogleTagManagerScriptTag from "./components/primitives/google-tag-manage
 import GoogleTagManagerNoScriptTag from "./components/primitives/google-tag-manager/gtm-noscript";
 import { Analytics } from '@vercel/analytics/react';
 import { ok } from "./utils/http-response.server";
-import { Button } from "./components/ui/button";
-import PUBLIC_WEBSITE_NAVIGATION_ITEMS from "./domain/website-navigation/public/public-website.nav-links";
-import GLOBAL_LINKS from "./domain/website-navigation/global-links.constant";
-import ExternalLink from "./components/primitives/external-link/external-link";
-import { cn } from "./lib/utils";
 import { ArrowRight } from "lucide-react";
 import Logo from "./components/primitives/logo/logo";
 import MicrosoftClarityScriptTag from "./components/primitives/ms-clarity/ms-clarity-script";
@@ -185,6 +181,14 @@ export default function App() {
 
 export function ErrorBoundary() {
   const error = useRouteError();
+  const location = useLocation();
+  const pathname = location?.pathname || "";
+
+  const primaryAction = (() => {
+    if (pathname.startsWith("/admin")) return { href: "/admin", label: "Voltar para o painel" };
+    if (pathname.startsWith("/cardapio")) return { href: "/cardapio", label: "Voltar ao cardápio" };
+    return { href: "/", label: "Ir para a página inicial" };
+  })();
 
   console.log({ error })
 
@@ -196,45 +200,51 @@ export function ErrorBoundary() {
         <Links />
       </head>
       <body>
-        {/* <h1>
-          {isRouteErrorResponse(error)
-            ? `${error.status} ${error.statusText}`
-            : error instanceof Error
-              ? error.message
-              : "Unknown Error"}
-        </h1> */}
-        <div className="w-screen h-screen">
-          <div className="grid grid-rows-6 w-full h-full items-center justify-center">
-            <Logo onlyText={true} className="w-full h-full px-32 flex row-span-2 mb:w-[250px]" color="black" />
-            <div className="flex flex-col items-center row-span-2" >
-              <div className="flex flex-col ">
-                <h1 className="font-thin leading-none text-6xl md:text-7xl">Desculpe</h1>
-                <h2 className="font-semibold text-xl">mas alguma coisa deu errado.</h2>
+        <div className="min-h-screen bg-gradient-to-br from-amber-50 via-white to-orange-50 text-slate-900">
+          <div className="mx-auto flex min-h-screen max-w-5xl flex-col gap-10 px-6 py-10 md:py-16">
+            <header className="flex items-center justify-between">
+              <Logo onlyText={true} className="w-40 md:w-48" color="black" />
+              <div className="rounded-full border border-amber-200 bg-white/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-amber-700 shadow-sm">
+                Erro inesperado
               </div>
-              <img src="/images/gato-chorando.gif" alt="Erro" className="h-64" />
-            </div>
-            <div className="flex flex-col items-center justify-center gap-2">
-              <ExternalLink
-                to={GLOBAL_LINKS.saiposCardapio.href}
-                ariaLabel="Cardápio digital pizzaria A Modo Mio"
-              >
-                <div className='flex gap-2 items-center justify-between px-4 py-2 bg-black rounded-lg'>
-                  <span className={
-                    cn(
-                      "uppercase tracking-wide font-semibold text-white",
-                    )
-                  }>
-                    Visualizar o cardápio
-                  </span>
-                  <ArrowRight color="white" />
+            </header>
+
+            <main className="grid items-center gap-10 rounded-3xl border border-amber-100 bg-white/80 p-8 shadow-[0_20px_70px_rgba(17,24,39,0.08)] backdrop-blur-sm md:p-12 lg:grid-cols-[1.05fr_0.95fr]">
+              <div className="space-y-6">
+                <p className="text-xs font-semibold uppercase tracking-[0.25em] text-amber-600">Algo saiu do forno errado</p>
+                <div className="space-y-3">
+                  <h1 className="text-4xl font-semibold leading-tight md:text-5xl">Desculpe, tivemos um imprevisto.</h1>
+                  <p className="text-lg text-slate-600 md:max-w-xl">
+                    Nosso time já foi avisado. Você pode retomar de onde estava ou voltar para o cardápio digital.
+                  </p>
                 </div>
-              </ExternalLink>
 
-            </div>
+                <div className="flex flex-wrap gap-3">
+                  <Link
+                    to={primaryAction.href}
+                    className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold uppercase tracking-wide text-white shadow-md transition hover:-translate-y-0.5 hover:shadow-lg"
+                  >
+                    <span>{primaryAction.label}</span>
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
+                  <Link
+                    to="/cardapio"
+                    className="inline-flex items-center gap-2 rounded-full border border-slate-300 px-5 py-3 text-sm font-semibold uppercase tracking-wide text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
+                  >
+                    <span>Ver cardápio digital</span>
+                  </Link>
+                </div>
+              </div>
 
-
+              <div className="relative flex items-center justify-center">
+                <div className="absolute inset-0 -z-10 mx-auto h-72 w-72 rounded-full bg-amber-100/70 blur-3xl" aria-hidden />
+                <div className="flex flex-col items-center gap-4 rounded-2xl border border-amber-100 bg-white/80 p-6 shadow-inner">
+                  <img src="/images/gato-chorando.gif" alt="Gatinho triste" className="w-44 md:w-52" />
+                  <div className="text-sm text-slate-500">Prometemos voltar a servir rapidinho.</div>
+                </div>
+              </div>
+            </main>
           </div>
-
         </div>
         <Scripts />
       </body>

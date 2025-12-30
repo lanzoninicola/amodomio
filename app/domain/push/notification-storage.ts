@@ -5,7 +5,6 @@ export type NotificationEntry = {
   url?: string;
   ts: number;
   read: boolean;
-  type?: string;
   source?: "push" | "local";
 };
 
