@@ -1,5 +1,5 @@
 import { InstagramLogoIcon } from "@radix-ui/react-icons";
-import { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
+import { LinksFunction, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { Await, Link, Outlet, defer, useLoaderData } from "@remix-run/react";
 import { ArrowRight, Bell, Divide, Donut, Info, Instagram, LayoutTemplate, MapPin, Proportions, SearchIcon, User, Users } from "lucide-react";
 import React, { ReactNode, Suspense, useEffect, useState } from "react";
@@ -24,6 +24,7 @@ import { parseBooleanSetting } from "~/utils/parse-boolean-setting";
 import { PushOptIn } from "~/domain/push/components/push-opt-in";
 import useCurrentPage from "~/hooks/use-current-page";
 import { NotificationCenterProvider, useNotificationCenter } from "~/domain/push/notification-center-context";
+import { PwaInstallPrompt } from "~/domain/pwa/pwa-install-prompt";
 
 
 /**
@@ -65,6 +66,16 @@ export const meta: MetaFunction = ({ data }) => {
         { name: "og:type", content: "website" },
     ];
 };
+
+export const links: LinksFunction = () => [
+    { rel: "manifest", href: "/site.webmanifest" },
+    { rel: "apple-touch-icon", sizes: "180x180", href: "/favicons/apple-touch-icon.png" },
+    { rel: "icon", type: "image/png", sizes: "32x32", href: "/favicons/favicon-32x32.png" },
+    { rel: "icon", type: "image/png", sizes: "16x16", href: "/favicons/favicon-16x16.png" },
+    { rel: "icon", type: "image/png", sizes: "192x192", href: "/favicons/android-chrome-192x192.png" },
+    { rel: "icon", type: "image/png", sizes: "512x512", href: "/favicons/android-chrome-512x512.png" },
+    { rel: "shortcut icon", href: "/favicon.ico" },
+];
 
 export async function loader({ request }: LoaderFunctionArgs) {
 
@@ -119,6 +130,7 @@ export default function CardapioWeb() {
             <CardapioHeader />
 
             <div className="md:m-auto md:max-w-6xl">
+                {/* <PwaInstallPrompt className="mt-16 md:mt-24 mb-6" /> */}
                 {/* {currentPage === "other" && <CompanyInfo />} */}
                 <Outlet />
 
