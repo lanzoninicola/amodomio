@@ -242,6 +242,7 @@ type DashboardMeta = {
   cardFeePerc: number;
   goalMinAmount: number;
   goalTargetAmount: number;
+  pctOfMin: number; // 0..100
   pctOfTarget: number; // 0..100
   status: "below-min" | "between" | "hit-target";
 };
@@ -364,6 +365,8 @@ export async function loader({ params }: LoaderFunctionArgs) {
   if (netAmount >= goalTargetAmount && goalTargetAmount > 0) status = "hit-target";
   else if (netAmount >= goalMinAmount) status = "between";
 
+  const pctOfMin =
+    goalMinAmount > 0 ? Math.min(100, (netAmount / goalMinAmount) * 100) : 0;
   const pctOfTarget =
     goalTargetAmount > 0 ? Math.min(100, (netAmount / goalTargetAmount) * 100) : 0;
 
@@ -403,6 +406,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
     cardFeePerc,
     goalMinAmount,
     goalTargetAmount,
+    pctOfMin,
     pctOfTarget,
     status,
     marketplaceTaxPerc: taxaMarketplacePerc
@@ -1836,25 +1840,30 @@ export default function GridKdsPage() {
                           <span className={`inline-flex h-2.5 w-2.5 rounded-full ${statusDot}`} aria-hidden />
                           Status do dia
                         </div>
-                        <Badge variant="outline" className="text-[11px] font-semibold uppercase tracking-wide bg-white/70">
-                          {dashboard.pctOfTarget.toFixed(0)}% da Target
-                        </Badge>
-                      </div>
-                      <div className={`text-3xl font-black leading-tight ${statusTextColor} tabular-nums`}>
-                        {dashboard.status === "hit-target"
-                          ? "Acima da meta"
-                          : dashboard.status === "between"
-                            ? "Acima da mínima"
-                            : "Abaixo da mínima"}
+                        <div className={`text-[11px] font-semibold uppercase tracking-wide ${statusTextColor}`}>
+                          {dashboard.status === "hit-target"
+                            ? "Acima da meta"
+                            : dashboard.status === "between"
+                              ? "Acima da mínima"
+                              : "Abaixo da mínima"}
+                        </div>
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div className="rounded-lg border border-white/60 bg-white/80 px-3 py-2">
+                        <div className="rounded-lg border border-white/60 bg-white/80 px-3 py-2 space-y-1.5">
                           <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-500">Meta Mínima (dia)</div>
+                          <div className={`text-4xl font-black ${statusTextColor} tabular-nums leading-none mb-2`}>
+                            {dashboard.pctOfMin.toFixed(0)}%
+                          </div>
+
                           <div className="font-mono text-base text-slate-800 tabular-nums">{fmtBRL(dashboard.goalMinAmount)}</div>
                         </div>
-                        <div className="rounded-lg border border-white/60 bg-white/80 px-3 py-2">
+                        <div className="rounded-lg border border-white/60 bg-white/80 px-3 py-2 space-y-1.5">
                           <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-500">Meta Target (dia)</div>
+                          <div className={`text-4xl font-black ${statusTextColor} tabular-nums leading-none mb-2`}>
+                            {dashboard.pctOfTarget.toFixed(0)}%
+                          </div>
+
                           <div className="font-mono text-base text-slate-800 tabular-nums">{fmtBRL(dashboard.goalTargetAmount)}</div>
                         </div>
                       </div>
