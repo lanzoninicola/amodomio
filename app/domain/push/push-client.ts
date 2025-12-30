@@ -13,6 +13,9 @@ export type PushSupport =
   | { supported: true }
   | { supported: false; reason: string };
 
+const SW_URL = "/push-sw.js";
+const SW_SCOPE = "/cardapio";
+
 function clearLocalPushFlags() {
   if (typeof window === "undefined") return;
   try {
@@ -46,15 +49,22 @@ export async function getExistingPushSubscription() {
   const support = getPushSupport();
   if (!support.supported) return null;
 
-  const registration = await navigator.serviceWorker.getRegistration(
-    "/push-sw.js"
-  );
+  const registration = await getActivePushRegistration();
   if (!registration) return null;
   return registration.pushManager.getSubscription();
 }
 
+async function getActivePushRegistration() {
+  const scoped = await navigator.serviceWorker.getRegistration(SW_SCOPE).catch(() => null);
+  if (scoped?.active && scoped.active.state !== "redundant") return scoped;
+  const registrations = await navigator.serviceWorker.getRegistrations().catch(() => []);
+  const matching = registrations.find((reg) => reg.active?.scriptURL?.includes(SW_URL));
+  if (matching?.active && matching.active.state !== "redundant") return matching;
+  return scoped || matching || null;
+}
+
 async function ensureRegistration() {
-  const current = await navigator.serviceWorker.getRegistration("/push-sw.js");
+  const current = await getActivePushRegistration();
   if (current?.active && current.active.state !== "redundant") return current;
   if (current) {
     try {
@@ -63,7 +73,7 @@ async function ensureRegistration() {
       console.warn("[push] failed to unregister stale service worker", err);
     }
   }
-  return navigator.serviceWorker.register("/push-sw.js");
+  return navigator.serviceWorker.register(SW_URL, { scope: SW_SCOPE });
 }
 
 export async function registerPushSubscription(vapidPublicKey: string) {
@@ -152,7 +162,7 @@ export async function removePushSubscription(): Promise<{ ok: boolean; error?: s
   }
 
   try {
-    const registration = await navigator.serviceWorker.getRegistration("/push-sw.js");
+    const registration = await getActivePushRegistration();
     if (!registration) {
       clearLocalPushFlags();
       return { ok: true };

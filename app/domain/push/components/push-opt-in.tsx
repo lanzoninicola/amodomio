@@ -16,12 +16,10 @@ export function PushOptIn({ vapidPublicKey, forceShow = false }: Props) {
   const [status, setStatus] = useState<"idle" | "working" | "done" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
   const [permission, setPermission] = useState<NotificationPermission | null>(null);
-  const [supportError, setSupportError] = useState<string | null>(null);
   const [shouldShow, setShouldShow] = useState(false);
   const [support, setSupport] = useState<PushSupport>({ supported: true });
 
   const isBlocked = permission === "denied";
-  const isFallbackFlow = !support.supported || !vapidPublicKey;
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -37,12 +35,10 @@ export function PushOptIn({ vapidPublicKey, forceShow = false }: Props) {
     const supportResult = getPushSupport();
     setSupport(supportResult);
     if (!supportResult.supported) {
-      setSupportError(supportResult.reason);
       setPermission(null);
-      return;
+    } else {
+      setPermission(Notification.permission);
     }
-    setSupportError(null);
-    setPermission(Notification.permission);
 
     getExistingPushSubscription()
       .then((sub) => {
@@ -65,13 +61,8 @@ export function PushOptIn({ vapidPublicKey, forceShow = false }: Props) {
     }
   }, []);
 
-  function handleFallbackOptIn(reason?: string) {
-    const message =
-      reason ||
-      supportError ||
-      "Seu navegador não suporta Web Push. Vamos registrar sua preferência e avisar por aqui quando possível.";
+  function handleFallbackOptIn() {
     setError(null);
-    setSupportError(message);
     setStatus("done");
     if (typeof window !== "undefined") window.localStorage.setItem(OPTED_IN_KEY, "fallback");
     setShouldShow(false);
@@ -85,12 +76,8 @@ export function PushOptIn({ vapidPublicKey, forceShow = false }: Props) {
     if (status === "working" || status === "done") return;
     setStatus("working");
     setError(null);
-    if (!support.supported) {
+    if (!support.supported || !vapidPublicKey) {
       handleFallbackOptIn();
-      return;
-    }
-    if (!vapidPublicKey) {
-      handleFallbackOptIn("Chave pública de push indisponível. Vamos registrar sua preferência por outro canal.");
       return;
     }
     try {
@@ -116,20 +103,10 @@ export function PushOptIn({ vapidPublicKey, forceShow = false }: Props) {
     if (typeof window !== "undefined") window.localStorage.setItem(DISMISS_KEY, Date.now().toString());
   }
 
-  const descriptionText = isFallbackFlow
-    ? "Seu navegador não suporta Web Push. Vamos registrar sua preferência e avisar por aqui quando estiver navegando."
-    : "Aproveite alertas rápidos sobre novidades e ofertas relâmpago. Nada de spam, só o essencial.";
+  const descriptionText = "Aproveite alertas rápidos sobre novidades e ofertas relâmpago. Nada de spam, só o essencial.";
 
   const actionLabel =
-    status === "done"
-      ? "Preferência salva"
-      : status === "working"
-        ? isFallbackFlow
-          ? "Registrando..."
-          : "Ativando..."
-        : isFallbackFlow
-          ? "Receber avisos aqui"
-          : "Ativar notificações";
+    status === "done" ? "Notificações ativas" : status === "working" ? "Ativando..." : "Ativar notificações";
 
   if (!shouldShow) return null;
 
@@ -183,9 +160,8 @@ export function PushOptIn({ vapidPublicKey, forceShow = false }: Props) {
           </div>
         </div>
 
-        {(error || supportError || isBlocked || status === "done") && (
+        {(error || isBlocked || status === "done") && (
           <div className="space-y-1 px-6 pb-5 text-[12px] leading-snug text-slate-800/90">
-            {supportError && <p className="text-amber-800">{supportError}</p>}
             {isBlocked && (
               <p className="text-amber-800">
                 Permissão negada no navegador. Libere em &ldquo;Configurações do site &gt; Notificações&rdquo; para ativar.
@@ -198,7 +174,7 @@ export function PushOptIn({ vapidPublicKey, forceShow = false }: Props) {
             )}
             {status === "done" && !error && (
               <p className="text-emerald-900" role="status">
-                {isFallbackFlow ? "Preferência salva. Vamos avisar você por aqui mesmo." : "Tudo certo! Você receberá notificações."}
+                Tudo certo! Preferências salvas.
               </p>
             )}
           </div>
