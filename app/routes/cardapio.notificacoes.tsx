@@ -8,6 +8,7 @@ import { useNotificationCenter } from "~/domain/push/notification-center-context
 import { NotificationFeed } from "~/domain/push/components/notification-feed";
 import { removePushSubscription } from "~/domain/push/push-client";
 import { useToast } from "~/components/ui/use-toast";
+import { PwaInstallPrompt } from "~/domain/pwa/pwa-install-prompt";
 import {
   Dialog,
   DialogContent,
@@ -66,8 +67,9 @@ export default function CardapioNotificationsRoute() {
 
   return (
     <section className="pt-32 pb-16 px-4 md:pt-32 md:max-w-4xl md:mx-auto font-neue">
-      <div className="mb-4">
-        <PushOptIn vapidPublicKey={vapidPublicKey} forceShow />
+      <div className="mb-4 space-y-3">
+        <PushOptIn vapidPublicKey={vapidPublicKey} />
+        <PwaInstallPrompt />
       </div>
 
       <div className="flex flex-col space-y-1">
