@@ -101,7 +101,7 @@ self.addEventListener("push", (event) => {
     console.error("[push-sw] Failed to parse push payload", err);
   }
 
-  const { title = "Notificação", body, url, campaignId, subscriptionId, type } = payload;
+  const { title = "Notificação", body, url, campaignId, subscriptionId } = payload;
   const shownAt = Date.now();
   const notificationId = payload?.id || `${campaignId || "local"}-${shownAt}`;
 
@@ -112,7 +112,6 @@ self.addEventListener("push", (event) => {
     url,
     ts: shownAt,
     read: false,
-    type,
     source: "push",
   };
 

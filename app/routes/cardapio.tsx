@@ -176,10 +176,24 @@ function CardapioHeader() {
     const [showSearch, setShowSearch] = useState(false)
     const { fazerPedidoPublicURL, vapidPublicKey } = useLoaderData<typeof loader>()
     const { unreadCount } = useNotificationCenter()
+    const hasUnread = unreadCount > 0
 
     return (
-        <header className="fixed top-0 w-full z-10 md:max-w-6xl md:-translate-x-1/2 md:left-1/2 " >
-            <div className="flex flex-col bg-white px-1 pt-2 py-3 h-[50px] md:h-[70px]">
+        <>
+            <style>{`
+              @keyframes bell-shake {
+                0%, 100% { transform: rotate(0deg); }
+                20% { transform: rotate(-12deg); }
+                40% { transform: rotate(8deg); }
+                60% { transform: rotate(-6deg); }
+                80% { transform: rotate(4deg); }
+              }
+              .bell-shake {
+                animation: bell-shake 1s ease-in-out infinite;
+              }
+            `}</style>
+            <header className="fixed top-0 w-full z-10 md:max-w-6xl md:-translate-x-1/2 md:left-1/2 " >
+                <div className="flex flex-col bg-white px-1 pt-2 py-3 h-[50px] md:h-[70px]">
                 <div className="grid grid-cols-3 items-center w-full">
                     {/* <div className="flex gap-1 items-center" onClick={() => setShowSearch(!showSearch)}>
                         <HamburgerMenuIcon className="w-6 h-6" />
@@ -197,11 +211,14 @@ function CardapioHeader() {
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                className="relative h-10 w-10 p-0 inline-flex items-center justify-center align-middle"
+                                className={cn(
+                                    "relative h-10 w-10 p-0 inline-flex items-center justify-center align-middle",
+                                    hasUnread && "bell-shake"
+                                )}
                                 aria-label="Notificações"
                             >
                                 <Bell className="h-5 w-5" />
-                                {unreadCount > 0 && (
+                                {hasUnread && (
                                     <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white" />
                                 )}
                             </Button>
@@ -293,7 +310,8 @@ function CardapioHeader() {
             </ScrollingBanner>
             {currentPage === "other" && <PushOptIn vapidPublicKey={vapidPublicKey} />}
 
-        </header>
+            </header>
+        </>
     )
 }
 

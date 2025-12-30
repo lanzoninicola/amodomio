@@ -1,5 +1,6 @@
 import { Link } from "@remix-run/react";
-import { Bell, Inbox } from "lucide-react";
+import { Bell, Inbox, AlertTriangle } from "lucide-react";
+import type { ReactNode } from "react";
 import { cn } from "~/lib/utils";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -9,10 +10,24 @@ type Props = {
   items: NotificationEntry[];
   initialized: boolean;
   onMarkAsRead: (id: string) => void | Promise<void>;
+  ctaItems?: NotificationCallToActionItem[];
   loadingMessage?: string;
   emptyTitle?: string;
   emptyDescription?: string;
   className?: string;
+};
+
+export type NotificationCallToActionItem = {
+  id: string;
+  title: string;
+  description: string;
+  severity?: "important" | "info";
+  icon?: ReactNode;
+  primaryLabel: string;
+  onPrimary: () => void;
+  primaryDisabled?: boolean;
+  secondaryLabel?: string;
+  onSecondary?: () => void;
 };
 
 function formatTime(ts: number) {
@@ -41,7 +56,7 @@ function NotificationFeedItem({ item, onMarkAsRead }: { item: NotificationEntry;
               !item.read && "bg-amber-200/90 shadow-md ring-1 ring-amber-100"
             )
           }>
-            <Bell className="h-6 w-6 text-amber-900" />
+            <Bell className="h-5 w-5" />
           </div>
 
         </div>
@@ -54,11 +69,6 @@ function NotificationFeedItem({ item, onMarkAsRead }: { item: NotificationEntry;
 
           {item.body && <p className="text-xs leading-snug text-slate-800/90">{item.body}</p>}
 
-          {item.type && (
-            <Badge variant="outline" className="mt-1 text-[10px] uppercase">
-              {item.type}
-            </Badge>
-          )}
         </div>
       </div>
 
@@ -118,35 +128,101 @@ export function NotificationFeed({
   items,
   initialized,
   onMarkAsRead,
+  ctaItems,
   loadingMessage = "Carregando notificações...",
   emptyTitle = "Nenhuma notificação por aqui ainda.",
   emptyDescription = "Assim que chegarem, elas aparecem aqui.",
   className,
 }: Props) {
+  const hasCtas = (ctaItems?.length || 0) > 0;
+
   if (!initialized) {
-    return <p className={cn("text-sm text-muted-foreground", className)}>{loadingMessage}</p>;
+    return (
+      <div className={cn("flex flex-col gap-3", className)}>
+        {hasCtas && ctaItems!.map((cta) => <NotificationFeedItemCallToAction key={cta.id} item={cta} />)}
+        <p className="text-sm text-muted-foreground">{loadingMessage}</p>
+      </div>
+    );
   }
 
   if (!items.length) {
     return (
-      <div
-        className={cn(
-          "flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground",
-          className
-        )}
-      >
-        <Inbox className="h-8 w-8" aria-hidden />
-        <p className="font-semibold text-slate-700">{emptyTitle}</p>
-        {emptyDescription && <p className="text-xs text-slate-500">{emptyDescription}</p>}
+      <div className={cn("flex flex-col gap-3", className)}>
+        {hasCtas && ctaItems!.map((cta) => <NotificationFeedItemCallToAction key={cta.id} item={cta} />)}
+        <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+          <Inbox className="h-8 w-8" aria-hidden />
+          <p className="font-semibold text-slate-700">{emptyTitle}</p>
+          {emptyDescription && <p className="text-xs text-slate-500">{emptyDescription}</p>}
+        </div>
       </div>
     );
   }
 
   return (
     <div className={cn("flex flex-col gap-3", className)}>
+      {ctaItems?.map((cta) => (
+        <NotificationFeedItemCallToAction key={cta.id} item={cta} />
+      ))}
       {items.map((item) => (
         <NotificationFeedItem key={item.id} item={item} onMarkAsRead={onMarkAsRead} />
       ))}
     </div>
+  );
+}
+
+function NotificationFeedItemCallToAction({ item }: { item: NotificationCallToActionItem }) {
+  const isImportant = item.severity === "important";
+  const ring = "ring-slate-100";
+  const headerBg = "bg-slate-50/70";
+  const iconBg = "bg-amber-200/90 shadow-md ring-1 ring-amber-100";
+  const hasSecondary = !!(item.secondaryLabel && item.onSecondary);
+
+  return (
+    <article
+      className={cn(
+        "overflow-hidden rounded-xl bg-white shadow-md ring-1 transition hover:shadow-lg",
+        ring
+      )}
+      role="article"
+    >
+      <div className={cn("flex items-start gap-3 px-4 py-4 sm:px-5 sm:py-5", headerBg)}>
+        <div className="relative">
+          <div className={cn("flex h-9 w-9 items-center justify-center rounded-xl", iconBg)}>
+            {item.icon || <AlertTriangle className="h-5 w-5" />}
+          </div>
+        </div>
+
+        <div className="flex-1 space-y-1">
+          <div className="flex items-start justify-between gap-2">
+            <p className="font-semibold leading-tight">{item.title}</p>
+            <div className="flex items-center gap-1" />
+          </div>
+
+          <p className="text-xs leading-snug text-slate-800/90">{item.description}</p>
+        </div>
+      </div>
+
+      <div className={cn("grid gap-x-4 px-4 py-3 sm:px-5", hasSecondary ? "grid-cols-2" : "grid-cols-1")}>
+        <Button
+          variant="secondary"
+          className="h-11 rounded-lg"
+          onClick={item.onPrimary}
+          disabled={item.primaryDisabled}
+          type="button"
+        >
+          {item.primaryLabel}
+        </Button>
+        {item.secondaryLabel && item.onSecondary && (
+          <Button
+            variant="ghost"
+            className="h-11 rounded-lg"
+            onClick={item.onSecondary}
+            type="button"
+          >
+            {item.secondaryLabel}
+          </Button>
+        )}
+      </div>
+    </article>
   );
 }

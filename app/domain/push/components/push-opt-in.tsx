@@ -103,10 +103,9 @@ export function PushOptIn({ vapidPublicKey, forceShow = false }: Props) {
     if (typeof window !== "undefined") window.localStorage.setItem(DISMISS_KEY, Date.now().toString());
   }
 
-  const descriptionText = "Aproveite alertas rápidos sobre novidades e ofertas relâmpago. Nada de spam, só o essencial.";
 
   const actionLabel =
-    status === "done" ? "Notificações ativas" : status === "working" ? "Ativando..." : "Ativar notificações";
+    status === "done" ? "Notificações ativas" : status === "working" ? "Ativando..." : "Ativar";
 
   if (!shouldShow) return null;
 
@@ -114,48 +113,40 @@ export function PushOptIn({ vapidPublicKey, forceShow = false }: Props) {
     <div className="flex justify-center bg-slate-900/95">
       <div className="w-full max-w-2xl overflow-hidden rounded-lg bg-gradient-to-br text-slate-900 shadow-md ">
         <div className="flex flex-col divide-y divide-white/40">
-          <div className="flex items-start gap-3 px-4 py-5 sm:px-6 sm:py-6">
+          <div className="flex items-start gap-3 p-4 sm:px-6 sm:py-6">
 
-            <div className="flex-1 space-y-1">
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex items-center gap-x-4">
-                  <PushOptInIcon />
-                  <p className="font-neue text-white uppercase  leading-tight tracking-wide">Receber notificações</p>
-                </div>
-                {displayTime && <span className="text-sm font-neue  font-semibold text-slate-100/80 tracking-wide">{displayTime}</span>}
+            <div className="flex items-center justify-between gap-x-5">
+              <div className="flex items-center gap-x-2">
+                <PushOptInIcon />
+                <p className="font-neue text-white uppercase  leading-tight tracking-wide">Receber notificações</p>
               </div>
+              <div className="flex flex-col gap-y-1">
+                <Button
+                  variant="ghost"
+                  className="font-neue text-xs tracking-wide h-8 text-slate-100 transition hover:bg-slate-900/10 uppercase font-normal border border-slate-100 rounded-none "
+                  onClick={handleDismiss}
+                  type="button"
+                >
+                  {isBlocked ? "Fechar" : "Agora não"}
+                </Button>
+                <Button
+                  className="h-8 text-sm rounded-none uppercase tracking-wide font-semibold "
+                  onClick={handleSubscribe}
+                  disabled={status === "working" || status === "done"}
+                  variant="secondary"
+                >
+                  {status === "done" && <Check className="mr-2 h-4 w-4" />}
+                  {status === "working" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  <span className="flex items-center gap-x-1">
 
-              <p className="font-neue tracking-wide text-xs leading-snug text-white">{descriptionText}</p>
+                    {actionLabel}
+                    <ArrowRight className="h-4 w-4" />
+                  </span>
+                </Button>
+
+
+              </div>
             </div>
-          </div>
-
-
-
-          <div className="grid grid-cols-8">
-            <Button
-              variant="ghost"
-              className="font-neue text-xs tracking-wide h-8 text-slate-100 transition hover:bg-slate-900/10 uppercase outline-none font-normal col-span-3"
-              onClick={handleDismiss}
-              type="button"
-            >
-              {isBlocked ? "Fechar" : "Agora não"}
-            </Button>
-            <Button
-              className="h-8 text-sm rounded-none uppercase tracking-wide font-semibold col-span-5"
-              onClick={handleSubscribe}
-              disabled={status === "working" || status === "done"}
-              variant="secondary"
-            >
-              {status === "done" && <Check className="mr-2 h-4 w-4" />}
-              {status === "working" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              <span className="flex items-center gap-x-1">
-
-                {actionLabel}
-                <ArrowRight className="h-4 w-4" />
-              </span>
-            </Button>
-
-
           </div>
         </div>
 
@@ -186,13 +177,6 @@ export function PushOptIn({ vapidPublicKey, forceShow = false }: Props) {
 
 function PushOptInIcon() {
   return (
-    <div className="relative">
-      <div className="flex h-6 w-6 items-center justify-center rounded-2xl bg-white shadow-md ring-1 ring-black-100">
-        <Bell className="h-4 w-4 text-black" />
-      </div>
-      <span className="absolute -right-1 -top-1 flex h-3 w-3 items-center justify-center rounded-full bg-slate-200 text-[11px] font-bold shadow ring-2 ring-white">
-        6
-      </span>
-    </div>
+    <Bell className="h-5 w-5 text-white" />
   )
 }
