@@ -331,6 +331,12 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
           items: [],
           disabled: false,
         },
+        {
+          title: "Backup do banco",
+          href: "/admin/database-backup",
+          items: [],
+          disabled: false,
+        },
 
         {
           title: "Zone de entrega",

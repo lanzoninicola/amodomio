@@ -138,6 +138,9 @@ export class MenuItemPrismaEntity {
       cacheRevalidation: false,
     }
   ) {
+    const { imageScaleWidth = 1280, cacheRevalidation = false } =
+      options || {};
+
     if (process.env.NODE_ENV === "development") {
       const stack = new Error().stack?.split("\n").slice(1, 6).join("\n");
       console.log("[MenuItem.findAll] chamado", {
@@ -148,7 +151,8 @@ export class MenuItemPrismaEntity {
     const cacheKey = `MenuItemPrismaEntity.findAll:${JSON.stringify(params)}`;
     let result = this.cacheManager.get<MenuItemWithAssociations[]>(cacheKey);
 
-    const shouldUseCache = result && options?.cacheRevalidation === false;
+    const shouldUseCache =
+      result !== undefined && cacheRevalidation === false;
 
     if (shouldUseCache) {
       return result;
@@ -198,7 +202,7 @@ export class MenuItemPrismaEntity {
       ...r,
       imageTransformedURL: CloudinaryUtils.scaleWidth(
         r.MenuItemImage?.publicId || "",
-        { width: options.imageScaleWidth }
+        { width: imageScaleWidth }
       ),
       tags: {
         all: r.tags.map((t) => t.Tag?.name ?? ""),
