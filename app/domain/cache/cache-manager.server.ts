@@ -16,9 +16,10 @@ export class CacheManager {
 
     if (result === undefined) {
       console.log(`Cache miss for key: ${key}`);
+    } else {
+      console.log("cache hit", key);
     }
 
-    console.log("cache hit", key);
     return result;
   }
 

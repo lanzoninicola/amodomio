@@ -85,7 +85,7 @@ import {
 import { Separator } from "~/components/ui/separator";
 import { cn } from "~/lib/utils";
 import DeliveryZoneCombobox from "~/domain/kds/components/delivery-zone-combobox";
-import { computeNetRevenueAmount } from "~/domain/finance/compute-net-revenue-amount.server";
+import { computeNetRevenueAmount } from "~/domain/finance/compute-net-revenue-amount";
 import { setOrderStatus } from "~/domain/kds/server/repository.server";
 import { MoneyInput } from "~/components/money-input/MoneyInput";
 import { getAvailableDoughSizes, getDoughStock, normalizeCounts, saveDoughStock, type DoughSizeOption, type DoughStockSnapshot } from "~/domain/kds/dough-stock.server";
@@ -242,6 +242,7 @@ type DashboardMeta = {
   cardFeePerc: number;
   goalMinAmount: number;
   goalTargetAmount: number;
+  pctOfMin: number; // 0..100
   pctOfTarget: number; // 0..100
   status: "below-min" | "between" | "hit-target";
 };
@@ -364,6 +365,8 @@ export async function loader({ params }: LoaderFunctionArgs) {
   if (netAmount >= goalTargetAmount && goalTargetAmount > 0) status = "hit-target";
   else if (netAmount >= goalMinAmount) status = "between";
 
+  const pctOfMin =
+    goalMinAmount > 0 ? Math.min(100, (netAmount / goalMinAmount) * 100) : 0;
   const pctOfTarget =
     goalTargetAmount > 0 ? Math.min(100, (netAmount / goalTargetAmount) * 100) : 0;
 
@@ -403,6 +406,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
     cardFeePerc,
     goalMinAmount,
     goalTargetAmount,
+    pctOfMin,
     pctOfTarget,
     status,
     marketplaceTaxPerc: taxaMarketplacePerc
@@ -1672,6 +1676,9 @@ export default function GridKdsPage() {
                   () => computePredictionData(rowsDb, operatorCountActive, riderCount, dzMap, nowMs, prepMinutesActive),
                   [rowsDb, operatorCountActive, riderCount, dzMap, nowMs, prepMinutesActive]
                 );
+                const sizeKeys = ["F", "M", "P", "I", "FT"] as (keyof SizeCounts)[];
+                const pizzaCounts = useMemo(() => sumSizes(rowsDb), [rowsDb]);
+                const totalPizzas = sizeKeys.reduce((acc, key) => acc + (pizzaCounts[key] ?? 0), 0);
                 const activeLastReady =
                   predictionMode === "real"
                     ? predictionData.realLastReadyAt
@@ -1686,7 +1693,7 @@ export default function GridKdsPage() {
                     : predictionData.theoreticalTimelineReadyMap;
 
                 return (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full items-stretch">
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 w-full items-stretch">
                     {/* Card previsão */}
                     <div className={summaryCardClass}>
                       <div className="flex items-start justify-between gap-3">
@@ -1799,6 +1806,37 @@ export default function GridKdsPage() {
                       </div>
                     </div>
 
+                    {/* Card pizzas */}
+                    <div className={summaryCardClass}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          <Pizza className="h-4 w-4" /> Pizzas do dia
+                        </div>
+                        <Badge variant="outline" className="text-[11px] font-semibold uppercase tracking-wide">
+                          Produção
+                        </Badge>
+                      </div>
+
+                      <div className="flex flex-col gap-x-4 sm:grid sm:grid-cols-6">
+                        <div className="flex flex-col items-baseline gap-2 sm:col-span-2">
+                          <div className="text-5xl font-black text-slate-900 tabular-nums">{totalPizzas}</div>
+                          <span className="text-[11px] uppercase tracking-wide text-slate-500 font-semibold">pizzas</span>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-3 sm:grid-rows-2 gap-1 sm:col-span-4">
+                          {sizeKeys.map((k) => (
+                            <div key={k} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 space-y-0.5">
+                              <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-600">
+                                {SIZE_LABELS[k]?.slice(0, 3) ?? k}
+                              </div>
+                              <div className="text-xl font-bold text-slate-900 tabular-nums leading-none">{pizzaCounts[k]}</div>
+                              {/* <div className="text-[11px] text-slate-500 font-semibold">{k}</div> */}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
                     {/* Card financeiro */}
                     <div className={summaryCardClass}>
                       <div className="flex items-start justify-between gap-3">
@@ -1813,11 +1851,11 @@ export default function GridKdsPage() {
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-center space-y-1">
                           <div className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Receita Líquida</div>
-                          <div className="text-3xl font-extrabold text-emerald-700 tabular-nums">{fmtBRL(dashboard.netAmount)}</div>
+                          <div className="text-3xl font-extrabold text-emerald-700 tabular-nums">{fmtBRL(dashboard.netAmount).slice(3, 99)}</div>
                         </div>
                         <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-center space-y-1">
                           <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Receita Bruta</div>
-                          <div className="text-3xl font-bold text-slate-800 tabular-nums">{fmtBRL(dashboard.grossAmount)}</div>
+                          <div className="text-3xl font-bold text-slate-800 tabular-nums">{fmtBRL(dashboard.grossAmount).slice(3, 99)}</div>
                         </div>
                       </div>
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-slate-600">
@@ -1836,25 +1874,30 @@ export default function GridKdsPage() {
                           <span className={`inline-flex h-2.5 w-2.5 rounded-full ${statusDot}`} aria-hidden />
                           Status do dia
                         </div>
-                        <Badge variant="outline" className="text-[11px] font-semibold uppercase tracking-wide bg-white/70">
-                          {dashboard.pctOfTarget.toFixed(0)}% da Target
-                        </Badge>
-                      </div>
-                      <div className={`text-3xl font-black leading-tight ${statusTextColor} tabular-nums`}>
-                        {dashboard.status === "hit-target"
-                          ? "Acima da meta"
-                          : dashboard.status === "between"
-                            ? "Acima da mínima"
-                            : "Abaixo da mínima"}
+                        <div className={`text-[11px] font-semibold uppercase tracking-wide ${statusTextColor}`}>
+                          {dashboard.status === "hit-target"
+                            ? "Acima da meta"
+                            : dashboard.status === "between"
+                              ? "Acima da mínima"
+                              : "Abaixo da mínima"}
+                        </div>
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div className="rounded-lg border border-white/60 bg-white/80 px-3 py-2">
+                        <div className="rounded-lg border border-white/60 bg-white/80 px-3 py-2 space-y-1.5">
                           <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-500">Meta Mínima (dia)</div>
+                          <div className={`text-3xl font-black ${statusTextColor} tabular-nums leading-none mb-2`}>
+                            {dashboard.pctOfMin.toFixed(0)}%
+                          </div>
+
                           <div className="font-mono text-base text-slate-800 tabular-nums">{fmtBRL(dashboard.goalMinAmount)}</div>
                         </div>
-                        <div className="rounded-lg border border-white/60 bg-white/80 px-3 py-2">
+                        <div className="rounded-lg border border-white/60 bg-white/80 px-3 py-2 space-y-1.5">
                           <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-500">Meta Target (dia)</div>
+                          <div className={`text-3xl font-black ${statusTextColor} tabular-nums leading-none mb-2`}>
+                            {dashboard.pctOfTarget.toFixed(0)}%
+                          </div>
+
                           <div className="font-mono text-base text-slate-800 tabular-nums">{fmtBRL(dashboard.goalTargetAmount)}</div>
                         </div>
                       </div>

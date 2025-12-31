@@ -163,6 +163,7 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
           items: [],
           disabled: false,
         },
+
         {
           title: "Fechamento do dia",
           href: "/admin/financeiro/fechamento-dia",
@@ -327,6 +328,12 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
         {
           title: "Importador de dados",
           href: "/admin/importer",
+          items: [],
+          disabled: false,
+        },
+        {
+          title: "Backup do banco",
+          href: "/admin/database-backup",
           items: [],
           disabled: false,
         },
