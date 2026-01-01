@@ -352,6 +352,18 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
         },
       ],
     },
+    {
+      title: "Marketing",
+      disabled: false,
+      items: [
+        {
+          title: "Notificações (Push)",
+          href: "/admin/push-notifications",
+          items: [],
+          disabled: false,
+        },
+      ],
+    },
   ],
 };
 
