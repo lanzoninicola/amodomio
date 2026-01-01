@@ -1,7 +1,7 @@
 import { InstagramLogoIcon } from "@radix-ui/react-icons";
-import { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
-import { Await, Link, Outlet, defer, matchPath, useLoaderData, useLocation } from "@remix-run/react";
-import { ArrowRight, Divide, Donut, Info, Instagram, LayoutTemplate, MapPin, Proportions, SearchIcon, User, Users } from "lucide-react";
+import { LinksFunction, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
+import { Await, Link, Outlet, defer, useLoaderData } from "@remix-run/react";
+import { ArrowRight, Bell, Divide, Donut, Info, Instagram, LayoutTemplate, MapPin, Proportions, SearchIcon, User, Users } from "lucide-react";
 import React, { ReactNode, Suspense, useEffect, useState } from "react";
 
 import ItalyFlag from "~/components/italy-flag/italy-flag";
@@ -21,6 +21,10 @@ import PUBLIC_WEBSITE_NAVIGATION_ITEMS from "~/domain/website-navigation/public/
 import prismaClient from "~/lib/prisma/client.server";
 import { cn } from "~/lib/utils";
 import { parseBooleanSetting } from "~/utils/parse-boolean-setting";
+import { PushOptIn } from "~/domain/push/components/push-opt-in";
+import useCurrentPage from "~/hooks/use-current-page";
+import { NotificationCenterProvider, useNotificationCenter } from "~/domain/push/notification-center-context";
+import { PwaInstallPrompt } from "~/domain/pwa/pwa-install-prompt";
 
 
 /**
@@ -63,6 +67,16 @@ export const meta: MetaFunction = ({ data }) => {
     ];
 };
 
+export const links: LinksFunction = () => [
+    { rel: "manifest", href: "/site.webmanifest" },
+    { rel: "apple-touch-icon", sizes: "180x180", href: "/favicons/apple-touch-icon.png" },
+    { rel: "icon", type: "image/png", sizes: "32x32", href: "/favicons/favicon-32x32.png" },
+    { rel: "icon", type: "image/png", sizes: "16x16", href: "/favicons/favicon-16x16.png" },
+    { rel: "icon", type: "image/png", sizes: "192x192", href: "/favicons/android-chrome-192x192.png" },
+    { rel: "icon", type: "image/png", sizes: "512x512", href: "/favicons/android-chrome-512x512.png" },
+    { rel: "shortcut icon", href: "/favicon.ico" },
+];
+
 export async function loader({ request }: LoaderFunctionArgs) {
 
     const requestedKeys = [
@@ -87,6 +101,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     return defer({
         fazerPedidoPublicURL: fPUrl,
         showLojaFechadaMessage,
+        vapidPublicKey: process.env.VAPID_PUBLIC_KEY ?? null,
     })
 
 }
@@ -95,22 +110,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 
 export default function CardapioWeb() {
-    const location = useLocation();
-    const pathname = location?.pathname;
+    const currentPage = useCurrentPage();
 
-    const searchPagePath = "/cardapio/buscar";
-    const singleItemPattern = "/cardapio/:id";
-
-    const isSearchPage = pathname === searchPagePath;
-    const isSingleItemPage = matchPath(singleItemPattern, pathname);
-
-    const currentPage = isSearchPage
-        ? "busca"
-        : isSingleItemPage
-            ? "single"
-            : "other";
-
-    const { showLojaFechadaMessage } = useLoaderData<typeof loader>()
+    const { showLojaFechadaMessage, vapidPublicKey } = useLoaderData<typeof loader>()
 
     // const sessionId = useClientSessionId();
 
@@ -123,15 +125,18 @@ export default function CardapioWeb() {
     // if (!isClient) return null; // ou um spinner, se quiser
 
     return (
-        <>
+        <NotificationCenterProvider>
             {showLojaFechadaMessage && <BannerFechado />}
             <CardapioHeader />
+
             <div className="md:m-auto md:max-w-6xl">
+                {/* <PwaInstallPrompt className="mt-16 md:mt-24 mb-6" /> */}
                 {/* {currentPage === "other" && <CompanyInfo />} */}
                 <Outlet />
+
             </div>
             {currentPage === "other" && <CardapioFooter />}
-        </>
+        </NotificationCenterProvider>
     );
 }
 
@@ -167,9 +172,10 @@ function BannerFechado() {
 
 
 function CardapioHeader() {
+    const currentPage = useCurrentPage()
     const [showSearch, setShowSearch] = useState(false)
-    const { fazerPedidoPublicURL } = useLoaderData<typeof loader>()
-
+    const { fazerPedidoPublicURL, vapidPublicKey } = useLoaderData<typeof loader>()
+    const { unreadCount } = useNotificationCenter()
 
     return (
         <header className="fixed top-0 w-full z-10 md:max-w-6xl md:-translate-x-1/2 md:left-1/2 " >
@@ -186,10 +192,23 @@ function CardapioHeader() {
                         </div>
                     </Link>
 
-                    <div className="w-full flex items-center gap-x-4 justify-end col-span-1">
+                    <div className="w-full flex items-center gap-x-2 justify-end col-span-1">
+                        <Link to="/cardapio/notificacoes" prefetch="intent">
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="relative h-10 w-10 p-0 inline-flex items-center justify-center align-middle"
+                                aria-label="Notificações"
+                            >
+                                <Bell className="h-5 w-5" />
+                                {unreadCount > 0 && (
+                                    <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white" />
+                                )}
+                            </Button>
+                        </Link>
                         <Link to={'buscar'} >
-                            <div className="flex justify-end items-center cursor-pointer" onClick={() => setShowSearch(!showSearch)}>
-                                <SearchIcon color={"black"} />
+                            <div className="flex h-10 w-10 items-center justify-center cursor-pointer" onClick={() => setShowSearch(!showSearch)}>
+                                <SearchIcon color={"black"} className="h-5 w-5" />
                                 {/* <span className="font-neue text-[10px] font-semibold  uppercase text-brand-blue">Pesquisar</span> */}
                             </div>
                         </Link>
@@ -272,6 +291,7 @@ function CardapioHeader() {
                 </div>
 
             </ScrollingBanner>
+            {currentPage === "other" && <PushOptIn vapidPublicKey={vapidPublicKey} />}
 
         </header>
     )
