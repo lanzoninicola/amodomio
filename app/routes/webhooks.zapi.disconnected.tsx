@@ -6,6 +6,7 @@ import { enforceRateLimit, handleRouteError } from "~/domain/z-api/route-helpers
 import { PayloadTooLargeError } from "~/domain/z-api/errors";
 import { readJsonBody } from "~/domain/z-api/security.server";
 import { normalizeWebhookPayload, stringifyPayloadForLog } from "~/domain/z-api/webhook.parser";
+import { addWebhookLog } from "~/domain/z-api/webhook-log.server";
 
 const WEBHOOK_BODY_LIMIT_BYTES = 256 * 1024;
 const LOG_HEADERS = ["user-agent", "x-forwarded-for", "cf-connecting-ip", "x-real-ip", "content-type"];
@@ -54,6 +55,14 @@ export async function action({ request }: ActionFunctionArgs) {
     headers: collectHeaders(request),
     payload: stringifyPayloadForLog(payload),
     normalized,
+  });
+
+  addWebhookLog({
+    id: correlationId,
+    event: "disconnected",
+    correlationId,
+    headers: collectHeaders(request),
+    payloadPreview: stringifyPayloadForLog(payload),
   });
 
   return json({ ok: true });

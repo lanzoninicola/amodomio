@@ -7,6 +7,7 @@ import { PayloadTooLargeError } from "~/domain/z-api/errors";
 import { readJsonBody } from "~/domain/z-api/security.server";
 import { normalizeWebhookPayload, stringifyPayloadForLog } from "~/domain/z-api/webhook.parser";
 import { sendAutoReplySafe } from "~/domain/z-api/zapi.service";
+import { addWebhookLog } from "~/domain/z-api/webhook-log.server";
 
 const WEBHOOK_BODY_LIMIT_BYTES = 256 * 1024;
 const LOG_HEADERS = ["user-agent", "x-forwarded-for", "cf-connecting-ip", "x-real-ip", "content-type"];
@@ -60,6 +61,14 @@ export async function action({ request }: ActionFunctionArgs) {
       instanceId: normalized.instanceId,
       messageTextPreview: normalized.messageText?.slice(0, 200),
     },
+  });
+
+  addWebhookLog({
+    id: correlationId,
+    event: "received",
+    correlationId,
+    headers: collectHeaders(request),
+    payloadPreview: stringifyPayloadForLog(payload),
   });
 
   // if (normalized.phone) {
