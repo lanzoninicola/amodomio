@@ -27,6 +27,37 @@ type SendResult = {
   removed: number;
 };
 
+<<<<<<< Updated upstream
+=======
+type PushSendFailure = {
+  campaignId: string;
+  endpoint: string;
+  statusCode?: number;
+  reason?: string;
+  provider?: "apple" | "google" | "microsoft" | "other";
+  at: number;
+};
+
+const lastPushErrors: PushSendFailure[] = [];
+const MAX_ERRORS = 50;
+
+function detectProvider(endpoint: string): PushSendFailure["provider"] {
+  if (endpoint.includes("web.push.apple.com")) return "apple";
+  if (endpoint.includes("fcm.googleapis.com") || endpoint.includes("googleapis")) return "google";
+  if (endpoint.includes("wns2") || endpoint.includes("notify.windows.com")) return "microsoft";
+  return "other";
+}
+
+function addPushError(entry: PushSendFailure) {
+  lastPushErrors.unshift(entry);
+  if (lastPushErrors.length > MAX_ERRORS) lastPushErrors.length = MAX_ERRORS;
+}
+
+export function getRecentPushErrors() {
+  return lastPushErrors.slice(0, MAX_ERRORS);
+}
+
+>>>>>>> Stashed changes
 export async function saveSubscription(params: {
   endpoint: string;
   expirationTime?: string | number | null;
@@ -116,7 +147,24 @@ export async function sendCampaignNow(campaignId: string): Promise<SendResult> {
         if (statusCode === 404 || statusCode === 410) {
           toRemove.push(sub.id);
         } else {
+<<<<<<< Updated upstream
           console.error("[push] Failed to send notification", { endpoint: sub.endpoint, error });
+=======
+          const provider = detectProvider(sub.endpoint);
+          const reason =
+            error?.body ||
+            error?.message ||
+            (typeof error === "string" ? error : JSON.stringify(error));
+          addPushError({
+            campaignId: campaign.id,
+            endpoint: sub.endpoint,
+            statusCode,
+            reason,
+            provider,
+            at: Date.now(),
+          });
+          console.error("[push] Failed to send notification", { endpoint: sub.endpoint, statusCode, provider, error });
+>>>>>>> Stashed changes
         }
       }
     })

@@ -9,7 +9,11 @@ import { Label } from "~/components/ui/label";
 import { Badge } from "~/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
+<<<<<<< Updated upstream
 import { sendCampaignNow } from "~/domain/push/web-push.server";
+=======
+import { getRecentPushErrors, sendCampaignNow } from "~/domain/push/web-push.server";
+>>>>>>> Stashed changes
 
 type Campaign = {
   id: string;
@@ -58,7 +62,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
     take: 50,
   });
 
+<<<<<<< Updated upstream
   return json({ totalSubscriptions, hasVapidKeys, campaigns, flash });
+=======
+  const recentErrors = getRecentPushErrors();
+
+  return json({ totalSubscriptions, hasVapidKeys, campaigns, flash, recentErrors });
+>>>>>>> Stashed changes
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -80,7 +90,11 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function AdminPushNotificationsIndex() {
+<<<<<<< Updated upstream
   const { totalSubscriptions, hasVapidKeys, campaigns, flash } = useLoaderData<typeof loader>();
+=======
+  const { totalSubscriptions, hasVapidKeys, campaigns, flash, recentErrors } = useLoaderData<typeof loader>();
+>>>>>>> Stashed changes
   const [searchParams, setSearchParams] = useSearchParams();
   const navigation = useNavigation();
 
@@ -175,6 +189,35 @@ export default function AdminPushNotificationsIndex() {
 
       {flash.sent && <div className="text-sm text-green-700">Campanha enviada.</div>}
       {flash.saved && <div className="text-sm text-green-700">Campanha salva para depois.</div>}
+<<<<<<< Updated upstream
+=======
+      {recentErrors?.length ? (
+        <div className="border rounded-xl bg-white shadow-sm">
+          <div className="flex items-center justify-between px-4 py-3">
+            <h2 className="text-lg font-semibold">Falhas recentes</h2>
+            <div className="text-xs text-slate-500">Últimas {recentErrors.length} tentativas com erro</div>
+          </div>
+          <div className="divide-y">
+            {recentErrors.map((err) => (
+              <div key={`${err.campaignId}-${err.endpoint}-${err.at}`} className="px-4 py-3 text-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex flex-col">
+                    <span className="font-semibold">Campanha: {err.campaignId}</span>
+                    <span className="text-xs text-slate-500 break-all">{err.endpoint}</span>
+                  </div>
+                  <Badge variant={err.provider === "apple" ? "destructive" : "secondary"}>
+                    {err.provider || "erro"}
+                  </Badge>
+                </div>
+                <div className="mt-1 text-xs text-slate-600">
+                  {err.statusCode ? `HTTP ${err.statusCode}` : "Erro desconhecido"} — {err.reason || "Sem detalhes"}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+>>>>>>> Stashed changes
 
       <div className="border rounded-xl bg-white shadow-sm">
         <div className="flex items-center justify-between px-4 py-3">
