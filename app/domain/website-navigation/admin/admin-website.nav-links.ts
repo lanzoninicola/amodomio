@@ -350,6 +350,12 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
           items: [],
           disabled: false,
         },
+        {
+          title: "Z-API Playground",
+          href: "/admin/zapi",
+          items: [],
+          disabled: false,
+        },
       ],
     },
     {
