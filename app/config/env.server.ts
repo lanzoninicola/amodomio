@@ -9,19 +9,28 @@ function toPositiveInt(value: string | undefined, fallback: number) {
 const zapiInstanceId = getRequiredServerEnvVar("VITE_ZAPI_INSTANCE_ID");
 const zapiInstanceToken = getRequiredServerEnvVar("VITE_ZAPI_INSTANCE_TOKEN");
 const zapiClientToken = getRequiredServerEnvVar("VITE_ZAPI_CLIENT_TOKEN");
+const zapiRemixRunApiKey = getRequiredServerEnvVar(
+  "VITE_ZAPI_REMIXRUN_API_KEY"
+);
+const zapiApiRateLimitPerMinute = getRequiredServerEnvVar(
+  "VITE_ZAPI_REMIXRUN_API_KEY"
+);
+const zapiEebhookRateLimitPerMinute = getRequiredServerEnvVar(
+  "VITE_ZAPI_WEBHOOK_RATE_LIMIT_PER_MINUTE"
+);
 
 export const env = {
   zapiBaseUrl: "https://api.z-api.io",
   zapiInstanceId,
   zapiInstanceToken,
   zapiClientToken,
-  apiKey: process.env.ZAPI_REMIXRUN_API_KEY || "",
+  apiKey: zapiRemixRunApiKey,
   apiRateLimitPerMinute: toPositiveInt(
-    process.env.ZAPI_API_RATE_LIMIT_PER_MINUTE,
+    zapiApiRateLimitPerMinute ? zapiApiRateLimitPerMinute : undefined,
     60
   ),
   webhookRateLimitPerMinute: toPositiveInt(
-    process.env.ZAPI_WEBHOOK_RATE_LIMIT_PER_MINUTE,
+    zapiEebhookRateLimitPerMinute ? zapiEebhookRateLimitPerMinute : undefined,
     120
   ),
 };

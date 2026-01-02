@@ -54,3 +54,24 @@ Content-Type: application/json
   "reason": "manual-test",
   "metadata": { "at": "2024-09-01T12:00:00Z" }
 }
+
+
+### Enviar texto Z-API
+POST http://localhost:3000/api/messages/text
+Content-Type: application/json
+x-api-key: 8f3c9b7e6a4d2c1f9e5b0a7d4e2c6f8a3b9d1e7c5a0f4e6b2d8a9c7e1f3
+
+{
+  "phone": "5546991052049",
+  "message": "Olá! Teste via rest.http"
+}
+
+### Exemplo com mensagem diferente
+POST http://localhost:3000/api/messages/text
+Content-Type: application/json
+x-api-key: SEU_API_KEY_AQUI
+
+{
+  "phone": "5544999999999",
+  "message": "Outro teste ✅"
+}

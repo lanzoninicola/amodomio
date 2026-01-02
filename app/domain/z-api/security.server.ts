@@ -17,7 +17,11 @@ export function getClientIp(request: Request) {
   return "unknown";
 }
 
-export function checkRateLimit(request: Request, limitPerMinute: number, bucket: string) {
+export function checkRateLimit(
+  request: Request,
+  limitPerMinute: number,
+  bucket: string
+) {
   const key = `${bucket}:${getClientIp(request)}`;
   const now = Date.now();
   const entry = rateLimitStore.get(key);
