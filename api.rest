@@ -31,3 +31,47 @@ GET https://a-modo-mio-evolutionapi-wursz4-9b618c-69-62-91-94.traefik.me
 
 ###
 GET https://evolution-api.amodomio.dev
+
+
+### Webhook recebido
+POST http://localhost:3000/webhooks/zapi/received
+Content-Type: application/json
+
+{
+  "phone": "5544999999999",
+  "message": "Teste de webhook",
+  "messageType": "text",
+  "instanceId": "instance-abc",
+  "extra": { "foo": "bar" }
+}
+
+### Webhook desconectado
+POST http://localhost:3000/webhooks/zapi/disconnected
+Content-Type: application/json
+
+{
+  "instanceId": "instance-abc",
+  "reason": "manual-test",
+  "metadata": { "at": "2024-09-01T12:00:00Z" }
+}
+
+
+### Enviar texto Z-API
+POST http://localhost:3000/api/messages/text
+Content-Type: application/json
+x-api-key: 8f3c9b7e6a4d2c1f9e5b0a7d4e2c6f8a3b9d1e7c5a0f4e6b2d8a9c7e1f3
+
+{
+  "phone": "5546991052049",
+  "message": "Olá! Teste via rest.http"
+}
+
+### Exemplo com mensagem diferente
+POST http://localhost:3000/api/messages/text
+Content-Type: application/json
+x-api-key: SEU_API_KEY_AQUI
+
+{
+  "phone": "5544999999999",
+  "message": "Outro teste ✅"
+}
