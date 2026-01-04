@@ -2,6 +2,7 @@ import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import prisma from "~/lib/prisma/client.server";
+import { useLoaderData } from "@remix-run/react";
 
 type LoaderData = {
   sends: Array<{

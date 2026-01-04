@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useState, type ReactNode } from "react";
 import prisma from "~/lib/prisma/client.server";
 import { normalize_phone_e164_br } from "~/domain/crm/normalize-phone.server";
+import { Separator } from "~/components/ui/separator";
 
 type LoaderData = {
   customers: Array<{
@@ -23,19 +24,30 @@ type LoaderData = {
     pageSize: number;
     total: number;
   };
+  query: string;
 };
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const page = Math.max(1, Number(url.searchParams.get("page") || 1));
   const pageSize = Math.min(100, Math.max(10, Number(url.searchParams.get("pageSize") || 20)));
+  const query = (url.searchParams.get("q") || "").trim();
+  const where = query
+    ? {
+      OR: [
+        { name: { contains: query, mode: "insensitive" } },
+        { phone_e164: { contains: query, mode: "insensitive" } },
+      ],
+    }
+    : undefined;
 
   const [total, customers] = await Promise.all([
-    prisma.crmCustomer.count(),
+    prisma.crmCustomer.count({ where }),
     prisma.crmCustomer.findMany({
       skip: (page - 1) * pageSize,
       take: pageSize,
       orderBy: { created_at: "desc" },
+      where,
       include: {
         _count: { select: { events: true, tags: true } },
         tags: { include: { tag: true } },
@@ -53,6 +65,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       tagBadges: c.tags.map((t) => t.tag.label || t.tag.key),
     })),
     pagination: { page, pageSize, total },
+    query,
   });
 }
 
@@ -92,32 +105,56 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function AdminCrmIndex() {
-  const { customers, pagination } = useLoaderData<typeof loader>();
+  const { customers, pagination, query } = useLoaderData<typeof loader>();
   const actionData = useActionData<ActionData>();
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
-  const [showQuick, setShowQuick] = useState(true);
+  const [showQuick, setShowQuick] = useState(false);
 
   return (
-    <div className="grid gap-6 font-neue">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
+    <div className="grid gap-5 font-neue">
+
+      <div className="space-y-3">
+        <div className="space-y-1">
           <h2 className="text-xl font-semibold">Clientes</h2>
-          <p className="text-sm text-muted-foreground">Cadastre e consulte clientes do CRM.</p>
         </div>
-        <div className="flex gap-2">
-          <Button asChild variant="secondary">
-            <Link to="/admin/crm/new">Novo cliente completo</Link>
-          </Button>
-          <Button
-            variant={showQuick ? "default" : "outline"}
-            type="button"
-            onClick={() => setShowQuick((v) => !v)}
-          >
-            {showQuick ? "Ocultar cadastro rápido" : "Cadastro rápido"}
-          </Button>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap gap-2">
+            <Button asChild variant="secondary">
+              <Link to="/admin/crm/new">Novo cliente completo</Link>
+            </Button>
+            <Button variant={showQuick ? "default" : "outline"} type="button" onClick={() => setShowQuick((v) => !v)}>
+              {showQuick ? "Ocultar cadastro rápido" : "Cadastro rápido"}
+            </Button>
+          </div>
+          <Form method="get" className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+            <div className="flex-1 sm:min-w-[280px]">
+              <Input
+                name="q"
+                placeholder="Buscar por nome ou telefone"
+                defaultValue={query}
+                className="w-full"
+                autoComplete="off"
+              />
+            </div>
+            <input type="hidden" name="page" value="1" />
+            <input type="hidden" name="pageSize" value={pagination.pageSize} />
+            <div className="flex gap-2 sm:justify-end">
+              <Button type="submit" variant="default">
+                Buscar
+              </Button>
+              {query ? (
+                <Button variant="ghost" asChild>
+                  <Link to="?">Limpar</Link>
+                </Button>
+              ) : null}
+            </div>
+          </Form>
         </div>
       </div>
+
+
+
 
       {showQuick ? (
         <Card id="quick-create">
@@ -150,16 +187,23 @@ export default function AdminCrmIndex() {
         </Card>
       ) : null}
 
+      <Separator className="my-2" />
+
       <section className="grid gap-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h3 className="text-lg font-semibold">Clientes</h3>
-            <p className="text-xs text-muted-foreground">
-              Mostrando {customers.length} de {pagination.total} registros.
-            </p>
-          </div>
+
+
+          <p className="text-xs text-muted-foreground">
+            Mostrando {customers.length} de {pagination.total} registros.
+          </p>
+
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <PageLink page={pagination.page - 1} disabled={pagination.page <= 1} pageSize={pagination.pageSize}>
+            <PageLink
+              page={pagination.page - 1}
+              disabled={pagination.page <= 1}
+              pageSize={pagination.pageSize}
+              query={query}
+            >
               Anterior
             </PageLink>
             <span className="text-muted-foreground">Página {pagination.page}</span>
@@ -167,6 +211,7 @@ export default function AdminCrmIndex() {
               page={pagination.page + 1}
               disabled={pagination.page * pagination.pageSize >= pagination.total}
               pageSize={pagination.pageSize}
+              query={query}
             >
               Próxima
             </PageLink>
@@ -228,16 +273,20 @@ function PageLink({
   pageSize,
   disabled,
   children,
+  query,
 }: {
   page: number;
   pageSize: number;
   disabled?: boolean;
   children: ReactNode;
+  query?: string;
 }) {
   if (disabled || page < 1) {
     return <span className="rounded border px-2 py-1 text-muted-foreground/70">{children}</span>;
   }
-  const search = new URLSearchParams({ page: String(page), pageSize: String(pageSize) }).toString();
+  const searchParams = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+  if (query) searchParams.set("q", query);
+  const search = searchParams.toString();
   return (
     <Link to={`?${search}`} className="rounded border px-2 py-1 text-primary hover:bg-muted">
       {children}
