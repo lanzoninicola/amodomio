@@ -368,6 +368,12 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
           items: [],
           disabled: false,
         },
+        {
+          title: "CRM",
+          href: "/admin/crm",
+          items: [],
+          disabled: false,
+        },
       ],
     },
     {

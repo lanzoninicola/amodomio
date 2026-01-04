@@ -66,6 +66,16 @@ x-api-key: 8f3c9b7e6a4d2c1f9e5b0a7d4e2c6f8a3b9d1e7c5a0f4e6b2d8a9c7e1f3
   "message": "Olá! Teste via rest.http"
 }
 
+### Enviar texto Z-API
+POST https://dev.amodomio.com.br/api/messages/text
+Content-Type: application/json
+x-api-key: 8f3c9b7e6a4d2c1f9e5b0a7d4e2c6f8a3b9d1e7c5a0f4e6b2d8a9c7e1f3
+
+{
+  "phone": "5546991052049",
+  "message": "Olá! Teste via rest.http"
+}
+
 ### Exemplo com mensagem diferente
 POST http://localhost:3000/api/messages/text
 Content-Type: application/json
@@ -74,4 +84,18 @@ x-api-key: SEU_API_KEY_AQUI
 {
   "phone": "5544999999999",
   "message": "Outro teste ✅"
+}
+
+
+### CRM contact
+POST http://localhost:3000/api/crm/contact
+Content-Type: application/json
+x-api-key: fOD19KP7zZaloS3nMyux3qqI8ABihL3c
+
+{
+  "name": "Cliente Teste",
+  "phone": "+5544999999999",
+  "gender": "female",
+  "age_profile": "adult",
+  "source": "whatsapp-web"
 }
