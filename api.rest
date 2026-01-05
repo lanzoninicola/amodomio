@@ -59,7 +59,18 @@ Content-Type: application/json
 ### Enviar texto Z-API
 POST http://localhost:3000/api/messages/text
 Content-Type: application/json
-x-api-key: 8f3c9b7e6a4d2c1f9e5b0a7d4e2c6f8a3b9d1e7c5a0f4e6b2d8a9c7e1f3
+x-api-key: fOD19KP7zZaloS3nMyux3qqI8ABihL3c
+
+{
+  "phone": "5546991052049",
+  "message": "Olá! Teste via rest.http"
+}
+
+
+### Enviar texto Z-API
+POST https://amodomio.com.br/api/messages/text
+Content-Type: application/json
+x-api-key: fOD19KP7zZaloS3nMyux3qqI8ABihL3c
 
 {
   "phone": "5546991052049",
@@ -69,28 +80,18 @@ x-api-key: 8f3c9b7e6a4d2c1f9e5b0a7d4e2c6f8a3b9d1e7c5a0f4e6b2d8a9c7e1f3
 ### Enviar texto Z-API
 POST https://dev.amodomio.com.br/api/messages/text
 Content-Type: application/json
-x-api-key: 8f3c9b7e6a4d2c1f9e5b0a7d4e2c6f8a3b9d1e7c5a0f4e6b2d8a9c7e1f3
+x-api-key: fOD19KP7zZaloS3nMyux3qqI8ABihL3c
 
 {
   "phone": "5546991052049",
   "message": "Olá! Teste via rest.http"
 }
 
-### Exemplo com mensagem diferente
-POST http://localhost:3000/api/messages/text
-Content-Type: application/json
-x-api-key: SEU_API_KEY_AQUI
-
-{
-  "phone": "5544999999999",
-  "message": "Outro teste ✅"
-}
-
 
 ### CRM contact
-POST http://localhost:3000/api/crm/contact
+POST http://localhost:3000/api/crm/customers
 Content-Type: application/json
-x-api-key: fOD19KP7zZaloS3nMyux3qqI8ABihL3c
+x-api-key: 3PjN!u9g@r5XzE1fQw7H
 
 {
   "name": "Cliente Teste",
@@ -100,8 +101,25 @@ x-api-key: fOD19KP7zZaloS3nMyux3qqI8ABihL3c
   "source": "whatsapp-web"
 }
 
+###
+POST https://amodomio.com.br/api/crm/customers
+Content-Type: application/json
+x-api-key: 3PjN!u9g@r5XzE1fQw7H
+
+{
+  "name": "Cliente Teste",
+  "phone": "+5544999999999",
+  "gender": "female",
+  "age_profile": "adult",
+  "source": "whatsapp-web"
+}
 
 ### Verificar se contato existe pelos últimos 8 dígitos
-GET http://localhost:3000/api/crm/customers?phone=+55%2046%20991052049
+GET https://amodomio.com.br/api/crm/customers?phone=+55%2046%20991052049
 Accept: application/json
-x-api-key: fOD19KP7zZaloS3nMyux3qqI8ABihL3c
+x-api-key: 3PjN!u9g@r5XzE1fQw7H
+
+###
+GET https://dev.amodomio.com.br/api/crm/customers?phone=+55%2046%20991052049
+Accept: application/json
+x-api-key: 3PjN!u9g@r5XzE1fQw7H
