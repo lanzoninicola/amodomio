@@ -60,7 +60,6 @@ function rateLimitCheck(
 
 function authorize(apiKey: string | null) {
   const secret = env.apiKey;
-  console.log("rest-api.entity.server.ts - authorize fn()", { secret });
   if (!secret) {
     return { status: 500, message: "REST API secret key not configured" };
   }
