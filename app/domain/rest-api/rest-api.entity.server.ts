@@ -1,72 +1,79 @@
-import { EnvironmentVariables } from "~/root";
-import { badRequest, HttpResponse, ok } from "~/utils/http-response.server";
+const WINDOW_MS = 60_000;
+const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
 
-const memoryStore = new Map<string, { count: number; expires: number }>();
+type RateLimitOptions = {
+  limitPerMinute?: number;
+  bucket?: string;
+};
 
-class RestApiEntity {
-  authorize(apiKey: string | null | undefined): HttpResponse {
-    if (!apiKey) {
-      return badRequest("API key is required") as HttpResponse;
-    }
+type RateLimitResult = {
+  success: boolean;
+  retryIn?: number;
+};
 
-    const env = import.meta.env;
-
-    const ENV: EnvironmentVariables = {
-      REST_API_SECRET_KEY: env.VITE_REST_API_SECRET_KEY,
-    };
-
-    if (!ENV.REST_API_SECRET_KEY || ENV.REST_API_SECRET_KEY === "") {
-      return badRequest(
-        "Environment variable VITE_REST_API_SECRET_KEY is not set"
-      ) as HttpResponse;
-    }
-
-    if (apiKey !== ENV.REST_API_SECRET_KEY) {
-      return badRequest("Unauthorized") as HttpResponse;
-    }
-
-    // If the API key is valid, return nothing (void)
-    return ok("API key is valid") as unknown as HttpResponse;
-  }
-
-  /**
-   * Aplica um controle simples de rate limit baseado em memória local.
-   * Limita o número de requisições por chave (IP ou x-api-key) dentro de uma janela de tempo.
-   *
-   * @param request - Objeto da requisição HTTP (Remix Request)
-   * @param limit - Número máximo de requisições permitidas na janela (padrão: 100)
-   * @param windowMs - Duração da janela em milissegundos (padrão: 10 minutos)
-   * @returns Um objeto indicando se a requisição é permitida ou bloqueada, com tempo restante em caso de bloqueio
-   */
-
-  async rateLimitCheck(request: Request, limit = 100, windowMs = 600_000) {
-    const key =
-      request.headers.get("x-api-key") ||
-      request.headers.get("x-forwarded-for") ||
-      request.headers.get("cf-connecting-ip") ||
-      "anonymous";
-
-    const now = Date.now();
-    const entry = memoryStore.get(key);
-
-    if (!entry || entry.expires < now) {
-      memoryStore.set(key, {
-        count: 1,
-        expires: now + windowMs,
-      });
-      return { success: true };
-    }
-
-    if (entry.count < limit) {
-      entry.count++;
-      return { success: true };
-    }
-
-    return {
-      success: false,
-      retryIn: entry.expires - now,
-    };
-  }
+function toPositiveInt(value: string | number | undefined, fallback: number) {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num <= 0) return fallback;
+  return Math.floor(num);
 }
 
-export const restApi = new RestApiEntity();
+function getClientIp(request: Request) {
+  const forwarded = request.headers.get("x-forwarded-for");
+  if (forwarded) return forwarded.split(",")[0].trim();
+
+  const realIp =
+    request.headers.get("cf-connecting-ip") ||
+    request.headers.get("x-real-ip") ||
+    request.headers.get("forwarded");
+
+  if (realIp) return realIp.split(",")[0].trim();
+  return "unknown";
+}
+
+function rateLimitCheck(
+  request: Request,
+  options: RateLimitOptions = {}
+): RateLimitResult {
+  const limitPerMinute = toPositiveInt(
+    options.limitPerMinute ?? process.env.VITE_REST_API_RATE_LIMIT_PER_MINUTE,
+    60
+  );
+  const bucket = options.bucket || "rest-api";
+  const key = `${bucket}:${getClientIp(request)}`;
+  const now = Date.now();
+  const entry = rateLimitStore.get(key);
+
+  if (!entry || entry.resetAt <= now) {
+    rateLimitStore.set(key, { count: 1, resetAt: now + WINDOW_MS });
+    return { success: true };
+  }
+
+  if (entry.count < limitPerMinute) {
+    entry.count += 1;
+    return { success: true };
+  }
+
+  return { success: false, retryIn: entry.resetAt - now };
+}
+
+function authorize(apiKey: string | null) {
+  const secret = process.env.VITE_REST_API_SECRET_KEY;
+  if (!secret) {
+    return { status: 500, message: "REST API secret key not configured" };
+  }
+
+  if (!apiKey) {
+    return { status: 401, message: "Missing x-api-key header" };
+  }
+
+  if (apiKey !== secret) {
+    return { status: 401, message: "Invalid API key" };
+  }
+
+  return { status: 200, message: "Authorized" };
+}
+
+export const restApi = {
+  authorize,
+  rateLimitCheck,
+};

@@ -371,6 +371,24 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
       ],
     },
     {
+      title: "CRM",
+      disabled: false,
+      items: [
+        {
+          title: "Clientes",
+          href: "/admin/crm",
+          items: [],
+          disabled: false,
+        },
+        {
+          title: "Campanhas",
+          href: "/admin/crm/campaigns",
+          items: [],
+          disabled: false,
+        },
+      ],
+    },
+    {
       title: "Marketing",
       disabled: false,
       items: [
