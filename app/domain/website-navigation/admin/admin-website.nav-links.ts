@@ -350,6 +350,42 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
           items: [],
           disabled: false,
         },
+        {
+          title: "Z-API Contatos",
+          href: "/admin/zapi/contacts",
+          items: [],
+          disabled: false,
+        },
+        {
+          title: "Z-API Playground",
+          href: "/admin/zapi/playground",
+          items: [],
+          disabled: false,
+        },
+        {
+          title: "Z-API Webhook Logs",
+          href: "/admin/zapi/logs",
+          items: [],
+          disabled: false,
+        },
+      ],
+    },
+    {
+      title: "CRM",
+      disabled: false,
+      items: [
+        {
+          title: "Clientes",
+          href: "/admin/crm",
+          items: [],
+          disabled: false,
+        },
+        {
+          title: "Campanhas",
+          href: "/admin/crm/campaigns",
+          items: [],
+          disabled: false,
+        },
       ],
     },
     {

@@ -25,6 +25,7 @@
     "paths": {
       "~/*": ["./app/*"],
       "@/*": ["./app/*"],
+      "@config/*": ["./app/config/*"],
       "@firestore-model/*": ["./app/lib/firestore-model/src/*"]
     },
 

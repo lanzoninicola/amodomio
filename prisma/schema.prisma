@@ -1508,3 +1508,115 @@ model Engagement {
 
   @@map("engagements")
 }
+
+// CRM Fase 1 (snake_case models/fields)
+model CrmCustomer {
+  id         String               @id @default(uuid())
+  phone_e164 String               @unique @db.VarChar(20)
+  name       String               @db.VarChar(255)
+  email      String?              @db.VarChar(255)
+  preferred_channel String?       @db.VarChar(20) @map("preferred_channel")
+
+  first_order_at DateTime?        @map("first_order_at")
+  last_order_at  DateTime?        @map("last_order_at")
+  orders_count   Int              @default(0) @map("orders_count")
+  total_revenue  Decimal          @default(0) @map("total_revenue") @db.Decimal(12, 2)
+  avg_ticket     Decimal          @default(0) @map("avg_ticket") @db.Decimal(12, 2)
+  lgpd_consent   Boolean          @default(false) @map("lgpd_consent")
+  consent_at     DateTime?        @map("consent_at")
+
+  delivery_address_last Json?     @map("delivery_address_last")
+  neighborhood          String?   @db.VarChar(255)
+  city                  String?   @db.VarChar(255)
+  postal_code           String?   @db.VarChar(20)
+
+  gender                  String  @default("unknown") @db.VarChar(20)
+  profession              String? @db.VarChar(255)
+  age_profile             String  @default("unknown") @db.VarChar(20)
+  preferred_payment_method String @default("unknown") @db.VarChar(20)
+  created_at DateTime             @default(now())
+  updated_at DateTime             @updatedAt
+  events     CrmCustomerEvent[]
+  tags       CrmCustomerTagLink[]
+  sends      CrmCampaignSend[]
+
+  @@map("crm_customer")
+}
+
+model CrmCustomerTag {
+  id         String                  @id @default(uuid())
+  key        String                  @unique @db.VarChar(100)
+  label      String?                 @db.VarChar(255)
+  created_at DateTime                @default(now())
+  updated_at DateTime                @updatedAt
+  links      CrmCustomerTagLink[]
+
+  @@map("crm_customer_tag")
+}
+
+model CrmCustomerTagLink {
+  id          String            @id @default(uuid())
+  customer_id String
+  tag_id      String
+  created_at  DateTime          @default(now())
+
+  customer CrmCustomer   @relation(fields: [customer_id], references: [id])
+  tag      CrmCustomerTag @relation(fields: [tag_id], references: [id])
+
+  @@unique([customer_id, tag_id])
+  @@index([tag_id], name: "crm_customer_tag_link_tag_id_idx")
+
+  @@map("crm_customer_tag_link")
+}
+
+model CrmCustomerEvent {
+  id           String   @id @default(uuid())
+  customer_id  String
+  event_type   String   @db.VarChar(50)
+  source       String?  @db.VarChar(100)
+  external_id  String?  @db.VarChar(150)
+  payload      Json?
+  payload_raw  String?
+  created_at   DateTime @default(now())
+
+  customer CrmCustomer @relation(fields: [customer_id], references: [id])
+
+  @@index([customer_id], name: "crm_customer_event_customer_id_idx")
+  @@index([source, external_id], name: "crm_customer_event_source_external_id_idx")
+
+  @@map("crm_customer_event")
+}
+
+model CrmCampaign {
+  id          String                @id @default(uuid())
+  name        String                @db.VarChar(255)
+  description String?               @db.Text
+  source      String?               @db.VarChar(100)
+  external_id String?               @db.VarChar(150)
+  created_at  DateTime              @default(now())
+  updated_at  DateTime              @updatedAt
+  sends       CrmCampaignSend[]
+
+  @@map("crm_campaign")
+}
+
+model CrmCampaignSend {
+  id           String        @id @default(uuid())
+  campaign_id  String
+  customer_id  String
+  status       String?       @db.VarChar(50)
+  payload      Json?
+  payload_raw  String?
+  source       String?       @db.VarChar(100)
+  external_id  String?       @db.VarChar(150)
+  created_at   DateTime      @default(now())
+
+  campaign CrmCampaign @relation(fields: [campaign_id], references: [id])
+  customer CrmCustomer @relation(fields: [customer_id], references: [id])
+
+  @@index([campaign_id], name: "crm_campaign_send_campaign_id_idx")
+  @@index([customer_id], name: "crm_campaign_send_customer_id_idx")
+  @@index([source, external_id], name: "crm_campaign_send_source_external_id_idx")
+
+  @@map("crm_campaign_send")
+}

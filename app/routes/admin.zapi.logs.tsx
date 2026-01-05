@@ -1,0 +1,137 @@
+import type { LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node";
+import { json, redirect } from "@remix-run/node";
+import { useLoaderData, useNavigation, Form } from "@remix-run/react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { clearWebhookLogs, getWebhookLogs } from "~/domain/z-api/webhook-log.server";
+
+type LoaderData = {
+  event: "received" | "disconnected" | "all";
+  logs: Array<{
+    id: string;
+    event: "received" | "disconnected";
+    correlationId: string;
+    timestamp: number;
+    headers: Record<string, string>;
+    payloadPreview: string;
+  }>;
+};
+
+export async function loader({ request }: LoaderFunctionArgs) {
+  const url = new URL(request.url);
+  const event = (url.searchParams.get("event") as LoaderData["event"]) || "all";
+
+  const logs =
+    event === "all"
+      ? getWebhookLogs()
+      : getWebhookLogs(event as "received" | "disconnected");
+
+  return json<LoaderData>({ event, logs });
+}
+
+export async function action({ request }: ActionFunctionArgs) {
+  const form = await request.formData();
+  const intent = String(form.get("_intent") || "");
+
+  if (intent === "clear") {
+    clearWebhookLogs();
+    const event = form.get("event");
+    const params = new URLSearchParams();
+    if (event) params.set("event", String(event));
+    return redirect(`/admin/zapi/logs${params.toString() ? `?${params.toString()}` : ""}`);
+  }
+
+  return redirect("/admin/zapi/logs");
+}
+
+export default function AdminZapiLogsPage() {
+  const { event, logs } = useLoaderData<typeof loader>();
+  const navigation = useNavigation();
+  const isLoading = navigation.state === "loading";
+
+  return (
+    <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Logs de Webhooks Z-API</h1>
+          <p className="text-sm text-muted-foreground">
+            Visualize os últimos webhooks recebidos em memória (não persistido).
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <Form method="get" className="flex items-center gap-3">
+            <Select
+              name="event"
+              defaultValue={event}
+              onValueChange={(value) => {
+                const form = document.createElement("form");
+                form.method = "get";
+                form.innerHTML = `<input name="event" value="${value}" />`;
+                form.submit();
+              }}
+            >
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Filtro" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="received">Received</SelectItem>
+                <SelectItem value="disconnected">Disconnected</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button
+              type="submit"
+              variant="outline"
+              disabled={isLoading}
+            >
+              {isLoading ? "Atualizando..." : "Atualizar"}
+            </Button>
+          </Form>
+
+          <Form method="post">
+            <input type="hidden" name="_intent" value="clear" />
+            <input type="hidden" name="event" value={event} />
+            <Button type="submit" variant="destructive" disabled={isLoading}>
+              Limpar log
+            </Button>
+          </Form>
+        </div>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Últimos eventos</CardTitle>
+          <CardDescription>
+            Mostrando {logs.length} registro(s) • filtro: {event}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {logs.length === 0 && (
+            <div className="rounded-md border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
+              Nenhum webhook registrado ainda. Aguarde chamadas para visualizar aqui.
+            </div>
+          )}
+
+          {logs.map((log) => (
+            <div key={log.id} className="rounded-lg border border-border bg-muted/30 p-3">
+              <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                <span className="rounded-full bg-primary/10 px-2 py-1 text-primary font-semibold text-[11px]">
+                  {log.event}
+                </span>
+                <span>Correlation: {log.correlationId}</span>
+                <span>{new Date(log.timestamp).toLocaleTimeString()}</span>
+              </div>
+              <div className="mt-2 text-xs text-muted-foreground">
+                Headers: <code className="rounded bg-black/5 px-1 py-0.5">{JSON.stringify(log.headers)}</code>
+              </div>
+              <pre className="mt-3 overflow-x-auto rounded bg-black/5 p-3 text-xs text-foreground">
+                {log.payloadPreview}
+              </pre>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
