@@ -33,4 +33,6 @@ export const env = {
   ),
 };
 
+console.log({ env });
+
 export type Env = typeof env;
