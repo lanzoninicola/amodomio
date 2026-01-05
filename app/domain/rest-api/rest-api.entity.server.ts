@@ -1,3 +1,5 @@
+import { env } from "~/config/env.server";
+
 const WINDOW_MS = 60_000;
 const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
 
@@ -57,7 +59,7 @@ function rateLimitCheck(
 }
 
 function authorize(apiKey: string | null) {
-  const secret = process.env.VITE_REST_API_SECRET_KEY;
+  const secret = env.apiKey;
   if (!secret) {
     return { status: 500, message: "REST API secret key not configured" };
   }
