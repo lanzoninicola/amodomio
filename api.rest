@@ -55,6 +55,42 @@ Content-Type: application/json
   "metadata": { "at": "2024-09-01T12:00:00Z" }
 }
 
+### Webhook trafego pago (auto-resposta template via /received)
+POST http://localhost:3000/webhooks/zapi/received
+Content-Type: application/json
+
+{
+  "phone": "5546991052049",
+  "message": "Oi, vi o anuncio META_ADS ads",
+  "extra": { "utm": "meta-ads" }
+}
+
+### Webhook trafego pago (auto-resposta template via /received)
+POST http://localhost:3000/webhooks/zapi/received
+Content-Type: application/json
+
+{
+    "phone": "554691052049",
+    "messageType": "ReceivedCallback",
+    "instanceId": "3EC947CCE08D7279C1EC6A599C5ED5B8",
+    "messageTextPreview": "META_ADS"
+}
+
+### Enviar botao de acao direto na Z-API (teste)
+POST https://api.z-api.io/instances/3EC947CCE08D7279C1EC6A599C5ED5B8/token/8E1A9D0ED29E466080F58818/send-button-actions
+Content-Type: application/json
+Client-Token: Ffafb55bb0ef142e899016c31fb77a320S
+
+{
+  "phone": "5546991052049",
+  "message": "Teste de botoes direto na Z-API",
+  "buttonActions": [
+    { "id": "VIEW_MENU", "text": "Ver cardapio", "url": "https://amodomio.com.br/cardapio" },
+    { "id": "INFO_SIZES", "text": "Tamanhos" }
+  ],
+  "footerText": "Teste direto via rest.http"
+}
+
 
 ### Enviar texto Z-API
 POST http://localhost:3000/api/messages/text
@@ -128,3 +164,18 @@ x-api-key: fOD19KP7zZaloS3nMyux3qqI8ABihL3c
 GET https://dev.amodomio.com.br/api/crm/customers?phone=+55%2046%20991052049
 Accept: application/json
 x-api-key: fOD19KP7zZaloS3nMyux3qqI8ABihL3c
+
+
+###
+
+### Webhook recebido (teste)
+POST http://localhost:3000/webhooks/zapi/received
+Content-Type: application/json
+
+{
+  "phone": "5546991052049",
+  "message": "Teste de webhook pelo rest.http",
+  "messageType": "text",
+  "instanceId": "instance-abc",
+  "extra": { "foo": "bar" }
+}
