@@ -1,4 +1,4 @@
-type WebhookEventType = "received" | "disconnected";
+type WebhookEventType = "received" | "disconnected" | "traffic";
 
 type LogEntry = {
   id: string;

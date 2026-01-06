@@ -1,6 +1,7 @@
 import { zapiInstancePath, zapiRequest, ZApiError } from "./zapi-client.server";
 import {
   ContactsResponse,
+  SendButtonActionsRequest,
   SendMessageResponse,
   SendTextRequest,
   SendVideoRequest,
@@ -30,6 +31,29 @@ function assertMessage(message: unknown): string {
   const trimmed = message.trim();
   if (!trimmed) throw new ValidationError("Message cannot be empty.");
   return trimmed;
+}
+
+function assertButtonActions(buttonActions: SendButtonActionsRequest["buttonActions"]) {
+  if (!Array.isArray(buttonActions) || buttonActions.length === 0) {
+    throw new ValidationError("buttonActions must be a non-empty array.");
+  }
+
+  return buttonActions.slice(0, 3).map((action, idx) => {
+    const id = assertMessage(action?.id ?? `btn-${idx + 1}`);
+    const text = assertMessage(action?.text ?? "");
+    const url = action?.url?.trim();
+    if (url) {
+      try {
+        const parsed = new URL(url);
+        if (!["http:", "https:"].includes(parsed.protocol)) {
+          throw new ValidationError("Button url must use http/https.");
+        }
+      } catch {
+        throw new ValidationError("Button url is invalid.");
+      }
+    }
+    return { id, text, url };
+  });
 }
 
 function assertVideoUrl(video: unknown): string {
@@ -109,6 +133,26 @@ export async function sendVideoMessage(
   );
 }
 
+export async function sendButtonActionsMessage(
+  payload: SendButtonActionsRequest,
+  options?: { timeoutMs?: number }
+): Promise<SendMessageResponse> {
+  const phone = assertPhone(payload?.phone);
+  const message = assertMessage(payload?.message);
+  const buttonActions = assertButtonActions(payload?.buttonActions);
+  const footerText = payload?.footerText?.trim();
+
+  const body: Record<string, any> = { phone, message, buttonActions };
+  if (footerText) body.footerText = footerText;
+
+  return zapiRequest<SendMessageResponse>(
+    "POST",
+    `${zapiInstancePath}/send-button-actions`,
+    body,
+    options
+  );
+}
+
 export async function listContacts(params: {
   page?: number | string;
   pageSize?: number | string;
@@ -142,5 +186,70 @@ export async function sendAutoReplySafe(phone: string) {
         ? { status: error.status, message: error.message }
         : { message: (error as any)?.message };
     console.warn("[z-api] auto-reply failed", { phone: normalized, ...details });
+  }
+}
+
+type TrafficAutoReplyOptions = {
+  menuUrl?: string;
+  message?: string;
+  menuButtonText?: string;
+  sizesButtonText?: string;
+  timeoutMs?: number;
+  forceText?: boolean;
+};
+
+export async function sendTrafficAutoReplyTemplate(
+  phone: string,
+  params?: TrafficAutoReplyOptions
+): Promise<SendMessageResponse | undefined> {
+  const normalized = normalizePhone(phone);
+  if (!normalized) return;
+
+  try {
+    const message =
+      params?.message ??
+      "Oi! Eu sou do A Modo Mio. Queremos te ajudar rapido. Escolha uma opcao abaixo:";
+
+    const menuButtonText = params?.menuButtonText ?? "Ver o nosso cardapio";
+    const sizesButtonText =
+      params?.sizesButtonText ?? "Informacoes sobre tamanhos";
+
+    if (params?.forceText) {
+      return await sendTextMessage(
+        {
+          phone: normalized,
+          message,
+        },
+        { timeoutMs: params?.timeoutMs ?? 10_000 }
+      );
+    }
+
+    return await sendButtonActionsMessage(
+      {
+        phone: normalized,
+        message,
+        buttonActions: [
+          {
+            id: "VIEW_MENU",
+            text: menuButtonText,
+            url: params?.menuUrl,
+          },
+          {
+            id: "INFO_SIZES",
+            text: sizesButtonText,
+          },
+        ],
+      },
+      { timeoutMs: params?.timeoutMs ?? 10_000 }
+    );
+  } catch (error) {
+    const details =
+      error instanceof ZApiError
+        ? { status: error.status, message: error.message, path: error.path }
+        : { message: (error as any)?.message };
+    console.warn("[z-api] traffic auto-reply failed", {
+      phone: normalized,
+      ...details,
+    });
   }
 }

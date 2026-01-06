@@ -1,12 +1,10 @@
 import { json } from "@remix-run/node";
 import type { ActionFunctionArgs } from "@remix-run/node";
 import { v4 as uuidv4 } from "uuid";
-import { env } from "@config/env";
 import { enforceRateLimit, handleRouteError } from "~/domain/z-api/route-helpers.server";
 import { PayloadTooLargeError } from "~/domain/z-api/errors";
 import { readJsonBody } from "~/domain/z-api/security.server";
 import { normalizeWebhookPayload, stringifyPayloadForLog } from "~/domain/z-api/webhook.parser";
-import { sendAutoReplySafe } from "~/domain/z-api/zapi.service";
 import { addWebhookLog } from "~/domain/z-api/webhook-log.server";
 import { maybeSendTrafficAutoReply } from "~/domain/z-api/meta-auto-responder.server";
 
@@ -43,7 +41,7 @@ export async function action({ request }: ActionFunctionArgs) {
     if (error instanceof PayloadTooLargeError) {
       return handleRouteError(error);
     }
-    console.warn("[z-api][webhook][received] invalid payload", {
+    console.warn("[z-api][webhook][traffic] invalid payload", {
       correlationId,
       error: (error as any)?.message,
     });
@@ -52,7 +50,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const normalized = normalizeWebhookPayload("received", payload);
 
-  console.info("[z-api][webhook][received]", {
+  console.info("[z-api][webhook][traffic]", {
     correlationId,
     headers: collectHeaders(request),
     payload: stringifyPayloadForLog(payload),
@@ -66,23 +64,13 @@ export async function action({ request }: ActionFunctionArgs) {
 
   addWebhookLog({
     id: correlationId,
-    event: "received",
+    event: "traffic",
     correlationId,
     headers: collectHeaders(request),
     payloadPreview: stringifyPayloadForLog(payload),
   });
 
-  const trafficResult = await maybeSendTrafficAutoReply(normalized, correlationId).catch((error) => {
-    console.warn("[z-api][webhook][received] traffic auto-reply failed", {
-      correlationId,
-      error: (error as any)?.message,
-    });
-    return { sent: false, reason: "error" };
-  });
+  const trafficResult = await maybeSendTrafficAutoReply(normalized, correlationId);
 
-  // if (normalized.phone) {
-  //   void sendAutoReplySafe(normalized.phone);
-  // }
-
-  return json({ ok: true, trafficResult });
+  return json({ ok: true, ...trafficResult });
 }

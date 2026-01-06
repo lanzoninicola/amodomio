@@ -284,6 +284,12 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
           disabled: false,
         },
         {
+          title: "META Autoresponder",
+          href: "/admin/bot/meta-auto-responder",
+          items: [],
+          disabled: false,
+        },
+        {
           title: "NLP",
           href: "/admin/nlp",
           items: [],

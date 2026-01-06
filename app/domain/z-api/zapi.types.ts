@@ -11,6 +11,19 @@ export type SendVideoRequest = {
   viewOnce?: boolean;
 };
 
+export type ButtonAction = {
+  id: string;
+  text: string;
+  url?: string;
+};
+
+export type SendButtonActionsRequest = {
+  phone: string;
+  message: string;
+  buttonActions: ButtonAction[];
+  footerText?: string;
+};
+
 export type SendMessageResponse = {
   id?: string;
   messageId?: string;

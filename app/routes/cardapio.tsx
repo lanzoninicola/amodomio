@@ -1,7 +1,7 @@
 import { InstagramLogoIcon } from "@radix-ui/react-icons";
 import { LinksFunction, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { Await, Link, Outlet, defer, useLoaderData } from "@remix-run/react";
-import { ArrowRight, Bell, Divide, Donut, Info, Instagram, LayoutTemplate, MapPin, Proportions, SearchIcon, User, Users } from "lucide-react";
+import { ArrowRight, Bell, Divide, Info, Instagram, LayoutTemplate, MapPin, Proportions, SearchIcon } from "lucide-react";
 import React, { ReactNode, Suspense, useEffect, useState } from "react";
 
 import ItalyFlag from "~/components/italy-flag/italy-flag";
@@ -25,6 +25,7 @@ import { PushOptIn } from "~/domain/push/components/push-opt-in";
 import useCurrentPage from "~/hooks/use-current-page";
 import { NotificationCenterProvider, useNotificationCenter } from "~/domain/push/notification-center-context";
 import { PwaInstallPrompt } from "~/domain/pwa/pwa-install-prompt";
+import { CardapioSizesContent } from "~/domain/cardapio/components/cardapio-sizes-content";
 
 
 /**
@@ -457,107 +458,7 @@ function CardapioFooterMenuItemDialog({ children, triggerComponent }: CardapioFo
 }
 
 
-type SizesSelection = "individual" | "pequeno" | "medio" | "familia";
-
-const SIZE_ORDER: SizesSelection[] = ["individual", "pequeno", "medio", "familia"];
-
-const sizeConfig: Record<
-    SizesSelection,
-    {
-        label: string;
-        serves: string;
-        flavors: string;
-        dims: string;
-        donuts: number;
-        imgW: string;
-    }
-> = {
-    individual: {
-        label: "Individual",
-        serves: "Serve até 1 pessoa",
-        flavors: "Máximo 1 sabor",
-        dims: "aprox. 25x15cm",
-        donuts: 1,
-        imgW: "w-[50px]",
-    },
-    pequeno: {
-        // por enquanto, exatamente igual ao "Individual"
-        label: "Pequeno",
-        serves: "Serve até 1 pessoa",
-        flavors: "Máximo 1 sabor",
-        dims: "aprox. metade de uma média",
-        donuts: 1,
-        imgW: "w-[60px]", // levemente maior para diferenciar visualmente
-    },
-    medio: {
-        label: "Médio",
-        serves: "Serve até 2 pessoas",
-        flavors: "Máximo 2 sabores",
-        dims: "aprox. 40x20cm (8 fatias)",
-        donuts: 2,
-        imgW: "w-[80px]",
-    },
-    familia: {
-        label: "Família",
-        serves: "Serve até 6 pessoas",
-        flavors: "Máximo 4 sabores",
-        dims: "aprox. 60x40cm (16 fatias)",
-        donuts: 4,
-        imgW: "w-[120px]",
-    },
-};
-
 export function CardapioSizesDialog() {
-    const [currentSize, setCurrentSize] = useState<SizesSelection>("individual");
-
-    const onKeySelect: React.KeyboardEventHandler<HTMLButtonElement> = (e) => {
-        if (e.key === "Enter" || e.key === " ") {
-            (e.currentTarget as HTMLButtonElement).click();
-            e.preventDefault();
-        }
-    };
-
-    function ButtonSelection({ size }: { size: SizesSelection }) {
-        const cfg = sizeConfig[size];
-        const active = currentSize === size;
-
-        return (
-            <button
-                type="button"
-                role="tab"
-                aria-pressed={active}
-                aria-selected={active}
-                onKeyDown={onKeySelect}
-                onClick={() => setCurrentSize(size)}
-                className={cn(
-                    "group relative flex flex-col items-center justify-center gap-y-4 rounded-xl border transition h-[130px]",
-                    "hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40",
-                    active
-                        ? "border-brand-blue bg-brand-blue/5"
-                        : "border-zinc-200 bg-white"
-                )}
-            >
-                <img
-                    src="/images/cardapio-web-app/pizza-placeholder-sm.png"
-                    alt={`Tamanho ${cfg.label}`}
-                    className={cn(cfg.imgW, "h-auto")}
-                    draggable={false}
-                />
-                <span className="mt-2 font-neue text-sm font-semibold tracking-wide uppercase">
-                    {cfg.label}
-                </span>
-
-                {active && (
-                    <span className="absolute -top-2 right-2 rounded-full bg-brand-blue px-2 py-0.5 text-[10px] font-semibold uppercase text-white">
-                        Selecionado
-                    </span>
-                )}
-            </button>
-        );
-    }
-
-    const current = sizeConfig[currentSize];
-
     return (
         <CardapioFooterMenuItemDialog
             triggerComponent={
@@ -567,66 +468,7 @@ export function CardapioSizesDialog() {
                 </div>
             }
         >
-            <div className="h-[580px] overflow-auto py-4">
-                <div className="mb-6">
-                    <h3 className="font-neue text-2xl font-semibold tracking-tight">
-                        Tamanhos disponíveis
-                    </h3>
-                    <span className="text-sm text-zinc-600">
-                        Selecione o tamanho para visualizar os detalhes
-                    </span>
-                </div>
-
-                {/* Botões de tamanho */}
-                <div
-                    role="tablist"
-                    aria-label="Selecionar tamanho"
-                    className="grid grid-cols-2 gap-3 sm:grid-cols-4"
-                >
-                    {SIZE_ORDER.map((s) => (
-                        <ButtonSelection key={s} size={s} />
-                    ))}
-                </div>
-
-                <Separator className="my-6" />
-
-                {/* Detalhes do tamanho */}
-                <div className="mx-auto flex max-w-sm flex-col items-center gap-y-2 text-center">
-                    <h4 className="mb-2 font-neue text-lg font-semibold uppercase ">
-                        Tamanho {current.label}
-                    </h4>
-
-                    <div className="grid grid-cols-3 gap-x-4 font-neue">
-
-                        {/* Serve */}
-                        <div className="flex flex-col items-center gap-2 leading-tight text-sm">
-                            {currentSize === "familia" || currentSize === "medio" ? (
-                                <Users size={32} />
-                            ) : (
-                                <User size={32} />
-                            )}
-                            <span>{current.serves}</span>
-                        </div>
-
-                        {/* Sabores */}
-                        <div className="flex flex-col items-center gap-2 leading-tight text-sm">
-                            <div className="flex gap-1">
-                                {Array.from({ length: current.donuts }).map((_, i) => (
-                                    <Donut key={i} size={32} />
-                                ))}
-                            </div>
-                            <span>{current.flavors}</span>
-                        </div>
-
-                        {/* Dimensões */}
-                        <div className="flex flex-col items-center gap-2 leading-tight text-sm">
-                            <Proportions size={32} />
-                            <span>{current.dims}</span>
-                        </div>
-
-                    </div>
-                </div>
-            </div>
+            <CardapioSizesContent />
         </CardapioFooterMenuItemDialog>
     );
 }
