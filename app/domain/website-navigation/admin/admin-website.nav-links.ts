@@ -387,6 +387,12 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
           disabled: false,
         },
         {
+          title: "Relatório de inserções",
+          href: "/admin/crm/jornada-de-inserimento",
+          items: [],
+          disabled: false,
+        },
+        {
           title: "Campanhas",
           href: "/admin/crm/campaigns",
           items: [],

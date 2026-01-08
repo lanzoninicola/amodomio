@@ -93,7 +93,6 @@ export async function action({ request }: ActionFunctionArgs) {
       ? body.gender.trim().toLowerCase()
       : "";
 
-  if (!name) return json({ error: "invalid_name" }, { status: 400 });
   if (!phone) return json({ error: "invalid_phone" }, { status: 400 });
 
   const phone_e164 = normalize_phone_e164_br(phone);
@@ -109,7 +108,7 @@ export async function action({ request }: ActionFunctionArgs) {
     ? await prisma.crmCustomer.update({
         where: { phone_e164 },
         data: {
-          name,
+          ...(name ? { name } : {}),
           email: email || undefined,
           preferred_channel: preferred_channel ?? undefined,
           gender: gender ?? undefined,
@@ -118,7 +117,7 @@ export async function action({ request }: ActionFunctionArgs) {
     : await prisma.crmCustomer.create({
         data: {
           phone_e164,
-          name,
+          name: name || null,
           email: email || null,
           preferred_channel: preferred_channel ?? "unknown",
           gender: gender ?? "unknown",
@@ -127,7 +126,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const eventPayload = {
     action: "contact_received",
-    name,
+    name: name || undefined,
     phone,
     email: email || undefined,
     message: message || undefined,

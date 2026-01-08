@@ -20,7 +20,6 @@ export async function action({ request }: ActionFunctionArgs) {
   const name = typeof body?.name === "string" ? body.name.trim() : "";
 
   if (!phone) return json({ error: "invalid_phone" }, { status: 400 });
-  if (!name) return json({ error: "invalid_name" }, { status: 400 });
 
   const phone_e164 = normalize_phone_e164_br(phone);
   if (!phone_e164) return json({ error: "invalid_phone" }, { status: 400 });
@@ -31,7 +30,7 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   const customer = await prisma.crmCustomer.create({
-    data: { phone_e164, name },
+    data: { phone_e164, name: name || null },
   });
 
   await prisma.crmCustomerEvent.create({

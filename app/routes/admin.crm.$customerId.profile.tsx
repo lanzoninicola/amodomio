@@ -18,7 +18,7 @@ import { useLoaderData, useNavigation, useActionData } from "@remix-run/react";
 type LoaderData = {
   customer: {
     id: string;
-    name: string;
+    name: string | null;
     phone_e164: string;
     created_at: string;
     updated_at: string;
@@ -91,7 +91,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
   const form = await request.formData();
   const name = String(form.get("name") || "").trim();
-  if (!name) return json<ActionData>({ error: "Nome é obrigatório" }, { status: 400 });
 
   const email = String(form.get("email") || "").trim() || null;
   const preferred_channel_raw = String(form.get("preferred_channel") || "").trim();
@@ -134,7 +133,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
   await prisma.crmCustomer.update({
     where: { id: customerId },
     data: {
-      name,
+      name: name || null,
       email,
       preferred_channel,
       gender,
@@ -219,7 +218,7 @@ export default function AdminCrmCustomerProfile() {
           <div className="grid gap-4 md:grid-cols-2">
             <div className="grid gap-1">
               <label className="text-xs uppercase text-muted-foreground">Nome</label>
-              <Input name="name" defaultValue={customer.name} required />
+              <Input name="name" defaultValue={customer.name || ""} />
             </div>
             <div className="grid gap-1">
               <label className="text-xs uppercase text-muted-foreground">Telefone (E.164)</label>

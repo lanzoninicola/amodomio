@@ -31,7 +31,6 @@ export async function action({ request }: ActionFunctionArgs) {
   const phone = String(form.get("phone") || "").trim();
   const name = String(form.get("name") || "").trim();
   if (!phone) return json<ActionData>({ error: "Telefone é obrigatório" }, { status: 400 });
-  if (!name) return json<ActionData>({ error: "Nome é obrigatório" }, { status: 400 });
 
   const phone_e164 = normalize_phone_e164_br(phone);
   if (!phone_e164) return json<ActionData>({ error: "Telefone inválido" }, { status: 400 });
@@ -82,7 +81,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const customer = await prisma.crmCustomer.create({
     data: {
       phone_e164,
-      name,
+      name: name || null,
       email,
       preferred_channel,
       gender,
