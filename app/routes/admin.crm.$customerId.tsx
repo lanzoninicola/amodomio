@@ -7,7 +7,7 @@ import prisma from "~/lib/prisma/client.server";
 type LoaderData = {
   customer: {
     id: string;
-    name: string;
+    name: string | null;
     phone_e164: string;
     tags: { id: string; tag: { key: string; label: string | null } }[];
   };
@@ -55,7 +55,7 @@ export default function AdminCrmCustomerLayout() {
       <div className="flex items-center justify-between">
         <div>
           <p className="text-xs text-muted-foreground">Cliente</p>
-          <h2 className="text-2xl font-semibold leading-tight">{customer.name}</h2>
+          <h2 className="text-2xl font-semibold leading-tight">{customer.name || "Sem nome"}</h2>
           <p className="font-mono text-sm text-muted-foreground">{customer.phone_e164}</p>
           {customer.tags?.length ? (
             <div className="mt-2 flex flex-wrap gap-2">
