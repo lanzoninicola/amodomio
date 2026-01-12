@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { settingPrismaEntity } from "~/domain/setting/setting.prisma.entity.server";
 import { getTrafficAutoresponderContext } from "~/domain/z-api/meta-auto-responder.server";
 
-type LoaderData = {
+type SettingsData = {
   enabled: boolean;
   trigger: string;
   menuUrl: string;
@@ -22,8 +22,10 @@ type LoaderData = {
   sizesButtonText: string;
 };
 
+type LoaderData = SettingsData;
+
 const CONTEXT = getTrafficAutoresponderContext();
-const DEFAULTS: LoaderData = {
+const DEFAULTS: SettingsData = {
   enabled: true,
   trigger: "ads",
   menuUrl: "https://amodomio.com.br/cardapio",

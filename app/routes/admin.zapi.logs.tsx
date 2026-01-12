@@ -4,17 +4,23 @@ import { useLoaderData, useNavigation, Form } from "@remix-run/react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import prismaClient from "~/lib/prisma/client.server";
 import { clearWebhookLogs, getWebhookLogs } from "~/domain/z-api/webhook-log.server";
 
 type LoaderData = {
-  event: "received" | "disconnected" | "all";
+  event: "received" | "disconnected" | "traffic" | "all";
   logs: Array<{
     id: string;
-    event: "received" | "disconnected";
+    event: string | null;
     correlationId: string;
     timestamp: number;
-    headers: Record<string, string>;
-    payloadPreview: string;
+    headers?: Record<string, string> | null;
+    payloadPreview: string | null;
+    source: "memory" | "stored";
+    phone?: string | null;
+    messageText?: string | null;
+    sent?: boolean;
+    reason?: string | null;
   }>;
 };
 
@@ -22,10 +28,44 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const event = (url.searchParams.get("event") as LoaderData["event"]) || "all";
 
-  const logs =
+  const memoryLogs =
     event === "all"
       ? getWebhookLogs()
-      : getWebhookLogs(event as "received" | "disconnected");
+      : getWebhookLogs(event as "received" | "disconnected" | "traffic");
+
+  const storedLogs = await prismaClient.metaAdsLog.findMany({
+    where: event === "all" ? undefined : { event },
+    orderBy: { createdAt: "desc" },
+    take: 200,
+  });
+
+  const normalizedMemoryLogs = memoryLogs.map((log) => ({
+    id: log.id,
+    event: log.event,
+    correlationId: log.correlationId,
+    timestamp: log.timestamp,
+    headers: log.headers,
+    payloadPreview: log.payloadPreview,
+    source: "memory" as const,
+  }));
+
+  const normalizedStoredLogs = storedLogs.map((log) => ({
+    id: log.id,
+    event: log.event,
+    correlationId: log.correlationId ?? "-",
+    timestamp: log.createdAt.getTime(),
+    headers: null,
+    payloadPreview: log.payloadPreview,
+    source: "stored" as const,
+    phone: log.phone,
+    messageText: log.messageText,
+    sent: log.sent,
+    reason: log.reason,
+  }));
+
+  const logs = [...normalizedStoredLogs, ...normalizedMemoryLogs].sort(
+    (a, b) => b.timestamp - a.timestamp
+  );
 
   return json<LoaderData>({ event, logs });
 }
@@ -42,6 +82,14 @@ export async function action({ request }: ActionFunctionArgs) {
     return redirect(`/admin/zapi/logs${params.toString() ? `?${params.toString()}` : ""}`);
   }
 
+  if (intent === "clear-stored") {
+    await prismaClient.metaAdsLog.deleteMany();
+    const event = form.get("event");
+    const params = new URLSearchParams();
+    if (event) params.set("event", String(event));
+    return redirect(`/admin/zapi/logs${params.toString() ? `?${params.toString()}` : ""}`);
+  }
+
   return redirect("/admin/zapi/logs");
 }
 
@@ -51,12 +99,12 @@ export default function AdminZapiLogsPage() {
   const isLoading = navigation.state === "loading";
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8">
+    <div className="flex max-w-6xl flex-col gap-6 px-4 py-8">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Logs de Webhooks Z-API</h1>
           <p className="text-sm text-muted-foreground">
-            Visualize os últimos webhooks recebidos em memória (não persistido).
+            Visualize logs em memória e logs armazenados (META_ADS).
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -77,6 +125,7 @@ export default function AdminZapiLogsPage() {
               <SelectContent>
                 <SelectItem value="all">Todos</SelectItem>
                 <SelectItem value="received">Received</SelectItem>
+                <SelectItem value="traffic">Traffic</SelectItem>
                 <SelectItem value="disconnected">Disconnected</SelectItem>
               </SelectContent>
             </Select>
@@ -93,7 +142,15 @@ export default function AdminZapiLogsPage() {
             <input type="hidden" name="_intent" value="clear" />
             <input type="hidden" name="event" value={event} />
             <Button type="submit" variant="destructive" disabled={isLoading}>
-              Limpar log
+              Limpar in-memory
+            </Button>
+          </Form>
+
+          <Form method="post">
+            <input type="hidden" name="_intent" value="clear-stored" />
+            <input type="hidden" name="event" value={event} />
+            <Button type="submit" variant="destructive" disabled={isLoading}>
+              Limpar armazenados
             </Button>
           </Form>
         </div>
@@ -114,19 +171,40 @@ export default function AdminZapiLogsPage() {
           )}
 
           {logs.map((log) => (
-            <div key={log.id} className="rounded-lg border border-border bg-muted/30 p-3">
+            <div key={`${log.source}-${log.id}`} className="rounded-lg border border-border bg-muted/30 p-3">
               <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                 <span className="rounded-full bg-primary/10 px-2 py-1 text-primary font-semibold text-[11px]">
-                  {log.event}
+                  {log.event || "unknown"}
+                </span>
+                <span
+                  className={
+                    log.source === "stored"
+                      ? "rounded-full bg-emerald-100 px-2 py-1 text-[11px] font-semibold text-emerald-700"
+                      : "rounded-full bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-700"
+                  }
+                >
+                  {log.source === "stored" ? "armazenado" : "in-memory"}
                 </span>
                 <span>Correlation: {log.correlationId}</span>
-                <span>{new Date(log.timestamp).toLocaleTimeString()}</span>
+                <span>{new Date(log.timestamp).toLocaleString("pt-BR")}</span>
+                {log.source === "stored" && log.phone ? <span>Telefone: {log.phone}</span> : null}
+                {log.source === "stored" ? (
+                  <span>Resposta: {log.sent ? "enviada" : "falhou"}</span>
+                ) : null}
+                {log.source === "stored" && log.reason ? <span>Motivo: {log.reason}</span> : null}
               </div>
-              <div className="mt-2 text-xs text-muted-foreground">
-                Headers: <code className="rounded bg-black/5 px-1 py-0.5">{JSON.stringify(log.headers)}</code>
-              </div>
+              {log.source === "memory" ? (
+                <div className="mt-2 text-xs text-muted-foreground">
+                  Headers: <code className="rounded bg-black/5 px-1 py-0.5">{JSON.stringify(log.headers)}</code>
+                </div>
+              ) : null}
+              {log.source === "stored" && log.messageText ? (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  <span className="font-semibold">Mensagem:</span> {log.messageText.slice(0, 180)}
+                </p>
+              ) : null}
               <pre className="mt-3 overflow-x-auto rounded bg-black/5 p-3 text-xs text-foreground">
-                {log.payloadPreview}
+                {log.payloadPreview || "Sem payload armazenado."}
               </pre>
             </div>
           ))}
