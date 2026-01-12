@@ -13,7 +13,7 @@ import { Separator } from "~/components/ui/separator";
 type LoaderData = {
   customers: Array<{
     id: string;
-    name: string;
+    name: string | null;
     phone_e164: string;
     events: number;
     tags: number;
@@ -80,15 +80,14 @@ export async function action({ request }: ActionFunctionArgs) {
   const name = String(form.get("name") || "").trim();
 
   if (!phone) return json<ActionData>({ error: "Telefone é obrigatório" }, { status: 400 });
-  if (!name) return json<ActionData>({ error: "Nome é obrigatório" }, { status: 400 });
 
   const phone_e164 = normalize_phone_e164_br(phone);
   if (!phone_e164) return json<ActionData>({ error: "Telefone inválido" }, { status: 400 });
 
   const customer = await prisma.crmCustomer.upsert({
     where: { phone_e164 },
-    update: { name },
-    create: { phone_e164, name },
+    update: name ? { name } : {},
+    create: { phone_e164, name: name || null },
   });
 
   await prisma.crmCustomerEvent.create({
@@ -122,6 +121,9 @@ export default function AdminCrmIndex() {
           <div className="flex flex-wrap gap-2">
             <Button asChild variant="secondary">
               <Link to="/admin/crm/new">Novo cliente completo</Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link to="/admin/crm/jornada-de-inserimento">Relatório de inserções</Link>
             </Button>
             <Button variant={showQuick ? "default" : "outline"} type="button" onClick={() => setShowQuick((v) => !v)}>
               {showQuick ? "Ocultar cadastro rápido" : "Cadastro rápido"}
@@ -232,7 +234,7 @@ export default function AdminCrmIndex() {
               {customers.length ? (
                 customers.map((c) => (
                   <TableRow key={c.id}>
-                    <TableCell>{c.name}</TableCell>
+                    <TableCell>{c.name || "-"}</TableCell>
                     <TableCell className="font-mono text-xs">{c.phone_e164}</TableCell>
                     <TableCell>{c.events}</TableCell>
                     <TableCell className="space-x-1">

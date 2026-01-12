@@ -86,7 +86,7 @@ function extractInstanceId(payload: any): string | undefined {
 }
 
 export function normalizeWebhookPayload(
-  event: "received" | "disconnected",
+  event: "received" | "disconnected" | "traffic",
   payload: any
 ): NormalizedWebhookEvent {
   return {

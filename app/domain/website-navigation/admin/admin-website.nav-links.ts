@@ -77,13 +77,19 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
       items: [
         {
           title: "Configurações",
-          href: "/admin/gerenciamento/cardapio-settings",
+          href: "/admin/gerenciamento/cardapio/settings",
           items: [],
           disabled: false,
         },
         {
           title: "Grupos",
           href: "/admin/gerenciamento/cardapio/groups",
+          items: [],
+          disabled: false,
+        },
+        {
+          title: "Tamanhos",
+          href: "/admin/gerenciamento/cardapio/sizes",
           items: [],
           disabled: false,
         },
@@ -284,6 +290,12 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
           disabled: false,
         },
         {
+          title: "META Autoresponder",
+          href: "/admin/bot/meta-auto-responder",
+          items: [],
+          disabled: false,
+        },
+        {
           title: "NLP",
           href: "/admin/nlp",
           items: [],
@@ -377,6 +389,12 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
         {
           title: "Clientes",
           href: "/admin/crm",
+          items: [],
+          disabled: false,
+        },
+        {
+          title: "Relatório de inserções",
+          href: "/admin/crm/jornada-de-inserimento",
           items: [],
           disabled: false,
         },
