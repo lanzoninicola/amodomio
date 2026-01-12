@@ -3,6 +3,7 @@ import React from "react";
 
 import { Separator } from "~/components/ui/separator";
 import { cn } from "~/lib/utils";
+import formatMoneyString from "~/utils/format-money-string";
 
 export type SizesSelection = "individual" | "pequeno" | "medio" | "familia";
 
@@ -23,13 +24,13 @@ export const sizeConfig: Record<
         label: "Individual",
         serves: "Serve até 1 pessoa",
         flavors: "Máximo 1 sabor",
-        dims: "aprox. 25x15cm",
+        dims: "aprox. metade de uma pequena",
         donuts: 1,
         imgW: "w-[50px]",
     },
     pequeno: {
         label: "Pequeno",
-        serves: "Serve até 1 pessoa",
+        serves: "Serve até 2 pessoas",
         flavors: "Máximo 1 sabor",
         dims: "aprox. metade de uma média",
         donuts: 1,
@@ -152,6 +153,92 @@ export function CardapioSizesContent({
                         <span>{current.dims}</span>
                     </div>
                 </div>
+            </div>
+        </div>
+    );
+}
+
+interface CardapioSizesSectionsProps {
+    hideTitle?: boolean;
+    className?: string;
+    sizes?: Array<{
+        id: string;
+        name: string;
+        nameShort?: string | null;
+        maxServeAmount?: number | null;
+        maxServeAmountDescription?: string | null;
+        maxToppingsAmount?: number | null;
+        maxToppingsAmountDescription?: string | null;
+        minPrice?: number | null;
+        maxPrice?: number | null;
+    }>;
+}
+
+export function CardapioSizesSections({ hideTitle = false, className, sizes }: CardapioSizesSectionsProps) {
+    const sections = sizes?.length
+        ? sizes.map((size) => {
+            const serves =
+                size.maxServeAmountDescription ||
+                (size.maxServeAmount
+                    ? `Serve até ${size.maxServeAmount} ${size.maxServeAmount === 1 ? "pessoa" : "pessoas"}`
+                    : "Serve sob consulta");
+            const flavors =
+                size.maxToppingsAmountDescription ||
+                (size.maxToppingsAmount
+                    ? `Máximo ${size.maxToppingsAmount} sabores`
+                    : "Máximo de sabores sob consulta");
+            const priceText =
+                size.minPrice != null
+                    ? size.maxPrice != null && size.maxPrice !== size.minPrice
+                        ? `de ${formatMoneyString(size.minPrice)} até ${formatMoneyString(size.maxPrice)}`
+                        : `${formatMoneyString(size.minPrice)}`
+                    : null;
+
+            return {
+                key: size.id,
+                label: size.name,
+                primary: serves,
+                details: [flavors, priceText].filter(Boolean) as string[],
+            };
+        })
+        : SIZE_ORDER.map((size) => {
+            const info = sizeConfig[size];
+            return {
+                key: size,
+                label: info.label,
+                primary: info.serves,
+                details: [info.flavors, info.dims],
+            };
+        });
+
+    return (
+        <div className={cn("h-full", className)}>
+            {!hideTitle && (
+                <div className="mb-6">
+                    <h3 className="font-neue text-2xl font-semibold tracking-tight">Tamanhos disponíveis</h3>
+                    <span className="text-sm text-zinc-600">Confira cada tamanho com pessoas, sabores e medidas</span>
+                </div>
+            )}
+
+            <div className="divide-y divide-zinc-200 rounded-2xl bg-white/80 px-4 shadow-sm">
+                {sections.map((section) => (
+                    <div key={section.key} className="flex flex-col gap-3 py-5">
+                        <span className="text-lg font-semibold text-brand-blue">{section.label}</span>
+                        <div className="text-[12px] font-semibold uppercase tracking-[0.14em] text-zinc-900">
+                            {section.primary}
+                        </div>
+                        <div className="flex flex-col gap-2 text-sm text-muted-foreground">
+                            {section.details.map((detail, index) => (
+                                <div
+                                    key={`${section.key}-detail-${index}`}
+                                    className={cn("text-zinc-700", index > 0 && "text-zinc-500 text-right")}
+                                >
+                                    {detail}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                ))}
             </div>
         </div>
     );
