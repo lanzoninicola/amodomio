@@ -1562,6 +1562,7 @@ model CrmCustomer {
   created_at               DateTime             @default(now())
   updated_at               DateTime             @updatedAt
   events                   CrmCustomerEvent[]
+  images                   CrmCustomerImage[]
   tags                     CrmCustomerTagLink[]
   sends                    CrmCampaignSend[]
 
@@ -1608,6 +1609,19 @@ model CrmCustomerEvent {
   @@index([customer_id], name: "crm_customer_event_customer_id_idx")
   @@index([source, external_id], name: "crm_customer_event_source_external_id_idx")
   @@map("crm_customer_event")
+}
+
+model CrmCustomerImage {
+  id          String   @id @default(uuid())
+  customer_id String   @map("customer_id")
+  url         String   @db.VarChar(2048)
+  description String?  @db.VarChar(255)
+  created_at  DateTime @default(now())
+
+  customer CrmCustomer @relation(fields: [customer_id], references: [id])
+
+  @@index([customer_id], name: "crm_customer_image_customer_id_idx")
+  @@map("crm_customer_image")
 }
 
 model CrmCampaign {
