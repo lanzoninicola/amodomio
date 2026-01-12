@@ -1,9 +1,19 @@
 import type { LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node";
 import { json, redirect } from "@remix-run/node";
 import { useLoaderData, useNavigation, Form } from "@remix-run/react";
+import { useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import prismaClient from "~/lib/prisma/client.server";
 import { clearWebhookLogs, getWebhookLogs } from "~/domain/z-api/webhook-log.server";
 
@@ -97,9 +107,45 @@ export default function AdminZapiLogsPage() {
   const { event, logs } = useLoaderData<typeof loader>();
   const navigation = useNavigation();
   const isLoading = navigation.state === "loading";
+  const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
+  const [formattedById, setFormattedById] = useState<Record<string, boolean>>({});
+  const [hideSelfReceived, setHideSelfReceived] = useState(true);
+
+  const formattedPayloadById = useMemo(() => {
+    const formatJson = (value: string | null | undefined) => {
+      if (!value) return "";
+      try {
+        return JSON.stringify(JSON.parse(value), null, 2);
+      } catch {
+        return value;
+      }
+    };
+
+    return logs.reduce<Record<string, string>>((acc, log) => {
+      acc[`${log.source}-${log.id}`] = formatJson(log.payloadPreview ?? "");
+      return acc;
+    }, {});
+  }, [logs]);
+
+  const handleCopy = async (value: string) => {
+    if (!value) return;
+    if (typeof navigator === "undefined" || !navigator.clipboard) return;
+    try {
+      await navigator.clipboard.writeText(value);
+    } catch {
+      // ignore
+    }
+  };
+
+  const shouldHideLog = (payloadPreview: string | null | undefined) => {
+    if (!hideSelfReceived) return false;
+    if (!payloadPreview) return false;
+    const normalized = payloadPreview.toLowerCase();
+    return normalized.includes("receivedcallback") && normalized.includes("\"fromme\":true");
+  };
 
   return (
-    <div className="flex max-w-6xl flex-col gap-6 px-4 py-8">
+    <div className="flex max-w-6xl flex-col gap-6 px-4 py-8 font-neue">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Logs de Webhooks Z-API</h1>
@@ -162,6 +208,16 @@ export default function AdminZapiLogsPage() {
           <CardDescription>
             Mostrando {logs.length} registro(s) • filtro: {event}
           </CardDescription>
+          <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+            <Switch
+              id="hide-self-received"
+              checked={hideSelfReceived}
+              onCheckedChange={setHideSelfReceived}
+            />
+            <Label htmlFor="hide-self-received">
+              Ignorar ReceivedCallback + fromMe=true
+            </Label>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           {logs.length === 0 && (
@@ -170,7 +226,9 @@ export default function AdminZapiLogsPage() {
             </div>
           )}
 
-          {logs.map((log) => (
+          {logs
+            .filter((log) => !shouldHideLog(log.payloadPreview))
+            .map((log) => (
             <div key={`${log.source}-${log.id}`} className="rounded-lg border border-border bg-muted/30 p-3">
               <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                 <span className="rounded-full bg-primary/10 px-2 py-1 text-primary font-semibold text-[11px]">
@@ -194,8 +252,27 @@ export default function AdminZapiLogsPage() {
                 {log.source === "stored" && log.reason ? <span>Motivo: {log.reason}</span> : null}
               </div>
               {log.source === "memory" ? (
-                <div className="mt-2 text-xs text-muted-foreground">
-                  Headers: <code className="rounded bg-black/5 px-1 py-0.5">{JSON.stringify(log.headers)}</code>
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  <span>Headers:</span>
+                  <code className="rounded bg-black/5 px-1 py-0.5">{JSON.stringify(log.headers)}</code>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-[11px]"
+                    onClick={() => handleCopy(JSON.stringify(log.headers ?? {}))}
+                  >
+                    Copiar headers
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-[11px]"
+                    onClick={() => handleCopy(JSON.stringify(log.headers ?? {}, null, 2))}
+                  >
+                    Copiar headers formatado
+                  </Button>
                 </div>
               ) : null}
               {log.source === "stored" && log.messageText ? (
@@ -203,8 +280,63 @@ export default function AdminZapiLogsPage() {
                   <span className="font-semibold">Mensagem:</span> {log.messageText.slice(0, 180)}
                 </p>
               ) : null}
-              <pre className="mt-3 overflow-x-auto rounded bg-black/5 p-3 text-xs text-foreground">
-                {log.payloadPreview || "Sem payload armazenado."}
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-[11px]"
+                  onClick={() =>
+                    setFormattedById((current) => ({
+                      ...current,
+                      [`${log.source}-${log.id}`]: !current[`${log.source}-${log.id}`],
+                    }))
+                  }
+                >
+                  {formattedById[`${log.source}-${log.id}`] ? "JSON compacto" : "Formatar JSON"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-[11px]"
+                  onClick={() => handleCopy(log.payloadPreview ?? "")}
+                >
+                  Copiar conteúdo
+                </Button>
+                <Dialog
+                  open={expandedLogId === `${log.source}-${log.id}`}
+                  onOpenChange={(open) => setExpandedLogId(open ? `${log.source}-${log.id}` : null)}
+                >
+                  <DialogTrigger asChild>
+                    <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-[11px]">
+                      Expandir
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-3xl">
+                    <DialogHeader>
+                      <DialogTitle>Payload formatado</DialogTitle>
+                    </DialogHeader>
+                    <div className="flex items-center justify-end gap-2">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => handleCopy(formattedPayloadById[`${log.source}-${log.id}`] || "")}
+                      >
+                        Copiar
+                      </Button>
+                    </div>
+                    <pre className="mt-3 max-h-[60vh] overflow-auto rounded bg-black/5 p-4 text-xs text-foreground">
+                      {formattedPayloadById[`${log.source}-${log.id}`] || "Sem payload armazenado."}
+                    </pre>
+                  </DialogContent>
+                </Dialog>
+              </div>
+              <pre className="mt-2 max-h-[240px] overflow-auto rounded bg-black/5 p-4 pr-6 pb-4 text-xs text-foreground">
+                {formattedById[`${log.source}-${log.id}`]
+                  ? formattedPayloadById[`${log.source}-${log.id}`] || "Sem payload armazenado."
+                  : log.payloadPreview || "Sem payload armazenado."}
               </pre>
             </div>
           ))}
