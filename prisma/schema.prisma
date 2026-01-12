@@ -192,6 +192,24 @@ model PushNotificationEvent {
   @@map("push_notification_events")
 }
 
+model MetaAdsLog {
+  id             String   @id @default(uuid())
+  correlationId  String?  @map("correlation_id")
+  event          String?
+  phone          String?
+  trigger        String?
+  messageText    String?  @map("message_text") @db.Text
+  sent           Boolean  @default(false)
+  reason         String?
+  responseType   String?  @map("response_type")
+  payloadPreview String?  @map("payload_preview") @db.Text
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([event])
+  @@index([createdAt])
+  @@map("meta_ads_logs")
+}
+
 model GroceryList {
   id              String            @id @default(uuid())
   name            String

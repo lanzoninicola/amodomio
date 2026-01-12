@@ -1,4 +1,6 @@
 import { settingPrismaEntity } from "~/domain/setting/setting.prisma.entity.server";
+import prismaClient from "~/lib/prisma/client.server";
+import { stringifyPayloadForLog } from "./webhook.parser";
 import { sendTrafficAutoReplyTemplate } from "./zapi.service";
 import { NormalizedWebhookEvent } from "./webhook.types";
 
@@ -51,7 +53,7 @@ async function loadConfig(): Promise<TrafficAutoReplyConfig> {
   }
 }
 
-function matchesTrigger(message: string | undefined, trigger: string) {
+function matchesTrigger(message: string | undefined, trigger: string, raw?: any) {
   if (!message) return false;
   const triggers = trigger
     .split(",")
@@ -64,6 +66,56 @@ function matchesTrigger(message: string | undefined, trigger: string) {
   return triggers.some((t) => normalized.includes(t));
 }
 
+function matchesTriggerFromPayload(trigger: string, raw?: any) {
+  if (!raw) return false;
+
+  const triggers = trigger
+    .split(",")
+    .map((t) => t.trim().toLowerCase())
+    .filter(Boolean);
+
+  if (!triggers.length) return false;
+
+  try {
+    const rawText = JSON.stringify(raw).toLowerCase();
+    return triggers.some((t) => rawText.includes(t));
+  } catch {
+    return false;
+  }
+}
+
+async function saveMetaAdsLog(params: {
+  correlationId?: string;
+  event?: string;
+  phone?: string;
+  trigger?: string;
+  messageText?: string;
+  sent: boolean;
+  reason?: string;
+  responseType?: string;
+  payloadPreview?: string;
+}) {
+  try {
+    await prismaClient.metaAdsLog.create({
+      data: {
+        correlationId: params.correlationId ?? null,
+        event: params.event ?? null,
+        phone: params.phone ?? null,
+        trigger: params.trigger ?? null,
+        messageText: params.messageText ?? null,
+        sent: params.sent,
+        reason: params.reason ?? null,
+        responseType: params.responseType ?? null,
+        payloadPreview: params.payloadPreview ?? null,
+      },
+    });
+  } catch (error) {
+    console.warn("[z-api][traffic] failed to save meta ads log", {
+      error: (error as any)?.message,
+    });
+  }
+}
+
 export async function maybeSendTrafficAutoReply(
   normalized: NormalizedWebhookEvent,
   correlationId: string
@@ -72,12 +124,34 @@ export async function maybeSendTrafficAutoReply(
 
   if (!config.enabled) return { sent: false, reason: "disabled" };
 
-  if (!matchesTrigger(normalized.messageText, config.trigger)) {
+  const triggered =
+    matchesTrigger(normalized.messageText, config.trigger) ||
+    matchesTriggerFromPayload(config.trigger, normalized.raw);
+
+  if (!triggered) {
+    console.info("[z-api][traffic] trigger not found", {
+      correlationId,
+      trigger: config.trigger,
+      messageTextPreview: normalized.messageText?.slice(0, 200),
+    });
     return { sent: false, reason: "trigger_not_found", trigger: config.trigger };
   }
 
+  const payloadPreview = stringifyPayloadForLog(normalized.raw);
+
   if (!normalized.phone) {
     console.warn("[z-api][traffic] missing phone", { correlationId });
+    await saveMetaAdsLog({
+      correlationId,
+      event: normalized.event,
+      phone: normalized.phone,
+      trigger: config.trigger,
+      messageText: normalized.messageText,
+      sent: false,
+      reason: "phone_not_found",
+      responseType: config.responseType,
+      payloadPreview,
+    });
     return { sent: false, reason: "phone_not_found" };
   }
 
@@ -91,6 +165,20 @@ export async function maybeSendTrafficAutoReply(
     forceText: !useButtons,
   });
 
+  await saveMetaAdsLog({
+    correlationId,
+    event: normalized.event,
+    phone: normalized.phone,
+    trigger: config.trigger,
+    messageText: normalized.messageText,
+    sent: Boolean(response),
+    reason: response ? undefined : "send_failed",
+    responseType: useButtons ? "buttons" : "text",
+    payloadPreview,
+  });
+
+  const sent = Boolean(response);
+
   console.info("[z-api][traffic] sent auto-reply", {
     correlationId,
     phone: normalized.phone,
@@ -98,7 +186,7 @@ export async function maybeSendTrafficAutoReply(
     response,
   });
 
-  return { sent: true, response };
+  return sent ? { sent, response } : { sent, response, reason: "send_failed" };
 }
 
 export function getTrafficAutoresponderContext() {

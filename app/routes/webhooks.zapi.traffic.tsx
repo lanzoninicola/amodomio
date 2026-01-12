@@ -1,6 +1,7 @@
 import { json } from "@remix-run/node";
 import type { ActionFunctionArgs } from "@remix-run/node";
 import { v4 as uuidv4 } from "uuid";
+import { env } from "@config/env";
 import { enforceRateLimit, handleRouteError } from "~/domain/z-api/route-helpers.server";
 import { PayloadTooLargeError } from "~/domain/z-api/errors";
 import { readJsonBody } from "~/domain/z-api/security.server";
@@ -48,7 +49,7 @@ export async function action({ request }: ActionFunctionArgs) {
     return json({ ok: true });
   }
 
-  const normalized = normalizeWebhookPayload("received", payload);
+  const normalized = normalizeWebhookPayload("traffic", payload);
 
   console.info("[z-api][webhook][traffic]", {
     correlationId,
