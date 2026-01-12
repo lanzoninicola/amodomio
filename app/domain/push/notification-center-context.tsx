@@ -36,7 +36,13 @@ function normalizePayload(payload: any): NotificationEntry {
   };
 }
 
-export function NotificationCenterProvider({ children }: { children: React.ReactNode }) {
+export function NotificationCenterProvider({
+  children,
+  enabled = true,
+}: {
+  children: React.ReactNode;
+  enabled?: boolean;
+}) {
   const [items, setItems] = useState<NotificationEntry[]>([]);
   const [initialized, setInitialized] = useState(false);
   const isMountedRef = useRef(true);
@@ -48,6 +54,14 @@ export function NotificationCenterProvider({ children }: { children: React.React
   }, []);
 
   useEffect(() => {
+    if (!enabled) {
+      if (isMountedRef.current) {
+        setItems([]);
+        setInitialized(true);
+      }
+      return;
+    }
+
     loadNotifications()
       .then((loaded) => {
         if (isMountedRef.current) setItems(loaded);
@@ -55,12 +69,13 @@ export function NotificationCenterProvider({ children }: { children: React.React
       .finally(() => {
         if (isMountedRef.current) setInitialized(true);
       });
-  }, []);
+  }, [enabled]);
 
   const addNotification = useCallback(async (entry: NotificationEntry) => {
+    if (!enabled) return;
     const next = await upsertNotification(entry);
     if (isMountedRef.current) setItems(next);
-  }, []);
+  }, [enabled]);
 
   const addFromPayload = useCallback(
     async (payload: any) => {
@@ -71,21 +86,25 @@ export function NotificationCenterProvider({ children }: { children: React.React
   );
 
   const markAsRead = useCallback(async (id: string) => {
+    if (!enabled) return;
     const next = await persistMarkAsRead(id);
     if (isMountedRef.current) setItems(next);
-  }, []);
+  }, [enabled]);
 
   const markAllAsRead = useCallback(async () => {
+    if (!enabled) return;
     const next = await persistMarkAllAsRead();
     if (isMountedRef.current) setItems(next);
-  }, []);
+  }, [enabled]);
 
   const clearAll = useCallback(async () => {
+    if (!enabled) return;
     const next = await clearNotifications();
     if (isMountedRef.current) setItems(next);
-  }, []);
+  }, [enabled]);
 
   useEffect(() => {
+    if (!enabled) return;
     if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
     const handler = (event: MessageEvent) => {
       const data = event.data;
@@ -98,7 +117,7 @@ export function NotificationCenterProvider({ children }: { children: React.React
     return () => {
       navigator.serviceWorker.removeEventListener("message", handler);
     };
-  }, [addFromPayload]);
+  }, [addFromPayload, enabled]);
 
   const unreadCount = useMemo(() => items.filter((item) => !item.read).length, [items]);
 

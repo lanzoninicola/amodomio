@@ -28,6 +28,28 @@ export const meta = () => {
 export default function CardapioNotificationsRoute() {
   const cardapioData = useRouteLoaderData<typeof cardapioLoader>("routes/cardapio");
   const vapidPublicKey = cardapioData?.vapidPublicKey ?? null;
+  const notificationsEnabled = cardapioData?.notificationsEnabled ?? true;
+
+  if (!notificationsEnabled) {
+    return (
+      <section className="pt-32 pb-16 px-4 md:pt-32 md:max-w-4xl md:mx-auto font-neue">
+        <div className="flex flex-col space-y-2">
+          <h1 className="text-xl font-semibold tracking-tight flex items-center gap-2">
+            <Bell className="h-5 w-5" />
+            Notificações desativadas
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Esta central está desligada no painel do cardápio.
+          </p>
+        </div>
+      </section>
+    );
+  }
+
+  return <NotificationsEnabled vapidPublicKey={vapidPublicKey} />;
+}
+
+function NotificationsEnabled({ vapidPublicKey }: { vapidPublicKey: string | null }) {
   const { toast } = useToast();
   const [removingSubscription, setRemovingSubscription] = useState(false);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
