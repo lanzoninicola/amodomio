@@ -146,34 +146,34 @@ model SubCategory {
 }
 
 model PushSubscription {
-  id             String   @id @default(uuid())
-  endpoint       String   @unique
+  id             String                  @id @default(uuid())
+  endpoint       String                  @unique
   expirationTime DateTime?
   p256dh         String
   auth           String
   userAgent      String?
-  createdAt      DateTime @default(now()) @map("created_at")
+  createdAt      DateTime                @default(now()) @map("created_at")
   events         PushNotificationEvent[]
 
   @@map("push_subscriptions")
 }
 
 model PushNotificationCampaign {
-  id            String   @id @default(uuid())
-  title         String
-  body          String
-  url           String?
-  status        String   @default("draft")
-  scheduledAt   DateTime?
-  sentAt        DateTime?
-  sendCount     Int      @default(0)
-  showCount     Int      @default(0)
-  clickCount    Int      @default(0)
-  closeCount    Int      @default(0)
-  totalDwellMs  Int      @default(0)
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at")
-  events        PushNotificationEvent[]
+  id           String                  @id @default(uuid())
+  title        String
+  body         String
+  url          String?
+  status       String                  @default("draft")
+  scheduledAt  DateTime?
+  sentAt       DateTime?
+  sendCount    Int                     @default(0)
+  showCount    Int                     @default(0)
+  clickCount   Int                     @default(0)
+  closeCount   Int                     @default(0)
+  totalDwellMs Int                     @default(0)
+  createdAt    DateTime                @default(now()) @map("created_at")
+  updatedAt    DateTime                @default(now()) @updatedAt @map("updated_at")
+  events       PushNotificationEvent[]
 
   @@map("push_notification_campaigns")
 }
@@ -187,7 +187,7 @@ model PushNotificationEvent {
   createdAt      DateTime @default(now()) @map("created_at")
 
   campaign     PushNotificationCampaign @relation(fields: [campaignId], references: [id])
-  subscription PushSubscription          @relation(fields: [subscriptionId], references: [id])
+  subscription PushSubscription         @relation(fields: [subscriptionId], references: [id])
 
   @@map("push_notification_events")
 }
@@ -544,18 +544,18 @@ model FinancialMonthlyClose {
 
   receitaExtratoBancoAmount Float @default(0) @map("receita_extrato_banco_amount")
   receitaDinheiroAmount     Float @default(0) @map("receita_dinheiro_amount")
-  receitaBrutaAmount     Float @default(0) @map("receita_bruta_amount")
-  faturamentoMensalAmount Float @default(0) @map("faturamento_mensal_amount")
-  vendaCartaoAmount      Float @default(0) @map("venda_cartao_amount")
-  vendaCartaoPerc        Float @default(0) @map("venda_cartao_perc")
-  taxaCartaoPerc         Float @default(0) @map("taxa_cartao_perc")
-  taxaCartaoAmount       Float @default(0) @map("taxa_cartao_amount")
-  impostoPerc            Float @default(0) @map("imposto_perc")
-  impostoAmount          Float @default(0) @map("imposto_amount")
-  vendaMarketplaceAmount Float @default(0) @map("venda_marketplace_amount")
-  taxaMarketplacePerc    Float @default(0) @map("taxa_marketplace_perc")
-  taxaMarketplaceAmount  Float @default(0) @map("taxa_marketplace_amount")
-  receitaLiquidaAmount   Float @default(0) @map("receita_liquida_amount")
+  receitaBrutaAmount        Float @default(0) @map("receita_bruta_amount")
+  faturamentoMensalAmount   Float @default(0) @map("faturamento_mensal_amount")
+  vendaCartaoAmount         Float @default(0) @map("venda_cartao_amount")
+  vendaCartaoPerc           Float @default(0) @map("venda_cartao_perc")
+  taxaCartaoPerc            Float @default(0) @map("taxa_cartao_perc")
+  taxaCartaoAmount          Float @default(0) @map("taxa_cartao_amount")
+  impostoPerc               Float @default(0) @map("imposto_perc")
+  impostoAmount             Float @default(0) @map("imposto_amount")
+  vendaMarketplaceAmount    Float @default(0) @map("venda_marketplace_amount")
+  taxaMarketplacePerc       Float @default(0) @map("taxa_marketplace_perc")
+  taxaMarketplaceAmount     Float @default(0) @map("taxa_marketplace_amount")
+  receitaLiquidaAmount      Float @default(0) @map("receita_liquida_amount")
 
   // Custos fixos principais (espelham o formulário)
   custoFixoPlanoSaudeAmount           Float @default(0) @map("custo_fixo_plano_saude_amount")
@@ -569,12 +569,12 @@ model FinancialMonthlyClose {
   custoFixoFaturaCartaoAmount         Float @default(0) @map("custo_fixo_fatura_cartao_amount")
   custoFixoOutrosAmount               Float @default(0) @map("custo_fixo_outros_amount")
   // Campos antigos mantidos para compatibilidade de dados legados
-  custoFixoFolhaAmount             Float @default(0) @map("custo_fixo_folha_amount")
-  custoFixoRetiradaLucroAmount     Float @default(0) @map("custo_fixo_retirada_lucro_amount")
-  custoFixoAluguelAmount           Float @default(0) @map("custo_fixo_aluguel_amount")
-  custoFixoEnergiaAmount           Float @default(0) @map("custo_fixo_energia_amount")
-  custoFixoSoftwareAmount          Float @default(0) @map("custo_fixo_software_amount")
-  custoFixoMarketingAmount         Float @default(0) @map("custo_fixo_marketing_amount")
+  custoFixoFolhaAmount                Float @default(0) @map("custo_fixo_folha_amount")
+  custoFixoRetiradaLucroAmount        Float @default(0) @map("custo_fixo_retirada_lucro_amount")
+  custoFixoAluguelAmount              Float @default(0) @map("custo_fixo_aluguel_amount")
+  custoFixoEnergiaAmount              Float @default(0) @map("custo_fixo_energia_amount")
+  custoFixoSoftwareAmount             Float @default(0) @map("custo_fixo_software_amount")
+  custoFixoMarketingAmount            Float @default(0) @map("custo_fixo_marketing_amount")
 
   // Custos variáveis principais (espelham o formulário)
   custoVariavelInsumosAmount   Float @default(0) @map("custo_variavel_insumos_amount")
@@ -587,16 +587,16 @@ model FinancialMonthlyClose {
   entradasNaoOperacionaisAmount Float @default(0) @map("entrada_nao_operacional_amount")
   saidasNaoOperacionaisAmount   Float @default(0) @map("saida_nao_operacional_amount")
 
-  custoFixoTotalAmount     Float @default(0) @map("custo_fixo_total_amount")
-  custoFixoPerc            Float @default(0) @map("custo_fixo_perc")
-  custoVariavelPerc        Float @default(0) @map("custo_variavel_perc")
-  pontoEquilibrioAmount    Float @default(0) @map("ponto_equilibrio_amount")
-  margemContribAmount      Float @default(0) @map("margem_contrib_amount")
-  margemContribPerc        Float @default(0) @map("margem_contrib_perc")
-  resultadoLiquidoAmount   Float @default(0) @map("resultado_liquido_amount")
-  resultadoLiquidoPerc     Float @default(0) @map("resultado_liquido_perc")
+  custoFixoTotalAmount   Float @default(0) @map("custo_fixo_total_amount")
+  custoFixoPerc          Float @default(0) @map("custo_fixo_perc")
+  custoVariavelPerc      Float @default(0) @map("custo_variavel_perc")
+  pontoEquilibrioAmount  Float @default(0) @map("ponto_equilibrio_amount")
+  margemContribAmount    Float @default(0) @map("margem_contrib_amount")
+  margemContribPerc      Float @default(0) @map("margem_contrib_perc")
+  resultadoLiquidoAmount Float @default(0) @map("resultado_liquido_amount")
+  resultadoLiquidoPerc   Float @default(0) @map("resultado_liquido_perc")
 
-  notes String? @db.Text @map("notes")
+  notes String? @map("notes") @db.Text
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -610,16 +610,23 @@ model MenuItemSize {
   id                                 String                               @id @default(uuid())
   key                                String?                              @map("key")
   name                               String
-  nameAbbreviated                    String?                              @map("name_abbreviated") // <- nova coluna
+  nameAbbreviated                    String?                              @map("name_abbreviated")
+  nameShort                          String?                              @map("name_short") // <- nova coluna
   description                        String?                              @map("description")
-  shortDescription                   String?                              @map("short_description")
   sortOrderIndex                     Int                                  @default(0) @map("sort_order_index")
   createdAt                          DateTime                             @map("created_at")
   updatedAt                          DateTime                             @default(now()) @updatedAt @map("updated_at")
   pizzaDoughCostAmount               Float                                @default(0) @map("pizza_dough_cost_amount")
   packagingCostAmount                Float                                @default(0) @map("packaging_cost_amount")
+  // visivel no cardapio
   visible                            Boolean                              @default(true)
+  // visivel para administracao
+  visibleAdmin                       Boolean                              @default(true) @map("visible_admin")
   maxToppingsAmount                  Float                                @default(0) @map("max_toppings_amount")
+  maxToppingsAmountDescription       String?                              @map("max_toppings_amount_description") // <- nova coluna
+  maxServeAmount                     Float                                @default(0) @map("max_serve_amount") // <- nova coluna
+  maxServeAmountDescription          String?                              @map("max_serve_amount_description") // <- nova coluna
+  group                              String?
   MenuItemPriceVariation             MenuItemPriceVariation[]
   MenuItemSellingPriceVariation      MenuItemSellingPriceVariation[]
   MenuItemCostVariation              MenuItemCostVariation[]
@@ -1511,105 +1518,103 @@ model Engagement {
 
 // CRM Fase 1 (snake_case models/fields)
 model CrmCustomer {
-  id         String               @id @default(uuid())
-  phone_e164 String               @unique @db.VarChar(20)
-  name       String?              @db.VarChar(255)
-  email      String?              @db.VarChar(255)
-  preferred_channel String?       @db.VarChar(20) @map("preferred_channel")
+  id                String  @id @default(uuid())
+  phone_e164        String  @unique @db.VarChar(20)
+  name              String? @db.VarChar(255)
+  email             String? @db.VarChar(255)
+  preferred_channel String? @map("preferred_channel") @db.VarChar(20)
 
-  first_order_at DateTime?        @map("first_order_at")
-  last_order_at  DateTime?        @map("last_order_at")
-  orders_count   Int              @default(0) @map("orders_count")
-  total_revenue  Decimal          @default(0) @map("total_revenue") @db.Decimal(12, 2)
-  avg_ticket     Decimal          @default(0) @map("avg_ticket") @db.Decimal(12, 2)
-  lgpd_consent   Boolean          @default(false) @map("lgpd_consent")
-  consent_at     DateTime?        @map("consent_at")
+  first_order_at DateTime? @map("first_order_at")
+  last_order_at  DateTime? @map("last_order_at")
+  orders_count   Int       @default(0) @map("orders_count")
+  total_revenue  Decimal   @default(0) @map("total_revenue") @db.Decimal(12, 2)
+  avg_ticket     Decimal   @default(0) @map("avg_ticket") @db.Decimal(12, 2)
+  lgpd_consent   Boolean   @default(false) @map("lgpd_consent")
+  consent_at     DateTime? @map("consent_at")
 
-  delivery_address_last Json?     @map("delivery_address_last")
-  neighborhood          String?   @db.VarChar(255)
-  city                  String?   @db.VarChar(255)
-  postal_code           String?   @db.VarChar(20)
+  delivery_address_last Json?   @map("delivery_address_last")
+  neighborhood          String? @db.VarChar(255)
+  city                  String? @db.VarChar(255)
+  postal_code           String? @db.VarChar(20)
 
-  gender                  String  @default("unknown") @db.VarChar(20)
-  profession              String? @db.VarChar(255)
-  age_profile             String  @default("unknown") @db.VarChar(20)
-  preferred_payment_method String @default("unknown") @db.VarChar(20)
-  created_at DateTime             @default(now())
-  updated_at DateTime             @updatedAt
-  events     CrmCustomerEvent[]
-  tags       CrmCustomerTagLink[]
-  sends      CrmCampaignSend[]
+  gender                   String               @default("unknown") @db.VarChar(20)
+  profession               String?              @db.VarChar(255)
+  age_profile              String               @default("unknown") @db.VarChar(20)
+  preferred_payment_method String               @default("unknown") @db.VarChar(20)
+  created_at               DateTime             @default(now())
+  updated_at               DateTime             @updatedAt
+  events                   CrmCustomerEvent[]
+  tags                     CrmCustomerTagLink[]
+  sends                    CrmCampaignSend[]
 
   @@map("crm_customer")
 }
 
 model CrmCustomerTag {
-  id         String                  @id @default(uuid())
-  key        String                  @unique @db.VarChar(100)
-  label      String?                 @db.VarChar(255)
-  created_at DateTime                @default(now())
-  updated_at DateTime                @updatedAt
+  id         String               @id @default(uuid())
+  key        String               @unique @db.VarChar(100)
+  label      String?              @db.VarChar(255)
+  created_at DateTime             @default(now())
+  updated_at DateTime             @updatedAt
   links      CrmCustomerTagLink[]
 
   @@map("crm_customer_tag")
 }
 
 model CrmCustomerTagLink {
-  id          String            @id @default(uuid())
+  id          String   @id @default(uuid())
   customer_id String
   tag_id      String
-  created_at  DateTime          @default(now())
+  created_at  DateTime @default(now())
 
-  customer CrmCustomer   @relation(fields: [customer_id], references: [id])
+  customer CrmCustomer    @relation(fields: [customer_id], references: [id])
   tag      CrmCustomerTag @relation(fields: [tag_id], references: [id])
 
   @@unique([customer_id, tag_id])
   @@index([tag_id], name: "crm_customer_tag_link_tag_id_idx")
-
   @@map("crm_customer_tag_link")
 }
 
 model CrmCustomerEvent {
-  id           String   @id @default(uuid())
-  customer_id  String
-  event_type   String   @db.VarChar(50)
-  source       String?  @db.VarChar(100)
-  external_id  String?  @db.VarChar(150)
-  payload      Json?
-  payload_raw  String?
-  created_at   DateTime @default(now())
+  id          String   @id @default(uuid())
+  customer_id String
+  event_type  String   @db.VarChar(50)
+  source      String?  @db.VarChar(100)
+  external_id String?  @db.VarChar(150)
+  payload     Json?
+  payload_raw String?
+  created_at  DateTime @default(now())
 
   customer CrmCustomer @relation(fields: [customer_id], references: [id])
 
   @@index([customer_id], name: "crm_customer_event_customer_id_idx")
   @@index([source, external_id], name: "crm_customer_event_source_external_id_idx")
-
   @@map("crm_customer_event")
 }
 
 model CrmCampaign {
-  id          String                @id @default(uuid())
-  name        String                @db.VarChar(255)
-  description String?               @db.Text
-  source      String?               @db.VarChar(100)
-  external_id String?               @db.VarChar(150)
-  created_at  DateTime              @default(now())
-  updated_at  DateTime              @updatedAt
+  id          String            @id @default(uuid())
+  name        String            @db.VarChar(255)
+  description String?           @db.Text
+  source      String?           @db.VarChar(100)
+  external_id String?           @db.VarChar(150)
+  created_at  DateTime          @default(now())
+  updated_at  DateTime          @updatedAt
   sends       CrmCampaignSend[]
 
   @@map("crm_campaign")
 }
 
 model CrmCampaignSend {
-  id           String        @id @default(uuid())
-  campaign_id  String
-  customer_id  String
-  status       String?       @db.VarChar(50)
-  payload      Json?
-  payload_raw  String?
-  source       String?       @db.VarChar(100)
-  external_id  String?       @db.VarChar(150)
-  created_at   DateTime      @default(now())
+  id          String   @id @default(uuid())
+  campaign_id String
+  customer_id String
+  status      String?  @db.VarChar(50)
+  payload     Json?
+  payload_raw String?
+  source      String?  @db.VarChar(100)
+  external_id String?  @db.VarChar(150)
+  created_at  DateTime @default(now())
 
   campaign CrmCampaign @relation(fields: [campaign_id], references: [id])
   customer CrmCustomer @relation(fields: [customer_id], references: [id])
@@ -1617,6 +1622,5 @@ model CrmCampaignSend {
   @@index([campaign_id], name: "crm_campaign_send_campaign_id_idx")
   @@index([customer_id], name: "crm_campaign_send_customer_id_idx")
   @@index([source, external_id], name: "crm_campaign_send_source_external_id_idx")
-
   @@map("crm_campaign_send")
 }
