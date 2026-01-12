@@ -83,6 +83,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const requestedKeys = [
         "cardapio.fazer_pedido.public.url",
         "cardapio.aviso_loja_fechada.yesno",
+        "cardapio.notificacoes.enabled",
     ] as const;
 
     const cardapioSettings = await prismaClient.cardapioSetting.findMany({
@@ -98,10 +99,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const fPUrl = settingsMap[requestedKeys[0]] ?? GLOBAL_LINKS.cardapioFallbackURL.href;
 
     const showLojaFechadaMessage = parseBooleanSetting(settingsMap[requestedKeys[1]], true);
+    const notificationsEnabled = parseBooleanSetting(settingsMap[requestedKeys[2]], true);
 
     return defer({
         fazerPedidoPublicURL: fPUrl,
         showLojaFechadaMessage,
+        notificationsEnabled,
         vapidPublicKey: process.env.VAPID_PUBLIC_KEY ?? null,
     })
 
@@ -113,7 +116,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 export default function CardapioWeb() {
     const currentPage = useCurrentPage();
 
-    const { showLojaFechadaMessage, vapidPublicKey } = useLoaderData<typeof loader>()
+    const { showLojaFechadaMessage, notificationsEnabled } = useLoaderData<typeof loader>()
 
     // const sessionId = useClientSessionId();
 
@@ -126,7 +129,7 @@ export default function CardapioWeb() {
     // if (!isClient) return null; // ou um spinner, se quiser
 
     return (
-        <NotificationCenterProvider>
+        <NotificationCenterProvider enabled={notificationsEnabled}>
             {showLojaFechadaMessage && <BannerFechado />}
             <CardapioHeader />
 
@@ -175,8 +178,7 @@ function BannerFechado() {
 function CardapioHeader() {
     const currentPage = useCurrentPage()
     const [showSearch, setShowSearch] = useState(false)
-    const { fazerPedidoPublicURL, vapidPublicKey } = useLoaderData<typeof loader>()
-    const { unreadCount } = useNotificationCenter()
+    const { fazerPedidoPublicURL, notificationsEnabled, vapidPublicKey } = useLoaderData<typeof loader>()
 
     return (
         <header className="fixed top-0 w-full z-10 md:max-w-6xl md:-translate-x-1/2 md:left-1/2 " >
@@ -189,24 +191,12 @@ function CardapioHeader() {
 
                     <Link to={GLOBAL_LINKS.cardapioPublic.href} className="flex col-span-2">
                         <div className="px-4 -py-3">
-                            <Logo color="black" onlyText={true} className="w-[120px] h-[30px] md:w-[150px] md:h-[50px]" tagline={false} showSantaHat />
+                            <Logo color="black" onlyText={true} className="w-[120px] h-[30px] md:w-[150px] md:h-[50px]" tagline={false} />
                         </div>
                     </Link>
 
                     <div className="w-full flex items-center gap-x-2 justify-end col-span-1">
-                        <Link to="/cardapio/notificacoes" prefetch="intent">
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="relative h-10 w-10 p-0 inline-flex items-center justify-center align-middle"
-                                aria-label="Notificações"
-                            >
-                                <Bell className="h-5 w-5" />
-                                {unreadCount > 0 && (
-                                    <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white" />
-                                )}
-                            </Button>
-                        </Link>
+                        {notificationsEnabled && <NotificationBell />}
                         <Link to={'buscar'} >
                             <div className="flex h-10 w-10 items-center justify-center cursor-pointer" onClick={() => setShowSearch(!showSearch)}>
                                 <SearchIcon color={"black"} className="h-5 w-5" />
@@ -292,9 +282,29 @@ function CardapioHeader() {
                 </div>
 
             </ScrollingBanner>
-            {currentPage === "other" && <PushOptIn vapidPublicKey={vapidPublicKey} />}
+            {currentPage === "other" && notificationsEnabled && <PushOptIn vapidPublicKey={vapidPublicKey} />}
 
         </header>
+    )
+}
+
+function NotificationBell() {
+    const { unreadCount } = useNotificationCenter()
+
+    return (
+        <Link to="/cardapio/notificacoes" prefetch="intent">
+            <Button
+                variant="ghost"
+                size="icon"
+                className="relative h-10 w-10 p-0 inline-flex items-center justify-center align-middle"
+                aria-label="Notificações"
+            >
+                <Bell className="h-5 w-5" />
+                {unreadCount > 0 && (
+                    <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white" />
+                )}
+            </Button>
+        </Link>
     )
 }
 
@@ -389,7 +399,7 @@ function CardapioFooter() {
         ">
             {/* Botão Tamanhos à esquerda */}
             <div className="flex">
-                <CardapioSizesDialog />
+                <TamanhosLinkButton />
             </div>
 
             {/* Botão flutuante central */}
@@ -415,60 +425,20 @@ function CardapioFooter() {
 
             {/* Botão Tamanhos à direita (se for necessário) */}
             <div className="flex">
-                <CardapioSizesDialog />
+                <TamanhosLinkButton />
             </div>
         </footer>
     );
 }
 
 
-
-
-interface CardapioFooterMenuItemDialogProps {
-    children?: React.ReactNode;
-    triggerComponent?: React.ReactNode;
-}
-
-function CardapioFooterMenuItemDialog({ children, triggerComponent }: CardapioFooterMenuItemDialogProps) {
-
+function TamanhosLinkButton() {
     return (
-        <Dialog>
-            <DialogTrigger asChild className="w-full">
-                <button>
-                    {triggerComponent}
-                </button>
-            </DialogTrigger>
-            <DialogContent className="p-0 bg-transparent border-none">
-                <div className="bg-white p-4">
-                    {children}
-                    <DialogClose asChild>
-                        <div className="w-full">
-                            <Button type="button" variant="secondary" className="w-full" >
-                                <span className=" tracking-wide font-semibold uppercase">Fechar</span>
-                            </Button>
-                        </div>
-
-                    </DialogClose>
-                </div>
-
-            </DialogContent>
-
-        </Dialog>
+        <Link to={GLOBAL_LINKS.cardapioTamanhosPagina.href} className="flex col-span-2">
+            <div className="flex flex-col items-center justify-center">
+                <Proportions className="col-span-1 md:col-span-2" />
+                <span className="font-neue text-[10px] uppercase tracking-widest">Tamanhos</span>
+            </div>
+        </Link>
     )
-}
-
-
-export function CardapioSizesDialog() {
-    return (
-        <CardapioFooterMenuItemDialog
-            triggerComponent={
-                <div className="flex flex-col items-center justify-center">
-                    <Proportions className="col-span-1 md:col-span-2" />
-                    <span className="font-neue text-[10px] uppercase tracking-widest">Tamanhos</span>
-                </div>
-            }
-        >
-            <CardapioSizesContent />
-        </CardapioFooterMenuItemDialog>
-    );
 }

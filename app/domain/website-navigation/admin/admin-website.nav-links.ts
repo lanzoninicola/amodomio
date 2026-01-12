@@ -77,13 +77,19 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
       items: [
         {
           title: "Configurações",
-          href: "/admin/gerenciamento/cardapio-settings",
+          href: "/admin/gerenciamento/cardapio/settings",
           items: [],
           disabled: false,
         },
         {
           title: "Grupos",
           href: "/admin/gerenciamento/cardapio/groups",
+          items: [],
+          disabled: false,
+        },
+        {
+          title: "Tamanhos",
+          href: "/admin/gerenciamento/cardapio/sizes",
           items: [],
           disabled: false,
         },

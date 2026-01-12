@@ -45,6 +45,10 @@ const GLOBAL_LINKS = {
     title: "Cardápio",
     href: "/cardapio",
   },
+  cardapioTamanhosPagina: {
+    title: "Cardápio",
+    href: "/cardapio/tamanhos",
+  },
 };
 
 export default GLOBAL_LINKS;

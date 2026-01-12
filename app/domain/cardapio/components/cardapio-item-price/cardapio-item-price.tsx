@@ -52,7 +52,7 @@ export function CardapioItemPrice({ prices, cnLabel, cnValue, showValuta = true 
                                         "uppercase text-[12px] text-muted-foreground leading-[1.1]",
                                         cnLabel
                                     )
-                                }>{p?.MenuItemSize?.shortDescription}</span>
+                                }>{p?.MenuItemSize?.nameShort}</span>
                                 <div className={
                                     cn(
                                         "flex items-end gap-[2px] text-muted-foreground",
@@ -117,7 +117,7 @@ export function CardapioItemPriceSelect({
     const triggerText = current
         ? (
             <div className="flex justify-between items-center w-full font-neue font-normal text-xs tracking-wide truncate">
-                <span>{current.MenuItemSize?.shortDescription}</span>
+                <span>{current.MenuItemSize?.nameShort}</span>
                 <span>{formatMoneyString(current.priceAmount)}</span>
             </div>
         )
@@ -146,7 +146,7 @@ export function CardapioItemPriceSelect({
                     <CommandEmpty>Nenhum tamanho encontrado.</CommandEmpty>
                     <CommandGroup className="max-h-[300px] overflow-auto">
                         {list.map((p) => {
-                            const text = `${p.MenuItemSize?.shortDescription} • ${showCurrency ? "R$ " : ""}${p.priceAmount}`
+                            const text = `${p.MenuItemSize?.nameShort} • ${showCurrency ? "R$ " : ""}${p.priceAmount}`
                             const selected = current?.id === p.id
                             return (
                                 <CommandItem
@@ -157,8 +157,8 @@ export function CardapioItemPriceSelect({
                                 >
                                     <Check className={cn("h-4 w-4", selected ? "opacity-100" : "opacity-0")} />
                                     <div className="grid grid-cols-2 gap-x-4 w-[160px] font-neue tracking-wide font-medium">
-                                        {/* <span className="font-medium leading-tight">{p.MenuItemSize?.name ?? p.MenuItemSize?.shortDescription}</span> */}
-                                        <span className="text-xs">{p.MenuItemSize?.shortDescription}</span>
+                                        {/* <span className="font-medium leading-tight">{p.MenuItemSize?.name ?? p.MenuItemSize?.nameShort}</span> */}
+                                        <span className="text-xs">{p.MenuItemSize?.nameShort}</span>
                                         <span className="text-xs">{formatMoneyString(p.priceAmount)}</span>
                                     </div>
                                 </CommandItem>

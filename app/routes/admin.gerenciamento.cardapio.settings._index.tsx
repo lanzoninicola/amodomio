@@ -18,9 +18,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
 import prismaClient from "~/lib/prisma/client.server";
+import { parseBooleanSetting } from "~/utils/parse-boolean-setting";
+
+const NOTIFICATIONS_SETTING_KEY = "cardapio.notificacoes.enabled";
+const NOTIFICATIONS_SETTING_NAME = "Notificações do cardápio";
 
 export const meta: MetaFunction = () => ([{ title: "Cardápio • Configurações" }]);
 
@@ -54,7 +58,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
     orderBy: [{ createdAt: "desc" }]
   });
 
-  return json({ settings, q });
+  const notificationsSetting = await prismaClient.cardapioSetting.findFirst({
+    where: { key: NOTIFICATIONS_SETTING_KEY },
+    orderBy: [{ createdAt: "desc" }],
+  });
+
+  return json({ settings, q, notificationsSetting });
 }
 
 // ======== Action (sem Zod) ========
@@ -64,6 +73,36 @@ export async function action({ request }: ActionFunctionArgs) {
 
   try {
     switch (action) {
+      case "toggle-notifications": {
+        const enabled = formData.get("notificationsEnabled") === "on";
+        const existing = await prismaClient.cardapioSetting.findFirst({
+          where: { key: NOTIFICATIONS_SETTING_KEY },
+          orderBy: [{ createdAt: "desc" }],
+        });
+
+        if (existing) {
+          await prismaClient.cardapioSetting.update({
+            where: { id: existing.id },
+            data: {
+              key: NOTIFICATIONS_SETTING_KEY,
+              name: NOTIFICATIONS_SETTING_NAME,
+              value: enabled ? "true" : "false",
+            },
+          });
+        } else {
+          await prismaClient.cardapioSetting.create({
+            data: {
+              key: NOTIFICATIONS_SETTING_KEY,
+              name: NOTIFICATIONS_SETTING_NAME,
+              value: enabled ? "true" : "false",
+              createdAt: new Date(),
+            },
+          });
+        }
+
+        return redirect("/admin/gerenciamento/cardapio-settings");
+      }
+
       case "create": {
         const key = str(formData.get("key"));
         const name = str(formData.get("name"));
@@ -126,12 +165,13 @@ export async function action({ request }: ActionFunctionArgs) {
 
 // ======== Component ========
 export default function CardapioSettingsPage() {
-  const { settings, q } = useLoaderData<typeof loader>();
+  const { settings, q, notificationsSetting } = useLoaderData<typeof loader>();
   const [searchParams] = useSearchParams();
   const submit = useSubmit();
   const navigation = useNavigation();
   const isSubmitting = navigation.state !== "idle";
   const actionData = useActionData<typeof action>();
+  const notificationsEnabled = parseBooleanSetting(notificationsSetting?.value, true);
 
   return (
     <div className="space-y-6 p-4 md:p-8">
@@ -143,6 +183,22 @@ export default function CardapioSettingsPage() {
 
         <CreateDialog defaultError={actionData as any} />
       </div>
+
+      <Card>
+        <CardHeader className="flex flex-col gap-1">
+          <CardTitle className="text-lg">Notificações</CardTitle>
+          <p className="text-sm text-muted-foreground">Ativa ou desativa toda a UI e lógica de notificações do cardápio.</p>
+        </CardHeader>
+        <CardContent>
+          <Form method="post" className="flex items-center justify-between gap-4" onChange={(e) => submit(e.currentTarget)}>
+            <input type="hidden" name="_action" value="toggle-notifications" />
+            <Label htmlFor="notificationsEnabled" className="font-medium">
+              {notificationsEnabled ? "Ativo" : "Desativado"}
+            </Label>
+            <Switch id="notificationsEnabled" name="notificationsEnabled" defaultChecked={notificationsEnabled} disabled={isSubmitting} />
+          </Form>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
