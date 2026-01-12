@@ -39,6 +39,12 @@ type LoaderData = {
     profession: string | null;
     age_profile: string;
     preferred_payment_method: string;
+    images: Array<{
+      id: string;
+      url: string;
+      description: string | null;
+      created_at: string;
+    }>;
   };
 };
 
@@ -50,6 +56,17 @@ export async function loader({ params }: LoaderFunctionArgs) {
     where: { id: customerId },
   });
   if (!customer) throw new Response("not found", { status: 404 });
+
+  const images = await prisma.crmCustomerImage.findMany({
+    where: { customer_id: customerId },
+    orderBy: { created_at: "desc" },
+    select: {
+      id: true,
+      url: true,
+      description: true,
+      created_at: true,
+    },
+  });
 
   return json<LoaderData>({
     customer: {
@@ -77,6 +94,12 @@ export async function loader({ params }: LoaderFunctionArgs) {
       profession: customer.profession,
       age_profile: customer.age_profile,
       preferred_payment_method: customer.preferred_payment_method,
+      images: images.map((image) => ({
+        id: image.id,
+        url: image.url,
+        description: image.description,
+        created_at: image.created_at.toISOString(),
+      })),
     },
   });
 }
@@ -167,6 +190,8 @@ export default function AdminCrmCustomerProfile() {
   const actionData = useActionData<ActionData>();
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
+  const images = customer.images || [];
+  const primaryImage = images[0];
   const consentInputValue = customer.consent_at
     ? (() => {
         const date = new Date(customer.consent_at);
@@ -187,6 +212,56 @@ export default function AdminCrmCustomerProfile() {
             {actionData.error}
           </div>
         )}
+
+        <div className="grid gap-3">
+          <div>
+            <p className="text-xs uppercase text-muted-foreground">Imagem do perfil</p>
+            <p className="text-sm text-muted-foreground">
+              Últimas fotos recebidas do WhatsApp.
+            </p>
+          </div>
+          {primaryImage ? (
+            <div className="grid gap-4 md:grid-cols-[200px,1fr]">
+              <a
+                href={primaryImage.url}
+                target="_blank"
+                rel="noreferrer"
+                className="overflow-hidden rounded-lg border bg-muted/40"
+                title={primaryImage.description || "Foto do perfil"}
+              >
+                <img
+                  src={primaryImage.url}
+                  alt={primaryImage.description || "Foto do perfil"}
+                  className="h-52 w-full object-cover"
+                  loading="lazy"
+                />
+              </a>
+              <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-4">
+                {images.map((image) => (
+                  <a
+                    key={image.id}
+                    href={image.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="overflow-hidden rounded-md border bg-muted/30"
+                    title={image.description || "Foto do perfil"}
+                  >
+                    <img
+                      src={image.url}
+                      alt={image.description || "Foto do perfil"}
+                      className="h-20 w-full object-cover"
+                      loading="lazy"
+                    />
+                  </a>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-md border border-dashed px-3 py-6 text-sm text-muted-foreground">
+              Nenhuma imagem de perfil cadastrada.
+            </div>
+          )}
+        </div>
 
         <div className="grid gap-3 md:grid-cols-5">
           <Metric

@@ -9,6 +9,8 @@ import { normalizeWebhookPayload, stringifyPayloadForLog } from "~/domain/z-api/
 import { sendAutoReplySafe } from "~/domain/z-api/zapi.service";
 import { addWebhookLog } from "~/domain/z-api/webhook-log.server";
 import { maybeSendTrafficAutoReply } from "~/domain/z-api/meta-auto-responder.server";
+import prisma from "~/lib/prisma/client.server";
+import { normalize_phone_e164_br } from "~/domain/crm/normalize-phone.server";
 
 const WEBHOOK_BODY_LIMIT_BYTES = 256 * 1024;
 const LOG_HEADERS = ["user-agent", "x-forwarded-for", "cf-connecting-ip", "x-real-ip", "content-type"];
@@ -20,6 +22,88 @@ function collectHeaders(request: Request) {
     if (value) headers[header] = value;
   }
   return headers;
+}
+
+function isBlank(value: string | null | undefined): boolean {
+  return !value || !value.trim();
+}
+
+async function syncCrmCustomerFromWebhook(
+  normalized: ReturnType<typeof normalizeWebhookPayload>,
+  correlationId: string
+) {
+  if (!normalized.phone) return { skipped: "missing_phone" };
+
+  const phone_e164 = normalize_phone_e164_br(normalized.phone);
+  if (!phone_e164) return { skipped: "invalid_phone" };
+
+  const name = normalized.contactName?.trim() || "";
+  const photo = normalized.contactPhoto?.trim() || "";
+
+  const existing = await prisma.crmCustomer.findUnique({ where: { phone_e164 } });
+  let customer = existing;
+
+  if (existing) {
+    const shouldUpdateName = Boolean(name) && isBlank(existing.name);
+    if (shouldUpdateName) {
+      customer = await prisma.crmCustomer.update({
+        where: { phone_e164 },
+        data: { name },
+      });
+    }
+  } else {
+    customer = await prisma.crmCustomer.create({
+      data: {
+        phone_e164,
+        name: name || null,
+        preferred_channel: "whatsapp",
+      },
+    });
+  }
+
+  if (photo && customer) {
+    const existingImage = await prisma.crmCustomerImage.findFirst({
+      where: { customer_id: customer.id, url: photo },
+      select: { id: true },
+    });
+
+    if (!existingImage) {
+      await prisma.crmCustomerImage.create({
+        data: {
+          customer_id: customer.id,
+          url: photo,
+          description: "WhatsApp profile photo",
+        },
+      });
+    }
+  }
+
+  if (customer) {
+    const eventPayload = {
+      action: "whatsapp_received",
+      phone: normalized.phone,
+      phone_e164,
+      name: name || undefined,
+      photo: photo || undefined,
+      messageType: normalized.messageType || undefined,
+      messageText: normalized.messageText || undefined,
+      instanceId: normalized.instanceId || undefined,
+      correlationId,
+    };
+
+    await prisma.crmCustomerEvent.create({
+      data: {
+        customer_id: customer.id,
+        event_type: "WHATSAPP_RECEIVED",
+        source: "zapi-webhook",
+        external_id: correlationId,
+        payload: eventPayload,
+        payload_raw: JSON.stringify(eventPayload),
+      },
+    });
+  }
+
+  return { customerId: customer?.id, created: !existing };
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -61,6 +145,8 @@ export async function action({ request }: ActionFunctionArgs) {
       messageType: normalized.messageType,
       instanceId: normalized.instanceId,
       messageTextPreview: normalized.messageText?.slice(0, 200),
+      contactName: normalized.contactName,
+      contactPhoto: normalized.contactPhoto,
     },
   });
 
@@ -70,6 +156,14 @@ export async function action({ request }: ActionFunctionArgs) {
     correlationId,
     headers: collectHeaders(request),
     payloadPreview: stringifyPayloadForLog(payload),
+  });
+
+  const crmSyncResult = await syncCrmCustomerFromWebhook(normalized, correlationId).catch((error) => {
+    console.warn("[z-api][webhook][received] crm sync failed", {
+      correlationId,
+      error: (error as any)?.message,
+    });
+    return { skipped: "error" };
   });
 
   const trafficResult = await maybeSendTrafficAutoReply(normalized, correlationId).catch((error) => {
@@ -84,5 +178,5 @@ export async function action({ request }: ActionFunctionArgs) {
   //   void sendAutoReplySafe(normalized.phone);
   // }
 
-  return json({ ok: true, trafficResult });
+  return json({ ok: true, trafficResult, crmSyncResult });
 }
