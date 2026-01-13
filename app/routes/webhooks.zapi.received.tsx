@@ -22,6 +22,14 @@ function shouldSkipCrmSync(phoneE164: string) {
   const cachedAt = crmSyncCache.get(phoneE164);
   if (cachedAt && now - cachedAt < CRM_SYNC_TTL_MS) return true;
 
+  if (crmSyncCache.size > 5000) {
+    for (const [key, timestamp] of crmSyncCache) {
+      if (now - timestamp >= CRM_SYNC_TTL_MS) {
+        crmSyncCache.delete(key);
+      }
+    }
+  }
+
   crmSyncCache.set(phoneE164, now);
   return false;
 }

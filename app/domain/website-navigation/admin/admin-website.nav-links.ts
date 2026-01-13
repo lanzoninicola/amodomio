@@ -34,6 +34,12 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
           disabled: false,
         },
         {
+          title: "Horários de atendimento",
+          href: "/admin/atendimento/horarios",
+          items: [],
+          disabled: false,
+        },
+        {
           title: "Gerenciamento Sabores",
           href: "/admin/atendimento/gerenciamento-sabores",
           items: [],
