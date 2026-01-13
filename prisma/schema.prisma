@@ -1624,6 +1624,7 @@ model CrmCustomerImage {
   @@map("crm_customer_image")
 }
 
+
 model CrmCampaign {
   id          String            @id @default(uuid())
   name        String            @db.VarChar(255)

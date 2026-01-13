@@ -1,6 +1,7 @@
 import { zapiInstancePath, zapiRequest, ZApiError } from "./zapi-client.server";
 import {
   ContactsResponse,
+  ProfilePictureResponse,
   SendButtonActionsRequest,
   SendMessageResponse,
   SendTextRequest,
@@ -168,6 +169,21 @@ export async function listContacts(params: {
   return zapiRequest<ContactsResponse>(
     "GET",
     `${zapiInstancePath}/contacts?${searchParams.toString()}`
+  );
+}
+
+export async function getContactProfilePicture(
+  phone: string,
+  options?: { timeoutMs?: number }
+): Promise<ProfilePictureResponse> {
+  const normalized = assertPhone(phone);
+  const searchParams = new URLSearchParams({ phone: normalized });
+
+  return zapiRequest<ProfilePictureResponse>(
+    "GET",
+    `${zapiInstancePath}/profile-picture?${searchParams.toString()}`,
+    undefined,
+    options
   );
 }
 

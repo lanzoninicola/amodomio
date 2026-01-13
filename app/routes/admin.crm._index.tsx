@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ImageOff } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import prisma from "~/lib/prisma/client.server";
 import { normalize_phone_e164_br } from "~/domain/crm/normalize-phone.server";
@@ -18,6 +19,7 @@ type LoaderData = {
     events: number;
     tags: number;
     tagBadges: string[];
+    profileImageUrl: string | null;
   }>;
   pagination: {
     page: number;
@@ -51,6 +53,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
       include: {
         _count: { select: { events: true, tags: true } },
         tags: { include: { tag: true } },
+        images: {
+          take: 1,
+          orderBy: { created_at: "desc" },
+          select: { url: true },
+        },
       },
     }),
   ]);
@@ -63,6 +70,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       events: c._count.events,
       tags: c._count.tags,
       tagBadges: c.tags.map((t) => t.tag.label || t.tag.key),
+      profileImageUrl: c.images[0]?.url ?? null,
     })),
     pagination: { page, pageSize, total },
     query,
@@ -223,6 +231,7 @@ export default function AdminCrmIndex() {
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/40">
+                <TableHead className="text-left">Perfil</TableHead>
                 <TableHead className="text-left">Nome</TableHead>
                 <TableHead className="text-left">Telefone</TableHead>
                 <TableHead className="text-left">Eventos</TableHead>
@@ -234,6 +243,20 @@ export default function AdminCrmIndex() {
               {customers.length ? (
                 customers.map((c) => (
                   <TableRow key={c.id}>
+                    <TableCell>
+                      {c.profileImageUrl ? (
+                        <img
+                          src={c.profileImageUrl}
+                          alt={c.name ? `Foto de ${c.name}` : "Foto do cliente"}
+                          className="h-10 w-10 rounded-full object-cover"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full border text-muted-foreground">
+                          <ImageOff className="h-5 w-5" aria-label="Sem foto" />
+                        </div>
+                      )}
+                    </TableCell>
                     <TableCell>{c.name || "-"}</TableCell>
                     <TableCell className="font-mono text-xs">{c.phone_e164}</TableCell>
                     <TableCell>{c.events}</TableCell>
@@ -257,7 +280,7 @@ export default function AdminCrmIndex() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
+                  <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
                     Nenhum cliente ainda.
                   </TableCell>
                 </TableRow>

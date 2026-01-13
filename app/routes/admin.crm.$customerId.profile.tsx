@@ -192,6 +192,7 @@ export default function AdminCrmCustomerProfile() {
   const isSubmitting = navigation.state === "submitting";
   const images = customer.images || [];
   const primaryImage = images[0];
+  const galleryImages = primaryImage ? images.slice(1) : images;
   const consentInputValue = customer.consent_at
     ? (() => {
         const date = new Date(customer.consent_at);
@@ -237,7 +238,7 @@ export default function AdminCrmCustomerProfile() {
                 />
               </a>
               <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-4">
-                {images.map((image) => (
+                {galleryImages.map((image) => (
                   <a
                     key={image.id}
                     href={image.url}
