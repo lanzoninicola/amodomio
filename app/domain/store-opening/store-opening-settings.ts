@@ -13,6 +13,15 @@ export type StoreOpeningScheduleDay = {
   rangeDigits: string;
 };
 
+export type StoreOpeningStatus = {
+  isOpen: boolean;
+  day: number;
+  nowTime: number;
+  start: number;
+  end: number;
+  enabled: boolean;
+};
+
 const TIME_RANGE_LENGTH = 8;
 
 function clamp(value: number, min: number, max: number) {
@@ -123,4 +132,36 @@ export function buildStoreOpeningSchedule(params: {
       rangeDigits,
     };
   });
+}
+
+export function computeStoreOpeningStatus(
+  schedule: StoreOpeningScheduleDay[],
+  now: Date = new Date()
+): StoreOpeningStatus {
+  const day = now.getDay();
+  const nowTime = now.getHours() * 100 + now.getMinutes();
+  const entry = schedule.find((item) => item.day === day);
+
+  if (!entry) {
+    return {
+      isOpen: false,
+      day,
+      nowTime,
+      start: 0,
+      end: 0,
+      enabled: false,
+    };
+  }
+
+  const isOpen =
+    Boolean(entry.enabled) && nowTime >= entry.start && nowTime < entry.end;
+
+  return {
+    isOpen,
+    day,
+    nowTime,
+    start: entry.start,
+    end: entry.end,
+    enabled: Boolean(entry.enabled),
+  };
 }

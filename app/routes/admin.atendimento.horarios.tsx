@@ -9,12 +9,12 @@ import { Clock } from "lucide-react";
 import { settingPrismaEntity } from "~/domain/setting/setting.prisma.entity.server";
 import {
   buildRangeDigitsFromNumbers,
-  buildStoreOpeningSchedule,
   DEFAULT_STORE_OPENING,
   formatRangeDigits,
   normalizeRangeDigits,
   STORE_OPENING_CONTEXT,
 } from "~/domain/store-opening/store-opening-settings";
+import { loadStoreOpeningSchedule } from "~/domain/store-opening/store-opening-status.server";
 import { cn } from "~/lib/utils";
 
 const WEEK_DAYS = [
@@ -58,15 +58,8 @@ function getFallbackConfig() {
 }
 
 export async function loader({}: LoaderFunctionArgs) {
-  const { fallbackOpenDays, fallbackStart, fallbackEnd, fallbackRange } = getFallbackConfig();
-  const settings = await settingPrismaEntity.findAllByContext(STORE_OPENING_CONTEXT);
-  const settingsMap = new Map(settings.map((setting) => [setting.name, setting.value]));
-  const schedule = buildStoreOpeningSchedule({
-    settings: settingsMap,
-    fallbackOpenDays,
-    fallbackStart,
-    fallbackEnd,
-  });
+  const { fallbackRange } = getFallbackConfig();
+  const schedule = await loadStoreOpeningSchedule();
   const scheduleByDay = new Map(schedule.map((item) => [item.day, item]));
 
   const days = WEEK_DAYS.map((weekday) => {
