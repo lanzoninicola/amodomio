@@ -14,6 +14,17 @@ import { normalize_phone_e164_br } from "~/domain/crm/normalize-phone.server";
 
 const WEBHOOK_BODY_LIMIT_BYTES = 256 * 1024;
 const LOG_HEADERS = ["user-agent", "x-forwarded-for", "cf-connecting-ip", "x-real-ip", "content-type"];
+const CRM_SYNC_TTL_MS = 15 * 60 * 1000;
+const crmSyncCache = new Map<string, number>();
+
+function shouldSkipCrmSync(phoneE164: string) {
+  const now = Date.now();
+  const cachedAt = crmSyncCache.get(phoneE164);
+  if (cachedAt && now - cachedAt < CRM_SYNC_TTL_MS) return true;
+
+  crmSyncCache.set(phoneE164, now);
+  return false;
+}
 
 function collectHeaders(request: Request) {
   const headers: Record<string, string> = {};
@@ -36,6 +47,7 @@ async function syncCrmCustomerFromWebhook(
 
   const phone_e164 = normalize_phone_e164_br(normalized.phone);
   if (!phone_e164) return { skipped: "invalid_phone" };
+  if (shouldSkipCrmSync(phone_e164)) return { skipped: "cache_hit" };
 
   const name = normalized.contactName?.trim() || "";
   const photo = normalized.contactPhoto?.trim() || "";
@@ -136,19 +148,19 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const normalized = normalizeWebhookPayload("received", payload);
 
-  console.info("[z-api][webhook][received]", {
-    correlationId,
-    headers: collectHeaders(request),
-    payload: stringifyPayloadForLog(payload),
-    normalized: {
-      phone: normalized.phone,
-      messageType: normalized.messageType,
-      instanceId: normalized.instanceId,
-      messageTextPreview: normalized.messageText?.slice(0, 200),
-      contactName: normalized.contactName,
-      contactPhoto: normalized.contactPhoto,
-    },
-  });
+  // console.info("[z-api][webhook][received]", {
+  //   correlationId,
+  //   headers: collectHeaders(request),
+  //   payload: stringifyPayloadForLog(payload),
+  //   normalized: {
+  //     phone: normalized.phone,
+  //     messageType: normalized.messageType,
+  //     instanceId: normalized.instanceId,
+  //     messageTextPreview: normalized.messageText?.slice(0, 200),
+  //     contactName: normalized.contactName,
+  //     contactPhoto: normalized.contactPhoto,
+  //   },
+  // });
 
   addWebhookLog({
     id: correlationId,

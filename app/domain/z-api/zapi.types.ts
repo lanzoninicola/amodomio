@@ -47,3 +47,8 @@ export type ContactsResponse = {
   total?: number;
   [key: string]: any;
 };
+
+export type ProfilePictureResponse = {
+  link?: string;
+  [key: string]: any;
+}[];
