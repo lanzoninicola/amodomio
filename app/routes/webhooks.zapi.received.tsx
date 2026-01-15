@@ -6,23 +6,51 @@ import { enforceRateLimit, handleRouteError } from "~/domain/z-api/route-helpers
 import { PayloadTooLargeError } from "~/domain/z-api/errors";
 import { readJsonBody } from "~/domain/z-api/security.server";
 import { normalizeWebhookPayload, stringifyPayloadForLog } from "~/domain/z-api/webhook.parser";
-import { sendAutoReplySafe } from "~/domain/z-api/zapi.service";
+import { sendAutoReplySafe, sendTextMessage } from "~/domain/z-api/zapi.service";
 import { addWebhookLog } from "~/domain/z-api/webhook-log.server";
 import { maybeSendTrafficAutoReply } from "~/domain/z-api/meta-auto-responder.server";
 import prisma from "~/lib/prisma/client.server";
 import { normalize_phone_e164_br } from "~/domain/crm/normalize-phone.server";
+import { getOffHoursAutoresponderConfig, getStoreOpeningStatus } from "~/domain/store-opening/store-opening-status.server";
 
 const WEBHOOK_BODY_LIMIT_BYTES = 256 * 1024;
 const LOG_HEADERS = ["user-agent", "x-forwarded-for", "cf-connecting-ip", "x-real-ip", "content-type"];
 const CRM_SYNC_TTL_MS = 15 * 60 * 1000;
+const OFF_HOURS_REPLY_TTL_MS = 60 * 60 * 1000;
 const crmSyncCache = new Map<string, number>();
+const offHoursReplyCache = new Map<string, number>();
 
 function shouldSkipCrmSync(phoneE164: string) {
   const now = Date.now();
   const cachedAt = crmSyncCache.get(phoneE164);
   if (cachedAt && now - cachedAt < CRM_SYNC_TTL_MS) return true;
 
+  if (crmSyncCache.size > 5000) {
+    for (const [key, timestamp] of crmSyncCache) {
+      if (now - timestamp >= CRM_SYNC_TTL_MS) {
+        crmSyncCache.delete(key);
+      }
+    }
+  }
+
   crmSyncCache.set(phoneE164, now);
+  return false;
+}
+
+function shouldSkipOffHoursReply(phone: string) {
+  const now = Date.now();
+  const cachedAt = offHoursReplyCache.get(phone);
+  if (cachedAt && now - cachedAt < OFF_HOURS_REPLY_TTL_MS) return true;
+
+  if (offHoursReplyCache.size > 5000) {
+    for (const [key, timestamp] of offHoursReplyCache) {
+      if (now - timestamp >= OFF_HOURS_REPLY_TTL_MS) {
+        offHoursReplyCache.delete(key);
+      }
+    }
+  }
+
+  offHoursReplyCache.set(phone, now);
   return false;
 }
 
@@ -186,9 +214,56 @@ export async function action({ request }: ActionFunctionArgs) {
     return { sent: false, reason: "error" };
   });
 
+  const offHoursResult = await maybeSendOffHoursAutoReply(normalized, correlationId, trafficResult.sent).catch((error) => {
+    console.warn("[z-api][webhook][received] off-hours auto-reply failed", {
+      correlationId,
+      error: (error as any)?.message,
+    });
+    return { sent: false, reason: "error" };
+  });
+
   // if (normalized.phone) {
   //   void sendAutoReplySafe(normalized.phone);
   // }
 
-  return json({ ok: true, trafficResult, crmSyncResult });
+  return json({ ok: true, trafficResult, offHoursResult, crmSyncResult });
+}
+
+async function maybeSendOffHoursAutoReply(
+  normalized: ReturnType<typeof normalizeWebhookPayload>,
+  correlationId: string,
+  alreadyReplied: boolean
+) {
+  if (alreadyReplied) return { sent: false, reason: "already_replied" };
+  if (!normalized.phone) return { sent: false, reason: "missing_phone" };
+
+  const [storeStatus, offHoursConfig] = await Promise.all([
+    getStoreOpeningStatus(),
+    getOffHoursAutoresponderConfig(),
+  ]);
+
+  if (!offHoursConfig.enabled) return { sent: false, reason: "disabled" };
+  if (storeStatus.status.isOpen) return { sent: false, reason: "store_open" };
+  if (shouldSkipOffHoursReply(normalized.phone)) {
+    return { sent: false, reason: "cooldown" };
+  }
+
+  const message = offHoursConfig.message?.trim();
+  if (!message) return { sent: false, reason: "empty_message" };
+
+  const response = await sendTextMessage(
+    {
+      phone: normalized.phone,
+      message,
+    },
+    { timeoutMs: 10_000 }
+  ).catch((error) => {
+    console.warn("[z-api][off-hours] send failed", {
+      correlationId,
+      error: (error as any)?.message,
+    });
+    return undefined;
+  });
+
+  return { sent: Boolean(response), reason: response ? undefined : "send_failed" };
 }
