@@ -6,7 +6,7 @@ import { enforceRateLimit, handleRouteError } from "~/domain/z-api/route-helpers
 import { PayloadTooLargeError } from "~/domain/z-api/errors";
 import { readJsonBody } from "~/domain/z-api/security.server";
 import { normalizeWebhookPayload, stringifyPayloadForLog } from "~/domain/z-api/webhook.parser";
-import { sendAutoReplySafe, sendTextMessage } from "~/domain/z-api/zapi.service";
+import { sendAutoReplySafe, sendTextMessage, sendVideoMessage } from "~/domain/z-api/zapi.service";
 import { addWebhookLog } from "~/domain/z-api/webhook-log.server";
 import { maybeSendTrafficAutoReply } from "~/domain/z-api/meta-auto-responder.server";
 import prisma from "~/lib/prisma/client.server";
@@ -248,22 +248,45 @@ async function maybeSendOffHoursAutoReply(
     return { sent: false, reason: "cooldown" };
   }
 
-  const message = offHoursConfig.message?.trim();
-  if (!message) return { sent: false, reason: "empty_message" };
+  const responseType = offHoursConfig.responseType ?? "text";
+  let response: any;
 
-  const response = await sendTextMessage(
-    {
-      phone: normalized.phone,
-      message,
-    },
-    { timeoutMs: 10_000 }
-  ).catch((error) => {
-    console.warn("[z-api][off-hours] send failed", {
-      correlationId,
-      error: (error as any)?.message,
+  if (responseType === "video") {
+    const video = offHoursConfig.video?.trim();
+    if (!video) return { sent: false, reason: "missing_video" };
+
+    response = await sendVideoMessage(
+      {
+        phone: normalized.phone,
+        video,
+        caption: offHoursConfig.caption?.trim() || undefined,
+      },
+      { timeoutMs: 10_000 }
+    ).catch((error) => {
+      console.warn("[z-api][off-hours] send video failed", {
+        correlationId,
+        error: (error as any)?.message,
+      });
+      return undefined;
     });
-    return undefined;
-  });
+  } else {
+    const message = offHoursConfig.message?.trim();
+    if (!message) return { sent: false, reason: "empty_message" };
+
+    response = await sendTextMessage(
+      {
+        phone: normalized.phone,
+        message,
+      },
+      { timeoutMs: 10_000 }
+    ).catch((error) => {
+      console.warn("[z-api][off-hours] send text failed", {
+        correlationId,
+        error: (error as any)?.message,
+      });
+      return undefined;
+    });
+  }
 
   return { sent: Boolean(response), reason: response ? undefined : "send_failed" };
 }

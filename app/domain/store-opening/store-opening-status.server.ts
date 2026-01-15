@@ -11,6 +11,7 @@ const OVERRIDE_SETTING_NAME = "override";
 const OVERRIDE_VALUES = ["auto", "open", "closed"] as const;
 export type StoreOpeningOverride = (typeof OVERRIDE_VALUES)[number];
 const OFF_HOURS_MESSAGE_DEFAULT = "Estamos fora do horário. Voltamos em breve! 🍕";
+const OFF_HOURS_RESPONSE_TYPE_DEFAULT = "text";
 
 export async function loadStoreOpeningSchedule(): Promise<StoreOpeningScheduleDay[]> {
   try {
@@ -72,10 +73,15 @@ export async function setStoreOpeningOverride(override: StoreOpeningOverride) {
 export async function getOffHoursAutoresponderConfig() {
   const settings = await settingPrismaEntity.findAllByContext(STORE_OPENING_CONTEXT);
   const byName = new Map(settings.map((setting) => [setting.name, setting.value]));
+  const responseTypeRaw = (byName.get("off-hours-response-type") || OFF_HOURS_RESPONSE_TYPE_DEFAULT).toLowerCase();
+  const responseType = responseTypeRaw === "video" ? "video" : "text";
 
   return {
     enabled: (byName.get("off-hours-enabled") ?? "true") === "true",
     message: byName.get("off-hours-message") || OFF_HOURS_MESSAGE_DEFAULT,
+    responseType,
+    video: byName.get("off-hours-video") || "",
+    caption: byName.get("off-hours-video-caption") || "",
   };
 }
 

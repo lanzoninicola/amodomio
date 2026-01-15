@@ -44,6 +44,14 @@ Para abrir ou fechar manualmente, usamos:
 - chave: `override`
 - valores: `auto` | `open` | `closed`
 
+## Mensagem fora do horario
+Configuracao adicional no mesmo contexto:
+- `off-hours-enabled`: ativa/desativa o envio
+- `off-hours-response-type`: `text` ou `video`
+- `off-hours-message`: texto enviado quando tipo = `text`
+- `off-hours-video`: URL/Base64 do video quando tipo = `video`
+- `off-hours-video-caption`: legenda opcional para video
+
 ## Fallback padrao
 Quando nao ha dados no banco, usa:
 - dias: quarta a domingo
