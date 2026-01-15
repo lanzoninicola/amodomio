@@ -5,6 +5,9 @@ import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Switch } from "@/components/ui/switch";
 import { Clock } from "lucide-react";
 import { settingPrismaEntity } from "~/domain/setting/setting.prisma.entity.server";
 import {
@@ -36,6 +39,8 @@ type LoaderDay = {
 
 type LoaderData = {
   days: LoaderDay[];
+  offHoursEnabled: boolean;
+  offHoursMessage: string;
 };
 
 export const meta: MetaFunction = () => [
@@ -61,6 +66,8 @@ export async function loader({}: LoaderFunctionArgs) {
   const { fallbackRange } = getFallbackConfig();
   const schedule = await loadStoreOpeningSchedule();
   const scheduleByDay = new Map(schedule.map((item) => [item.day, item]));
+  const settings = await settingPrismaEntity.findAllByContext(STORE_OPENING_CONTEXT);
+  const byName = new Map(settings.map((setting) => [setting.name, setting.value]));
 
   const days = WEEK_DAYS.map((weekday) => {
     const entry = scheduleByDay.get(weekday.day);
@@ -72,7 +79,13 @@ export async function loader({}: LoaderFunctionArgs) {
     };
   });
 
-  return json<LoaderData>({ days });
+  return json<LoaderData>({
+    days,
+    offHoursEnabled: (byName.get("off-hours-enabled") ?? "true") === "true",
+    offHoursMessage:
+      byName.get("off-hours-message") ||
+      "Estamos fora do horário. Voltamos em breve! 🍕",
+  });
 }
 
 async function upsertSetting(name: string, value: string, type: string) {
@@ -98,6 +111,8 @@ async function upsertSetting(name: string, value: string, type: string) {
 export async function action({ request }: ActionFunctionArgs) {
   const form = await request.formData();
   const { fallbackRange } = getFallbackConfig();
+  const offHoursEnabled = form.get("off-hours-enabled") === "on";
+  const offHoursMessage = String(form.get("off-hours-message") || "");
 
   for (const weekday of WEEK_DAYS) {
     const enabledName = `day-${weekday.day}-enabled`;
@@ -111,11 +126,25 @@ export async function action({ request }: ActionFunctionArgs) {
     await upsertSetting(rangeName, rangeDigits, "string");
   }
 
+  await upsertSetting("off-hours-enabled", String(offHoursEnabled), "boolean");
+  await upsertSetting("off-hours-message", offHoursMessage, "string");
+
   return redirect("/admin/atendimento/horarios");
 }
 
+function toWhatsappFormatting(value: string) {
+  if (!value) return "";
+  let text = value;
+  text = text.replace(/\*\*(.+?)\*\*/g, "*$1*");
+  text = text.replace(/__(.+?)__/g, "_$1_");
+  text = text.replace(/_(.+?)_/g, "_$1_");
+  text = text.replace(/```([\s\S]+?)```/g, "$1");
+  text = text.replace(/`(.+?)`/g, "$1");
+  return text;
+}
+
 export default function AtendimentoHorariosPage() {
-  const { days } = useLoaderData<typeof loader>();
+  const { days, offHoursEnabled, offHoursMessage } = useLoaderData<typeof loader>();
   const nav = useNavigation();
   const isSubmitting = nav.state !== "idle";
 
@@ -131,12 +160,25 @@ export default function AtendimentoHorariosPage() {
       return acc;
     }, {})
   );
+  const [absenceMessage, setAbsenceMessage] = useState(offHoursMessage);
 
   const formattedRanges = useMemo(() => {
     return Object.fromEntries(
       days.map((item) => [item.day, formatRangeDigits(rangeByDay[item.day] ?? "")])
     );
   }, [days, rangeByDay]);
+
+  const renderWhatsappPreview = (value: string) => {
+    const escape = (str: string) =>
+      str
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+
+    const wa = toWhatsappFormatting(value || "");
+    return { __html: escape(wa).replace(/\n/g, "<br />") };
+  };
 
   return (
     <Form method="post" className="font-neue">
@@ -164,78 +206,121 @@ export default function AtendimentoHorariosPage() {
         </div>
       </div>
 
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">
-          Digite números consecutivos, exemplo: <span className="font-mono">19002200</span>
-          {" "}vira <span className="font-mono">19:00 - 22:00</span>.
-        </p>
-      </div>
+      <Tabs defaultValue="hours" className="w-full space-y-4">
+        <TabsList className="mb-0 rounded-lg border bg-background/80">
+          <TabsTrigger value="hours">Horários</TabsTrigger>
+          <TabsTrigger value="offhours">Mensagem de ausência</TabsTrigger>
+        </TabsList>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        {days.map((weekday) => {
-          const enabled = enabledByDay[weekday.day];
-          const rangeName = `day-${weekday.day}-range`;
-          const checkboxId = `day-${weekday.day}-enabled`;
+        <TabsContent value="hours" className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-muted-foreground">
+              Digite números consecutivos, exemplo: <span className="font-mono">19002200</span>
+              {" "}vira <span className="font-mono">19:00 - 22:00</span>.
+            </p>
+          </div>
 
-          return (
-            <div
-              key={weekday.day}
-              className="flex items-center justify-between rounded-lg border bg-background px-4 py-3"
-            >
-              <div className="flex items-center gap-3">
-                <input
-                  id={checkboxId}
-                  name={checkboxId}
-                  type="checkbox"
-                  defaultChecked={weekday.enabled}
-                  className="h-4 w-4 rounded border-input text-primary focus-visible:ring-2 focus-visible:ring-ring"
-                  onChange={(event) =>
-                    setEnabledByDay((prev) => ({
-                      ...prev,
-                      [weekday.day]: event.target.checked,
-                    }))
-                  }
-                />
-                <Label htmlFor={checkboxId} className="capitalize">
-                  {weekday.label}
-                </Label>
-              </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            {days.map((weekday) => {
+              const enabled = enabledByDay[weekday.day];
+              const rangeName = `day-${weekday.day}-range`;
+              const checkboxId = `day-${weekday.day}-enabled`;
 
-              <div className="flex items-center gap-2">
-                <input
-                  type="hidden"
-                  name={rangeName}
-                  value={rangeByDay[weekday.day] ?? ""}
-                />
-                <Input
-                  id={rangeName}
-                  inputMode="numeric"
-                  autoComplete="off"
-                  value={formattedRanges[weekday.day] ?? ""}
-                  onChange={(event) => {
-                    const digits = event.target.value.replace(/\D/g, "").slice(0, 8);
-                    setRangeByDay((prev) => ({ ...prev, [weekday.day]: digits }));
-                  }}
-                  readOnly={!enabled}
-                  placeholder="18:00 - 22:00"
-                  className={cn(
-                    "w-[150px] text-center font-mono",
-                    !enabled && "text-muted-foreground"
-                  )}
-                />
+              return (
                 <div
-                  className={cn(
-                    "flex h-9 w-9 items-center justify-center rounded-md border",
-                    !enabled && "text-muted-foreground"
-                  )}
+                  key={weekday.day}
+                  className="flex items-center justify-between rounded-lg border bg-background px-4 py-3"
                 >
-                  <Clock className="h-4 w-4" />
+                  <div className="flex items-center gap-3">
+                    <input
+                      id={checkboxId}
+                      name={checkboxId}
+                      type="checkbox"
+                      defaultChecked={weekday.enabled}
+                      className="h-4 w-4 rounded border-input text-primary focus-visible:ring-2 focus-visible:ring-ring"
+                      onChange={(event) =>
+                        setEnabledByDay((prev) => ({
+                          ...prev,
+                          [weekday.day]: event.target.checked,
+                        }))
+                      }
+                    />
+                    <Label htmlFor={checkboxId} className="capitalize">
+                      {weekday.label}
+                    </Label>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="hidden"
+                      name={rangeName}
+                      value={rangeByDay[weekday.day] ?? ""}
+                    />
+                    <Input
+                      id={rangeName}
+                      inputMode="numeric"
+                      autoComplete="off"
+                      value={formattedRanges[weekday.day] ?? ""}
+                      onChange={(event) => {
+                        const digits = event.target.value.replace(/\D/g, "").slice(0, 8);
+                        setRangeByDay((prev) => ({ ...prev, [weekday.day]: digits }));
+                      }}
+                      readOnly={!enabled}
+                      placeholder="18:00 - 22:00"
+                      className={cn(
+                        "w-[150px] text-center font-mono",
+                        !enabled && "text-muted-foreground"
+                      )}
+                    />
+                    <div
+                      className={cn(
+                        "flex h-9 w-9 items-center justify-center rounded-md border",
+                        !enabled && "text-muted-foreground"
+                      )}
+                    >
+                      <Clock className="h-4 w-4" />
+                    </div>
+                  </div>
                 </div>
-              </div>
+              );
+            })}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="offhours" className="rounded-xl border bg-background/70 p-4 shadow-sm">
+          <div className="mb-4 flex items-center justify-between rounded-lg border bg-background/60 px-4 py-3">
+            <div>
+              <Label htmlFor="off-hours-enabled">Ativar mensagem de ausência</Label>
+              <p className="text-xs text-muted-foreground">Enviar resposta quando estiver fechado.</p>
             </div>
-          );
-        })}
-      </div>
+            <Switch id="off-hours-enabled" name="off-hours-enabled" defaultChecked={offHoursEnabled} />
+          </div>
+          <div className="mb-3 flex items-center justify-between text-xs text-muted-foreground">
+            <span>Suporta formatação estilo WhatsApp: *negrito*, _itálico_, monospace sem formatação.</span>
+            <span className="text-[11px]">Preview (como será enviado)</span>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="off-hours-message">Mensagem de ausência</Label>
+              <Textarea
+                id="off-hours-message"
+                name="off-hours-message"
+                className="min-h-[240px] font-mono"
+                value={absenceMessage}
+                onChange={(e) => setAbsenceMessage(e.target.value)}
+                placeholder="Mensagem enviada fora do horário"
+              />
+            </div>
+            <div className="rounded-lg border bg-muted/40 p-3 text-sm leading-relaxed h-full">
+              <p className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground mb-2">Preview</p>
+              <div
+                className="whitespace-pre-wrap break-words"
+                dangerouslySetInnerHTML={renderWhatsappPreview(`${absenceMessage}`)}
+              />
+            </div>
+          </div>
+        </TabsContent>
+      </Tabs>
     </Form>
   );
 }

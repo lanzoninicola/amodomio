@@ -285,13 +285,13 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
         },
         {
           title: "Auto Responder",
-          href: "/admin/wpp/auto-responder",
+          href: "/admin/bot/auto-responder",
           items: [],
           disabled: false,
         },
         {
           title: "Configurar Auto Responder",
-          href: "/admin/wpp/auto-responder/settings",
+          href: "/admin/bot/auto-responder/settings",
           items: [],
           disabled: false,
         },

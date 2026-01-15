@@ -31,10 +31,18 @@ Funcoes principais:
 - `loadStoreOpeningSchedule()` carrega e normaliza o schedule do banco
 - `computeStoreOpeningStatus()` calcula aberto/fechado para um horario
 - `getStoreOpeningStatus()` combina as duas em server-side
+- `setStoreOpeningOverride()` define o modo manual (abrir/fechar)
 
 ## Onde e usado
 - `app/hooks/use-store-opening-status.ts` consulta o status via API
 - `app/routes/api.store-opening-status.tsx` expõe status atual via API
+- `app/components/layout/admin-header/admin-header.tsx` exibe e permite override manual
+
+## Override manual
+Para abrir ou fechar manualmente, usamos:
+- contexto: `store-opening-hours`
+- chave: `override`
+- valores: `auto` | `open` | `closed`
 
 ## Fallback padrao
 Quando nao ha dados no banco, usa:
