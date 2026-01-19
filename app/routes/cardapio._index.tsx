@@ -277,7 +277,10 @@ export default function CardapioWebIndex() {
                     <Await resolve={items}>
                         {(items) => {
                             return (
-                                <section id="destaque" className="flex flex-col gap-4 mx-2 md:flex-1 ">
+                                <section
+                                    id="destaque"
+                                    className="flex flex-col gap-4 mx-2 md:col-span-2 md:mx-auto md:w-full md:max-w-4xl"
+                                >
                                     {/* @ts-ignore */}
                                     <CardapioItemListDestaque items={items} title="Sugestões do chef" tagFilter="em-destaque" />
                                 </section>
@@ -606,7 +609,7 @@ function CardapioItemsGrid({ items }: { items: MenuItemWithAssociations[] }) {
           mt-4 grid grid-cols-2 gap-3
           sm:grid-cols-3
           lg:grid-cols-4
-          xl:grid-cols-5
+          xl:grid-cols-4
         "
             >
                 {items.map((item) => (
@@ -691,10 +694,10 @@ function CardapioGridItem({
                         </div>
                     </div>
 
-                    <div className="px-1 pb-2 pt-1 flex flex-col bg-white rounded-b-md">
+                    <div className="px-1 pb-2 pt-1 flex flex-col bg-white rounded-b-md sm:pt-2">
                         <span
                             className={cn(
-                                "font-neue line-clamp-1 font-medium text-xs tracking-wide sm:text-base",
+                                "font-neue line-clamp-1 font-medium text-xs tracking-wide sm:tracking-widest md:uppercase ",
                                 isExpanded && "text-md"
                             )}
                         >
@@ -703,7 +706,7 @@ function CardapioGridItem({
 
                         <span
                             className={cn(
-                                "font-neue text-xs tracking-wide leading-[110%] sm:text-base line-clamp-2 my-1",
+                                "font-neue text-xs tracking-wide leading-[110%] sm:text-base md:text-sm line-clamp-2 my-1",
                                 isExpanded && "text-md line-clamp-none mb-2 leading-[120%]"
                             )}
                         >
@@ -763,7 +766,7 @@ function CardapioGridItem({
 
                         <span
                             className={cn(
-                                "font-neue text-xs tracking-wide leading-[110%] sm:text-base line-clamp-2 my-1",
+                                "font-neue text-xs tracking-wide leading-[110%] sm:text-base md:text-sm line-clamp-2 my-1",
                                 isExpanded && "text-md line-clamp-none mb-2 leading-[120%]"
                             )}
                         >
