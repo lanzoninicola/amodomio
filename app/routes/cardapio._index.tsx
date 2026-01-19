@@ -48,6 +48,9 @@ import prismaClient from "~/lib/prisma/client.server";
 import { Tag } from "@prisma/client";
 import { Heart } from "lucide-react";
 import { useSoundEffects } from "~/components/sound-effects/use-sound-effects";
+import { getOrCreateMenuItemInterestClientId } from "~/domain/cardapio/menu-item-interest/menu-item-interest.client";
+
+const INTEREST_ENDPOINT = "/api/menu-item-interest";
 
 export const headers: HeadersFunction = () => ({
     "Cache-Control": "s-maxage=1, stale-while-revalidate=59"
@@ -637,6 +640,8 @@ function CardapioItemsGrid({ items }: { items: MenuItemWithAssociations[] }) {
     const [isDesktop, setIsDesktop] = useState(false);
 
     const itemRefs = useRef<Record<string, HTMLLIElement | null>>({});
+    const trackedViewRef = useRef<Set<string>>(new Set());
+    const trackedOpenDetailRef = useRef<Set<string>>(new Set());
 
     useEffect(() => {
         const mq = window.matchMedia("(min-width: 1024px)");
@@ -647,6 +652,39 @@ function CardapioItemsGrid({ items }: { items: MenuItemWithAssociations[] }) {
     }, []);
 
     if (!items?.length) return null;
+
+    const trackInterest = useCallback((type: "view_list" | "open_detail", menuItemId: string) => {
+        const clientId = getOrCreateMenuItemInterestClientId();
+
+        fetch(INTEREST_ENDPOINT, {
+            method: "post",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ type, menuItemId, clientId }),
+            keepalive: true
+        }).catch((error) => {
+            console.warn("[cardapio] falha ao registrar interesse", error);
+        });
+    }, []);
+
+    const trackViewOnce = useCallback(
+        (menuItemId: string) => {
+            if (trackedViewRef.current.has(menuItemId)) return;
+            trackedViewRef.current.add(menuItemId);
+            trackInterest("view_list", menuItemId);
+        },
+        [trackInterest]
+    );
+
+    const trackOpenDetailOnce = useCallback(
+        (menuItemId: string) => {
+            if (trackedOpenDetailRef.current.has(menuItemId)) return;
+            trackedOpenDetailRef.current.add(menuItemId);
+            trackInterest("open_detail", menuItemId);
+        },
+        [trackInterest]
+    );
 
     const scrollToItemTop = (id: string) => {
         const el = itemRefs.current[id];
@@ -667,6 +705,7 @@ function CardapioItemsGrid({ items }: { items: MenuItemWithAssociations[] }) {
             const next = willExpand ? id : null;
 
             if (willExpand) {
+                trackOpenDetailOnce(id);
                 requestAnimationFrame(() => {
                     requestAnimationFrame(() => scrollToItemTop(id));
                 });
@@ -691,6 +730,8 @@ function CardapioItemsGrid({ items }: { items: MenuItemWithAssociations[] }) {
                         item={item}
                         isExpanded={expandedItemId === item.id}
                         onClick={() => onCardClick(item.id)}
+                        onOpenDetail={() => trackOpenDetailOnce(item.id)}
+                        onView={() => trackViewOnce(item.id)}
                         isDesktop={isDesktop}
                         innerRef={(el) => (itemRefs.current[item.id] = el)}
                     />
@@ -705,22 +746,55 @@ function CardapioGridItem({
     item,
     isExpanded,
     onClick,
+    onOpenDetail,
+    onView,
     isDesktop,
     innerRef
 }: {
     item: MenuItemWithAssociations;
     isExpanded: boolean;
     onClick: () => void;
+    onOpenDetail?: () => void;
+    onView?: () => void;
     isDesktop: boolean;
     innerRef?: (el: HTMLLIElement | null) => void;
 }) {
+    const localRef = useRef<HTMLLIElement | null>(null);
     const featuredImage =
         item.MenuItemGalleryImage?.find((img) => img.isPrimary) ||
         item.MenuItemGalleryImage?.[0];
 
+    const setRefs = useCallback(
+        (el: HTMLLIElement | null) => {
+            localRef.current = el;
+            innerRef?.(el);
+        },
+        [innerRef]
+    );
+
+    useEffect(() => {
+        const element = localRef.current;
+        if (!element || !onView) return;
+
+        let tracked = false;
+        const observer = new IntersectionObserver(
+            (entries) => {
+                const entry = entries[0];
+                if (!entry?.isIntersecting || tracked) return;
+                tracked = true;
+                onView();
+                observer.disconnect();
+            },
+            { threshold: 0.5 }
+        );
+
+        observer.observe(element);
+        return () => observer.disconnect();
+    }, [onView]);
+
     return (
         <li
-            ref={innerRef}
+            ref={setRefs}
             className={cn(
                 "flex flex-col rounded-md border border-transparent",
                 "transition-all duration-300 ease-in-out",
@@ -733,6 +807,7 @@ function CardapioGridItem({
                     to={`/cardapio/${item.slug}`}
                     className="flex flex-col cursor-pointer"
                     aria-label={`Abrir ${item.name}`}
+                    onClick={onOpenDetail}
                 >
                     <div className="group overflow-hidden rounded-t-md relative focus:outline-none focus:ring-2 focus:ring-black/20">
                         <div
@@ -784,6 +859,10 @@ function CardapioGridItem({
                             )}
                         >
                             {item.ingredients}
+                        </span>
+                        <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                            <span>Ver ingredientes</span>
+                            <span aria-hidden="true">...</span>
                         </span>
                     </div>
                 </Link>
@@ -844,6 +923,10 @@ function CardapioGridItem({
                             )}
                         >
                             {item.ingredients}
+                        </span>
+                        <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                            <span>Ver ingredientes</span>
+                            <span aria-hidden="true">...</span>
                         </span>
                     </div>
                 </div>
