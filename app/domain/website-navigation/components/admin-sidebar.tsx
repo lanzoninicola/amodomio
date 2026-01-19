@@ -10,12 +10,9 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
-import MobileLink from "./mobile-link"
 import { SidebarNavItem, WebsiteNavigationLinks } from "../website-navigation.type";
-import React from "react";
-import { Link } from "@remix-run/react";
+import { Link, useFetcher } from "@remix-run/react";
 import { cn } from "~/lib/utils";
-import { Shield } from "lucide-react";
 
 export interface AdminSidebarProps {
   navigationLinks: Partial<WebsiteNavigationLinks>;
@@ -24,32 +21,54 @@ export interface AdminSidebarProps {
 }
 
 export function AdminSidebar({ navigationLinks }: AdminSidebarProps) {
+  const fetcher = useFetcher();
+
+  const trackNavClick = (payload: { href?: string; title: string; groupTitle?: string }) => {
+    if (!payload.href || payload.href === "/admin") {
+      return;
+    }
+
+    fetcher.submit(
+      {
+        href: payload.href,
+        title: payload.title,
+        groupTitle: payload.groupTitle || "",
+      },
+      { method: "post", action: "/api/admin-nav-click" }
+    );
+  };
+
   return (
     <Sidebar variant="floating">
       <SidebarHeader />
       <SidebarContent>
 
-        {navigationLinks?.sidebarNav && navigationLinks.sidebarNav.map((item: SidebarNavItem, index) => (
-          <SidebarGroup key={item.title} className="font-body">
-            <SidebarGroupLabel>{item.title}</SidebarGroupLabel>
+        {navigationLinks?.sidebarNav && navigationLinks.sidebarNav.map((group: SidebarNavItem) => (
+          <SidebarGroup key={group.title} className="font-body">
+            <SidebarGroupLabel>{group.title}</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {item.items.filter(i => i.disabled === false)
-                  .map((item) => (
-                    <SidebarMenuItem key={item.title}>
+                {group.items.filter(i => i.disabled === false)
+                  .map((navItem) => (
+                    <SidebarMenuItem key={navItem.title}>
                       <SidebarMenuButton asChild >
-                        <div className="flex gap-1">
-                          {item.icon && (
-                            <item.icon size={15} />
+                        <Link
+                          to={navItem.href || ""}
+                          prefetch="none"
+                          className="flex gap-1"
+                          onClick={() => trackNavClick({ href: navItem.href, title: navItem.title, groupTitle: group.title })}
+                        >
+                          {navItem.icon && (
+                            <navItem.icon size={15} />
                           )}
-                          <Link to={item.href || ""} prefetch="none">
-                            <span className={
-                              cn(
-                                item.highlight && "font-semibold"
-                              )
-                            }>{item.title}</span>
-                          </Link></div>
-
+                          <span
+                            className={cn(
+                              navItem.highlight && "font-semibold"
+                            )}
+                          >
+                            {navItem.title}
+                          </span>
+                        </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   ))}
@@ -65,4 +84,3 @@ export function AdminSidebar({ navigationLinks }: AdminSidebarProps) {
     </Sidebar>
   )
 }
-

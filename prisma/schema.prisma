@@ -276,6 +276,7 @@ model MenuItem {
   slug                               String?                              @map("slug")
   MenuItemLike                       MenuItemLike[]
   MenuItemShare                      MenuItemShare[]
+  MenuItemInterestEvent              MenuItemInterestEvent[]
   imageId                            String?                              @map("image_id")
   MenuItemImage                      MenuItemImage?                       @relation(fields: [imageId], references: [id])
   MenuItemNote                       MenuItemNote[]
@@ -679,6 +680,19 @@ model MenuItemShare {
   @@map("menu_item_shares")
 }
 
+model MenuItemInterestEvent {
+  id         String   @id @default(uuid())
+  menuItemId String   @map("menu_item_id")
+  MenuItem   MenuItem @relation(fields: [menuItemId], references: [id])
+  clientId   String?  @map("client_id")
+  type       String   @db.VarChar
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([menuItemId, type, createdAt])
+  @@index([clientId])
+  @@map("menu_item_interest_events")
+}
+
 /// here we can manage: featured (recommended), vegetarian, kids, meat
 model MenuItemTag {
   id         String    @id @default(uuid())
@@ -691,6 +705,19 @@ model MenuItemTag {
   updatedAt  DateTime  @default(now()) @updatedAt @map("updated_at")
 
   @@map("menu_item_tags")
+}
+
+model AdminNavigationClick {
+  id            String   @id @default(uuid())
+  href          String   @unique
+  title         String
+  groupTitle    String?  @map("group_title")
+  count         Int      @default(0)
+  lastClickedAt DateTime @map("last_clicked_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("admin_navigation_clicks")
 }
 
 model Tag {
