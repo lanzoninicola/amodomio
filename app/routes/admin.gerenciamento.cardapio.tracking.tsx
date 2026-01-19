@@ -19,6 +19,7 @@ type ItemInterest = {
   name: string;
   counts7d: InterestCounts;
   counts30d: InterestCounts;
+  countsTotal: InterestCounts;
 };
 
 type MonthRange = {
@@ -30,6 +31,12 @@ type MonthRange = {
 type MonthOption = {
   value: string;
   label: string;
+};
+
+type RangeOption = {
+  value: "total" | "3" | "6" | "12";
+  label: string;
+  months: number | null;
 };
 
 const emptyCounts: InterestCounts = {
@@ -97,14 +104,42 @@ const buildMonthOptions = (base: MonthRange, total = 12): MonthOption[] => {
     return { value, label };
   });
 };
+
+const rangeOptions: RangeOption[] = [
+  { value: "total", label: "Total acumulado", months: null },
+  { value: "3", label: "Últimos 3 meses", months: 3 },
+  { value: "6", label: "Últimos 6 meses", months: 6 },
+  { value: "12", label: "Últimos 12 meses", months: 12 },
+];
+
+const resolveRange = (value: string | null) =>
+  rangeOptions.find((option) => option.value === value) ?? rangeOptions[0];
 export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const currentMonth = resolveMonthRange(url.searchParams.get("month"));
   const previousMonth = resolvePreviousMonthRange(currentMonth);
   const monthOptions = buildMonthOptions(currentMonth, 12);
+  const range = resolveRange(url.searchParams.get("range"));
+  const rangeStart =
+    range.months == null
+      ? null
+      : new Date(
+          currentMonth.start.getFullYear(),
+          currentMonth.start.getMonth() - (range.months - 1),
+          1
+        );
 
-  const [eventsCurrent, eventsPrevious, likesCurrent, likesPrevious, sharesCurrent, sharesPrevious] =
-    await Promise.all([
+  const [
+    eventsCurrent,
+    eventsPrevious,
+    eventsTotal,
+    likesCurrent,
+    likesPrevious,
+    likesTotal,
+    sharesCurrent,
+    sharesPrevious,
+    sharesTotal,
+  ] = await Promise.all([
     prismaClient.menuItemInterestEvent.groupBy({
       by: ["menuItemId", "type"],
       _count: { _all: true },
@@ -114,40 +149,61 @@ export async function loader({ request }: LoaderFunctionArgs) {
       by: ["menuItemId", "type"],
       _count: { _all: true },
       where: { createdAt: { gte: previousMonth.start, lt: previousMonth.end } },
+    }),
+    prismaClient.menuItemInterestEvent.groupBy({
+      by: ["menuItemId", "type"],
+      _count: { _all: true },
+      ...(rangeStart ? { where: { createdAt: { gte: rangeStart } } } : {}),
     }),
     prismaClient.menuItemLike.groupBy({
       by: ["menuItemId"],
       _sum: { amount: true },
       where: { createdAt: { gte: currentMonth.start, lt: currentMonth.end }, deletedAt: null },
     }),
-    prismaClient.menuItemShare.groupBy({
-      by: ["menuItemId"],
-      _count: { _all: true },
-      where: { createdAt: { gte: currentMonth.start, lt: currentMonth.end } },
-    }),
     prismaClient.menuItemLike.groupBy({
       by: ["menuItemId"],
       _sum: { amount: true },
       where: { createdAt: { gte: previousMonth.start, lt: previousMonth.end }, deletedAt: null },
+    }),
+    prismaClient.menuItemLike.groupBy({
+      by: ["menuItemId"],
+      _sum: { amount: true },
+      ...(rangeStart
+        ? { where: { createdAt: { gte: rangeStart }, deletedAt: null } }
+        : { where: { deletedAt: null } }),
+    }),
+    prismaClient.menuItemShare.groupBy({
+      by: ["menuItemId"],
+      _count: { _all: true },
+      where: { createdAt: { gte: currentMonth.start, lt: currentMonth.end } },
     }),
     prismaClient.menuItemShare.groupBy({
       by: ["menuItemId"],
       _count: { _all: true },
       where: { createdAt: { gte: previousMonth.start, lt: previousMonth.end } },
     }),
+    prismaClient.menuItemShare.groupBy({
+      by: ["menuItemId"],
+      _count: { _all: true },
+      ...(rangeStart ? { where: { createdAt: { gte: rangeStart } } } : {}),
+    }),
   ]);
 
   const mapCurrent = buildCountMap(eventsCurrent);
   const mapPrevious = buildCountMap(eventsPrevious);
+  const mapTotal = buildCountMap(eventsTotal);
 
   const menuItemIds = Array.from(
     new Set([
       ...mapCurrent.keys(),
       ...mapPrevious.keys(),
+      ...mapTotal.keys(),
       ...likesCurrent.map((row) => row.menuItemId).filter(Boolean),
       ...sharesCurrent.map((row) => row.menuItemId).filter(Boolean),
       ...likesPrevious.map((row) => row.menuItemId).filter(Boolean),
       ...sharesPrevious.map((row) => row.menuItemId).filter(Boolean),
+      ...likesTotal.map((row) => row.menuItemId).filter(Boolean),
+      ...sharesTotal.map((row) => row.menuItemId).filter(Boolean),
     ])
   ) as string[];
 
@@ -164,6 +220,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       name: itemsById.get(id) ?? "Item desconhecido",
       counts7d: mapCurrent.get(id) ?? { ...emptyCounts },
       counts30d: mapPrevious.get(id) ?? { ...emptyCounts },
+      countsTotal: mapTotal.get(id) ?? { ...emptyCounts },
     }))
     .filter((item) => item.name !== "Item desconhecido");
 
@@ -201,8 +258,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
       Number(row._sum?.amount) || 0,
     ])
   );
+  const likesTotalMap = new Map(
+    likesTotal.map((row) => [row.menuItemId, Number(row._sum?.amount) || 0])
+  );
   const sharesPrevMap = new Map(
     sharesPrevious.map((row) => [row.menuItemId, getGroupCount(row)])
+  );
+  const sharesTotalMap = new Map(
+    sharesTotal.map((row) => [row.menuItemId, getGroupCount(row)])
   );
 
   const engagementItems = interestItems
@@ -213,6 +276,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
       shares: sharesMap.get(item.id) ?? 0,
       likesPrev: likesPrevMap.get(item.id) ?? 0,
       sharesPrev: sharesPrevMap.get(item.id) ?? 0,
+      likesTotal: likesTotalMap.get(item.id) ?? 0,
+      sharesTotal: sharesTotalMap.get(item.id) ?? 0,
     }))
     .sort((a, b) => b.likes + b.shares - (a.likes + a.shares))
     .slice(0, 8);
@@ -223,6 +288,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       name: item.name,
       score7d: calculateScore(item.counts7d),
       score30d: calculateScore(item.counts30d),
+      scoreTotal: calculateScore(item.countsTotal),
     }))
     .sort((a, b) => {
       if (b.score7d !== a.score7d) return b.score7d - a.score7d;
@@ -234,6 +300,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
     currentMonth: currentMonth.label,
     previousMonth: previousMonth.label,
     monthOptions,
+    rangeOptions,
+    rangeValue: range.value,
+    rangeLabel: range.label,
     interestRateItems,
     openDetailItems,
     engagementItems,
@@ -250,9 +319,13 @@ export default function AdminGerenciamentoCardapioTracking() {
     currentMonth,
     previousMonth,
     monthOptions,
+    rangeOptions,
+    rangeValue,
+    rangeLabel,
   } = useLoaderData<typeof loader>();
   const [searchParams] = useSearchParams();
   const selectedMonth = searchParams.get("month") ?? currentMonth;
+  const selectedRange = searchParams.get("range") ?? rangeValue;
   const currentLabel =
     monthOptions.find((option) => option.value === currentMonth)?.label ??
     currentMonth;
@@ -304,6 +377,17 @@ export default function AdminGerenciamentoCardapioTracking() {
                 </option>
               ))}
             </select>
+            <select
+              name="range"
+              defaultValue={selectedRange}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-200"
+            >
+              {rangeOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
             <button
               type="submit"
               className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-900 shadow-sm transition hover:border-slate-300"
@@ -312,7 +396,7 @@ export default function AdminGerenciamentoCardapioTracking() {
             </button>
           </div>
           <span className="text-xs text-muted-foreground">
-            Comparando {currentLabel} x {previousLabel}
+            Comparando {currentLabel} x {previousLabel} · {rangeLabel}
           </span>
         </form>
       </header>
@@ -333,30 +417,38 @@ export default function AdminGerenciamentoCardapioTracking() {
             </div>
           ) : (
             <div className="mt-4 overflow-x-auto rounded-md border border-muted">
-              <table className="w-full min-w-[520px] text-sm">
+              <table className="w-full min-w-[620px] text-sm">
                 <thead className="bg-slate-50 text-xs uppercase tracking-wide text-muted-foreground">
                   <tr>
                     <th className="px-3 py-2 text-left font-medium">Sabor</th>
                     <th className="px-3 py-2 text-right font-medium">Taxa mês</th>
                     <th className="px-3 py-2 text-right font-medium">Mês anterior</th>
+                    <th className="px-3 py-2 text-right font-medium">Total ({rangeLabel})</th>
                     <th className="px-3 py-2 text-right font-medium">Δ</th>
                   </tr>
                 </thead>
                 <tbody>
                   {interestRateItems.map((item) => {
                     const diff = pctDiff(item.rate, item.ratePrev);
+                    const rateTotal =
+                      item.countsTotal.view_list > 0
+                        ? item.countsTotal.open_detail / item.countsTotal.view_list
+                        : 0;
                     return (
                       <tr key={item.id} className="border-t">
                         <td className="px-3 py-2 font-medium text-slate-900">
                           {item.name}
                         </td>
-                        <td className="px-3 py-2 text-right text-slate-700">
+                        <td className="px-3 py-2 text-right font-mono text-slate-700">
                           {(item.rate * 100).toFixed(1)}%
                         </td>
-                        <td className="px-3 py-2 text-right text-slate-500">
+                        <td className="px-3 py-2 text-right font-mono text-slate-500">
                           {(item.ratePrev * 100).toFixed(1)}%
                         </td>
-                        <td className={`px-3 py-2 text-right font-semibold ${diff.cls}`}>
+                        <td className="px-3 py-2 text-right font-mono text-slate-500">
+                          {(rateTotal * 100).toFixed(1)}%
+                        </td>
+                        <td className={`px-3 py-2 text-right font-mono text-xs font-semibold ${diff.cls}`}>
                           {diff.text}
                         </td>
                       </tr>
@@ -382,12 +474,13 @@ export default function AdminGerenciamentoCardapioTracking() {
             </div>
           ) : (
             <div className="mt-4 overflow-x-auto rounded-md border border-muted">
-              <table className="w-full min-w-[520px] text-sm">
+              <table className="w-full min-w-[620px] text-sm">
                 <thead className="bg-slate-50 text-xs uppercase tracking-wide text-muted-foreground">
                   <tr>
                     <th className="px-3 py-2 text-left font-medium">Sabor</th>
                     <th className="px-3 py-2 text-right font-medium">Aberturas mês</th>
                     <th className="px-3 py-2 text-right font-medium">Mês anterior</th>
+                    <th className="px-3 py-2 text-right font-medium">Total ({rangeLabel})</th>
                     <th className="px-3 py-2 text-right font-medium">Δ</th>
                   </tr>
                 </thead>
@@ -399,13 +492,16 @@ export default function AdminGerenciamentoCardapioTracking() {
                         <td className="px-3 py-2 font-medium text-slate-900">
                           {item.name}
                         </td>
-                        <td className="px-3 py-2 text-right text-slate-700">
+                        <td className="px-3 py-2 text-right font-mono text-slate-700">
                           {item.counts7d.open_detail}
                         </td>
-                        <td className="px-3 py-2 text-right text-slate-500">
+                        <td className="px-3 py-2 text-right font-mono text-slate-500">
                           {item.counts30d.open_detail}
                         </td>
-                        <td className={`px-3 py-2 text-right font-semibold ${diff.cls}`}>
+                        <td className="px-3 py-2 text-right font-mono text-slate-500">
+                          {item.countsTotal.open_detail}
+                        </td>
+                        <td className={`px-3 py-2 text-right font-mono text-xs font-semibold ${diff.cls}`}>
                           {diff.text}
                         </td>
                       </tr>
@@ -431,13 +527,14 @@ export default function AdminGerenciamentoCardapioTracking() {
             </div>
           ) : (
             <div className="mt-4 overflow-x-auto rounded-md border border-muted">
-              <table className="w-full min-w-[560px] text-sm">
+              <table className="w-full min-w-[680px] text-sm">
                 <thead className="bg-slate-50 text-xs uppercase tracking-wide text-muted-foreground">
                   <tr>
                     <th className="px-3 py-2 text-left font-medium">Sabor</th>
                     <th className="px-3 py-2 text-right font-medium">Likes mês</th>
                     <th className="px-3 py-2 text-right font-medium">Shares mês</th>
                     <th className="px-3 py-2 text-right font-medium">Mês anterior</th>
+                    <th className="px-3 py-2 text-right font-medium">Total ({rangeLabel})</th>
                     <th className="px-3 py-2 text-right font-medium">Δ</th>
                   </tr>
                 </thead>
@@ -446,21 +543,25 @@ export default function AdminGerenciamentoCardapioTracking() {
                     const currentTotal = item.likes + item.shares;
                     const previousTotal = item.likesPrev + item.sharesPrev;
                     const diff = pctDiff(currentTotal, previousTotal);
+                    const totalEngagement = item.likesTotal + item.sharesTotal;
                     return (
                       <tr key={item.id} className="border-t">
                         <td className="px-3 py-2 font-medium text-slate-900">
                           {item.name}
                         </td>
-                        <td className="px-3 py-2 text-right text-slate-700">
+                        <td className="px-3 py-2 text-right font-mono text-slate-700">
                           {item.likes}
                         </td>
-                        <td className="px-3 py-2 text-right text-slate-700">
+                        <td className="px-3 py-2 text-right font-mono text-slate-700">
                           {item.shares}
                         </td>
-                        <td className="px-3 py-2 text-right text-slate-500">
+                        <td className="px-3 py-2 text-right font-mono text-slate-500">
                           {item.likesPrev} · {item.sharesPrev}
                         </td>
-                        <td className={`px-3 py-2 text-right font-semibold ${diff.cls}`}>
+                        <td className="px-3 py-2 text-right font-mono text-slate-500">
+                          {item.likesTotal} · {item.sharesTotal} ({totalEngagement})
+                        </td>
+                        <td className={`px-3 py-2 text-right font-mono text-xs font-semibold ${diff.cls}`}>
                           {diff.text}
                         </td>
                       </tr>
@@ -486,12 +587,13 @@ export default function AdminGerenciamentoCardapioTracking() {
             </div>
           ) : (
             <div className="mt-4 overflow-x-auto rounded-md border border-muted">
-              <table className="w-full min-w-[520px] text-sm">
+              <table className="w-full min-w-[620px] text-sm">
                 <thead className="bg-slate-50 text-xs uppercase tracking-wide text-muted-foreground">
                   <tr>
                     <th className="px-3 py-2 text-left font-medium">Sabor</th>
                     <th className="px-3 py-2 text-right font-medium">Score mês</th>
                     <th className="px-3 py-2 text-right font-medium">Mês anterior</th>
+                    <th className="px-3 py-2 text-right font-medium">Total ({rangeLabel})</th>
                     <th className="px-3 py-2 text-right font-medium">Δ</th>
                   </tr>
                 </thead>
@@ -503,13 +605,16 @@ export default function AdminGerenciamentoCardapioTracking() {
                         <td className="px-3 py-2 font-medium text-slate-900">
                           {item.name}
                         </td>
-                        <td className="px-3 py-2 text-right text-slate-700">
+                        <td className="px-3 py-2 text-right font-mono text-slate-700">
                           {item.score7d} pts
                         </td>
-                        <td className="px-3 py-2 text-right text-slate-500">
+                        <td className="px-3 py-2 text-right font-mono text-slate-500">
                           {item.score30d} pts
                         </td>
-                        <td className={`px-3 py-2 text-right font-semibold ${diff.cls}`}>
+                        <td className="px-3 py-2 text-right font-mono text-slate-500">
+                          {item.scoreTotal} pts
+                        </td>
+                        <td className={`px-3 py-2 text-right font-mono text-xs font-semibold ${diff.cls}`}>
                           {diff.text}
                         </td>
                       </tr>
