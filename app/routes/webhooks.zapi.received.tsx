@@ -67,6 +67,17 @@ function isBlank(value: string | null | undefined): boolean {
   return !value || !value.trim();
 }
 
+function toWhatsappFormatting(value: string) {
+  if (!value) return "";
+  let text = value;
+  text = text.replace(/\*\*(.+?)\*\*/g, "*$1*");
+  text = text.replace(/__(.+?)__/g, "_$1_");
+  text = text.replace(/_(.+?)_/g, "_$1_");
+  text = text.replace(/```([\s\S]+?)```/g, "$1");
+  text = text.replace(/`(.+?)`/g, "$1");
+  return text;
+}
+
 async function syncCrmCustomerFromWebhook(
   normalized: ReturnType<typeof normalizeWebhookPayload>,
   correlationId: string
@@ -276,7 +287,9 @@ async function sendOffHoursAutoReply(
       {
         phone: normalized.phone,
         video,
-        caption: offHoursConfig.caption?.trim() || undefined,
+        caption: offHoursConfig.caption
+          ? toWhatsappFormatting(offHoursConfig.caption.trim())
+          : undefined,
       },
       { timeoutMs: 10_000 }
     ).catch((error) => {

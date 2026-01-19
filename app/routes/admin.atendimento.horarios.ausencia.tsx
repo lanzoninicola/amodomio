@@ -130,6 +130,18 @@ export default function AtendimentoHorariosAusencia() {
     return { __html: escape(wa).replace(/\n/g, "<br />") };
   }, [messageValue]);
 
+  const renderCaptionPreview = useMemo(() => {
+    const escape = (str: string) =>
+      str
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+
+    const wa = toWhatsappFormatting(captionValue || "");
+    return { __html: escape(wa).replace(/\n/g, "<br />") };
+  }, [captionValue]);
+
   return (
     <Form method="post" className="rounded-xl border bg-background/70 p-4 shadow-sm">
       <input type="hidden" name="off-hours-enabled" value={enabledValue ? "on" : "off"} />
@@ -198,12 +210,25 @@ export default function AtendimentoHorariosAusencia() {
                   value={videoValue}
                   onChange={(e) => setVideoValue(e.target.value)}
                 />
-                <Input
-                  id="off-hours-video-caption"
-                  placeholder="Legenda do vídeo"
-                  value={captionValue}
-                  onChange={(e) => setCaptionValue(e.target.value)}
-                />
+                <div className="space-y-2">
+                  <Textarea
+                    id="off-hours-video-caption"
+                    placeholder="Legenda do vídeo"
+                    className="min-h-[96px]"
+                    value={captionValue}
+                    onChange={(e) => setCaptionValue(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Suporta formatação WhatsApp: *negrito*, _itálico_, monospace sem formatação.
+                  </p>
+                  <div className="rounded-md border bg-muted/40 p-2 text-xs leading-relaxed">
+                    <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground mb-1">Preview</p>
+                    <div
+                      className="whitespace-pre-wrap break-words"
+                      dangerouslySetInnerHTML={renderCaptionPreview}
+                    />
+                  </div>
+                </div>
               </div>
               <div className="rounded-lg border bg-muted/30 p-3 flex flex-col gap-2">
                 <p className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">Preview</p>
