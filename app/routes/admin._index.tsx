@@ -10,45 +10,6 @@ import prismaClient from "~/lib/prisma/client.server";
 import { Suspense } from "react";
 
 export async function loader({ request }: LoaderFunctionArgs) {
-    const topItems = (async () => {
-        try {
-            const items = await prismaClient.menuItem.findMany({
-                where: {
-                    visible: true,
-                    active: true,
-                },
-                select: {
-                    id: true,
-                    name: true,
-                    MenuItemLike: {
-                        where: { deletedAt: null },
-                        select: { amount: true },
-                    },
-                },
-            });
-
-            return items
-                .map((item) => ({
-                    id: item.id,
-                    name: item.name,
-                    likesAmount: item.MenuItemLike.reduce(
-                        (sum, like) => sum + (Number(like.amount) || 0),
-                        0
-                    ),
-                }))
-                .sort((a, b) => {
-                    if (b.likesAmount !== a.likesAmount) {
-                        return b.likesAmount - a.likesAmount;
-                    }
-                    return a.name.localeCompare(b.name);
-                })
-                .slice(0, 8);
-        } catch (error) {
-            console.error("[AdminIndex.loader] erro ao buscar topItems", error);
-            return [];
-        }
-    })();
-
     const topNav = (async () => {
         try {
             return await prismaClient.adminNavigationClick.findMany({
@@ -61,7 +22,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         }
     })();
 
-    return defer({ topItems, topNav });
+    return defer({ topNav });
 }
 
 
@@ -157,7 +118,7 @@ export default function AdminIndex() {
                         Acesse rapidamente as áreas mais usadas do dia a dia.
                     </p>
                 </div>
-                <div className="w-full max-w-5xl grid gap-6 lg:grid-cols-2">
+                <div className="w-full max-w-5xl grid gap-6 lg:grid-cols-1">
                     <section className="rounded-lg border border-muted bg-white p-5 shadow-sm">
                         <h2 className="text-base font-semibold text-slate-900">
                             Mais acessados no admin
@@ -173,7 +134,7 @@ export default function AdminIndex() {
                             )}
                         >
                             <Await resolve={loaderData.topNav}>
-                                {(topNav: { id: string; href: string; title: string; count: number }[]) =>
+                                {(topNav: { id: string; href: string; title: string; count: number; groupTitle?: string | null }[]) =>
                                     topNav.length === 0 ? (
                                         <p className="mt-3 text-sm text-muted-foreground">
                                             Sem dados de navegação ainda.
@@ -186,53 +147,18 @@ export default function AdminIndex() {
                                                     to={navItem.href}
                                                     className="flex items-center justify-between rounded-md border border-muted bg-slate-50 px-4 py-3 text-sm transition hover:border-slate-300 hover:bg-white"
                                                 >
-                                                    <span className="font-medium text-slate-900">
-                                                        {navItem.title}
+                                                    <span className="flex flex-col gap-1">
+                                                        <span className="font-medium text-slate-900">
+                                                            {navItem.title}
+                                                        </span>
+                                                        {navItem.groupTitle ? (
+                                                            <span className="text-xs text-muted-foreground">
+                                                                {navItem.groupTitle}
+                                                            </span>
+                                                        ) : null}
                                                     </span>
                                                     <span className="text-xs text-muted-foreground">
                                                         {navItem.count} acessos
-                                                    </span>
-                                                </Link>
-                                            ))}
-                                        </div>
-                                    )
-                                }
-                            </Await>
-                        </Suspense>
-                    </section>
-                    <section className="rounded-lg border border-muted bg-white p-5 shadow-sm">
-                        <h2 className="text-base font-semibold text-slate-900">
-                            Mais clicados no cardápio
-                        </h2>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                            Acesso rápido aos sabores que recebem mais cliques no cardápio.
-                        </p>
-                        <Suspense
-                            fallback={(
-                                <div className="mt-4 rounded-md border border-muted bg-slate-50 px-4 py-3 text-sm text-muted-foreground">
-                                    Carregando cliques do cardápio...
-                                </div>
-                            )}
-                        >
-                            <Await resolve={loaderData.topItems}>
-                                {(topItems: { id: string; name: string; likesAmount: number }[]) =>
-                                    topItems.length === 0 ? (
-                                        <p className="mt-3 text-sm text-muted-foreground">
-                                            Sem dados de cliques ainda.
-                                        </p>
-                                    ) : (
-                                        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                                            {topItems.map((item) => (
-                                                <Link
-                                                    key={item.id}
-                                                    to={`/admin/gerenciamento/cardapio/${item.id}/main`}
-                                                    className="flex items-center justify-between rounded-md border border-muted bg-slate-50 px-4 py-3 text-sm transition hover:border-slate-300 hover:bg-white"
-                                                >
-                                                    <span className="font-medium text-slate-900">
-                                                        {item.name}
-                                                    </span>
-                                                    <span className="text-xs text-muted-foreground">
-                                                        {item.likesAmount} cliques
                                                     </span>
                                                 </Link>
                                             ))}
