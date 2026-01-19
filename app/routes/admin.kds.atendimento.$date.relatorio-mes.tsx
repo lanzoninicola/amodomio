@@ -6,7 +6,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { todayLocalYMD, ymdToDateInt } from "@/domain/kds";
+import { computeNetRevenueAmount } from "~/domain/finance/compute-net-revenue-amount";
 import { getDailyAggregates, listMotoboy } from "~/domain/kds/server/repository.server";
+import prisma from "~/lib/prisma/client.server";
 
 /* =========================
  * Meta
@@ -72,6 +74,8 @@ type DailyAgg = {
   total: number;
   moto: number;
   count: number;
+  card: number;
+  marketplace: number;
   byChannel: AggRow[];
   byStatus: AggRow[];
 };
@@ -97,11 +101,15 @@ export async function loader({ params }: LoaderFunctionArgs) {
   const dateIntsPrev = ymdsPrev.map(ymdToDateInt);
 
   // Carrega agregados diários (financeiro) e listas de motoboy para os dois meses
-  const [aggsCurr, motoCurr, aggsPrev, motoPrev] = await Promise.all([
+  const [aggsCurr, motoCurr, aggsPrev, motoPrev, finance] = await Promise.all([
     Promise.all(dateIntsCurr.map((di) => getDailyAggregates(di))) as Promise<DailyAgg[]>,
     Promise.all(dateIntsCurr.map((di) => listMotoboy(di))) as Promise<any[][]>,
     Promise.all(dateIntsPrev.map((di) => getDailyAggregates(di))) as Promise<DailyAgg[]>,
     Promise.all(dateIntsPrev.map((di) => listMotoboy(di))) as Promise<any[][]>,
+    prisma.financialSummary.findFirst({
+      where: { isSnapshot: false },
+      select: { taxaCartaoPerc: true, impostoPerc: true, taxaMarketplacePerc: true },
+    }),
   ]);
 
   // Redução mensal (totais simples)
@@ -109,9 +117,32 @@ export async function loader({ params }: LoaderFunctionArgs) {
     total: aggs.reduce((s, a) => s + Number(a?.total ?? 0), 0),
     moto: aggs.reduce((s, a) => s + Number(a?.moto ?? 0), 0),
     count: aggs.reduce((s, a) => s + Number(a?.count ?? 0), 0),
+    card: aggs.reduce((s, a) => s + Number(a?.card ?? 0), 0),
+    marketplace: aggs.reduce((s, a) => s + Number(a?.marketplace ?? 0), 0),
   });
   const totalsCurr = reduceTotals(aggsCurr);
   const totalsPrev = reduceTotals(aggsPrev);
+
+  const taxPerc = Number(finance?.impostoPerc ?? 0);
+  const cardFeePerc = Number(finance?.taxaCartaoPerc ?? 0);
+  const taxaMarketplacePerc = Number(finance?.taxaMarketplacePerc ?? 0);
+
+  const netCurr = computeNetRevenueAmount({
+    receitaBrutaAmount: totalsCurr.total,
+    vendaCartaoAmount: totalsCurr.card,
+    taxaCartaoPerc: cardFeePerc,
+    impostoPerc: taxPerc,
+    vendaMarketplaceAmount: totalsCurr.marketplace,
+    taxaMarketplacePerc,
+  });
+  const netPrev = computeNetRevenueAmount({
+    receitaBrutaAmount: totalsPrev.total,
+    vendaCartaoAmount: totalsPrev.card,
+    taxaCartaoPerc: cardFeePerc,
+    impostoPerc: taxPerc,
+    vendaMarketplaceAmount: totalsPrev.marketplace,
+    taxaMarketplacePerc,
+  });
 
   // Redução mensal (por canal / por status)
   const sumMap = (rows: AggRow[] = [], map = new Map<string, AggRow>()) => {
@@ -160,7 +191,10 @@ export async function loader({ params }: LoaderFunctionArgs) {
     }),
 
     // totais
-    totals: { curr: totalsCurr, prev: totalsPrev },
+    totals: {
+      curr: { ...totalsCurr, net: netCurr },
+      prev: { ...totalsPrev, net: netPrev },
+    },
 
     // tabelas
     tables: {
@@ -198,10 +232,12 @@ export default function RelatorioMensalKdsPage() {
     const diff = pctDiff(curr, ref);
     const value = ref == null ? "--" : money ? `R$ ${fmt(ref)}` : `${ref}`;
     return (
-      <div className="grid grid-cols-3 px-3 py-2 rounded border text-xs items-center">
-        <span className="opacity-70">{label}:</span>
-        <span className="font-mono">{value}</span>
-        <span className={`ml-2 font-medium ${diff.cls}`}>{diff.text}</span>
+      <div className="px-3 py-2 rounded border text-xs">
+        <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+          <span className="opacity-70">{label}:</span>
+          <span className="font-mono">{value}</span>
+        </div>
+        <div className={`mt-1 text-right font-medium ${diff.cls}`}>{diff.text}</div>
       </div>
     );
   };
@@ -233,9 +269,19 @@ export default function RelatorioMensalKdsPage() {
           <CardHeader>
             <CardTitle>Faturamento do mês</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2">
-            <div className="text-2xl font-mono">R$ {fmt(data.totals.curr.total)}</div>
-            {compBadge("Mês anterior", data.totals.curr.total, data.totals.prev.total, true)}
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="">
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Líquido</div>
+                <div className="text-2xl font-mono text-emerald-600">R$ {fmt(data.totals.curr.net)}</div>
+                {compBadge("Mês anterior", data.totals.curr.net, data.totals.prev.net, true)}
+              </div>
+              <div className="">
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Bruto</div>
+                <div className="text-2xl font-mono">R$ {fmt(data.totals.curr.total)}</div>
+                {compBadge("Mês anterior", data.totals.curr.total, data.totals.prev.total, true)}
+              </div>
+            </div>
           </CardContent>
         </Card>
 
@@ -281,7 +327,7 @@ export default function RelatorioMensalKdsPage() {
                     <tr className="text-left border-b">
                       <th className="py-2">Canal</th>
                       <th className="py-2 text-right">Pedidos</th>
-                      <th className="py-2 text-right">Faturamento (R$)</th>
+                      <th className="py-2 text-right">Faturamento bruto (R$)</th>
                       <th className="py-2 text-right">Mês anterior (R$)</th>
                       <th className="py-2 text-right">Δ mês</th>
                     </tr>
@@ -316,7 +362,7 @@ export default function RelatorioMensalKdsPage() {
                     <tr className="text-left border-b">
                       <th className="py-2">Status</th>
                       <th className="py-2 text-right">Pedidos</th>
-                      <th className="py-2 text-right">Faturamento (R$)</th>
+                      <th className="py-2 text-right">Faturamento bruto (R$)</th>
                       <th className="py-2 text-right">Mês anterior (R$)</th>
                       <th className="py-2 text-right">Δ mês</th>
                     </tr>
