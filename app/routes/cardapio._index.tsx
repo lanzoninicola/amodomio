@@ -46,6 +46,7 @@ import Autoplay from "embla-carousel-autoplay";
 import CardapioItemImageSingle from "~/domain/cardapio/components/cardapio-item-image-single/cardapio-item-image-single";
 import prismaClient from "~/lib/prisma/client.server";
 import { Tag } from "@prisma/client";
+import { Heart } from "lucide-react";
 import { useSoundEffects } from "~/components/sound-effects/use-sound-effects";
 
 export const headers: HeadersFunction = () => ({
@@ -249,7 +250,7 @@ export default function CardapioWebIndex() {
             <Separator className="my-6 md:hidden" />
 
             {/* TOPO: Halloween + Destaques (igual ao teu) */}
-            <div className="flex flex-col mt-24 md:grid md:grid-cols-2 md:items-start md:mt-40 md:justify-center">
+            <div className="flex flex-col mt-24 gap-8 md:grid md:grid-cols-2 md:gap-0 md:items-start md:mt-52 md:mb-10 md:justify-center">
                 {/* Bloco Halloween */}
                 {/* <Suspense fallback={<Loading />}>
                     <Await resolve={items}>
@@ -276,14 +277,70 @@ export default function CardapioWebIndex() {
                 <Suspense fallback={<Loading />}>
                     <Await resolve={items}>
                         {(items) => {
+                            const flatItems = isGrouped(items)
+                                ? (items as GroupedItems[]).flatMap((g) => g.menuItems)
+                                : (items as MenuItem[]);
+
+                            const getLikesAmount = (item: MenuItem | MenuItemWithAssociations) =>
+                                (item as MenuItemWithAssociations)?.likes?.amount ?? 0;
+
+                            const topLikedItems = [...flatItems]
+                                .sort((a, b) => getLikesAmount(b) - getLikesAmount(a))
+                                .slice(0, 4);
+
                             return (
-                                <section
-                                    id="destaque"
-                                    className="flex flex-col gap-4 mx-2 md:col-span-2 md:mx-auto md:w-full md:max-w-4xl"
-                                >
-                                    {/* @ts-ignore */}
-                                    <CardapioItemListDestaque items={items} title="Sugestões do chef" tagFilter="em-destaque" />
-                                </section>
+                                <>
+                                    <section
+                                        id="destaque"
+                                        className="flex flex-col gap-4 mx-2 md:flex-1"
+                                    >
+                                        {/* @ts-ignore */}
+                                        <CardapioItemListDestaque items={items} title="Sugestões do chef" tagFilter="em-destaque" />
+                                    </section>
+
+                                    <section
+                                        id="mais-curtidas"
+                                        className="flex flex-col gap-4 mx-2 md:flex-1"
+                                    >
+                                        <div className="p-2">
+                                            <h3 className="font-neue text-base md:text-xl font-semibold tracking-wide mb-2 flex items-center gap-2">
+                                                <Heart aria-hidden="true" className="h-4 w-4 md:h-5 md:w-5" />
+                                                <span>Mais curtidas</span>
+                                                <Heart aria-hidden="true" className="h-4 w-4 md:h-5 md:w-5" />
+                                            </h3>
+                                            <div className="grid grid-cols-2 gap-3 md:grid-cols-2">
+                                                {topLikedItems.map((i) => {
+                                                    const featuredImage =
+                                                        i.MenuItemGalleryImage?.find((img) => img.isPrimary) ||
+                                                        i.MenuItemGalleryImage?.[0];
+                                                    return (
+                                                        <Link
+                                                            key={i.id}
+                                                            to={`/cardapio/${i.slug}`}
+                                                            className="group relative block overflow-hidden rounded-md"
+                                                        >
+                                                            <div className="relative h-[160px] md:h-[200px]">
+                                                                <CardapioItemImageSingle
+                                                                    src={featuredImage?.secureUrl || ""}
+                                                                    placeholder={i.imagePlaceholderURL || ""}
+                                                                    placeholderIcon={false}
+                                                                    cnContainer="h-full w-full"
+                                                                    enableOverlay={false}
+                                                                />
+                                                                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-90" />
+                                                                <div className="absolute bottom-2 left-2 right-2">
+                                                                    <span className="font-neue text-white text-xs tracking-widest uppercase font-semibold drop-shadow">
+                                                                        {i.name}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        </Link>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    </section>
+                                </>
                             );
                         }}
                     </Await>
@@ -999,7 +1056,7 @@ function CardapioItemListDestaque({
                                                 </div>
                                             )}
                                             <div className="absolute bottom-3 left-3 right-3">
-                                                <h4 className="font-neue text-white text-2xl leading-tight drop-shadow">
+                                                <h4 className="font-neue text-white text-xs tracking-widest uppercase font-semibold drop-shadow">
                                                     {i.name}
                                                 </h4>
                                             </div>
@@ -1097,7 +1154,7 @@ function CardapioItemListDestaque({
                                                         </div>
                                                     )}
                                                     <div className="absolute bottom-3 left-3 right-3">
-                                                        <h5 className="font-neue text-white text-2xl leading-tight drop-shadow">
+                                                        <h5 className="font-neue text-white text-sm tracking-widest uppercase font-semibold drop-shadow">
                                                             {i.name}
                                                         </h5>
                                                     </div>
