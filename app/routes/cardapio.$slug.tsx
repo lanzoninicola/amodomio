@@ -46,56 +46,80 @@ export default function SingleCardapioItem() {
           }, [item.name]);
 
           return (
-            <div className="relative min-h-screen flex flex-col mt-32">
-              {/* Hero */}
-              <div className="flex flex-col mx-4">
-                <div className="h-[40vh] sm:h-[70vh] overflow-hidden rounded-t-xl ">
-                  <CardapioItemImageSingle
-                    src={imageUrl || ""}
-                    placeholder={item.imagePlaceholderURL || ""}
-                    placeholderIcon={true}
-                    cnContainer="h-full w-full object-cover"
-                    enableOverlay={false}
-                  />
-
-                </div>
-                {/* Ações */}
-                <div className="flex justify-between gap-4 my-4">
-                  <ShareIt item={item} size={24} />
-                  <LikeIt item={item} size={24} cnLabel="text-lg" />
-                </div>
-              </div>
-
-              <Separator className="my-2" />
-              {/* Conteúdo */}
-              <div className="flex flex-col px-4">
-                <div className="flex justify-between items-center mb-2">
-                  <h1 className="font-neue text-2xl sm:text-3xl font-semibold tracking-tight">
-                    {item.name}
-                  </h1>
-                  <ItalyIngredientsStatement showText={false} />
+            <div className="relative min-h-screen flex flex-col mt-44 md:mt-52">
+              <div className="mx-4 md:grid md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] md:gap-8 md:items-start">
+                {/* Hero */}
+                <div className="flex flex-col">
+                  <div className="h-[40vh] sm:h-[70vh] md:h-[60vh] overflow-hidden">
+                    <CardapioItemImageSingle
+                      src={imageUrl || ""}
+                      placeholder={item.imagePlaceholderURL || ""}
+                      placeholderIcon={true}
+                      cnContainer="h-full w-full object-cover"
+                      enableOverlay={false}
+                    />
+                  </div>
                 </div>
 
-                {/* Ingredientes */}
-                <p className="font-neue text-base leading-snug tracking-wide">
-                  {ingredients}
-                </p>
+                <Separator className="my-2 md:hidden" />
 
-                <Separator className="my-4" />
+                {/* Conteúdo */}
+                <div className="flex flex-col">
+                  {/* Ações */}
+                  <div className="flex justify-between gap-6 mt-2 mb-4 md:mt-0 md:mb-0 md:p-0">
+                    <div className="flex items-center gap-2 hover:bg-zinc-100 hover:cursor-pointer md:px-2 md:rounded-md">
+                      <ShareIt
+                        item={item}
+                        size={22}
+                        cnContainer="p-2 rounded-md transition-colors "
+                      />
+                      <span className="hidden md:inline font-neue text-xs uppercase font-semibold tracking-widest text-zinc-600">
+                        Compartilhar
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 hover:bg-red-200 hover:cursor-pointer md:px-2 md:rounded-md">
+                      <LikeIt
+                        item={item}
+                        size={22}
+                        cnLabel="text-sm"
+                        cnContainer="p-2 rounded-md transition-colors hover:bg-red-200 md:p-0"
+                      />
+                      <span className="hidden md:inline font-neue text-xs uppercase font-semibold tracking-widest text-red-500">
+                        Gostei
+                      </span>
+                    </div>
+                  </div>
 
-                {/* Preço */}
-                <div className="transform transition-all duration-300 hover:scale-105 w-full">
-                  <CardapioItemPrice
-                    prices={item?.MenuItemSellingPriceVariation || []}
-                    cnLabel="text-black/90 transition-colors duration-300 hover:text-black md:text-md"
-                    cnValue="text-black font-bold transition-all duration-300 hover:text-orange-400 hover:scale-110 md:text-md"
-                    showValuta={false}
-                  />
+                  <Separator className="my-4" />
+
+                  <div className="flex justify-between items-center mb-2">
+                    <h1 className="font-neue text-2xl sm:text-3xl font-semibold tracking-tight">
+                      {item.name}
+                    </h1>
+                    <ItalyIngredientsStatement showText={false} />
+                  </div>
+
+                  {/* Ingredientes */}
+                  <p className="font-neue text-base leading-snug tracking-wide">
+                    {ingredients}
+                  </p>
+
+                  <Separator className="my-8" />
+
+                  {/* Preço */}
+                  <div className="transform transition-all duration-300 hover:scale-105 w-full">
+                    <CardapioItemPrice
+                      prices={item?.MenuItemSellingPriceVariation || []}
+                      cnLabel="text-black/90 transition-colors duration-300 hover:text-black md:text-md"
+                      cnValue="text-black font-bold transition-all duration-300 hover:text-orange-400 hover:scale-110 md:text-md"
+                      showValuta={false}
+                    />
+                  </div>
+
+                  <Link to={"/cardapio"} className="mt-6 md:mb-6">
+                    <Button className="w-full uppercase tracking-wider font-neue">Voltar</Button>
+                  </Link>
                 </div>
-
-                <Link to={"/cardapio"} className="mt-6 md:mb-6">
-                  <Button className="w-full uppercase tracking-wider font-neue">Voltar</Button>
-                </Link>
               </div>
             </div>
           );

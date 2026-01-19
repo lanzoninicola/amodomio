@@ -12,6 +12,8 @@ const OVERRIDE_VALUES = ["auto", "open", "closed"] as const;
 export type StoreOpeningOverride = (typeof OVERRIDE_VALUES)[number];
 const OFF_HOURS_MESSAGE_DEFAULT = "Estamos fora do horário. Voltamos em breve! 🍕";
 const OFF_HOURS_RESPONSE_TYPE_DEFAULT = "text";
+const OFF_HOURS_COOLDOWN_MINUTES_DEFAULT = 15;
+const OFF_HOURS_AGGREGATION_SECONDS_DEFAULT = 20;
 
 export async function loadStoreOpeningSchedule(): Promise<StoreOpeningScheduleDay[]> {
   try {
@@ -75,6 +77,14 @@ export async function getOffHoursAutoresponderConfig() {
   const byName = new Map(settings.map((setting) => [setting.name, setting.value]));
   const responseTypeRaw = (byName.get("off-hours-response-type") || OFF_HOURS_RESPONSE_TYPE_DEFAULT).toLowerCase();
   const responseType = responseTypeRaw === "video" ? "video" : "text";
+  const cooldownRaw = Number(byName.get("off-hours-cooldown-minutes") || OFF_HOURS_COOLDOWN_MINUTES_DEFAULT);
+  const cooldownMinutes = Number.isFinite(cooldownRaw) && cooldownRaw > 0
+    ? Math.floor(cooldownRaw)
+    : OFF_HOURS_COOLDOWN_MINUTES_DEFAULT;
+  const aggregationRaw = Number(byName.get("off-hours-aggregation-seconds") || OFF_HOURS_AGGREGATION_SECONDS_DEFAULT);
+  const aggregationSeconds = Number.isFinite(aggregationRaw) && aggregationRaw >= 0
+    ? Math.floor(aggregationRaw)
+    : OFF_HOURS_AGGREGATION_SECONDS_DEFAULT;
 
   return {
     enabled: (byName.get("off-hours-enabled") ?? "true") === "true",
@@ -82,6 +92,8 @@ export async function getOffHoursAutoresponderConfig() {
     responseType,
     video: byName.get("off-hours-video") || "",
     caption: byName.get("off-hours-video-caption") || "",
+    cooldownMinutes,
+    aggregationSeconds,
   };
 }
 
@@ -90,7 +102,7 @@ export async function getStoreOpeningStatus(now: Date = new Date()) {
     loadStoreOpeningSchedule(),
     loadStoreOpeningOverride(),
   ]);
-  const status = computeStoreOpeningStatus(schedule, now);
+  const status = computeStoreOpeningStatus(schedule, now, "America/Sao_Paulo");
 
   const isOpen =
     override === "open" ? true : override === "closed" ? false : status.isOpen;

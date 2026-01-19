@@ -51,6 +51,8 @@ Configuracao adicional no mesmo contexto:
 - `off-hours-message`: texto enviado quando tipo = `text`
 - `off-hours-video`: URL/Base64 do video quando tipo = `video`
 - `off-hours-video-caption`: legenda opcional para video
+- `off-hours-cooldown-minutes`: tempo minimo para reenviar a mesma mensagem ao mesmo numero
+- `off-hours-aggregation-seconds`: janela (em segundos) para agrupar mensagens antes de responder
 
 ## Fallback padrao
 Quando nao ha dados no banco, usa:
