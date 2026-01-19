@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import prisma from "~/lib/prisma/client.server";
+import { CHANNELS } from "~/domain/kds/constants";
 export async function ensureHeader(dateInt: number, currentDate: Date) {
   return prisma.kdsDailyOrder.upsert({
     where: { dateInt },
@@ -44,6 +45,20 @@ export async function getDailyAggregates(dateInt: number) {
     _sum: { orderAmount: true, motoValue: true },
     _count: { _all: true },
   });
+  const cardAgg = await prisma.kdsDailyOrderDetail.aggregate({
+    where: { dateInt, status: { not: "pendente" }, isCreditCard: true },
+    _sum: { orderAmount: true },
+  });
+  const aiqfomeChannelStr = CHANNELS[2];
+  const ifoodChannelStr = CHANNELS[3];
+  const marketplaceAgg = await prisma.kdsDailyOrderDetail.aggregate({
+    where: {
+      dateInt,
+      status: { not: "pendente" },
+      channel: { in: [aiqfomeChannelStr, ifoodChannelStr] },
+    },
+    _sum: { orderAmount: true },
+  });
   const byChannel = await prisma.kdsDailyOrderDetail.groupBy({
     by: ["channel"],
     where: { dateInt, status: { not: "pendente" } },
@@ -60,6 +75,8 @@ export async function getDailyAggregates(dateInt: number) {
     total: Number(agg._sum.orderAmount ?? 0),
     moto: Number(agg._sum.motoValue ?? 0),
     count: agg._count._all ?? 0,
+    card: Number(cardAgg._sum.orderAmount ?? 0),
+    marketplace: Number(marketplaceAgg._sum.orderAmount ?? 0),
     byChannel: byChannel.map((x) => ({
       k: x.channel ?? "(sem canal)",
       total: Number(x._sum.orderAmount ?? 0),
