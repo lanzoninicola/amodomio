@@ -1,7 +1,8 @@
 import { json, type ActionFunctionArgs } from "@remix-run/node";
-import prismaClient from "~/lib/prisma/client.server";
-
-const allowedTypes = new Set(["view_list", "open_detail", "like", "share"]);
+import {
+  createMenuItemInterestEvent,
+  isAllowedMenuItemInterestType,
+} from "~/domain/cardapio/menu-item-interest/menu-item-interest.server";
 
 function normalizePayload(payload: unknown) {
   if (!payload || typeof payload !== "object") {
@@ -37,18 +38,15 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const { menuItemId, type, clientId } = normalizePayload(payload);
 
-  if (!menuItemId || !type || !allowedTypes.has(type)) {
+  if (!menuItemId || !type || !isAllowedMenuItemInterestType(type)) {
     return json({ error: "invalid_payload" }, { status: 400 });
   }
 
   try {
-    await prismaClient.menuItemInterestEvent.create({
-      data: {
-        menuItemId,
-        type,
-        clientId: clientId || null,
-        createdAt: new Date().toISOString(),
-      },
+    await createMenuItemInterestEvent({
+      menuItemId,
+      type,
+      clientId,
     });
 
     return json({ ok: true }, { status: 200 });

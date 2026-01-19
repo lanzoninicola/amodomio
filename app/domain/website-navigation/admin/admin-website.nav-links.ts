@@ -106,6 +106,12 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
           disabled: false,
         },
         {
+          title: "Dashboard de Interesse",
+          href: "/admin/gerenciamento/cardapio/tracking",
+          items: [],
+          disabled: false,
+        },
+        {
           title: "Custo Ficha Tecnica",
           href: "/admin/gerenciamento/cardapio/cost-management",
           items: [],

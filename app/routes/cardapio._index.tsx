@@ -48,24 +48,9 @@ import prismaClient from "~/lib/prisma/client.server";
 import { Tag } from "@prisma/client";
 import { Heart } from "lucide-react";
 import { useSoundEffects } from "~/components/sound-effects/use-sound-effects";
+import { getOrCreateMenuItemInterestClientId } from "~/domain/cardapio/menu-item-interest/menu-item-interest.client";
 
 const INTEREST_ENDPOINT = "/api/menu-item-interest";
-const CLIENT_ID_STORAGE_KEY = "cardapio_client_id";
-
-const getOrCreateClientId = () => {
-    if (typeof window === "undefined") return null;
-
-    const stored = window.localStorage.getItem(CLIENT_ID_STORAGE_KEY);
-    if (stored) return stored;
-
-    const generated =
-        typeof window.crypto?.randomUUID === "function"
-            ? window.crypto.randomUUID()
-            : `cid_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-
-    window.localStorage.setItem(CLIENT_ID_STORAGE_KEY, generated);
-    return generated;
-};
 
 export const headers: HeadersFunction = () => ({
     "Cache-Control": "s-maxage=1, stale-while-revalidate=59"
@@ -669,7 +654,7 @@ function CardapioItemsGrid({ items }: { items: MenuItemWithAssociations[] }) {
     if (!items?.length) return null;
 
     const trackInterest = useCallback((type: "view_list" | "open_detail", menuItemId: string) => {
-        const clientId = getOrCreateClientId();
+        const clientId = getOrCreateMenuItemInterestClientId();
 
         fetch(INTEREST_ENDPOINT, {
             method: "post",
