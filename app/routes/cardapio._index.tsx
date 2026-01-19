@@ -46,6 +46,7 @@ import Autoplay from "embla-carousel-autoplay";
 import CardapioItemImageSingle from "~/domain/cardapio/components/cardapio-item-image-single/cardapio-item-image-single";
 import prismaClient from "~/lib/prisma/client.server";
 import { Tag } from "@prisma/client";
+import { Heart } from "lucide-react";
 import { useSoundEffects } from "~/components/sound-effects/use-sound-effects";
 
 export const headers: HeadersFunction = () => ({
@@ -249,7 +250,7 @@ export default function CardapioWebIndex() {
             <Separator className="my-6 md:hidden" />
 
             {/* TOPO: Halloween + Destaques (igual ao teu) */}
-            <div className="flex flex-col mt-24 md:grid md:grid-cols-2 md:items-start md:mt-40 md:justify-center">
+            <div className="flex flex-col mt-24 gap-8 md:grid md:grid-cols-2 md:gap-0 md:items-start md:mt-52 md:mb-10 md:justify-center">
                 {/* Bloco Halloween */}
                 {/* <Suspense fallback={<Loading />}>
                     <Await resolve={items}>
@@ -276,14 +277,86 @@ export default function CardapioWebIndex() {
                 <Suspense fallback={<Loading />}>
                     <Await resolve={items}>
                         {(items) => {
+                            const flatItems = isGrouped(items)
+                                ? (items as GroupedItems[]).flatMap((g) => g.menuItems)
+                                : (items as MenuItemWithAssociations[]);
+
+                            const topMarginItems = [...(flatItems as MenuItemWithAssociations[])]
+                                .sort(
+                                    (a, b) =>
+                                        getItemMarginPerc(b) - getItemMarginPerc(a)
+                                )
+                                .slice(0, 12);
+
+                            const chefSuggestionGroups = buildRandomGroups(topMarginItems, 4);
+
+                            const getLikesAmount = (item: MenuItem | MenuItemWithAssociations) =>
+                                (item as MenuItemWithAssociations)?.likes?.amount ?? 0;
+
+                            const topLikedItems = [...flatItems]
+                                .sort((a, b) => getLikesAmount(b) - getLikesAmount(a))
+                                .slice(0, 4);
+
                             return (
-                                <section
-                                    id="destaque"
-                                    className="flex flex-col gap-4 mx-2 md:col-span-2 md:mx-auto md:w-full md:max-w-4xl"
-                                >
-                                    {/* @ts-ignore */}
-                                    <CardapioItemListDestaque items={items} title="Sugestões do chef" tagFilter="em-destaque" />
-                                </section>
+                                <>
+                                    <section
+                                        id="destaque"
+                                        className="flex flex-col gap-4 mx-2 md:flex-1"
+                                    >
+                                        <ChefSuggestionsCarousel
+                                            title="Sugestões do chef"
+                                            subtitle="Os sabores selecionados pelo chef para vocês, com combinações especiais e ótimas escolhas para aproveitar o melhor do cardápio."
+                                            groups={chefSuggestionGroups}
+                                        />
+                                    </section>
+
+                                    <section
+                                        id="mais-curtidas"
+                                        className="flex flex-col gap-4 mx-2 md:flex-1"
+                                    >
+                                        <div className="p-2">
+                                            <h3 className="font-neue text-base md:text-xl font-semibold tracking-wide mb-2 flex items-center gap-2">
+                                                <Heart aria-hidden="true" className="h-4 w-4 md:h-5 md:w-5" />
+                                                <span>Mais curtidas</span>
+                                                <Heart aria-hidden="true" className="h-4 w-4 md:h-5 md:w-5" />
+                                            </h3>
+                                            <p className="font-neue text-xs md:text-sm tracking-wide text-muted-foreground mb-3">
+                                                Nossos clientes gostam de mostrar o que é bom. Aqui está uma seleção dos
+                                                sabores que eles mais curtem e querem compartilhar com todo mundo.
+                                            </p>
+                                            <div className="grid grid-cols-2 gap-3 md:grid-cols-2">
+                                                {topLikedItems.map((i) => {
+                                                    const featuredImage =
+                                                        i.MenuItemGalleryImage?.find((img) => img.isPrimary) ||
+                                                        i.MenuItemGalleryImage?.[0];
+                                                    return (
+                                                        <Link
+                                                            key={i.id}
+                                                            to={`/cardapio/${i.slug}`}
+                                                            className="group relative block overflow-hidden rounded-md"
+                                                        >
+                                                            <div className="relative h-[160px] md:h-[200px]">
+                                                                <CardapioItemImageSingle
+                                                                    src={featuredImage?.secureUrl || ""}
+                                                                    placeholder={i.imagePlaceholderURL || ""}
+                                                                    placeholderIcon={false}
+                                                                    cnContainer="h-full w-full"
+                                                                    enableOverlay={false}
+                                                                />
+                                                                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-90" />
+                                                                <div className="absolute bottom-2 left-2 right-2">
+                                                                    <span className="font-neue text-white text-xs tracking-widest uppercase font-semibold drop-shadow leading-none">
+                                                                        {i.name}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        </Link>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    </section>
+                                </>
                             );
                         }}
                     </Await>
@@ -912,6 +985,142 @@ function isGrouped(items: MenuItem[] | GroupedItems[]): items is GroupedItems[] 
     return Array.isArray(items) && items.length > 0 && "menuItems" in (items[0] as any);
 }
 
+function getItemMarginPerc(item: MenuItemWithAssociations) {
+    const variations = item.MenuItemSellingPriceVariation ?? [];
+    const visibleVariations = variations.filter((v) => v.showOnCardapio);
+    const source = visibleVariations.length > 0 ? visibleVariations : variations;
+    if (!source.length) return 0;
+    return Math.max(
+        ...source.map(
+            (v) => Number(v.profitActualPerc ?? v.profitExpectedPerc ?? 0)
+        )
+    );
+}
+
+function buildRandomGroups<T>(items: T[], size: number) {
+    const shuffled = [...items];
+    for (let i = shuffled.length - 1; i > 0; i -= 1) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    const groups: T[][] = [];
+    for (let i = 0; i < shuffled.length; i += size) {
+        groups.push(shuffled.slice(i, i + size));
+    }
+    return groups;
+}
+
+type ChefSuggestionsCarouselProps = {
+    title?: string;
+    subtitle?: string;
+    groups: MenuItemWithAssociations[][];
+    carouselDelay?: number;
+};
+
+function ChefSuggestionsCarousel({
+    title,
+    subtitle,
+    groups,
+    carouselDelay = 2500
+}: ChefSuggestionsCarouselProps) {
+    const { playNavigation } = useSoundEffects();
+    const [api, setApi] = React.useState<CarouselApi | null>(null);
+    const [selectedIndex, setSelectedIndex] = React.useState(0);
+
+    React.useEffect(() => {
+        if (!api) return;
+        const onSelect = () => setSelectedIndex(api.selectedScrollSnap());
+        api.on("select", onSelect);
+        setSelectedIndex(api.selectedScrollSnap());
+        return () => api.off("select", onSelect);
+    }, [api]);
+
+    if (!groups.length) return null;
+
+    const items = groups.flat();
+    const groupSize = 4;
+    const selectedGroupIndex = Math.floor(selectedIndex / groupSize);
+
+    return (
+        <div className="p-2">
+            {title ? (
+                <div className="mb-2">
+                    <h3 className="font-neue text-base md:text-xl font-semibold tracking-wide mb-1">
+                        {title}
+                    </h3>
+                    {subtitle ? (
+                        <p className="font-neue text-xs md:text-sm tracking-wide text-muted-foreground">
+                            {subtitle}
+                        </p>
+                    ) : null}
+                </div>
+            ) : null}
+
+            <Carousel
+                setApi={setApi}
+                opts={{ loop: true, align: "start" }}
+                plugins={[
+                    Autoplay({
+                        delay: carouselDelay,
+                        stopOnInteraction: false,
+                        stopOnMouseEnter: true
+                    })
+                ]}
+                className="relative"
+            >
+                <CarouselContent>
+                    {items.map((i) => {
+                        const featuredImage =
+                            i.MenuItemGalleryImage?.find((img) => img.isPrimary) ||
+                            i.MenuItemGalleryImage?.[0];
+
+                        return (
+                            <CarouselItem key={i.id} className="basis-full">
+                                <Link
+                                    to={`/cardapio/${i.slug}`}
+                                    className="group relative block overflow-hidden rounded-md"
+                                    onClick={() => playNavigation()}
+                                >
+                                    <div className="relative h-[220px] md:h-[280px]">
+                                        <CardapioItemImageSingle
+                                            src={featuredImage?.secureUrl || ""}
+                                            placeholder={i.imagePlaceholderURL || ""}
+                                            placeholderIcon={false}
+                                            placeholderText={i.ingredients}
+                                            cnContainer="h-full w-full"
+                                            enableOverlay={false}
+                                        />
+                                        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-90" />
+                                        <div className="absolute bottom-2 left-2 right-2">
+                                                                    <span className="font-neue text-white text-xs tracking-widest uppercase font-semibold drop-shadow leading-tight">
+                                                                        {i.name}
+                                                                    </span>
+                                        </div>
+                                    </div>
+                                </Link>
+                            </CarouselItem>
+                        );
+                    })}
+                </CarouselContent>
+
+                <div className="absolute inset-x-0 -bottom-3 flex items-center justify-center gap-2 md:-bottom-4">
+                    {groups.map((_, idx) => (
+                        <button
+                            key={idx}
+                            aria-label={`Ir para slide ${idx + 1}`}
+                            onClick={() => api?.scrollTo(idx * groupSize)}
+                            className={[
+                                "h-2 w-2 rounded-full transition-all",
+                                selectedGroupIndex === idx ? "w-6 bg-black/80" : "bg-black/30"
+                            ].join(" ")}
+                        />
+                    ))}
+                </div>
+            </Carousel>
+        </div>
+    );
+}
+
 // ======================================================
 // DESTAQUES (mantido)
 // ======================================================
@@ -999,7 +1208,7 @@ function CardapioItemListDestaque({
                                                 </div>
                                             )}
                                             <div className="absolute bottom-3 left-3 right-3">
-                                                <h4 className="font-neue text-white text-2xl leading-tight drop-shadow">
+                                                <h4 className="font-neue text-white text-xs tracking-widest uppercase font-semibold drop-shadow">
                                                     {i.name}
                                                 </h4>
                                             </div>
@@ -1097,7 +1306,7 @@ function CardapioItemListDestaque({
                                                         </div>
                                                     )}
                                                     <div className="absolute bottom-3 left-3 right-3">
-                                                        <h5 className="font-neue text-white text-2xl leading-tight drop-shadow">
+                                                        <h5 className="font-neue text-white text-sm tracking-widest uppercase font-semibold drop-shadow">
                                                             {i.name}
                                                         </h5>
                                                     </div>
