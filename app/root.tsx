@@ -19,12 +19,6 @@ import { ok } from "./utils/http-response.server";
 import { ArrowRight } from "lucide-react";
 import Logo from "./components/primitives/logo/logo";
 import MicrosoftClarityScriptTag from "./components/primitives/ms-clarity/ms-clarity-script";
-import { settingPrismaEntity } from "./domain/setting/setting.prisma.entity.server";
-import {
-  buildStoreOpeningSchedule,
-  DEFAULT_STORE_OPENING,
-  STORE_OPENING_CONTEXT,
-} from "./domain/store-opening/store-opening-settings";
 
 export const meta: MetaFunction = () => {
   return [
@@ -118,18 +112,6 @@ export interface EnvironmentVariables {
   MODE: "development" | "production"
   GTM_ID?: string
   CLOUDINARY_CLOUD_NAME?: string
-  STORE_OPENING_CONFIG?: {
-    OPENING_DAYS: number[]
-    OPENING_HOUR: number
-    CLOSING_HOUR: number
-    OPENING_SCHEDULE?: {
-      day: number
-      enabled: boolean
-      start: number
-      end: number
-      rangeDigits: string
-    }[]
-  }
   REST_API_SECRET_KEY?: string
 }
 
@@ -137,44 +119,10 @@ export interface EnvironmentVariables {
 export async function loader({ request }: LoaderFunctionArgs) {
 
   const env = import.meta.env
-  const fallbackOpenDays = DEFAULT_STORE_OPENING.openDays;
-  const fallbackStart = DEFAULT_STORE_OPENING.start;
-  const fallbackEnd = DEFAULT_STORE_OPENING.end;
-  type OpeningSchedule = NonNullable<
-    EnvironmentVariables["STORE_OPENING_CONFIG"]
-  >["OPENING_SCHEDULE"];
-  let openingSchedule: OpeningSchedule;
-  try {
-    const settings = await settingPrismaEntity.findAllByContext(STORE_OPENING_CONTEXT);
-    const settingsMap = new Map(settings.map((setting) => [setting.name, setting.value]));
-    openingSchedule = buildStoreOpeningSchedule({
-      settings: settingsMap,
-      fallbackOpenDays,
-      fallbackStart,
-      fallbackEnd,
-    });
-  } catch (error) {
-    console.warn("[store-opening] failed to load settings, using env defaults", {
-      error: (error as any)?.message,
-    });
-    openingSchedule = buildStoreOpeningSchedule({
-      settings: new Map(),
-      fallbackOpenDays,
-      fallbackStart,
-      fallbackEnd,
-    });
-  }
-
   const ENV: EnvironmentVariables = {
     MODE: env.VITE_MODE ?? "development",
     GTM_ID: env.VITE_GOOGLE_TAG_MANAGER_ID ?? "",
     CLOUDINARY_CLOUD_NAME: env.VITE_CLOUDINARY_CLOUD_NAME ?? "",
-    STORE_OPENING_CONFIG: {
-      OPENING_DAYS: fallbackOpenDays,
-      OPENING_HOUR: fallbackStart,
-      CLOSING_HOUR: fallbackEnd,
-      OPENING_SCHEDULE: openingSchedule,
-    }
   }
 
   return ok({
