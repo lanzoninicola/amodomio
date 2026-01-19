@@ -615,6 +615,7 @@ function CardapioItemsGrid({ items }: { items: MenuItemWithAssociations[] }) {
                         item={item}
                         isExpanded={expandedItemId === item.id}
                         onClick={() => onCardClick(item.id)}
+                        isDesktop={isDesktop}
                         innerRef={(el) => (itemRefs.current[item.id] = el)}
                     />
                 ))}
@@ -628,11 +629,13 @@ function CardapioGridItem({
     item,
     isExpanded,
     onClick,
+    isDesktop,
     innerRef
 }: {
     item: MenuItemWithAssociations;
     isExpanded: boolean;
     onClick: () => void;
+    isDesktop: boolean;
     innerRef?: (el: HTMLLIElement | null) => void;
 }) {
     const featuredImage =
@@ -649,64 +652,126 @@ function CardapioGridItem({
                 isExpanded ? "col-span-2 lg:col-span-1" : "col-span-1"
             )}
         >
-            <div className="flex flex-col" onClick={onClick}>
+            {isDesktop ? (
+                <Link
+                    to={`/cardapio/${item.slug}`}
+                    className="flex flex-col cursor-pointer"
+                    aria-label={`Abrir ${item.name}`}
+                >
+                    <div className="group overflow-hidden rounded-t-md relative focus:outline-none focus:ring-2 focus:ring-black/20">
+                        <div
+                            className={cn(
+                                "relative transition-all duration-300 ease-in-out",
+                                isExpanded ? "h-[260px]" : "h-[150px]"
+                            )}
+                        >
+                            <CardapioItemImageSingle
+                                src={featuredImage?.secureUrl || ""}
+                                placeholder={item.imagePlaceholderURL || ""}
+                                placeholderIcon={false}
+                                cnPlaceholderText={cn(
+                                    "text-black font-urw text-sm tracking-tight",
+                                    isExpanded && "text-lg"
+                                )}
+                                cnPlaceholderContainer="from-zinc-200 via-zinc-100 to-white "
+                                cnContainer="w-full h-full"
+                                enableOverlay={false}
+                            />
+
+                            {item.meta?.isBestSeller && (
+                                <div className="absolute left-1 top-2 rounded-sm bg-black px-2 py-[2px] text-[10px] font-medium text-white backdrop-blur font-neue tracking-wide">
+                                    <span>Mais vendido</span>
+                                </div>
+                            )}
+                            {item.tags?.all?.includes("produtos-italianos") && (
+                                <div className="absolute left-1 top-2 rounded-sm bg-black px-2 py-[2px] text-[10px] font-medium text-white backdrop-blur font-neue tracking-wide">
+                                    <span>Com produtos italianos</span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="px-1 pb-2 pt-1 flex flex-col bg-white rounded-b-md">
+                        <span
+                            className={cn(
+                                "font-neue line-clamp-1 font-medium text-xs tracking-wide sm:text-base",
+                                isExpanded && "text-md"
+                            )}
+                        >
+                            {item.name}
+                        </span>
+
+                        <span
+                            className={cn(
+                                "font-neue text-xs tracking-wide leading-[110%] sm:text-base line-clamp-2 my-1",
+                                isExpanded && "text-md line-clamp-none mb-2 leading-[120%]"
+                            )}
+                        >
+                            {item.ingredients}
+                        </span>
+                    </div>
+                </Link>
+            ) : (
                 <div
+                    className="flex flex-col cursor-pointer"
+                    onClick={onClick}
                     role="button"
                     aria-label={`Abrir ${item.name}`}
-                    className="group overflow-hidden rounded-t-md relative focus:outline-none focus:ring-2 focus:ring-black/20"
                 >
-                    <div
-                        className={cn(
-                            "relative transition-all duration-300 ease-in-out",
-                            isExpanded ? "h-[260px]" : "h-[150px]"
-                        )}
-                    >
-                        <CardapioItemImageSingle
-                            src={featuredImage?.secureUrl || ""}
-                            placeholder={item.imagePlaceholderURL || ""}
-                            placeholderIcon={false}
-                            cnPlaceholderText={cn(
-                                "text-black font-urw text-sm tracking-tight",
-                                isExpanded && "text-lg"
+                    <div className="group overflow-hidden rounded-t-md relative focus:outline-none focus:ring-2 focus:ring-black/20">
+                        <div
+                            className={cn(
+                                "relative transition-all duration-300 ease-in-out",
+                                isExpanded ? "h-[260px]" : "h-[150px]"
                             )}
-                            cnPlaceholderContainer="from-zinc-200 via-zinc-100 to-white "
-                            cnContainer="w-full h-full"
-                            enableOverlay={false}
-                        />
+                        >
+                            <CardapioItemImageSingle
+                                src={featuredImage?.secureUrl || ""}
+                                placeholder={item.imagePlaceholderURL || ""}
+                                placeholderIcon={false}
+                                cnPlaceholderText={cn(
+                                    "text-black font-urw text-sm tracking-tight",
+                                    isExpanded && "text-lg"
+                                )}
+                                cnPlaceholderContainer="from-zinc-200 via-zinc-100 to-white "
+                                cnContainer="w-full h-full"
+                                enableOverlay={false}
+                            />
 
-                        {item.meta?.isBestSeller && (
-                            <div className="absolute left-1 top-2 rounded-sm bg-black px-2 py-[2px] text-[10px] font-medium text-white backdrop-blur font-neue tracking-wide">
-                                <span>Mais vendido</span>
-                            </div>
-                        )}
-                        {item.tags?.all?.includes("produtos-italianos") && (
-                            <div className="absolute left-1 top-2 rounded-sm bg-black px-2 py-[2px] text-[10px] font-medium text-white backdrop-blur font-neue tracking-wide">
-                                <span>Com produtos italianos</span>
-                            </div>
-                        )}
+                            {item.meta?.isBestSeller && (
+                                <div className="absolute left-1 top-2 rounded-sm bg-black px-2 py-[2px] text-[10px] font-medium text-white backdrop-blur font-neue tracking-wide">
+                                    <span>Mais vendido</span>
+                                </div>
+                            )}
+                            {item.tags?.all?.includes("produtos-italianos") && (
+                                <div className="absolute left-1 top-2 rounded-sm bg-black px-2 py-[2px] text-[10px] font-medium text-white backdrop-blur font-neue tracking-wide">
+                                    <span>Com produtos italianos</span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="px-1 pb-2 pt-1 flex flex-col bg-white rounded-b-md">
+                        <span
+                            className={cn(
+                                "font-neue line-clamp-1 font-medium text-xs tracking-wide sm:text-base",
+                                isExpanded && "text-md"
+                            )}
+                        >
+                            {item.name}
+                        </span>
+
+                        <span
+                            className={cn(
+                                "font-neue text-xs tracking-wide leading-[110%] sm:text-base line-clamp-2 my-1",
+                                isExpanded && "text-md line-clamp-none mb-2 leading-[120%]"
+                            )}
+                        >
+                            {item.ingredients}
+                        </span>
                     </div>
                 </div>
-
-                <div className="px-1 pb-2 pt-1 flex flex-col bg-white rounded-b-md">
-                    <span
-                        className={cn(
-                            "font-neue line-clamp-1 font-medium text-xs tracking-wide sm:text-base",
-                            isExpanded && "text-md"
-                        )}
-                    >
-                        {item.name}
-                    </span>
-
-                    <span
-                        className={cn(
-                            "font-neue text-xs tracking-wide leading-[110%] sm:text-base line-clamp-2 my-1",
-                            isExpanded && "text-md line-clamp-none mb-2 leading-[120%]"
-                        )}
-                    >
-                        {item.ingredients}
-                    </span>
-                </div>
-            </div>
+            )}
 
             <CardapioItemPriceSelect prices={item.MenuItemSellingPriceVariation} />
 
