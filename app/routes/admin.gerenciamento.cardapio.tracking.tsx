@@ -1,5 +1,6 @@
 import { json, type LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { useLoaderData, useSearchParams } from "@remix-run/react";
+import { Prisma } from "@prisma/client";
 import prismaClient from "~/lib/prisma/client.server";
 
 export const meta: MetaFunction = () => [
@@ -37,6 +38,16 @@ type RangeOption = {
   value: "total" | "3" | "6" | "12";
   label: string;
   months: number | null;
+};
+
+type HourCount = {
+  hour: number;
+  count: number;
+};
+
+type WeekdayCount = {
+  day: number;
+  count: number;
 };
 
 const emptyCounts: InterestCounts = {
@@ -128,6 +139,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           currentMonth.start.getMonth() - (range.months - 1),
           1
         );
+  const viewListFilter = { type: "view_list" };
 
   const [
     eventsCurrent,
@@ -139,6 +151,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
     sharesCurrent,
     sharesPrevious,
     sharesTotal,
+    totalVisitsCurrent,
+    totalVisitsPrevious,
+    totalVisitsTotal,
+    uniqueVisitorsCurrent,
+    uniqueVisitorsPrevious,
+    uniqueVisitorsTotal,
+    uniqueVisitorsByHourRaw,
+    uniqueVisitorsByWeekdayRaw,
   ] = await Promise.all([
     prismaClient.menuItemInterestEvent.groupBy({
       by: ["menuItemId", "type"],
@@ -187,7 +207,108 @@ export async function loader({ request }: LoaderFunctionArgs) {
       _count: { _all: true },
       ...(rangeStart ? { where: { createdAt: { gte: rangeStart } } } : {}),
     }),
+    prismaClient.menuItemInterestEvent.count({
+      where: {
+        createdAt: { gte: currentMonth.start, lt: currentMonth.end },
+        ...viewListFilter,
+      },
+    }),
+    prismaClient.menuItemInterestEvent.count({
+      where: {
+        createdAt: { gte: previousMonth.start, lt: previousMonth.end },
+        ...viewListFilter,
+      },
+    }),
+    prismaClient.menuItemInterestEvent.count({
+      where: {
+        ...(rangeStart ? { createdAt: { gte: rangeStart } } : {}),
+        ...viewListFilter,
+      },
+    }),
+    prismaClient.menuItemInterestEvent.groupBy({
+      by: ["clientId"],
+      _count: { _all: true },
+      where: {
+        createdAt: { gte: currentMonth.start, lt: currentMonth.end },
+        clientId: { not: null },
+        ...viewListFilter,
+      },
+    }),
+    prismaClient.menuItemInterestEvent.groupBy({
+      by: ["clientId"],
+      _count: { _all: true },
+      where: {
+        createdAt: { gte: previousMonth.start, lt: previousMonth.end },
+        clientId: { not: null },
+        ...viewListFilter,
+      },
+    }),
+    prismaClient.menuItemInterestEvent.groupBy({
+      by: ["clientId"],
+      _count: { _all: true },
+      where: {
+        ...(rangeStart ? { createdAt: { gte: rangeStart } } : {}),
+        clientId: { not: null },
+        ...viewListFilter,
+      },
+    }),
+    prismaClient.$queryRaw<{ hour: number | null; count: number }[]>(
+      Prisma.sql`
+        SELECT date_part('hour', created_at) AS hour,
+               COUNT(DISTINCT client_id) AS count
+        FROM menu_item_interest_events
+        WHERE created_at >= ${currentMonth.start}
+          AND created_at < ${currentMonth.end}
+          AND client_id IS NOT NULL
+          AND type = ${viewListFilter.type}
+        GROUP BY 1
+        ORDER BY 1
+      `
+    ),
+    prismaClient.$queryRaw<{ day: number | null; count: number }[]>(
+      Prisma.sql`
+        SELECT date_part('dow', created_at) AS day,
+               COUNT(DISTINCT client_id) AS count
+        FROM menu_item_interest_events
+        WHERE created_at >= ${currentMonth.start}
+          AND created_at < ${currentMonth.end}
+          AND client_id IS NOT NULL
+          AND type = ${viewListFilter.type}
+        GROUP BY 1
+        ORDER BY 1
+      `
+    ),
   ]);
+
+  const uniqueVisitorsByHour: HourCount[] = Array.from(
+    { length: 24 },
+    (_, hour) => ({
+      hour,
+      count: 0,
+    })
+  );
+
+  uniqueVisitorsByHourRaw.forEach((row) => {
+    if (row.hour == null) return;
+    const hour = Math.floor(Number(row.hour));
+    if (!Number.isFinite(hour) || hour < 0 || hour > 23) return;
+    uniqueVisitorsByHour[hour].count = Number(row.count ?? 0);
+  });
+
+  const uniqueVisitorsByWeekday: WeekdayCount[] = Array.from(
+    { length: 7 },
+    (_, day) => ({
+      day,
+      count: 0,
+    })
+  );
+
+  uniqueVisitorsByWeekdayRaw.forEach((row) => {
+    if (row.day == null) return;
+    const day = Math.floor(Number(row.day));
+    if (!Number.isFinite(day) || day < 0 || day > 6) return;
+    uniqueVisitorsByWeekday[day].count = Number(row.count ?? 0);
+  });
 
   const mapCurrent = buildCountMap(eventsCurrent);
   const mapPrevious = buildCountMap(eventsPrevious);
@@ -307,6 +428,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
     openDetailItems,
     engagementItems,
     rankingItems,
+    totalVisitsCurrent,
+    totalVisitsPrevious,
+    totalVisitsTotal,
+    uniqueVisitorsCurrent: uniqueVisitorsCurrent.length,
+    uniqueVisitorsPrevious: uniqueVisitorsPrevious.length,
+    uniqueVisitorsTotal: uniqueVisitorsTotal.length,
+    uniqueVisitorsByHour,
+    uniqueVisitorsByWeekday,
   });
 }
 
@@ -322,6 +451,14 @@ export default function AdminGerenciamentoCardapioTracking() {
     rangeOptions,
     rangeValue,
     rangeLabel,
+    totalVisitsCurrent,
+    totalVisitsPrevious,
+    totalVisitsTotal,
+    uniqueVisitorsCurrent,
+    uniqueVisitorsPrevious,
+    uniqueVisitorsTotal,
+    uniqueVisitorsByHour,
+    uniqueVisitorsByWeekday,
   } = useLoaderData<typeof loader>();
   const [searchParams] = useSearchParams();
   const selectedMonth = searchParams.get("month") ?? currentMonth;
@@ -345,6 +482,18 @@ export default function AdminGerenciamentoCardapioTracking() {
       p > 0 ? "text-emerald-600" : p < 0 ? "text-red-600" : "text-slate-500";
     return { text: `${sign} ${Math.abs(p).toFixed(1)}%`, cls: color };
   };
+  const formatNumber = new Intl.NumberFormat("pt-BR");
+  const visitsDiff = pctDiff(totalVisitsCurrent, totalVisitsPrevious);
+  const uniqueDiff = pctDiff(uniqueVisitorsCurrent, uniqueVisitorsPrevious);
+  const maxUniqueVisitorsByHour = Math.max(
+    ...uniqueVisitorsByHour.map((entry) => entry.count),
+    1
+  );
+  const maxUniqueVisitorsByWeekday = Math.max(
+    ...uniqueVisitorsByWeekday.map((entry) => entry.count),
+    1
+  );
+  const weekdayLabels = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sab"];
 
   return (
     <section className="flex flex-col gap-6">
@@ -400,6 +549,149 @@ export default function AdminGerenciamentoCardapioTracking() {
           </span>
         </form>
       </header>
+
+      <div className="grid gap-4 lg:grid-cols-[1.1fr_1.9fr]">
+        <div className="rounded-lg border border-muted bg-white p-4 shadow-sm">
+          <h3 className="text-sm font-semibold text-slate-900">
+            Resumo de visitas
+          </h3>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Visitas totais (view_list) e visitantes unicos (clientId) do mes.
+          </p>
+          <div className="mt-4 overflow-x-auto rounded-md border border-muted">
+            <table className="w-full min-w-[520px] text-sm">
+              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-muted-foreground">
+                <tr>
+                  <th className="px-3 py-2 text-left font-medium">Metrica</th>
+                  <th className="px-3 py-2 text-right font-medium">Mes atual</th>
+                  <th className="px-3 py-2 text-right font-medium">Mes anterior</th>
+                  <th className="px-3 py-2 text-right font-medium">Total ({rangeLabel})</th>
+                  <th className="px-3 py-2 text-right font-medium">Δ</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="border-t">
+                  <td className="px-3 py-2 font-medium text-slate-900">
+                    Visitas no cardapio
+                  </td>
+                  <td className="px-3 py-2 text-right font-mono text-slate-700">
+                    {formatNumber.format(totalVisitsCurrent)}
+                  </td>
+                  <td className="px-3 py-2 text-right font-mono text-slate-500">
+                    {formatNumber.format(totalVisitsPrevious)}
+                  </td>
+                  <td className="px-3 py-2 text-right font-mono text-slate-500">
+                    {formatNumber.format(totalVisitsTotal)}
+                  </td>
+                  <td className={`px-3 py-2 text-right font-mono text-xs font-semibold ${visitsDiff.cls}`}>
+                    {visitsDiff.text}
+                  </td>
+                </tr>
+                <tr className="border-t">
+                  <td className="px-3 py-2 font-medium text-slate-900">
+                    Visitantes unicos
+                  </td>
+                  <td className="px-3 py-2 text-right font-mono text-slate-700">
+                    {formatNumber.format(uniqueVisitorsCurrent)}
+                  </td>
+                  <td className="px-3 py-2 text-right font-mono text-slate-500">
+                    {formatNumber.format(uniqueVisitorsPrevious)}
+                  </td>
+                  <td className="px-3 py-2 text-right font-mono text-slate-500">
+                    {formatNumber.format(uniqueVisitorsTotal)}
+                  </td>
+                  <td className={`px-3 py-2 text-right font-mono text-xs font-semibold ${uniqueDiff.cls}`}>
+                    {uniqueDiff.text}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-4">
+          <div className="rounded-lg border border-muted bg-white p-4 shadow-sm">
+            <h3 className="text-sm font-semibold text-slate-900">
+              Visitantes unicos por horario
+            </h3>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Distribuicao de clientes unicos por hora do dia (mes atual).
+            </p>
+            <div className="mt-4">
+              <div className="flex h-36 items-end gap-1 rounded-md border border-muted bg-slate-50 px-2 py-3">
+                {uniqueVisitorsByHour.map((entry) => {
+                  const height = Math.max(
+                    4,
+                    Math.round((entry.count / maxUniqueVisitorsByHour) * 100)
+                  );
+                  return (
+                    <div
+                      key={entry.hour}
+                      className="flex w-full flex-col items-center justify-end gap-1"
+                      title={`${entry.hour}h: ${formatNumber.format(entry.count)}`}
+                    >
+                      <span className="text-[10px] font-semibold text-slate-500">
+                        {entry.count > 0 ? formatNumber.format(entry.count) : ""}
+                      </span>
+                      <div
+                        className="w-full rounded-sm bg-slate-700"
+                        style={{ height: `${height}%` }}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="mt-2 grid grid-cols-12 text-[11px] text-muted-foreground">
+                {Array.from({ length: 12 }).map((_, index) => {
+                  const hour = index * 2;
+                  return (
+                    <span key={hour} className="text-center">
+                      {String(hour).padStart(2, "0")}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-muted bg-white p-4 shadow-sm">
+            <h3 className="text-sm font-semibold text-slate-900">
+              Visitantes unicos por dia
+            </h3>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Distribuicao de clientes unicos por dia da semana (mes atual).
+            </p>
+            <div className="mt-4">
+              <div className="flex h-36 items-end gap-2 rounded-md border border-muted bg-slate-50 px-3 py-3">
+                {uniqueVisitorsByWeekday.map((entry) => {
+                  const height = Math.max(
+                    4,
+                    Math.round((entry.count / maxUniqueVisitorsByWeekday) * 100)
+                  );
+                  return (
+                    <div
+                      key={entry.day}
+                      className="flex w-full flex-col items-center justify-end gap-1"
+                      title={`${weekdayLabels[entry.day]}: ${formatNumber.format(entry.count)}`}
+                    >
+                      <span className="text-[10px] font-semibold text-slate-500">
+                        {entry.count > 0 ? formatNumber.format(entry.count) : ""}
+                      </span>
+                      <div
+                        className="w-full rounded-sm bg-slate-700"
+                        style={{ height: `${height}%` }}
+                      />
+                      <span className="mt-1 text-[11px] text-muted-foreground">
+                        {weekdayLabels[entry.day]}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="rounded-lg border border-muted bg-white p-4 shadow-sm">
