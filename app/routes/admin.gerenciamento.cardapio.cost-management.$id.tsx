@@ -1,15 +1,22 @@
-import { LoaderFunctionArgs } from "@remix-run/node";
+import { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { Await, Form, defer, useLoaderData } from "@remix-run/react";
 import { AlertCircleIcon } from "lucide-react";
 import { Suspense } from "react";
 import Loading from "~/components/loading/loading";
+import { MoneyInput } from "~/components/money-input/MoneyInput";
 import { NumericInput } from "~/components/numeric-input/numeric-input";
 import SubmitButton from "~/components/primitives/submit-button/submit-button";
 import { authenticator } from "~/domain/auth/google.server";
 import { menuItemCostHandler } from "~/domain/cardapio/menu-item-cost-handler.server";
+import { menuItemCostVariationPrismaEntity } from "~/domain/cardapio/menu-item-cost-variation.entity.server";
+import { menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { MenuItemWithCostVariations } from "~/domain/cardapio/menu-item.types";
 import { cn } from "~/lib/utils";
+import { prismaIt } from "~/lib/prisma/prisma-it.server";
+import { badRequest, ok } from "~/utils/http-response.server";
+import parserFormDataEntryToNumber from "~/utils/parse-form-data-entry-to-number";
 import randomReactKey from "~/utils/random-react-key";
+import createUUID from "~/utils/uuid";
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
 
@@ -25,6 +32,97 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   })
 }
 
+export async function action({ request }: ActionFunctionArgs) {
+  const formData = await request.formData();
+  const { _action, ...values } = Object.fromEntries(formData);
+
+  if (_action === "menu-item-cost-variation-upsert-user-input") {
+    const menuItemId = values?.menuItemId as string;
+    const menuItemCostVariationId = values?.menuItemCostVariationId as string;
+    const menuItemSizeId = values?.menuItemSizeId as string;
+    const updatedBy = values?.updatedBy as string;
+    const costAmount = parserFormDataEntryToNumber(values?.costAmount) || 0;
+    const previousCostAmount = parserFormDataEntryToNumber(values?.previousCostAmount) || 0;
+
+    const recordId = menuItemCostVariationId === "" ? createUUID() : menuItemCostVariationId;
+
+    const [err] = await prismaIt(menuItemCostVariationPrismaEntity.upsert(recordId, {
+      id: recordId,
+      menuItemId,
+      menuItemSizeId,
+      costAmount,
+      previousCostAmount,
+      updatedBy,
+    }));
+
+    if (err) {
+      return badRequest(err);
+    }
+
+    return ok("O custo da ficha tecnica foi atualizado com sucesso");
+  }
+
+  if (_action === "menu-item-cost-variation-upsert-proposed-input") {
+    const menuItemId = values?.menuItemId as string;
+    const menuItemCostVariationId = values?.menuItemCostVariationId as string;
+    const menuItemSizeId = values?.menuItemSizeId as string;
+    const updatedBy = values?.updatedBy as string;
+    const costAmount = parserFormDataEntryToNumber(values?.recommendedCostAmount) || 0;
+    const previousCostAmount = parserFormDataEntryToNumber(values?.previousCostAmount) || 0;
+
+    const recordId = menuItemCostVariationId === "" ? createUUID() : menuItemCostVariationId;
+
+    const [err] = await prismaIt(menuItemCostVariationPrismaEntity.upsert(recordId, {
+      id: recordId,
+      menuItemId,
+      menuItemSizeId,
+      costAmount,
+      previousCostAmount,
+      updatedBy,
+    }));
+
+    if (err) {
+      return badRequest(err);
+    }
+
+    return ok("O custo da ficha tecnica foi atualizado com sucesso");
+  }
+
+  if (_action === "menu-item-cost-variation-upsert-all-proposed-input") {
+    const menuItemId = values?.menuItemId as string;
+    const updatedBy = values?.updatedBy as string;
+    const recommendedCostAmount = parserFormDataEntryToNumber(values?.recommendedCostAmount) || 0;
+
+    const menuItemWithCostVariations = await menuItemPrismaEntity.findWithCostVariationsByItem(menuItemId);
+
+    if (!menuItemWithCostVariations) {
+      return badRequest("Nenhum item encontrado");
+    }
+
+    const costVariations = menuItemWithCostVariations.costVariations.map((record) => {
+      return {
+        id: record.menuItemCostVariationId,
+        menuItemId,
+        costAmount: recommendedCostAmount,
+        updatedAt: record.updatedAt,
+        updatedBy,
+        previousCostAmount: record.costAmount,
+        menuItemSizeId: record.sizeId,
+      };
+    });
+
+    const [err] = await prismaIt(menuItemCostVariationPrismaEntity.upsertMany(menuItemId, costVariations));
+
+    if (err) {
+      return badRequest(err);
+    }
+
+    return ok("Os custos da ficha tecnica foi atualizado com sucesso");
+  }
+
+  return ok("Elemento atualizado com successo");
+}
+
 export default function AdminGerenciamentoCardapioCostManagementSingle() {
   const { data } = useLoaderData<typeof loader>();
 
@@ -33,15 +131,22 @@ export default function AdminGerenciamentoCardapioCostManagementSingle() {
 
     <div className="p-2" data-element="admin-gerenciamento-cardapio-custo-single">
       <Suspense fallback={<Loading />}>
-        <Await resolve={data}>
+          <Await resolve={data}>
           {/* @ts-ignore */}
           {([menuItemWithCostVariationsAndRecommended, user]) => {
-
-
 
             // @ts-ignore
             const menuItem: MenuItemWithCostVariations = menuItemWithCostVariationsAndRecommended;
 
+            if (!menuItem) {
+              return (
+                <div className="text-sm text-muted-foreground">
+                  Item não encontrado.
+                </div>
+              );
+            }
+
+            return (
             <>
 
               <div className="flex justify-between  items-center mb-4 bg-slate-300 rounded-md px-4 py-1">
@@ -106,7 +211,7 @@ export default function AdminGerenciamentoCardapioCostManagementSingle() {
                                   <div className="flex flex-col gap-1 items-center">
                                     <div className="flex flex-col gap-y-0">
                                       <span className="text-muted-foreground text-[11px]">Novo custo:</span>
-                                      <NumericInput name="costAmount" defaultValue={record.costAmount} />
+                                      <MoneyInput name="costAmount" defaultValue={record.costAmount} />
                                     </div>
                                     <SubmitButton
                                       actionName="menu-item-cost-variation-upsert-user-input"
@@ -164,6 +269,7 @@ export default function AdminGerenciamentoCardapioCostManagementSingle() {
 
 
             </>
+            );
           }
           }
         </Await>
