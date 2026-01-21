@@ -12,7 +12,7 @@ import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { menuItemLikePrismaEntity } from "~/domain/cardapio/menu-item-like.prisma.entity.server";
 import { badRequest, ok } from "~/utils/http-response.server";
 import { menuItemSharePrismaEntity } from "~/domain/cardapio/menu-item-share.prisma.entity.server";
-import GLOBAL_LINKS from "~/domain/website-navigation/global-links.constant";
+import WEBSITE_LINKS from "~/domain/website-navigation/links/website-links";
 import ItalyFlag from "~/components/italy-flag/italy-flag";
 
 export const headers: HeadersFunction = () => ({
@@ -280,7 +280,7 @@ function CardapioItemActionBarVertical({ item }: { item: MenuItemWithAssociation
         navigator.share({
             title: item.name,
             text,
-            url: `${GLOBAL_LINKS.cardapioPublic}/#${item.id}`
+            url: `${WEBSITE_LINKS.cardapioPublic}/#${item.id}`
         }).then(() => {
 
             fetcher.submit(

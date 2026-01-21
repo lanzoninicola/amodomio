@@ -16,8 +16,8 @@ import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapi
 import BadgeTag from "~/domain/tags/components/badge-tag";
 import { tagPrismaEntity } from "~/domain/tags/tag.prisma.entity.server";
 import { WebsiteNavigationSidebar } from "~/domain/website-navigation/components/website-navigation-sidebar";
-import GLOBAL_LINKS from "~/domain/website-navigation/global-links.constant";
-import PUBLIC_WEBSITE_NAVIGATION_ITEMS from "~/domain/website-navigation/public/public-website.nav-links";
+import WEBSITE_LINKS from "~/domain/website-navigation/links/website-links";
+import PUBLIC_NAVIGATION_LINKS from "~/domain/website-navigation/links/public-navigation";
 import { prismaAll } from "~/lib/prisma/prisma-all.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import getSearchParam from "~/utils/get-search-param";
@@ -152,7 +152,7 @@ export default function CardapioWeb() {
                     </div>
                     <div className="grid grid-cols-3 gap-x-4">
 
-                        <Link to={GLOBAL_LINKS.instagram.href} aria-label={GLOBAL_LINKS.instagram.title} className="flex items-center justify-center gap-1 rounded-lg bg-muted py-1">
+                        <Link to={WEBSITE_LINKS.instagram.href} aria-label={WEBSITE_LINKS.instagram.title} className="flex items-center justify-center gap-1 rounded-lg bg-muted py-1">
                             <Instagram />
                             <span className="font-semibold text-xs">Instagram</span>
                         </Link>
@@ -165,7 +165,7 @@ export default function CardapioWeb() {
                             <WhatsAppIcon color="black" />
                             <span className="font-semibold text-xs">WhatsApp</span>
                         </WhatsappExternalLink>
-                        <Link to={GLOBAL_LINKS.maps.href} aria-label={GLOBAL_LINKS.maps.title} className="flex items-center justify-center gap-1 rounded-lg bg-muted py-1">
+                        <Link to={WEBSITE_LINKS.maps.href} aria-label={WEBSITE_LINKS.maps.title} className="flex items-center justify-center gap-1 rounded-lg bg-muted py-1">
                             <MapPin />
                             <span className="font-semibold text-xs">Maps</span>
                         </Link>
@@ -199,7 +199,7 @@ function CardapioHeader({ items, tags }: CardapioHeaderProps) {
 
                     <WebsiteNavigationSidebar
                         homeLink={{ label: "Cardápio", to: "cardapio" }}
-                        navigationLinks={PUBLIC_WEBSITE_NAVIGATION_ITEMS}
+                        navigationLinks={PUBLIC_NAVIGATION_LINKS}
                         buttonTrigger={{
                             label: "Menu",
                             classNameLabel: "block font-neue text-[10px] font-semibold  uppercase",
@@ -248,7 +248,7 @@ function CardapioFooter() {
         <footer className="py-6 px-2 fixed bottom-0 w-screen md:max-w-2xl md:-translate-x-1/2 md:left-1/2 ">
             {/* <Separator className="my-4" /> */}
             <div className="px-2 w-full">
-                <ExternalLink to={GLOBAL_LINKS.saiposCardapio.href}
+                <ExternalLink to={WEBSITE_LINKS.saiposCardapio.href}
                     ariaLabel="Cardápio digital pizzaria A Modo Mio"
                     className="flex justify-between font-neue rounded-sm bg-green-400 py-2 px-4"
                 >

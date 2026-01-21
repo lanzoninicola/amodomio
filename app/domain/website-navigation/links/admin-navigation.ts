@@ -1,9 +1,9 @@
-import GLOBAL_LINKS from "../global-links.constant";
-import { WebsiteNavigationLinks } from "../website-navigation.type";
+import WEBSITE_LINKS from "./website-links";
+import { WebsiteNavigationConfig } from "../types/navigation-types";
 import { Shield } from "lucide-react";
 
-const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
-  mainNav: [GLOBAL_LINKS.admin, GLOBAL_LINKS.website],
+const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
+  mainNav: [WEBSITE_LINKS.admin, WEBSITE_LINKS.website],
   sidebarNav: [
     {
       title: "Iniçio",
@@ -106,9 +106,22 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
           disabled: false,
         },
         {
-          title: "Dashboard de Interesse",
-          href: "/admin/gerenciamento/cardapio/tracking",
-          items: [],
+          title: "Relatorios",
+          href: "",
+          items: [
+            {
+              title: "Visitas",
+              href: "/admin/gerenciamento/cardapio/tracking",
+              items: [],
+              disabled: false,
+            },
+            {
+              title: "Dashboard de Interesse",
+              href: "/admin/gerenciamento/cardapio/tracking",
+              items: [],
+              disabled: false,
+            },
+          ],
           disabled: false,
         },
         {
@@ -433,4 +446,4 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
   ],
 };
 
-export default ADMIN_WEBSITE_NAVIGATION_ITEMS;
+export default ADMIN_NAVIGATION_LINKS;

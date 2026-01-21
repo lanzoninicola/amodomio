@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { MenuItemWithAssociations } from "../../menu-item.prisma.entity.server";
 import { useFetcher } from "@remix-run/react";
-import GLOBAL_LINKS from "~/domain/website-navigation/global-links.constant";
+import WEBSITE_LINKS from "~/domain/website-navigation/links/website-links";
 import { Heart, Share2 } from "lucide-react";
 import WhatsappExternalLink from "~/components/primitives/whatsapp/whatsapp-external-link";
 import WhatsAppIcon from "~/components/primitives/whatsapp/whatsapp-icon";
@@ -48,7 +48,7 @@ export function CardapioItemActionBarVertical({ item, cnContainer }: CardapioIte
         navigator.share({
             title: item.name,
             text,
-            url: `${GLOBAL_LINKS.cardapioPublic}/#${item.id}`
+            url: `${WEBSITE_LINKS.cardapioPublic}/#${item.id}`
         }).then(() => {
 
             fetcher.submit(
@@ -150,7 +150,7 @@ export function CardapioItemActionBarHorizontal({ item, cnContainer }: CardapioI
         navigator.share({
             title: item.name,
             text,
-            url: `${GLOBAL_LINKS.cardapioPublic}/#${item.id}`
+            url: `${WEBSITE_LINKS.cardapioPublic}/#${item.id}`
         }).then(() => {
 
             fetcher.submit(
@@ -221,7 +221,7 @@ export function ShareIt({ item, size, children, cnContainer }: { item: MenuItemW
         navigator.share({
             title: item.name,
             text,
-            url: `${GLOBAL_LINKS.cardapioPublic}/#${item.id}`
+            url: `${WEBSITE_LINKS.cardapioPublic}/#${item.id}`
         }).then(() => {
 
             fetcher.submit(

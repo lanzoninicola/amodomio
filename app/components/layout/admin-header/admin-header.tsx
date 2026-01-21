@@ -82,7 +82,7 @@ export function AdminHeader({ urlSegment, slug }: AdminHeaderProps) {
             <div className="container flex h-14 max-w-screen-2xl items-center">
                 {/* <WebsiteNavigationSidebar
                     homeLink={{ label: "Iniçio", to: "admin" }}
-                    navigationLinks={ADMIN_WEBSITE_NAVIGATION_ITEMS}
+                    navigationLinks={ADMIN_NAVIGATION_LINKS}
                     buttonTrigger={{
                         label: "Menu de navegação",
                     }}
