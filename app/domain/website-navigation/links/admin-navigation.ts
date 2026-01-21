@@ -111,13 +111,13 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
           items: [
             {
               title: "Visitas",
-              href: "/admin/gerenciamento/cardapio/tracking",
+              href: "/admin/gerenciamento/cardapio/dashboard/visitas",
               items: [],
               disabled: false,
             },
             {
               title: "Dashboard de Interesse",
-              href: "/admin/gerenciamento/cardapio/tracking",
+              href: "/admin/gerenciamento/cardapio/dashboard/tracking",
               items: [],
               disabled: false,
             },
