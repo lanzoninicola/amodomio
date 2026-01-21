@@ -4,7 +4,7 @@ import { AdminHeader } from "~/components/layout/admin-header/admin-header";
 import { SidebarProvider, SidebarTrigger } from "~/components/ui/sidebar";
 import { authenticator } from "~/domain/auth/google.server";
 import { LoggedUser } from "~/domain/auth/types.server";
-import ADMIN_WEBSITE_NAVIGATION_ITEMS from "~/domain/website-navigation/admin/admin-website.nav-links";
+import ADMIN_NAVIGATION_LINKS from "~/domain/website-navigation/links/admin-navigation";
 import { AdminSidebar } from "~/domain/website-navigation/components/admin-sidebar";
 import prismaClient from "~/lib/prisma/client.server";
 import { ok } from "~/utils/http-response.server";
@@ -68,7 +68,7 @@ export default function AdminOutlet() {
 
     return (
         <SidebarProvider data-element="sidebar-provider">
-            <AdminSidebar navigationLinks={ADMIN_WEBSITE_NAVIGATION_ITEMS} />
+            <AdminSidebar navigationLinks={ADMIN_NAVIGATION_LINKS} />
             <SidebarTrigger />
             <div className="flex flex-col w-screen">
                 <AdminHeader slug={slug} urlSegment={urlSegment} />
@@ -82,5 +82,4 @@ export default function AdminOutlet() {
         </SidebarProvider>
     )
 }
-
 

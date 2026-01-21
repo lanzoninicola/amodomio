@@ -5,7 +5,7 @@ import { ArrowLeft, RefreshCcw, RotateCcw } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import { CardapioSizesSections } from "~/domain/cardapio/components/cardapio-sizes-content";
-import GLOBAL_LINKS from "~/domain/website-navigation/global-links.constant";
+import WEBSITE_LINKS from "~/domain/website-navigation/links/website-links";
 import prismaClient from "~/lib/prisma/client.server";
 
 export const meta: MetaFunction = () => {
@@ -188,7 +188,7 @@ export default function CardapioTamanhosPage() {
 
             <section className="my-10 px-4">
                 <div className="flex flex-wrap gap-3 w-full">
-                    <Link to={GLOBAL_LINKS.cardapioPublic.href} prefetch="intent" className="w-full">
+                    <Link to={WEBSITE_LINKS.cardapioPublic.href} prefetch="intent" className="w-full">
                         <Button size="lg" className="gap-2 tracking-wide uppercase w-full">
                             <ArrowLeft className="h-4 w-4" />
                             Ver cardápio

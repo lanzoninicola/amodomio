@@ -12,7 +12,7 @@ import CardapioItemDialog from "~/domain/cardapio/components/cardapio-item-dialo
 import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import BadgeTag from "~/domain/tags/components/badge-tag";
 import { tagPrismaEntity } from "~/domain/tags/tag.prisma.entity.server";
-import GLOBAL_LINKS from "~/domain/website-navigation/global-links.constant";
+import WEBSITE_LINKS from "~/domain/website-navigation/links/website-links";
 import capitalize from "~/utils/capitalize";
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -92,7 +92,7 @@ export default function CardapioSearch() {
                 </Suspense> */}
                 <FoundedItems items={currentItems} />
             </div>
-            <Link to={GLOBAL_LINKS.cardapioPublic.href}>
+            <Link to={WEBSITE_LINKS.cardapioPublic.href}>
                 <Button className="w-full flex gap-2 justify-center" variant={"secondary"}>
                     <span className="text-[12px] tracking-widest font-semibold uppercase" style={{
                         lineHeight: "normal",

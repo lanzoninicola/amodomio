@@ -1,7 +1,7 @@
 import { ArrowRight } from 'lucide-react';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import ExternalLink from '~/components/primitives/external-link/external-link';
-import GLOBAL_LINKS from '~/domain/website-navigation/global-links.constant';
+import WEBSITE_LINKS from "~/domain/website-navigation/links/website-links";
 import useBrandColors from '~/hooks/use-brand-colors';
 import { cn } from '~/lib/utils';
 
@@ -32,7 +32,7 @@ export default function FazerPedidoButton({
     disabled = false,
     iconRight,
     variant = 'primary',
-    externalLinkURL = GLOBAL_LINKS.cardapioFallbackURL.href,
+    externalLinkURL = WEBSITE_LINKS.cardapioFallbackURL.href,
     ariaLabel,
 }: FazerPedidoButtonProps) {
     const brandColors = useBrandColors();

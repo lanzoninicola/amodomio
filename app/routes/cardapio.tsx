@@ -16,8 +16,8 @@ import { Separator } from "~/components/ui/separator";
 import FazerPedidoButton from "~/domain/cardapio/components/fazer-pedido-button/fazer-pedido-button";
 import { MenuItemWithAssociations } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { WebsiteNavigationSidebar } from "~/domain/website-navigation/components/website-navigation-sidebar";
-import GLOBAL_LINKS from "~/domain/website-navigation/global-links.constant";
-import PUBLIC_WEBSITE_NAVIGATION_ITEMS from "~/domain/website-navigation/public/public-website.nav-links";
+import WEBSITE_LINKS from "~/domain/website-navigation/links/website-links";
+import PUBLIC_NAVIGATION_LINKS from "~/domain/website-navigation/links/public-navigation";
 import prismaClient from "~/lib/prisma/client.server";
 import { cn } from "~/lib/utils";
 import { parseBooleanSetting } from "~/utils/parse-boolean-setting";
@@ -96,7 +96,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         return acc;
     }, {});
 
-    const fPUrl = settingsMap[requestedKeys[0]] ?? GLOBAL_LINKS.cardapioFallbackURL.href;
+    const fPUrl = settingsMap[requestedKeys[0]] ?? WEBSITE_LINKS.cardapioFallbackURL.href;
 
     const showLojaFechadaMessage = parseBooleanSetting(settingsMap[requestedKeys[1]], true);
     const notificationsEnabled = parseBooleanSetting(settingsMap[requestedKeys[2]], true);
@@ -189,7 +189,7 @@ function CardapioHeader() {
                         <span className="font-neue text-[10px] font-semibold  uppercase">Menu</span>
                     </div> */}
 
-                    <Link to={GLOBAL_LINKS.cardapioPublic.href} className="flex col-span-2">
+                    <Link to={WEBSITE_LINKS.cardapioPublic.href} className="flex col-span-2">
                         <div className="px-4 -py-3">
                             <Logo color="black" onlyText={true} className="w-[120px] h-[30px] md:w-[150px] md:h-[50px]" tagline={false} />
                         </div>
@@ -204,8 +204,8 @@ function CardapioHeader() {
                             </div>
                         </Link>
                         <WebsiteNavigationSidebar
-                            homeLink={{ label: GLOBAL_LINKS.cardapioPublic.title, to: GLOBAL_LINKS.cardapioPublic.href }}
-                            navigationLinks={PUBLIC_WEBSITE_NAVIGATION_ITEMS}
+                            homeLink={{ label: WEBSITE_LINKS.cardapioPublic.title, to: WEBSITE_LINKS.cardapioPublic.href }}
+                            navigationLinks={PUBLIC_NAVIGATION_LINKS}
                             buttonTrigger={{
                                 label: "",
                                 classNameLabel: "block font-neue text-[10px] font-semibold uppercase",
@@ -247,12 +247,12 @@ function CardapioHeader() {
 
             <div className=" bg-white   flex items-center justify-between border-t border-b px-4 py-2">
                 <div className="flex gap-4 items-center">
-                    <ExternalLink to={GLOBAL_LINKS.instagram.href} aria-label={GLOBAL_LINKS.instagram.title} ariaLabel="Link pagina instagram"
+                    <ExternalLink to={WEBSITE_LINKS.instagram.href} aria-label={WEBSITE_LINKS.instagram.title} ariaLabel="Link pagina instagram"
                     >
                         <InstagramLogoIcon color="black" className="w-[16px] h-[16px] md:w-[24px] md:h-[24px]" />
                         {/* <span className="font-semibold tracking-wide text-[12px]">Instagram</span> */}
                     </ExternalLink>
-                    <ExternalLink to={GLOBAL_LINKS.maps.href} aria-label={GLOBAL_LINKS.maps.title} ariaLabel="Link para o google maps"
+                    <ExternalLink to={WEBSITE_LINKS.maps.href} aria-label={WEBSITE_LINKS.maps.title} ariaLabel="Link para o google maps"
                     >
                         <MapPin color="black" className="w-[16px] h-[16px] md:w-[24px] md:h-[24px]" />
                         {/* <span className="font-semibold tracking-wide text-[12px]">Maps</span> */}
@@ -353,7 +353,7 @@ function CompanyInfo({ cnContainer }: { cnContainer?: string }) {
             }>
                 <div className="flex justify-end gap-4 px-4">
 
-                    <Link to={GLOBAL_LINKS.instagram.href} aria-label={GLOBAL_LINKS.instagram.title}
+                    <Link to={WEBSITE_LINKS.instagram.href} aria-label={WEBSITE_LINKS.instagram.title}
                         className="flex items-center justify-center gap-1 rounded-full backdrop-blur-lg bg-black/30 w-[48px] h-[48px]">
                         <Instagram size={24} color="white" />
                         {/* <span className="font-semibold tracking-wide text-[12px]">Instagram</span> */}
@@ -367,7 +367,7 @@ function CompanyInfo({ cnContainer }: { cnContainer?: string }) {
                         <WhatsAppIcon color="white" height={24} width={24} />
                         {/* <span className="font-semibold tracking-wide text-[12px]">WhatsApp</span> */}
                     </WhatsappExternalLink>
-                    <Link to={GLOBAL_LINKS.maps.href} aria-label={GLOBAL_LINKS.maps.title}
+                    <Link to={WEBSITE_LINKS.maps.href} aria-label={WEBSITE_LINKS.maps.title}
                         className="flex items-center justify-center gap-1 rounded-full backdrop-blur-lg bg-black/30 w-[48px] h-[48px]">
                         <MapPin size={24} color="white" />
                         {/* <span className="font-semibold tracking-wide text-[12px]">Maps</span> */}
@@ -434,7 +434,7 @@ function CardapioFooter() {
 
 function TamanhosLinkButton() {
     return (
-        <Link to={GLOBAL_LINKS.cardapioTamanhosPagina.href} className="flex col-span-2">
+        <Link to={WEBSITE_LINKS.cardapioTamanhosPagina.href} className="flex col-span-2">
             <div className="flex flex-col items-center justify-center">
                 <Proportions className="col-span-1 md:col-span-2" />
                 <span className="font-neue text-[10px] uppercase tracking-widest">Tamanhos</span>

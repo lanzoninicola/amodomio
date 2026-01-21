@@ -8,7 +8,7 @@ import Logo from "~/components/primitives/logo/logo";
 import WhatsappExternalLink from "~/components/primitives/whatsapp/whatsapp-external-link";
 import WhatsAppIcon from "~/components/primitives/whatsapp/whatsapp-icon";
 import { fmtYYYMMDD } from "~/domain/kds";
-import GLOBAL_LINKS from "~/domain/website-navigation/global-links.constant";
+import WEBSITE_LINKS from "~/domain/website-navigation/links/website-links";
 import { CloudinaryUtils } from "~/lib/cloudinary";
 import { cn } from "~/lib/utils";
 import { ok } from "~/utils/http-response.server";
@@ -44,7 +44,7 @@ export default function HomePage() {
                     <div className="w-[130px] md:w-[150px] ">
                         <Logo onlyText={true} className="w-full h-full" color="black" />
                     </div>
-                    <Link to={GLOBAL_LINKS.cardapioPublic.href} className="hidden md:block" >
+                    <Link to={WEBSITE_LINKS.cardapioPublic.href} className="hidden md:block" >
                         <div className="bg-black px-2 py-2 rounded-lg w-max flex items-center gap-2 shadow-sm">
                             <span className="font-neue font-semibold text-white uppercase tracking-wider text-xs">cardápio</span>
                             <span className="flex  items-center justify-center rounded-full bg-white/10 text-white">
@@ -74,7 +74,7 @@ export default function HomePage() {
                             </div>
 
                             <div className="mt-2 flex flex-wrap items-center gap-3">
-                                <Link to={GLOBAL_LINKS.cardapioPublic.href} >
+                                <Link to={WEBSITE_LINKS.cardapioPublic.href} >
                                     <div className="group relative overflow-hidden rounded-xl border border-black bg-black px-6 py-3.5 text-white shadow-[0_10px_30px_rgba(0,0,0,0.25)] transition-all duration-150 hover:-translate-y-0.5 hover:shadow-[0_16px_40px_rgba(0,0,0,0.28)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black">
                                         <div className="absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-10 bg-white" aria-hidden />
                                         <div className="relative flex items-center gap-3 font-neue font-bold uppercase tracking-wide">
@@ -283,7 +283,7 @@ function DiaCliente25({ targetDate }: DiaCliente25Props) {
                                 </DialogContent>
                             </Dialog>
 
-                            <Link to={GLOBAL_LINKS.cardapioPublic.href} className="w-full">
+                            <Link to={WEBSITE_LINKS.cardapioPublic.href} className="w-full">
                                 <Button
                                     className="h-12 w-full justify-center bg-brand-green text-white hover:opacity-90 uppercase font-neue tracking-wide"
                                     aria-label="Abrir cardápio"
@@ -301,7 +301,6 @@ function DiaCliente25({ targetDate }: DiaCliente25Props) {
         </section>
     )
 }
-
 
 
 

@@ -10,12 +10,12 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
-import { SidebarNavItem, WebsiteNavigationLinks } from "../website-navigation.type";
+import { SidebarNavigationSection, WebsiteNavigationConfig } from "../types/navigation-types";
 import { Link, useFetcher } from "@remix-run/react";
 import { cn } from "~/lib/utils";
 
 export interface AdminSidebarProps {
-  navigationLinks: Partial<WebsiteNavigationLinks>;
+  navigationLinks: Partial<WebsiteNavigationConfig>;
   className?: string;
   children?: React.ReactNode;
 }
@@ -38,40 +38,73 @@ export function AdminSidebar({ navigationLinks }: AdminSidebarProps) {
     );
   };
 
+  const renderSidebarItems = (
+    items: SidebarNavigationSection[],
+    groupTitle: string,
+    depth = 0
+  ) => {
+    return items
+      .filter((item) => item.disabled === false)
+      .map((item) => (
+        <SidebarMenuItem key={`${groupTitle}-${item.title}-${item.href ?? "no-link"}`}>
+          <SidebarMenuButton asChild>
+            {item.href ? (
+              <Link
+                to={item.href}
+                prefetch="none"
+                className={cn(
+                  "flex gap-1",
+                  depth === 0 && "text-sm",
+                  depth > 0 && "pl-4 text-xs text-muted-foreground border-l border-muted"
+                )}
+                onClick={() =>
+                  trackNavClick({
+                    href: item.href,
+                    title: item.title,
+                    groupTitle,
+                  })
+                }
+              >
+                {item.icon && <item.icon size={15} />}
+                <span className={cn(item.highlight && "font-semibold")}>
+                  {item.title}
+                </span>
+              </Link>
+            ) : (
+              <span
+                className={cn(
+                  "flex gap-1",
+                  depth === 0 && "text-sm",
+                  depth > 0 && "pl-4 text-xs text-muted-foreground border-l border-muted"
+                )}
+              >
+                {item.icon && <item.icon size={15} />}
+                <span className={cn(item.highlight && "font-semibold")}>
+                  {item.title}
+                </span>
+              </span>
+            )}
+          </SidebarMenuButton>
+          {item.items?.length ? (
+            <SidebarMenu className="mt-1">
+              {renderSidebarItems(item.items, groupTitle, depth + 1)}
+            </SidebarMenu>
+          ) : null}
+        </SidebarMenuItem>
+      ));
+  };
+
   return (
     <Sidebar variant="floating">
       <SidebarHeader />
       <SidebarContent>
 
-        {navigationLinks?.sidebarNav && navigationLinks.sidebarNav.map((group: SidebarNavItem) => (
+        {navigationLinks?.sidebarNav && navigationLinks.sidebarNav.map((group: SidebarNavigationSection) => (
           <SidebarGroup key={group.title} className="font-body">
-            <SidebarGroupLabel>{group.title}</SidebarGroupLabel>
+            <SidebarGroupLabel className="font-semibold">{group.title}</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {group.items.filter(i => i.disabled === false)
-                  .map((navItem) => (
-                    <SidebarMenuItem key={navItem.title}>
-                      <SidebarMenuButton asChild >
-                        <Link
-                          to={navItem.href || ""}
-                          prefetch="none"
-                          className="flex gap-1"
-                          onClick={() => trackNavClick({ href: navItem.href, title: navItem.title, groupTitle: group.title })}
-                        >
-                          {navItem.icon && (
-                            <navItem.icon size={15} />
-                          )}
-                          <span
-                            className={cn(
-                              navItem.highlight && "font-semibold"
-                            )}
-                          >
-                            {navItem.title}
-                          </span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
+                {renderSidebarItems(group.items, group.title)}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
