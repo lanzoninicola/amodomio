@@ -1,6 +1,7 @@
 import WEBSITE_LINKS from "./website-links";
 import { WebsiteNavigationConfig } from "../types/navigation-types";
 import { Shield } from "lucide-react";
+import { todayLocalYMD } from "~/domain/kds";
 
 const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
   mainNav: [WEBSITE_LINKS.admin, WEBSITE_LINKS.website],
@@ -154,14 +155,14 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
       title: "Produção",
       items: [
         {
-          title: "Programação Diaria",
-          href: "/admin/producao/progamacao-diaria",
+          title: "Estoque de massa",
+          href: `/admin/kds/atendimento/${todayLocalYMD()}/estoque-massa`,
           items: [],
           disabled: false,
         },
         {
-          title: "Stock Massa",
-          href: "/admin/gerenciamento/stock-massa-init",
+          title: "Programação Diaria",
+          href: "/admin/producao/progamacao-diaria",
           items: [],
           disabled: false,
         },
