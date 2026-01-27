@@ -493,6 +493,7 @@ export class MenuItemPrismaEntity {
             previousPriceAmount: variation.previousPriceAmount ?? 0,
             discountPercentage: variation.discountPercentage ?? 0,
             lastAuditRecord: variationAuditRecords.at(-1) ?? null,
+            auditRecords: variationAuditRecords,
           };
         })
         .filter(Boolean);

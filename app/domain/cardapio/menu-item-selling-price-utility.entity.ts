@@ -38,6 +38,7 @@ export interface ComputedSellingPriceBreakdown {
   wasteCost: number;
   packagingCostAmount: number;
   doughCostAmount: number;
+  dnaPercentage: number;
   channel: {
     name: string;
     taxPerc: number;
@@ -145,6 +146,7 @@ class MenuItemSellingPriceUtilityEntity {
       wasteCost: Number((custoFichaTecnica * (wasteFactor - 1)).toFixed(2)),
       doughCostAmount: Number((size?.pizzaDoughCostAmount ?? 0).toFixed(2)),
       packagingCostAmount: Number((size?.packagingCostAmount ?? 0).toFixed(2)),
+      dnaPercentage: sellingPriceConfig.dnaPercentage ?? 0,
       channel: {
         name: channel?.name ?? "",
         taxPerc: channel?.taxPerc ?? 0,
