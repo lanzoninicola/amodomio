@@ -86,6 +86,7 @@ import { Separator } from "~/components/ui/separator";
 import { cn } from "~/lib/utils";
 import DeliveryZoneCombobox from "~/domain/kds/components/delivery-zone-combobox";
 import { computeNetRevenueAmount } from "~/domain/finance/compute-net-revenue-amount";
+import { calcWeightedCostPerc } from "~/domain/finance/calc-weighted-cost-perc";
 import { setOrderStatus } from "~/domain/kds/server/repository.server";
 import { MoneyInput } from "~/components/money-input/MoneyInput";
 import { getAvailableDoughSizes, getDoughStock, normalizeCounts, saveDoughStock, type DoughSizeOption, type DoughStockSnapshot } from "~/domain/kds/dough-stock.server";
@@ -240,6 +241,11 @@ type DashboardMeta = {
   taxPerc: number;
   marketplaceTaxPerc: number
   cardFeePerc: number;
+  costFixedPerc: number;
+  costVariablePerc: number;
+  estimatedProfitDay: number;
+  estimatedProfitMonthToDate: number;
+  costAverageBaseLabel: string;
   goalMinAmount: number;
   goalTargetAmount: number;
   pctOfMin: number; // 0..100
@@ -267,6 +273,10 @@ function mapGoalForDate(goal: any, dateStr: string): { min: number; target: numb
 export async function loader({ params }: LoaderFunctionArgs) {
   const dateStr = params.date ?? todayLocalYMD();
   const dateInt = ymdToDateInt(dateStr);
+  const year = Number(dateStr.slice(0, 4));
+  const month = Number(dateStr.slice(5, 7));
+  const monthStartStr = `${dateStr.slice(0, 7)}-01`;
+  const monthStartInt = ymdToDateInt(monthStartStr);
 
   // Dados já existentes
   const listPromise = listByDate(dateInt);
@@ -302,6 +312,10 @@ export async function loader({ params }: LoaderFunctionArgs) {
     where: { dateInt, hasMoto: true },
     _sum: { motoValue: true },
   });
+  const grossMonthRow = await prisma.kdsDailyOrderDetail.aggregate({
+    where: { dateInt: { gte: monthStartInt, lte: dateInt } },
+    _sum: { orderAmount: true },
+  });
 
   const aiqfomeChannelStr = CHANNELS[2]
   const ifoodChannelStr = CHANNELS[3];
@@ -320,6 +334,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
   const grossAmount = Number(grossRow._sum.orderAmount ?? 0);
   const cardAmount = Number(cardRow._sum.orderAmount ?? 0);
   const motoAmount = Number(motoRow._sum.motoValue ?? 0);
+  const grossMonthAmount = Number(grossMonthRow._sum.orderAmount ?? 0);
   const marketplaceAmount = Number(marketplaceRow._sum.orderAmount ?? 0);
 
   // Taxas vigentes (snapshot=false)
@@ -370,6 +385,38 @@ export async function loader({ params }: LoaderFunctionArgs) {
   const pctOfTarget =
     goalTargetAmount > 0 ? Math.min(100, (netAmount / goalTargetAmount) * 100) : 0;
 
+  const monthlyCloseRepo = (prisma as any).financialMonthlyClose;
+  let costFixedPerc = 0;
+  let costVariablePerc = 0;
+  let costAverageBaseLabel = "—";
+  if (monthlyCloseRepo && typeof monthlyCloseRepo.findMany === "function" && Number.isFinite(year) && Number.isFinite(month)) {
+    const closesForAverage = await monthlyCloseRepo.findMany({
+      where: {
+        OR: [
+          { referenceYear: { lt: year } },
+          { referenceYear: year, referenceMonth: { lte: month } },
+        ],
+      },
+      orderBy: [
+        { referenceYear: "desc" },
+        { referenceMonth: "desc" },
+      ],
+      take: 3,
+    });
+    const weightedCosts = calcWeightedCostPerc(closesForAverage);
+    costFixedPerc = weightedCosts.custoFixoPerc;
+    costVariablePerc = weightedCosts.custoVariavelPerc;
+    if (closesForAverage.length > 0) {
+      costAverageBaseLabel = closesForAverage
+        .map((close: any) => `${String(close.referenceMonth).padStart(2, "0")}/${close.referenceYear}`)
+        .join(", ");
+    }
+  }
+
+  const totalCostPerc = costFixedPerc + costVariablePerc;
+  const estimatedProfitDay = grossAmount * (1 - totalCostPerc / 100);
+  const estimatedProfitMonthToDate = grossMonthAmount * (1 - totalCostPerc / 100);
+
   const doughStock = await getDoughStock(dateInt);
   const doughUsage = listPromise.then((rows) => sumSizes(rows));
   const availableSizes = await getAvailableDoughSizes();
@@ -404,6 +451,11 @@ export async function loader({ params }: LoaderFunctionArgs) {
     netAmount,
     taxPerc,
     cardFeePerc,
+    costFixedPerc,
+    costVariablePerc,
+    estimatedProfitDay,
+    estimatedProfitMonthToDate,
+    costAverageBaseLabel,
     goalMinAmount,
     goalTargetAmount,
     pctOfMin,
@@ -1863,6 +1915,22 @@ export default function GridKdsPage() {
                         <span>Cartão {dashboard.cardFeePerc?.toFixed(2)}%</span>
                         <span>Imposto {dashboard.taxPerc?.toFixed(2)}%</span>
                         <span>Marketplace {dashboard.marketplaceTaxPerc?.toFixed(2)}%</span>
+                      </div>
+                      <div className="text-[11px] text-slate-500">
+                        Custo médio: fixo {dashboard.costFixedPerc.toFixed(2)}% + variável {dashboard.costVariablePerc.toFixed(2)}%
+                      </div>
+                      <div className="text-[11px] text-slate-500">
+                        Base (3 meses): {dashboard.costAverageBaseLabel}
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-center space-y-1">
+                          <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Lucro est. dia</div>
+                          <div className="text-2xl font-bold text-slate-800 tabular-nums">{fmtBRL(dashboard.estimatedProfitDay).slice(3, 99)}</div>
+                        </div>
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-center space-y-1">
+                          <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Lucro est. mês</div>
+                          <div className="text-2xl font-bold text-slate-800 tabular-nums">{fmtBRL(dashboard.estimatedProfitMonthToDate).slice(3, 99)}</div>
+                        </div>
                       </div>
 
                     </div>
