@@ -305,6 +305,13 @@ export default function AdminFinanceiroFechamentoMensal() {
     closes.find((c) => c.referenceMonth === referenceMonth && c.referenceYear === referenceYear) ??
     closes[0];
   const totals = calcMonthlyCloseTotals(currentDefaults);
+  const lastClose = React.useMemo(() => {
+    if (!currentDefaults) return undefined;
+    const prevMonth = currentDefaults.referenceMonth === 1 ? 12 : currentDefaults.referenceMonth - 1;
+    const prevYear = currentDefaults.referenceMonth === 1 ? currentDefaults.referenceYear - 1 : currentDefaults.referenceYear;
+    return closes.find((c) => c.referenceMonth === prevMonth && c.referenceYear === prevYear);
+  }, [closes, currentDefaults]);
+  const lastTotals = calcMonthlyCloseTotals(lastClose);
 
   const receitaBase = React.useMemo(() => {
     const extrato = (currentDefaults as any)?.receitaExtratoBancoAmount ?? 0;
@@ -486,6 +493,18 @@ export default function AdminFinanceiroFechamentoMensal() {
   const margemStatus = ratePercent(totals.margemContribPerc, "margem");
   const resultadoStatus = ratePercent(totals.resultadoLiquidoPercBruta, "resultado");
   const coberturaStatus = rateCobertura(coberturaPreview);
+  const custoFixoPercBruta = totals.receitaBruta > 0 ? (totals.custoFixoTotal / totals.receitaBruta) * 100 : 0;
+  const custoVariavelPercBruta = totals.receitaBruta > 0 ? (totals.custoVariavelTotal / totals.receitaBruta) * 100 : 0;
+  const hasLastClose = Boolean(lastClose);
+  const diffTone = (value: number) => (value > 0 ? "text-emerald-700" : value < 0 ? "text-red-700" : "text-slate-500");
+  const diffBadgeClass = (value: number) =>
+    value > 0
+      ? "text-emerald-700"
+      : value < 0
+        ? "text-red-700"
+        : "text-slate-600";
+  const diffLabel = (value: number, suffix = "") =>
+    `${value > 0 ? "+" : ""}${value.toFixed(2)}${suffix}`;
   const isLoadingData = loadStatus === "loading";
   const formHidden = isLoadingData || isSwitchingPeriod;
   const loadStatusMeta = {
@@ -500,8 +519,15 @@ export default function AdminFinanceiroFechamentoMensal() {
     green: "bg-emerald-100 text-emerald-800",
     amber: "bg-amber-100 text-amber-900",
   }[loadStatusMeta[loadStatus].tone];
+  const formatShortPeriodLabel = (month: number, year: number) => {
+    const label = MONTH_OPTIONS.find((m) => m.value === month)?.label ?? String(month);
+    return `${String(label).slice(0, 3)}/${String(year).slice(-2)}`;
+  };
   const currentMonthLabel = MONTH_OPTIONS.find((m) => m.value === referenceMonth)?.label ?? referenceMonth;
   const currentPeriodLabel = `${currentMonthLabel} / ${referenceYear}`;
+  const lastCloseLabel = lastClose
+    ? formatShortPeriodLabel(lastClose.referenceMonth, lastClose.referenceYear)
+    : null;
   const lastClosingLabel = currentDefaults
     ? `${MONTH_OPTIONS.find((m) => m.value === currentDefaults.referenceMonth)?.label ?? currentDefaults.referenceMonth} / ${currentDefaults.referenceYear}`
     : null;
@@ -624,88 +650,240 @@ export default function AdminFinanceiroFechamentoMensal() {
 
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <Card>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          <Card className="rounded-2xl border bg-white/90 shadow-sm">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm">Margem de contribuição</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm">
-              <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-[11px] uppercase tracking-wide text-slate-900">
+                  Margem de contribuição
+                </CardTitle>
                 <span className={`inline-flex items-center rounded-full px-2 py-1 text-[11px] font-medium ${badgeClasses(margemStatus.tone)}`}>
                   {margemStatus.label}
                 </span>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              <div className="flex items-start justify-between gap-2">
                 <span className="text-xs text-muted-foreground text-right">{margemStatus.text}</span>
               </div>
               <p className="text-xs text-muted-foreground">
                 Receita de caixa menos custos variáveis. É o que sobra para pagar os fixos.
               </p>
-              <div className="flex justify-between">
-                <span>Valor</span>
-                <span className="font-mono ">{formatMoneyString(totals.margemContrib, 2)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>% sobre receita de caixa</span>
-                <span className="font-mono ">{totals.margemContribPerc.toFixed(2)}%</span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-center space-y-1">
+                  <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-600">Valor</div>
+                  <div className="text-2xl font-bold text-slate-900 tabular-nums">
+                  {formatMoneyString(totals.margemContrib, 2)}
+                  </div>
+                  {hasLastClose && (
+                    <div className={`text-[11px] font-semibold ${diffTone(totals.margemContrib - lastTotals.margemContrib)}`}>
+                      {formatMoneyString(totals.margemContrib - lastTotals.margemContrib, 2)} vs {lastCloseLabel}
+                    </div>
+                  )}
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-center space-y-1">
+                  <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-600">% Receita de caixa</div>
+                  <div className="text-2xl font-bold text-slate-900 tabular-nums">
+                    {totals.margemContribPerc.toFixed(2)}%
+                  </div>
+                  {hasLastClose && (
+                    <div className={`text-[11px] font-semibold ${diffTone(totals.margemContribPerc - lastTotals.margemContribPerc)}`}>
+                      {diffLabel(totals.margemContribPerc - lastTotals.margemContribPerc, "%")} vs {lastCloseLabel}
+                    </div>
+                  )}
+                </div>
               </div>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="rounded-2xl border bg-white/90 shadow-sm">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm">Resultado líquido</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm">
-              <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-[11px] uppercase tracking-wide text-slate-900">
+                  Resultado líquido
+                </CardTitle>
                 <span className={`inline-flex items-center rounded-full px-2 py-1 text-[11px] font-medium ${badgeClasses(resultadoStatus.tone)}`}>
                   {resultadoStatus.label}
                 </span>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              <div className="flex items-start justify-between gap-2">
                 <span className="text-xs text-muted-foreground text-right">{resultadoStatus.text}</span>
               </div>
               <p className="text-xs text-muted-foreground">
                 Margem de contribuição menos custos fixos. Lucro/prejuízo do mês.
               </p>
-              <div className="flex justify-between">
-                <span>Valor</span>
-                <span className="font-mono ">{formatMoneyString(totals.resultadoLiquido, 2)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Ajuste não operacional</span>
-                <span className="font-mono ">
-                  {formatMoneyString(totals.entradasNaoOperacionais - totals.saidasNaoOperacionais, 2)}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span>% sobre receita bruta</span>
-                <span className={`font-mono  ${totals.resultadoLiquido >= 0 ? "text-green-600" : "text-red-600"}`}>
-                  {totals.resultadoLiquidoPercBruta.toFixed(2)}%
-                </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-center space-y-1">
+                  <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-600">Valor</div>
+                  <div
+                    className={`text-2xl font-bold tabular-nums ${totals.resultadoLiquido >= 0 ? "text-emerald-700" : "text-red-700"}`}
+                  >
+                    {formatMoneyString(totals.resultadoLiquido, 2)}
+                  </div>
+                  {hasLastClose && (
+                    <div
+                      className={`inline-flex items-center justify-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${diffBadgeClass(
+                        totals.resultadoLiquido - lastTotals.resultadoLiquido,
+                      )}`}
+                    >
+                      {formatMoneyString(totals.resultadoLiquido - lastTotals.resultadoLiquido, 2)} vs {lastCloseLabel}
+                    </div>
+                  )}
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-center space-y-1">
+                  <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-600">Ajuste não operacional</div>
+                  <div className="text-2xl font-bold text-slate-900 tabular-nums">
+                    {formatMoneyString(totals.entradasNaoOperacionais - totals.saidasNaoOperacionais, 2)}
+                  </div>
+                  {hasLastClose && (
+                    <div
+                      className={`inline-flex items-center justify-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${diffBadgeClass(
+                        (totals.entradasNaoOperacionais - totals.saidasNaoOperacionais) -
+                        (lastTotals.entradasNaoOperacionais - lastTotals.saidasNaoOperacionais),
+                      )}`}
+                    >
+                      {formatMoneyString(
+                        (totals.entradasNaoOperacionais - totals.saidasNaoOperacionais) -
+                        (lastTotals.entradasNaoOperacionais - lastTotals.saidasNaoOperacionais),
+                        2,
+                      )}{" "}
+                      vs {lastCloseLabel}
+                    </div>
+                  )}
+                </div>
               </div>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="rounded-2xl border bg-white/90 shadow-sm">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm">Ponto de equilíbrio</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm">
-              <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-[11px] uppercase tracking-wide text-slate-900">
+                  Ponto de equilíbrio
+                </CardTitle>
                 <span className={`inline-flex items-center rounded-full px-2 py-1 text-[11px] font-medium ${badgeClasses(coberturaStatus.tone)}`}>
                   {coberturaStatus.label}
                 </span>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              <div className="flex items-start justify-between gap-2">
                 <span className="text-xs text-muted-foreground text-right">{coberturaStatus.text}</span>
               </div>
               <p className="text-xs text-muted-foreground">
                 Receita de caixa mínima para zerar lucro. Cobertura mostra o quanto a receita atual alcança do PE.
               </p>
-              <div className="flex justify-between">
-                <span>Valor</span>
-                <span className="font-mono">{formatMoneyString(totals.pontoEquilibrio, 2)}</span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-center space-y-1">
+                  <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-600">Valor</div>
+                  <div className="text-2xl font-bold text-slate-900 tabular-nums">
+                    {formatMoneyString(totals.pontoEquilibrio, 2)}
+                  </div>
+                  {hasLastClose && (
+                    <div className={`text-[11px] font-semibold ${diffTone(totals.pontoEquilibrio - lastTotals.pontoEquilibrio)}`}>
+                      {formatMoneyString(totals.pontoEquilibrio - lastTotals.pontoEquilibrio, 2)} vs {lastCloseLabel}
+                    </div>
+                  )}
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-center space-y-1">
+                  <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-600">Cobertura</div>
+                  <div className="text-2xl font-bold text-slate-900 tabular-nums">
+                    {totals.receitaBruta > 0 ? ((totals.receitaBruta / (totals.pontoEquilibrio || 1)) * 100).toFixed(2) : "0.00"}%
+                  </div>
+                  {hasLastClose && (
+                    <div
+                      className={`text-[11px] font-semibold ${diffTone(
+                        (totals.receitaBruta > 0 ? (totals.receitaBruta / (totals.pontoEquilibrio || 1)) * 100 : 0) -
+                        (lastTotals.receitaBruta > 0 ? (lastTotals.receitaBruta / (lastTotals.pontoEquilibrio || 1)) * 100 : 0),
+                      )}`}
+                    >
+                      {diffLabel(
+                        (totals.receitaBruta > 0 ? (totals.receitaBruta / (totals.pontoEquilibrio || 1)) * 100 : 0) -
+                        (lastTotals.receitaBruta > 0 ? (lastTotals.receitaBruta / (lastTotals.pontoEquilibrio || 1)) * 100 : 0),
+                        "%",
+                      )}{" "}
+                      vs {lastCloseLabel}
+                    </div>
+                  )}
+                </div>
               </div>
-              <div className="flex justify-between">
-                <span>Cobertura</span>
-                <span className="font-mono">
-                  {totals.receitaBruta > 0 ? ((totals.receitaBruta / (totals.pontoEquilibrio || 1)) * 100).toFixed(2) : "0.00"}%
-                </span>
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-2xl border bg-white/90 shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-[11px] uppercase tracking-wide text-slate-900">
+                % receita bruta
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              <p className="text-xs text-muted-foreground">
+                Percentuais de custos fixos e variáveis em relação à receita bruta.
+              </p>
+              <div className="grid grid-cols-1 gap-3">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 space-y-2">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-[11px] uppercase tracking-wide font-semibold text-slate-600">Custos fixos</span>
+                    <span className="text-lg font-bold text-slate-900 tabular-nums">{custoFixoPercBruta.toFixed(2)}%</span>
+                  </div>
+                  {hasLastClose && (
+                    <div className="flex justify-start">
+                      <span
+                        className={`inline-flex items-center justify-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${diffBadgeClass(
+                          custoFixoPercBruta - (lastTotals.receitaBruta > 0 ? (lastTotals.custoFixoTotal / lastTotals.receitaBruta) * 100 : 0),
+                        )}`}
+                      >
+                        {diffLabel(
+                          custoFixoPercBruta - (lastTotals.receitaBruta > 0 ? (lastTotals.custoFixoTotal / lastTotals.receitaBruta) * 100 : 0),
+                          "%",
+                        )}{" "}
+                        vs {lastCloseLabel}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 space-y-2">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-[11px] uppercase tracking-wide font-semibold text-slate-600">Custos variáveis</span>
+                    <span className="text-lg font-bold text-slate-900 tabular-nums">{custoVariavelPercBruta.toFixed(2)}%</span>
+                  </div>
+                  {hasLastClose && (
+                    <div className="flex justify-start">
+                      <span
+                        className={`inline-flex items-center justify-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${diffBadgeClass(
+                          custoVariavelPercBruta - (lastTotals.receitaBruta > 0 ? (lastTotals.custoVariavelTotal / lastTotals.receitaBruta) * 100 : 0),
+                        )}`}
+                      >
+                        {diffLabel(
+                          custoVariavelPercBruta - (lastTotals.receitaBruta > 0 ? (lastTotals.custoVariavelTotal / lastTotals.receitaBruta) * 100 : 0),
+                          "%",
+                        )}{" "}
+                        vs {lastCloseLabel}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 space-y-2">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-[11px] uppercase tracking-wide font-semibold text-slate-600">Lucro</span>
+                    <span className={`text-lg font-bold tabular-nums ${totals.resultadoLiquidoPercBruta >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                      {totals.resultadoLiquidoPercBruta.toFixed(2)}%
+                    </span>
+                  </div>
+                  {hasLastClose && (
+                    <div className="flex justify-start">
+                      <span
+                        className={`inline-flex items-center justify-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${diffBadgeClass(
+                          totals.resultadoLiquidoPercBruta - lastTotals.resultadoLiquidoPercBruta,
+                        )}`}
+                      >
+                        {diffLabel(totals.resultadoLiquidoPercBruta - lastTotals.resultadoLiquidoPercBruta, "%")} vs {lastCloseLabel}
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
             </CardContent>
           </Card>
