@@ -1,6 +1,7 @@
 import WEBSITE_LINKS from "./website-links";
 import { WebsiteNavigationConfig } from "../types/navigation-types";
 import { Shield } from "lucide-react";
+import { todayLocalYMD } from "~/domain/kds";
 
 const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
   mainNav: [WEBSITE_LINKS.admin, WEBSITE_LINKS.website],
@@ -82,26 +83,46 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
       title: "Gerenciamento Cardápio",
       items: [
         {
+          title: "Cardápios",
+          href: "",
+          items: [
+            {
+              title: "Cardápio Delivery",
+              href: "/admin/gerenciamento/cardapio/main/list",
+              items: [],
+              disabled: false,
+            },
+            {
+              title: "Cardápio Pizza Al Taglio",
+              href: "/admin/gerenciamento/cardapio-pizza-al-taglio",
+              items: [],
+              disabled: false,
+            },
+          ],
+          disabled: false,
+        },
+        {
+          title: "Estrutura",
+          href: "",
+          items: [
+            {
+              title: "Grupos",
+              href: "/admin/gerenciamento/cardapio/groups",
+              items: [],
+              disabled: false,
+            },
+            {
+              title: "Tamanhos",
+              href: "/admin/gerenciamento/cardapio/sizes",
+              items: [],
+              disabled: false,
+            },
+          ],
+          disabled: false,
+        },
+        {
           title: "Configurações",
           href: "/admin/gerenciamento/cardapio/settings",
-          items: [],
-          disabled: false,
-        },
-        {
-          title: "Grupos",
-          href: "/admin/gerenciamento/cardapio/groups",
-          items: [],
-          disabled: false,
-        },
-        {
-          title: "Tamanhos",
-          href: "/admin/gerenciamento/cardapio/sizes",
-          items: [],
-          disabled: false,
-        },
-        {
-          title: "Cardápio Delivery",
-          href: "/admin/gerenciamento/cardapio/main/list",
           items: [],
           disabled: false,
         },
@@ -125,6 +146,17 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
           disabled: false,
         },
         {
+          title: "Promo 'Fotos Cardapio'",
+          href: "/admin/gerenciamento/pizza-promo",
+          items: [],
+          disabled: false,
+        },
+      ],
+    },
+    {
+      title: "PRECIFICAÇÃO",
+      items: [
+        {
           title: "Custo Ficha Tecnica",
           href: "/admin/gerenciamento/cardapio/cost-management",
           items: [],
@@ -137,14 +169,8 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
           disabled: false,
         },
         {
-          title: "Cardápio Pizza Al Taglio",
-          href: "/admin/gerenciamento/cardapio-pizza-al-taglio",
-          items: [],
-          disabled: false,
-        },
-        {
-          title: "Promo 'Fotos Cardapio'",
-          href: "/admin/gerenciamento/pizza-promo",
+          title: "DNA",
+          href: "/admin/financeiro/dna",
           items: [],
           disabled: false,
         },
@@ -154,14 +180,14 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
       title: "Produção",
       items: [
         {
-          title: "Programação Diaria",
-          href: "/admin/producao/progamacao-diaria",
+          title: "Estoque de massa",
+          href: `/admin/kds/atendimento/${todayLocalYMD()}/estoque-massa`,
           items: [],
           disabled: false,
         },
         {
-          title: "Stock Massa",
-          href: "/admin/gerenciamento/stock-massa-init",
+          title: "Programação Diaria",
+          href: "/admin/producao/progamacao-diaria",
           items: [],
           disabled: false,
         },
@@ -170,12 +196,6 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
     {
       title: "Financeiro",
       items: [
-        {
-          title: "DNA",
-          href: "/admin/financeiro/dna",
-          items: [],
-          disabled: false,
-        },
         {
           title: "Resumo financeiro",
           href: "/admin/financeiro/resumo-financeiro",

@@ -9,6 +9,9 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
 } from "@/components/ui/sidebar"
 import { SidebarNavigationSection, WebsiteNavigationConfig } from "../types/navigation-types";
 import { Link, useFetcher } from "@remix-run/react";
@@ -38,12 +41,46 @@ export function AdminSidebar({ navigationLinks }: AdminSidebarProps) {
     );
   };
 
-  const renderSidebarItems = (
-    items: SidebarNavigationSection[],
-    groupTitle: string,
-    depth = 0
-  ) => {
-    return items
+  const renderSubItems = (items: SidebarNavigationSection[], groupTitle: string) => (
+    <SidebarMenuSub>
+      {items
+        .filter((item) => item.disabled === false)
+        .map((item) => (
+          <SidebarMenuSubItem key={`${groupTitle}-${item.title}-${item.href ?? "no-link"}-sub`}>
+            <SidebarMenuSubButton asChild>
+              {item.href ? (
+                <Link
+                  to={item.href}
+                  prefetch="none"
+                  onClick={() =>
+                    trackNavClick({
+                      href: item.href,
+                      title: item.title,
+                      groupTitle,
+                    })
+                  }
+                >
+                  {item.icon && <item.icon size={14} />}
+                  <span className={cn(item.highlight && "font-semibold")}>
+                    {item.title}
+                  </span>
+                </Link>
+              ) : (
+                <span>
+                  {item.icon && <item.icon size={14} />}
+                  <span className={cn(item.highlight && "font-semibold")}>
+                    {item.title}
+                  </span>
+                </span>
+              )}
+            </SidebarMenuSubButton>
+          </SidebarMenuSubItem>
+        ))}
+    </SidebarMenuSub>
+  );
+
+  const renderSidebarItems = (items: SidebarNavigationSection[], groupTitle: string) =>
+    items
       .filter((item) => item.disabled === false)
       .map((item) => (
         <SidebarMenuItem key={`${groupTitle}-${item.title}-${item.href ?? "no-link"}`}>
@@ -52,11 +89,7 @@ export function AdminSidebar({ navigationLinks }: AdminSidebarProps) {
               <Link
                 to={item.href}
                 prefetch="none"
-                className={cn(
-                  "flex gap-1",
-                  depth === 0 && "text-sm",
-                  depth > 0 && "pl-4 text-xs text-muted-foreground border-l border-muted"
-                )}
+                className="text-sm"
                 onClick={() =>
                   trackNavClick({
                     href: item.href,
@@ -71,13 +104,7 @@ export function AdminSidebar({ navigationLinks }: AdminSidebarProps) {
                 </span>
               </Link>
             ) : (
-              <span
-                className={cn(
-                  "flex gap-1",
-                  depth === 0 && "text-sm",
-                  depth > 0 && "pl-4 text-xs text-muted-foreground border-l border-muted"
-                )}
-              >
+              <span className="text-sm">
                 {item.icon && <item.icon size={15} />}
                 <span className={cn(item.highlight && "font-semibold")}>
                   {item.title}
@@ -85,14 +112,9 @@ export function AdminSidebar({ navigationLinks }: AdminSidebarProps) {
               </span>
             )}
           </SidebarMenuButton>
-          {item.items?.length ? (
-            <SidebarMenu className="mt-1">
-              {renderSidebarItems(item.items, groupTitle, depth + 1)}
-            </SidebarMenu>
-          ) : null}
+          {item.items?.length ? renderSubItems(item.items, groupTitle) : null}
         </SidebarMenuItem>
       ));
-  };
 
   return (
     <Sidebar variant="floating">
