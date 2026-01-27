@@ -1745,7 +1745,7 @@ export default function GridKdsPage() {
                     : predictionData.theoreticalTimelineReadyMap;
 
                 return (
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 w-full items-stretch">
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4 w-full items-stretch">
                     {/* Card previsão */}
                     <div className={summaryCardClass}>
                       <div className="flex items-start justify-between gap-3">
@@ -1890,7 +1890,7 @@ export default function GridKdsPage() {
                     </div>
 
                     {/* Card financeiro */}
-                    <div className={summaryCardClass}>
+                    <div className={`${summaryCardClass} md:col-span-2 xl:col-span-2`}>
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
                           <BadgeDollarSign className="h-4 w-4" /> Meta financeira do dia
@@ -1951,7 +1951,7 @@ export default function GridKdsPage() {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 gap-3">
                         <div className="rounded-lg border border-white/60 bg-white/80 px-3 py-2 space-y-1.5">
                           <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-500">Meta Mínima (dia)</div>
                           <div className={`text-3xl font-black ${statusTextColor} tabular-nums leading-none mb-2`}>
