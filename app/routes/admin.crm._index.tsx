@@ -4,12 +4,12 @@ import { Form, Link, useActionData, useLoaderData, useNavigation } from "@remix-
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ImageOff } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import prisma from "~/lib/prisma/client.server";
 import { normalize_phone_e164_br } from "~/domain/crm/normalize-phone.server";
 import { Separator } from "~/components/ui/separator";
+import { dayjs } from "~/lib/dayjs";
 
 type LoaderData = {
   customers: Array<{
@@ -27,6 +27,12 @@ type LoaderData = {
     total: number;
   };
   query: string;
+  stats: {
+    total: number;
+    addedYesterday: number;
+    addedLastWeek: number;
+    addedLastMonth: number;
+  };
 };
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -43,7 +49,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
     }
     : undefined;
 
-  const [total, customers] = await Promise.all([
+  const now = dayjs();
+  const startOfToday = now.startOf("day");
+  const startOfYesterday = startOfToday.subtract(1, "day");
+  const startOfLastWeek = startOfToday.subtract(7, "day");
+  const startOfLastMonth = startOfToday.subtract(30, "day");
+
+  const [total, customers, totalAll, addedYesterday, addedLastWeek, addedLastMonth] = await Promise.all([
     prisma.crmCustomer.count({ where }),
     prisma.crmCustomer.findMany({
       skip: (page - 1) * pageSize,
@@ -60,6 +72,29 @@ export async function loader({ request }: LoaderFunctionArgs) {
         },
       },
     }),
+    prisma.crmCustomer.count(),
+    prisma.crmCustomer.count({
+      where: {
+        created_at: {
+          gte: startOfYesterday.toDate(),
+          lt: startOfToday.toDate(),
+        },
+      },
+    }),
+    prisma.crmCustomer.count({
+      where: {
+        created_at: {
+          gte: startOfLastWeek.toDate(),
+        },
+      },
+    }),
+    prisma.crmCustomer.count({
+      where: {
+        created_at: {
+          gte: startOfLastMonth.toDate(),
+        },
+      },
+    }),
   ]);
 
   return json<LoaderData>({
@@ -70,10 +105,21 @@ export async function loader({ request }: LoaderFunctionArgs) {
       events: c._count.events,
       tags: c._count.tags,
       tagBadges: c.tags.map((t) => t.tag.label || t.tag.key),
-      profileImageUrl: c.images[0]?.url ?? null,
+      profileImageUrl: (() => {
+        const url = c.images[0]?.url?.trim();
+        if (!url) return null;
+        const normalized = url.toLowerCase();
+        return normalized === "null" || normalized === "undefined" ? null : url;
+      })(),
     })),
     pagination: { page, pageSize, total },
     query,
+    stats: {
+      total: totalAll,
+      addedYesterday,
+      addedLastWeek,
+      addedLastMonth,
+    },
   });
 }
 
@@ -112,11 +158,12 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function AdminCrmIndex() {
-  const { customers, pagination, query } = useLoaderData<typeof loader>();
+  const { customers, pagination, query, stats } = useLoaderData<typeof loader>();
   const actionData = useActionData<ActionData>();
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
   const [showQuick, setShowQuick] = useState(false);
+  const numberFormatter = new Intl.NumberFormat("pt-BR");
 
   return (
     <div className="grid gap-5 font-neue">
@@ -163,8 +210,36 @@ export default function AdminCrmIndex() {
         </div>
       </div>
 
-
-
+      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>Total de registros</CardDescription>
+            <CardTitle className="text-2xl">{numberFormatter.format(stats.total)}</CardTitle>
+          </CardHeader>
+          <CardContent className="text-xs text-muted-foreground">Base completa de clientes</CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>Adicionados ontem</CardDescription>
+            <CardTitle className="text-2xl">{numberFormatter.format(stats.addedYesterday)}</CardTitle>
+          </CardHeader>
+          <CardContent className="text-xs text-muted-foreground">Últimas 24h fechadas</CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>Última semana</CardDescription>
+            <CardTitle className="text-2xl">{numberFormatter.format(stats.addedLastWeek)}</CardTitle>
+          </CardHeader>
+          <CardContent className="text-xs text-muted-foreground">Novos em 7 dias</CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>Último mês</CardDescription>
+            <CardTitle className="text-2xl">{numberFormatter.format(stats.addedLastMonth)}</CardTitle>
+          </CardHeader>
+          <CardContent className="text-xs text-muted-foreground">Novos em 30 dias</CardContent>
+        </Card>
+      </section>
 
       {showQuick ? (
         <Card id="quick-create">
@@ -227,67 +302,36 @@ export default function AdminCrmIndex() {
             </PageLink>
           </div>
         </div>
-        <div className="overflow-hidden rounded-lg border">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/40">
-                <TableHead className="text-left">Perfil</TableHead>
-                <TableHead className="text-left">Nome</TableHead>
-                <TableHead className="text-left">Telefone</TableHead>
-                <TableHead className="text-left">Eventos</TableHead>
-                <TableHead className="text-left">Tags</TableHead>
-                <TableHead className="text-left">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {customers.length ? (
-                customers.map((c) => (
-                  <TableRow key={c.id}>
-                    <TableCell>
-                      {c.profileImageUrl ? (
-                        <img
-                          src={c.profileImageUrl}
-                          alt={c.name ? `Foto de ${c.name}` : "Foto do cliente"}
-                          className="h-10 w-10 rounded-full object-cover"
-                          loading="lazy"
-                        />
-                      ) : (
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full border text-muted-foreground">
-                          <ImageOff className="h-5 w-5" aria-label="Sem foto" />
-                        </div>
-                      )}
-                    </TableCell>
-                    <TableCell>{c.name || "-"}</TableCell>
-                    <TableCell className="font-mono text-xs">{c.phone_e164}</TableCell>
-                    <TableCell>{c.events}</TableCell>
-                    <TableCell className="space-x-1">
-                      {c.tagBadges.length ? (
-                        c.tagBadges.map((tag) => (
-                          <span key={tag} className="inline-flex rounded-full bg-muted px-2 py-0.5 text-xs">
-                            {tag}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="text-xs text-muted-foreground">Nenhuma</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Link to={`/admin/crm/${c.id}/profile`} className="text-primary underline">
-                        Abrir
-                      </Link>
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
-                    Nenhum cliente ainda.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
+        {customers.length ? (
+          <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            {customers.map((c) => (
+              <Link
+                key={c.id}
+                to={`/admin/crm/${c.id}/profile`}
+                className="group flex flex-col items-center gap-2 rounded-lg border bg-card p-3 text-center transition hover:border-primary/40 hover:bg-muted/30"
+              >
+                {c.profileImageUrl ? (
+                  <img
+                    src={c.profileImageUrl}
+                    alt={c.name ? `Foto de ${c.name}` : "Foto do cliente"}
+                    className="h-14 w-14 rounded-full object-cover"
+                    loading="lazy"
+                  />
+                ) : (
+                  <div className="flex h-14 w-14 items-center justify-center rounded-full border text-muted-foreground">
+                    <ImageOff className="h-5 w-5" aria-label="Sem foto" />
+                  </div>
+                )}
+                <div className="text-sm font-medium">{c.name || "-"}</div>
+                <div className="text-xs text-muted-foreground">{c.phone_e164}</div>
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-lg border py-10 text-center text-sm text-muted-foreground">
+            Nenhum cliente ainda.
+          </div>
+        )}
       </section>
     </div>
   );
