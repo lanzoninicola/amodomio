@@ -1,6 +1,6 @@
 export const CHANNELS = [
   "WHATS/PRESENCIAL/TELE",
-  "MOGO",
+  "CARDAPIO",
   "AIQFOME",
   "IFOOD",
 ] as const;

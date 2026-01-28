@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { todayLocalYMD, ymdToDateInt } from "@/domain/kds";
+import { calcWeightedCostPerc } from "~/domain/finance/calc-weighted-cost-perc";
 import { computeNetRevenueAmount } from "~/domain/finance/compute-net-revenue-amount";
 import { getDailyAggregates, listMotoboy } from "~/domain/kds/server/repository.server";
 import prisma from "~/lib/prisma/client.server";
@@ -85,6 +86,8 @@ type DailyAgg = {
  * ========================= */
 export async function loader({ params }: LoaderFunctionArgs) {
   const dateStr = params.date ?? todayLocalYMD();
+  const { y: year, mIdx } = ymdParts(dateStr);
+  const month = mIdx + 1;
 
   // mês atual (com base no :date)
   const monthStart = firstDayOfMonth(dateStr);
@@ -101,7 +104,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
   const dateIntsPrev = ymdsPrev.map(ymdToDateInt);
 
   // Carrega agregados diários (financeiro) e listas de motoboy para os dois meses
-  const [aggsCurr, motoCurr, aggsPrev, motoPrev, finance] = await Promise.all([
+  const [aggsCurr, motoCurr, aggsPrev, motoPrev, finance, closesForAverage] = await Promise.all([
     Promise.all(dateIntsCurr.map((di) => getDailyAggregates(di))) as Promise<DailyAgg[]>,
     Promise.all(dateIntsCurr.map((di) => listMotoboy(di))) as Promise<any[][]>,
     Promise.all(dateIntsPrev.map((di) => getDailyAggregates(di))) as Promise<DailyAgg[]>,
@@ -110,6 +113,21 @@ export async function loader({ params }: LoaderFunctionArgs) {
       where: { isSnapshot: false },
       select: { taxaCartaoPerc: true, impostoPerc: true, taxaMarketplacePerc: true },
     }),
+    (prisma as any).financialMonthlyClose?.findMany
+      ? (prisma as any).financialMonthlyClose.findMany({
+        where: {
+          OR: [
+            { referenceYear: { lt: year } },
+            { referenceYear: year, referenceMonth: { lte: month } },
+          ],
+        },
+        orderBy: [
+          { referenceYear: "desc" },
+          { referenceMonth: "desc" },
+        ],
+        take: 3,
+      })
+      : Promise.resolve([]),
   ]);
 
   // Redução mensal (totais simples)
@@ -143,6 +161,11 @@ export async function loader({ params }: LoaderFunctionArgs) {
     vendaMarketplaceAmount: totalsPrev.marketplace,
     taxaMarketplacePerc,
   });
+
+  const weightedCosts = calcWeightedCostPerc(closesForAverage ?? []);
+  const totalCostPerc = weightedCosts.custoFixoPerc + weightedCosts.custoVariavelPerc;
+  const estimatedResultCurr = totalsCurr.total * (1 - totalCostPerc / 100);
+  const estimatedResultPrev = totalsPrev.total * (1 - totalCostPerc / 100);
 
   // Redução mensal (por canal / por status)
   const sumMap = (rows: AggRow[] = [], map = new Map<string, AggRow>()) => {
@@ -192,8 +215,8 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
     // totais
     totals: {
-      curr: { ...totalsCurr, net: netCurr },
-      prev: { ...totalsPrev, net: netPrev },
+      curr: { ...totalsCurr, net: netCurr, estimatedResult: estimatedResultCurr },
+      prev: { ...totalsPrev, net: netPrev, estimatedResult: estimatedResultPrev },
     },
 
     // tabelas
@@ -280,6 +303,21 @@ export default function RelatorioMensalKdsPage() {
                 <div className="text-xs uppercase tracking-wide text-muted-foreground">Bruto</div>
                 <div className="text-2xl font-mono">R$ {fmt(data.totals.curr.total)}</div>
                 {compBadge("Mês anterior", data.totals.curr.total, data.totals.prev.total, true)}
+              </div>
+              <div className="md:col-span-2">
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Resultado estimado</div>
+                <div
+                  className={`text-2xl font-mono ${
+                    data.totals.curr.estimatedResult > 0
+                      ? "text-emerald-600"
+                      : data.totals.curr.estimatedResult < 0
+                        ? "text-red-600"
+                        : "text-slate-900"
+                  }`}
+                >
+                  R$ {fmt(data.totals.curr.estimatedResult)}
+                </div>
+                {compBadge("Mês anterior", data.totals.curr.estimatedResult, data.totals.prev.estimatedResult, true)}
               </div>
             </div>
           </CardContent>

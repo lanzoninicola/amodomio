@@ -131,6 +131,10 @@ function fmtBRL(n: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2 }).format(n || 0);
 }
 
+function pad2(value: number) {
+  return String(value).padStart(2, "0");
+}
+
 function CommandNumberInput({
   value,
   onChange,
@@ -245,6 +249,8 @@ type DashboardMeta = {
   costVariablePerc: number;
   estimatedProfitDay: number;
   estimatedProfitMonthToDate: number;
+  estimatedProfitPrevMonth: number;
+  prevMonthLabel: string;
   costAverageBaseLabel: string;
   goalMinAmount: number;
   goalTargetAmount: number;
@@ -277,6 +283,15 @@ export async function loader({ params }: LoaderFunctionArgs) {
   const month = Number(dateStr.slice(5, 7));
   const monthStartStr = `${dateStr.slice(0, 7)}-01`;
   const monthStartInt = ymdToDateInt(monthStartStr);
+  const prevMonthStartDate = new Date(year, month - 2, 1);
+  const prevMonthYear = prevMonthStartDate.getFullYear();
+  const prevMonthMonth = prevMonthStartDate.getMonth() + 1;
+  const prevMonthEndDate = new Date(prevMonthYear, prevMonthMonth, 0);
+  const prevMonthStartStr = `${prevMonthYear}-${pad2(prevMonthMonth)}-01`;
+  const prevMonthEndStr = `${prevMonthYear}-${pad2(prevMonthMonth)}-${pad2(prevMonthEndDate.getDate())}`;
+  const prevMonthStartInt = ymdToDateInt(prevMonthStartStr);
+  const prevMonthEndInt = ymdToDateInt(prevMonthEndStr);
+  const prevMonthLabel = `${pad2(prevMonthMonth)}/${prevMonthYear}`;
 
   // Dados já existentes
   const listPromise = listByDate(dateInt);
@@ -316,6 +331,10 @@ export async function loader({ params }: LoaderFunctionArgs) {
     where: { dateInt: { gte: monthStartInt, lte: dateInt } },
     _sum: { orderAmount: true },
   });
+  const grossPrevMonthRow = await prisma.kdsDailyOrderDetail.aggregate({
+    where: { dateInt: { gte: prevMonthStartInt, lte: prevMonthEndInt } },
+    _sum: { orderAmount: true },
+  });
 
   const aiqfomeChannelStr = CHANNELS[2]
   const ifoodChannelStr = CHANNELS[3];
@@ -335,6 +354,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
   const cardAmount = Number(cardRow._sum.orderAmount ?? 0);
   const motoAmount = Number(motoRow._sum.motoValue ?? 0);
   const grossMonthAmount = Number(grossMonthRow._sum.orderAmount ?? 0);
+  const grossPrevMonthAmount = Number(grossPrevMonthRow._sum.orderAmount ?? 0);
   const marketplaceAmount = Number(marketplaceRow._sum.orderAmount ?? 0);
 
   // Taxas vigentes (snapshot=false)
@@ -416,6 +436,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
   const totalCostPerc = costFixedPerc + costVariablePerc;
   const estimatedProfitDay = grossAmount * (1 - totalCostPerc / 100);
   const estimatedProfitMonthToDate = grossMonthAmount * (1 - totalCostPerc / 100);
+  const estimatedProfitPrevMonth = grossPrevMonthAmount * (1 - totalCostPerc / 100);
 
   const doughStock = await getDoughStock(dateInt);
   const doughUsage = listPromise.then((rows) => sumSizes(rows));
@@ -455,6 +476,8 @@ export async function loader({ params }: LoaderFunctionArgs) {
     costVariablePerc,
     estimatedProfitDay,
     estimatedProfitMonthToDate,
+    estimatedProfitPrevMonth,
+    prevMonthLabel,
     costAverageBaseLabel,
     goalMinAmount,
     goalTargetAmount,
@@ -1628,6 +1651,10 @@ export default function GridKdsPage() {
       status === "REOPENED" ? "Dia reaberto" :
         status === "CLOSED" ? "Dia fechado" :
           "Aguardando abertura";
+  const prevMonthDiff = dashboard.estimatedProfitMonthToDate - dashboard.estimatedProfitPrevMonth;
+  const prevMonthDiffArrow = prevMonthDiff > 0 ? "▲" : prevMonthDiff < 0 ? "▼" : "•";
+  const prevMonthDiffTone = prevMonthDiff > 0 ? "text-emerald-700" : prevMonthDiff < 0 ? "text-red-700" : "text-slate-500";
+  const prevMonthDiffPrefix = prevMonthDiff > 0 ? "+" : prevMonthDiff < 0 ? "-" : "";
 
   return (
     <div className="space-y-4 mt-6">
@@ -1916,20 +1943,27 @@ export default function GridKdsPage() {
                         <span>Imposto {dashboard.taxPerc?.toFixed(2)}%</span>
                         <span>Marketplace {dashboard.marketplaceTaxPerc?.toFixed(2)}%</span>
                       </div>
-                      <div className="text-[11px] text-slate-500">
-                        Custo médio: fixo {dashboard.costFixedPerc.toFixed(2)}% + variável {dashboard.costVariablePerc.toFixed(2)}%
-                      </div>
-                      <div className="text-[11px] text-slate-500">
-                        Base (3 meses): {dashboard.costAverageBaseLabel}
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500">
+                        <span>
+                          Custo médio: fixo {dashboard.costFixedPerc.toFixed(2)}% + variável {dashboard.costVariablePerc.toFixed(2)}%
+                        </span>
+                        <span>Base (3 meses): {dashboard.costAverageBaseLabel}</span>
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-center space-y-1">
-                          <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Lucro est. dia</div>
-                          <div className="text-2xl font-bold text-slate-800 tabular-nums">{fmtBRL(dashboard.estimatedProfitDay).slice(3, 99)}</div>
+                          <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Resultado estimado dia</div>
+                          <div className={`text-2xl font-bold tabular-nums ${dashboard.estimatedProfitDay > 0 ? "text-emerald-700" : dashboard.estimatedProfitDay < 0 ? "text-red-700" : "text-slate-900"}`}>
+                            {fmtBRL(dashboard.estimatedProfitDay).slice(3, 99)}
+                          </div>
                         </div>
                         <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-center space-y-1">
-                          <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Lucro est. mês</div>
-                          <div className="text-2xl font-bold text-slate-800 tabular-nums">{fmtBRL(dashboard.estimatedProfitMonthToDate).slice(3, 99)}</div>
+                          <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Resultado estimado mês</div>
+                          <div className={`text-2xl font-bold tabular-nums ${dashboard.estimatedProfitMonthToDate > 0 ? "text-emerald-700" : dashboard.estimatedProfitMonthToDate < 0 ? "text-red-700" : "text-slate-900"}`}>
+                            {fmtBRL(dashboard.estimatedProfitMonthToDate).slice(3, 99)}
+                          </div>
+                          <div className={`text-[11px] font-semibold ${prevMonthDiffTone}`}>
+                            {prevMonthDiffArrow} Mês anterior ({dashboard.prevMonthLabel}): {prevMonthDiffPrefix}{fmtBRL(Math.abs(prevMonthDiff))}
+                          </div>
                         </div>
                       </div>
 
