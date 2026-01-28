@@ -41,8 +41,8 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
           disabled: false,
         },
         {
-          title: "Gerenciamento Sabores",
-          href: "/admin/atendimento/gerenciamento-sabores",
+          title: "Lista de sabores",
+          href: "/admin/atendimento/lista-sabores",
           items: [],
           disabled: false,
         },
