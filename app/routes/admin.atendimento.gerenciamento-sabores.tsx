@@ -25,6 +25,8 @@ import { MenuItemSellingPriceVariation } from "@prisma/client";
 import { Badge } from "~/components/ui/badge";
 import formatDecimalPlaces from "~/utils/format-decimal-places";
 import formatMoneyString from "~/utils/format-money-string";
+import { Switch } from "~/components/ui/switch";
+import { Label } from "~/components/ui/label";
 
 
 export const loader = async () => {
@@ -351,11 +353,9 @@ function CardapioItemSearch({
   setIsSearching: React.Dispatch<React.SetStateAction<boolean>>
 }) {
   const [search, setSearch] = useState("")
+  const [includeHidden, setIncludeHidden] = useState(false)
 
-  const handleSearch = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const value = event.target.value
-    setSearch(value)
-
+  const applySearch = (value: string, shouldIncludeHidden: boolean) => {
     if (!value) {
       setIsSearching(false)
       return setFilteredItems(items.filter(i => i.visible === true && i.active === true))
@@ -365,6 +365,7 @@ function CardapioItemSearch({
 
     const searchedItems = items
       .filter(item => item.active === true)
+      .filter(item => (shouldIncludeHidden ? true : item.visible === true))
       .filter(item => {
         const tags = item?.tags?.public || []
 
@@ -379,15 +380,35 @@ function CardapioItemSearch({
     setFilteredItems(searchedItems)
   }
 
+  const handleSearch = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const value = event.target.value
+    setSearch(value)
+    applySearch(value, includeHidden)
+  }
+
   return (
-    <div className="flex flex-col gap-4 items-center w-full col-span-4">
+    <div className="flex flex-col md:flex-row gap-2 md:gap-4 items-center w-full col-span-4">
       <Input
         name="search"
-        className="w-full py-4 text-lg bg-white"
+        className="w-full md:w-[60%] py-4 text-lg bg-white"
         placeholder="Pesquisar no cardápio..."
         onChange={handleSearch}
         value={search}
       />
+      <div className="flex items-center gap-2 self-start md:self-auto">
+        <Switch
+          id="search-hidden-flavors"
+          checked={includeHidden}
+          onCheckedChange={(value) => {
+            const nextValue = !!value
+            setIncludeHidden(nextValue)
+            applySearch(search, nextValue)
+          }}
+        />
+        <Label htmlFor="search-hidden-flavors" className="text-xs text-muted-foreground">
+          Incluir sabores ocultos na busca
+        </Label>
+      </div>
     </div>
   )
 }
