@@ -1,5 +1,5 @@
 import { json, type LoaderFunctionArgs, type MetaFunction } from "@remix-run/node";
-import { Form, useLoaderData } from "@remix-run/react";
+import { Form, Link, useLoaderData } from "@remix-run/react";
 import { useMemo, useState } from "react";
 import { menuItemSellingPriceHandler } from "~/domain/cardapio/menu-item-selling-price-handler.server";
 import { menuItemSizePrismaEntity } from "~/domain/cardapio/menu-item-size.entity.server";
@@ -34,9 +34,7 @@ type LoaderData = {
   filters: {
     sizeKey: string;
     channelKey: string;
-    range: string;
-    start: string;
-    end: string;
+    salesImportId: string | null;
   };
   thresholds: {
     popularityAvg: number;
@@ -52,6 +50,8 @@ type LoaderData = {
   };
   sizes: { id: string; key: string; name: string }[];
   channels: { id: string; key: string; name: string }[];
+  imports: { id: string; month: number; year: number; source: string | null }[];
+  activeImport: { id: string; month: number; year: number; source: string | null } | null;
   quadrants: Record<MatrixQuadrant, MatrixItem[]>;
   unpricedItems: { id: string; name: string }[];
   unmatched: { name: string; quantity: number }[];
@@ -68,72 +68,20 @@ const normalize = (value: string) =>
 
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-const parseDateInput = (value: string | null) => {
-  if (!value) return null;
-  const parsed = new Date(`${value}T00:00:00`);
-  if (Number.isNaN(parsed.getTime())) return null;
-  return parsed;
-};
-
-const toYmd = (date: Date) => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-};
-
-const addDays = (date: Date, days: number) => {
-  const copy = new Date(date);
-  copy.setDate(copy.getDate() + days);
-  return copy;
-};
-
-const rangeOptions = [
-  { value: "7d", label: "Últimos 7 dias", days: 7 },
-  { value: "30d", label: "Últimos 30 dias", days: 30 },
-  { value: "90d", label: "Últimos 90 dias", days: 90 },
-  { value: "180d", label: "Últimos 180 dias", days: 180 },
-  { value: "total", label: "Total (sem filtro)", days: null },
-];
+const pad2 = (value: number) => String(value).padStart(2, "0");
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const sizes = await menuItemSizePrismaEntity.findAll();
   const channels = await menuItemSellingChannelPrismaEntity.findAll();
+  const imports = await prismaClient.menuEngineeringImport.findMany({
+    select: { id: true, month: true, year: true, source: true },
+    orderBy: [{ year: "desc" }, { month: "desc" }],
+  });
 
   const requestedSizeKey = url.searchParams.get("size") ?? "pizza-medium";
   const requestedChannelKey = url.searchParams.get("channel") ?? "cardapio";
-  const range = url.searchParams.get("range") ?? "90d";
-
-  const startParam = url.searchParams.get("start");
-  const endParam = url.searchParams.get("end");
-
-  const now = new Date();
-  let startDate = parseDateInput(startParam);
-  let endDate = parseDateInput(endParam);
-
-  if (!startDate && !endDate) {
-    const rangeConfig = rangeOptions.find((option) => option.value === range) ?? rangeOptions[2];
-    if (rangeConfig.days != null) {
-      startDate = addDays(now, -rangeConfig.days);
-      endDate = now;
-    }
-  }
-
-  const startLabel = startDate ? toYmd(startDate) : "";
-  const endLabel = endDate ? toYmd(endDate) : "";
-
-  const orderDateFilter =
-    startDate || endDate
-      ? {
-          order: {
-            paidAt: {
-              ...(startDate ? { gte: startDate } : {}),
-              ...(endDate ? { lt: addDays(endDate, 1) } : {}),
-            },
-          },
-        }
-      : {};
+  const requestedImportId = url.searchParams.get("salesImport");
 
   const resolvedSizeKey =
     sizes.find((size) => size.key === requestedSizeKey)?.key ?? sizes[0]?.key ?? "";
@@ -142,23 +90,20 @@ export async function loader({ request }: LoaderFunctionArgs) {
     channels[0]?.key ??
     "";
 
-  const [items, orderItems] = await Promise.all([
-    menuItemSellingPriceHandler.loadMany({
-      channelKey: resolvedChannelKey,
-      sizeKey: resolvedSizeKey,
-    }),
-    prismaClient.customerOrderItem.findMany({
-      where: {
-        isFee: false,
-        isDiscount: false,
-        ...orderDateFilter,
-      },
-      select: {
-        productName: true,
-        quantity: true,
-      },
-    }),
-  ]);
+  const resolvedImportId = requestedImportId ?? imports[0]?.id ?? null;
+  const activeImport = resolvedImportId
+    ? await prismaClient.menuEngineeringImport.findUnique({
+        where: { id: resolvedImportId },
+        select: { id: true, month: true, year: true, source: true, items: true },
+      })
+    : null;
+
+  const items = await menuItemSellingPriceHandler.loadMany({
+    channelKey: resolvedChannelKey,
+    sizeKey: resolvedSizeKey,
+  });
+
+  const importedToppings = activeImport?.items ?? [];
 
   const sizeTokens = sizes
     .flatMap((size) => [size.name, size.key])
@@ -178,8 +123,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const salesByItem = new Map<string, number>();
   const unmatchedMap = new Map<string, number>();
 
-  orderItems.forEach((orderItem) => {
-    const rawName = orderItem.productName ?? "";
+  importedToppings.forEach((toppingRow) => {
+    const rawName = toppingRow.topping ?? "";
     const normalized = normalize(rawName);
     let cleaned = normalized;
 
@@ -208,11 +153,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
     if (matchedId) {
       salesByItem.set(
         matchedId,
-        (salesByItem.get(matchedId) ?? 0) + (orderItem.quantity ?? 0)
+        (salesByItem.get(matchedId) ?? 0) + (toppingRow.quantity ?? 0)
       );
     } else {
       const key = rawName.trim() || "(sem nome)";
-      unmatchedMap.set(key, (unmatchedMap.get(key) ?? 0) + (orderItem.quantity ?? 0));
+      unmatchedMap.set(key, (unmatchedMap.get(key) ?? 0) + (toppingRow.quantity ?? 0));
     }
   });
 
@@ -299,9 +244,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     filters: {
       sizeKey: resolvedSizeKey,
       channelKey: resolvedChannelKey,
-      range,
-      start: startLabel,
-      end: endLabel,
+      salesImportId: resolvedImportId,
     },
     thresholds: {
       popularityAvg,
@@ -317,6 +260,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
     },
     sizes: sizes.map((size) => ({ id: size.id, key: size.key, name: size.name })),
     channels: channels.map((channel) => ({ id: channel.id, key: channel.key, name: channel.name })),
+    imports,
+    activeImport: activeImport
+      ? {
+          id: activeImport.id,
+          month: activeImport.month,
+          year: activeImport.year,
+          source: activeImport.source ?? null,
+        }
+      : null,
     quadrants,
     unpricedItems,
     unmatched,
@@ -428,12 +380,18 @@ export default function AdminGerenciamentoCardapioMenuEngineering() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold">Menu Engineering Matrix</h1>
-        <p className="text-sm text-muted-foreground">
-          Popularidade (vendas) × Margem de contribuição (lucro). Baseado em vendas reais e nas
-          variações de preço/custo do cardápio.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex flex-col gap-2">
+          <h1 className="text-2xl font-semibold">Menu Engineering Matrix</h1>
+          <p className="text-sm text-muted-foreground">
+            Popularidade (vendas) × Margem de contribuição (lucro). Baseado nas vendas importadas.
+          </p>
+        </div>
+        <Button asChild variant="outline">
+          <Link to="/admin/gerenciamento/cardapio/dashboard/menu-engineering/import">
+            Importar vendas
+          </Link>
+        </Button>
       </div>
 
       <Card>
@@ -444,7 +402,7 @@ export default function AdminGerenciamentoCardapioMenuEngineering() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Form method="get" className="grid gap-4 md:grid-cols-5">
+          <Form method="get" className="grid gap-4 md:grid-cols-4">
             <label className="flex flex-col gap-1 text-sm">
               Canal
               <select
@@ -476,41 +434,26 @@ export default function AdminGerenciamentoCardapioMenuEngineering() {
             </label>
 
             <label className="flex flex-col gap-1 text-sm">
-              Período
+              Vendas (Mês/Ano)
               <select
-                name="range"
-                defaultValue={data.filters.range}
+                name="salesImport"
+                defaultValue={data.filters.salesImportId ?? ""}
                 className="h-10 rounded-md border border-input bg-background px-3"
               >
-                {rangeOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
+                {data.imports.length === 0 ? (
+                  <option value="">Sem importações</option>
+                ) : (
+                  data.imports.map((imp) => (
+                    <option key={imp.id} value={imp.id}>
+                      {pad2(imp.month)}/{imp.year}
+                      {imp.source ? ` · ${imp.source}` : ""}
+                    </option>
+                  ))
+                )}
               </select>
             </label>
 
-            <label className="flex flex-col gap-1 text-sm">
-              Início
-              <input
-                type="date"
-                name="start"
-                defaultValue={data.filters.start}
-                className="h-10 rounded-md border border-input bg-background px-3"
-              />
-            </label>
-
-            <label className="flex flex-col gap-1 text-sm">
-              Fim
-              <input
-                type="date"
-                name="end"
-                defaultValue={data.filters.end}
-                className="h-10 rounded-md border border-input bg-background px-3"
-              />
-            </label>
-
-            <div className="md:col-span-5">
+            <div className="md:col-span-4">
               <Button type="submit">Aplicar filtros</Button>
             </div>
           </Form>
@@ -569,13 +512,13 @@ export default function AdminGerenciamentoCardapioMenuEngineering() {
             <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
               <span>Canal: {data.filters.channelKey}</span>
               <span>Tamanho: {data.filters.sizeKey}</span>
-              {data.filters.start || data.filters.end ? (
-                <span>
-                  Período: {data.filters.start || "—"} → {data.filters.end || "—"}
-                </span>
-              ) : (
-                <span>Período: {rangeOptions.find((opt) => opt.value === data.filters.range)?.label}</span>
-              )}
+              <span>
+                Vendas:{" "}
+                {data.activeImport
+                  ? `${pad2(data.activeImport.month)}/${data.activeImport.year}`
+                  : "Sem importação"}
+              </span>
+              {data.activeImport?.source ? <span>Fonte: {data.activeImport.source}</span> : null}
             </div>
           </div>
         </CardHeader>
