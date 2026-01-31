@@ -10,10 +10,6 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  /// the url is override when the Prisma Client object is created
-  /// this url is used only for the "migrate" commands
-  url      = env("PRISMA_DB_DEV_URL")
-  /// url      = env("PRISMA_DB_URL")
 }
 
 model CardapioSetting {
@@ -902,6 +898,34 @@ model ImportSessionRecord {
   @@map("import_sessions_records")
 }
 
+model MenuEngineeringImport {
+  id        String                      @id @default(uuid())
+  month     Int
+  year      Int
+  source    String?                     @map("source")
+  createdAt DateTime                    @default(now()) @map("created_at")
+  updatedAt DateTime                    @default(now()) @updatedAt @map("updated_at")
+  items     MenuEngineeringImportItem[]
+
+  @@unique([month, year])
+  @@map("menu_engineering_imports")
+}
+
+model MenuEngineeringImportItem {
+  id        String   @id @default(uuid())
+  importId  String   @map("import_id")
+  topping   String
+  quantity  Int
+  value     Float
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  import MenuEngineeringImport @relation(fields: [importId], references: [id], onDelete: Cascade)
+
+  @@index([importId])
+  @@map("menu_engineering_import_items")
+}
+
 model ImportSessionRecordBankTransaction {
   id              String        @id @default(uuid())
   importSessionId String        @map("import_session_id")
@@ -1650,7 +1674,6 @@ model CrmCustomerImage {
   @@index([customer_id], name: "crm_customer_image_customer_id_idx")
   @@map("crm_customer_image")
 }
-
 
 model CrmCampaign {
   id          String            @id @default(uuid())

@@ -1,4 +1,6 @@
 import { Prisma, PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { Pool } from "pg";
 
 const env = process.env.NODE_ENV || "production";
 const prismaDatasourceUrl = process.env?.PRISMA_DB_URL;
@@ -6,6 +8,8 @@ const prismaDevDatasourceUrl = process.env?.PRISMA_DB_DEV_URL;
 
 const datasourceUrl =
   env === "development" ? prismaDevDatasourceUrl : prismaDatasourceUrl;
+const pool = datasourceUrl ? new Pool({ connectionString: datasourceUrl }) : undefined;
+const adapter = pool ? new PrismaPg(pool) : undefined;
 
 class AMMPrismaClient<
   T extends Prisma.PrismaClientOptions = Prisma.PrismaClientOptions
@@ -29,6 +33,6 @@ class AMMPrismaClient<
   }
 }
 
-const prismaClient = new AMMPrismaClient({ datasourceUrl });
+const prismaClient = new AMMPrismaClient({ adapter });
 
 export default prismaClient;

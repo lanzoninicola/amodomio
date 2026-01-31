@@ -12,6 +12,12 @@ npm run dev
 
 This starts your app in development mode, which will purge the server require cache when Remix rebuilds assets so you don't need a process manager restarting the express server.
 
+## Prisma
+
+Prisma configuration, env vars, and migration notes are documented in:
+
+- `prisma/README.md`
+
 ## Deployment
 
 First, build your app for production:
