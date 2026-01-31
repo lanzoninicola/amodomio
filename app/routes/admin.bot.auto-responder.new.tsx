@@ -23,7 +23,7 @@ export async function action({ request }: ActionFunctionArgs) {
       activeTo: form.get("activeTo") ? new Date(String(form.get("activeTo"))) : null,
     },
   });
-  return redirect("/admin/wpp/auto-responder");
+  return redirect("/admin/bot/auto-responder");
 }
 
 export default function NewRulePage() {

@@ -117,11 +117,6 @@ export interface EnvironmentVariables {
   MODE: "development" | "production"
   GTM_ID?: string
   CLOUDINARY_CLOUD_NAME?: string
-  STORE_OPENING_CONFIG?: {
-    OPENING_DAYS: number[]
-    OPENING_HOUR: number
-    CLOSING_HOUR: number
-  }
   REST_API_SECRET_KEY?: string
 }
 
@@ -129,16 +124,10 @@ export interface EnvironmentVariables {
 export async function loader({ request }: LoaderFunctionArgs) {
 
   const env = import.meta.env
-
   const ENV: EnvironmentVariables = {
     MODE: env.VITE_MODE ?? "development",
     GTM_ID: env.VITE_GOOGLE_TAG_MANAGER_ID ?? "",
     CLOUDINARY_CLOUD_NAME: env.VITE_CLOUDINARY_CLOUD_NAME ?? "",
-    STORE_OPENING_CONFIG: {
-      OPENING_DAYS: env.VITE_STORE_OPEN_DAYWEEK ? env.VITE_STORE_OPEN_DAYWEEK.split(",").map(Number) : [],
-      OPENING_HOUR: env?.STORE_OPEN_HH_START ? parseInt(env.VITE_STORE_OPEN_HH_START) : 1800,
-      CLOSING_HOUR: env?.STORE_OPEN_HH_END ? parseInt(env.VITE_STORE_OPEN_HH_END) : 1800,
-    }
   }
 
   return ok({

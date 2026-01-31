@@ -46,7 +46,11 @@ import Autoplay from "embla-carousel-autoplay";
 import CardapioItemImageSingle from "~/domain/cardapio/components/cardapio-item-image-single/cardapio-item-image-single";
 import prismaClient from "~/lib/prisma/client.server";
 import { Tag } from "@prisma/client";
+import { Heart } from "lucide-react";
 import { useSoundEffects } from "~/components/sound-effects/use-sound-effects";
+import { getOrCreateMenuItemInterestClientId } from "~/domain/cardapio/menu-item-interest/menu-item-interest.client";
+
+const INTEREST_ENDPOINT = "/api/menu-item-interest";
 
 export const headers: HeadersFunction = () => ({
     "Cache-Control": "s-maxage=1, stale-while-revalidate=59"
@@ -249,7 +253,7 @@ export default function CardapioWebIndex() {
             <Separator className="my-6 md:hidden" />
 
             {/* TOPO: Halloween + Destaques (igual ao teu) */}
-            <div className="flex flex-col mt-24 md:grid md:grid-cols-2 md:items-start md:mt-40 md:justify-center">
+            <div className="flex flex-col mt-24 gap-8 md:grid md:grid-cols-2 md:gap-0 md:items-start md:mt-52 md:mb-10 md:justify-center">
                 {/* Bloco Halloween */}
                 {/* <Suspense fallback={<Loading />}>
                     <Await resolve={items}>
@@ -276,11 +280,86 @@ export default function CardapioWebIndex() {
                 <Suspense fallback={<Loading />}>
                     <Await resolve={items}>
                         {(items) => {
+                            const flatItems = isGrouped(items)
+                                ? (items as GroupedItems[]).flatMap((g) => g.menuItems)
+                                : (items as MenuItemWithAssociations[]);
+
+                            const topMarginItems = [...(flatItems as MenuItemWithAssociations[])]
+                                .sort(
+                                    (a, b) =>
+                                        getItemMarginPerc(b) - getItemMarginPerc(a)
+                                )
+                                .slice(0, 12);
+
+                            const chefSuggestionGroups = buildRandomGroups(topMarginItems, 4);
+
+                            const getLikesAmount = (item: MenuItem | MenuItemWithAssociations) =>
+                                (item as MenuItemWithAssociations)?.likes?.amount ?? 0;
+
+                            const topLikedItems = [...flatItems]
+                                .sort((a, b) => getLikesAmount(b) - getLikesAmount(a))
+                                .slice(0, 4);
+
                             return (
-                                <section id="destaque" className="flex flex-col gap-4 mx-2 md:flex-1 ">
-                                    {/* @ts-ignore */}
-                                    <CardapioItemListDestaque items={items} title="Sugestões do chef" tagFilter="em-destaque" />
-                                </section>
+                                <>
+                                    <section
+                                        id="destaque"
+                                        className="flex flex-col gap-4 mx-2 md:flex-1"
+                                    >
+                                        <ChefSuggestionsCarousel
+                                            title="Sugestões do chef"
+                                            subtitle="Os sabores selecionados pelo chef para vocês, com combinações especiais e ótimas escolhas para aproveitar o melhor do cardápio."
+                                            groups={chefSuggestionGroups}
+                                        />
+                                    </section>
+
+                                    <section
+                                        id="mais-curtidas"
+                                        className="flex flex-col gap-4 mx-2 md:flex-1"
+                                    >
+                                        <div className="p-2">
+                                            <h3 className="font-neue text-base md:text-xl font-semibold tracking-wide mb-2 flex items-center gap-2">
+                                                <Heart aria-hidden="true" className="h-4 w-4 md:h-5 md:w-5" />
+                                                <span>Mais curtidas</span>
+                                                <Heart aria-hidden="true" className="h-4 w-4 md:h-5 md:w-5" />
+                                            </h3>
+                                            <p className="font-neue text-xs md:text-sm tracking-wide text-muted-foreground mb-3">
+                                                Nossos clientes gostam de mostrar o que é bom. Aqui está uma seleção dos
+                                                sabores que eles mais curtem e querem compartilhar com todo mundo.
+                                            </p>
+                                            <div className="grid grid-cols-2 gap-3 md:grid-cols-2">
+                                                {topLikedItems.map((i) => {
+                                                    const featuredImage =
+                                                        i.MenuItemGalleryImage?.find((img) => img.isPrimary) ||
+                                                        i.MenuItemGalleryImage?.[0];
+                                                    return (
+                                                        <Link
+                                                            key={i.id}
+                                                            to={`/cardapio/${i.slug}`}
+                                                            className="group relative block overflow-hidden rounded-md"
+                                                        >
+                                                            <div className="relative h-[160px] md:h-[200px]">
+                                                                <CardapioItemImageSingle
+                                                                    src={featuredImage?.secureUrl || ""}
+                                                                    placeholder={i.imagePlaceholderURL || ""}
+                                                                    placeholderIcon={false}
+                                                                    cnContainer="h-full w-full"
+                                                                    enableOverlay={false}
+                                                                />
+                                                                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-90" />
+                                                                <div className="absolute bottom-2 left-2 right-2">
+                                                                    <span className="font-neue text-white text-xs tracking-widest uppercase font-semibold drop-shadow leading-none">
+                                                                        {i.name}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        </Link>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    </section>
+                                </>
                             );
                         }}
                     </Await>
@@ -561,6 +640,8 @@ function CardapioItemsGrid({ items }: { items: MenuItemWithAssociations[] }) {
     const [isDesktop, setIsDesktop] = useState(false);
 
     const itemRefs = useRef<Record<string, HTMLLIElement | null>>({});
+    const trackedViewRef = useRef<Set<string>>(new Set());
+    const trackedOpenDetailRef = useRef<Set<string>>(new Set());
 
     useEffect(() => {
         const mq = window.matchMedia("(min-width: 1024px)");
@@ -571,6 +652,39 @@ function CardapioItemsGrid({ items }: { items: MenuItemWithAssociations[] }) {
     }, []);
 
     if (!items?.length) return null;
+
+    const trackInterest = useCallback((type: "view_list" | "open_detail", menuItemId: string) => {
+        const clientId = getOrCreateMenuItemInterestClientId();
+
+        fetch(INTEREST_ENDPOINT, {
+            method: "post",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ type, menuItemId, clientId }),
+            keepalive: true
+        }).catch((error) => {
+            console.warn("[cardapio] falha ao registrar interesse", error);
+        });
+    }, []);
+
+    const trackViewOnce = useCallback(
+        (menuItemId: string) => {
+            if (trackedViewRef.current.has(menuItemId)) return;
+            trackedViewRef.current.add(menuItemId);
+            trackInterest("view_list", menuItemId);
+        },
+        [trackInterest]
+    );
+
+    const trackOpenDetailOnce = useCallback(
+        (menuItemId: string) => {
+            if (trackedOpenDetailRef.current.has(menuItemId)) return;
+            trackedOpenDetailRef.current.add(menuItemId);
+            trackInterest("open_detail", menuItemId);
+        },
+        [trackInterest]
+    );
 
     const scrollToItemTop = (id: string) => {
         const el = itemRefs.current[id];
@@ -591,6 +705,7 @@ function CardapioItemsGrid({ items }: { items: MenuItemWithAssociations[] }) {
             const next = willExpand ? id : null;
 
             if (willExpand) {
+                trackOpenDetailOnce(id);
                 requestAnimationFrame(() => {
                     requestAnimationFrame(() => scrollToItemTop(id));
                 });
@@ -606,7 +721,7 @@ function CardapioItemsGrid({ items }: { items: MenuItemWithAssociations[] }) {
           mt-4 grid grid-cols-2 gap-3
           sm:grid-cols-3
           lg:grid-cols-4
-          xl:grid-cols-5
+          xl:grid-cols-4
         "
             >
                 {items.map((item) => (
@@ -615,6 +730,9 @@ function CardapioItemsGrid({ items }: { items: MenuItemWithAssociations[] }) {
                         item={item}
                         isExpanded={expandedItemId === item.id}
                         onClick={() => onCardClick(item.id)}
+                        onOpenDetail={() => trackOpenDetailOnce(item.id)}
+                        onView={() => trackViewOnce(item.id)}
+                        isDesktop={isDesktop}
                         innerRef={(el) => (itemRefs.current[item.id] = el)}
                     />
                 ))}
@@ -628,20 +746,55 @@ function CardapioGridItem({
     item,
     isExpanded,
     onClick,
+    onOpenDetail,
+    onView,
+    isDesktop,
     innerRef
 }: {
     item: MenuItemWithAssociations;
     isExpanded: boolean;
     onClick: () => void;
+    onOpenDetail?: () => void;
+    onView?: () => void;
+    isDesktop: boolean;
     innerRef?: (el: HTMLLIElement | null) => void;
 }) {
+    const localRef = useRef<HTMLLIElement | null>(null);
     const featuredImage =
         item.MenuItemGalleryImage?.find((img) => img.isPrimary) ||
         item.MenuItemGalleryImage?.[0];
 
+    const setRefs = useCallback(
+        (el: HTMLLIElement | null) => {
+            localRef.current = el;
+            innerRef?.(el);
+        },
+        [innerRef]
+    );
+
+    useEffect(() => {
+        const element = localRef.current;
+        if (!element || !onView) return;
+
+        let tracked = false;
+        const observer = new IntersectionObserver(
+            (entries) => {
+                const entry = entries[0];
+                if (!entry?.isIntersecting || tracked) return;
+                tracked = true;
+                onView();
+                observer.disconnect();
+            },
+            { threshold: 0.5 }
+        );
+
+        observer.observe(element);
+        return () => observer.disconnect();
+    }, [onView]);
+
     return (
         <li
-            ref={innerRef}
+            ref={setRefs}
             className={cn(
                 "flex flex-col rounded-md border border-transparent",
                 "transition-all duration-300 ease-in-out",
@@ -649,64 +802,135 @@ function CardapioGridItem({
                 isExpanded ? "col-span-2 lg:col-span-1" : "col-span-1"
             )}
         >
-            <div className="flex flex-col" onClick={onClick}>
+            {isDesktop ? (
+                <Link
+                    to={`/cardapio/${item.slug}`}
+                    className="flex flex-col cursor-pointer"
+                    aria-label={`Abrir ${item.name}`}
+                    onClick={onOpenDetail}
+                >
+                    <div className="group overflow-hidden rounded-t-md relative focus:outline-none focus:ring-2 focus:ring-black/20">
+                        <div
+                            className={cn(
+                                "relative transition-all duration-300 ease-in-out",
+                                isExpanded ? "h-[260px]" : "h-[150px]"
+                            )}
+                        >
+                            <CardapioItemImageSingle
+                                src={featuredImage?.secureUrl || ""}
+                                placeholder={item.imagePlaceholderURL || ""}
+                                placeholderIcon={false}
+                                cnPlaceholderText={cn(
+                                    "text-black font-urw text-sm tracking-tight",
+                                    isExpanded && "text-lg"
+                                )}
+                                cnPlaceholderContainer="from-zinc-200 via-zinc-100 to-white "
+                                cnContainer="w-full h-full"
+                                enableOverlay={false}
+                            />
+
+                            {item.meta?.isBestSeller && (
+                                <div className="absolute left-1 top-2 rounded-sm bg-black px-2 py-[2px] text-[10px] font-medium text-white backdrop-blur font-neue tracking-wide">
+                                    <span>Mais vendido</span>
+                                </div>
+                            )}
+                            {item.tags?.all?.includes("produtos-italianos") && (
+                                <div className="absolute left-1 top-2 rounded-sm bg-black px-2 py-[2px] text-[10px] font-medium text-white backdrop-blur font-neue tracking-wide">
+                                    <span>Com produtos italianos</span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="px-1 pb-2 pt-1 flex flex-col bg-white rounded-b-md sm:pt-2">
+                        <span
+                            className={cn(
+                                "font-neue line-clamp-1 font-medium text-xs tracking-wide sm:tracking-widest md:uppercase ",
+                                isExpanded && "text-md"
+                            )}
+                        >
+                            {item.name}
+                        </span>
+
+                        <span
+                            className={cn(
+                                "font-neue text-xs tracking-wide leading-[110%] sm:text-base md:text-sm line-clamp-2 my-1",
+                                isExpanded && "text-md line-clamp-none mb-2 leading-[120%]"
+                            )}
+                        >
+                            {item.ingredients}
+                        </span>
+                        <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                            <span>Ver ingredientes</span>
+                            <span aria-hidden="true">...</span>
+                        </span>
+                    </div>
+                </Link>
+            ) : (
                 <div
+                    className="flex flex-col cursor-pointer"
+                    onClick={onClick}
                     role="button"
                     aria-label={`Abrir ${item.name}`}
-                    className="group overflow-hidden rounded-t-md relative focus:outline-none focus:ring-2 focus:ring-black/20"
                 >
-                    <div
-                        className={cn(
-                            "relative transition-all duration-300 ease-in-out",
-                            isExpanded ? "h-[260px]" : "h-[150px]"
-                        )}
-                    >
-                        <CardapioItemImageSingle
-                            src={featuredImage?.secureUrl || ""}
-                            placeholder={item.imagePlaceholderURL || ""}
-                            placeholderIcon={false}
-                            cnPlaceholderText={cn(
-                                "text-black font-urw text-sm tracking-tight",
-                                isExpanded && "text-lg"
+                    <div className="group overflow-hidden rounded-t-md relative focus:outline-none focus:ring-2 focus:ring-black/20">
+                        <div
+                            className={cn(
+                                "relative transition-all duration-300 ease-in-out",
+                                isExpanded ? "h-[260px]" : "h-[150px]"
                             )}
-                            cnPlaceholderContainer="from-zinc-200 via-zinc-100 to-white "
-                            cnContainer="w-full h-full"
-                            enableOverlay={false}
-                        />
+                        >
+                            <CardapioItemImageSingle
+                                src={featuredImage?.secureUrl || ""}
+                                placeholder={item.imagePlaceholderURL || ""}
+                                placeholderIcon={false}
+                                cnPlaceholderText={cn(
+                                    "text-black font-urw text-sm tracking-tight",
+                                    isExpanded && "text-lg"
+                                )}
+                                cnPlaceholderContainer="from-zinc-200 via-zinc-100 to-white "
+                                cnContainer="w-full h-full"
+                                enableOverlay={false}
+                            />
 
-                        {item.meta?.isBestSeller && (
-                            <div className="absolute left-1 top-2 rounded-sm bg-black px-2 py-[2px] text-[10px] font-medium text-white backdrop-blur font-neue tracking-wide">
-                                <span>Mais vendido</span>
-                            </div>
-                        )}
-                        {item.tags?.all?.includes("produtos-italianos") && (
-                            <div className="absolute left-1 top-2 rounded-sm bg-black px-2 py-[2px] text-[10px] font-medium text-white backdrop-blur font-neue tracking-wide">
-                                <span>Com produtos italianos</span>
-                            </div>
-                        )}
+                            {item.meta?.isBestSeller && (
+                                <div className="absolute left-1 top-2 rounded-sm bg-black px-2 py-[2px] text-[10px] font-medium text-white backdrop-blur font-neue tracking-wide">
+                                    <span>Mais vendido</span>
+                                </div>
+                            )}
+                            {item.tags?.all?.includes("produtos-italianos") && (
+                                <div className="absolute left-1 top-2 rounded-sm bg-black px-2 py-[2px] text-[10px] font-medium text-white backdrop-blur font-neue tracking-wide">
+                                    <span>Com produtos italianos</span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="px-1 pb-2 pt-1 flex flex-col bg-white rounded-b-md">
+                        <span
+                            className={cn(
+                                "font-neue line-clamp-1 font-medium text-xs tracking-wide sm:text-base",
+                                isExpanded && "text-md"
+                            )}
+                        >
+                            {item.name}
+                        </span>
+
+                        <span
+                            className={cn(
+                                "font-neue text-xs tracking-wide leading-[110%] sm:text-base md:text-sm line-clamp-2 my-1",
+                                isExpanded && "text-md line-clamp-none mb-2 leading-[120%]"
+                            )}
+                        >
+                            {item.ingredients}
+                        </span>
+                        <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                            <span>Ver ingredientes</span>
+                            <span aria-hidden="true">...</span>
+                        </span>
                     </div>
                 </div>
-
-                <div className="px-1 pb-2 pt-1 flex flex-col bg-white rounded-b-md">
-                    <span
-                        className={cn(
-                            "font-neue line-clamp-1 font-medium text-xs tracking-wide sm:text-base",
-                            isExpanded && "text-md"
-                        )}
-                    >
-                        {item.name}
-                    </span>
-
-                    <span
-                        className={cn(
-                            "font-neue text-xs tracking-wide leading-[110%] sm:text-base line-clamp-2 my-1",
-                            isExpanded && "text-md line-clamp-none mb-2 leading-[120%]"
-                        )}
-                    >
-                        {item.ingredients}
-                    </span>
-                </div>
-            </div>
+            )}
 
             <CardapioItemPriceSelect prices={item.MenuItemSellingPriceVariation} />
 
@@ -844,6 +1068,142 @@ function isGrouped(items: MenuItem[] | GroupedItems[]): items is GroupedItems[] 
     return Array.isArray(items) && items.length > 0 && "menuItems" in (items[0] as any);
 }
 
+function getItemMarginPerc(item: MenuItemWithAssociations) {
+    const variations = item.MenuItemSellingPriceVariation ?? [];
+    const visibleVariations = variations.filter((v) => v.showOnCardapio);
+    const source = visibleVariations.length > 0 ? visibleVariations : variations;
+    if (!source.length) return 0;
+    return Math.max(
+        ...source.map(
+            (v) => Number(v.profitActualPerc ?? v.profitExpectedPerc ?? 0)
+        )
+    );
+}
+
+function buildRandomGroups<T>(items: T[], size: number) {
+    const shuffled = [...items];
+    for (let i = shuffled.length - 1; i > 0; i -= 1) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    const groups: T[][] = [];
+    for (let i = 0; i < shuffled.length; i += size) {
+        groups.push(shuffled.slice(i, i + size));
+    }
+    return groups;
+}
+
+type ChefSuggestionsCarouselProps = {
+    title?: string;
+    subtitle?: string;
+    groups: MenuItemWithAssociations[][];
+    carouselDelay?: number;
+};
+
+function ChefSuggestionsCarousel({
+    title,
+    subtitle,
+    groups,
+    carouselDelay = 2500
+}: ChefSuggestionsCarouselProps) {
+    const { playNavigation } = useSoundEffects();
+    const [api, setApi] = React.useState<CarouselApi | null>(null);
+    const [selectedIndex, setSelectedIndex] = React.useState(0);
+
+    React.useEffect(() => {
+        if (!api) return;
+        const onSelect = () => setSelectedIndex(api.selectedScrollSnap());
+        api.on("select", onSelect);
+        setSelectedIndex(api.selectedScrollSnap());
+        return () => api.off("select", onSelect);
+    }, [api]);
+
+    if (!groups.length) return null;
+
+    const items = groups.flat();
+    const groupSize = 4;
+    const selectedGroupIndex = Math.floor(selectedIndex / groupSize);
+
+    return (
+        <div className="p-2">
+            {title ? (
+                <div className="mb-2">
+                    <h3 className="font-neue text-base md:text-xl font-semibold tracking-wide mb-1">
+                        {title}
+                    </h3>
+                    {subtitle ? (
+                        <p className="font-neue text-xs md:text-sm tracking-wide text-muted-foreground">
+                            {subtitle}
+                        </p>
+                    ) : null}
+                </div>
+            ) : null}
+
+            <Carousel
+                setApi={setApi}
+                opts={{ loop: true, align: "start" }}
+                plugins={[
+                    Autoplay({
+                        delay: carouselDelay,
+                        stopOnInteraction: false,
+                        stopOnMouseEnter: true
+                    })
+                ]}
+                className="relative"
+            >
+                <CarouselContent>
+                    {items.map((i) => {
+                        const featuredImage =
+                            i.MenuItemGalleryImage?.find((img) => img.isPrimary) ||
+                            i.MenuItemGalleryImage?.[0];
+
+                        return (
+                            <CarouselItem key={i.id} className="basis-full">
+                                <Link
+                                    to={`/cardapio/${i.slug}`}
+                                    className="group relative block overflow-hidden rounded-md"
+                                    onClick={() => playNavigation()}
+                                >
+                                    <div className="relative h-[220px] md:h-[280px]">
+                                        <CardapioItemImageSingle
+                                            src={featuredImage?.secureUrl || ""}
+                                            placeholder={i.imagePlaceholderURL || ""}
+                                            placeholderIcon={false}
+                                            placeholderText={i.ingredients}
+                                            cnContainer="h-full w-full"
+                                            enableOverlay={false}
+                                        />
+                                        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-90" />
+                                        <div className="absolute bottom-2 left-2 right-2">
+                                                                    <span className="font-neue text-white text-xs tracking-widest uppercase font-semibold drop-shadow leading-tight">
+                                                                        {i.name}
+                                                                    </span>
+                                        </div>
+                                    </div>
+                                </Link>
+                            </CarouselItem>
+                        );
+                    })}
+                </CarouselContent>
+
+                <div className="absolute inset-x-0 -bottom-3 flex items-center justify-center gap-2 md:-bottom-4">
+                    {groups.map((_, idx) => (
+                        <button
+                            key={idx}
+                            aria-label={`Ir para slide ${idx + 1}`}
+                            onClick={() => api?.scrollTo(idx * groupSize)}
+                            className={[
+                                "h-2 w-2 rounded-full transition-all",
+                                selectedGroupIndex === idx ? "w-6 bg-black/80" : "bg-black/30"
+                            ].join(" ")}
+                        />
+                    ))}
+                </div>
+            </Carousel>
+        </div>
+    );
+}
+
 // ======================================================
 // DESTAQUES (mantido)
 // ======================================================
@@ -931,7 +1291,7 @@ function CardapioItemListDestaque({
                                                 </div>
                                             )}
                                             <div className="absolute bottom-3 left-3 right-3">
-                                                <h4 className="font-neue text-white text-2xl leading-tight drop-shadow">
+                                                <h4 className="font-neue text-white text-xs tracking-widest uppercase font-semibold drop-shadow">
                                                     {i.name}
                                                 </h4>
                                             </div>
@@ -1029,7 +1389,7 @@ function CardapioItemListDestaque({
                                                         </div>
                                                     )}
                                                     <div className="absolute bottom-3 left-3 right-3">
-                                                        <h5 className="font-neue text-white text-2xl leading-tight drop-shadow">
+                                                        <h5 className="font-neue text-white text-sm tracking-widest uppercase font-semibold drop-shadow">
                                                             {i.name}
                                                         </h5>
                                                     </div>

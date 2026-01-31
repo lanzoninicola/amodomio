@@ -13,7 +13,7 @@ export default function AutoResponderLayout() {
         ? "edit"
         : "list";
 
-  const base = "/admin/wpp/auto-responder";
+  const base = "/admin/bot/auto-responder";
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 mb-12">

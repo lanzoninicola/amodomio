@@ -70,6 +70,7 @@ export class MenuItemSellingPriceHandler {
       channelKey?: string;
       sizeKey?: string;
       menuItemId?: string;
+      includeAuditRecords?: boolean;
     },
     returnedOptions?: {
       format?: T;
@@ -83,7 +84,11 @@ export class MenuItemSellingPriceHandler {
       channels,
       sellingPriceConfig,
     ] = await Promise.all([
-      this.menuItemPrismaEntity.findManyWithSellPriceVariations(),
+      this.menuItemPrismaEntity.findManyWithSellPriceVariations(
+        undefined,
+        params.channelKey,
+        { includeAuditRecords: params.includeAuditRecords }
+      ),
       this.menuItemPrismaEntity.findManyWithCostVariations(),
       this.menuItemSize.findAll(),
       this.menuItemSellingChannel.findAll(),

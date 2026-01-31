@@ -56,6 +56,7 @@ export interface SellPriceVariation {
   computedSellingPriceBreakdown?: ComputedSellingPriceBreakdown;
   warnings?: Warning[];
   lastAuditRecord?: MenuItemSellingPriceVariationAudit;
+  auditRecords?: MenuItemSellingPriceVariationAudit[];
 }
 
 export interface MenuItemWithSellPriceVariations {

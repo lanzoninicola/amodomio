@@ -1,9 +1,10 @@
-import GLOBAL_LINKS from "../global-links.constant";
-import { WebsiteNavigationLinks } from "../website-navigation.type";
+import WEBSITE_LINKS from "./website-links";
+import { WebsiteNavigationConfig } from "../types/navigation-types";
 import { Shield } from "lucide-react";
+import { todayLocalYMD } from "~/domain/kds";
 
-const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
-  mainNav: [GLOBAL_LINKS.admin, GLOBAL_LINKS.website],
+const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
+  mainNav: [WEBSITE_LINKS.admin, WEBSITE_LINKS.website],
   sidebarNav: [
     {
       title: "Iniçio",
@@ -34,8 +35,14 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
           disabled: false,
         },
         {
-          title: "Gerenciamento Sabores",
-          href: "/admin/atendimento/gerenciamento-sabores",
+          title: "Horários de atendimento",
+          href: "/admin/atendimento/horarios",
+          items: [],
+          disabled: false,
+        },
+        {
+          title: "Lista de sabores",
+          href: "/admin/atendimento/lista-sabores",
           items: [],
           disabled: false,
         },
@@ -76,29 +83,85 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
       title: "Gerenciamento Cardápio",
       items: [
         {
+          title: "Cardápios",
+          href: "",
+          items: [
+            {
+              title: "Cardápio Delivery",
+              href: "/admin/gerenciamento/cardapio/main/list",
+              items: [],
+              disabled: false,
+            },
+            {
+              title: "Cardápio Pizza Al Taglio",
+              href: "/admin/gerenciamento/cardapio-pizza-al-taglio",
+              items: [],
+              disabled: false,
+            },
+          ],
+          disabled: false,
+        },
+        {
+          title: "Estrutura",
+          href: "",
+          items: [
+            {
+              title: "Grupos",
+              href: "/admin/gerenciamento/cardapio/groups",
+              items: [],
+              disabled: false,
+            },
+            {
+              title: "Tamanhos",
+              href: "/admin/gerenciamento/cardapio/sizes",
+              items: [],
+              disabled: false,
+            },
+          ],
+          disabled: false,
+        },
+        {
           title: "Configurações",
           href: "/admin/gerenciamento/cardapio/settings",
           items: [],
           disabled: false,
         },
         {
-          title: "Grupos",
-          href: "/admin/gerenciamento/cardapio/groups",
-          items: [],
+          title: "Relatorios",
+          href: "",
+          items: [
+            {
+              title: "Visitas",
+              href: "/admin/gerenciamento/cardapio/dashboard/visitas",
+              items: [],
+              disabled: false,
+            },
+            {
+              title: "Dashboard de Interesse",
+              href: "/admin/gerenciamento/cardapio/dashboard/tracking",
+              items: [],
+              disabled: false,
+            },
+            {
+              title: "Menu Engineering Matrix",
+              href: "/admin/gerenciamento/cardapio/dashboard/menu-engineering",
+              items: [],
+              disabled: false,
+            },
+          ],
           disabled: false,
         },
         {
-          title: "Tamanhos",
-          href: "/admin/gerenciamento/cardapio/sizes",
+          title: "Promo 'Fotos Cardapio'",
+          href: "/admin/gerenciamento/pizza-promo",
           items: [],
           disabled: false,
         },
-        {
-          title: "Cardápio Delivery",
-          href: "/admin/gerenciamento/cardapio/main/list",
-          items: [],
-          disabled: false,
-        },
+      ],
+    },
+    {
+      title: "PRECIFICAÇÃO",
+      items: [
         {
           title: "Custo Ficha Tecnica",
           href: "/admin/gerenciamento/cardapio/cost-management",
@@ -112,14 +175,8 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
           disabled: false,
         },
         {
-          title: "Cardápio Pizza Al Taglio",
-          href: "/admin/gerenciamento/cardapio-pizza-al-taglio",
-          items: [],
-          disabled: false,
-        },
-        {
-          title: "Promo 'Fotos Cardapio'",
-          href: "/admin/gerenciamento/pizza-promo",
+          title: "DNA",
+          href: "/admin/financeiro/dna",
           items: [],
           disabled: false,
         },
@@ -129,14 +186,14 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
       title: "Produção",
       items: [
         {
-          title: "Programação Diaria",
-          href: "/admin/producao/progamacao-diaria",
+          title: "Estoque de massa",
+          href: `/admin/kds/atendimento/${todayLocalYMD()}/estoque-massa`,
           items: [],
           disabled: false,
         },
         {
-          title: "Stock Massa",
-          href: "/admin/gerenciamento/stock-massa-init",
+          title: "Programação Diaria",
+          href: "/admin/producao/progamacao-diaria",
           items: [],
           disabled: false,
         },
@@ -145,12 +202,6 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
     {
       title: "Financeiro",
       items: [
-        {
-          title: "DNA",
-          href: "/admin/financeiro/dna",
-          items: [],
-          disabled: false,
-        },
         {
           title: "Resumo financeiro",
           href: "/admin/financeiro/resumo-financeiro",
@@ -279,13 +330,13 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
         },
         {
           title: "Auto Responder",
-          href: "/admin/wpp/auto-responder",
+          href: "/admin/bot/auto-responder",
           items: [],
           disabled: false,
         },
         {
           title: "Configurar Auto Responder",
-          href: "/admin/wpp/auto-responder/settings",
+          href: "/admin/bot/auto-responder/settings",
           items: [],
           disabled: false,
         },
@@ -421,4 +472,4 @@ const ADMIN_WEBSITE_NAVIGATION_ITEMS: WebsiteNavigationLinks = {
   ],
 };
 
-export default ADMIN_WEBSITE_NAVIGATION_ITEMS;
+export default ADMIN_NAVIGATION_LINKS;

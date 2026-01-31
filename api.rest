@@ -179,3 +179,35 @@ Content-Type: application/json
   "instanceId": "instance-abc",
   "extra": { "foo": "bar" }
 }
+
+
+### Webhook trafego pago (META_ADS) via /received
+POST https://amodomio.com.br/webhooks/zapi/received
+Content-Type: application/json
+
+{
+  "type": "ReceivedCallback",
+  "instanceId": "3EC947CCE08D7279C1EC6A599C5ED5B8",
+  "connectedPhone": "554691272525",
+  "fromMe": false,
+  "fromApi": false,
+  "status": "RECEIVED",
+  "chatLid": "129847561239847@lid",
+  "phone": "129847561239847@lid",
+  "chatName": "Meta Lead",
+  "isGroup": false,
+  "isNewsletter": false,
+  "broadcast": false,
+  "waitingMessage": false,
+  "isEdit": false,
+  "forwarded": false,
+  "participantLid": null,
+  "senderName": null,
+  "senderPhoto": null,
+  "messageId": "METAADSCB001",
+  "momment": 1768242408000,
+  "messageExpirationSeconds": 0,
+  "text": {
+    "message": "Olá! Tenho interesse e queria mais informações, por favor. (código: META_ADS)"
+  }
+}

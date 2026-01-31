@@ -34,18 +34,18 @@ export async function action({ request, params }: ActionFunctionArgs) {
         activeTo: form.get("activeTo") ? new Date(String(form.get("activeTo"))) : null,
       },
     });
-    return redirect("/admin/wpp/auto-responder");
+    return redirect("/admin/bot/auto-responder");
   }
 
   if (intent === "delete") {
     await prismaClient.botAutoResponseRule.delete({ where: { id } });
-    return redirect("/admin/wpp/auto-responder");
+    return redirect("/admin/bot/auto-responder");
   }
 
   if (intent === "toggle") {
     const current = await prismaClient.botAutoResponseRule.findUnique({ where: { id } });
     await prismaClient.botAutoResponseRule.update({ where: { id }, data: { isActive: !current?.isActive } });
-    return redirect("/admin/wpp/auto-responder");
+    return redirect("/admin/bot/auto-responder");
   }
 
   return json({ ok: false, error: "intent inválido" }, { status: 400 });

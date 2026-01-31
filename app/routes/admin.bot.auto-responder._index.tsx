@@ -47,13 +47,13 @@ export async function action({ request }: ActionFunctionArgs) {
     const id = String(form.get("id"));
     const current = await prismaClient.botAutoResponseRule.findUnique({ where: { id } });
     await prismaClient.botAutoResponseRule.update({ where: { id }, data: { isActive: !current?.isActive } });
-    return redirect("/admin/wpp/auto-responder");
+    return redirect("/admin/bot/auto-responder");
   }
 
   if (intent === "delete") {
     const id = String(form.get("id"));
     await prismaClient.botAutoResponseRule.delete({ where: { id } });
-    return redirect("/admin/wpp/auto-responder");
+    return redirect("/admin/bot/auto-responder");
   }
 
   return json({ ok: false, error: "intent inválido" }, { status: 400 });
@@ -79,7 +79,7 @@ export default function IndexPage() {
           <Form method="get" className="flex gap-2 items-center">
             <Input name="q" defaultValue={q || ""} placeholder="Buscar por nome, gatilho ou resposta…" className="w-[260px]" />
             <Button type="submit" variant="outline">Buscar</Button>
-            <Button asChild><Link to="/admin/wpp/auto-responder/new">Nova Regra</Link></Button>
+            <Button asChild><Link to="/admin/bot/auto-responder/new">Nova Regra</Link></Button>
           </Form>
         </CardHeader>
         <CardContent>
@@ -121,7 +121,7 @@ export default function IndexPage() {
                     </TableCell>
                     <TableCell className="text-right space-x-2">
                       <Button asChild size="sm" variant="outline">
-                        <Link to={`/admin/wpp/auto-responder/${r.id}/edit`}>Editar</Link>
+                        <Link to={`/admin/bot/auto-responder/${r.id}/edit`}>Editar</Link>
                       </Button>
                       <Form method="post" className="inline">
                         <input type="hidden" name="intent" value="delete" />

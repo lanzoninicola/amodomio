@@ -7,7 +7,7 @@ import { mapPriceVariationsLabel } from "~/domain/cardapio/fn.utils";
 import CopyButton from "~/components/primitives/copy-button/copy-button";
 import Loading from "~/components/loading/loading";
 import MenuItemSwitchVisibilitySubmit from "~/domain/cardapio/components/menu-item-switch-visibility/menu-item-switch-visibility-submit";
-import { LoaderFunctionArgs } from "@remix-run/node";
+import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { badRequest, ok } from "~/utils/http-response.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import tryit from "~/utils/try-it";
@@ -25,6 +25,14 @@ import { MenuItemSellingPriceVariation } from "@prisma/client";
 import { Badge } from "~/components/ui/badge";
 import formatDecimalPlaces from "~/utils/format-decimal-places";
 import formatMoneyString from "~/utils/format-money-string";
+import { Switch } from "~/components/ui/switch";
+import { Label } from "~/components/ui/label";
+import { Checkbox } from "~/components/ui/checkbox";
+
+export const meta: MetaFunction = () => [
+  { title: "Lista de sabores | Admin" },
+  { name: "robots", content: "noindex" },
+];
 
 
 export const loader = async () => {
@@ -96,7 +104,7 @@ export async function action({ request }: LoaderFunctionArgs) {
 }
 
 
-export default function AdminAtendimentoGerenciamentoSabores() {
+export default function AdminAtendimentoListaSabores() {
   const { cardapioItems } = useLoaderData<typeof loader>()
 
 
@@ -141,12 +149,34 @@ export default function AdminAtendimentoGerenciamentoSabores() {
 
             const [items] = useState<MenuItemWithAssociations[]>(cardapioItems) // original completo
             const [filteredItems, setFilteredItems] = useState<MenuItemWithAssociations[]>(cardapioItems.filter(i => i.visible === true && i.active === true) || [])
+            const [profitRanges, setProfitRanges] = useState({
+              critical: false,
+              low: false,
+              medium: false,
+              priority: false,
+            })
 
             const [isSearching, setIsSearching] = useState(false)
 
 
             const [visible, setVisible] = useState(false)
             const [active, setActive] = useState(false)
+
+            const hasProfitFilter = Object.values(profitRanges).some(Boolean)
+
+            const applyProfitFilter = (list: MenuItemWithAssociations[]) => {
+              if (!hasProfitFilter) return list
+
+              return list.filter((item) => {
+                const profitPerc = getProfitPercForItem(item)
+
+                if (profitPerc === null) return false
+                if (profitPerc < 0) return profitRanges.critical
+                if (profitPerc <= 10) return profitRanges.low
+                if (profitPerc <= 15) return profitRanges.medium
+                return profitRanges.priority
+              })
+            }
 
             const handleOptionVisibileItems = (state: boolean) => {
               setFilteredItems(items.filter(item => item.visible === state && item.active === true))
@@ -156,13 +186,14 @@ export default function AdminAtendimentoGerenciamentoSabores() {
               setFilteredItems(items.filter(item => item.active === state))
             }
 
+            const displayedItems = applyProfitFilter(filteredItems)
 
             // @ts-ignore
             return (
               <div className="flex flex-col gap-4">
                 <div className="grid grid-cols-1 md:grid-cols-8 gap-4 items-center bg-slate-50 px-4 py-2">
                   <h1 className="text-lg font-bold tracking-tighter md:text-lg col-span-2">
-                    Gerençiamento sabores
+                    Lista de sabores
                   </h1>
                   <CardapioItemSearch items={items} setFilteredItems={setFilteredItems} setIsSearching={setIsSearching} />
 
@@ -184,13 +215,67 @@ export default function AdminAtendimentoGerenciamentoSabores() {
                       <SelectItem value="inactive">Inativos</SelectItem>
                     </SelectContent>
                   </Select>
+
+                  <div className="col-span-full flex flex-wrap items-center justify-center gap-4 text-center">
+                    <span className="text-xs text-muted-foreground">Faixa de lucro</span>
+                    <div className="flex flex-wrap items-center justify-center gap-3">
+                      <div className="flex items-center gap-2">
+                        <Checkbox
+                          id="profit-critical"
+                          checked={profitRanges.critical}
+                          onCheckedChange={(value) =>
+                            setProfitRanges((prev) => ({ ...prev, critical: Boolean(value) }))
+                          }
+                        />
+                        <Label htmlFor="profit-critical" className="text-xs">
+                          Crítico (&lt; 0)
+                        </Label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Checkbox
+                          id="profit-low"
+                          checked={profitRanges.low}
+                          onCheckedChange={(value) =>
+                            setProfitRanges((prev) => ({ ...prev, low: Boolean(value) }))
+                          }
+                        />
+                        <Label htmlFor="profit-low" className="text-xs">
+                          Baixo (0 a 10)
+                        </Label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Checkbox
+                          id="profit-medium"
+                          checked={profitRanges.medium}
+                          onCheckedChange={(value) =>
+                            setProfitRanges((prev) => ({ ...prev, medium: Boolean(value) }))
+                          }
+                        />
+                        <Label htmlFor="profit-medium" className="text-xs">
+                          Médio (10 a 15)
+                        </Label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Checkbox
+                          id="profit-priority"
+                          checked={profitRanges.priority}
+                          onCheckedChange={(value) =>
+                            setProfitRanges((prev) => ({ ...prev, priority: Boolean(value) }))
+                          }
+                        />
+                        <Label htmlFor="profit-priority" className="text-xs">
+                          Prioridade (&gt; 15)
+                        </Label>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="flex flex-col items-center">
 
                   <ul className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-4">
                     {
-                      filteredItems.map(item => {
+                      displayedItems.map(item => {
                         return (
                           <CardapioItem
                             key={item.id}
@@ -235,7 +320,8 @@ interface CardapioItemProps {
 }
 
 function CardapioItem({ item, setVisible, visible, active, setActive, showExpandButton = true, isSearching = false }: CardapioItemProps) {
-
+  const profitPerc = getProfitPercForItem(item);
+  const profitBadge = getProfitBadgeConfig(profitPerc);
 
   return (
     <div className={
@@ -247,7 +333,17 @@ function CardapioItem({ item, setVisible, visible, active, setActive, showExpand
       <div className="flex flex-col  mb-2">
 
         <div className="flex justify-between items-center">
-          <h2 className="text-xs uppercase font-semibold tracking-wide">{item.name}</h2>
+          <div className="flex flex-col gap-1">
+            <h2 className="text-xs uppercase font-semibold tracking-wide">{item.name}</h2>
+            <Badge
+              className={cn(
+                "text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 w-max",
+                profitBadge.className
+              )}
+            >
+              {profitBadge.label}
+            </Badge>
+          </div>
           <div className="flex gap-2 items-center">
             {isSearching && (
               <Badge
@@ -303,6 +399,49 @@ function CardapioItem({ item, setVisible, visible, active, setActive, showExpand
   )
 }
 
+function getProfitBadgeConfig(profitPerc: number | null) {
+  if (profitPerc === null) {
+    return {
+      label: "Sem margem",
+      className: "bg-slate-100 text-slate-600",
+    };
+  }
+
+  if (profitPerc < 0) {
+    return {
+      label: "🔴 Lucro Crítico (< 0)",
+      className: "bg-red-500 text-white",
+    };
+  }
+
+  if (profitPerc <= 10) {
+    return {
+      label: "🟠 Lucro Baixo (0 a 10)",
+      className: "bg-orange-500 text-white",
+    };
+  }
+
+  if (profitPerc <= 15) {
+    return {
+      label: "🟡 Lucro Médio (10 a 15)",
+      className: "bg-amber-400 text-amber-950",
+    };
+  }
+
+  return {
+    label: "🟢 Prioridade de Venda (> 15)",
+    className: "bg-emerald-500 text-white",
+  };
+}
+
+function getProfitPercForItem(item: MenuItemWithAssociations) {
+  const profitVariation = item.MenuItemSellingPriceVariation?.find(
+    (variation) => variation.MenuItemSize?.key === "pizza-medium"
+  );
+
+  return profitVariation ? Number(profitVariation.profitActualPerc ?? 0) : null;
+}
+
 interface CardapioItemDialogProps {
   children?: React.ReactNode;
   triggerComponent?: React.ReactNode;
@@ -351,11 +490,9 @@ function CardapioItemSearch({
   setIsSearching: React.Dispatch<React.SetStateAction<boolean>>
 }) {
   const [search, setSearch] = useState("")
+  const [includeHidden, setIncludeHidden] = useState(false)
 
-  const handleSearch = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const value = event.target.value
-    setSearch(value)
-
+  const applySearch = (value: string, shouldIncludeHidden: boolean) => {
     if (!value) {
       setIsSearching(false)
       return setFilteredItems(items.filter(i => i.visible === true && i.active === true))
@@ -365,6 +502,7 @@ function CardapioItemSearch({
 
     const searchedItems = items
       .filter(item => item.active === true)
+      .filter(item => (shouldIncludeHidden ? true : item.visible === true))
       .filter(item => {
         const tags = item?.tags?.public || []
 
@@ -379,15 +517,35 @@ function CardapioItemSearch({
     setFilteredItems(searchedItems)
   }
 
+  const handleSearch = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const value = event.target.value
+    setSearch(value)
+    applySearch(value, includeHidden)
+  }
+
   return (
-    <div className="flex flex-col gap-4 items-center w-full col-span-4">
+    <div className="flex flex-col md:flex-row gap-2 md:gap-4 items-center w-full col-span-4">
       <Input
         name="search"
-        className="w-full py-4 text-lg bg-white"
+        className="w-full md:w-[60%] py-4 text-lg bg-white"
         placeholder="Pesquisar no cardápio..."
         onChange={handleSearch}
         value={search}
       />
+      <div className="flex items-center gap-2 self-start md:self-auto">
+        <Switch
+          id="search-hidden-flavors"
+          checked={includeHidden}
+          onCheckedChange={(value) => {
+            const nextValue = !!value
+            setIncludeHidden(nextValue)
+            applySearch(search, nextValue)
+          }}
+        />
+        <Label htmlFor="search-hidden-flavors" className="text-xs text-muted-foreground">
+          Incluir sabores ocultos na busca
+        </Label>
+      </div>
     </div>
   )
 }

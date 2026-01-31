@@ -1,6 +1,6 @@
 import { title } from "process";
 
-const GLOBAL_LINKS = {
+const WEBSITE_LINKS = {
   website: {
     title: "Website",
     href: "/",
@@ -51,4 +51,4 @@ const GLOBAL_LINKS = {
   },
 };
 
-export default GLOBAL_LINKS;
+export default WEBSITE_LINKS;

@@ -14,6 +14,30 @@ const MESSAGE_KEYS = [
 ];
 const MESSAGE_TYPE_KEYS = ["type", "messagetype", "typemessage"];
 const INSTANCE_KEYS = ["instanceid", "instance_id"];
+const CONTACT_NAME_KEYS = [
+  "pushname",
+  "sendername",
+  "name",
+  "vname",
+  "short",
+  "profilename",
+  "displayname",
+  "formattedname",
+  "notify",
+];
+const CONTACT_PHOTO_KEYS = [
+  "photo",
+  "profilepic",
+  "profilepicthumb",
+  "profilepicthumbobj",
+  "profilepicture",
+  "picture",
+  "avatar",
+  "img",
+  "imgfull",
+  "eurl",
+  "url",
+];
 
 function coerceToString(value: any): string | null {
   if (typeof value === "string") return value;
@@ -85,6 +109,40 @@ function extractInstanceId(payload: any): string | undefined {
   return undefined;
 }
 
+function isHttpUrl(value: string): boolean {
+  if (!value) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function findUrlInValue(value: any): string | null {
+  if (typeof value === "string") return isHttpUrl(value) ? value : null;
+  if (!value || typeof value !== "object") return null;
+  return walkObject(value, (_key, nested) => {
+    if (typeof nested === "string" && isHttpUrl(nested)) return nested;
+    return null;
+  });
+}
+
+function extractContactName(payload: any): string | undefined {
+  const name = deepFindByKeys(payload, CONTACT_NAME_KEYS);
+  const trimmed = name?.trim();
+  return trimmed || undefined;
+}
+
+function extractContactPhoto(payload: any): string | undefined {
+  const keySet = new Set(CONTACT_PHOTO_KEYS);
+  const found = walkObject(payload, (key, value) => {
+    if (!keySet.has(key.toLowerCase())) return null;
+    return findUrlInValue(value);
+  });
+  return found || undefined;
+}
+
 export function normalizeWebhookPayload(
   event: "received" | "disconnected" | "traffic",
   payload: any
@@ -95,6 +153,8 @@ export function normalizeWebhookPayload(
     messageText: extractMessageText(payload),
     messageType: extractMessageType(payload),
     instanceId: extractInstanceId(payload),
+    contactName: extractContactName(payload),
+    contactPhoto: extractContactPhoto(payload),
     raw: payload,
   };
 }

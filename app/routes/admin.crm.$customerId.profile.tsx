@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { ImageOff } from "lucide-react";
 import prisma from "~/lib/prisma/client.server";
 import { useLoaderData, useNavigation, useActionData } from "@remix-run/react";
 
@@ -39,6 +40,12 @@ type LoaderData = {
     profession: string | null;
     age_profile: string;
     preferred_payment_method: string;
+    images: Array<{
+      id: string;
+      url: string | null;
+      description: string | null;
+      created_at: string;
+    }>;
   };
 };
 
@@ -50,6 +57,17 @@ export async function loader({ params }: LoaderFunctionArgs) {
     where: { id: customerId },
   });
   if (!customer) throw new Response("not found", { status: 404 });
+
+  const images = await prisma.crmCustomerImage.findMany({
+    where: { customer_id: customerId },
+    orderBy: { created_at: "desc" },
+    select: {
+      id: true,
+      url: true,
+      description: true,
+      created_at: true,
+    },
+  });
 
   return json<LoaderData>({
     customer: {
@@ -77,6 +95,12 @@ export async function loader({ params }: LoaderFunctionArgs) {
       profession: customer.profession,
       age_profile: customer.age_profile,
       preferred_payment_method: customer.preferred_payment_method,
+      images: images.map((image) => ({
+        id: image.id,
+        url: image.url,
+        description: image.description,
+        created_at: image.created_at.toISOString(),
+      })),
     },
   });
 }
@@ -167,12 +191,20 @@ export default function AdminCrmCustomerProfile() {
   const actionData = useActionData<ActionData>();
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
+  const images = customer.images || [];
+  const primaryImage = images[0];
+  const galleryImages = primaryImage ? images.slice(1) : images;
+  const hasValidImageUrl = (url: string | null | undefined) => {
+    if (!url) return false;
+    const normalized = url.trim().toLowerCase();
+    return normalized !== "" && normalized !== "null" && normalized !== "undefined";
+  };
   const consentInputValue = customer.consent_at
     ? (() => {
-        const date = new Date(customer.consent_at);
-        const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
-        return local.toISOString().slice(0, 16);
-      })()
+      const date = new Date(customer.consent_at);
+      const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+      return local.toISOString().slice(0, 16);
+    })()
     : "";
 
   return (
@@ -187,6 +219,75 @@ export default function AdminCrmCustomerProfile() {
             {actionData.error}
           </div>
         )}
+
+        <div className="grid gap-3">
+          <div>
+            <p className="text-xs uppercase text-muted-foreground">Imagem do perfil</p>
+            <p className="text-sm text-muted-foreground">
+              Últimas fotos recebidas do WhatsApp.
+            </p>
+          </div>
+          {primaryImage ? (
+            <div className="grid gap-4 md:grid-cols-[200px,1fr]">
+              {hasValidImageUrl(primaryImage.url) ? (
+                <a
+                  href={primaryImage.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="overflow-hidden rounded-lg border bg-muted/40"
+                  title={primaryImage.description || "Foto do perfil"}
+                >
+                  <img
+                    src={primaryImage.url}
+                    alt={primaryImage.description || "Foto do perfil"}
+                    className="h-52 w-full object-cover"
+                    loading="lazy"
+                  />
+                </a>
+              ) : (
+                <div className="flex h-52 items-center justify-center rounded-lg border bg-muted/30 text-muted-foreground">
+                  <div className="grid justify-items-center gap-2 text-xs uppercase">
+                    <ImageOff className="h-8 w-8" aria-hidden="true" />
+                    <span>Sem imagem</span>
+                  </div>
+                </div>
+              )}
+              <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-4">
+                {galleryImages.map((image) => (
+                  hasValidImageUrl(image.url) ? (
+                    <a
+                      key={image.id}
+                      href={image.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="overflow-hidden rounded-md border bg-muted/30"
+                      title={image.description || "Foto do perfil"}
+                    >
+                      <img
+                        src={image.url}
+                        alt={image.description || "Foto do perfil"}
+                        className="h-20 w-full object-cover"
+                        loading="lazy"
+                      />
+                    </a>
+                  ) : (
+                    <div
+                      key={image.id}
+                      className="flex h-20 items-center justify-center rounded-md border bg-muted/20 text-muted-foreground"
+                      aria-label="Sem imagem"
+                    >
+                      <ImageOff className="h-4 w-4" aria-hidden="true" />
+                    </div>
+                  )
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-md border border-dashed px-3 py-6 text-sm text-muted-foreground">
+              Nenhuma imagem de perfil cadastrada.
+            </div>
+          )}
+        </div>
 
         <div className="grid gap-3 md:grid-cols-5">
           <Metric
@@ -250,8 +351,8 @@ export default function AdminCrmCustomerProfile() {
 
           <div className="grid gap-4 md:grid-cols-2">
             <div className="grid gap-1">
-                <label className="text-xs uppercase text-muted-foreground">Gênero</label>
-                <Select name="gender" defaultValue={customer.gender || "unknown"}>
+              <label className="text-xs uppercase text-muted-foreground">Gênero</label>
+              <Select name="gender" defaultValue={customer.gender || "unknown"}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>

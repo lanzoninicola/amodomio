@@ -4,6 +4,8 @@ export type NormalizedWebhookEvent = {
   messageText?: string;
   messageType?: string;
   instanceId?: string;
+  contactName?: string;
+  contactPhoto?: string;
   raw: any;
 };
 
