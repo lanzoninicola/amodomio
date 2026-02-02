@@ -93,6 +93,7 @@ type Variation = {
 type MenuItemRow = {
   name: string;
   sellPriceVariations?: Variation[];
+  upcoming?: boolean;
 };
 
 type ExportRenderedDialogProps = {
@@ -168,9 +169,10 @@ export function ExportRenderedDialog(props: ExportRenderedDialogProps) {
   // --- Export principal ---
   const onExport = () => {
     const sizeNames = sizes.map(s => s.name);
+    const exportItems = items.filter((mi) => mi.upcoming !== true);
 
     if (format === "json") {
-      const data = items.map(mi => {
+      const data = exportItems.map(mi => {
         const out: any = { sabor: mi.name };
         const map: Record<string, Variation> = {};
         mi.sellPriceVariations?.forEach(r => (map[r.sizeName] = r));
@@ -200,7 +202,7 @@ export function ExportRenderedDialog(props: ExportRenderedDialogProps) {
         if (sel.profit) headers.push(`${sn} Lucro%`);
       });
 
-      const lines = items.map(mi => {
+      const lines = exportItems.map(mi => {
         const map: Record<string, Variation> = {};
         mi.sellPriceVariations?.forEach(r => (map[r.sizeName] = r));
 
@@ -240,6 +242,9 @@ export function ExportRenderedDialog(props: ExportRenderedDialogProps) {
           <DialogTitle>Exportar dados</DialogTitle>
           <DialogDescription>Escolha as colunas e o formato do arquivo.</DialogDescription>
         </DialogHeader>
+        <p className="text-xs text-muted-foreground">
+          A exportação inclui apenas itens não marcados como lançamento futuro (upcoming = false).
+        </p>
 
         <div className="space-y-4">
           {/* Selecionar tudo */}
@@ -395,15 +400,18 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
                   cnContainer="col-span-6 md:col-span-6"
                 />
 
-                {/* Botão de Exportar */}
-                <ExportRenderedDialog
-                  items={items}
-                  sizes={sizes}
-                  channelKey={currentSellingChannel.key}
-                  trigger={<Button size="sm" variant="secondary">Exportar dados</Button>}
-                />
+                <div className="flex flex-col gap-2 py-2 md:py-0 md:grid md:grid-cols-4 md:items-center col-span-2 w-full" >
 
-                <AlertsCostsAndSellPrice items={items} cnContainer="col-span-1 flex justify-center md:justify-end w-full col-span-1" />
+                  {/* Botão de Exportar */}
+                  <ExportRenderedDialog
+                    items={items}
+                    sizes={sizes}
+                    channelKey={currentSellingChannel.key}
+                    trigger={<Button size="sm" className="bg-yellow-400 text-black col-span-3">Exportar dados (CSV / JSON)</Button>}
+                  />
+
+                  <AlertsCostsAndSellPrice items={items} cnContainer="col-span-1 flex justify-center md:justify-end w-full col-span-1" />
+                </div>
               </div>
 
 
@@ -475,9 +483,6 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
   )
 
 }
-
-
-
 
 
 

@@ -507,6 +507,7 @@ export class MenuItemPrismaEntity {
         ingredients: item.ingredients,
         visible: item.visible,
         active: item.active,
+        upcoming: item.upcoming,
         sellPriceVariations,
       };
     });

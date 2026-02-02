@@ -14,7 +14,16 @@ export const meta: MetaFunction = () => [
   { name: "robots", content: "noindex" },
 ];
 
-type ImportRow = { id: string; month: number; year: number; source: string | null; updatedAt: string; itemsCount: number };
+type ImportPreviewItem = { id: string; topping: string; quantity: number; value: number };
+type ImportRow = {
+  id: string;
+  month: number;
+  year: number;
+  source: string | null;
+  updatedAt: string;
+  itemsCount: number;
+  preview: ImportPreviewItem[];
+};
 
 type LoaderData = {
   imports: ImportRow[];
@@ -41,6 +50,11 @@ export async function loader({}: LoaderFunctionArgs) {
       source: true,
       updatedAt: true,
       _count: { select: { items: true } },
+      items: {
+        select: { id: true, topping: true, quantity: true, value: true },
+        orderBy: { quantity: "desc" },
+        take: 6,
+      },
     },
     orderBy: [{ year: "desc" }, { month: "desc" }],
   });
@@ -53,6 +67,7 @@ export async function loader({}: LoaderFunctionArgs) {
       source: item.source,
       updatedAt: item.updatedAt.toISOString(),
       itemsCount: item._count.items,
+      preview: item.items,
     })),
   });
 }
@@ -60,6 +75,16 @@ export async function loader({}: LoaderFunctionArgs) {
 export async function action({ request }: ActionFunctionArgs) {
   try {
     const formData = await request.formData();
+    const action = String(formData.get("_action") ?? "");
+
+    if (action === "delete") {
+      const importId = String(formData.get("importId") ?? "");
+      if (!importId) return badRequest({ message: "Importação não encontrada." });
+
+      await prismaClient.menuEngineeringImport.delete({ where: { id: importId } });
+      return ok({ message: "Importação removida." });
+    }
+
     const file = formData.get("file");
     const jsonText = String(formData.get("json") ?? "").trim();
 
@@ -223,7 +248,41 @@ export default function MenuEngineeringImportPage() {
                 <div className="flex items-center gap-2">
                   {imp.source ? <Badge variant="outline">{imp.source}</Badge> : null}
                   <Badge variant="secondary">{imp.itemsCount} itens</Badge>
+                  <Form method="post">
+                    <input type="hidden" name="_action" value="delete" />
+                    <input type="hidden" name="importId" value={imp.id} />
+                    <Button
+                      type="submit"
+                      variant="outline"
+                      size="sm"
+                      onClick={(event) => {
+                        if (!window.confirm("Tem certeza que deseja excluir este mês?")) {
+                          event.preventDefault();
+                        }
+                      }}
+                    >
+                      Excluir mês
+                    </Button>
+                  </Form>
                 </div>
+                <details className="w-full text-xs text-muted-foreground">
+                  <summary className="cursor-pointer">Ver toppings importados</summary>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                    {imp.preview.length === 0 ? (
+                      <span>Nenhum item encontrado.</span>
+                    ) : (
+                      imp.preview.map((row) => (
+                        <div key={row.id} className="rounded-md border border-border px-3 py-2">
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium text-foreground">{row.topping}</span>
+                            <span>{row.quantity}</span>
+                          </div>
+                          <div>Valor: R$ {row.value.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </details>
               </div>
             ))
           )}

@@ -200,6 +200,7 @@ export class MenuItemSellingPriceHandler {
           ingredients: item.ingredients,
           visible: item.visible,
           active: item.active,
+          upcoming: item.upcoming,
           sellPriceVariations: variations,
           warnings, // ← novo campo
         };
@@ -320,6 +321,7 @@ export class MenuItemSellingPriceHandler {
       ingredients: item.ingredients,
       visible: item.visible,
       active: item.active,
+      upcoming: item.upcoming,
       sellPriceVariations: variations,
       warnings,
     };

@@ -8,6 +8,7 @@
     "start": "remix-serve ./build/server/index.js",
     "migrate:dev": "npx prisma migrate dev --name",
     "migrate:deploy": "npx prisma migrate deploy",
+    "postinstall": "prisma generate",
     "test": "vitest"
   },
   "dependencies": {
