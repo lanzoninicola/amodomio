@@ -934,21 +934,22 @@ function CardapioGridItem({
 
             <CardapioItemPriceSelect prices={item.MenuItemSellingPriceVariation} />
 
-            <div className="flex justify-between shadow-sm bg-white">
+            <div className="flex flex-col gap-y-1 shadow-sm bg-white my-2">
                 <ShareIt
                     item={item}
                     size={isExpanded === true ? 20 : 16}
-                    cnContainer={cn("px-2 ", isExpanded && "my-2 border border-black")}
+                    cnContainer={cn("px-2 py-0 h-7 border border-black")}
                 >
-                    {isExpanded && <span className="font-neue text-sm">Compartilhar</span>}
+                    <span className="font-neue text-xs uppercase tracking-wide ">Compartilhar</span>
                 </ShareIt>
 
                 <LikeIt
                     item={item}
                     size={isExpanded === true ? 20 : 16}
-                    cnContainer={cn("px-2 ", isExpanded && "my-2 border border-red-500")}
+                    cnContainer={cn("px-2 py-0 h-7 bg-red-500 text-white")}
+                    color="white"
                 >
-                    {isExpanded && <span className="font-neue text-sm text-red-500 mr-2">Gostei</span>}
+                    <span className="font-neue text-xs uppercase tracking-wide">Gostei</span>
                 </LikeIt>
             </div>
 
@@ -1175,9 +1176,9 @@ function ChefSuggestionsCarousel({
                                         />
                                         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-90" />
                                         <div className="absolute bottom-2 left-2 right-2">
-                                                                    <span className="font-neue text-white text-xs tracking-widest uppercase font-semibold drop-shadow leading-tight">
-                                                                        {i.name}
-                                                                    </span>
+                                            <span className="font-neue text-white text-xs tracking-widest uppercase font-semibold drop-shadow leading-tight">
+                                                {i.name}
+                                            </span>
                                         </div>
                                     </div>
                                 </Link>

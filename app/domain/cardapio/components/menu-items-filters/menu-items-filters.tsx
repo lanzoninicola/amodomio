@@ -57,6 +57,10 @@ export function MenuItemsFilters({
     applyFilters(currentGroup, currentCategory, currentFilter, search);
   }, []);
 
+  useEffect(() => {
+    applyFilters(currentGroup, currentCategory, currentFilter, search);
+  }, [initialItems]);
+
   return (
     <div className={
       cn(
