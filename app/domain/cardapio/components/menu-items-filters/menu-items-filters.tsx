@@ -28,7 +28,7 @@ export function MenuItemsFilters({
   const [search, setSearch] = useState("");
   const [currentGroup, setCurrentGroup] = useState<MenuItemGroup["key"] | null>(null);
   const [currentCategory, setCurrentCategory] = useState<Category | null>(null);
-  const [currentFilter, setCurrentFilter] = useState<MenuItemVisibilityFilterOption | null>("active");
+  const [currentFilter, setCurrentFilter] = useState<MenuItemVisibilityFilterOption | null>("all");
 
   const applyFilters = (
     groupKey: MenuItemGroup["key"] | null,
@@ -40,8 +40,9 @@ export function MenuItemsFilters({
 
     if (groupKey) filtered = filtered.filter(i => i.group?.key === groupKey);
     if (category) filtered = filtered.filter(i => i.category?.id === category.id);
-    if (visibility === "active") filtered = filtered.filter(i => i.visible === true);
-    if (visibility === "venda-pausada") filtered = filtered.filter(i => i.active && !i.visible);
+    if (visibility === "active") filtered = filtered.filter(i => i.active === true && i.visible === true);
+    if (visibility === "venda-pausada") filtered = filtered.filter(i => i.active === true && i.visible === false);
+    if (visibility === "inactive") filtered = filtered.filter(i => i.active === false);
     if (searchValue) {
       filtered = filtered.filter(i =>
         i.name?.toLowerCase().includes(searchValue.toLowerCase()) ||
@@ -55,6 +56,10 @@ export function MenuItemsFilters({
   useEffect(() => {
     applyFilters(currentGroup, currentCategory, currentFilter, search);
   }, []);
+
+  useEffect(() => {
+    applyFilters(currentGroup, currentCategory, currentFilter, search);
+  }, [initialItems]);
 
   return (
     <div className={
@@ -113,14 +118,16 @@ export function MenuItemsFilters({
           setCurrentFilter(v);
           applyFilters(currentGroup, currentCategory, v, search);
         }}
-        defaultValue={"active"}
+        defaultValue={"all"}
       >
         <SelectTrigger className="w-full bg-white md:col-span-1">
           <SelectValue placeholder="Filtrar vendas" />
         </SelectTrigger>
         <SelectContent>
+          <SelectItem value="all">Todos</SelectItem>
           <SelectItem value="active">Venda ativa</SelectItem>
           <SelectItem value="venda-pausada">Venda pausada</SelectItem>
+          <SelectItem value="inactive">Desativados</SelectItem>
         </SelectContent>
       </Select>
 

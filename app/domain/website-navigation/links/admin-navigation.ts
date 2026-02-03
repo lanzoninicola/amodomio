@@ -142,6 +142,12 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
               items: [],
               disabled: false,
             },
+            {
+              title: "Menu Engineering Matrix",
+              href: "/admin/gerenciamento/cardapio/dashboard/menu-engineering",
+              items: [],
+              disabled: false,
+            },
           ],
           disabled: false,
         },

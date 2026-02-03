@@ -158,7 +158,12 @@ export async function action({ request }: LoaderFunctionArgs) {
     return null
 }
 
-export type MenuItemVisibilityFilterOption = "active" | "lancamento-futuro" | "venda-pausada" | "inactive"
+export type MenuItemVisibilityFilterOption =
+    | "all"
+    | "active"
+    | "lancamento-futuro"
+    | "venda-pausada"
+    | "inactive"
 
 export default function AdminGerenciamentoCardapioMainListLayout() {
 

@@ -250,7 +250,21 @@ export function ShareIt({ item, size, children, cnContainer }: { item: MenuItemW
     )
 }
 
-export function LikeIt({ item, size, cnLabel, children, cnContainer }: { item: MenuItemWithAssociations, size?: number, cnLabel?: string, children?: React.ReactNode, cnContainer?: string }) {
+export function LikeIt({
+    item,
+    size,
+    cnLabel,
+    children,
+    cnContainer,
+    color = "red",
+}: {
+    item: MenuItemWithAssociations,
+    size?: number,
+    cnLabel?: string,
+    children?: React.ReactNode,
+    cnContainer?: string,
+    color?: "red" | "white",
+}) {
     const [likeIt, setLikeIt] = useState(false)
     const [likesAmount, setLikesAmount] = useState(item.likes?.amount || 0)
 
@@ -270,26 +284,34 @@ export function LikeIt({ item, size, cnLabel, children, cnContainer }: { item: M
             { method: 'post' }
         );
     };
+    const isRed = color === "red";
+    const textColor = isRed ? "text-red-500" : "text-white";
+    const strokeColor = isRed ? "stroke-red-500" : "stroke-white";
+    const fillColor = isRed ? "fill-red-500" : "fill-white";
+
     return (
         <Button
             variant={"ghost"}
             className={cn("flex items-center cursor-pointer", cnContainer)} onClick={likingIt}>
-            {children}
+
             <Heart
                 size={size ?? 16}
                 className={cn(
-                    likeIt ? "fill-red-500" : "fill-none",
-                    likeIt ? "stroke-red-500" : "stroke-black",
-                    item.likes?.amount && item.likes?.amount > 0 ? "stroke-red-500" : "stroke-black"
+                    "mr-2",
+                    likeIt ? fillColor : "fill-none",
+                    likeIt ? strokeColor : strokeColor,
+                    item.likes?.amount && item.likes?.amount > 0 ? strokeColor : strokeColor
                 )}
             />
+            {children}
+
             <span className={
                 cn(
-                    "text-xs font-neue font-medium tracking-widest uppercase pl-1 text-red-500",
+                    `text-xs font-neue font-medium tracking-widest uppercase pl-1 ${textColor}`,
                     cnLabel
                 )
             }>
-                {likesAmount > 0 && `${likesAmount}`}
+                ({likesAmount > 0 && `${likesAmount}`})
 
             </span>
         </Button>

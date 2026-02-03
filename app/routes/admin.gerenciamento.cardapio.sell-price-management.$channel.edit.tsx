@@ -506,10 +506,7 @@ const EditablePriceCell = React.memo(function EditablePriceCellInner({
                 <span className="font-mono text-right">
                   {formatDecimalPlaces(custoEmbalagem)}
                 </span>
-                <span>{`DNA (${formatDecimalPlaces(dnaPerc)}%)`}</span>
-                <span className="font-mono text-right">
-                  {formatDecimalPlaces(dnaValor)}
-                </span>
+
               </div>
 
               <Separator className="my-2" />
@@ -517,6 +514,16 @@ const EditablePriceCell = React.memo(function EditablePriceCellInner({
                 <span className="font-semibold">Custo total</span>
                 <span className="font-mono text-right">
                   {formatDecimalPlaces(custoTotal)}
+                </span>
+
+              </div>
+
+              <Separator className="my-2" />
+
+              <div className="grid grid-cols-2 text-[12px] gap-y-1">
+                <span>{`DNA (${formatDecimalPlaces(dnaPerc)}%)`}</span>
+                <span className="font-mono text-right">
+                  {formatDecimalPlaces(dnaValor)}
                 </span>
                 <span className="font-semibold">Custo base + DNA</span>
                 <span className="font-mono text-right">
@@ -936,8 +943,8 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
                                 bulkTargetMenuItemId === "all"
                                   ? allItems
                                   : allItems.filter(
-                                      (mi) => mi.menuItemId === bulkTargetMenuItemId
-                                    );
+                                    (mi) => mi.menuItemId === bulkTargetMenuItemId
+                                  );
                               if (sourceItems.length === 0) return;
                               const label =
                                 bulkTargetMenuItemId === "all"
