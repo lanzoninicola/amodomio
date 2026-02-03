@@ -46,11 +46,13 @@ import Autoplay from "embla-carousel-autoplay";
 import CardapioItemImageSingle from "~/domain/cardapio/components/cardapio-item-image-single/cardapio-item-image-single";
 import prismaClient from "~/lib/prisma/client.server";
 import { Tag } from "@prisma/client";
-import { Heart } from "lucide-react";
+import { Heart, X } from "lucide-react";
 import { useSoundEffects } from "~/components/sound-effects/use-sound-effects";
 import { getOrCreateMenuItemInterestClientId } from "~/domain/cardapio/menu-item-interest/menu-item-interest.client";
+import Logo from "~/components/primitives/logo/logo";
 
 const INTEREST_ENDPOINT = "/api/menu-item-interest";
+const REELS_SETTING_KEY = "cardapio.reel.urls";
 
 export const headers: HeadersFunction = () => ({
     "Cache-Control": "s-maxage=1, stale-while-revalidate=59"
@@ -100,10 +102,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
         }
     });
 
+    const reelSetting = await prismaClient.cardapioSetting.findFirst({
+        where: { key: REELS_SETTING_KEY }
+    });
+
+    const reelUrls = parseReelUrls(reelSetting?.value);
+
     return defer({
         items,
         tags,
-        postFeatured
+        postFeatured,
+        reelUrls
     });
 }
 
@@ -246,14 +255,29 @@ export async function action({ request }: LoaderFunctionArgs) {
 // PAGE
 // ======================================================
 export default function CardapioWebIndex() {
-    const { items, tags, postFeatured } = useLoaderData<typeof loader>();
+    const { items, tags, postFeatured, reelUrls } = useLoaderData<typeof loader>();
+    const hasReels = reelUrls.length > 0;
 
     return (
         <section className="flex flex-col mb-24" data-element="cardapio-index">
             <Separator className="my-6 md:hidden" />
 
+            {reelUrls.length > 0 ? (
+                <div className="mx-2 md:mx-0 mt-20 md:mt-40">
+                    <h3 className="font-neue text-base md:text-xl font-semibold tracking-wide mb-3">
+                        Reels sugeridos
+                    </h3>
+                    <ReelsCarousel urls={reelUrls} />
+                </div>
+            ) : null}
+
             {/* TOPO: Halloween + Destaques (igual ao teu) */}
-            <div className="flex flex-col mt-24 gap-8 md:grid md:grid-cols-2 md:gap-0 md:items-start md:mt-52 md:mb-10 md:justify-center">
+            <div
+                className={cn(
+                    "flex flex-col gap-8 md:grid md:grid-cols-2 md:gap-0 md:items-start md:mb-10 md:justify-center",
+                    hasReels ? "mt-12 md:mt-24" : "mt-24 md:mt-52"
+                )}
+            >
                 {/* Bloco Halloween */}
                 {/* <Suspense fallback={<Loading />}>
                     <Await resolve={items}>
@@ -1092,6 +1116,197 @@ function buildRandomGroups<T>(items: T[], size: number) {
         groups.push(shuffled.slice(i, i + size));
     }
     return groups;
+}
+
+function parseReelUrls(raw?: string | null) {
+    if (!raw) return [];
+    try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+            return parsed.filter((url) => typeof url === "string" && url.trim().length > 0);
+        }
+        if (typeof parsed === "string" && parsed.trim().length > 0) return [parsed.trim()];
+    } catch {
+        return raw
+            .split(/\r?\n|,/g)
+            .map((url) => url.trim())
+            .filter(Boolean);
+    }
+    return [];
+}
+
+function ReelsCarousel({ urls }: { urls: string[] }) {
+    if (!urls.length) return null;
+
+    const videoRefs = useRef<Array<HTMLVideoElement | null>>([]);
+    const containerRefs = useRef<Array<HTMLDivElement | null>>([]);
+    const [fullscreenIndex, setFullscreenIndex] = useState<number | null>(null);
+
+    useEffect(() => {
+        const refs = videoRefs.current.filter(Boolean) as HTMLVideoElement[];
+        if (!refs.length) return;
+
+        const observer = new IntersectionObserver(
+            (entries) => {
+                entries.forEach((entry) => {
+                    const video = entry.target as HTMLVideoElement;
+                    if (entry.isIntersecting && entry.intersectionRatio > 0.6) {
+                        video.play().catch(() => null);
+                    } else {
+                        video.pause();
+                    }
+                });
+            },
+            { threshold: [0.25, 0.6, 0.9] }
+        );
+
+        refs.forEach((video) => observer.observe(video));
+        return () => observer.disconnect();
+    }, [urls]);
+
+    const openFullscreen = (index: number) => {
+        const video = videoRefs.current[index];
+        const container = containerRefs.current[index];
+        if (!video) return;
+        const anyVideo = video as any;
+        video.controls = true;
+        if (typeof anyVideo.webkitEnterFullscreen === "function") {
+            anyVideo.webkitEnterFullscreen();
+            return;
+        }
+        if (container && typeof container.requestFullscreen === "function") {
+            container.requestFullscreen().catch(() => null);
+        }
+    };
+
+    useEffect(() => {
+        const refs = videoRefs.current.filter(Boolean) as HTMLVideoElement[];
+        if (!refs.length) return;
+
+        const handleFullscreenChange = () => {
+            const fullscreenEl = document.fullscreenElement as HTMLElement | null;
+            const idx = fullscreenEl
+                ? containerRefs.current.findIndex((el) => el === fullscreenEl)
+                : -1;
+            setFullscreenIndex(idx >= 0 ? idx : null);
+            refs.forEach((video) => {
+                if (!fullscreenEl) {
+                    video.controls = false;
+                }
+            });
+        };
+
+        const handlers = refs.map((video) => {
+            const onBegin = () => {
+                video.controls = true;
+            };
+            const onEnd = () => {
+                video.controls = false;
+            };
+            video.addEventListener("webkitbeginfullscreen", onBegin as EventListener);
+            video.addEventListener("webkitendfullscreen", onEnd as EventListener);
+            return { video, onBegin, onEnd };
+        });
+
+        document.addEventListener("fullscreenchange", handleFullscreenChange);
+        return () => {
+            document.removeEventListener("fullscreenchange", handleFullscreenChange);
+            handlers.forEach(({ video, onBegin, onEnd }) => {
+                video.removeEventListener("webkitbeginfullscreen", onBegin as EventListener);
+                video.removeEventListener("webkitendfullscreen", onEnd as EventListener);
+            });
+        };
+    }, [urls]);
+
+    return (
+        <Carousel opts={{ align: "start" }} className="relative">
+            <CarouselContent>
+                {urls.map((url, index) => (
+                    <CarouselItem key={`${url}-${index}`} className="basis-[45%] md:basis-1/5 lg:basis-1/6">
+                        <div className="px-0">
+                            <div
+                                ref={(el) => {
+                                    containerRefs.current[index] = el;
+                                }}
+                                className="relative overflow-hidden rounded-xl bg-black"
+                                onClick={() => openFullscreen(index)}
+                                role="button"
+                                tabIndex={0}
+                                aria-label={`Abrir reel ${index + 1} em tela cheia`}
+                                onKeyDown={(event) => {
+                                    if (event.key === "Enter" || event.key === " ") {
+                                        event.preventDefault();
+                                        openFullscreen(index);
+                                    }
+                                }}
+                            >
+                                <video
+                                    ref={(el) => {
+                                        videoRefs.current[index] = el;
+                                    }}
+                                    className="h-full w-full aspect-[4/5] object-cover"
+                                    src={url}
+                                    muted
+                                    loop
+                                    playsInline
+                                    preload="metadata"
+                                    controls={false}
+                                    aria-label={`Reel ${index + 1}`}
+                                />
+                                {fullscreenIndex === index && (
+                                    <button
+                                        type="button"
+                                        onClick={(event) => {
+                                            event.stopPropagation();
+                                            if (document.fullscreenElement) {
+                                                document.exitFullscreen().catch(() => null);
+                                            }
+                                        }}
+                                        className="absolute right-3 top-3 z-10 inline-flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-lg"
+                                        aria-label="Fechar"
+                                    >
+                                        <X className="h-5 w-5" />
+                                    </button>
+                                )}
+                                <div className={
+                                    cn(
+                                        "pointer-events-none absolute left-3 z-10 flex items-center gap-2",
+                                        fullscreenIndex === index ? "bottom-16" : "bottom-2"
+                                    )
+                                }>
+                                    <Logo circle color="white" className={
+                                        cn(
+                                            fullscreenIndex === index ? "h-11 w-11 p-1.5" : "h-6 w-6 p-0.5"
+                                        )
+                                    } />
+                                    <span className="text-sm font-semibold tracking-wide text-white drop-shadow">
+                                        amodomio
+                                    </span>
+                                </div>
+                                {fullscreenIndex === index && (
+                                    <div className="absolute bottom-16 right-3 z-10">
+                                        <button
+                                            type="button"
+                                            onClick={(event) => {
+                                                event.stopPropagation();
+                                                if (document.fullscreenElement) {
+                                                    document.exitFullscreen().catch(() => null);
+                                                }
+                                            }}
+                                            className="inline-flex h-9 items-center rounded-full bg-black/90 px-4 text-[11px] font-semibold tracking-[0.2em] text-white shadow-lg backdrop-blur-lg"
+                                            aria-label="Voltar"
+                                        >
+                                            VOLTAR
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </CarouselItem>
+                ))}
+            </CarouselContent>
+        </Carousel>
+    );
 }
 
 type ChefSuggestionsCarouselProps = {
