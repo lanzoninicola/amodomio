@@ -262,15 +262,6 @@ export default function CardapioWebIndex() {
         <section className="flex flex-col mb-24" data-element="cardapio-index">
             <Separator className="my-6 md:hidden" />
 
-            {reelUrls.length > 0 ? (
-                <div className="mx-2 md:mx-0 mt-20 md:mt-40">
-                    <h3 className="font-neue text-base md:text-xl font-semibold tracking-wide mb-3">
-                        Reels sugeridos
-                    </h3>
-                    <ReelsCarousel urls={reelUrls} />
-                </div>
-            ) : null}
-
             {/* TOPO: Halloween + Destaques (igual ao teu) */}
             <div
                 className={cn(
@@ -389,6 +380,15 @@ export default function CardapioWebIndex() {
                     </Await>
                 </Suspense>
             </div>
+
+            {reelUrls.length > 0 ? (
+                <div className="mx-4 md:mx-0 my-6">
+                    <h3 className="font-neue text-base md:text-xl font-semibold tracking-wide mb-3">
+                        Reels sugeridos
+                    </h3>
+                    <ReelsCarousel urls={reelUrls} />
+                </div>
+            ) : null}
 
             <Separator className="m-4" />
 
