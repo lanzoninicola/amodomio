@@ -1210,6 +1210,10 @@ model KdsDailyOrderDetail {
   channel     String?
   status      String  @default("novoPedido")
 
+  /// Cliente (opcional)
+  customerName  String? @map("customer_name")
+  customerPhone String? @map("customer_phone")
+
   takeAway Boolean @default(false) @map("take_away")
 
   requestedForOven Boolean @default(false) @map("requested_for_oven")

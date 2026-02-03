@@ -826,6 +826,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
       const dzIdRaw = String(form.get("deliveryZoneId") ?? "").trim();
       const deliveryZoneId = dzIdRaw === "" ? null : dzIdRaw;
+      const customerNameRaw = String(form.get("customerName") ?? "").trim();
+      const customerPhoneRaw = String(form.get("customerPhone") ?? "").trim();
 
       await prisma.kdsDailyOrderDetail.update({
         where: { id },
@@ -840,6 +842,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
           size: stringifySize(sizeCounts as any),
           deliveryZoneId: deliveryZoneId as any,
           isCreditCard: String(form.get("isCreditCard") ?? "") === "on",
+          customerName: customerNameRaw === "" ? null : customerNameRaw,
+          customerPhone: customerPhoneRaw === "" ? null : customerPhoneRaw,
           ...(patchNovoPedidoAt !== undefined ? { novoPedidoAt: patchNovoPedidoAt as any } : {}),
         },
       });
@@ -911,6 +915,15 @@ function RowItem({
   const [sizes, setSizes] = useState<SizeCounts>(sizeCounts);
   const statusText = (o as any).status ?? "pendente";
   const npAt = (o as any).novoPedidoAt ? new Date((o as any).novoPedidoAt as any) : null;
+  const [detailsStatus, setDetailsStatus] = useState<string>((o as any).status ?? "pendente");
+  const [customerName, setCustomerName] = useState<string>((o as any).customerName ?? "");
+  const [customerPhone, setCustomerPhone] = useState<string>((o as any).customerPhone ?? "");
+
+  useEffect(() => {
+    setDetailsStatus((o as any).status ?? "pendente");
+    setCustomerName((o as any).customerName ?? "");
+    setCustomerPhone((o as any).customerPhone ?? "");
+  }, [(o as any).status, (o as any).customerName, (o as any).customerPhone]);
 
   const rowError =
     rowFx.data && typeof (rowFx.data as any) === "object" && (rowFx.data as any).rowId === o.id
@@ -925,6 +938,32 @@ function RowItem({
       : "idle";
   const savingIcon =
     fxState !== "idle" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />;
+
+  const submitRowUpdate = (statusValue: string) => {
+    if (readOnly) return;
+    const fd = new FormData();
+    fd.set("_action", "saveRow");
+    fd.set("id", o.id);
+    fd.set("date", dateStr);
+    fd.set("status", statusValue);
+    fd.set("commandNumber", String(cmdLocal ?? ""));
+    fd.set("orderAmount", String(o.orderAmount ?? 0));
+    fd.set("motoValue", String(o.motoValue ?? 0));
+    fd.set("hasMoto", hasMoto ? "on" : "");
+    fd.set("takeAway", takeAway ? "on" : "");
+    const sc = parseSize(o.size);
+    fd.set("sizeF", String(sc.F));
+    fd.set("sizeM", String(sc.M));
+    fd.set("sizeP", String(sc.P));
+    fd.set("sizeI", String(sc.I));
+    fd.set("sizeFT", String(sc.FT));
+    fd.set("channel", String((o.channel ?? "").trim()));
+    fd.set("deliveryZoneId", String(deliveryZoneId ?? ""));
+    fd.set("isCreditCard", String(isCreditCard ? "on" : ""));
+    fd.set("customerName", customerName.trim());
+    fd.set("customerPhone", customerPhone.trim());
+    rowFx.submit(fd, { method: "post" });
+  };
 
   return (
     <li key={o.id} className="flex flex-col">
@@ -1108,35 +1147,23 @@ function RowItem({
             onOpenChange={(v) => !v && setDetailsOpenId(false)}
             createdAt={(o as any).novoPedidoAt as any}
             nowMs={nowMs}
-            status={o.status ?? "pendente"}
+            status={detailsStatus}
             onStatusChange={(value) => {
-              if (readOnly) return;
-              const fd = new FormData();
-              fd.set("_action", "saveRow");
-              fd.set("id", o.id);
-              fd.set("date", dateStr);
-              fd.set("status", value);
-              fd.set("commandNumber", String(cmdLocal ?? ""));
-              fd.set("orderAmount", String(o.orderAmount ?? 0));
-              fd.set("motoValue", String(o.motoValue ?? 0));
-              fd.set("hasMoto", hasMoto ? "on" : "");
-              fd.set("takeAway", takeAway ? "on" : "");
-              const sc = parseSize(o.size);
-              fd.set("sizeF", String(sc.F));
-              fd.set("sizeM", String(sc.M));
-              fd.set("sizeP", String(sc.P));
-              fd.set("sizeI", String(sc.I));
-              fd.set("sizeFT", String(sc.FT));
-              fd.set("channel", String((o.channel ?? "").trim()));
-              fd.set("deliveryZoneId", String(deliveryZoneId ?? ""));
-              fd.set("isCreditCard", String(isCreditCard ? "on" : ""));
-              rowFx.submit(fd, { method: "post" });
+              setDetailsStatus(value);
+              submitRowUpdate(value);
             }}
-            onSubmit={() => setDetailsOpenId(false)}
+            onSubmit={() => {
+              submitRowUpdate(detailsStatus);
+              setDetailsOpenId(false);
+            }}
             orderAmount={Number(o.orderAmount ?? 0)}
             motoValue={Number(o.motoValue ?? 0)}
             sizeSummary={sizeSummary(parseSize(o.size))}
             channel={(o.channel ?? "").trim()}
+            customerName={customerName}
+            customerPhone={customerPhone}
+            onCustomerNameChange={setCustomerName}
+            onCustomerPhoneChange={setCustomerPhone}
           />
         </rowFx.Form>
       </div>
