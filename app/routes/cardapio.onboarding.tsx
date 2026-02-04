@@ -40,15 +40,15 @@ function applyTemplate(template: string, params: Record<string, string>) {
 function formatWhatsappName(name: string) {
   const safe = name.trim().replace(/\s+/g, " ");
   if (!safe) return "";
-  return safe
+  const title = safe
     .split(" ")
     .map((part) => {
       const first = part.charAt(0).toUpperCase();
       const rest = part.slice(1).toLowerCase();
-      if (!rest) return first;
-      return `${first}\u200b*${rest}*`;
+      return `${first}${rest}`;
     })
     .join(" ");
+  return `*${title}*`;
 }
 
 function escapeRegExp(value: string) {
