@@ -18,6 +18,12 @@ Prisma configuration, env vars, and migration notes are documented in:
 
 - `prisma/README.md`
 
+## KDS REST API
+
+Documentação da API REST do KDS (criação de pedidos e delivery zones):
+
+- `app/domain/kds/README.md`
+
 ## Deployment
 
 First, build your app for production:

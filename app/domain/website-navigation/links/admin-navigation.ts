@@ -383,6 +383,12 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
       disabled: false,
       items: [
         {
+          title: "Configurações globais",
+          href: "/admin/administracao/settings",
+          items: [],
+          disabled: false,
+        },
+        {
           title: "Usuários",
           href: "/admin/users",
           items: [],

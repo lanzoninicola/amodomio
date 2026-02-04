@@ -30,4 +30,6 @@ export type OrderRow = {
   orderAmount?: DecimalLike | null;
   channel?: string | null;
   status?: string | null;
+  customerName?: string | null;
+  customerPhone?: string | null;
 };

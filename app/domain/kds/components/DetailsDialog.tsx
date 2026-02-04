@@ -1,9 +1,41 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { fmtElapsedHHMM, fmtHHMM } from "../utils/date";
-export function DetailsDialog({ open, onOpenChange, createdAt, nowMs, status, onStatusChange, onSubmit, orderAmount, motoValue, sizeSummary, channel, }:
-{ open: boolean; onOpenChange: (v: boolean) => void; createdAt?: string | Date | null; nowMs: number; status: string; onStatusChange: (value: string) => void; onSubmit: () => void; orderAmount?: number; motoValue?: number; sizeSummary?: string; channel?: string | null; }) {
+export function DetailsDialog({
+  open,
+  onOpenChange,
+  createdAt,
+  nowMs,
+  status,
+  onStatusChange,
+  onSubmit,
+  orderAmount,
+  motoValue,
+  sizeSummary,
+  channel,
+  customerName,
+  customerPhone,
+  onCustomerNameChange,
+  onCustomerPhoneChange,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  createdAt?: string | Date | null;
+  nowMs: number;
+  status: string;
+  onStatusChange: (value: string) => void;
+  onSubmit: () => void;
+  orderAmount?: number;
+  motoValue?: number;
+  sizeSummary?: string;
+  channel?: string | null;
+  customerName?: string | null;
+  customerPhone?: string | null;
+  onCustomerNameChange?: (value: string) => void;
+  onCustomerPhoneChange?: (value: string) => void;
+}) {
   return (<Dialog open={open} onOpenChange={onOpenChange}>
     <DialogContent className="sm:max-w-lg">
       <DialogHeader><DialogTitle>Detalhes</DialogTitle><DialogDescription>Informações completas do registro</DialogDescription></DialogHeader>
@@ -14,7 +46,7 @@ export function DetailsDialog({ open, onOpenChange, createdAt, nowMs, status, on
         </div>
         <div className="space-y-2">
           <div className="text-gray-500">Status</div>
-          <Select defaultValue={status} onValueChange={onStatusChange}>
+          <Select value={status} onValueChange={onStatusChange}>
             <SelectTrigger className="w-full h-9 text-xs"><SelectValue placeholder="Status" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="pendente">(0) Pendente</SelectItem>
@@ -25,6 +57,26 @@ export function DetailsDialog({ open, onOpenChange, createdAt, nowMs, status, on
               <SelectItem value="finalizado">(5) Finalizado</SelectItem>
             </SelectContent>
           </Select>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <div className="text-gray-500">Nome do cliente</div>
+            <Input
+              value={customerName ?? ""}
+              onChange={(e) => onCustomerNameChange?.(e.target.value)}
+              placeholder="Opcional"
+              className="h-9 text-xs"
+            />
+          </div>
+          <div className="space-y-1">
+            <div className="text-gray-500">Telefone do cliente</div>
+            <Input
+              value={customerPhone ?? ""}
+              onChange={(e) => onCustomerPhoneChange?.(e.target.value)}
+              placeholder="Opcional"
+              className="h-9 text-xs"
+            />
+          </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div><div className="text-gray-500">Pedido (R$)</div><div className="font-mono">{(orderAmount ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</div></div>
