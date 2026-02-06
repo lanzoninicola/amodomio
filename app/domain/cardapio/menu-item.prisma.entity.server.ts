@@ -244,6 +244,176 @@ export class MenuItemPrismaEntity {
     return returnedRecords;
   }
 
+  async findAllLight(
+    params: MenuItemEntityFindAllParams = {
+      where: {},
+      mock: false,
+      sellingChannelKey: "cardapio",
+    },
+    options: MenuItemEntityFindAllOptions = {
+      imageTransform: false,
+      imageScaleWidth: 1280,
+      cacheRevalidation: false,
+    }
+  ) {
+    const { imageScaleWidth = 1280, cacheRevalidation = false } =
+      options || {};
+
+    const cacheKey = `MenuItemPrismaEntity.findAllLight:${JSON.stringify(
+      params
+    )}`;
+    let result = this.cacheManager.get<MenuItemWithAssociations[]>(cacheKey);
+
+    const shouldUseCache =
+      result !== undefined && cacheRevalidation === false;
+
+    if (shouldUseCache) {
+      return result;
+    }
+
+    if (params?.mock) {
+      return [] as MenuItemWithAssociations[];
+    }
+
+    const recordsFounded = await this.client.menuItem.findMany({
+      where: params?.where,
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        ingredients: true,
+        sortOrderIndex: true,
+        visible: true,
+        active: true,
+        upcoming: true,
+        MenuItemImage: {
+          select: {
+            publicId: true,
+          },
+        },
+        MenuItemGalleryImage: {
+          select: {
+            isPrimary: true,
+            secureUrl: true,
+          },
+        },
+        MenuItemGroup: {
+          select: {
+            id: true,
+            name: true,
+            sortOrderIndex: true,
+          },
+        },
+        Category: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        tags: {
+          select: {
+            Tag: {
+              select: {
+                id: true,
+                name: true,
+                public: true,
+              },
+            },
+          },
+        },
+        MenuItemSellingPriceVariation: {
+          where: {
+            MenuItemSellingChannel: {
+              key: params.sellingChannelKey || "cardapio",
+            },
+          },
+          orderBy: {
+            priceAmount: "asc",
+          },
+          select: {
+            id: true,
+            priceAmount: true,
+            profitActualPerc: true,
+            profitExpectedPerc: true,
+            showOnCardapio: true,
+            MenuItemSellingChannel: {
+              select: {
+                id: true,
+                key: true,
+                name: true,
+              },
+            },
+            MenuItemSize: {
+              select: {
+                id: true,
+                name: true,
+                nameShort: true,
+                sortOrderIndex: true,
+              },
+            },
+          },
+        },
+        _count: {
+          select: {
+            MenuItemLike: true,
+            MenuItemShare: true,
+          },
+        },
+      },
+    });
+
+    const records = recordsFounded.map((r) => ({
+      ...r,
+      MenuItemLike: [] as MenuItemLike[],
+      MenuItemShare: [] as MenuItemShare[],
+      imageTransformedURL: CloudinaryUtils.scaleWidth(
+        r.MenuItemImage?.publicId || "",
+        { width: imageScaleWidth }
+      ),
+      imagePlaceholderURL: CloudinaryUtils.scaleWidth(
+        r.MenuItemImage?.publicId || "",
+        { width: 20, quality: 1, blur: 1000 }
+      ),
+      tags: {
+        all: r.tags.map((t) => t.Tag?.name ?? ""),
+        public: r.tags
+          .filter((t) => t.Tag?.public === true)
+          .map((t) => t.Tag?.name ?? ""),
+        models: r.tags.map((t) => t.Tag),
+      },
+      likes: { amount: r._count.MenuItemLike },
+      shares: { amount: r._count.MenuItemShare },
+      meta: {
+        isItalyProduct: r.tags.some(
+          (t) => t.Tag?.name.toLowerCase() === "produtos-italiano"
+        ),
+        isBestSeller: r.tags.some(
+          (t) => t.Tag?.name.toLowerCase() === "mais-vendido"
+        ),
+        isMonthlyBestSeller: r.tags.some(
+          (t) => t.Tag?.name.toLowerCase() === "mais-vendido-mes"
+        ),
+        isChefSpecial: r.tags.some(
+          (t) => t.Tag?.name.toLowerCase() === "especial-chef"
+        ),
+        isMonthlySpecial: r.tags.some(
+          (t) => t.Tag?.name.toLowerCase() === "especial-mes"
+        ),
+      },
+    })) as MenuItemWithAssociations[];
+
+    const returnedRecords = params?.option?.sorted
+      ? records.sort((a, b) => {
+          const direction = params.option?.direction === "asc" ? 1 : -1;
+          return (a.sortOrderIndex - b.sortOrderIndex) * direction;
+        })
+      : [...records];
+
+    this.cacheManager.set(cacheKey, returnedRecords);
+
+    return returnedRecords;
+  }
+
   async findAllGroupedByCategory(
     params: MenuItemEntityFindAllParams = {},
     options = {
@@ -317,6 +487,53 @@ export class MenuItemPrismaEntity {
           (a.sortOrderIndex - b.sortOrderIndex) * direction ||
           a.name.localeCompare(b.name)
       ) // desempate opcional por nome
+      .map((g) => ({
+        groupId: g.id,
+        group: g.name,
+        sortOrderIndex: g.sortOrderIndex,
+        menuItems: g.items,
+      }));
+
+    return result;
+  }
+
+  async findAllGroupedByGroupLight(
+    params: MenuItemEntityFindAllParams = {},
+    options = {
+      imageTransform: false,
+      imageScaleWidth: 1280,
+    }
+  ) {
+    const allMenuItems = (await this.findAllLight(params, options)) || [];
+
+    const direction = params.option?.direction === "desc" ? -1 : 1;
+
+    const grouped = allMenuItems.reduce((acc, menuItem) => {
+      const g = menuItem.MenuItemGroup;
+      const key = g?.id ?? "__sem_grupo__";
+
+      if (!acc[key]) {
+        acc[key] = {
+          id: key,
+          name: g?.name ?? "Sem grupo",
+          sortOrderIndex:
+            typeof g?.sortOrderIndex === "number"
+              ? g.sortOrderIndex
+              : Number.MAX_SAFE_INTEGER,
+          items: [] as MenuItemWithAssociations[],
+        };
+      }
+
+      acc[key].items.push(menuItem);
+      return acc;
+    }, {} as Record<string, { id: string; name: string; sortOrderIndex: number; items: MenuItemWithAssociations[] }>);
+
+    const result = Object.values(grouped)
+      .sort(
+        (a, b) =>
+          (a.sortOrderIndex - b.sortOrderIndex) * direction ||
+          a.name.localeCompare(b.name)
+      )
       .map((g) => ({
         groupId: g.id,
         group: g.name,
