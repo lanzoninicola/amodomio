@@ -676,6 +676,19 @@ model MenuItemShare {
   @@map("menu_item_shares")
 }
 
+model RateLimitBucket {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  count       Int      @default(0)
+  windowStart DateTime @map("window_start")
+  expiresAt   DateTime @map("expires_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@index([expiresAt])
+  @@map("rate_limit_buckets")
+}
+
 model MenuItemInterestEvent {
   id         String   @id @default(uuid())
   menuItemId String   @map("menu_item_id")

@@ -175,6 +175,7 @@ export class MenuItemPrismaEntity {
         MenuItemLike: {
           where: {
             deletedAt: null,
+            amount: { gt: 0, lte: 1 },
           },
         },
         MenuItemShare: true,
@@ -321,6 +322,15 @@ export class MenuItemPrismaEntity {
             },
           },
         },
+        MenuItemLike: {
+          where: {
+            deletedAt: null,
+            amount: { gt: 0, lte: 1 },
+          },
+          select: {
+            id: true,
+          },
+        },
         MenuItemSellingPriceVariation: {
           where: {
             MenuItemSellingChannel: {
@@ -355,7 +365,6 @@ export class MenuItemPrismaEntity {
         },
         _count: {
           select: {
-            MenuItemLike: true,
             MenuItemShare: true,
           },
         },
@@ -381,7 +390,7 @@ export class MenuItemPrismaEntity {
           .map((t) => t.Tag?.name ?? ""),
         models: r.tags.map((t) => t.Tag),
       },
-      likes: { amount: r._count.MenuItemLike },
+      likes: { amount: r.MenuItemLike?.length ?? 0 },
       shares: { amount: r._count.MenuItemShare },
       meta: {
         isItalyProduct: r.tags.some(
@@ -759,6 +768,7 @@ export class MenuItemPrismaEntity {
         MenuItemLike: {
           where: {
             deletedAt: null,
+            amount: { gt: 0, lte: 1 },
           },
         },
         MenuItemShare: true,
@@ -824,6 +834,7 @@ export class MenuItemPrismaEntity {
         MenuItemLike: {
           where: {
             deletedAt: null,
+            amount: { gt: 0, lte: 1 },
           },
         },
         MenuItemShare: true,

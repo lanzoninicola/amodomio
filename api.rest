@@ -220,7 +220,7 @@ x-api-key: {{REST_API_KEY}}
 
 {
   "date": "2026-02-03",
-  "commandNumber": 1,
+    "commandNumber": 1,
     "orderAmount": 89.90,
     "channel": "CARDÁPIO",
     "sizes": { "M": 1, "P": 2 },
