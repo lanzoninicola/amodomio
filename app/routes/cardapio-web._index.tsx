@@ -14,6 +14,15 @@ import { badRequest, ok } from "~/utils/http-response.server";
 import { menuItemSharePrismaEntity } from "~/domain/cardapio/menu-item-share.prisma.entity.server";
 import WEBSITE_LINKS from "~/domain/website-navigation/links/website-links";
 import ItalyFlag from "~/components/italy-flag/italy-flag";
+import {
+    createMenuItemInterestEvent,
+    hasRecentMenuItemInterestEvent
+} from "~/domain/cardapio/menu-item-interest/menu-item-interest.server";
+import { getOrCreateMenuItemInterestClientId } from "~/domain/cardapio/menu-item-interest/menu-item-interest.client";
+import {
+    buildLikeRateLimitContext,
+    consumeLikeRateLimit
+} from "~/domain/rate-limit/like-rate-limit.server";
 
 export const headers: HeadersFunction = () => ({
     'Cache-Control': 's-maxage=1, stale-while-revalidate=59',
@@ -25,14 +34,50 @@ export async function action({ request }: ActionFunctionArgs) {
 
 
     if (values?.action === "menu-item-like-it") {
-        const itemId = values?.itemId as string
-        let amount = 0
+        const itemId = typeof values?.itemId === "string" ? values.itemId : "";
+        const clientId = typeof values?.clientId === "string" ? values.clientId : null;
 
-        amount = isNaN(Number(values?.likesAmount)) ? 1 : Number(values?.likesAmount)
+        const rateLimitContext = await buildLikeRateLimitContext(request);
+        const responseHeaders = rateLimitContext.headers ?? undefined;
+
+        if (!itemId || !clientId) {
+            return badRequest({
+                action: "menu-item-like-it",
+                likeAmount: 0
+            }, { headers: responseHeaders });
+        }
+
+        const alreadyLiked = await hasRecentMenuItemInterestEvent({
+            menuItemId: itemId,
+            type: "like",
+            clientId
+        });
+
+        if (alreadyLiked) {
+            const currentAmount = await menuItemLikePrismaEntity.countByMenuItemId(itemId);
+            return ok({
+                action: "menu-item-like-it",
+                likeAmount: currentAmount
+            }, { headers: responseHeaders });
+        }
+
+        const rateLimitResult = await consumeLikeRateLimit({
+            menuItemId: itemId,
+            rateLimitId: rateLimitContext.rateLimitId,
+            ip: rateLimitContext.ip
+        });
+
+        if (!rateLimitResult.allowed) {
+            const currentAmount = await menuItemLikePrismaEntity.countByMenuItemId(itemId);
+            return ok({
+                action: "menu-item-like-it",
+                likeAmount: currentAmount
+            }, { headers: responseHeaders });
+        }
 
         const [err, likeAmount] = await prismaIt(menuItemLikePrismaEntity.create({
             createdAt: new Date().toISOString(),
-            amount,
+            amount: 1,
             MenuItem: {
                 connect: {
                     id: itemId,
@@ -44,13 +89,19 @@ export async function action({ request }: ActionFunctionArgs) {
             return badRequest({
                 action: "menu-item-like-it",
                 likeAmount
-            })
+            }, { headers: responseHeaders })
         }
+
+        await createMenuItemInterestEvent({
+            menuItemId: itemId,
+            type: "like",
+            clientId
+        });
 
         return ok({
             action: "menu-item-like-it",
             likeAmount
-        })
+        }, { headers: responseHeaders })
 
     }
 
@@ -260,11 +311,13 @@ function CardapioItemActionBarVertical({ item }: { item: MenuItemWithAssociation
         setLikeIt(true)
         setLikesAmount(likesAmount + 1)
 
+        const clientId = getOrCreateMenuItemInterestClientId();
         fetcher.submit(
             {
                 action: "menu-item-like-it",
                 itemId: item.id,
                 likesAmount: String(1),
+                clientId: clientId || "",
             },
             { method: 'post' }
         );

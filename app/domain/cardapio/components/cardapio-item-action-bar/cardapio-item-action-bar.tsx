@@ -8,6 +8,7 @@ import WhatsAppIcon from "~/components/primitives/whatsapp/whatsapp-icon";
 import { cn } from "~/lib/utils";
 import { useSoundEffects } from "~/components/sound-effects/use-sound-effects";
 import { Button } from "~/components/ui/button";
+import { getOrCreateMenuItemInterestClientId } from "~/domain/cardapio/menu-item-interest/menu-item-interest.client";
 
 interface CardapioItemActionBarProps { item: MenuItemWithAssociations, cnContainer?: string }
 
@@ -26,11 +27,13 @@ export function CardapioItemActionBarVertical({ item, cnContainer }: CardapioIte
         setLikeIt(true)
         setLikesAmount(likesAmount + 1)
 
+        const clientId = getOrCreateMenuItemInterestClientId();
         fetcher.submit(
             {
                 action: "menu-item-like-it",
                 itemId: item.id,
                 likesAmount: String(1),
+                clientId: clientId || "",
             },
             { method: 'post' }
         );
@@ -130,11 +133,13 @@ export function CardapioItemActionBarHorizontal({ item, cnContainer }: CardapioI
         setLikeIt(true)
         setLikesAmount(likesAmount + 1)
 
+        const clientId = getOrCreateMenuItemInterestClientId();
         fetcher.submit(
             {
                 action: "menu-item-like-it",
                 itemId: item.id,
                 likesAmount: String(1),
+                clientId: clientId || "",
             },
             { method: 'post' }
         );
@@ -275,11 +280,13 @@ export function LikeIt({
         setLikeIt(true)
         setLikesAmount(likesAmount + 1)
 
+        const clientId = getOrCreateMenuItemInterestClientId();
         fetcher.submit(
             {
                 action: "menu-item-like-it",
                 itemId: item.id,
                 likesAmount: String(1),
+                clientId: clientId || "",
             },
             { method: 'post' }
         );

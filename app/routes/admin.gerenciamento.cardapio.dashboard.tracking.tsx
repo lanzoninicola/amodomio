@@ -158,19 +158,33 @@ export async function loader({ request }: LoaderFunctionArgs) {
     prismaClient.menuItemLike.groupBy({
       by: ["menuItemId"],
       _sum: { amount: true },
-      where: { createdAt: { gte: currentMonth.start, lt: currentMonth.end }, deletedAt: null },
+      where: {
+        createdAt: { gte: currentMonth.start, lt: currentMonth.end },
+        deletedAt: null,
+        amount: { gt: 0, lte: 1 },
+      },
     }),
     prismaClient.menuItemLike.groupBy({
       by: ["menuItemId"],
       _sum: { amount: true },
-      where: { createdAt: { gte: previousMonth.start, lt: previousMonth.end }, deletedAt: null },
+      where: {
+        createdAt: { gte: previousMonth.start, lt: previousMonth.end },
+        deletedAt: null,
+        amount: { gt: 0, lte: 1 },
+      },
     }),
     prismaClient.menuItemLike.groupBy({
       by: ["menuItemId"],
       _sum: { amount: true },
       ...(rangeStart
-        ? { where: { createdAt: { gte: rangeStart }, deletedAt: null } }
-        : { where: { deletedAt: null } }),
+        ? {
+            where: {
+              createdAt: { gte: rangeStart },
+              deletedAt: null,
+              amount: { gt: 0, lte: 1 },
+            },
+          }
+        : { where: { deletedAt: null, amount: { gt: 0, lte: 1 } } }),
     }),
     prismaClient.menuItemShare.groupBy({
       by: ["menuItemId"],
