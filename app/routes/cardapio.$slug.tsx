@@ -10,6 +10,7 @@ import { CardapioItemPrice, CardapioItemPriceSelect } from "~/domain/cardapio/co
 import ItalyIngredientsStatement from "~/domain/cardapio/components/italy-ingredient-statement/italy-ingredient-statement";
 import { menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
+import { getEngagementSettings } from "~/domain/cardapio/engagement-settings.server";
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const { slug } = params;
@@ -20,14 +21,16 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   // Aqui você pode buscar o item do cardápio pelo ID
   const itemQuery = prismaIt(menuItemPrismaEntity.findBySlug(slug as string));
+  const engagementSettings = await getEngagementSettings();
 
   return defer({
     itemQuery,
+    engagementSettings,
   });
 }
 
 export default function SingleCardapioItem() {
-  const { itemQuery } = useLoaderData<typeof loader>();
+  const { itemQuery, engagementSettings } = useLoaderData<typeof loader>();
 
 
   return (
@@ -66,29 +69,35 @@ export default function SingleCardapioItem() {
                 {/* Conteúdo */}
                 <div className="flex flex-col">
                   {/* Ações */}
-                  <div className="flex justify-between gap-6 mt-2 mb-4 md:mt-0 md:mb-0 md:p-0">
-                    <div className="flex items-center gap-2 hover:bg-zinc-100 hover:cursor-pointer md:px-2 md:rounded-md">
-                      <ShareIt
-                        item={item}
-                        size={22}
-                        cnContainer="p-2 rounded-md transition-colors "
-                      />
-                      <span className="hidden md:inline font-neue text-xs uppercase font-semibold tracking-widest text-zinc-600">
-                        Compartilhar
-                      </span>
+                  {(engagementSettings.sharesEnabled || engagementSettings.likesEnabled) && (
+                    <div className="flex justify-between gap-6 mt-2 mb-4 md:mt-0 md:mb-0 md:p-0">
+                      {engagementSettings.sharesEnabled && (
+                        <div className="flex items-center gap-2 hover:bg-zinc-100 hover:cursor-pointer md:px-2 md:rounded-md">
+                          <ShareIt
+                            item={item}
+                            size={22}
+                            cnContainer="p-2 rounded-md transition-colors "
+                          />
+                          <span className="hidden md:inline font-neue text-xs uppercase font-semibold tracking-widest text-zinc-600">
+                            Compartilhar
+                          </span>
+                        </div>
+                      )}
+                      {engagementSettings.likesEnabled && (
+                        <div className="flex items-center gap-2 hover:bg-red-200 hover:cursor-pointer md:px-2 md:rounded-md">
+                          <LikeIt
+                            item={item}
+                            size={22}
+                            cnLabel="text-sm"
+                            cnContainer="p-2 rounded-md transition-colors hover:bg-red-200 md:p-0"
+                          />
+                          <span className="hidden md:inline font-neue text-xs uppercase font-semibold tracking-widest text-red-500">
+                            Gostei
+                          </span>
+                        </div>
+                      )}
                     </div>
-                    <div className="flex items-center gap-2 hover:bg-red-200 hover:cursor-pointer md:px-2 md:rounded-md">
-                      <LikeIt
-                        item={item}
-                        size={22}
-                        cnLabel="text-sm"
-                        cnContainer="p-2 rounded-md transition-colors hover:bg-red-200 md:p-0"
-                      />
-                      <span className="hidden md:inline font-neue text-xs uppercase font-semibold tracking-widest text-red-500">
-                        Gostei
-                      </span>
-                    </div>
-                  </div>
+                  )}
 
                   <Separator className="my-4" />
 

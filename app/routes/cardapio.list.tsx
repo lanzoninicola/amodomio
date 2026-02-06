@@ -12,6 +12,7 @@ import { Badge } from "~/components/ui/badge";
 import BadgeTag from "~/domain/tags/components/badge-tag";
 import { FiltersTags } from "~/domain/cardapio/components/filter-tags/filter-tags";
 import CardapioTabs from "~/domain/cardapio/components/cardapio-tabs/cardapio-tabs";
+import { getEngagementSettings } from "~/domain/cardapio/engagement-settings.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
     const env = process.env?.NODE_ENV
@@ -46,16 +47,20 @@ export async function loader({ request }: LoaderFunctionArgs) {
         public: true
     })
 
+    const { likesEnabled, sharesEnabled } = await getEngagementSettings();
+
     return defer({
         items,
-        tags
+        tags,
+        likesEnabled,
+        sharesEnabled
     })
 
 
 }
 
 export default function CardapioList() {
-    const { items, tags } = useLoaderData<typeof loader>()
+    const { items, tags, likesEnabled, sharesEnabled } = useLoaderData<typeof loader>()
 
     return (
         <section>
@@ -76,7 +81,13 @@ export default function CardapioList() {
 
                         {(items) => {
                             // @ts-ignore
-                            return <CardapioItemList allItems={items ?? []} />
+                            return (
+                                <CardapioItemList
+                                    allItems={items ?? []}
+                                    likesEnabled={likesEnabled}
+                                    sharesEnabled={sharesEnabled}
+                                />
+                            )
                         }}
                     </Await>
 
@@ -88,7 +99,15 @@ export default function CardapioList() {
     );
 }
 
-const CardapioItemList = ({ allItems }: { allItems: MenuItemWithAssociations[] }) => {
+const CardapioItemList = ({
+    allItems,
+    likesEnabled,
+    sharesEnabled
+}: {
+    allItems: MenuItemWithAssociations[];
+    likesEnabled: boolean;
+    sharesEnabled: boolean;
+}) => {
     const [searchParams] = useSearchParams();
     const currentFilterTag = searchParams.get("tag");
 
@@ -203,7 +222,11 @@ const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) =>
                     <CardapioItemPrice prices={item?.priceVariations} cnLabel="text-black" />
                 </div>
             </div>
-            <CardapioItemActionBarVertical item={item} />
+            <CardapioItemActionBarVertical
+                item={item}
+                likesEnabled={likesEnabled}
+                sharesEnabled={sharesEnabled}
+            />
 
             {/* </CardapioItemDialog> */}
         </li>
@@ -256,4 +279,3 @@ function CardapioItemPrice({ prices, cnLabel }: CardapioItemPriceProps) {
         </div>
     )
 }
-

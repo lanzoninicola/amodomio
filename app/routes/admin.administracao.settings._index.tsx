@@ -8,9 +8,16 @@ import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, Di
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import prismaClient from "~/lib/prisma/client.server";
+import { parseBooleanSetting } from "~/utils/parse-boolean-setting";
+import {
+  ENGAGEMENT_SETTINGS_CONTEXT,
+  LIKE_SETTING_NAME,
+  SHARE_SETTING_NAME,
+} from "~/domain/cardapio/engagement-settings.server";
 
 const SETTING_TYPES = ["string", "boolean", "float", "int", "json"] as const;
 
@@ -52,6 +59,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
     orderBy: [{ createdAt: "desc" }],
   });
 
+  const [likesSetting, sharesSetting] = await Promise.all([
+    prismaClient.setting.findFirst({
+      where: { context: ENGAGEMENT_SETTINGS_CONTEXT, name: LIKE_SETTING_NAME },
+      orderBy: [{ createdAt: "desc" }],
+    }),
+    prismaClient.setting.findFirst({
+      where: { context: ENGAGEMENT_SETTINGS_CONTEXT, name: SHARE_SETTING_NAME },
+      orderBy: [{ createdAt: "desc" }],
+    }),
+  ]);
+
   const contextsRows = await prismaClient.setting.findMany({
     distinct: ["context"],
     select: { context: true },
@@ -61,7 +79,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     .filter(Boolean)
     .sort((a, b) => a.localeCompare(b, "pt-BR"));
 
-  return json({ settings, q, context, contexts });
+  return json({ settings, q, context, contexts, likesSetting, sharesSetting });
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -70,6 +88,64 @@ export async function action({ request }: ActionFunctionArgs) {
 
   try {
     switch (action) {
+      case "toggle-cardapio-likes": {
+        const enabled = formData.get("cardapioLikesEnabled") === "on";
+        const existing = await prismaClient.setting.findFirst({
+          where: { context: ENGAGEMENT_SETTINGS_CONTEXT, name: LIKE_SETTING_NAME },
+          orderBy: [{ createdAt: "desc" }],
+        });
+
+        if (existing) {
+          await prismaClient.setting.update({
+            where: { id: existing.id },
+            data: {
+              value: enabled ? "true" : "false",
+              type: "boolean",
+            },
+          });
+        } else {
+          await prismaClient.setting.create({
+            data: {
+              context: ENGAGEMENT_SETTINGS_CONTEXT,
+              name: LIKE_SETTING_NAME,
+              type: "boolean",
+              value: enabled ? "true" : "false",
+              createdAt: new Date(),
+            },
+          });
+        }
+
+        return redirect("/admin/administracao/settings");
+      }
+      case "toggle-cardapio-shares": {
+        const enabled = formData.get("cardapioSharesEnabled") === "on";
+        const existing = await prismaClient.setting.findFirst({
+          where: { context: ENGAGEMENT_SETTINGS_CONTEXT, name: SHARE_SETTING_NAME },
+          orderBy: [{ createdAt: "desc" }],
+        });
+
+        if (existing) {
+          await prismaClient.setting.update({
+            where: { id: existing.id },
+            data: {
+              value: enabled ? "true" : "false",
+              type: "boolean",
+            },
+          });
+        } else {
+          await prismaClient.setting.create({
+            data: {
+              context: ENGAGEMENT_SETTINGS_CONTEXT,
+              name: SHARE_SETTING_NAME,
+              type: "boolean",
+              value: enabled ? "true" : "false",
+              createdAt: new Date(),
+            },
+          });
+        }
+
+        return redirect("/admin/administracao/settings");
+      }
       case "create": {
         const context = str(formData.get("context"));
         const name = str(formData.get("name"));
@@ -157,9 +233,12 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function AdminSettingsPage() {
-  const { settings, q, context, contexts } = useLoaderData<typeof loader>();
+  const { settings, q, context, contexts, likesSetting, sharesSetting } =
+    useLoaderData<typeof loader>();
   const submit = useSubmit();
   const actionData = useActionData<typeof action>();
+  const likesEnabled = parseBooleanSetting(likesSetting?.value, true);
+  const sharesEnabled = parseBooleanSetting(sharesSetting?.value, true);
 
   return (
     <div className="space-y-6 p-4 md:p-8">
@@ -173,6 +252,47 @@ export default function AdminSettingsPage() {
 
         <CreateDialog contexts={contexts} defaultError={actionData as any} />
       </div>
+
+      <Card>
+        <CardHeader className="flex flex-col gap-1">
+          <CardTitle className="text-lg">Engajamento do cardápio</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Ativa ou desativa os botões de curtir e compartilhar no cardápio.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Form
+            method="post"
+            className="flex items-center justify-between gap-4"
+            onChange={(event) => submit(event.currentTarget)}
+          >
+            <input type="hidden" name="_action" value="toggle-cardapio-likes" />
+            <Label htmlFor="cardapioLikesEnabled" className="font-medium">
+              {likesEnabled ? "Curtir ativo" : "Curtir desativado"}
+            </Label>
+            <Switch
+              id="cardapioLikesEnabled"
+              name="cardapioLikesEnabled"
+              defaultChecked={likesEnabled}
+            />
+          </Form>
+          <Form
+            method="post"
+            className="flex items-center justify-between gap-4"
+            onChange={(event) => submit(event.currentTarget)}
+          >
+            <input type="hidden" name="_action" value="toggle-cardapio-shares" />
+            <Label htmlFor="cardapioSharesEnabled" className="font-medium">
+              {sharesEnabled ? "Compartilhar ativo" : "Compartilhar desativado"}
+            </Label>
+            <Switch
+              id="cardapioSharesEnabled"
+              name="cardapioSharesEnabled"
+              defaultChecked={sharesEnabled}
+            />
+          </Form>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
