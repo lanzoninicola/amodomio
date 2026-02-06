@@ -64,7 +64,7 @@ export const headers: HeadersFunction = () => ({
 export async function loader({ request }: LoaderFunctionArgs) {
     // itens agrupados do cardápio
     // @ts-ignore
-    const items = menuItemPrismaEntity.findAllGroupedByGroup(
+    const items = menuItemPrismaEntity.findAllGroupedByGroupLight(
         {
             where: {
                 visible: true
