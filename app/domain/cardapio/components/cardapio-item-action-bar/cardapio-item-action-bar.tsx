@@ -10,9 +10,19 @@ import { useSoundEffects } from "~/components/sound-effects/use-sound-effects";
 import { Button } from "~/components/ui/button";
 import { getOrCreateMenuItemInterestClientId } from "~/domain/cardapio/menu-item-interest/menu-item-interest.client";
 
-interface CardapioItemActionBarProps { item: MenuItemWithAssociations, cnContainer?: string }
+interface CardapioItemActionBarProps {
+    item: MenuItemWithAssociations;
+    cnContainer?: string;
+    likesEnabled?: boolean;
+    sharesEnabled?: boolean;
+}
 
-export function CardapioItemActionBarVertical({ item, cnContainer }: CardapioItemActionBarProps) {
+export function CardapioItemActionBarVertical({
+    item,
+    cnContainer,
+    likesEnabled = true,
+    sharesEnabled = true
+}: CardapioItemActionBarProps) {
 
     const [likeIt, setLikeIt] = useState(false)
     const [likesAmount, setLikesAmount] = useState(item.likes?.amount || 0)
@@ -35,7 +45,7 @@ export function CardapioItemActionBarVertical({ item, cnContainer }: CardapioIte
                 likesAmount: String(1),
                 clientId: clientId || "",
             },
-            { method: 'post' }
+            { method: "post", action: "/api/menu-item-like" }
         );
     };
 
@@ -54,12 +64,14 @@ export function CardapioItemActionBarVertical({ item, cnContainer }: CardapioIte
             url: `${WEBSITE_LINKS.cardapioPublic}/#${item.id}`
         }).then(() => {
 
+            const clientId = getOrCreateMenuItemInterestClientId();
             fetcher.submit(
                 {
                     action: "menu-item-share-it",
                     itemId: item.id,
+                    clientId: clientId || "",
                 },
-                { method: 'post' }
+                { method: "post", action: "/api/menu-item-share" }
             );
 
         }).catch((error) => {
@@ -80,29 +92,34 @@ export function CardapioItemActionBarVertical({ item, cnContainer }: CardapioIte
                 >
                     <WhatsAppIcon color="white" />
                 </WhatsappExternalLink>
-                <div className="flex flex-col gap-2 items-center">
+                {(sharesEnabled || likesEnabled) && (
+                    <div className="flex flex-col gap-2 items-center">
+                        {sharesEnabled && (
+                            <div className="flex flex-col gap-1 cursor-pointer p-1 active:bg-black/50 " onClick={shareIt}>
+                                <Share2 color="white" />
+                                <span className="text-md text-center font-neue tracking-widest font-semibold uppercase text-white">
+                                    {sharesAmount > 0 && `${sharesAmount}`}
+                                </span>
+                            </div>
+                        )}
+                        {likesEnabled && (
+                            <div className="flex flex-col items-center gap-1 cursor-pointer p-1 active:bg-black/50" onClick={likingIt}>
+                                <Heart
+                                    className={cn(
+                                        "stroke-white",
+                                        likeIt ? "fill-red-500" : "fill-none",
+                                        likeIt ? "stroke-red-500" : "stroke-white",
+                                        item.likes?.amount && item.likes?.amount > 0 ? "stroke-red-500" : "stroke-white"
+                                    )}
+                                />
+                                <span className="text-md text-center font-neue tracking-widest font-semibold uppercase text-red-500">
+                                    {likesAmount > 0 && `${likesAmount}`}
 
-                    <div className="flex flex-col gap-1 cursor-pointer p-1 active:bg-black/50 " onClick={shareIt}>
-                        <Share2 color="white" />
-                        <span className="text-md text-center font-neue tracking-widest font-semibold uppercase text-white">
-                            {sharesAmount > 0 && `${sharesAmount}`}
-                        </span>
+                                </span>
+                            </div>
+                        )}
                     </div>
-                    <div className="flex flex-col items-center gap-1 cursor-pointer p-1 active:bg-black/50" onClick={likingIt}>
-                        <Heart
-                            className={cn(
-                                "stroke-white",
-                                likeIt ? "fill-red-500" : "fill-none",
-                                likeIt ? "stroke-red-500" : "stroke-white",
-                                item.likes?.amount && item.likes?.amount > 0 ? "stroke-red-500" : "stroke-white"
-                            )}
-                        />
-                        <span className="text-md text-center font-neue tracking-widest font-semibold uppercase text-red-500">
-                            {likesAmount > 0 && `${likesAmount}`}
-
-                        </span>
-                    </div>
-                </div>
+                )}
 
 
             </div>
@@ -122,7 +139,12 @@ export function CardapioItemActionBarVertical({ item, cnContainer }: CardapioIte
 }
 
 
-export function CardapioItemActionBarHorizontal({ item, cnContainer }: CardapioItemActionBarProps) {
+export function CardapioItemActionBarHorizontal({
+    item,
+    cnContainer,
+    likesEnabled = true,
+    sharesEnabled = true
+}: CardapioItemActionBarProps) {
     const [likeIt, setLikeIt] = useState(false)
     const [likesAmount, setLikesAmount] = useState(item.likes?.amount || 0)
 
@@ -141,7 +163,7 @@ export function CardapioItemActionBarHorizontal({ item, cnContainer }: CardapioI
                 likesAmount: String(1),
                 clientId: clientId || "",
             },
-            { method: 'post' }
+            { method: "post", action: "/api/menu-item-like" }
         );
     };
 
@@ -158,12 +180,14 @@ export function CardapioItemActionBarHorizontal({ item, cnContainer }: CardapioI
             url: `${WEBSITE_LINKS.cardapioPublic}/#${item.id}`
         }).then(() => {
 
+            const clientId = getOrCreateMenuItemInterestClientId();
             fetcher.submit(
                 {
                     action: "menu-item-share-it",
                     itemId: item.id,
+                    clientId: clientId || "",
                 },
-                { method: 'post' }
+                { method: "post", action: "/api/menu-item-share" }
             );
 
         }).catch((error) => {
@@ -174,18 +198,22 @@ export function CardapioItemActionBarHorizontal({ item, cnContainer }: CardapioI
         <div className="flex flex-col gap-0 my-2">
             <div className="grid grid-cols-2 font-neue">
                 <div className="flex items-center">
-                    <div className="flex flex-col gap-1 cursor-pointer p-2 active:bg-black/50" onClick={likingIt}>
-                        <Heart
-                            className={cn(
-                                likeIt ? "fill-red-500" : "fill-none",
-                                likeIt ? "stroke-red-500" : "stroke-black",
-                                item.likes?.amount && item.likes?.amount > 0 ? "stroke-red-500" : "stroke-black"
-                            )}
-                        />
-                    </div>
-                    <div className="flex flex-col gap-1 cursor-pointer p-2 active:bg-black/50 " onClick={shareIt}>
-                        <Share2 />
-                    </div>
+                    {likesEnabled && (
+                        <div className="flex flex-col gap-1 cursor-pointer p-2 active:bg-black/50" onClick={likingIt}>
+                            <Heart
+                                className={cn(
+                                    likeIt ? "fill-red-500" : "fill-none",
+                                    likeIt ? "stroke-red-500" : "stroke-black",
+                                    item.likes?.amount && item.likes?.amount > 0 ? "stroke-red-500" : "stroke-black"
+                                )}
+                            />
+                        </div>
+                    )}
+                    {sharesEnabled && (
+                        <div className="flex flex-col gap-1 cursor-pointer p-2 active:bg-black/50 " onClick={shareIt}>
+                            <Share2 />
+                        </div>
+                    )}
                 </div>
 
                 <WhatsappExternalLink
@@ -197,17 +225,18 @@ export function CardapioItemActionBarHorizontal({ item, cnContainer }: CardapioI
                     <WhatsAppIcon color="black" />
                 </WhatsappExternalLink>
             </div>
-            {likesAmount === 0 && (
+            {likesEnabled && likesAmount === 0 && (
                 <div className="flex items-center gap-1">
                     <span className="text-sm font-neue tracking-widest font-semibold uppercase">Seja o primeiro! Curte com </span>
                     <Heart size={14} />
                 </div>
             )}
 
-            <span className="text-sm font-neue tracking-widest font-semibold uppercase pl-1 text-red-500">
-                {likesAmount > 0 && `${likesAmount} curtidas`}
-
-            </span>
+            {likesEnabled && (
+                <span className="text-sm font-neue tracking-widest font-semibold uppercase pl-1 text-red-500">
+                    {likesAmount > 0 && `${likesAmount} curtidas`}
+                </span>
+            )}
         </div>
     );
 }
@@ -229,12 +258,14 @@ export function ShareIt({ item, size, children, cnContainer }: { item: MenuItemW
             url: `${WEBSITE_LINKS.cardapioPublic}/#${item.id}`
         }).then(() => {
 
+            const clientId = getOrCreateMenuItemInterestClientId();
             fetcher.submit(
                 {
                     action: "menu-item-share-it",
                     itemId: item.id,
+                    clientId: clientId || "",
                 },
-                { method: 'post' }
+                { method: "post", action: "/api/menu-item-share" }
             );
 
         }).catch((error) => {
@@ -288,7 +319,7 @@ export function LikeIt({
                 likesAmount: String(1),
                 clientId: clientId || "",
             },
-            { method: 'post' }
+            { method: "post", action: "/api/menu-item-like" }
         );
     };
     const isRed = color === "red";

@@ -11,6 +11,11 @@ import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import prismaClient from "~/lib/prisma/client.server";
+import {
+  ENGAGEMENT_SETTINGS_CONTEXT,
+  LIKE_SETTING_NAME,
+  SHARE_SETTING_NAME,
+} from "~/domain/cardapio/engagement-settings.server";
 
 const SETTING_TYPES = ["string", "boolean", "float", "int", "json"] as const;
 
@@ -46,6 +51,41 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }
 
   const where = filters.length ? { AND: filters } : {};
+
+  const [likesSetting, sharesSetting] = await Promise.all([
+    prismaClient.setting.findFirst({
+      where: { context: ENGAGEMENT_SETTINGS_CONTEXT, name: LIKE_SETTING_NAME },
+      orderBy: [{ createdAt: "desc" }],
+    }),
+    prismaClient.setting.findFirst({
+      where: { context: ENGAGEMENT_SETTINGS_CONTEXT, name: SHARE_SETTING_NAME },
+      orderBy: [{ createdAt: "desc" }],
+    }),
+  ]);
+
+  if (!likesSetting) {
+    await prismaClient.setting.create({
+      data: {
+        context: ENGAGEMENT_SETTINGS_CONTEXT,
+        name: LIKE_SETTING_NAME,
+        type: "boolean",
+        value: "true",
+        createdAt: new Date(),
+      },
+    });
+  }
+
+  if (!sharesSetting) {
+    await prismaClient.setting.create({
+      data: {
+        context: ENGAGEMENT_SETTINGS_CONTEXT,
+        name: SHARE_SETTING_NAME,
+        type: "boolean",
+        value: "true",
+        createdAt: new Date(),
+      },
+    });
+  }
 
   const settings = await prismaClient.setting.findMany({
     where,

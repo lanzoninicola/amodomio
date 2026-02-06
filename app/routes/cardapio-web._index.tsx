@@ -1,5 +1,5 @@
-import { ActionFunctionArgs, HeadersFunction } from "@remix-run/node";
-import { useActionData, useFetcher, useOutletContext, useSearchParams } from "@remix-run/react";
+import { HeadersFunction } from "@remix-run/node";
+import { useFetcher, useOutletContext, useSearchParams } from "@remix-run/react";
 import { Share2, Heart } from "lucide-react";
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import WhatsappExternalLink from "~/components/primitives/whatsapp/whatsapp-external-link";
@@ -8,137 +8,19 @@ import { Separator } from "~/components/ui/separator";
 import { MenuItemWithAssociations } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { cn } from "~/lib/utils";
 import { CardapioOutletContext } from "./cardapio-web";
-import { prismaIt } from "~/lib/prisma/prisma-it.server";
-import { menuItemLikePrismaEntity } from "~/domain/cardapio/menu-item-like.prisma.entity.server";
-import { badRequest, ok } from "~/utils/http-response.server";
-import { menuItemSharePrismaEntity } from "~/domain/cardapio/menu-item-share.prisma.entity.server";
 import WEBSITE_LINKS from "~/domain/website-navigation/links/website-links";
 import ItalyFlag from "~/components/italy-flag/italy-flag";
-import {
-    createMenuItemInterestEvent,
-    hasRecentMenuItemInterestEvent
-} from "~/domain/cardapio/menu-item-interest/menu-item-interest.server";
 import { getOrCreateMenuItemInterestClientId } from "~/domain/cardapio/menu-item-interest/menu-item-interest.client";
-import {
-    buildLikeRateLimitContext,
-    consumeLikeRateLimit
-} from "~/domain/rate-limit/like-rate-limit.server";
 
 export const headers: HeadersFunction = () => ({
     'Cache-Control': 's-maxage=1, stale-while-revalidate=59',
 });
 
-export async function action({ request }: ActionFunctionArgs) {
-    let formData = await request.formData();
-    const { _action, ...values } = Object.fromEntries(formData);
-
-
-    if (values?.action === "menu-item-like-it") {
-        const itemId = typeof values?.itemId === "string" ? values.itemId : "";
-        const clientId = typeof values?.clientId === "string" ? values.clientId : null;
-
-        const rateLimitContext = await buildLikeRateLimitContext(request);
-        const responseHeaders = rateLimitContext.headers ?? undefined;
-
-        if (!itemId || !clientId) {
-            return badRequest({
-                action: "menu-item-like-it",
-                likeAmount: 0
-            }, { headers: responseHeaders });
-        }
-
-        const alreadyLiked = await hasRecentMenuItemInterestEvent({
-            menuItemId: itemId,
-            type: "like",
-            clientId
-        });
-
-        if (alreadyLiked) {
-            const currentAmount = await menuItemLikePrismaEntity.countByMenuItemId(itemId);
-            return ok({
-                action: "menu-item-like-it",
-                likeAmount: currentAmount
-            }, { headers: responseHeaders });
-        }
-
-        const rateLimitResult = await consumeLikeRateLimit({
-            menuItemId: itemId,
-            rateLimitId: rateLimitContext.rateLimitId,
-            ip: rateLimitContext.ip
-        });
-
-        if (!rateLimitResult.allowed) {
-            const currentAmount = await menuItemLikePrismaEntity.countByMenuItemId(itemId);
-            return ok({
-                action: "menu-item-like-it",
-                likeAmount: currentAmount
-            }, { headers: responseHeaders });
-        }
-
-        const [err, likeAmount] = await prismaIt(menuItemLikePrismaEntity.create({
-            createdAt: new Date().toISOString(),
-            amount: 1,
-            MenuItem: {
-                connect: {
-                    id: itemId,
-                },
-            }
-        }));
-
-        if (err) {
-            return badRequest({
-                action: "menu-item-like-it",
-                likeAmount
-            }, { headers: responseHeaders })
-        }
-
-        await createMenuItemInterestEvent({
-            menuItemId: itemId,
-            type: "like",
-            clientId
-        });
-
-        return ok({
-            action: "menu-item-like-it",
-            likeAmount
-        }, { headers: responseHeaders })
-
-    }
-
-    if (values?.action === "menu-item-share-it") {
-        const itemId = values?.itemId as string
-
-        const [err, likeAmount] = await prismaIt(menuItemSharePrismaEntity.create({
-            createdAt: new Date().toISOString(),
-            MenuItem: {
-                connect: {
-                    id: itemId,
-                },
-            }
-        }));
-
-        if (err) {
-            return badRequest({
-                action: "menu-item-share-it",
-                likeAmount
-            })
-        }
-
-        return ok({
-            action: "menu-item-share-it",
-            likeAmount
-        })
-
-    }
-
-    return null
-}
-
 export default function CardapioWebIndex() {
     const [searchParams] = useSearchParams();
     let currentFilterTag = searchParams.get("tag");
 
-    const { items: allItems } = useOutletContext<CardapioOutletContext>();
+    const { items: allItems, likesEnabled, sharesEnabled } = useOutletContext<CardapioOutletContext>();
 
     const [items, setItems] = useState<MenuItemWithAssociations[]>([]);
     const [hasMore, setHasMore] = useState(true);
@@ -186,9 +68,24 @@ export default function CardapioWebIndex() {
             <ul className="flex flex-col overflow-y-auto md:overflow-y-z auto snap-mandatory">
                 {items.map((item, index) => {
                     if (items.length === index + 1) {
-                        return <CardapioItem ref={lastItemRef} key={item.id} item={item} />;
+                        return (
+                            <CardapioItem
+                                ref={lastItemRef}
+                                key={item.id}
+                                item={item}
+                                likesEnabled={likesEnabled}
+                                sharesEnabled={sharesEnabled}
+                            />
+                        );
                     } else {
-                        return <CardapioItem key={item.id} item={item} />;
+                        return (
+                            <CardapioItem
+                                key={item.id}
+                                item={item}
+                                likesEnabled={likesEnabled}
+                                sharesEnabled={sharesEnabled}
+                            />
+                        );
                     }
                 })}
             </ul>
@@ -199,9 +96,11 @@ export default function CardapioWebIndex() {
 
 interface CardapioItemProps {
     item: MenuItemWithAssociations;
+    likesEnabled: boolean;
+    sharesEnabled: boolean;
 }
 
-const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) => (
+const CardapioItem = React.forwardRef(({ item, likesEnabled, sharesEnabled }: CardapioItemProps, ref: any) => (
     <li className="flex flex-col snap-start" id={item.id} ref={ref}>
         <div className="relative mb-2">
             <CardapioItemImage item={item} />
@@ -213,7 +112,11 @@ const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) =>
             <h3 className="font-neue text-sm font-semibold uppercase mb-2">{item.name}</h3>
             <p className="font-neue leading-tight">{item.ingredients}</p>
         </div>
-        <CardapioItemActionBarVertical item={item} />
+        <CardapioItemActionBarVertical
+            item={item}
+            likesEnabled={likesEnabled}
+            sharesEnabled={sharesEnabled}
+        />
         <Separator className="my-4" />
     </li>
 ));
@@ -300,7 +203,15 @@ function CardapioItemPrice({ prices }: CardapioItemPriceProps) {
     )
 }
 
-function CardapioItemActionBarVertical({ item }: { item: MenuItemWithAssociations }) {
+function CardapioItemActionBarVertical({
+    item,
+    likesEnabled,
+    sharesEnabled
+}: {
+    item: MenuItemWithAssociations;
+    likesEnabled: boolean;
+    sharesEnabled: boolean;
+}) {
     const [likeIt, setLikeIt] = useState(false)
     const [likesAmount, setLikesAmount] = useState(item.likes?.amount || 0)
 
@@ -319,7 +230,7 @@ function CardapioItemActionBarVertical({ item }: { item: MenuItemWithAssociation
                 likesAmount: String(1),
                 clientId: clientId || "",
             },
-            { method: 'post' }
+            { method: "post", action: "/api/menu-item-like" }
         );
     };
 
@@ -336,12 +247,14 @@ function CardapioItemActionBarVertical({ item }: { item: MenuItemWithAssociation
             url: `${WEBSITE_LINKS.cardapioPublic}/#${item.id}`
         }).then(() => {
 
+            const clientId = getOrCreateMenuItemInterestClientId();
             fetcher.submit(
                 {
                     action: "menu-item-share-it",
                     itemId: item.id,
+                    clientId: clientId || "",
                 },
-                { method: 'post' }
+                { method: "post", action: "/api/menu-item-share" }
             );
 
         }).catch((error) => {
@@ -351,22 +264,30 @@ function CardapioItemActionBarVertical({ item }: { item: MenuItemWithAssociation
 
 
 
+    if (!likesEnabled && !sharesEnabled) {
+        return null;
+    }
+
     return (
         <div className="flex flex-col gap-0">
             <div className="grid grid-cols-2 font-neue px-4 mb-1">
                 <div className="flex items-center">
-                    <div className="flex flex-col gap-1 cursor-pointer p-2 active:bg-brand-blue/50" onClick={likingIt}>
-                        <Heart
-                            className={cn(
-                                likeIt ? "fill-red-500" : "fill-none",
-                                likeIt ? "stroke-red-500" : "stroke-black",
-                                item.likes?.amount && item.likes?.amount > 0 ? "stroke-red-500" : "stroke-black"
-                            )}
-                        />
-                    </div>
-                    <div className="flex flex-col gap-1 cursor-pointer p-2 active:bg-brand-blue/50 " onClick={shareIt}>
-                        <Share2 />
-                    </div>
+                    {likesEnabled && (
+                        <div className="flex flex-col gap-1 cursor-pointer p-2 active:bg-brand-blue/50" onClick={likingIt}>
+                            <Heart
+                                className={cn(
+                                    likeIt ? "fill-red-500" : "fill-none",
+                                    likeIt ? "stroke-red-500" : "stroke-black",
+                                    item.likes?.amount && item.likes?.amount > 0 ? "stroke-red-500" : "stroke-black"
+                                )}
+                            />
+                        </div>
+                    )}
+                    {sharesEnabled && (
+                        <div className="flex flex-col gap-1 cursor-pointer p-2 active:bg-brand-blue/50 " onClick={shareIt}>
+                            <Share2 />
+                        </div>
+                    )}
                 </div>
 
                 <WhatsappExternalLink
@@ -378,17 +299,18 @@ function CardapioItemActionBarVertical({ item }: { item: MenuItemWithAssociation
                     <WhatsAppIcon color="black" />
                 </WhatsappExternalLink>
             </div>
-            {likesAmount === 0 && (
+            {likesEnabled && likesAmount === 0 && (
                 <div className="flex items-center gap-1">
                     <span className="text-sm font-neue tracking-tight pl-4">Seja o primeiro! Curte com </span>
                     <Heart size={14} />
                 </div>
             )}
 
-            <span className="text-xs font-semibold font-neue tracking-tight px-4 text-red-500">
-                {likesAmount > 0 && `${likesAmount} curtidas`}
-
-            </span>
+            {likesEnabled && (
+                <span className="text-xs font-semibold font-neue tracking-tight px-4 text-red-500">
+                    {likesAmount > 0 && `${likesAmount} curtidas`}
+                </span>
+            )}
         </div>
     );
 }

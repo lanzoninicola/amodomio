@@ -22,6 +22,7 @@ import { prismaAll } from "~/lib/prisma/prisma-all.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import getSearchParam from "~/utils/get-search-param";
 import { badRequest, ok } from "~/utils/http-response.server";
+import { getEngagementSettings } from "~/domain/cardapio/engagement-settings.server";
 
 
 /**
@@ -41,7 +42,9 @@ import { badRequest, ok } from "~/utils/http-response.server";
  */
 
 export interface CardapioOutletContext {
-    items: MenuItemWithAssociations[]
+    items: MenuItemWithAssociations[];
+    likesEnabled: boolean;
+    sharesEnabled: boolean;
 }
 
 export const meta: MetaFunction = ({ data }) => {
@@ -93,7 +96,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
         public: true
     }))
 
-    const results = await Promise.all([itemsQuery, tagsQuery])
+    const [engagementSettings, results] = await Promise.all([
+        getEngagementSettings(),
+        Promise.all([itemsQuery, tagsQuery])
+    ])
 
     const [errItems, items] = results[0]
     const [errTags, tags] = results[1]
@@ -104,7 +110,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 
     return ok({
-        items, tags
+        items,
+        tags,
+        likesEnabled: engagementSettings.likesEnabled,
+        sharesEnabled: engagementSettings.sharesEnabled
     })
 
 
@@ -115,6 +124,8 @@ export default function CardapioWeb() {
     const loaderData = useLoaderData<typeof loader>()
     const items = loaderData?.payload.items as MenuItemWithAssociations[] || []
     const tags = loaderData?.payload.tags as Tag[] || []
+    const likesEnabled = loaderData?.payload.likesEnabled ?? true
+    const sharesEnabled = loaderData?.payload.sharesEnabled ?? true
 
     // const [storedValue, setStoredValue] = useLocalStorage("sessionId", null)
 
@@ -173,7 +184,7 @@ export default function CardapioWeb() {
                 </section>
                 <Separator />
                 {/* <Featured /> */}
-                <Outlet context={{ items }} />
+            <Outlet context={{ items, likesEnabled, sharesEnabled }} />
 
             </div>
             <CardapioFooter />

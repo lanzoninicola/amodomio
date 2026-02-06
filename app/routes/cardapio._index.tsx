@@ -14,9 +14,7 @@ import {
     menuItemPrismaEntity
 } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
-import { menuItemLikePrismaEntity } from "~/domain/cardapio/menu-item-like.prisma.entity.server";
 import { badRequest, ok } from "~/utils/http-response.server";
-import { menuItemSharePrismaEntity } from "~/domain/cardapio/menu-item-share.prisma.entity.server";
 import ItalyIngredientsStatement from "~/domain/cardapio/components/italy-ingredient-statement/italy-ingredient-statement";
 import {
     CardapioItemActionBarVertical,
@@ -49,16 +47,9 @@ import { Tag } from "@prisma/client";
 import { Heart, X } from "lucide-react";
 import { useSoundEffects } from "~/components/sound-effects/use-sound-effects";
 import { getOrCreateMenuItemInterestClientId } from "~/domain/cardapio/menu-item-interest/menu-item-interest.client";
-import {
-    createMenuItemInterestEvent,
-    hasRecentMenuItemInterestEvent
-} from "~/domain/cardapio/menu-item-interest/menu-item-interest.server";
-import {
-    buildLikeRateLimitContext,
-    consumeLikeRateLimit
-} from "~/domain/rate-limit/like-rate-limit.server";
 import Logo from "~/components/primitives/logo/logo";
 import { parseBooleanSetting } from "~/utils/parse-boolean-setting";
+import { getEngagementSettings } from "~/domain/cardapio/engagement-settings.server";
 
 const INTEREST_ENDPOINT = "/api/menu-item-interest";
 const REELS_SETTING_KEY = "cardapio.reel.urls";
@@ -127,13 +118,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
         orderBy: [{ createdAt: "desc" }],
     });
     const menuItemInterestEnabled = parseBooleanSetting(menuItemInterestSetting?.value, true);
+    const { likesEnabled, sharesEnabled } = await getEngagementSettings();
 
     return defer({
         items,
         tags,
         postFeatured,
         reelUrls,
-        menuItemInterestEnabled
+        menuItemInterestEnabled,
+        likesEnabled,
+        sharesEnabled
     });
 }
 
@@ -144,108 +138,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
 export async function action({ request }: LoaderFunctionArgs) {
     const formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);
-
-    // like de item do cardápio
-    if (values?.action === "menu-item-like-it") {
-        const itemId = typeof values?.itemId === "string" ? values.itemId : "";
-        const clientId = typeof values?.clientId === "string" ? values.clientId : null;
-
-        const rateLimitContext = await buildLikeRateLimitContext(request);
-        const responseHeaders = rateLimitContext.headers ?? undefined;
-
-        if (!itemId || !clientId) {
-            return badRequest({
-                action: "menu-item-like-it",
-                likeAmount: 0
-            }, { headers: responseHeaders });
-        }
-
-        const alreadyLiked = await hasRecentMenuItemInterestEvent({
-            menuItemId: itemId,
-            type: "like",
-            clientId
-        });
-
-        if (alreadyLiked) {
-            const currentAmount = await menuItemLikePrismaEntity.countByMenuItemId(itemId);
-            return ok({
-                action: "menu-item-like-it",
-                likeAmount: currentAmount
-            }, { headers: responseHeaders });
-        }
-
-        const rateLimitResult = await consumeLikeRateLimit({
-            menuItemId: itemId,
-            rateLimitId: rateLimitContext.rateLimitId,
-            ip: rateLimitContext.ip
-        });
-
-        if (!rateLimitResult.allowed) {
-            const currentAmount = await menuItemLikePrismaEntity.countByMenuItemId(itemId);
-            return ok({
-                action: "menu-item-like-it",
-                likeAmount: currentAmount
-            }, { headers: responseHeaders });
-        }
-
-        const [err, likeAmount] = await prismaIt(
-            menuItemLikePrismaEntity.create({
-                createdAt: new Date().toISOString(),
-                amount: 1,
-                MenuItem: {
-                    connect: {
-                        id: itemId
-                    }
-                }
-            })
-        );
-
-        if (err) {
-            return badRequest({
-                action: "menu-item-like-it",
-                likeAmount
-            }, { headers: responseHeaders });
-        }
-
-        await createMenuItemInterestEvent({
-            menuItemId: itemId,
-            type: "like",
-            clientId
-        });
-
-        return ok({
-            action: "menu-item-like-it",
-            likeAmount
-        }, { headers: responseHeaders });
-    }
-
-    // share de item do cardápio
-    if (values?.action === "menu-item-share-it") {
-        const itemId = values?.itemId as string;
-
-        const [err, shareAmount] = await prismaIt(
-            menuItemSharePrismaEntity.create({
-                createdAt: new Date().toISOString(),
-                MenuItem: {
-                    connect: {
-                        id: itemId
-                    }
-                }
-            })
-        );
-
-        if (err) {
-            return badRequest({
-                action: "menu-item-share-it",
-                shareAmount
-            });
-        }
-
-        return ok({
-            action: "menu-item-share-it",
-            shareAmount
-        });
-    }
 
     // like de post
     if (values?.action === "post-like-it") {
@@ -316,7 +208,7 @@ export async function action({ request }: LoaderFunctionArgs) {
 // PAGE
 // ======================================================
 export default function CardapioWebIndex() {
-    const { items, tags, postFeatured, reelUrls, menuItemInterestEnabled } = useLoaderData<typeof loader>();
+    const { items, tags, postFeatured, reelUrls, menuItemInterestEnabled, likesEnabled, sharesEnabled } = useLoaderData<typeof loader>();
     const hasReels = reelUrls.length > 0;
 
     return (
@@ -372,9 +264,11 @@ export default function CardapioWebIndex() {
                             const getLikesAmount = (item: MenuItem | MenuItemWithAssociations) =>
                                 (item as MenuItemWithAssociations)?.likes?.amount ?? 0;
 
-                            const topLikedItems = [...flatItems]
-                                .sort((a, b) => getLikesAmount(b) - getLikesAmount(a))
-                                .slice(0, 4);
+                            const topLikedItems = likesEnabled
+                                ? [...flatItems]
+                                    .sort((a, b) => getLikesAmount(b) - getLikesAmount(a))
+                                    .slice(0, 4)
+                                : [];
 
                             return (
                                 <>
@@ -389,52 +283,54 @@ export default function CardapioWebIndex() {
                                         />
                                     </section>
 
-                                    <section
-                                        id="mais-curtidas"
-                                        className="flex flex-col gap-4 mx-2 md:flex-1"
-                                    >
-                                        <div className="p-2">
-                                            <h3 className="font-neue text-base md:text-xl font-semibold tracking-wide mb-2 flex items-center gap-2">
-                                                <Heart aria-hidden="true" className="h-4 w-4 md:h-5 md:w-5" />
-                                                <span>Mais curtidas</span>
-                                                <Heart aria-hidden="true" className="h-4 w-4 md:h-5 md:w-5" />
-                                            </h3>
-                                            <p className="font-neue text-xs md:text-sm tracking-wide text-muted-foreground mb-3">
-                                                Nossos clientes gostam de mostrar o que é bom. Aqui está uma seleção dos
-                                                sabores que eles mais curtem e querem compartilhar com todo mundo.
-                                            </p>
-                                            <div className="grid grid-cols-2 gap-3 md:grid-cols-2">
-                                                {topLikedItems.map((i) => {
-                                                    const featuredImage =
-                                                        i.MenuItemGalleryImage?.find((img) => img.isPrimary) ||
-                                                        i.MenuItemGalleryImage?.[0];
-                                                    return (
-                                                        <Link
-                                                            key={i.id}
-                                                            to={`/cardapio/${i.slug}`}
-                                                            className="group relative block overflow-hidden rounded-md"
-                                                        >
-                                                            <div className="relative h-[160px] md:h-[200px]">
-                                                                <CardapioItemImageSingle
-                                                                    src={featuredImage?.secureUrl || ""}
-                                                                    placeholder={i.imagePlaceholderURL || ""}
-                                                                    placeholderIcon={false}
-                                                                    cnContainer="h-full w-full"
-                                                                    enableOverlay={false}
-                                                                />
-                                                                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-90" />
-                                                                <div className="absolute bottom-2 left-2 right-2">
-                                                                    <span className="font-neue text-white text-xs tracking-widest uppercase font-semibold drop-shadow leading-none">
-                                                                        {i.name}
-                                                                    </span>
+                                    {likesEnabled && (
+                                        <section
+                                            id="mais-curtidas"
+                                            className="flex flex-col gap-4 mx-2 md:flex-1"
+                                        >
+                                            <div className="p-2">
+                                                <h3 className="font-neue text-base md:text-xl font-semibold tracking-wide mb-2 flex items-center gap-2">
+                                                    <Heart aria-hidden="true" className="h-4 w-4 md:h-5 md:w-5" />
+                                                    <span>Mais curtidas</span>
+                                                    <Heart aria-hidden="true" className="h-4 w-4 md:h-5 md:w-5" />
+                                                </h3>
+                                                <p className="font-neue text-xs md:text-sm tracking-wide text-muted-foreground mb-3">
+                                                    Nossos clientes gostam de mostrar o que é bom. Aqui está uma seleção dos
+                                                    sabores que eles mais curtem e querem compartilhar com todo mundo.
+                                                </p>
+                                                <div className="grid grid-cols-2 gap-3 md:grid-cols-2">
+                                                    {topLikedItems.map((i) => {
+                                                        const featuredImage =
+                                                            i.MenuItemGalleryImage?.find((img) => img.isPrimary) ||
+                                                            i.MenuItemGalleryImage?.[0];
+                                                        return (
+                                                            <Link
+                                                                key={i.id}
+                                                                to={`/cardapio/${i.slug}`}
+                                                                className="group relative block overflow-hidden rounded-md"
+                                                            >
+                                                                <div className="relative h-[160px] md:h-[200px]">
+                                                                    <CardapioItemImageSingle
+                                                                        src={featuredImage?.secureUrl || ""}
+                                                                        placeholder={i.imagePlaceholderURL || ""}
+                                                                        placeholderIcon={false}
+                                                                        cnContainer="h-full w-full"
+                                                                        enableOverlay={false}
+                                                                    />
+                                                                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-90" />
+                                                                    <div className="absolute bottom-2 left-2 right-2">
+                                                                        <span className="font-neue text-white text-xs tracking-widest uppercase font-semibold drop-shadow leading-none">
+                                                                            {i.name}
+                                                                        </span>
+                                                                    </div>
                                                                 </div>
-                                                            </div>
-                                                        </Link>
-                                                    );
-                                                })}
+                                                            </Link>
+                                                        );
+                                                    })}
+                                                </div>
                                             </div>
-                                        </div>
-                                    </section>
+                                        </section>
+                                    )}
                                 </>
                             );
                         }}
@@ -563,11 +459,21 @@ export default function CardapioWebIndex() {
                                             <h3 className="font-neue text-base md:text-xl font-semibold tracking-wide mb-2 border-b">
                                                 {g.group}
                                             </h3>
-                                            <CardapioItemsGrid items={g.menuItems} interestTrackingEnabled={menuItemInterestEnabled} />
+                                            <CardapioItemsGrid
+                                                items={g.menuItems}
+                                                interestTrackingEnabled={menuItemInterestEnabled}
+                                                likesEnabled={likesEnabled}
+                                                sharesEnabled={sharesEnabled}
+                                            />
                                         </section>
                                     ))
                                     : (
-                                        <CardapioItemsGrid items={currentItems as any[]} interestTrackingEnabled={menuItemInterestEnabled} />
+                                        <CardapioItemsGrid
+                                            items={currentItems as any[]}
+                                            interestTrackingEnabled={menuItemInterestEnabled}
+                                            likesEnabled={likesEnabled}
+                                            sharesEnabled={sharesEnabled}
+                                        />
                                     )}
                             </div>
                         );
@@ -630,7 +536,15 @@ function ImagesCarousel({
 // ======================================================
 // LISTA COM INFINITE SCROLL (mantida)
 // ======================================================
-const CardapioItemList = ({ allItems }: { allItems: MenuItemWithAssociations[] }) => {
+const CardapioItemList = ({
+    allItems,
+    likesEnabled,
+    sharesEnabled
+}: {
+    allItems: MenuItemWithAssociations[];
+    likesEnabled: boolean;
+    sharesEnabled: boolean;
+}) => {
     const [searchParams] = useSearchParams();
     const currentFilterTag = searchParams.get("tag");
 
@@ -707,6 +621,8 @@ const CardapioItemList = ({ allItems }: { allItems: MenuItemWithAssociations[] }
                                 ref={isLastItem ? lastItemRef : null}
                                 key={item.id}
                                 item={item}
+                                likesEnabled={likesEnabled}
+                                sharesEnabled={sharesEnabled}
                             />
                         );
                     })}
@@ -721,10 +637,14 @@ const CardapioItemList = ({ allItems }: { allItems: MenuItemWithAssociations[] }
 // ======================================================
 function CardapioItemsGrid({
     items,
-    interestTrackingEnabled
+    interestTrackingEnabled,
+    likesEnabled,
+    sharesEnabled
 }: {
     items: MenuItemWithAssociations[];
     interestTrackingEnabled: boolean;
+    likesEnabled: boolean;
+    sharesEnabled: boolean;
 }) {
     const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
     const [desktopDialogId, setDesktopDialogId] = useState<string | null>(null);
@@ -827,6 +747,8 @@ function CardapioItemsGrid({
                         onOpenDetail={() => trackOpenDetailOnce(item.id)}
                         onView={() => trackViewOnce(item.id)}
                         isDesktop={isDesktop}
+                        likesEnabled={likesEnabled}
+                        sharesEnabled={sharesEnabled}
                         innerRef={(el) => (itemRefs.current[item.id] = el)}
                     />
                 ))}
@@ -843,7 +765,9 @@ function CardapioGridItem({
     onOpenDetail,
     onView,
     isDesktop,
-    innerRef
+    innerRef,
+    likesEnabled,
+    sharesEnabled
 }: {
     item: MenuItemWithAssociations;
     isExpanded: boolean;
@@ -852,6 +776,8 @@ function CardapioGridItem({
     onView?: () => void;
     isDesktop: boolean;
     innerRef?: (el: HTMLLIElement | null) => void;
+    likesEnabled: boolean;
+    sharesEnabled: boolean;
 }) {
     const localRef = useRef<HTMLLIElement | null>(null);
     const featuredImage =
@@ -1028,24 +954,30 @@ function CardapioGridItem({
 
             <CardapioItemPriceSelect prices={item.MenuItemSellingPriceVariation} />
 
-            <div className="flex flex-col gap-y-1 shadow-sm bg-white my-2">
-                <ShareIt
-                    item={item}
-                    size={isExpanded === true ? 20 : 16}
-                    cnContainer={cn("px-2 py-0 h-7 border border-black")}
-                >
-                    <span className="font-neue text-xs uppercase tracking-wide ">Compartilhar</span>
-                </ShareIt>
+            {(sharesEnabled || likesEnabled) && (
+                <div className="flex flex-col gap-y-1 shadow-sm bg-white my-2">
+                    {sharesEnabled && (
+                        <ShareIt
+                            item={item}
+                            size={isExpanded === true ? 20 : 16}
+                            cnContainer={cn("px-2 py-0 h-7 border border-black")}
+                        >
+                            <span className="font-neue text-xs uppercase tracking-wide ">Compartilhar</span>
+                        </ShareIt>
+                    )}
 
-                <LikeIt
-                    item={item}
-                    size={isExpanded === true ? 20 : 16}
-                    cnContainer={cn("px-2 py-0 h-7 bg-red-500 text-white")}
-                    color="white"
-                >
-                    <span className="font-neue text-xs uppercase tracking-wide">Gostei</span>
-                </LikeIt>
-            </div>
+                    {likesEnabled && (
+                        <LikeIt
+                            item={item}
+                            size={isExpanded === true ? 20 : 16}
+                            cnContainer={cn("px-2 py-0 h-7 bg-red-500 text-white")}
+                            color="white"
+                        >
+                            <span className="font-neue text-xs uppercase tracking-wide">Gostei</span>
+                        </LikeIt>
+                    )}
+                </div>
+            )}
 
             <div
                 className={cn(
@@ -1064,10 +996,12 @@ function CardapioGridItem({
 // ======================================================
 interface CardapioItemFullImageProps {
     item: MenuItemWithAssociations;
+    likesEnabled: boolean;
+    sharesEnabled: boolean;
 }
 
 const CardapioItemFullImage = React.forwardRef(
-    ({ item }: CardapioItemFullImageProps, ref: any) => {
+    ({ item, likesEnabled, sharesEnabled }: CardapioItemFullImageProps, ref: any) => {
         const { playNavigation } = useSoundEffects();
         const italyProduct = item.tags?.public.some(
             (t) => t.toLocaleLowerCase() === "produtos-italianos"
@@ -1124,7 +1058,11 @@ const CardapioItemFullImage = React.forwardRef(
                                     </div>
                                 </div>
                             </Link>
-                            <CardapioItemActionBarVertical item={item} />
+                            <CardapioItemActionBarVertical
+                                item={item}
+                                likesEnabled={likesEnabled}
+                                sharesEnabled={sharesEnabled}
+                            />
                         </div>
                     </div>
                 </div>
