@@ -147,7 +147,6 @@ export async function action({ request }: ActionFunctionArgs) {
         await prismaClient.setting.delete({ where: { id } });
         return json({ ok: true });
       }
-
       default:
         return json({ error: "Acao invalida" }, { status: 400 });
     }
