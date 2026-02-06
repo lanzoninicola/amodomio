@@ -50,9 +50,12 @@ import { Heart, X } from "lucide-react";
 import { useSoundEffects } from "~/components/sound-effects/use-sound-effects";
 import { getOrCreateMenuItemInterestClientId } from "~/domain/cardapio/menu-item-interest/menu-item-interest.client";
 import Logo from "~/components/primitives/logo/logo";
+import { parseBooleanSetting } from "~/utils/parse-boolean-setting";
 
 const INTEREST_ENDPOINT = "/api/menu-item-interest";
 const REELS_SETTING_KEY = "cardapio.reel.urls";
+const MENU_ITEM_INTEREST_SETTING_CONTEXT = "cardapio";
+const MENU_ITEM_INTEREST_SETTING_NAME = "menu-item-interest-enabled";
 
 export const headers: HeadersFunction = () => ({
     "Cache-Control": "s-maxage=1, stale-while-revalidate=59"
@@ -108,11 +111,21 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
     const reelUrls = parseReelUrls(reelSetting?.value);
 
+    const menuItemInterestSetting = await prismaClient.setting.findFirst({
+        where: {
+            context: MENU_ITEM_INTEREST_SETTING_CONTEXT,
+            name: MENU_ITEM_INTEREST_SETTING_NAME,
+        },
+        orderBy: [{ createdAt: "desc" }],
+    });
+    const menuItemInterestEnabled = parseBooleanSetting(menuItemInterestSetting?.value, true);
+
     return defer({
         items,
         tags,
         postFeatured,
-        reelUrls
+        reelUrls,
+        menuItemInterestEnabled
     });
 }
 
@@ -255,7 +268,7 @@ export async function action({ request }: LoaderFunctionArgs) {
 // PAGE
 // ======================================================
 export default function CardapioWebIndex() {
-    const { items, tags, postFeatured, reelUrls } = useLoaderData<typeof loader>();
+    const { items, tags, postFeatured, reelUrls, menuItemInterestEnabled } = useLoaderData<typeof loader>();
     const hasReels = reelUrls.length > 0;
 
     return (
@@ -502,11 +515,11 @@ export default function CardapioWebIndex() {
                                             <h3 className="font-neue text-base md:text-xl font-semibold tracking-wide mb-2 border-b">
                                                 {g.group}
                                             </h3>
-                                            <CardapioItemsGrid items={g.menuItems} />
+                                            <CardapioItemsGrid items={g.menuItems} interestTrackingEnabled={menuItemInterestEnabled} />
                                         </section>
                                     ))
                                     : (
-                                        <CardapioItemsGrid items={currentItems as any[]} />
+                                        <CardapioItemsGrid items={currentItems as any[]} interestTrackingEnabled={menuItemInterestEnabled} />
                                     )}
                             </div>
                         );
@@ -658,7 +671,13 @@ const CardapioItemList = ({ allItems }: { allItems: MenuItemWithAssociations[] }
 // ======================================================
 // GRID DE ITENS (teu componente atualizado)
 // ======================================================
-function CardapioItemsGrid({ items }: { items: MenuItemWithAssociations[] }) {
+function CardapioItemsGrid({
+    items,
+    interestTrackingEnabled
+}: {
+    items: MenuItemWithAssociations[];
+    interestTrackingEnabled: boolean;
+}) {
     const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
     const [desktopDialogId, setDesktopDialogId] = useState<string | null>(null);
     const [isDesktop, setIsDesktop] = useState(false);
@@ -678,6 +697,7 @@ function CardapioItemsGrid({ items }: { items: MenuItemWithAssociations[] }) {
     if (!items?.length) return null;
 
     const trackInterest = useCallback((type: "view_list" | "open_detail", menuItemId: string) => {
+        if (!interestTrackingEnabled) return;
         const clientId = getOrCreateMenuItemInterestClientId();
 
         fetch(INTEREST_ENDPOINT, {
@@ -690,24 +710,26 @@ function CardapioItemsGrid({ items }: { items: MenuItemWithAssociations[] }) {
         }).catch((error) => {
             console.warn("[cardapio] falha ao registrar interesse", error);
         });
-    }, []);
+    }, [interestTrackingEnabled]);
 
     const trackViewOnce = useCallback(
         (menuItemId: string) => {
+            if (!interestTrackingEnabled) return;
             if (trackedViewRef.current.has(menuItemId)) return;
             trackedViewRef.current.add(menuItemId);
             trackInterest("view_list", menuItemId);
         },
-        [trackInterest]
+        [interestTrackingEnabled, trackInterest]
     );
 
     const trackOpenDetailOnce = useCallback(
         (menuItemId: string) => {
+            if (!interestTrackingEnabled) return;
             if (trackedOpenDetailRef.current.has(menuItemId)) return;
             trackedOpenDetailRef.current.add(menuItemId);
             trackInterest("open_detail", menuItemId);
         },
-        [trackInterest]
+        [interestTrackingEnabled, trackInterest]
     );
 
     const scrollToItemTop = (id: string) => {
