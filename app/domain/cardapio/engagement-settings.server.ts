@@ -1,9 +1,9 @@
 import prismaClient from "~/lib/prisma/client.server";
 import { parseBooleanSetting } from "~/utils/parse-boolean-setting";
 
-export const ENGAGEMENT_SETTINGS_CONTEXT = "engagement";
-export const LIKE_SETTING_NAME = "cardapio.likes.enabled";
-export const SHARE_SETTING_NAME = "cardapio.shares.enabled";
+export const ENGAGEMENT_SETTINGS_CONTEXT = "cardapio";
+export const LIKE_SETTING_NAME = "engagement.likes.enabled";
+export const SHARE_SETTING_NAME = "engagement.shares.enabled";
 
 export async function getEngagementSettings() {
   const settings = await prismaClient.setting.findMany({
