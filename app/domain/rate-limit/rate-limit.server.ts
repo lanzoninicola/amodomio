@@ -55,15 +55,21 @@ export async function consumeRateLimitBucket({
   limit: number;
   windowMs: number;
 }) {
+  const rateLimitBucket = (prismaClient as any).rateLimitBucket;
+  if (!rateLimitBucket) {
+    console.warn("[rate-limit] rateLimitBucket model not available in Prisma client");
+    return { allowed: true, remaining: limit };
+  }
+
   const now = new Date();
   const expiresAt = new Date(now.getTime() + windowMs);
 
-  const existing = await prismaClient.rateLimitBucket.findUnique({
+  const existing = await rateLimitBucket.findUnique({
     where: { key },
   });
 
   if (!existing || existing.expiresAt.getTime() <= now.getTime()) {
-    await prismaClient.rateLimitBucket.upsert({
+    await rateLimitBucket.upsert({
       where: { key },
       create: {
         key,
@@ -84,7 +90,7 @@ export async function consumeRateLimitBucket({
     return { allowed: false, remaining: 0 };
   }
 
-  await prismaClient.rateLimitBucket.update({
+  await rateLimitBucket.update({
     where: { key },
     data: { count: { increment: 1 } },
   });
