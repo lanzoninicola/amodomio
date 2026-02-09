@@ -12,18 +12,6 @@ datasource db {
   provider = "postgresql"
 }
 
-model CardapioSetting {
-  id    String @id @default(uuid())
-  key   String
-  name  String
-  value String
-
-  createdAt DateTime @map("created_at")
-  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
-
-  @@map("cardapio_settings")
-}
-
 model Product {
   id                     String                   @id @default(uuid())
   name                   String

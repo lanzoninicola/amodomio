@@ -121,12 +121,6 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
           disabled: false,
         },
         {
-          title: "Configurações",
-          href: "/admin/gerenciamento/cardapio/settings",
-          items: [],
-          disabled: false,
-        },
-        {
           title: "Relatorios",
           href: "",
           items: [

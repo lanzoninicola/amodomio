@@ -1,7 +1,7 @@
 // app/routes/cardapio._index.tsx
 
 import { HeadersFunction, LoaderFunctionArgs } from "@remix-run/node";
-import { Await, Link, defer, useLoaderData, useSearchParams } from "@remix-run/react";
+import { Await, Link, defer, useLoaderData, useRouteError, useSearchParams } from "@remix-run/react";
 import React, {
     useState,
     useRef,
@@ -50,11 +50,15 @@ import { getOrCreateMenuItemInterestClientId } from "~/domain/cardapio/menu-item
 import Logo from "~/components/primitives/logo/logo";
 import { parseBooleanSetting } from "~/utils/parse-boolean-setting";
 import { getEngagementSettings } from "~/domain/cardapio/engagement-settings.server";
+import CardapioErrorRedirect from "~/domain/cardapio/components/cardapio-error-redirect/cardapio-error-redirect";
 
 const INTEREST_ENDPOINT = "/api/menu-item-interest";
-const REELS_SETTING_KEY = "cardapio.reel.urls";
+const REELS_SETTING_KEY = "reel.urls";
+const REELS_SETTING_CONTEXT = "cardapio";
 const MENU_ITEM_INTEREST_SETTING_CONTEXT = "cardapio";
 const MENU_ITEM_INTEREST_SETTING_NAME = "menu-item-interest-enabled";
+const SIMULATE_ERROR_SETTING_CONTEXT = "cardapio";
+const SIMULATE_ERROR_SETTING_NAME = "simula.erro";
 
 export const headers: HeadersFunction = () => ({
     "Cache-Control": "s-maxage=1, stale-while-revalidate=59"
@@ -64,6 +68,29 @@ export const headers: HeadersFunction = () => ({
 // LOADER
 // ======================================================
 export async function loader({ request }: LoaderFunctionArgs) {
+    const url = new URL(request.url);
+    const simulateError = url.searchParams.get("simularErro");
+    const simulateErrorByQuery = simulateError === "cardapio-index" || simulateError === "cardapio";
+    let simulateErrorBySetting = false;
+
+    try {
+        const simulateErrorSetting = await prismaClient.setting.findFirst({
+            where: {
+                context: SIMULATE_ERROR_SETTING_CONTEXT,
+                name: SIMULATE_ERROR_SETTING_NAME,
+            },
+            orderBy: [{ createdAt: "desc" }],
+        });
+
+        simulateErrorBySetting = parseBooleanSetting(simulateErrorSetting?.value, false);
+    } catch (error) {
+        console.error("[cardapio._index] non-blocking simula.erro load failed, using default", error);
+    }
+
+    if (simulateErrorByQuery || simulateErrorBySetting) {
+        throw new Error("SIMULACAO_ERRO_CARDAPIO_INDEX");
+    }
+
     // itens agrupados do cardápio
     // @ts-ignore
     const items = menuItemPrismaEntity.findAllGroupedByGroupLight(
@@ -104,8 +131,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
         }
     });
 
-    const reelSetting = await prismaClient.cardapioSetting.findFirst({
-        where: { key: REELS_SETTING_KEY }
+    const reelSetting = await prismaClient.setting.findFirst({
+        where: {
+            context: REELS_SETTING_CONTEXT,
+            name: REELS_SETTING_KEY
+        },
+        orderBy: [{ createdAt: "desc" }],
     });
 
     const reelUrls = parseReelUrls(reelSetting?.value);
@@ -255,7 +286,7 @@ export default function CardapioWebIndex() {
             <div
                 className={cn(
                     "flex flex-col gap-8 md:grid md:grid-cols-2 md:gap-0 md:items-start md:mb-10 md:justify-center",
-                    hasReels ? "mt-12 md:mt-24" : "mt-24 md:mt-52"
+                    "mt-28 md:mt-48"
                 )}
             >
                 {/* Bloco Halloween */}
@@ -518,6 +549,15 @@ export default function CardapioWebIndex() {
             </Suspense>
         </section>
     );
+}
+
+export function ErrorBoundary() {
+    const error = useRouteError();
+    const saiposHref = WEBSITE_LINKS.saiposCardapio.href;
+
+    console.error("[cardapio._index] route error boundary", error);
+
+    return <CardapioErrorRedirect redirectHref={saiposHref} />;
 }
 
 // ======================================================
