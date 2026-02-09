@@ -36,7 +36,7 @@ export default function CardapioErrorRedirect({
         <Logo circle={true} className="w-20 md:w-24" tagline={false} />
       </div>
 
-      <div className="flex-1 flex items-center justify-center pb-24 md:pb-0">
+      <div className="flex-1 flex items-center justify-center pb-20 md:pb-0">
         <div className="max-w-md text-center font-neue">
           <div className="flex flex-col items-center justify-center">
             <AlertTriangle className="h-8 w-8 text-amber-600" />
@@ -50,10 +50,12 @@ export default function CardapioErrorRedirect({
             </p>
           </div>
           <div className="mt-6 space-y-1">
-            <p className="text-xs font-semibold uppercase tracking-widest text-amber-700/80">
+            <p className="text-xs font-semibold uppercase tracking-widest text-amber-800">
               Redirecionamento automático
             </p>
-            <p className="text-3xl md:text-4xl font-bold text-amber-600 tracking-wide">{secondsLeft}</p>
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 ring-1 ring-amber-300/70">
+              <p className="text-3xl font-bold leading-none text-amber-700">{secondsLeft}</p>
+            </div>
           </div>
 
           <a
@@ -62,16 +64,24 @@ export default function CardapioErrorRedirect({
           >
             FINALIZAR O PEDIDO
           </a>
+          <p className="mt-3 hidden text-xs text-slate-600 md:block">
+            Se não redirecionar automaticamente, clique em
+            <span className="block">FINALIZAR O PEDIDO.</span>
+          </p>
         </div>
       </div>
 
-      <div className="fixed inset-x-0 bottom-6 flex justify-center md:hidden">
+      <div className="fixed inset-x-0 bottom-4 flex flex-col items-center gap-2 px-6 md:hidden">
         <a
           href={redirectHref}
           className="inline-flex items-center rounded-md bg-black text-white px-4 py-2 text-sm font-semibold tracking-wide"
         >
           FINALIZAR O PEDIDO
         </a>
+        <p className="text-center text-xs text-slate-600">
+          Se não redirecionar automaticamente, toque em
+          <span className="block">FINALIZAR O PEDIDO.</span>
+        </p>
       </div>
     </section>
   );
