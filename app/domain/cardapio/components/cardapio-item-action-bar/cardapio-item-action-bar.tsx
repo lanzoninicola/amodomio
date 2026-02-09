@@ -37,6 +37,10 @@ export function CardapioItemActionBarVertical({
         setLikeIt(true)
         setLikesAmount(likesAmount + 1)
 
+        if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("cardapio:like-celebration"));
+        }
+
         const clientId = getOrCreateMenuItemInterestClientId();
         fetcher.submit(
             {
@@ -154,6 +158,10 @@ export function CardapioItemActionBarHorizontal({
 
         setLikeIt(true)
         setLikesAmount(likesAmount + 1)
+
+        if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("cardapio:like-celebration"));
+        }
 
         const clientId = getOrCreateMenuItemInterestClientId();
         fetcher.submit(
@@ -311,6 +319,10 @@ export function LikeIt({
         setLikeIt(true)
         setLikesAmount(likesAmount + 1)
 
+        if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("cardapio:like-celebration"));
+        }
+
         const clientId = getOrCreateMenuItemInterestClientId();
         fetcher.submit(
             {
@@ -330,7 +342,12 @@ export function LikeIt({
     return (
         <Button
             variant={"ghost"}
-            className={cn("flex items-center cursor-pointer", cnContainer)} onClick={likingIt}>
+            className={cn(
+                "flex items-center cursor-pointer focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 focus:ring-0 focus:ring-offset-0",
+                cnContainer
+            )}
+            onClick={likingIt}
+        >
 
             <Heart
                 size={size ?? 16}

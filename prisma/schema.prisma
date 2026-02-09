@@ -12,18 +12,6 @@ datasource db {
   provider = "postgresql"
 }
 
-model CardapioSetting {
-  id    String @id @default(uuid())
-  key   String
-  name  String
-  value String
-
-  createdAt DateTime @map("created_at")
-  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
-
-  @@map("cardapio_settings")
-}
-
 model Product {
   id                     String                   @id @default(uuid())
   name                   String
@@ -721,6 +709,7 @@ model AdminNavigationClick {
   href          String   @unique
   title         String
   groupTitle    String?  @map("group_title")
+  pinned        Boolean  @default(false)
   count         Int      @default(0)
   lastClickedAt DateTime @map("last_clicked_at")
   createdAt     DateTime @default(now()) @map("created_at")

@@ -19,6 +19,8 @@ import { ok } from "./utils/http-response.server";
 import { ArrowRight } from "lucide-react";
 import Logo from "./components/primitives/logo/logo";
 import MicrosoftClarityScriptTag from "./components/primitives/ms-clarity/ms-clarity-script";
+import WEBSITE_LINKS from "./domain/website-navigation/links/website-links";
+import { useEffect, useState } from "react";
 
 export const meta: MetaFunction = () => {
   return [
@@ -167,10 +169,24 @@ export function ErrorBoundary() {
   const error = useRouteError();
   const location = useLocation();
   const pathname = location?.pathname || "";
+  const shouldRedirectCardapio = pathname.startsWith("/cardapio");
+  const cardapioFallbackHref = WEBSITE_LINKS.saiposCardapio.href;
+  const redirectDelaySeconds = 3;
+  const [secondsLeft, setSecondsLeft] = useState(redirectDelaySeconds);
+
+  useEffect(() => {
+    if (!shouldRedirectCardapio || typeof window === "undefined") return;
+
+    const intervalId = window.setInterval(() => {
+      setSecondsLeft((current) => (current > 1 ? current - 1 : 1));
+    }, 1000);
+
+    return () => window.clearInterval(intervalId);
+  }, [shouldRedirectCardapio]);
 
   const primaryAction = (() => {
     if (pathname.startsWith("/admin")) return { href: "/admin", label: "Voltar para o painel" };
-    if (pathname.startsWith("/cardapio")) return { href: "/cardapio", label: "Voltar ao cardápio" };
+    if (pathname.startsWith("/cardapio")) return { href: cardapioFallbackHref, label: "Ir para finalizar o pedido" };
     return { href: "/", label: "Ir para a página inicial" };
   })();
 
@@ -180,10 +196,20 @@ export function ErrorBoundary() {
     <html>
       <head>
         <title>Oops!</title>
+        {shouldRedirectCardapio ? (
+          <meta httpEquiv="refresh" content={`${redirectDelaySeconds};url=${cardapioFallbackHref}`} />
+        ) : null}
         <Meta />
         <Links />
       </head>
       <body>
+        {shouldRedirectCardapio ? (
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `window.setTimeout(function () { window.location.replace(${JSON.stringify(cardapioFallbackHref)}); }, ${redirectDelaySeconds * 1000});`,
+            }}
+          />
+        ) : null}
         <div className="min-h-screen bg-gradient-to-br from-amber-50 via-white to-orange-50 text-slate-900">
           <div className="mx-auto flex min-h-screen max-w-5xl flex-col gap-10 px-6 py-10 md:py-16">
             <header className="flex items-center justify-between">
@@ -199,8 +225,13 @@ export function ErrorBoundary() {
                 <div className="space-y-3">
                   <h1 className="text-4xl font-semibold leading-tight md:text-5xl">Desculpe, tivemos um imprevisto.</h1>
                   <p className="text-lg text-slate-600 md:max-w-xl">
-                    Nosso time já foi avisado. Você pode retomar de onde estava ou voltar para o cardápio digital.
+                    Ocorreu um erro no cardápio digital. Estamos redirecionando você automaticamente para finalizar seu pedido.
                   </p>
+                  {shouldRedirectCardapio ? (
+                    <p className="text-sm font-semibold text-slate-800">
+                      Redirecionando em {secondsLeft}...
+                    </p>
+                  ) : null}
                 </div>
 
                 <div className="flex flex-wrap gap-3">
@@ -212,10 +243,10 @@ export function ErrorBoundary() {
                     <ArrowRight className="h-4 w-4" />
                   </Link>
                   <Link
-                    to="/cardapio"
+                    to={shouldRedirectCardapio ? cardapioFallbackHref : "/cardapio"}
                     className="inline-flex items-center gap-2 rounded-full border border-slate-300 px-5 py-3 text-sm font-semibold uppercase tracking-wide text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
                   >
-                    <span>Ver cardápio digital</span>
+                    <span>{shouldRedirectCardapio ? "Ir para finalizar o pedido" : "Ver cardápio digital"}</span>
                   </Link>
                 </div>
               </div>

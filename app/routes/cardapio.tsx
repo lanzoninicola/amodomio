@@ -1,6 +1,6 @@
 import { InstagramLogoIcon } from "@radix-ui/react-icons";
 import { LinksFunction, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
-import { Await, Link, Outlet, defer, useLoaderData } from "@remix-run/react";
+import { Await, Link, Outlet, defer, useLoaderData, useRouteError } from "@remix-run/react";
 import { ArrowRight, Bell, Divide, Info, Instagram, LayoutTemplate, MapPin, Proportions, SearchIcon } from "lucide-react";
 import React, { ReactNode, Suspense, useEffect, useState } from "react";
 
@@ -26,6 +26,7 @@ import useCurrentPage from "~/hooks/use-current-page";
 import { NotificationCenterProvider, useNotificationCenter } from "~/domain/push/notification-center-context";
 import { PwaInstallPrompt } from "~/domain/pwa/pwa-install-prompt";
 import { CardapioSizesContent } from "~/domain/cardapio/components/cardapio-sizes-content";
+import CardapioErrorRedirect from "~/domain/cardapio/components/cardapio-error-redirect/cardapio-error-redirect";
 
 
 /**
@@ -79,27 +80,54 @@ export const links: LinksFunction = () => [
 ];
 
 export async function loader({ request }: LoaderFunctionArgs) {
+    const url = new URL(request.url);
+    const simulateError = url.searchParams.get("simularErro");
+    const simulateErrorByQuery = simulateError === "cardapio-layout";
+    const SIMULATE_ERROR_SETTING_NAME = "simula.erro";
 
+    const CARDAPIO_SETTINGS_CONTEXT = "cardapio";
     const requestedKeys = [
-        "cardapio.fazer_pedido.public.url",
-        "cardapio.aviso_loja_fechada.yesno",
-        "cardapio.notificacoes.enabled",
+        "fazer_pedido.public.url",
+        "aviso_loja_fechada.yesno",
+        "notificacoes.enabled",
+        SIMULATE_ERROR_SETTING_NAME,
     ] as const;
 
-    const cardapioSettings = await prismaClient.cardapioSetting.findMany({
-        where: { key: { in: [...requestedKeys] } },
-        select: { key: true, value: true },
-    });
+    const defaults = {
+        fazerPedidoPublicURL: WEBSITE_LINKS.cardapioFallbackURL.href,
+        showLojaFechadaMessage: false,
+        notificationsEnabled: false,
+    };
 
-    const settingsMap = cardapioSettings.reduce<Record<string, string | null>>((acc, setting) => {
-        acc[setting.key] = setting.value;
-        return acc;
-    }, {});
+    let settingsMap: Record<string, string | null> = {};
 
-    const fPUrl = settingsMap[requestedKeys[0]] ?? WEBSITE_LINKS.cardapioFallbackURL.href;
+    try {
+        const globalSettings = await prismaClient.setting.findMany({
+            where: {
+                context: CARDAPIO_SETTINGS_CONTEXT,
+                name: { in: [...requestedKeys] }
+            },
+            select: { name: true, value: true },
+            orderBy: [{ createdAt: "desc" }],
+        });
 
-    const showLojaFechadaMessage = parseBooleanSetting(settingsMap[requestedKeys[1]], true);
-    const notificationsEnabled = parseBooleanSetting(settingsMap[requestedKeys[2]], true);
+        settingsMap = globalSettings.reduce<Record<string, string | null>>((acc, setting) => {
+            if (acc[setting.name] !== undefined) return acc;
+            acc[setting.name] = setting.value;
+            return acc;
+        }, {});
+    } catch (error) {
+        console.error("[cardapio] non-blocking settings load failed, using defaults", error);
+    }
+
+    const fPUrl = settingsMap[requestedKeys[0]] ?? defaults.fazerPedidoPublicURL;
+    const showLojaFechadaMessage = parseBooleanSetting(settingsMap[requestedKeys[1]], defaults.showLojaFechadaMessage);
+    const notificationsEnabled = parseBooleanSetting(settingsMap[requestedKeys[2]], defaults.notificationsEnabled);
+    const simulateErrorBySetting = parseBooleanSetting(settingsMap[SIMULATE_ERROR_SETTING_NAME], false);
+
+    if (simulateErrorByQuery || simulateErrorBySetting) {
+        throw new Error("SIMULACAO_ERRO_CARDAPIO_LAYOUT");
+    }
 
     return defer({
         fazerPedidoPublicURL: fPUrl,
@@ -142,6 +170,15 @@ export default function CardapioWeb() {
             {currentPage === "other" && <CardapioFooter />}
         </NotificationCenterProvider>
     );
+}
+
+export function ErrorBoundary() {
+    const error = useRouteError();
+    const saiposHref = WEBSITE_LINKS.saiposCardapio.href;
+
+    console.error("[cardapio] route error boundary", error);
+
+    return <CardapioErrorRedirect redirectHref={saiposHref} />;
 }
 
 function shouldShowBanner(date: Date = new Date()) {
