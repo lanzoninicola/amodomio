@@ -38,12 +38,6 @@ export const loader: LoaderFunction = async ({ request }: LoaderFunctionArgs) =>
     const environment = process.env.NODE_ENV
     const prismaDbName = prismaClient.dbName
 
-    console.log("revalidate?",
-        request.headers.get("x-remix-revalidate"),
-        "method", request.method,
-        "url", new URL(request.url).toString()
-    );
-
     let user = await authenticator.isAuthenticated(request);
 
     if (!user) {
@@ -52,7 +46,21 @@ export const loader: LoaderFunction = async ({ request }: LoaderFunctionArgs) =>
 
     const slug = lastUrlSegment(request.url)
 
-    return ok({ user, slug, environment, prismaDbName, urlSegment: request.url })
+    const pinnedNav = await prismaClient.adminNavigationClick.findMany({
+        where: { pinned: true },
+        select: { href: true },
+        orderBy: [{ lastClickedAt: "desc" }],
+        take: 50,
+    });
+
+    return ok({
+        user,
+        slug,
+        environment,
+        prismaDbName,
+        urlSegment: request.url,
+        pinnedNavHrefs: pinnedNav.map((item) => item.href),
+    })
 }
 
 
@@ -65,10 +73,11 @@ export default function AdminOutlet() {
     const slug = loaderData?.payload?.slug;
     const urlSegment = loaderData?.payload?.urlSegment
     const env = loaderData?.payload?.environment
+    const pinnedNavHrefs = loaderData?.payload?.pinnedNavHrefs ?? [];
 
     return (
         <SidebarProvider data-element="sidebar-provider">
-            <AdminSidebar navigationLinks={ADMIN_NAVIGATION_LINKS} />
+            <AdminSidebar navigationLinks={ADMIN_NAVIGATION_LINKS} pinnedHrefs={pinnedNavHrefs} />
             <SidebarTrigger />
             <div className="flex flex-col w-screen">
                 <AdminHeader slug={slug} urlSegment={urlSegment} />
@@ -82,4 +91,3 @@ export default function AdminOutlet() {
         </SidebarProvider>
     )
 }
-

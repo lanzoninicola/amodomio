@@ -721,6 +721,7 @@ model AdminNavigationClick {
   href          String   @unique
   title         String
   groupTitle    String?  @map("group_title")
+  pinned        Boolean  @default(false)
   count         Int      @default(0)
   lastClickedAt DateTime @map("last_clicked_at")
   createdAt     DateTime @default(now()) @map("created_at")
