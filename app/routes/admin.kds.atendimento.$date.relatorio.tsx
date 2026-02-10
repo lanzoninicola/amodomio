@@ -1,7 +1,7 @@
 // app/routes/admin.kds.atendimento.$date.relatorio.tsx
 import { json, MetaFunction, type LoaderFunctionArgs } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
-import { ymdToDateInt, todayLocalYMD } from "@/domain/kds";
+import { isValidYMD, ymdToDateInt, todayLocalYMD } from "@/domain/kds";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { computeNetRevenueAmount } from "~/domain/finance/compute-net-revenue-amount";
@@ -26,7 +26,7 @@ function addDaysYMD(ymd: string, delta: number) {
 
 /** ===================== LOADER ===================== **/
 export async function loader({ params }: LoaderFunctionArgs) {
-  const dateStr = params.date ?? todayLocalYMD();
+  const dateStr = isValidYMD(params.date) ? params.date : todayLocalYMD();
   const dateInt = ymdToDateInt(dateStr);
 
   const prevDayStr = addDaysYMD(dateStr, -1);

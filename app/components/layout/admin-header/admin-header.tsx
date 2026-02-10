@@ -1,6 +1,6 @@
 
 import { Link, useFetcher, useNavigate } from "@remix-run/react";
-import { Globe, Search, Shield } from "lucide-react";
+import { Globe, Search, Settings, Shield } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { cn } from "~/lib/utils";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "~/components/ui/dropdown-menu";
@@ -240,6 +240,12 @@ export function AdminHeader({ urlSegment, slug }: AdminHeaderProps) {
                             <div className="flex gap-2 items-center hover:bg-slate-50 rounded-md p-2">
                                 <Shield />
                                 <span className="hidden text-foreground/60 transition-colors hover:text-foreground/80 lg:block">Pagina Iniçial</span>
+                            </div>
+                        </Link>
+                        <Link to={"/admin/administracao/settings"}>
+                            <div className="flex gap-2 items-center hover:bg-slate-50 rounded-md p-2">
+                                <Settings />
+                                <span className="hidden text-foreground/60 transition-colors hover:text-foreground/80 lg:block">Configurações</span>
                             </div>
                         </Link>
                         <Link to={"/"} prefetch="none">

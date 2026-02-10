@@ -54,6 +54,7 @@ import CardapioErrorRedirect from "~/domain/cardapio/components/cardapio-error-r
 import { redisGetJson, redisSetJson } from "~/lib/cache/redis.server";
 import { CARDAPIO_INDEX_CACHE_KEY } from "~/domain/cardapio/cardapio-cache.server";
 import { notifyCardapioContingencyByWhatsapp } from "~/domain/cardapio/cardapio-contingency-alert.server";
+import WEBSITE_LINKS from "~/domain/website-navigation/links/website-links";
 
 const INTEREST_ENDPOINT = "/api/menu-item-interest";
 const REELS_SETTING_KEY = "reel.urls";

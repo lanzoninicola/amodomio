@@ -6,7 +6,7 @@ import { enforceRateLimit, handleRouteError } from "~/domain/z-api/route-helpers
 import { PayloadTooLargeError } from "~/domain/z-api/errors";
 import { readJsonBody } from "~/domain/z-api/security.server";
 import { normalizeWebhookPayload, stringifyPayloadForLog } from "~/domain/z-api/webhook.parser";
-import { sendAutoReplySafe, sendTextMessage, sendVideoMessage } from "~/domain/z-api/zapi.service";
+import { sendTextMessage, sendVideoMessage } from "~/domain/z-api/zapi.service";
 import { addWebhookLog } from "~/domain/z-api/webhook-log.server";
 import { maybeSendTrafficAutoReply } from "~/domain/z-api/meta-auto-responder.server";
 import prisma from "~/lib/prisma/client.server";
@@ -16,6 +16,7 @@ import { getOffHoursAutoresponderConfig, getStoreOpeningStatus } from "~/domain/
 const WEBHOOK_BODY_LIMIT_BYTES = 256 * 1024;
 const LOG_HEADERS = ["user-agent", "x-forwarded-for", "cf-connecting-ip", "x-real-ip", "content-type"];
 const CRM_SYNC_TTL_MS = 15 * 60 * 1000;
+const ECHO_SENT_WINDOW_MS = 5 * 60 * 1000;
 const crmSyncCache = new Map<string, number>();
 const offHoursReplyCache = new Map<string, number>();
 const offHoursAggregationQueue = new Map<string, NodeJS.Timeout>();
@@ -78,6 +79,57 @@ function toWhatsappFormatting(value: string) {
   return text;
 }
 
+function normalizeComparableMessageText(value: string | undefined | null) {
+  if (!value) return "";
+  return value
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+}
+
+async function isOutboundEchoMessage(
+  customerId: string,
+  messageText: string | undefined | null
+) {
+  const normalizedIncoming = normalizeComparableMessageText(messageText);
+  if (!normalizedIncoming) return false;
+
+  const since = new Date(Date.now() - ECHO_SENT_WINDOW_MS);
+  const recentSentEvents = await prisma.crmCustomerEvent.findMany({
+    where: {
+      customer_id: customerId,
+      event_type: "WHATSAPP_SENT",
+      created_at: { gte: since },
+    },
+    orderBy: { created_at: "desc" },
+    take: 20,
+    select: { payload: true, payload_raw: true },
+  });
+
+  for (const event of recentSentEvents) {
+    const payloadMessage = normalizeComparableMessageText(
+      (event.payload as any)?.messageText
+    );
+    if (payloadMessage && payloadMessage === normalizedIncoming) {
+      return true;
+    }
+
+    if (event.payload_raw) {
+      try {
+        const parsed = JSON.parse(event.payload_raw);
+        const rawMessage = normalizeComparableMessageText(parsed?.messageText);
+        if (rawMessage && rawMessage === normalizedIncoming) {
+          return true;
+        }
+      } catch {
+        // ignore invalid JSON
+      }
+    }
+  }
+
+  return false;
+}
+
 async function syncCrmCustomerFromWebhook(
   normalized: ReturnType<typeof normalizeWebhookPayload>,
   correlationId: string
@@ -86,7 +138,7 @@ async function syncCrmCustomerFromWebhook(
 
   const phone_e164 = normalize_phone_e164_br(normalized.phone);
   if (!phone_e164) return { skipped: "invalid_phone" };
-  if (shouldSkipCrmSync(phone_e164)) return { skipped: "cache_hit" };
+  const shouldSkipProfileSync = shouldSkipCrmSync(phone_e164);
 
   const name = normalized.contactName?.trim() || "";
   const photo = normalized.contactPhoto?.trim() || "";
@@ -96,7 +148,7 @@ async function syncCrmCustomerFromWebhook(
 
   if (existing) {
     const shouldUpdateName = Boolean(name) && isBlank(existing.name);
-    if (shouldUpdateName) {
+    if (!shouldSkipProfileSync && shouldUpdateName) {
       customer = await prisma.crmCustomer.update({
         where: { phone_e164 },
         data: { name },
@@ -112,7 +164,7 @@ async function syncCrmCustomerFromWebhook(
     });
   }
 
-  if (photo && customer) {
+  if (!shouldSkipProfileSync && photo && customer) {
     const existingImage = await prisma.crmCustomerImage.findFirst({
       where: { customer_id: customer.id, url: photo },
       select: { id: true },
@@ -130,12 +182,16 @@ async function syncCrmCustomerFromWebhook(
   }
 
   if (customer) {
+    const isOutboundEcho = await isOutboundEchoMessage(customer.id, normalized.messageText);
+    const isSentByAttendant = normalized.fromMe === true || isOutboundEcho;
     const eventPayload = {
-      action: "whatsapp_received",
+      action: isSentByAttendant ? "whatsapp_sent" : "whatsapp_received",
       phone: normalized.phone,
       phone_e164,
       name: name || undefined,
       photo: photo || undefined,
+      fromMe: normalized.fromMe,
+      fromEcho: isOutboundEcho || undefined,
       messageType: normalized.messageType || undefined,
       messageText: normalized.messageText || undefined,
       instanceId: normalized.instanceId || undefined,
@@ -145,7 +201,7 @@ async function syncCrmCustomerFromWebhook(
     await prisma.crmCustomerEvent.create({
       data: {
         customer_id: customer.id,
-        event_type: "WHATSAPP_RECEIVED",
+        event_type: isSentByAttendant ? "WHATSAPP_SENT" : "WHATSAPP_RECEIVED",
         source: "zapi-webhook",
         external_id: correlationId,
         payload: eventPayload,
@@ -154,7 +210,46 @@ async function syncCrmCustomerFromWebhook(
     });
   }
 
-  return { customerId: customer?.id, created: !existing };
+  return { customerId: customer?.id, created: !existing, skippedProfileSync: shouldSkipProfileSync };
+}
+
+async function registerAutoReplySentEvent(
+  normalized: ReturnType<typeof normalizeWebhookPayload>,
+  correlationId: string,
+  channel: "traffic" | "off-hours",
+  messageText?: string
+) {
+  if (!normalized.phone) return;
+
+  const phone_e164 = normalize_phone_e164_br(normalized.phone);
+  if (!phone_e164) return;
+
+  const customer = await prisma.crmCustomer.findUnique({
+    where: { phone_e164 },
+    select: { id: true },
+  });
+  if (!customer) return;
+
+  const payload = {
+    action: "whatsapp_sent",
+    channel,
+    phone: normalized.phone,
+    phone_e164,
+    fromMe: true,
+    messageText: messageText?.trim() || undefined,
+    correlationId,
+  };
+
+  await prisma.crmCustomerEvent.create({
+    data: {
+      customer_id: customer.id,
+      event_type: "WHATSAPP_SENT",
+      source: "zapi-auto-reply",
+      external_id: `${correlationId}:${channel}`,
+      payload,
+      payload_raw: JSON.stringify(payload),
+    },
+  });
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -217,6 +312,10 @@ export async function action({ request }: ActionFunctionArgs) {
     return { skipped: "error" };
   });
 
+  if (normalized.fromMe === true) {
+    return json({ ok: true, trafficResult: { sent: false, reason: "from_me" }, offHoursResult: { sent: false, reason: "from_me" }, crmSyncResult });
+  }
+
   const trafficResult = await maybeSendTrafficAutoReply(normalized, correlationId).catch((error) => {
     console.warn("[z-api][webhook][received] traffic auto-reply failed", {
       correlationId,
@@ -224,6 +323,14 @@ export async function action({ request }: ActionFunctionArgs) {
     });
     return { sent: false, reason: "error" };
   });
+  if (trafficResult.sent) {
+    await registerAutoReplySentEvent(normalized, correlationId, "traffic").catch((error) => {
+      console.warn("[z-api][webhook][received] traffic sent event failed", {
+        correlationId,
+        error: (error as any)?.message,
+      });
+    });
+  }
 
   const offHoursResult = await maybeSendOffHoursAutoReply(normalized, correlationId, trafficResult.sent).catch((error) => {
     console.warn("[z-api][webhook][received] off-hours auto-reply failed", {
@@ -282,8 +389,7 @@ async function sendOffHoursAutoReply(
   if (responseType === "video") {
     const video = offHoursConfig.video?.trim();
     if (!video) return undefined;
-
-    return await sendVideoMessage(
+    const response = await sendVideoMessage(
       {
         phone: normalized.phone,
         video,
@@ -299,12 +405,26 @@ async function sendOffHoursAutoReply(
       });
       return undefined;
     });
+    if (response) {
+      await registerAutoReplySentEvent(
+        normalized,
+        correlationId,
+        "off-hours",
+        offHoursConfig.caption
+      ).catch((error) => {
+        console.warn("[z-api][off-hours] register sent event failed", {
+          correlationId,
+          error: (error as any)?.message,
+        });
+      });
+    }
+    return response;
   }
 
   const message = offHoursConfig.message?.trim();
   if (!message) return undefined;
 
-  return await sendTextMessage(
+  const response = await sendTextMessage(
     {
       phone: normalized.phone,
       message,
@@ -317,6 +437,15 @@ async function sendOffHoursAutoReply(
     });
     return undefined;
   });
+  if (response) {
+    await registerAutoReplySentEvent(normalized, correlationId, "off-hours", message).catch((error) => {
+      console.warn("[z-api][off-hours] register sent event failed", {
+        correlationId,
+        error: (error as any)?.message,
+      });
+    });
+  }
+  return response;
 }
 
 function scheduleOffHoursAutoReply(
