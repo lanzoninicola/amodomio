@@ -9,6 +9,7 @@ import { AdminSidebar } from "~/domain/website-navigation/components/admin-sideb
 import prismaClient from "~/lib/prisma/client.server";
 import { ok } from "~/utils/http-response.server";
 import { lastUrlSegment } from "~/utils/url";
+import RouteProgressBar from "~/components/route-progress-bar/route-progress-bar";
 
 
 export interface AdminOutletContext {
@@ -77,6 +78,7 @@ export default function AdminOutlet() {
 
     return (
         <SidebarProvider data-element="sidebar-provider">
+            <RouteProgressBar />
             <AdminSidebar navigationLinks={ADMIN_NAVIGATION_LINKS} pinnedHrefs={pinnedNavHrefs} />
             <SidebarTrigger />
             <div className="flex flex-col w-screen">

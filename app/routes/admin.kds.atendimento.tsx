@@ -31,7 +31,6 @@ import {
 import { cn } from "~/lib/utils";
 import { todayLocalYMD } from "~/domain/kds";
 import { Badge } from "@/components/ui/badge";
-import RouteProgressBar from "~/components/route-progress-bar/route-progress-bar";
 
 /* =============================
  * Helpers de data
@@ -191,7 +190,6 @@ export default function KdsAtendimento() {
 
   return (
     <div className="mb-12">
-      <RouteProgressBar />
       <Suspense fallback={<div>Carregando dias...</div>}>
         <Await resolve={data.days}>
           {(days) => (

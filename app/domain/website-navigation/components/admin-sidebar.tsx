@@ -116,12 +116,12 @@ export function AdminSidebar({ navigationLinks, pinnedHrefs }: AdminSidebarProps
   };
 
   const renderSubItems = (items: SidebarNavigationSection[], groupTitle: string) => (
-    <SidebarMenuSub>
+    <SidebarMenuSub className="gap-0.5 py-0">
       {items
         .filter((item) => item.disabled === false)
         .map((item) => (
           <SidebarMenuSubItem key={`${groupTitle}-${item.title}-${item.href ?? "no-link"}-sub`}>
-            <SidebarMenuSubButton asChild>
+            <SidebarMenuSubButton asChild size="sm" className="h-6 px-1.5">
               {item.href ? (
                 <div className="flex w-full items-center gap-2">
                   {showPins ? (
@@ -162,18 +162,19 @@ export function AdminSidebar({ navigationLinks, pinnedHrefs }: AdminSidebarProps
                         groupTitle,
                       })
                     }
-                    className="flex items-center gap-2"
+                    className="flex min-w-0 flex-1 items-center gap-2"
+                    title={item.title}
                   >
                     {item.icon && <item.icon size={14} />}
-                    <span className={cn(item.highlight && "font-semibold")}>
+                    <span className={cn("min-w-0 truncate whitespace-nowrap text-[12px]", item.highlight && "font-semibold")}>
                       {item.title}
                     </span>
                   </Link>
                 </div>
               ) : (
-                <span>
+                <span className="flex min-w-0 items-center gap-2" title={item.title}>
                   {item.icon && <item.icon size={14} />}
-                  <span className={cn(item.highlight && "font-semibold")}>
+                  <span className={cn("min-w-0 truncate whitespace-nowrap text-[12px]", item.highlight && "font-semibold")}>
                     {item.title}
                   </span>
                 </span>
@@ -223,7 +224,7 @@ export function AdminSidebar({ navigationLinks, pinnedHrefs }: AdminSidebarProps
                 <Link
                   to={item.href}
                   prefetch="none"
-                  className="flex flex-1 items-center gap-2 text-sm"
+                  className="flex min-w-0 flex-1 items-center gap-2 text-sm"
                   onClick={() =>
                     trackNavClick({
                       href: item.href,
@@ -231,17 +232,18 @@ export function AdminSidebar({ navigationLinks, pinnedHrefs }: AdminSidebarProps
                       groupTitle,
                     })
                   }
+                  title={item.title}
                 >
                   {item.icon && <item.icon size={15} />}
-                  <span className={cn(item.highlight && "font-semibold")}>
+                  <span className={cn("min-w-0 truncate whitespace-nowrap", item.highlight && "font-semibold")}>
                     {item.title}
                   </span>
                 </Link>
               </div>
             ) : (
-              <span className="text-sm">
+              <span className="flex min-w-0 items-center gap-2 text-sm" title={item.title}>
                 {item.icon && <item.icon size={15} />}
-                <span className={cn(item.highlight && "font-semibold")}>
+                <span className={cn("min-w-0 truncate whitespace-nowrap", item.highlight && "font-semibold")}>
                   {item.title}
                 </span>
               </span>
