@@ -25,7 +25,11 @@ export default defineConfig({
     !isVitest && mkcert(),
     remix({
       presets: [RemixPWAPreset()],
-      ignoredRouteFiles: ["**/*.css"],
+      ignoredRouteFiles: [
+        "**/*.css",
+        "**/*.test.{js,jsx,ts,tsx}",
+        "**/*.spec.{js,jsx,ts,tsx}",
+      ],
       future: {
         v3_fetcherPersist: true,
         v3_relativeSplatPath: true,
