@@ -71,6 +71,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const itemsQuery = prismaIt(menuItemPrismaEntity.findAll({
         where: {
             visible: true,
+            active: true,
+            upcoming: false,
             // tags: {
             //     some: {
             //         Tag: {

@@ -196,7 +196,7 @@ export default function AdminGerenciamentoCardapioMainListLayout() {
                     const [items, setItems] = useState<any[]>([]);
                     const [search, setSearch] = useState("");
                     const [currentGroup, setCurrentGroup] = useState<MenuItemGroup["key"] | null>(null);
-                    const [currentFilter, setCurrentFilter] = useState<MenuItemVisibilityFilterOption | null>("active");
+                    const [currentFilter, setCurrentFilter] = useState<MenuItemVisibilityFilterOption | null>("all");
 
                     const [dragEnable, setDragEnabled] = useState(false)
 
@@ -293,12 +293,13 @@ export default function AdminGerenciamentoCardapioMainListLayout() {
                                 {/* Select de Visibilidade */}
                                 <Select
                                     onValueChange={(value) => handleVisibilityChange(value as MenuItemVisibilityFilterOption)}
-                                    defaultValue={"active"}
+                                    defaultValue={"all"}
                                 >
                                     <SelectTrigger className="w-full md:col-span-2">
                                         <SelectValue placeholder="Filtrar vendas" />
                                     </SelectTrigger>
                                     <SelectContent>
+                                        <SelectItem value="all">Todos</SelectItem>
                                         <SelectItem value="active">Venda ativa</SelectItem>
                                         <SelectItem value="lancamento-futuro">Lançamento futuro</SelectItem>
                                         <SelectItem value="venda-pausada">Venda pausada</SelectItem>
