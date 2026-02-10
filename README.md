@@ -61,3 +61,36 @@ rm -rf app
 # copy your app over
 cp -R ../my-old-remix-app/app app
 ```
+
+## Proteção de Merge no `vercel-prod`
+
+Para reduzir risco de deploy com falha no cardápio público, o projeto usa dois checks:
+
+1. `Vercel Prod Loader Guard` (`.github/workflows/vercel-prod-loader-guard.yml`)
+2. `Cardapio Loader Smoke` (`.github/workflows/cardapio-loader-smoke.yml`)
+
+### O que cada check valida
+
+- `Vercel Prod Loader Guard`:
+  - roda em `pull_request` para `vercel-prod`
+  - executa `app/routes/cardapio._index.loader.test.ts`
+  - garante comportamento esperado do loader blocante do cardápio
+
+- `Cardapio Loader Smoke`:
+  - roda em `deployment_status` (após deploy bem-sucedido da Vercel)
+  - valida a rota `/cardapio` no preview
+  - falha se detectar contingência ativa (`Redirecionamento automático`)
+
+### Configuração recomendada no GitHub
+
+Em `Settings > Branches > Branch protection rules` para `vercel-prod`:
+
+1. Ativar `Require status checks to pass before merging`
+2. Marcar como obrigatórios:
+   - `Vercel Prod Loader Guard / cardapio-loader-blocker-test`
+   - `Cardapio Loader Smoke / smoke-cardapio-loader`
+
+### Observação sobre simulação de erro
+
+O setting `context=cardapio`, `name=simula.erro`, `value=true` força a contingência.
+Se estiver ativo em preview/deploy, os checks podem falhar por design.
