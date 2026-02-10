@@ -19,7 +19,7 @@ export type KdsTimestamps = {
 const toMs = (d?: Date | string | null) =>
   d ? new Date(d as any).getTime() : undefined;
 
-const diffPos(msStart?: number, msEnd?: number) =>
+const diffPos = (msStart?: number, msEnd?: number) =>
   msStart == null || msEnd == null ? 0 : Math.max(0, msEnd - msStart);
 
 export const msToMin = (ms: number) => ms / 60000;
@@ -49,14 +49,14 @@ export function getPhaseDurationsMs(row: KdsTimestamps, now = nowMs()) {
   const c = toMs(row.createdAt);
   const ep = toMs(row.emProducaoAt);
   const af = toMs(row.aguardandoFornoAt);
-  const as = toMs(row.assandoAt);
+  const assando = toMs(row.assandoAt);
   const fi = toMs(row.finalizadoAt);
 
   // Encadeamento de “endereços” válidos para cada fase:
   const filaMs       = diffPos(c,  ep ?? fi ?? now);                // até entrar em produção (ou fim/now)
   const producaoMs   = ep ? diffPos(ep,  af ?? fi ?? now) : 0;      // até ir pra fila de forno (ou fim/now)
-  const filaFornoMs  = af ? diffPos(af,  as ?? fi ?? now) : 0;      // até começar a assar (ou fim/now)
-  const fornoMs      = as ? diffPos(as,  fi ?? now)            : 0; // até finalizar (ou now)
+  const filaFornoMs  = af ? diffPos(af,  assando ?? fi ?? now) : 0; // até começar a assar (ou fim/now)
+  const fornoMs      = assando ? diffPos(assando,  fi ?? now)  : 0; // até finalizar (ou now)
   const posFinalMs   = fi ? diffPos(fi,  now)                  : 0; // após finalizado
 
   const cicloTotalMs = diffPos(c,  fi ?? now);
@@ -80,7 +80,7 @@ export function getPhaseDurationsMin(row: KdsTimestamps, now = nowMs()) {
 }
 
 /** Em qual fase o pedido está agora? */
-export function getCurrentPhase(row: KdsTimestamps): Exclude<KdsPhases, "posFinal" | "cicloTotal"> {
+export function getCurrentPhase(row: KdsTimestamps): Exclude<KdsPhases, "cicloTotal"> {
   if (row.finalizadoAt) return "posFinal";
   if (row.assandoAt) return "forno";
   if (row.aguardandoFornoAt) return "filaForno";
@@ -93,11 +93,11 @@ export function getCurrentPhaseElapsedMs(row: KdsTimestamps, now = nowMs()) {
   const c = toMs(row.createdAt);
   const ep = toMs(row.emProducaoAt);
   const af = toMs(row.aguardandoFornoAt);
-  const as = toMs(row.assandoAt);
+  const assando = toMs(row.assandoAt);
   const fi = toMs(row.finalizadoAt);
 
   if (fi) return 0;
-  if (as) return diffPos(as, now);
+  if (assando) return diffPos(assando, now);
   if (af) return diffPos(af, now);
   if (ep) return diffPos(ep, now);
   return diffPos(c, now);

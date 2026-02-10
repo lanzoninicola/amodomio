@@ -8,9 +8,9 @@ import tryit from "~/utils/try-it";
 import { toast } from "~/components/ui/use-toast";
 import prismaClient from "~/lib/prisma/client.server";
 import { Suspense, useEffect, useRef, useState } from "react";
-import { Loader2, Pin, PinOff } from "lucide-react";
+import { Loader2, Pin, PinOff, Settings } from "lucide-react";
 
-export async function loader({ request }: LoaderFunctionArgs) {
+export async function loader() {
     const topNav = (async () => {
         try {
             return await prismaClient.adminNavigationClick.findMany({
@@ -170,15 +170,26 @@ export default function AdminIndex() {
         <Container className="md:max-w-none">
             <div className="grid place-items-center h-full gap-8 py-10">
                 <div className="w-full max-w-5xl">
-                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                        Dashboard
-                    </p>
-                    <h1 className="mt-2 text-2xl font-bold leading-tight tracking-tight md:text-3xl">
-                        Bem vindo ao painel de administração! 👋🏻
-                    </h1>
-                    <p className="mt-2 text-sm text-muted-foreground">
-                        Acesse rapidamente as áreas mais usadas do dia a dia.
-                    </p>
+                    <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                        <div>
+                            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                                Dashboard
+                            </p>
+                            <h1 className="mt-2 text-2xl font-bold leading-tight tracking-tight md:text-3xl">
+                                Bem vindo ao painel de administração! 👋🏻
+                            </h1>
+                            <p className="mt-2 text-sm text-muted-foreground">
+                                Acesse rapidamente as áreas mais usadas do dia a dia.
+                            </p>
+                        </div>
+                        <Link
+                            to="/admin/administracao/settings"
+                            className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
+                        >
+                            <Settings className="h-4 w-4" />
+                            Configurações
+                        </Link>
+                    </div>
                 </div>
                 <div className="w-full max-w-5xl grid gap-6 lg:grid-cols-1">
                     <Suspense
