@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   getEngagementSettings: vi.fn(),
   redisGetJson: vi.fn(),
   redisSetJson: vi.fn(),
+  notifyContingency: vi.fn(),
 }));
 
 vi.mock("~/domain/cardapio/menu-item.prisma.entity.server", () => ({
@@ -42,6 +43,10 @@ vi.mock("~/lib/cache/redis.server", () => ({
   redisSetJson: mocks.redisSetJson,
 }));
 
+vi.mock("~/domain/cardapio/cardapio-contingency-alert.server", () => ({
+  notifyCardapioContingencyByWhatsapp: mocks.notifyContingency,
+}));
+
 import { loader } from "~/routes/cardapio._index";
 
 function buildArgs(url = "http://localhost/cardapio") {
@@ -65,9 +70,10 @@ describe("cardapio._index loader (blocker guard)", () => {
     });
     mocks.redisGetJson.mockResolvedValue(undefined);
     mocks.redisSetJson.mockResolvedValue(undefined);
+    mocks.notifyContingency.mockResolvedValue(undefined);
 
     mocks.settingFindFirst
-      .mockResolvedValueOnce({ value: "false" }) // simula.erro
+      .mockResolvedValueOnce({ value: "false" }) // contingencia.simula.erro
       .mockResolvedValueOnce({ value: null }) // reel.urls
       .mockResolvedValueOnce({ value: "true" }); // menu-item-interest-enabled
   });
@@ -102,7 +108,7 @@ describe("cardapio._index loader (blocker guard)", () => {
 
   it("falha quando a simulacao bloqueante está ativada por setting", async () => {
     mocks.settingFindFirst.mockReset();
-    mocks.settingFindFirst.mockResolvedValueOnce({ value: "true" }); // simula.erro
+    mocks.settingFindFirst.mockResolvedValueOnce({ value: "true" }); // contingencia.simula.erro
 
     await expect(loader(buildArgs())).rejects.toThrow("SIMULACAO_ERRO_CARDAPIO_INDEX");
   });
@@ -113,5 +119,6 @@ describe("cardapio._index loader (blocker guard)", () => {
     });
 
     await expect(loader(buildArgs())).rejects.toThrow("ITEMS_QUERY_FAILED");
+    expect(mocks.notifyContingency).toHaveBeenCalledTimes(1);
   });
 });
