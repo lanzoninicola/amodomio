@@ -20,6 +20,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const items = menuItemPrismaEntity.findAll({
         where: {
             visible: true,
+            active: true,
+            upcoming: false,
         },
         option: {
             sorted: true,
