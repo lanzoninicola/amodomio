@@ -91,8 +91,8 @@ export async function action({ request }: LoaderFunctionArgs) {
             colorHEX: "#FFFFFF",
         }
 
-        const [err, _] = await tryit(prismaClient.tag.create({
-            data: nextTag
+        const [err, _] = await tryit(tagPrismaEntity.create({
+            ...nextTag
         }))
 
         if (err) {

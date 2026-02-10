@@ -27,6 +27,7 @@ import { NotificationCenterProvider, useNotificationCenter } from "~/domain/push
 import { PwaInstallPrompt } from "~/domain/pwa/pwa-install-prompt";
 import { CardapioSizesContent } from "~/domain/cardapio/components/cardapio-sizes-content";
 import CardapioErrorRedirect from "~/domain/cardapio/components/cardapio-error-redirect/cardapio-error-redirect";
+import RouteProgressBar from "~/components/route-progress-bar/route-progress-bar";
 
 
 /**
@@ -158,6 +159,7 @@ export default function CardapioWeb() {
 
     return (
         <NotificationCenterProvider enabled={notificationsEnabled}>
+            <RouteProgressBar />
             {showLojaFechadaMessage && <BannerFechado />}
             <CardapioHeader />
 

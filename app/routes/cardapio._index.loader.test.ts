@@ -6,6 +6,8 @@ const mocks = vi.hoisted(() => ({
   postFindFirst: vi.fn(),
   settingFindFirst: vi.fn(),
   getEngagementSettings: vi.fn(),
+  redisGetJson: vi.fn(),
+  redisSetJson: vi.fn(),
 }));
 
 vi.mock("~/domain/cardapio/menu-item.prisma.entity.server", () => ({
@@ -35,6 +37,11 @@ vi.mock("~/domain/cardapio/engagement-settings.server", () => ({
   getEngagementSettings: mocks.getEngagementSettings,
 }));
 
+vi.mock("~/lib/cache/redis.server", () => ({
+  redisGetJson: mocks.redisGetJson,
+  redisSetJson: mocks.redisSetJson,
+}));
+
 import { loader } from "~/routes/cardapio._index";
 
 function buildArgs(url = "http://localhost/cardapio") {
@@ -56,6 +63,8 @@ describe("cardapio._index loader (blocker guard)", () => {
       likesEnabled: true,
       sharesEnabled: true,
     });
+    mocks.redisGetJson.mockResolvedValue(undefined);
+    mocks.redisSetJson.mockResolvedValue(undefined);
 
     mocks.settingFindFirst
       .mockResolvedValueOnce({ value: "false" }) // simula.erro
@@ -70,6 +79,25 @@ describe("cardapio._index loader (blocker guard)", () => {
     expect(result.data).toHaveProperty("items");
     expect(result.data).toHaveProperty("tags");
     expect(result.data.menuItemInterestEnabled).toBe(true);
+    expect(mocks.redisSetJson).toHaveBeenCalledTimes(1);
+  });
+
+  it("retorna cache quando houver hit no Redis", async () => {
+    mocks.redisGetJson.mockResolvedValueOnce({
+      items: [{ id: "cached-item-1" }],
+      tags: [{ id: "cached-tag-1", name: "pizza" }],
+      postFeatured: null,
+      reelUrls: [],
+      menuItemInterestEnabled: true,
+      likesEnabled: true,
+      sharesEnabled: true,
+    });
+
+    const result: any = await loader(buildArgs());
+
+    expect(mocks.findItems).not.toHaveBeenCalled();
+    expect(mocks.findTags).not.toHaveBeenCalled();
+    expect(result.data.items[0].id).toBe("cached-item-1");
   });
 
   it("falha quando a simulacao bloqueante está ativada por setting", async () => {

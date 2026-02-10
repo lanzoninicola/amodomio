@@ -31,6 +31,7 @@ import {
 import { cn } from "~/lib/utils";
 import { todayLocalYMD } from "~/domain/kds";
 import { Badge } from "@/components/ui/badge";
+import RouteProgressBar from "~/components/route-progress-bar/route-progress-bar";
 
 /* =============================
  * Helpers de data
@@ -91,21 +92,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     today: todayStr, // não é usada como value; mantida por compat.
     fullMonth, // modo atual (dados)
   });
-}
-
-/* =============================
- * Barra de progresso global
- * ============================= */
-function RouteProgressBar() {
-  const navigation = useNavigation();
-  const loading = navigation.state !== "idle";
-  return (
-    <div
-      className={`fixed left-0 top-0 h-1 bg-blue-600 transition-all duration-300
-      ${loading ? "w-full opacity-100" : "w-0 opacity-0"}`}
-      style={{ zIndex: 60 }}
-    />
-  );
 }
 
 /* =============================

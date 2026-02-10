@@ -46,6 +46,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select";
+import { invalidateCardapioIndexCache, invalidateSellingPriceHandlerCache } from "~/domain/cardapio/cardapio-cache.server";
 
 
 // ======= LOADER =======
@@ -239,6 +240,10 @@ export async function action({ request }: ActionFunctionArgs) {
       })
     );
     if (errUpdate) return badRequest(errUpdate);
+    await Promise.all([
+      invalidateSellingPriceHandlerCache(),
+      invalidateCardapioIndexCache(),
+    ]);
 
     const nextPriceAudit: MenuItemSellingPriceVariationAudit = {
       id: createUUID(),
