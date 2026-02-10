@@ -344,7 +344,7 @@ export default function CardapioWebIndex() {
                                         className="flex flex-col gap-4 mx-2 md:flex-1"
                                     >
                                         <ChefSuggestionsCarousel
-                                            title="Sugestões do chef"
+                                            title="Sugestões do nosso chef"
                                             subtitle="Os sabores selecionados pelo chef para vocês, com combinações especiais e ótimas escolhas para aproveitar o melhor do cardápio."
                                             groups={chefSuggestionGroups}
                                         />
