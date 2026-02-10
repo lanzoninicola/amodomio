@@ -228,38 +228,22 @@ export default function AdminIndex() {
                                 }
 
                                 return (
-                                    <>
+                                    <div className="grid gap-5 lg:grid-cols-2">
                                         {effectivePinnedNav.length > 0 ? (
-                                            <section className="rounded-lg border border-amber-200 bg-amber-50/60 p-5 shadow-sm">
-                                                <h2 className="text-base font-semibold text-amber-900">
-                                                    Fixados
+                                            <section className="rounded-2xl border border-slate-200/80 bg-white/85 p-4 shadow-[0_20px_40px_-30px_rgba(15,23,42,0.55)] backdrop-blur-sm">
+                                                <h2 className="text-sm font-semibold tracking-tight text-slate-900">
+                                                    URLs fixadas
                                                 </h2>
-                                                <p className="mt-1 text-sm text-amber-800/80">
-                                                    Links que você fixou para acesso rápido.
-                                                </p>
-                                                <div className="mt-4 grid gap-2">
+                                                <div className="mt-3 grid gap-2.5">
                                                     {effectivePinnedNav.map((navItem) => (
                                                         <div
                                                             key={navItem.id}
-                                                            className="flex items-center justify-between rounded-md border border-amber-200 bg-white px-3 py-2 text-sm"
+                                                            className="grid grid-cols-[74px_1fr] items-center gap-2.5"
                                                         >
-                                                            <Link
-                                                                to={navItem.href}
-                                                                className="flex flex-col gap-1"
-                                                            >
-                                                                <span className="font-medium text-slate-900">
-                                                                    {navItem.title}
-                                                                </span>
-                                                                {navItem.groupTitle ? (
-                                                                    <span className="text-xs text-muted-foreground">
-                                                                        {navItem.groupTitle}
-                                                                    </span>
-                                                                ) : null}
-                                                            </Link>
-                                                            <button
-                                                                type="button"
-                                                                onClick={() =>
-                                                                    {
+                                                            <div className="flex flex-col items-center justify-center gap-1.5">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
                                                                         const requestId = `${Date.now()}-${navItem.href}`;
                                                                         pendingPinRequestIdRef.current = requestId;
                                                                         pendingPinPrevPinnedRef.current = true;
@@ -276,83 +260,82 @@ export default function AdminIndex() {
                                                                             { method: "post", action: "/api/admin-nav-pin" }
                                                                         );
                                                                     }
-                                                                }
-                                                                disabled={fetcher.state !== "idle" && pendingPinHref === navItem.href}
-                                                                className="inline-flex items-center gap-1 rounded-md border border-amber-200 px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-700 transition hover:bg-amber-100"
-                                                                aria-pressed="true"
-                                                                aria-label="Desfixar link"
+                                                                    }
+                                                                    disabled={fetcher.state !== "idle" && pendingPinHref === navItem.href}
+                                                                    className="inline-flex h-10 w-full items-center justify-center rounded-full bg-amber-500 text-white shadow-[0_8px_18px_-12px_rgba(245,158,11,0.95)] transition hover:bg-amber-400 disabled:opacity-80"
+                                                                    aria-pressed="true"
+                                                                    aria-label="Desfixar link"
+                                                                >
+                                                                    {fetcher.state !== "idle" && pendingPinHref === navItem.href ? (
+                                                                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                                                    ) : (
+                                                                        <PinOff className="h-3.5 w-3.5" />
+                                                                    )}
+                                                                </button>
+                                                                <span className="text-[10px] font-medium tracking-tight text-slate-500">
+                                                                    Desfixar
+                                                                </span>
+                                                            </div>
+                                                            <Link
+                                                                to={navItem.href}
+                                                                className="group flex min-h-[72px] flex-col justify-center rounded-[22px] bg-slate-100/90 px-4 py-2.5 transition hover:bg-slate-100"
                                                             >
-                                                                {fetcher.state !== "idle" && pendingPinHref === navItem.href ? (
-                                                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                                                ) : (
-                                                                    <PinOff className="h-3.5 w-3.5" />
-                                                                )}
-                                                                <span className="hidden sm:inline">Desfixar</span>
-                                                            </button>
+                                                                <span className="text-base font-semibold tracking-tight text-slate-900 md:text-lg">
+                                                                    {navItem.title}
+                                                                </span>
+                                                                {navItem.groupTitle ? (
+                                                                    <span className="mt-0.5 text-xs text-slate-500">
+                                                                        {navItem.groupTitle}
+                                                                    </span>
+                                                                ) : null}
+                                                            </Link>
                                                         </div>
                                                     ))}
                                                 </div>
                                             </section>
                                         ) : null}
 
-                                        <section className="rounded-lg border border-muted bg-white p-5 shadow-sm">
-                                            <h2 className="text-base font-semibold text-slate-900">
-                                                Mais acessados no admin
+                                            <section
+                                            className={[
+                                                "rounded-2xl border border-slate-200/80 bg-white/85 p-4 shadow-[0_20px_40px_-30px_rgba(15,23,42,0.55)] backdrop-blur-sm",
+                                                effectivePinnedNav.length > 0 ? "" : "lg:col-span-2",
+                                            ].join(" ")}
+                                        >
+                                            <h2 className="text-sm font-semibold tracking-tight text-slate-900">
+                                                Atalhos rápidos
                                             </h2>
-                                            <p className="mt-1 text-sm text-muted-foreground">
-                                                Atalhos rápidos para as páginas que você mais usa no painel.
-                                            </p>
-                                            <div className="mt-4 grid gap-3">
+                                            <div className="mt-3 grid gap-2.5">
                                                 {topNavUnpinned.map((navItem) => {
                                                     const isPinned = Boolean(navItem.pinned);
                                                     const isSubmittingCurrentPin = fetcher.state !== "idle" && pendingPinHref === navItem.href;
                                                     return (
                                                         <div
                                                             key={navItem.id}
-                                                            className="flex items-center justify-between rounded-md border border-muted bg-slate-50 px-4 py-3 text-sm transition hover:border-slate-300 hover:bg-white"
+                                                            className="grid grid-cols-[74px_1fr] items-center gap-2.5"
                                                         >
-                                                            <Link to={navItem.href} className="flex flex-col gap-1">
-                                                                <span className="font-medium text-slate-900">
-                                                                    {navItem.title}
-                                                                </span>
-                                                                {navItem.groupTitle ? (
-                                                                    <span className="text-xs text-muted-foreground">
-                                                                        {navItem.groupTitle}
-                                                                    </span>
-                                                                ) : null}
-                                                            </Link>
-                                                            <div className="flex items-center gap-3">
-                                                                <span className="text-xs text-muted-foreground">
-                                                                    {navItem.count} acessos
-                                                                </span>
+                                                            <div className="flex flex-col items-center justify-center gap-1.5">
                                                                 <button
                                                                     type="button"
-                                                                    onClick={() =>
-                                                                        {
-                                                                            const requestId = `${Date.now()}-${navItem.href}`;
-                                                                            pendingPinRequestIdRef.current = requestId;
-                                                                            pendingPinPrevPinnedRef.current = isPinned;
-                                                                            setPendingPinHref(navItem.href);
-                                                                            setPinOverrides((prev) => ({ ...prev, [navItem.href]: !isPinned }));
-                                                                            fetcher.submit(
-                                                                                {
-                                                                                    href: navItem.href,
-                                                                                    title: navItem.title,
-                                                                                    groupTitle: navItem.groupTitle ?? "",
-                                                                                    pinned: isPinned ? "false" : "true",
-                                                                                    requestId,
-                                                                                },
-                                                                                { method: "post", action: "/api/admin-nav-pin" }
-                                                                            );
-                                                                        }
+                                                                    onClick={() => {
+                                                                        const requestId = `${Date.now()}-${navItem.href}`;
+                                                                        pendingPinRequestIdRef.current = requestId;
+                                                                        pendingPinPrevPinnedRef.current = isPinned;
+                                                                        setPendingPinHref(navItem.href);
+                                                                        setPinOverrides((prev) => ({ ...prev, [navItem.href]: !isPinned }));
+                                                                        fetcher.submit(
+                                                                            {
+                                                                                href: navItem.href,
+                                                                                title: navItem.title,
+                                                                                groupTitle: navItem.groupTitle ?? "",
+                                                                                pinned: isPinned ? "false" : "true",
+                                                                                requestId,
+                                                                            },
+                                                                            { method: "post", action: "/api/admin-nav-pin" }
+                                                                        );
+                                                                    }
                                                                     }
                                                                     disabled={isSubmittingCurrentPin}
-                                                                    className={[
-                                                                        "inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] transition",
-                                                                        isPinned
-                                                                            ? "border-amber-200 text-amber-700 hover:bg-amber-100"
-                                                                            : "border-slate-200 text-slate-600 hover:bg-slate-100",
-                                                                    ].join(" ")}
+                                                                    className="inline-flex h-10 w-full items-center justify-center rounded-full bg-amber-500 text-white shadow-[0_8px_18px_-12px_rgba(245,158,11,0.95)] transition hover:bg-amber-400"
                                                                     aria-pressed={isPinned}
                                                                     aria-label={isPinned ? "Desfixar link" : "Fixar link"}
                                                                 >
@@ -363,7 +346,6 @@ export default function AdminIndex() {
                                                                             ) : (
                                                                                 <PinOff className="h-3.5 w-3.5" />
                                                                             )}
-                                                                            <span className="hidden sm:inline">Desfixar</span>
                                                                         </>
                                                                     ) : (
                                                                         <>
@@ -372,17 +354,32 @@ export default function AdminIndex() {
                                                                             ) : (
                                                                                 <Pin className="h-3.5 w-3.5" />
                                                                             )}
-                                                                            <span className="hidden sm:inline">Fixar</span>
                                                                         </>
                                                                     )}
                                                                 </button>
+                                                                <span className="text-[10px] font-medium tracking-tight text-slate-500">
+                                                                    {isPinned ? "Desfixar" : "Fixar"}
+                                                                </span>
                                                             </div>
+                                                            <Link to={navItem.href} className="group flex min-h-[72px] flex-col justify-center rounded-[22px] bg-slate-100/90 px-4 py-2.5 transition hover:bg-slate-100">
+                                                                <span className="text-base font-semibold tracking-tight text-slate-900 md:text-lg">
+                                                                    {navItem.title}
+                                                                </span>
+                                                                {navItem.groupTitle ? (
+                                                                    <span className="mt-0.5 text-xs text-slate-500">
+                                                                        {navItem.groupTitle}
+                                                                    </span>
+                                                                ) : null}
+                                                                <span className="mt-0.5 text-xs text-slate-500">
+                                                                    {navItem.count} acessos
+                                                                </span>
+                                                            </Link>
                                                         </div>
                                                     );
                                                 })}
                                             </div>
                                         </section>
-                                    </>
+                                    </div>
                                 );
                             }}
                         </Await>

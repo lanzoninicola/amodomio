@@ -53,6 +53,7 @@ import { getEngagementSettings } from "~/domain/cardapio/engagement-settings.ser
 import CardapioErrorRedirect from "~/domain/cardapio/components/cardapio-error-redirect/cardapio-error-redirect";
 import { redisGetJson, redisSetJson } from "~/lib/cache/redis.server";
 import { CARDAPIO_INDEX_CACHE_KEY } from "~/domain/cardapio/cardapio-cache.server";
+import { notifyCardapioContingencyByWhatsapp } from "~/domain/cardapio/cardapio-contingency-alert.server";
 
 const INTEREST_ENDPOINT = "/api/menu-item-interest";
 const REELS_SETTING_KEY = "reel.urls";
@@ -60,7 +61,7 @@ const REELS_SETTING_CONTEXT = "cardapio";
 const MENU_ITEM_INTEREST_SETTING_CONTEXT = "cardapio";
 const MENU_ITEM_INTEREST_SETTING_NAME = "menu-item-interest-enabled";
 const SIMULATE_ERROR_SETTING_CONTEXT = "cardapio";
-const SIMULATE_ERROR_SETTING_NAME = "simula.erro";
+const SIMULATE_ERROR_SETTING_NAME = "contingencia.simula.erro";
 const CARDAPIO_INDEX_CACHE_TTL_SECONDS = Number(process.env.CARDAPIO_INDEX_CACHE_TTL_SECONDS ?? 60);
 
 function getCardapioItemHref(item: Pick<MenuItemWithAssociations, "id" | "slug">) {
@@ -92,109 +93,123 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
         simulateErrorBySetting = parseBooleanSetting(simulateErrorSetting?.value, false);
     } catch (error) {
-        console.error("[cardapio._index] non-blocking simula.erro load failed, using default", error);
+        console.error("[cardapio._index] non-blocking contingencia.simula.erro load failed, using default", error);
     }
 
     if (simulateErrorByQuery || simulateErrorBySetting) {
-        throw new Error("SIMULACAO_ERRO_CARDAPIO_INDEX");
+        const simulationError = new Error("SIMULACAO_ERRO_CARDAPIO_INDEX");
+        await notifyCardapioContingencyByWhatsapp({
+            requestUrl: request.url,
+            error: simulationError,
+            ignoreCooldown: simulateErrorBySetting,
+        });
+        throw simulationError;
     }
 
-    const cachedPayload = await redisGetJson<{
-        items: unknown[];
-        tags: Tag[];
-        postFeatured: {
-            id: string;
-            title: string;
-            _count: { PostLike: number; PostShare: number };
-        } | null;
-        reelUrls: string[];
-        menuItemInterestEnabled: boolean;
-        likesEnabled: boolean;
-        sharesEnabled: boolean;
-    }>(CARDAPIO_INDEX_CACHE_KEY);
+    try {
+        const cachedPayload = await redisGetJson<{
+            items: unknown[];
+            tags: Tag[];
+            postFeatured: {
+                id: string;
+                title: string;
+                _count: { PostLike: number; PostShare: number };
+            } | null;
+            reelUrls: string[];
+            menuItemInterestEnabled: boolean;
+            likesEnabled: boolean;
+            sharesEnabled: boolean;
+        }>(CARDAPIO_INDEX_CACHE_KEY);
 
-    if (cachedPayload) {
-        return defer(cachedPayload);
-    }
-
-    // itens agrupados do cardápio
-    // @ts-ignore
-    const itemsPromise = menuItemPrismaEntity.findAllGroupedByGroupLight(
-        {
-            where: {
-                visible: true
-            },
-            option: {
-                sorted: true,
-                direction: "asc"
-            }
-        },
-        {
-            imageTransform: true,
-            imageScaleWidth: 375
+        if (cachedPayload) {
+            return defer(cachedPayload);
         }
-    );
 
-    // tags públicas (filtros)
-    const tagsPromise = tagPrismaEntity.findAll({
-        public: true
-    });
+        // itens agrupados do cardápio
+        // @ts-ignore
+        const itemsPromise = menuItemPrismaEntity.findAllGroupedByGroupLight(
+            {
+                where: {
+                    visible: true
+                },
+                option: {
+                    sorted: true,
+                    direction: "asc"
+                }
+            },
+            {
+                imageTransform: true,
+                imageScaleWidth: 375
+            }
+        );
 
-    // post em destaque (já estava no teu arquivo)
-    const postFeatured = await prismaClient.post.findFirst({
-        where: {
-            featured: true
-        },
-        select: {
-            id: true,
-            title: true,
-            _count: {
-                select: {
-                    PostLike: true,
-                    PostShare: true
+        // tags públicas (filtros)
+        const tagsPromise = tagPrismaEntity.findAll({
+            public: true
+        });
+
+        // post em destaque (já estava no teu arquivo)
+        const postFeatured = await prismaClient.post.findFirst({
+            where: {
+                featured: true
+            },
+            select: {
+                id: true,
+                title: true,
+                _count: {
+                    select: {
+                        PostLike: true,
+                        PostShare: true
+                    }
                 }
             }
-        }
-    });
+        });
 
-    const reelSetting = await prismaClient.setting.findFirst({
-        where: {
-            context: REELS_SETTING_CONTEXT,
-            name: REELS_SETTING_KEY
-        },
-        orderBy: [{ createdAt: "desc" }],
-    });
+        const reelSetting = await prismaClient.setting.findFirst({
+            where: {
+                context: REELS_SETTING_CONTEXT,
+                name: REELS_SETTING_KEY
+            },
+            orderBy: [{ createdAt: "desc" }],
+        });
 
-    const reelUrls = parseReelUrls(reelSetting?.value);
+        const reelUrls = parseReelUrls(reelSetting?.value);
 
-    const menuItemInterestSetting = await prismaClient.setting.findFirst({
-        where: {
-            context: MENU_ITEM_INTEREST_SETTING_CONTEXT,
-            name: MENU_ITEM_INTEREST_SETTING_NAME,
-        },
-        orderBy: [{ createdAt: "desc" }],
-    });
-    const menuItemInterestEnabled = parseBooleanSetting(menuItemInterestSetting?.value, true);
-    const { likesEnabled, sharesEnabled } = await getEngagementSettings();
-    const [items, tags] = await Promise.all([itemsPromise, tagsPromise]);
+        const menuItemInterestSetting = await prismaClient.setting.findFirst({
+            where: {
+                context: MENU_ITEM_INTEREST_SETTING_CONTEXT,
+                name: MENU_ITEM_INTEREST_SETTING_NAME,
+            },
+            orderBy: [{ createdAt: "desc" }],
+        });
+        const menuItemInterestEnabled = parseBooleanSetting(menuItemInterestSetting?.value, true);
+        const { likesEnabled, sharesEnabled } = await getEngagementSettings();
+        const [items, tags] = await Promise.all([itemsPromise, tagsPromise]);
 
-    const payload = {
-        items,
-        tags,
-        postFeatured,
-        reelUrls,
-        menuItemInterestEnabled,
-        likesEnabled,
-        sharesEnabled
-    };
+        const payload = {
+            items,
+            tags,
+            postFeatured,
+            reelUrls,
+            menuItemInterestEnabled,
+            likesEnabled,
+            sharesEnabled
+        };
 
-    await redisSetJson(
-        CARDAPIO_INDEX_CACHE_KEY,
-        payload,
-        Number.isFinite(CARDAPIO_INDEX_CACHE_TTL_SECONDS) ? CARDAPIO_INDEX_CACHE_TTL_SECONDS : 60
-    );
+        await redisSetJson(
+            CARDAPIO_INDEX_CACHE_KEY,
+            payload,
+            Number.isFinite(CARDAPIO_INDEX_CACHE_TTL_SECONDS) ? CARDAPIO_INDEX_CACHE_TTL_SECONDS : 60
+        );
 
-    return defer(payload);
+        return defer(payload);
+    } catch (error) {
+        await notifyCardapioContingencyByWhatsapp({
+            requestUrl: request.url,
+            error,
+        });
+        throw error;
+    }
 }
 
 // ======================================================

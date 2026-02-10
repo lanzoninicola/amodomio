@@ -84,14 +84,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const url = new URL(request.url);
     const simulateError = url.searchParams.get("simularErro");
     const simulateErrorByQuery = simulateError === "cardapio-layout";
-    const SIMULATE_ERROR_SETTING_NAME = "simula.erro";
 
     const CARDAPIO_SETTINGS_CONTEXT = "cardapio";
     const requestedKeys = [
         "fazer_pedido.public.url",
         "aviso_loja_fechada.yesno",
         "notificacoes.enabled",
-        SIMULATE_ERROR_SETTING_NAME,
     ] as const;
 
     const defaults = {
@@ -124,9 +122,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const fPUrl = settingsMap[requestedKeys[0]] ?? defaults.fazerPedidoPublicURL;
     const showLojaFechadaMessage = parseBooleanSetting(settingsMap[requestedKeys[1]], defaults.showLojaFechadaMessage);
     const notificationsEnabled = parseBooleanSetting(settingsMap[requestedKeys[2]], defaults.notificationsEnabled);
-    const simulateErrorBySetting = parseBooleanSetting(settingsMap[SIMULATE_ERROR_SETTING_NAME], false);
 
-    if (simulateErrorByQuery || simulateErrorBySetting) {
+    if (simulateErrorByQuery) {
         throw new Error("SIMULACAO_ERRO_CARDAPIO_LAYOUT");
     }
 

@@ -92,5 +92,5 @@ Em `Settings > Branches > Branch protection rules` para `vercel-prod`:
 
 ### Observação sobre simulação de erro
 
-O setting `context=cardapio`, `name=simula.erro`, `value=true` força a contingência.
+O setting `context=cardapio`, `name=contingencia.simula.erro`, `value=true` força a contingência.
 Se estiver ativo em preview/deploy, os checks podem falhar por design.

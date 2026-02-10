@@ -97,3 +97,22 @@ export async function redisSetString(key: string, value: string) {
     console.error("[redis] SET(string) failed", { key, error });
   }
 }
+
+export async function redisSetStringEx(
+  key: string,
+  value: string,
+  ttlSeconds: number
+) {
+  const client = getRedisClient();
+  if (!client) return;
+
+  const ttl = Number.isFinite(ttlSeconds)
+    ? Math.max(1, Math.floor(ttlSeconds))
+    : 60;
+
+  try {
+    await client.set(key, value, "EX", ttl);
+  } catch (error) {
+    console.error("[redis] SETEX(string) failed", { key, error });
+  }
+}
