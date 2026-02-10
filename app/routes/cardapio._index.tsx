@@ -51,6 +51,8 @@ import Logo from "~/components/primitives/logo/logo";
 import { parseBooleanSetting } from "~/utils/parse-boolean-setting";
 import { getEngagementSettings } from "~/domain/cardapio/engagement-settings.server";
 import CardapioErrorRedirect from "~/domain/cardapio/components/cardapio-error-redirect/cardapio-error-redirect";
+import { redisGetJson, redisSetJson } from "~/lib/cache/redis.server";
+import { CARDAPIO_INDEX_CACHE_KEY } from "~/domain/cardapio/cardapio-cache.server";
 
 const INTEREST_ENDPOINT = "/api/menu-item-interest";
 const REELS_SETTING_KEY = "reel.urls";
@@ -59,6 +61,12 @@ const MENU_ITEM_INTEREST_SETTING_CONTEXT = "cardapio";
 const MENU_ITEM_INTEREST_SETTING_NAME = "menu-item-interest-enabled";
 const SIMULATE_ERROR_SETTING_CONTEXT = "cardapio";
 const SIMULATE_ERROR_SETTING_NAME = "simula.erro";
+const CARDAPIO_INDEX_CACHE_TTL_SECONDS = Number(process.env.CARDAPIO_INDEX_CACHE_TTL_SECONDS ?? 60);
+
+function getCardapioItemHref(item: Pick<MenuItemWithAssociations, "id" | "slug">) {
+    const identifier = item.slug?.trim() || item.id;
+    return `/cardapio/${encodeURIComponent(identifier)}`;
+}
 
 export const headers: HeadersFunction = () => ({
     "Cache-Control": "s-maxage=1, stale-while-revalidate=59"
@@ -91,9 +99,27 @@ export async function loader({ request }: LoaderFunctionArgs) {
         throw new Error("SIMULACAO_ERRO_CARDAPIO_INDEX");
     }
 
+    const cachedPayload = await redisGetJson<{
+        items: unknown[];
+        tags: Tag[];
+        postFeatured: {
+            id: string;
+            title: string;
+            _count: { PostLike: number; PostShare: number };
+        } | null;
+        reelUrls: string[];
+        menuItemInterestEnabled: boolean;
+        likesEnabled: boolean;
+        sharesEnabled: boolean;
+    }>(CARDAPIO_INDEX_CACHE_KEY);
+
+    if (cachedPayload) {
+        return defer(cachedPayload);
+    }
+
     // itens agrupados do cardápio
     // @ts-ignore
-    const items = menuItemPrismaEntity.findAllGroupedByGroupLight(
+    const itemsPromise = menuItemPrismaEntity.findAllGroupedByGroupLight(
         {
             where: {
                 visible: true
@@ -110,7 +136,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     );
 
     // tags públicas (filtros)
-    const tags = tagPrismaEntity.findAll({
+    const tagsPromise = tagPrismaEntity.findAll({
         public: true
     });
 
@@ -150,8 +176,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
     });
     const menuItemInterestEnabled = parseBooleanSetting(menuItemInterestSetting?.value, true);
     const { likesEnabled, sharesEnabled } = await getEngagementSettings();
+    const [items, tags] = await Promise.all([itemsPromise, tagsPromise]);
 
-    return defer({
+    const payload = {
         items,
         tags,
         postFeatured,
@@ -159,7 +186,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
         menuItemInterestEnabled,
         likesEnabled,
         sharesEnabled
-    });
+    };
+
+    await redisSetJson(
+        CARDAPIO_INDEX_CACHE_KEY,
+        payload,
+        Number.isFinite(CARDAPIO_INDEX_CACHE_TTL_SECONDS) ? CARDAPIO_INDEX_CACHE_TTL_SECONDS : 60
+    );
+
+    return defer(payload);
 }
 
 // ======================================================
@@ -373,7 +408,7 @@ export default function CardapioWebIndex() {
                                                         return (
                                                             <Link
                                                                 key={i.id}
-                                                                to={`/cardapio/${i.slug}`}
+                                                                to={getCardapioItemHref(i)}
                                                                 className="group relative block overflow-hidden rounded-md"
                                                             >
                                                                 <div className="relative h-[160px] md:h-[200px]">
@@ -1038,7 +1073,7 @@ function CardapioGridItem({
         >
             {isDesktop ? (
                 <Link
-                    to={`/cardapio/${item.slug}`}
+                    to={getCardapioItemHref(item)}
                     className="flex flex-col cursor-pointer"
                     aria-label={`Abrir ${item.name}`}
                     onClick={onOpenDetail}
@@ -1095,8 +1130,8 @@ function CardapioGridItem({
                             {item.ingredients}
                         </span>
                         <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                            <span>Ver ingredientes</span>
-                            <span aria-hidden="true">...</span>
+                            <span>{isExpanded ? "VOLTAR" : "Ver ingredientes"}</span>
+                            {!isExpanded && <span aria-hidden="true">...</span>}
                         </span>
                     </div>
                 </Link>
@@ -1159,8 +1194,8 @@ function CardapioGridItem({
                             {item.ingredients}
                         </span>
                         <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                            <span>Ver ingredientes</span>
-                            <span aria-hidden="true">...</span>
+                            <span>{isExpanded ? "VOLTAR" : "Ver ingredientes"}</span>
+                            {!isExpanded && <span aria-hidden="true">...</span>}
                         </span>
                     </div>
                 </div>
@@ -1169,12 +1204,17 @@ function CardapioGridItem({
             <CardapioItemPriceSelect prices={item.MenuItemSellingPriceVariation} />
 
             {(sharesEnabled || likesEnabled) && (
-                <div className="flex flex-col gap-y-1 shadow-sm bg-white my-2">
+                <div className={cn(
+                    "shadow-sm bg-white my-2",
+                    isExpanded && sharesEnabled && likesEnabled
+                        ? "grid grid-cols-2 gap-2"
+                        : "flex flex-col gap-y-1"
+                )}>
                     {sharesEnabled && (
                         <ShareIt
                             item={item}
                             size={isExpanded === true ? 20 : 16}
-                            cnContainer={cn("px-2 py-0 h-7 border border-black")}
+                            cnContainer={cn("w-full px-2 py-0 h-7 border border-black")}
                         >
                             <span className="font-neue text-xs uppercase tracking-wide ">Compartilhar</span>
                         </ShareIt>
@@ -1184,7 +1224,7 @@ function CardapioGridItem({
                         <LikeIt
                             item={item}
                             size={isExpanded === true ? 20 : 16}
-                            cnContainer={cn("px-2 py-0 h-7 bg-red-500 text-white")}
+                            cnContainer={cn("w-full px-2 py-0 h-7 bg-red-500 text-white")}
                             color="white"
                         >
                             <span className="font-neue text-xs uppercase tracking-wide">Gostei</span>
@@ -1242,7 +1282,7 @@ const CardapioItemFullImage = React.forwardRef(
                     <div className="absolute inset-0">
                         <div className="grid grid-cols-8 h-full">
                             <Link
-                                to={`/cardapio/${item.slug}`}
+                                to={getCardapioItemHref(item)}
                                 className="flex flex-col mb-2 px-4 text-white  justify-end items-end w-full col-span-7"
                                 onClick={() => {
                                     playNavigation();
@@ -1516,7 +1556,7 @@ function ReelsCarousel({ urls }: { urls: string[] }) {
                                                 }
                                             }}
                                             className="inline-flex h-9 items-center rounded-full bg-black/90 px-4 text-[11px] font-semibold tracking-[0.2em] text-white shadow-lg backdrop-blur-lg"
-                                            aria-label="Voltar"
+                                            aria-label="VOLTAR"
                                         >
                                             VOLTAR
                                         </button>
@@ -1598,7 +1638,7 @@ function ChefSuggestionsCarousel({
                         return (
                             <CarouselItem key={i.id} className="basis-full">
                                 <Link
-                                    to={`/cardapio/${i.slug}`}
+                                    to={getCardapioItemHref(i)}
                                     className="group relative block overflow-hidden rounded-md"
                                     onClick={() => playNavigation()}
                                 >
@@ -1709,7 +1749,7 @@ function CardapioItemListDestaque({
                             return (
                                 <CarouselItem key={i.id}>
                                     <Link
-                                        to={`/cardapio/${i.slug}`}
+                                        to={getCardapioItemHref(i)}
                                         className="block w-full"
                                         onClick={() => playNavigation()}
                                     >
@@ -1806,7 +1846,7 @@ function CardapioItemListDestaque({
                                     return (
                                         <CarouselItem key={i.id}>
                                             <Link
-                                                to={`/cardapio/${i.slug}`}
+                                                to={getCardapioItemHref(i)}
                                                 className="block w-full"
                                                 onClick={() => playNavigation()}
                                             >

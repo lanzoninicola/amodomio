@@ -70,31 +70,27 @@ export default function SingleCardapioItem() {
                 <div className="flex flex-col">
                   {/* Ações */}
                   {(engagementSettings.sharesEnabled || engagementSettings.likesEnabled) && (
-                    <div className="flex justify-between gap-6 mt-2 mb-4 md:mt-0 md:mb-0 md:p-0">
+                    <div
+                      className={`grid grid-cols-1 gap-2 mt-2 mb-4 md:mt-0 md:mb-0 ${engagementSettings.sharesEnabled && engagementSettings.likesEnabled ? "md:grid-cols-2" : "md:grid-cols-1"}`}
+                    >
                       {engagementSettings.sharesEnabled && (
-                        <div className="flex items-center gap-2 hover:bg-zinc-100 hover:cursor-pointer md:px-2 md:rounded-md">
-                          <ShareIt
-                            item={item}
-                            size={22}
-                            cnContainer="p-2 rounded-md transition-colors "
-                          />
-                          <span className="hidden md:inline font-neue text-xs uppercase font-semibold tracking-widest text-zinc-600">
-                            Compartilhar
-                          </span>
-                        </div>
+                        <ShareIt
+                          item={item}
+                          size={20}
+                          cnContainer="w-full px-2 py-0 h-8 border border-black"
+                        >
+                          <span className="font-neue text-xs uppercase tracking-wide">Compartilhar</span>
+                        </ShareIt>
                       )}
                       {engagementSettings.likesEnabled && (
-                        <div className="flex items-center gap-2 hover:bg-red-200 hover:cursor-pointer md:px-2 md:rounded-md">
-                          <LikeIt
-                            item={item}
-                            size={22}
-                            cnLabel="text-sm"
-                            cnContainer="p-2 rounded-md transition-colors hover:bg-red-200 md:p-0"
-                          />
-                          <span className="hidden md:inline font-neue text-xs uppercase font-semibold tracking-widest text-red-500">
-                            Gostei
-                          </span>
-                        </div>
+                        <LikeIt
+                          item={item}
+                          size={20}
+                          cnContainer="w-full px-2 py-0 h-8 bg-red-500 text-white"
+                          color="white"
+                        >
+                          <span className="font-neue text-xs uppercase tracking-wide">Gostei</span>
+                        </LikeIt>
                       )}
                     </div>
                   )}

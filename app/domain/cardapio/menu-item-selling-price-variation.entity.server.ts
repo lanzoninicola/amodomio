@@ -5,6 +5,10 @@ import { menuItemCostVariationPrismaEntity } from "./menu-item-cost-variation.en
 import { menuItemSellingChannelPrismaEntity } from "./menu-item-selling-channel.entity.server";
 import { menuItemSellingPriceVariationAuditPrismaEntity } from "./menu-item-selling-price-variation-audit.entity.server";
 import { menuItemSellingPriceUtilityEntity } from "./menu-item-selling-price-utility.entity";
+import {
+  invalidateCardapioIndexCache,
+  invalidateSellingPriceHandlerCache,
+} from "./cardapio-cache.server";
 
 interface MenuItemSellingPriceVariationPrismaEntityConstructorProps
   extends PrismaEntityProps {
@@ -64,7 +68,7 @@ class MenuItemSellingPriceVariationPrismaEntity {
   }
 
   async create(data: MenuItemSellingPriceVariationCreateParams) {
-    return await this.client.menuItemSellingPriceVariation.create({
+    const created = await this.client.menuItemSellingPriceVariation.create({
       data: {
         ...data,
         id: createUUID(),
@@ -72,6 +76,11 @@ class MenuItemSellingPriceVariationPrismaEntity {
         updatedAt: new Date(),
       },
     });
+    await Promise.all([
+      invalidateSellingPriceHandlerCache(),
+      invalidateCardapioIndexCache(),
+    ]);
+    return created;
   }
 
   async upsert(id: string, data: MenuItemSellingPriceVariationUpsertParams) {
@@ -82,7 +91,7 @@ class MenuItemSellingPriceVariationPrismaEntity {
     const now = new Date();
 
     if (record) {
-      return await this.client.menuItemSellingPriceVariation.update({
+      const updated = await this.client.menuItemSellingPriceVariation.update({
         where: { id },
         data: {
           ...data,
@@ -90,6 +99,11 @@ class MenuItemSellingPriceVariationPrismaEntity {
           previousPriceAmount: record.priceAmount,
         },
       });
+      await Promise.all([
+        invalidateSellingPriceHandlerCache(),
+        invalidateCardapioIndexCache(),
+      ]);
+      return updated;
     }
 
     return await this.create({
@@ -119,7 +133,12 @@ class MenuItemSellingPriceVariationPrismaEntity {
       })
     );
 
-    return await Promise.all(upsertPromises);
+    const result = await Promise.all(upsertPromises);
+    await Promise.all([
+      invalidateSellingPriceHandlerCache(),
+      invalidateCardapioIndexCache(),
+    ]);
+    return result;
   }
 }
 

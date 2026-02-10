@@ -1,10 +1,14 @@
 import { LoaderFunctionArgs } from "@remix-run/node";
-import { Link, useLoaderData } from "@remix-run/react";
-import { ChevronRight } from "lucide-react";
-import { Heart, MenuSquare, Share2 } from "lucide-react";
-import { useState } from "react";
+import { Link, useLoaderData, useNavigation } from "@remix-run/react";
+import { QuestionMarkCircledIcon } from "@radix-ui/react-icons";
+import { ChevronRight, ClipboardCopy, Heart, LoaderCircle, MenuSquare, Share2 } from "lucide-react";
+import { MouseEvent, useState } from "react";
 import TypewriterComponent from "typewriter-effect";
 import Logo from "~/components/primitives/logo/logo";
+import RouteProgressBar from "~/components/route-progress-bar/route-progress-bar";
+import { Button } from "~/components/ui/button";
+import { Dialog, DialogContent, DialogTrigger } from "~/components/ui/dialog";
+import { useToast } from "~/components/ui/use-toast";
 import WhatsappExternalLink from "~/components/primitives/whatsapp/whatsapp-external-link";
 import WhatsAppIcon from "~/components/primitives/whatsapp/whatsapp-icon";
 import { fmtYYYMMDD } from "~/domain/kds";
@@ -26,6 +30,83 @@ export async function loader({ request }: LoaderFunctionArgs) {
     });
 }
 
+type CardapioLinkProps = {
+    mode?: "header" | "hero" | "campaign";
+    className?: string;
+};
+
+function CardapioLink({ mode = "hero", className }: CardapioLinkProps) {
+    const navigation = useNavigation();
+    const cardapioPath = WEBSITE_LINKS.cardapioPublic.href;
+    const nextPath = navigation.location?.pathname ?? "";
+    const isNavigatingToCardapio = navigation.state !== "idle" && nextPath.startsWith(cardapioPath);
+
+    const preventRepeatedClick = (e: MouseEvent<HTMLAnchorElement>) => {
+        if (isNavigatingToCardapio) {
+            e.preventDefault();
+        }
+    };
+
+    if (mode === "header") {
+        return (
+            <Link
+                to={cardapioPath}
+                className={cn("hidden md:block", className, isNavigatingToCardapio && "pointer-events-none")}
+                onClick={preventRepeatedClick}
+                aria-disabled={isNavigatingToCardapio}
+            >
+                <div className={cn("bg-black px-2 py-2 rounded-lg w-max flex items-center gap-2 shadow-sm", isNavigatingToCardapio && "opacity-80")}>
+                    <span className="font-neue font-semibold text-white uppercase tracking-wider text-xs">
+                        {isNavigatingToCardapio ? "Abrindo..." : "cardápio"}
+                    </span>
+                    <span className="flex items-center justify-center rounded-full bg-white/10 text-white">
+                        {isNavigatingToCardapio ? <LoaderCircle className="h-[14px] w-[14px] animate-spin" /> : <ChevronRight color="#ffffff" size={14} />}
+                    </span>
+                </div>
+            </Link>
+        );
+    }
+
+    if (mode === "campaign") {
+        return (
+            <Link
+                to={cardapioPath}
+                className={cn("w-full", className, isNavigatingToCardapio && "pointer-events-none")}
+                onClick={preventRepeatedClick}
+                aria-disabled={isNavigatingToCardapio}
+            >
+                <Button
+                    className="h-12 w-full justify-center bg-brand-green text-white hover:opacity-90 uppercase font-neue tracking-wide"
+                    aria-label="Abrir cardápio"
+                    disabled={isNavigatingToCardapio}
+                >
+                    {isNavigatingToCardapio ? "Abrindo cardápio..." : "Cardápio"}
+                    {isNavigatingToCardapio && <LoaderCircle className="ml-2 h-4 w-4 animate-spin" />}
+                </Button>
+            </Link>
+        );
+    }
+
+    return (
+        <Link
+            to={cardapioPath}
+            className={cn(className, isNavigatingToCardapio && "pointer-events-none")}
+            onClick={preventRepeatedClick}
+            aria-disabled={isNavigatingToCardapio}
+        >
+            <div className="group relative overflow-hidden rounded-xl border border-black bg-black px-6 py-3.5 text-white shadow-[0_10px_30px_rgba(0,0,0,0.25)] transition-all duration-150 hover:-translate-y-0.5 hover:shadow-[0_16px_40px_rgba(0,0,0,0.28)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black">
+                <div className="absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-10 bg-white" aria-hidden />
+                <div className="relative flex items-center gap-3 font-neue font-bold uppercase tracking-wide">
+                    <span>{isNavigatingToCardapio ? "Abrindo cardápio..." : "Ver cardápio"}</span>
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white">
+                        {isNavigatingToCardapio ? <LoaderCircle className="h-5 w-5 animate-spin" /> : <ChevronRight color="#ffffff" />}
+                    </span>
+                </div>
+            </div>
+        </Link>
+    );
+}
+
 
 export default function HomePage() {
     const loaderData = useLoaderData<typeof loader>();
@@ -35,6 +116,7 @@ export default function HomePage() {
 
     return (
         <>
+            <RouteProgressBar />
             <section className={
                 cn(
                     today === mktDateTarget && 'hidden'
@@ -44,14 +126,7 @@ export default function HomePage() {
                     <div className="w-[130px] md:w-[150px] ">
                         <Logo onlyText={true} className="w-full h-full" color="black" />
                     </div>
-                    <Link to={WEBSITE_LINKS.cardapioPublic.href} className="hidden md:block" >
-                        <div className="bg-black px-2 py-2 rounded-lg w-max flex items-center gap-2 shadow-sm">
-                            <span className="font-neue font-semibold text-white uppercase tracking-wider text-xs">cardápio</span>
-                            <span className="flex  items-center justify-center rounded-full bg-white/10 text-white">
-                                <ChevronRight color="#ffffff" size={14} />
-                            </span>
-                        </div>
-                    </Link>
+                    <CardapioLink mode="header" />
                 </header>
                 <section className="relative bg-white overflow-hidden">
 
@@ -74,17 +149,7 @@ export default function HomePage() {
                             </div>
 
                             <div className="mt-2 flex flex-wrap items-center gap-3">
-                                <Link to={WEBSITE_LINKS.cardapioPublic.href} >
-                                    <div className="group relative overflow-hidden rounded-xl border border-black bg-black px-6 py-3.5 text-white shadow-[0_10px_30px_rgba(0,0,0,0.25)] transition-all duration-150 hover:-translate-y-0.5 hover:shadow-[0_16px_40px_rgba(0,0,0,0.28)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black">
-                                        <div className="absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-10 bg-white" aria-hidden />
-                                        <div className="relative flex items-center gap-3 font-neue font-bold uppercase tracking-wide">
-                                            <span>Ver cardápio</span>
-                                            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white">
-                                                <ChevronRight color="#ffffff" />
-                                            </span>
-                                        </div>
-                                    </div>
-                                </Link>
+                                <CardapioLink />
                             </div>
                         </div>
 
@@ -134,12 +199,6 @@ function HeroVideo({ videoURLs }: HeroVideoProps) {
 interface DiaCliente25Props {
     targetDate: string
 }
-
-import { ClipboardCopy } from "lucide-react";
-import { Dialog, DialogContent, DialogTrigger } from "~/components/ui/dialog";
-import { Button } from "~/components/ui/button";
-import { useToast } from "~/components/ui/use-toast";
-import { QuestionMarkCircledIcon } from "@radix-ui/react-icons";
 
 function DiaCliente25({ targetDate }: DiaCliente25Props) {
     const [loaded, setLoaded] = useState(false)
@@ -283,14 +342,7 @@ function DiaCliente25({ targetDate }: DiaCliente25Props) {
                                 </DialogContent>
                             </Dialog>
 
-                            <Link to={WEBSITE_LINKS.cardapioPublic.href} className="w-full">
-                                <Button
-                                    className="h-12 w-full justify-center bg-brand-green text-white hover:opacity-90 uppercase font-neue tracking-wide"
-                                    aria-label="Abrir cardápio"
-                                >
-                                    Cardápio
-                                </Button>
-                            </Link>
+                            <CardapioLink mode="campaign" />
                         </div>
                     </div>
 
@@ -301,6 +353,3 @@ function DiaCliente25({ targetDate }: DiaCliente25Props) {
         </section>
     )
 }
-
-
-

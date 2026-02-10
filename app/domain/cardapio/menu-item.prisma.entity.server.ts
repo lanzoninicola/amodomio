@@ -25,7 +25,6 @@ import {
   MenuItemWithSellPriceVariations,
 } from "./menu-item.types";
 import { menuItemCostVariationPrismaEntity } from "./menu-item-cost-variation.entity.server";
-import { CacheManager } from "../cache/cache-manager.server";
 import {
   PizzaSizeKey,
   menuItemSizePrismaEntity,
@@ -37,6 +36,7 @@ import {
 } from "./menu-item-selling-channel.entity.server";
 import { slugifyString } from "~/utils/slugify";
 import { group } from "console";
+import { invalidateCardapioIndexCache } from "./cardapio-cache.server";
 
 export interface MenuItemWithAssociations extends MenuItem {
   priceVariations: MenuItemPriceVariation[];
@@ -89,7 +89,6 @@ export interface MenuItemEntityFindAllOptions {
   imageScaleWidth?: number;
   sorted?: boolean;
   direction?: "asc" | "desc";
-  cacheRevalidation?: boolean;
 }
 
 interface MenuItemEntityProps extends PrismaEntityProps {
@@ -101,8 +100,6 @@ interface MenuItemEntityProps extends PrismaEntityProps {
 
 export class MenuItemPrismaEntity {
   client;
-  // Simple in-memory cache
-  private cacheManager: CacheManager;
 
   menuItemCostVariation: typeof menuItemCostVariationPrismaEntity;
 
@@ -118,7 +115,6 @@ export class MenuItemPrismaEntity {
     menuItemSellingChannel,
   }: MenuItemEntityProps) {
     this.client = client;
-    this.cacheManager = new CacheManager();
 
     this.menuItemCostVariation = menuItemCostVariation;
 
@@ -135,11 +131,9 @@ export class MenuItemPrismaEntity {
     options: MenuItemEntityFindAllOptions = {
       imageTransform: false,
       imageScaleWidth: 1280,
-      cacheRevalidation: false,
     }
   ) {
-    const { imageScaleWidth = 1280, cacheRevalidation = false } =
-      options || {};
+    const { imageScaleWidth = 1280 } = options || {};
 
     if (process.env.NODE_ENV === "development") {
       const stack = new Error().stack?.split("\n").slice(1, 6).join("\n");
@@ -148,16 +142,6 @@ export class MenuItemPrismaEntity {
       });
       console.log(stack);
     }
-    const cacheKey = `MenuItemPrismaEntity.findAll:${JSON.stringify(params)}`;
-    let result = this.cacheManager.get<MenuItemWithAssociations[]>(cacheKey);
-
-    const shouldUseCache =
-      result !== undefined && cacheRevalidation === false;
-
-    if (shouldUseCache) {
-      return result;
-    }
-
     if (params?.mock) {
       // fake to remove TS error. need to be fixed
       return [] as MenuItemWithAssociations[];
@@ -240,8 +224,6 @@ export class MenuItemPrismaEntity {
         })
       : [...records];
 
-    this.cacheManager.set(cacheKey, returnedRecords);
-
     return returnedRecords;
   }
 
@@ -254,23 +236,9 @@ export class MenuItemPrismaEntity {
     options: MenuItemEntityFindAllOptions = {
       imageTransform: false,
       imageScaleWidth: 1280,
-      cacheRevalidation: false,
     }
   ) {
-    const { imageScaleWidth = 1280, cacheRevalidation = false } =
-      options || {};
-
-    const cacheKey = `MenuItemPrismaEntity.findAllLight:${JSON.stringify(
-      params
-    )}`;
-    let result = this.cacheManager.get<MenuItemWithAssociations[]>(cacheKey);
-
-    const shouldUseCache =
-      result !== undefined && cacheRevalidation === false;
-
-    if (shouldUseCache) {
-      return result;
-    }
+    const { imageScaleWidth = 1280 } = options || {};
 
     if (params?.mock) {
       return [] as MenuItemWithAssociations[];
@@ -417,8 +385,6 @@ export class MenuItemPrismaEntity {
           return (a.sortOrderIndex - b.sortOrderIndex) * direction;
         })
       : [...records];
-
-    this.cacheManager.set(cacheKey, returnedRecords);
 
     return returnedRecords;
   }
@@ -823,7 +789,9 @@ export class MenuItemPrismaEntity {
     }
   ) {
     const item = await this.client.menuItem.findFirst({
-      where: { slug },
+      where: {
+        OR: [{ slug }, { id: slug }],
+      },
       include: {
         Category: true,
         tags: {
@@ -930,7 +898,7 @@ export class MenuItemPrismaEntity {
       };
     }
 
-    await this.cacheManager.invalidate();
+    await invalidateCardapioIndexCache();
 
     return await this.client.menuItem.create({ data: nextItem });
   }
@@ -940,7 +908,7 @@ export class MenuItemPrismaEntity {
       data.updatedAt = new Date().toISOString();
     }
 
-    await this.cacheManager.invalidate();
+    await invalidateCardapioIndexCache();
 
     data.slug = slugifyString(data.name as string);
 
@@ -950,13 +918,13 @@ export class MenuItemPrismaEntity {
   async softDelete(id: string, deletedBy: string = "undefined") {}
 
   async delete(id: string) {
-    await this.cacheManager.invalidate();
+    await invalidateCardapioIndexCache();
 
     return await this.client.menuItem.delete({ where: { id } });
   }
 
   async associateTag(itemId: string, tag: Tag) {
-    await this.cacheManager.invalidate();
+    await invalidateCardapioIndexCache();
 
     return await menuItemTagPrismaEntity.create({
       createdAt: new Date().toISOString(),
@@ -990,7 +958,7 @@ export class MenuItemPrismaEntity {
   }
 
   async removeTag(itemId: string, tagId: string) {
-    await this.cacheManager.invalidate();
+    await invalidateCardapioIndexCache();
 
     const tag = await this.client.menuItemTag.findFirst({
       where: {
