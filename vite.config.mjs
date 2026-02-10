@@ -8,6 +8,7 @@ import { RemixVitePWA } from "@vite-pwa/remix";
 installGlobals();
 // Gera um hash/versão por build com base em timestamp
 const buildVersion = `v${new Date().toISOString().replace(/[-:.TZ]/g, '')}`;
+const isVitest = process.env.VITEST === "true";
 
 const { RemixVitePWAPlugin, RemixPWAPreset } = RemixVitePWA();
 
@@ -21,7 +22,7 @@ export default defineConfig({
     port: 3000
   },
   plugins: [
-    mkcert(),
+    !isVitest && mkcert(),
     remix({
       presets: [RemixPWAPreset()],
       ignoredRouteFiles: ["**/*.css"],
@@ -74,5 +75,5 @@ export default defineConfig({
     }),
 
     tsconfigPaths()
-  ]
+  ].filter(Boolean)
 });
