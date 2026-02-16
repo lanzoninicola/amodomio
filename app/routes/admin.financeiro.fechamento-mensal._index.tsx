@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
 
 import prismaClient from "~/lib/prisma/client.server";
 import { DecimalInput } from "~/components/inputs/inputs";
@@ -258,6 +257,62 @@ function Label({ children }: { children: React.ReactNode }) {
   return <div className="text-sm text-muted-foreground">{children}</div>;
 }
 
+function ReadonlyField({
+  label,
+  value,
+  fractionDigits = 2,
+  muted = true,
+}: {
+  label: string;
+  value: number;
+  fractionDigits?: number;
+  muted?: boolean;
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <Label>{label}</Label>
+      <DecimalInput
+        defaultValue={value}
+        fractionDigits={fractionDigits}
+        className={muted ? "w-full bg-muted text-muted-foreground font-mono" : "w-full font-mono"}
+        disabled
+        readOnly
+      />
+    </div>
+  );
+}
+
+function DeltaField({
+  label,
+  value,
+  fractionDigits = 2,
+  percent = false,
+}: {
+  label: string;
+  value: number;
+  fractionDigits?: number;
+  percent?: boolean;
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <Label>{label}</Label>
+      {percent ? (
+        <div className={`h-10 rounded-md border bg-muted px-3 flex items-center justify-end font-mono ${value > 0 ? "text-emerald-700" : value < 0 ? "text-red-700" : "text-slate-500"}`}>
+          {value > 0 ? "+" : ""}{value.toFixed(2)}%
+        </div>
+      ) : (
+        <DecimalInput
+          defaultValue={value}
+          fractionDigits={fractionDigits}
+          className={`w-full bg-muted font-mono ${value > 0 ? "text-emerald-700" : value < 0 ? "text-red-700" : "text-slate-500"}`}
+          disabled
+          readOnly
+        />
+      )}
+    </div>
+  );
+}
+
 type StatusTone = "good" | "warn" | "bad";
 
 function badgeClasses(tone: StatusTone) {
@@ -324,6 +379,17 @@ export default function AdminFinanceiroFechamentoMensal() {
       bruta: receitaBrutaAmount,
     };
   }, [currentDefaults]);
+  const lastReceitaBase = React.useMemo(() => {
+    const extrato = (lastClose as any)?.receitaExtratoBancoAmount ?? 0;
+    const dinheiro = (lastClose as any)?.receitaDinheiroAmount ?? 0;
+    const receitaBrutaAmount = lastClose?.receitaBrutaAmount ?? 0;
+    const hasSplit = (extrato ?? 0) + (dinheiro ?? 0) > 0;
+    return {
+      extrato: hasSplit ? extrato : receitaBrutaAmount,
+      dinheiro: hasSplit ? dinheiro : 0,
+      bruta: receitaBrutaAmount,
+    };
+  }, [lastClose]);
 
   const [receitaExtratoBanco, setReceitaExtratoBanco] = React.useState<number>(
     receitaBase.extrato,
@@ -495,16 +561,65 @@ export default function AdminFinanceiroFechamentoMensal() {
   const coberturaStatus = rateCobertura(coberturaPreview);
   const custoFixoPercBruta = totals.receitaBruta > 0 ? (totals.custoFixoTotal / totals.receitaBruta) * 100 : 0;
   const custoVariavelPercBruta = totals.receitaBruta > 0 ? (totals.custoVariavelTotal / totals.receitaBruta) * 100 : 0;
+  const lastCustoFixoPercBruta = lastTotals.receitaBruta > 0 ? (lastTotals.custoFixoTotal / lastTotals.receitaBruta) * 100 : 0;
+  const lastCustoVariavelPercBruta = lastTotals.receitaBruta > 0 ? (lastTotals.custoVariavelTotal / lastTotals.receitaBruta) * 100 : 0;
+  const lastCoberturaPerc = lastTotals.pontoEquilibrio > 0 ? (lastTotals.receitaBruta / lastTotals.pontoEquilibrio) * 100 : 0;
+  const lastMargemStatus = ratePercent(lastTotals.margemContribPerc, "margem");
+  const lastResultadoStatus = ratePercent(lastTotals.resultadoLiquidoPercBruta, "resultado");
+  const lastCoberturaStatus = rateCobertura(lastCoberturaPerc);
   const hasLastClose = Boolean(lastClose);
+  const lastFaturamentoMensal = (lastClose as any)?.faturamentoMensalAmount ?? 0;
+  const lastTaxaCartaoPerc = lastClose?.taxaCartaoPerc ?? 0;
+  const lastTaxaMarketplacePerc = lastClose?.taxaMarketplacePerc ?? 0;
+  const lastVendaCartaoAmount = lastClose?.vendaCartaoAmount ?? 0;
+  const lastVendaMarketplaceAmount = lastClose?.vendaMarketplaceAmount ?? 0;
+  const lastTaxaCartaoAmountPreview = lastVendaCartaoAmount > 0 ? (lastVendaCartaoAmount * lastTaxaCartaoPerc) / 100 : 0;
+  const lastTaxaMarketplaceAmountPreview = lastVendaMarketplaceAmount > 0 ? (lastVendaMarketplaceAmount * lastTaxaMarketplacePerc) / 100 : 0;
+  const lastImpostoAmountPreview = (lastClose as any)?.custoVariavelImpostosAmount ?? lastClose?.impostoAmount ?? 0;
+  const lastImpostoPercPreview = lastTotals.receitaBruta > 0
+    ? Number(((lastImpostoAmountPreview / lastTotals.receitaBruta) * 100).toFixed(2))
+    : 0;
+  const lastCustoVariavelOutrosPreview = (lastClose?.custoVariavelTotalAmount ?? 0) -
+    ((lastClose?.custoVariavelInsumosAmount ?? 0) +
+      (lastClose?.custoVariavelEntregaAmount ?? 0) +
+      (lastClose?.custoVariavelImpostosAmount ?? 0));
+  const lastCustoFixoOutrosPreview = (lastClose?.custoFixoTotalAmount ?? 0) -
+    ((lastClose?.custoFixoPlanoSaudeAmount ?? lastClose?.custoFixoFolhaAmount ?? 0) +
+      (lastClose?.custoFixoFolhaFuncionariosAmount ?? 0) +
+      (lastClose?.custoFixoProlaboreAmount ?? 0) +
+      (lastClose?.custoFixoRetiradaProlaboreAmount ?? 0) +
+      (lastClose?.custoFixoRetiradaResultadoAmount ?? 0) +
+      (lastClose?.custoFixoParcelaFinanciamentoAmount ?? 0) +
+      (lastClose?.custoFixoAssessoriaMarketingAmount ?? 0) +
+      (lastClose?.custoFixoTrafegoPagoAmount ?? lastClose?.custoVariavelMarketingAmount ?? 0) +
+      (lastClose?.custoFixoFaturaCartaoAmount ?? 0));
+  const lastCustoFixoPlanoSaude = lastClose?.custoFixoPlanoSaudeAmount ?? lastClose?.custoFixoFolhaAmount ?? 0;
+  const lastCustoFixoTrafegoPago = lastClose?.custoFixoTrafegoPagoAmount ?? lastClose?.custoVariavelMarketingAmount ?? 0;
+  const lastCustoFixoFolhaFuncionarios = lastClose?.custoFixoFolhaFuncionariosAmount ?? 0;
+  const lastCustoFixoProlabore = lastClose?.custoFixoProlaboreAmount ?? 0;
+  const lastCustoFixoRetiradaProlabore = lastClose?.custoFixoRetiradaProlaboreAmount ?? 0;
+  const lastCustoFixoRetiradaResultado = lastClose?.custoFixoRetiradaResultadoAmount ?? 0;
+  const lastCustoFixoFinanciamento = lastClose?.custoFixoParcelaFinanciamentoAmount ?? 0;
+  const lastCustoFixoMarketing = lastClose?.custoFixoAssessoriaMarketingAmount ?? 0;
+  const lastCustoFixoFaturaCartao = lastClose?.custoFixoFaturaCartaoAmount ?? 0;
+  const lastCustoVarInsumos = lastClose?.custoVariavelInsumosAmount ?? 0;
+  const lastCustoVarEntrega = lastClose?.custoVariavelEntregaAmount ?? 0;
+  const lastCustoVarImpostos = lastClose?.custoVariavelImpostosAmount ?? 0;
+  const lastEntradasNaoOperacionais = (lastClose as any)?.entradasNaoOperacionaisAmount ?? 0;
+  const lastSaidasNaoOperacionais = (lastClose as any)?.saidasNaoOperacionaisAmount ?? 0;
+  const lastResultadoNaoOperacional = lastEntradasNaoOperacionais - lastSaidasNaoOperacionais;
+  const lastDespesasPessoalTotal = lastCustoFixoPlanoSaude + lastCustoFixoFolhaFuncionarios + lastCustoFixoProlabore + lastCustoFixoRetiradaProlabore + lastCustoFixoRetiradaResultado;
+  const lastMarketingTotal = lastCustoFixoMarketing + lastCustoFixoTrafegoPago;
+  const lastServicoDividaTotal = lastCustoFixoFinanciamento + lastCustoFixoFaturaCartao;
+  const delta = (current: number, previous: number) => current - previous;
   const diffTone = (value: number) => (value > 0 ? "text-emerald-700" : value < 0 ? "text-red-700" : "text-slate-500");
-  const diffBadgeClass = (value: number) =>
-    value > 0
-      ? "text-emerald-700"
-      : value < 0
-        ? "text-red-700"
-        : "text-slate-600";
-  const diffLabel = (value: number, suffix = "") =>
-    `${value > 0 ? "+" : ""}${value.toFixed(2)}${suffix}`;
+  const diffLabel = (value: number, suffix = "") => `${value > 0 ? "+" : ""}${value.toFixed(2)}${suffix}`;
+  const rateDelta = (value: number) => {
+    if (value > 0) return { label: "Alta", tone: "good" as StatusTone };
+    if (value < 0) return { label: "Queda", tone: "bad" as StatusTone };
+    return { label: "Estável", tone: "warn" as StatusTone };
+  };
+  const renderFieldDiff = (..._args: unknown[]) => null;
   const isLoadingData = loadStatus === "loading";
   const formHidden = isLoadingData || isSwitchingPeriod;
   const loadStatusMeta = {
@@ -574,7 +689,7 @@ export default function AdminFinanceiroFechamentoMensal() {
       >
         <input type="hidden" name="intent" value="save" />
 
-        <div className="sticky top-20 z-30 rounded-2xl border bg-card/70 shadow-sm backdrop-blur p-4 md:p-6 space-y-4">
+        <div className="z-30 rounded-2xl border bg-card/70 shadow-sm backdrop-blur p-4 md:p-6 space-y-4">
           <div className="rounded-xl border bg-muted/20 px-4 py-3 space-y-2">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div className="space-y-1">
@@ -650,243 +765,1249 @@ export default function AdminFinanceiroFechamentoMensal() {
 
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-          <Card className="rounded-2xl border bg-white/90 shadow-sm">
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-[11px] uppercase tracking-wide text-slate-900">
-                  Margem de contribuição
-                </CardTitle>
-                <span className={`inline-flex items-center rounded-full px-2 py-1 text-[11px] font-medium ${badgeClasses(margemStatus.tone)}`}>
-                  {margemStatus.label}
-                </span>
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
+          <div className="space-y-6 xl:col-span-4">
+            <div className="rounded-xl border bg-muted/20 px-4 py-3">
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">1. Mês anterior</p>
+              <p className="text-sm font-semibold">{hasLastClose ? `${lastCloseLabel}` : "Sem referência anterior"}</p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4">
+              <Card className="rounded-2xl border bg-white/90 shadow-sm">
+                <CardHeader className="space-y-2">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-start">
+                    <CardTitle className="text-[11px] uppercase tracking-wide text-slate-900">
+                      % receita bruta
+                    </CardTitle>
+                    <div className="space-y-2 text-right sm:ml-auto sm:w-[240px]">
+                      <div className="w-full">
+                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Custos fixos</p>
+                        <p className="font-mono text-lg font-bold text-slate-900">{hasLastClose ? lastCustoFixoPercBruta.toFixed(2) : "0.00"}%</p>
+                      </div>
+                      <div className="w-full">
+                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Custos variáveis</p>
+                        <p className="font-mono text-lg font-bold text-slate-900">{hasLastClose ? lastCustoVariavelPercBruta.toFixed(2) : "0.00"}%</p>
+                      </div>
+                      <div className="w-full">
+                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Lucro</p>
+                        <p className={`font-mono text-lg font-bold ${lastTotals.resultadoLiquidoPercBruta >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                          {hasLastClose ? lastTotals.resultadoLiquidoPercBruta.toFixed(2) : "0.00"}%
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Percentuais de custos fixos e variáveis em relação à receita bruta.
+                  </p>
+                </CardHeader>
+              </Card>
+
+              <Card className="rounded-2xl border bg-white/90 shadow-sm">
+                <CardHeader className="space-y-2">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-start">
+                    <div className="flex items-center gap-2">
+                      <CardTitle className="text-[11px] uppercase tracking-wide text-slate-900">
+                        Margem de contribuição
+                      </CardTitle>
+                      <span className={`inline-flex items-center rounded-full px-2 py-1 text-[11px] font-medium ${badgeClasses(lastMargemStatus.tone)}`}>
+                        {lastMargemStatus.label}
+                      </span>
+                    </div>
+                    <div className="space-y-2 text-right sm:ml-auto sm:w-[240px]">
+                      <div className="w-full">
+                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Valor</p>
+                        <p className="font-mono text-lg font-bold text-slate-900">{formatMoneyString(hasLastClose ? lastTotals.margemContrib : 0, 2)}</p>
+                      </div>
+                      <div className="w-full">
+                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">% Receita de caixa</p>
+                        <p className="font-mono text-lg font-bold text-slate-900">{hasLastClose ? lastTotals.margemContribPerc.toFixed(2) : "0.00"}%</p>
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Receita de caixa menos custos variáveis. É o que sobra para pagar os fixos.
+                  </p>
+                </CardHeader>
+              </Card>
+
+              <Card className="rounded-2xl border bg-white/90 shadow-sm">
+                <CardHeader className="space-y-2">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-start">
+                    <div className="flex items-center gap-2">
+                      <CardTitle className="text-[11px] uppercase tracking-wide text-slate-900">
+                        Resultado líquido
+                      </CardTitle>
+                      <span className={`inline-flex items-center rounded-full px-2 py-1 text-[11px] font-medium ${badgeClasses(lastResultadoStatus.tone)}`}>
+                        {lastResultadoStatus.label}
+                      </span>
+                    </div>
+                    <div className="space-y-2 text-right sm:ml-auto sm:w-[240px]">
+                      <div className="w-full">
+                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Valor</p>
+                        <p className={`font-mono text-lg font-bold ${lastTotals.resultadoLiquido >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                          {formatMoneyString(hasLastClose ? lastTotals.resultadoLiquido : 0, 2)}
+                        </p>
+                      </div>
+                      <div className="w-full">
+                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Ajuste não operacional</p>
+                        <p className="font-mono text-lg font-bold text-slate-900">
+                          {formatMoneyString(hasLastClose ? lastTotals.entradasNaoOperacionais - lastTotals.saidasNaoOperacionais : 0, 2)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Margem de contribuição menos custos fixos. Lucro/prejuízo do mês.
+                  </p>
+                </CardHeader>
+              </Card>
+
+              <Card className="rounded-2xl border bg-white/90 shadow-sm">
+                <CardHeader className="space-y-2">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-start">
+                    <div className="flex items-center gap-2">
+                      <CardTitle className="text-[11px] uppercase tracking-wide text-slate-900">
+                        Ponto de equilíbrio
+                      </CardTitle>
+                      <span className={`inline-flex items-center rounded-full px-2 py-1 text-[11px] font-medium ${badgeClasses(lastCoberturaStatus.tone)}`}>
+                        {lastCoberturaStatus.label}
+                      </span>
+                    </div>
+                    <div className="space-y-2 text-right sm:ml-auto sm:w-[240px]">
+                      <div className="w-full">
+                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Valor</p>
+                        <p className="font-mono text-lg font-bold text-slate-900">{formatMoneyString(hasLastClose ? lastTotals.pontoEquilibrio : 0, 2)}</p>
+                      </div>
+                      <div className="w-full">
+                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Cobertura</p>
+                        <p className="font-mono text-lg font-bold text-slate-900">{hasLastClose ? lastCoberturaPerc.toFixed(2) : "0.00"}%</p>
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Receita de caixa mínima para zerar lucro. Cobertura mostra o quanto a receita atual alcança do PE.
+                  </p>
+                </CardHeader>
+              </Card>
+            </div>
+
+            <Card>
+              <CardHeader className="flex flex-col gap-1">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm font-semibold">Receita Bruta</CardTitle>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span>Total:</span>
+                    <DecimalInput
+                      defaultValue={lastTotals.receitaBruta}
+                      fractionDigits={2}
+                      className="w-48 font-mono text-lg font-semibold bg-muted text-muted-foreground"
+                      disabled
+                      readOnly
+                    />
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="grid grid-cols-1 gap-4">
+                <ReadonlyField label="Receita extrato banco (R$)" value={lastReceitaBase.extrato} muted={false} />
+                <ReadonlyField label="Receita dinheiro (R$)" value={lastReceitaBase.dinheiro} muted={false} />
+                <div><Separator /></div>
+                <ReadonlyField label="Faturamento mensal (informativo)" value={lastFaturamentoMensal} muted={false} />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-col gap-1">
+                <div>
+                  <CardTitle className="text-sm font-semibold">Receita Liquida (calculo)</CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    Esses valores alimentam o cálculo da receita líquida e ficam salvos para histórico.
+                  </p>
+                </div>
+                <Separator className="my-2" />
+              </CardHeader>
+              <CardContent className="flex flex-col gap-6">
+                <div className="grid grid-cols-1 items-center gap-x-4 gap-y-3">
+                  <ReadonlyField label="Taxa Cartão (%)" value={lastTaxaCartaoPerc} muted={false} />
+                  <ReadonlyField label="Taxa marketplace (%)" value={lastTaxaMarketplacePerc} muted={false} />
+                  <ReadonlyField label="Imposto sobre vendas (%)" value={lastImpostoPercPreview} />
+                </div>
+                <Separator className="my-2" />
+                <div className="grid grid-cols-1 items-center gap-x-4 gap-y-3">
+                  <ReadonlyField label="Venda no cartão (R$)" value={lastVendaCartaoAmount} muted={false} />
+                  <ReadonlyField label="Taxa Cartão (R$)" value={lastTaxaCartaoAmountPreview} />
+                </div>
+                <div className="grid grid-cols-1 items-center gap-x-4 gap-y-3">
+                  <ReadonlyField label="Venda marketplace (R$)" value={lastVendaMarketplaceAmount} muted={false} />
+                  <ReadonlyField label="Taxa marketplace (R$)" value={lastTaxaMarketplaceAmountPreview} />
+                </div>
+                <div className="grid grid-cols-1 items-center gap-x-4 gap-y-3">
+                  <ReadonlyField label="Imposto sobre vendas (R$)" value={lastImpostoAmountPreview} />
+                </div>
+                <Separator className="my-2" />
+                <ReadonlyField label="Receita líquida (R$)" value={lastTotals.receitaLiquida} muted={false} />
+              </CardContent>
+            </Card>
+
+            <div className="grid grid-cols-1 gap-4">
+              <Card>
+                <CardHeader className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-sm font-semibold">Custos variáveis (principais)</CardTitle>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <span>Total:</span>
+                      <DecimalInput
+                        defaultValue={lastTotals.custoVariavelTotal}
+                        fractionDigits={2}
+                        className="w-48 font-mono text-lg font-semibold bg-muted text-muted-foreground"
+                        disabled
+                        readOnly
+                      />
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="grid grid-cols-1 gap-4">
+                  <ReadonlyField label="Imposto sobre vendas (R$)" value={lastCustoVarImpostos} muted={false} />
+                  <ReadonlyField label="Insumos (R$)" value={lastCustoVarInsumos} muted={false} />
+                  <ReadonlyField label="Entrega (R$)" value={lastCustoVarEntrega} muted={false} />
+                  <div><Separator /></div>
+                  <ReadonlyField label="Outros variáveis (R$)" value={lastCustoVariavelOutrosPreview} />
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-sm font-semibold">Custos fixos (principais)</CardTitle>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <span>Total:</span>
+                      <DecimalInput
+                        defaultValue={lastTotals.custoFixoTotal}
+                        fractionDigits={2}
+                        className="w-48 font-mono text-lg font-semibold bg-muted text-muted-foreground"
+                        disabled
+                        readOnly
+                      />
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between text-sm font-medium text-muted-foreground">
+                      <span className="uppercase">Despesas com pessoal</span>
+                      <span className="font-mono font-semibold text-foreground">{formatMoneyString(lastDespesasPessoalTotal, 2)}</span>
+                    </div>
+                    <div className="grid grid-cols-1 gap-4">
+                      <ReadonlyField label="Folha funcionários (R$)" value={lastCustoFixoFolhaFuncionarios} muted={false} />
+                      <ReadonlyField label="Pró-labore (R$)" value={lastCustoFixoProlabore} muted={false} />
+                      <ReadonlyField label="Retirada de lucro / pró-labore (R$)" value={lastCustoFixoRetiradaProlabore} muted={false} />
+                      <ReadonlyField label="Retirada de lucro / resultado (R$)" value={lastCustoFixoRetiradaResultado} muted={false} />
+                      <ReadonlyField label="Plano de saúde (R$)" value={lastCustoFixoPlanoSaude} muted={false} />
+                    </div>
+                  </div>
+                  <Separator className="my-2" />
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between text-sm font-medium text-muted-foreground">
+                      <span className="uppercase">Marketing</span>
+                      <span className="font-mono font-semibold text-foreground">{formatMoneyString(lastMarketingTotal, 2)}</span>
+                    </div>
+                    <div className="grid grid-cols-1 gap-4">
+                      <ReadonlyField label="Assessoria (R$)" value={lastCustoFixoMarketing} muted={false} />
+                      <ReadonlyField label="Tráfego pago (R$)" value={lastCustoFixoTrafegoPago} muted={false} />
+                    </div>
+                  </div>
+                  <Separator className="my-2" />
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between text-sm font-medium text-muted-foreground">
+                      <span className="uppercase">Serviço da dívida</span>
+                      <span className="font-mono font-semibold text-foreground">{formatMoneyString(lastServicoDividaTotal, 2)}</span>
+                    </div>
+                    <div className="grid grid-cols-1 gap-4">
+                      <ReadonlyField label="Parcela financiamento (R$)" value={lastCustoFixoFinanciamento} muted={false} />
+                      <ReadonlyField label="Fatura cartão crédito (R$)" value={lastCustoFixoFaturaCartao} muted={false} />
+                    </div>
+                  </div>
+                  <Separator />
+                  <ReadonlyField label="Outros fixos (R$)" value={lastCustoFixoOutrosPreview} />
+                </CardContent>
+              </Card>
+            </div>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold">Movimentos não operacionais</CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  Entradas/saídas fora da operação do mês. Elas ajustam diretamente o resultado líquido.
+                </p>
+              </CardHeader>
+              <CardContent className="grid grid-cols-1 gap-4 items-end">
+                <ReadonlyField label="Entradas não operacionais (R$)" value={lastEntradasNaoOperacionais} muted={false} />
+                <ReadonlyField label="Saídas não operacionais (R$)" value={lastSaidasNaoOperacionais} muted={false} />
+                <ReadonlyField label="Impacto no resultado (R$)" value={lastResultadoNaoOperacional} />
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="space-y-6 xl:col-span-4">
+            <div className="rounded-xl border bg-muted/20 px-4 py-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">2. Mês corrente</p>
+                  <p className="text-sm font-semibold">{currentPeriodLabel}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Resultado líquido atual</p>
+                  <p className={`font-mono text-sm font-semibold ${resultadoLiquidoPreview >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                    {formatMoneyString(resultadoLiquidoPreview, 2)}
+                  </p>
+                </div>
               </div>
+            </div>
+
+        <div className="grid grid-cols-1 gap-4">
+          <Card className="rounded-2xl border bg-white/90 shadow-sm">
+            <CardHeader className="space-y-2">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-start">
+                <CardTitle className="text-[11px] uppercase tracking-wide text-slate-900">
+                  % receita bruta
+                </CardTitle>
+                <div className="space-y-2 text-right sm:ml-auto sm:w-[240px]">
+                  <div className="w-full">
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Custos fixos</p>
+                    <p className="font-mono text-lg font-bold text-slate-900">{custoFixoPercBruta.toFixed(2)}%</p>
+                  </div>
+                  <div className="w-full">
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Custos variáveis</p>
+                    <p className="font-mono text-lg font-bold text-slate-900">{custoVariavelPercBruta.toFixed(2)}%</p>
+                  </div>
+                  <div className="w-full">
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Lucro</p>
+                    <p className={`font-mono text-lg font-bold ${totals.resultadoLiquidoPercBruta >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                      {totals.resultadoLiquidoPercBruta.toFixed(2)}%
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Percentuais de custos fixos e variáveis em relação à receita bruta.
+              </p>
             </CardHeader>
-            <CardContent className="space-y-3 text-sm">
-              <div className="flex items-start justify-between gap-2">
-                <span className="text-xs text-muted-foreground text-right">{margemStatus.text}</span>
+          </Card>
+
+          <Card className="rounded-2xl border bg-white/90 shadow-sm">
+            <CardHeader className="space-y-2">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-start">
+                <div className="flex items-center gap-2">
+                  <CardTitle className="text-[11px] uppercase tracking-wide text-slate-900">
+                    Margem de contribuição
+                  </CardTitle>
+                  <span className={`inline-flex items-center rounded-full px-2 py-1 text-[11px] font-medium ${badgeClasses(margemStatus.tone)}`}>
+                    {margemStatus.label}
+                  </span>
+                </div>
+                <div className="space-y-2 text-right sm:ml-auto sm:w-[240px]">
+                  <div className="w-full">
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Valor</p>
+                    <p className="font-mono text-lg font-bold text-slate-900">{formatMoneyString(totals.margemContrib, 2)}</p>
+                  </div>
+                  <div className="w-full">
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">% Receita de caixa</p>
+                    <p className="font-mono text-lg font-bold text-slate-900">{totals.margemContribPerc.toFixed(2)}%</p>
+                  </div>
+                </div>
               </div>
               <p className="text-xs text-muted-foreground">
                 Receita de caixa menos custos variáveis. É o que sobra para pagar os fixos.
               </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-center space-y-1">
-                  <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-600">Valor</div>
-                  <div className="text-2xl font-bold text-slate-900 tabular-nums">
-                  {formatMoneyString(totals.margemContrib, 2)}
-                  </div>
-                  {hasLastClose && (
-                    <div className={`text-[11px] font-semibold ${diffTone(totals.margemContrib - lastTotals.margemContrib)}`}>
-                      {formatMoneyString(totals.margemContrib - lastTotals.margemContrib, 2)} vs {lastCloseLabel}
-                    </div>
-                  )}
-                </div>
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-center space-y-1">
-                  <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-600">% Receita de caixa</div>
-                  <div className="text-2xl font-bold text-slate-900 tabular-nums">
-                    {totals.margemContribPerc.toFixed(2)}%
-                  </div>
-                  {hasLastClose && (
-                    <div className={`text-[11px] font-semibold ${diffTone(totals.margemContribPerc - lastTotals.margemContribPerc)}`}>
-                      {diffLabel(totals.margemContribPerc - lastTotals.margemContribPerc, "%")} vs {lastCloseLabel}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </CardContent>
+            </CardHeader>
           </Card>
 
           <Card className="rounded-2xl border bg-white/90 shadow-sm">
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-[11px] uppercase tracking-wide text-slate-900">
-                  Resultado líquido
-                </CardTitle>
-                <span className={`inline-flex items-center rounded-full px-2 py-1 text-[11px] font-medium ${badgeClasses(resultadoStatus.tone)}`}>
-                  {resultadoStatus.label}
-                </span>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm">
-              <div className="flex items-start justify-between gap-2">
-                <span className="text-xs text-muted-foreground text-right">{resultadoStatus.text}</span>
+            <CardHeader className="space-y-2">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-start">
+                <div className="flex items-center gap-2">
+                  <CardTitle className="text-[11px] uppercase tracking-wide text-slate-900">
+                    Resultado líquido
+                  </CardTitle>
+                  <span className={`inline-flex items-center rounded-full px-2 py-1 text-[11px] font-medium ${badgeClasses(resultadoStatus.tone)}`}>
+                    {resultadoStatus.label}
+                  </span>
+                </div>
+                <div className="space-y-2 text-right sm:ml-auto sm:w-[240px]">
+                  <div className="w-full">
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Valor</p>
+                    <p className={`font-mono text-lg font-bold ${totals.resultadoLiquido >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                      {formatMoneyString(totals.resultadoLiquido, 2)}
+                    </p>
+                  </div>
+                  <div className="w-full">
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Ajuste não operacional</p>
+                    <p className="font-mono text-lg font-bold text-slate-900">
+                      {formatMoneyString(totals.entradasNaoOperacionais - totals.saidasNaoOperacionais, 2)}
+                    </p>
+                  </div>
+                </div>
               </div>
               <p className="text-xs text-muted-foreground">
                 Margem de contribuição menos custos fixos. Lucro/prejuízo do mês.
               </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-center space-y-1">
-                  <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-600">Valor</div>
-                  <div
-                    className={`text-2xl font-bold tabular-nums ${totals.resultadoLiquido >= 0 ? "text-emerald-700" : "text-red-700"}`}
-                  >
-                    {formatMoneyString(totals.resultadoLiquido, 2)}
-                  </div>
-                  {hasLastClose && (
-                    <div
-                      className={`inline-flex items-center justify-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${diffBadgeClass(
-                        totals.resultadoLiquido - lastTotals.resultadoLiquido,
-                      )}`}
-                    >
-                      {formatMoneyString(totals.resultadoLiquido - lastTotals.resultadoLiquido, 2)} vs {lastCloseLabel}
-                    </div>
-                  )}
-                </div>
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-center space-y-1">
-                  <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-600">Ajuste não operacional</div>
-                  <div className="text-2xl font-bold text-slate-900 tabular-nums">
-                    {formatMoneyString(totals.entradasNaoOperacionais - totals.saidasNaoOperacionais, 2)}
-                  </div>
-                  {hasLastClose && (
-                    <div
-                      className={`inline-flex items-center justify-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${diffBadgeClass(
-                        (totals.entradasNaoOperacionais - totals.saidasNaoOperacionais) -
-                        (lastTotals.entradasNaoOperacionais - lastTotals.saidasNaoOperacionais),
-                      )}`}
-                    >
-                      {formatMoneyString(
-                        (totals.entradasNaoOperacionais - totals.saidasNaoOperacionais) -
-                        (lastTotals.entradasNaoOperacionais - lastTotals.saidasNaoOperacionais),
-                        2,
-                      )}{" "}
-                      vs {lastCloseLabel}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </CardContent>
+            </CardHeader>
           </Card>
 
           <Card className="rounded-2xl border bg-white/90 shadow-sm">
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-[11px] uppercase tracking-wide text-slate-900">
-                  Ponto de equilíbrio
-                </CardTitle>
-                <span className={`inline-flex items-center rounded-full px-2 py-1 text-[11px] font-medium ${badgeClasses(coberturaStatus.tone)}`}>
-                  {coberturaStatus.label}
-                </span>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm">
-              <div className="flex items-start justify-between gap-2">
-                <span className="text-xs text-muted-foreground text-right">{coberturaStatus.text}</span>
+            <CardHeader className="space-y-2">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-start">
+                <div className="flex items-center gap-2">
+                  <CardTitle className="text-[11px] uppercase tracking-wide text-slate-900">
+                    Ponto de equilíbrio
+                  </CardTitle>
+                  <span className={`inline-flex items-center rounded-full px-2 py-1 text-[11px] font-medium ${badgeClasses(coberturaStatus.tone)}`}>
+                    {coberturaStatus.label}
+                  </span>
+                </div>
+                <div className="space-y-2 text-right sm:ml-auto sm:w-[240px]">
+                  <div className="w-full">
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Valor</p>
+                    <p className="font-mono text-lg font-bold text-slate-900">{formatMoneyString(totals.pontoEquilibrio, 2)}</p>
+                  </div>
+                  <div className="w-full">
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Cobertura</p>
+                    <p className="font-mono text-lg font-bold text-slate-900">
+                      {totals.receitaBruta > 0 ? ((totals.receitaBruta / (totals.pontoEquilibrio || 1)) * 100).toFixed(2) : "0.00"}%
+                    </p>
+                  </div>
+                </div>
               </div>
               <p className="text-xs text-muted-foreground">
                 Receita de caixa mínima para zerar lucro. Cobertura mostra o quanto a receita atual alcança do PE.
               </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-center space-y-1">
-                  <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-600">Valor</div>
-                  <div className="text-2xl font-bold text-slate-900 tabular-nums">
-                    {formatMoneyString(totals.pontoEquilibrio, 2)}
-                  </div>
-                  {hasLastClose && (
-                    <div className={`text-[11px] font-semibold ${diffTone(totals.pontoEquilibrio - lastTotals.pontoEquilibrio)}`}>
-                      {formatMoneyString(totals.pontoEquilibrio - lastTotals.pontoEquilibrio, 2)} vs {lastCloseLabel}
-                    </div>
-                  )}
-                </div>
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-center space-y-1">
-                  <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-600">Cobertura</div>
-                  <div className="text-2xl font-bold text-slate-900 tabular-nums">
-                    {totals.receitaBruta > 0 ? ((totals.receitaBruta / (totals.pontoEquilibrio || 1)) * 100).toFixed(2) : "0.00"}%
-                  </div>
-                  {hasLastClose && (
-                    <div
-                      className={`text-[11px] font-semibold ${diffTone(
-                        (totals.receitaBruta > 0 ? (totals.receitaBruta / (totals.pontoEquilibrio || 1)) * 100 : 0) -
-                        (lastTotals.receitaBruta > 0 ? (lastTotals.receitaBruta / (lastTotals.pontoEquilibrio || 1)) * 100 : 0),
-                      )}`}
-                    >
-                      {diffLabel(
-                        (totals.receitaBruta > 0 ? (totals.receitaBruta / (totals.pontoEquilibrio || 1)) * 100 : 0) -
-                        (lastTotals.receitaBruta > 0 ? (lastTotals.receitaBruta / (lastTotals.pontoEquilibrio || 1)) * 100 : 0),
-                        "%",
-                      )}{" "}
-                      vs {lastCloseLabel}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-2xl border bg-white/90 shadow-sm">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-[11px] uppercase tracking-wide text-slate-900">
-                % receita bruta
-              </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3 text-sm">
-              <p className="text-xs text-muted-foreground">
-                Percentuais de custos fixos e variáveis em relação à receita bruta.
-              </p>
-              <div className="grid grid-cols-1 gap-3">
-                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 space-y-2">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span className="text-[11px] uppercase tracking-wide font-semibold text-slate-600">Custos fixos</span>
-                    <span className="text-lg font-bold text-slate-900 tabular-nums">{custoFixoPercBruta.toFixed(2)}%</span>
-                  </div>
-                  {hasLastClose && (
-                    <div className="flex justify-start">
-                      <span
-                        className={`inline-flex items-center justify-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${diffBadgeClass(
-                          custoFixoPercBruta - (lastTotals.receitaBruta > 0 ? (lastTotals.custoFixoTotal / lastTotals.receitaBruta) * 100 : 0),
-                        )}`}
-                      >
-                        {diffLabel(
-                          custoFixoPercBruta - (lastTotals.receitaBruta > 0 ? (lastTotals.custoFixoTotal / lastTotals.receitaBruta) * 100 : 0),
-                          "%",
-                        )}{" "}
-                        vs {lastCloseLabel}
-                      </span>
-                    </div>
-                  )}
-                </div>
-                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 space-y-2">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span className="text-[11px] uppercase tracking-wide font-semibold text-slate-600">Custos variáveis</span>
-                    <span className="text-lg font-bold text-slate-900 tabular-nums">{custoVariavelPercBruta.toFixed(2)}%</span>
-                  </div>
-                  {hasLastClose && (
-                    <div className="flex justify-start">
-                      <span
-                        className={`inline-flex items-center justify-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${diffBadgeClass(
-                          custoVariavelPercBruta - (lastTotals.receitaBruta > 0 ? (lastTotals.custoVariavelTotal / lastTotals.receitaBruta) * 100 : 0),
-                        )}`}
-                      >
-                        {diffLabel(
-                          custoVariavelPercBruta - (lastTotals.receitaBruta > 0 ? (lastTotals.custoVariavelTotal / lastTotals.receitaBruta) * 100 : 0),
-                          "%",
-                        )}{" "}
-                        vs {lastCloseLabel}
-                      </span>
-                    </div>
-                  )}
-                </div>
-                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 space-y-2">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span className="text-[11px] uppercase tracking-wide font-semibold text-slate-600">Lucro</span>
-                    <span className={`text-lg font-bold tabular-nums ${totals.resultadoLiquidoPercBruta >= 0 ? "text-emerald-700" : "text-red-700"}`}>
-                      {totals.resultadoLiquidoPercBruta.toFixed(2)}%
-                    </span>
-                  </div>
-                  {hasLastClose && (
-                    <div className="flex justify-start">
-                      <span
-                        className={`inline-flex items-center justify-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${diffBadgeClass(
-                          totals.resultadoLiquidoPercBruta - lastTotals.resultadoLiquidoPercBruta,
-                        )}`}
-                      >
-                        {diffLabel(totals.resultadoLiquidoPercBruta - lastTotals.resultadoLiquidoPercBruta, "%")} vs {lastCloseLabel}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </CardContent>
           </Card>
+        </div>
+
+        {formHidden && (
+          <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
+            <div className="h-full w-1/3 animate-pulse bg-foreground/70" />
+          </div>
+        )}
+        <>
+
+            <div className="grid grid-cols-1 gap-4">
+              <Card>
+                <CardHeader className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-sm font-semibold">Receita Bruta</CardTitle>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <span>Total:</span>
+                      <DecimalInput
+                        name="receitaBrutaAmount"
+                        defaultValue={receitaBruta}
+                        fractionDigits={2}
+                        className="w-48 font-mono text-lg font-semibold"
+                        readOnly={true}
+                      />
+                      {renderFieldDiff(lastTotals.receitaBruta, receitaBruta)}
+                    </div>
+                  </div>
+
+                </CardHeader>
+                <CardContent className="grid grid-cols-1 gap-4">
+                  <div className="flex flex-col gap-2">
+                    <Label>Receita extrato banco (R$)</Label>
+                    <DecimalInput
+                      name="receitaExtratoBancoAmount"
+                      defaultValue={receitaExtratoBanco}
+                      fractionDigits={2}
+                      className="w-full"
+                      onValueChange={setReceitaExtratoBanco}
+                    />
+                    {renderFieldDiff(lastReceitaBase.extrato, receitaExtratoBanco)}
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label>Receita dinheiro (R$)</Label>
+                    <DecimalInput
+                      name="receitaDinheiroAmount"
+                      defaultValue={receitaDinheiro}
+                      fractionDigits={2}
+                      className="w-full"
+                      onValueChange={setReceitaDinheiro}
+                    />
+                    {renderFieldDiff(lastReceitaBase.dinheiro, receitaDinheiro)}
+                  </div>
+                  <div>
+                    <Separator />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <Label>Faturamento mensal (informativo)</Label>
+                      <span className={`text-xs font-medium ${diferencaFaturamentoTone}`}>
+                        Diferença vs receita bruta: {formatMoneyString(diferencaFaturamentoReceitaBruta, 2)}
+                      </span>
+                    </div>
+                    <DecimalInput
+                      name="faturamentoMensalAmount"
+                      defaultValue={faturamentoMensal}
+                      fractionDigits={2}
+                      className="w-full"
+                      onValueChange={setFaturamentoMensal}
+                    />
+                    {renderFieldDiff(lastFaturamentoMensal, faturamentoMensal)}
+                    <p className="text-xs text-muted-foreground">Registro manual do faturamento. Não entra nos cálculos.</p>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-col gap-1">
+                  <div className="flex items-start justify-between gap-2 flex-wrap">
+                    <div>
+                      <CardTitle className="text-sm font-semibold">Receita Liquida (calculo)</CardTitle>
+                      <p className="text-sm text-muted-foreground">
+                        Esses valores alimentam o cálculo da receita líquida e ficam salvos para histórico.
+                      </p>
+                    </div>
+                    <Separator className="my-2" />
+                    <div className="grid grid-cols-1 items-center gap-x-4 gap-y-3">
+                      <div className="flex flex-col gap-2">
+                        <Label>Taxa Cartão (%)</Label>
+                        <DecimalInput
+                          name="taxaCartaoPerc"
+                          defaultValue={taxaCartaoPerc}
+                          fractionDigits={2}
+                          className="w-full"
+                          onValueChange={setTaxaCartaoPerc}
+                        />
+                        {renderFieldDiff(lastTaxaCartaoPerc, taxaCartaoPerc, { asPercent: true })}
+
+
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <Label>Taxa marketplace (%)</Label>
+                        <DecimalInput
+                          name="taxaMarketplacePerc"
+                          defaultValue={taxaMarketplacePerc}
+                          fractionDigits={2}
+                          className="w-full"
+                          onValueChange={setTaxaMarketplacePerc}
+                        />
+                        {renderFieldDiff(lastTaxaMarketplacePerc, taxaMarketplacePerc, { asPercent: true })}
+
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <Label>Imposto sobre vendas (%)</Label>
+                        <DecimalInput
+                          key={`imposto-perc-${impostoPercPreview}`}
+                          name="impostoPercPreview"
+                          defaultValue={impostoPercPreview}
+                          fractionDigits={2}
+                          className="w-full bg-muted text-muted-foreground font-mono"
+                          disabled
+                          readOnly
+                        />
+                        {renderFieldDiff(lastImpostoPercPreview, impostoPercPreview, { asPercent: true })}
+                        <input type="hidden" name="impostoPerc" value={impostoPercPreview.toFixed(2)} />
+                      </div>
+                    </div>
+
+                  </div>
+                  <Separator className="my-2" />
+                </CardHeader>
+
+                <CardContent className="flex flex-col gap-6">
+
+                  <div className="grid grid-cols-1 items-center gap-x-4 gap-y-3">
+                    <div className="flex flex-col gap-2">
+                      <Label>Venda no cartão (R$)</Label>
+                      <DecimalInput
+                        name="vendaCartaoAmount"
+                        defaultValue={vendaCartaoAmount}
+                        fractionDigits={2}
+                        className="w-full"
+                        onValueChange={setVendaCartaoAmount}
+                      />
+                      {renderFieldDiff(lastVendaCartaoAmount, vendaCartaoAmount)}
+                    </div>
+
+                    <div className="flex flex-col">
+                      <Label>Taxa Cartão (R$)</Label>
+                      <DecimalInput
+                        name="taxaCartaoAmountPreview"
+                        defaultValue={taxaCartaoAmountPreview}
+                        fractionDigits={2}
+                        className="w-full bg-muted text-muted-foreground font-mono"
+                        disabled
+                        readOnly
+                      />
+                      {renderFieldDiff(lastTaxaCartaoAmountPreview, taxaCartaoAmountPreview)}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 items-center gap-x-4 gap-y-3">
+                    <div className="flex flex-col gap-2">
+                      <Label>Venda marketplace (R$)</Label>
+                      <DecimalInput
+                        name="vendaMarketplaceAmount"
+                        defaultValue={vendaMarketplaceAmount}
+                        fractionDigits={2}
+                        className="w-full"
+                        onValueChange={setVendaMarketplaceAmount}
+                      />
+                      {renderFieldDiff(lastVendaMarketplaceAmount, vendaMarketplaceAmount)}
+                    </div>
+
+                    <div className="flex flex-col">
+                      <Label>Taxa marketplace (R$)</Label>
+                      <DecimalInput
+                        name="taxaMarketplaceAmountPreview"
+                        defaultValue={taxaMarketplaceAmountPreview}
+                        fractionDigits={2}
+                        className="w-full bg-muted text-muted-foreground font-mono"
+                        disabled
+                        readOnly
+                      />
+                      {renderFieldDiff(lastTaxaMarketplaceAmountPreview, taxaMarketplaceAmountPreview)}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 items-center gap-x-4 gap-y-3">
+
+                    <div className="flex flex-col">
+                      <Label>Imposto sobre vendas (R$)</Label>
+                      <DecimalInput
+                        key={`imposto-amount-${impostoAmountPreview}`}
+                        name="impostoAmountPreview"
+                        defaultValue={impostoAmountPreview}
+                        fractionDigits={2}
+                        className="w-full bg-muted text-muted-foreground font-mono"
+                        disabled
+                        readOnly
+                      />
+                      {renderFieldDiff(lastImpostoAmountPreview, impostoAmountPreview)}
+                    </div>
+
+                  </div>
+
+                  <Separator className="my-2" />
+
+                  <div className="flex items-center gap-x-8">
+                    <Label>Receita líquida (R$)</Label>
+                    <DecimalInput
+                      key={`receita-liquida-${receitaLiquidaPreview}`}
+                      name="receitaLiquidaAmountPreview"
+                      defaultValue={receitaLiquidaPreview}
+                      fractionDigits={2}
+                      className="w-full bg-white border-none font-bold text-lg font-mono"
+                      disabled
+                      readOnly
+                    />
+                    {renderFieldDiff(lastTotals.receitaLiquida, receitaLiquidaPreview)}
+                  </div>
+                </CardContent>
+              </Card>
+
+
+            </div>
+
+
+
+            <Separator />
+
+            {/* Custos variáveis logo após receita */}
+            <div className="grid grid-cols-1 gap-4">
+              <Card>
+                <CardHeader className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-sm font-semibold">Custos variáveis (principais)</CardTitle>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <span>Total (editável):</span>
+                      <DecimalInput
+                        name="custoVariavelTotalAmount"
+                        defaultValue={custoVarTotalEdit}
+                        fractionDigits={2}
+                        className="w-48 font-mono text-lg font-semibold"
+                        onValueChange={setCustoVarTotalEdit}
+                      />
+                      {renderFieldDiff(lastTotals.custoVariavelTotal, custoVarTotalEdit)}
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="grid grid-cols-1 gap-4">
+                  <div className="flex flex-col gap-2">
+                    <Label>Imposto sobre vendas (R$)</Label>
+                    <DecimalInput
+                      name="custoVariavelImpostosAmount"
+                      defaultValue={custoVarImpostos}
+                      fractionDigits={2}
+                      className="w-full"
+                      onValueChange={setCustoVarImpostos}
+                    />
+                    {renderFieldDiff(lastClose?.custoVariavelImpostosAmount ?? 0, custoVarImpostos)}
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label>Insumos (R$)</Label>
+                    <DecimalInput
+                      name="custoVariavelInsumosAmount"
+                      defaultValue={custoVarInsumos}
+                      fractionDigits={2}
+                      className="w-full"
+                      onValueChange={setCustoVarInsumos}
+                    />
+                    {renderFieldDiff(lastClose?.custoVariavelInsumosAmount ?? 0, custoVarInsumos)}
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label>Entrega (R$)</Label>
+                    <DecimalInput
+                      name="custoVariavelEntregaAmount"
+                      defaultValue={custoVarEntrega}
+                      fractionDigits={2}
+                      className="w-full"
+                      onValueChange={setCustoVarEntrega}
+                    />
+                    {renderFieldDiff(lastClose?.custoVariavelEntregaAmount ?? 0, custoVarEntrega)}
+                  </div>
+                  <div>
+                    <Separator />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label>Outros variáveis (R$)</Label>
+                    <DecimalInput
+                      key={`outros-var-${custoVariavelOutrosPreview}`}
+                      name="custoVariavelOutrosAmount"
+                      defaultValue={custoVariavelOutrosPreview}
+                      fractionDigits={2}
+                      className="w-full bg-muted text-muted-foreground font-mono"
+                      disabled
+                      readOnly
+                    />
+                    {renderFieldDiff(lastCustoVariavelOutrosPreview, custoVariavelOutrosPreview)}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-sm font-semibold">Custos fixos (principais)</CardTitle>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <span>Total (editável):</span>
+                      <DecimalInput
+                        name="custoFixoTotalAmount"
+                        defaultValue={custoFixoTotalEdit}
+                        fractionDigits={2}
+                        className="w-48 font-mono text-lg font-semibold"
+                        onValueChange={setCustoFixoTotalEdit}
+                      />
+                      {renderFieldDiff(lastTotals.custoFixoTotal, custoFixoTotalEdit)}
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between text-sm font-medium text-muted-foreground">
+                      <span className="uppercase">Despesas com pessoal</span>
+                      <span className="font-mono font-semibold text-foreground">{formatMoneyString(despesasPessoalTotal, 2)}</span>
+                    </div>
+                    <div className="grid grid-cols-1 gap-4">
+                      <div className="flex flex-col gap-2">
+                        <Label>Folha funcionários (R$)</Label>
+                        <DecimalInput
+                          name="custoFixoFolhaFuncionariosAmount"
+                          defaultValue={custoFixoFolhaFuncionarios}
+                          fractionDigits={2}
+                          className="w-full"
+                          onValueChange={setCustoFixoFolhaFuncionarios}
+                        />
+                        {renderFieldDiff(lastClose?.custoFixoFolhaFuncionariosAmount ?? 0, custoFixoFolhaFuncionarios)}
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <Label>Pró-labore (R$)</Label>
+                        <DecimalInput
+                          name="custoFixoProlaboreAmount"
+                          defaultValue={custoFixoProlabore}
+                          fractionDigits={2}
+                          className="w-full"
+                          onValueChange={setCustoFixoProlabore}
+                        />
+                        {renderFieldDiff(lastClose?.custoFixoProlaboreAmount ?? 0, custoFixoProlabore)}
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <Label>Retirada de lucro / pró-labore (R$)</Label>
+                        <DecimalInput
+                          name="custoFixoRetiradaProlaboreAmount"
+                          defaultValue={custoFixoRetiradaProlabore}
+                          fractionDigits={2}
+                          className="w-full"
+                          onValueChange={setCustoFixoRetiradaProlabore}
+                        />
+                        {renderFieldDiff(lastClose?.custoFixoRetiradaProlaboreAmount ?? 0, custoFixoRetiradaProlabore)}
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <Label>Retirada de lucro / resultado (R$)</Label>
+                        <DecimalInput
+                          name="custoFixoRetiradaResultadoAmount"
+                          defaultValue={custoFixoRetiradaResultado}
+                          fractionDigits={2}
+                          className="w-full"
+                          onValueChange={setCustoFixoRetiradaResultado}
+                        />
+                        {renderFieldDiff(lastClose?.custoFixoRetiradaResultadoAmount ?? 0, custoFixoRetiradaResultado)}
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <Label>Plano de saúde (R$)</Label>
+                        <DecimalInput
+                          name="custoFixoPlanoSaudeAmount"
+                          defaultValue={custoFixoPlanoSaude}
+                          fractionDigits={2}
+                          className="w-full"
+                          onValueChange={setCustoFixoPlanoSaude}
+                        />
+                        {renderFieldDiff(lastClose?.custoFixoPlanoSaudeAmount ?? lastClose?.custoFixoFolhaAmount ?? 0, custoFixoPlanoSaude)}
+                      </div>
+                    </div>
+                  </div>
+                  <Separator className="my-2" />
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between text-sm font-medium text-muted-foreground">
+                      <span className="uppercase">Marketing</span>
+                      <span className="font-mono font-semibold text-foreground">{formatMoneyString(marketingTotal, 2)}</span>
+                    </div>
+                    <div className="grid grid-cols-1 gap-4">
+                      <div className="flex flex-col gap-2">
+                        <Label>Assessoria (R$)</Label>
+                        <DecimalInput
+                          name="custoFixoAssessoriaMarketingAmount"
+                          defaultValue={custoFixoMarketing}
+                          fractionDigits={2}
+                          className="w-full"
+                          onValueChange={setCustoFixoMarketing}
+                        />
+                        {renderFieldDiff(lastClose?.custoFixoAssessoriaMarketingAmount ?? 0, custoFixoMarketing)}
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <Label>Tráfego pago (R$)</Label>
+                        <DecimalInput
+                          name="custoFixoTrafegoPagoAmount"
+                          defaultValue={custoFixoTrafegoPago}
+                          fractionDigits={2}
+                          className="w-full"
+                          onValueChange={setCustoFixoTrafegoPago}
+                        />
+                        {renderFieldDiff(lastClose?.custoFixoTrafegoPagoAmount ?? lastClose?.custoVariavelMarketingAmount ?? 0, custoFixoTrafegoPago)}
+                      </div>
+                    </div>
+                  </div>
+
+                  <Separator className="my-2" />
+
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between text-sm font-medium text-muted-foreground">
+                      <span className="uppercase">Serviço da dívida</span>
+                      <span className="font-mono font-semibold text-foreground">{formatMoneyString(servicoDividaTotal, 2)}</span>
+                    </div>
+                    <div className="grid grid-cols-1 gap-4">
+                      <div className="flex flex-col gap-2">
+                        <Label>Parcela financiamento (R$)</Label>
+                        <DecimalInput
+                          name="custoFixoParcelaFinanciamentoAmount"
+                          defaultValue={custoFixoFinanciamento}
+                          fractionDigits={2}
+                          className="w-full"
+                          onValueChange={setCustoFixoFinanciamento}
+                        />
+                        {renderFieldDiff(lastClose?.custoFixoParcelaFinanciamentoAmount ?? 0, custoFixoFinanciamento)}
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <Label>Fatura cartão crédito (R$)</Label>
+                        <DecimalInput
+                          name="custoFixoFaturaCartaoAmount"
+                          defaultValue={custoFixoFaturaCartao}
+                          fractionDigits={2}
+                          className="w-full"
+                          onValueChange={setCustoFixoFaturaCartao}
+                        />
+                        {renderFieldDiff(lastClose?.custoFixoFaturaCartaoAmount ?? 0, custoFixoFaturaCartao)}
+                      </div>
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  <div className="flex flex-col gap-2 md:max-w-md">
+                    <Label>Outros fixos (R$)</Label>
+                    <DecimalInput
+                      key={`outros-fixo-${custoFixoOutrosPreview}`}
+                      name="custoFixoOutrosAmount"
+                      defaultValue={custoFixoOutrosPreview}
+                      fractionDigits={2}
+                      className="w-full bg-muted text-muted-foreground font-mono"
+                      disabled
+                      readOnly
+                    />
+                    {renderFieldDiff(lastCustoFixoOutrosPreview, custoFixoOutrosPreview)}
+                  </div>
+                </CardContent>
+              </Card>
+
+
+            </div>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold">Movimentos não operacionais</CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  Entradas/saídas fora da operação do mês. Elas ajustam diretamente o resultado líquido.
+                </p>
+              </CardHeader>
+              <CardContent className="grid grid-cols-1 gap-4 items-end">
+                <div className="flex flex-col gap-2">
+                  <Label>Entradas não operacionais (R$)</Label>
+                  <DecimalInput
+                    name="entradasNaoOperacionaisAmount"
+                    defaultValue={entradasNaoOperacionais}
+                    fractionDigits={2}
+                    className="w-full"
+                    onValueChange={setEntradasNaoOperacionais}
+                  />
+                  {renderFieldDiff(lastTotals.entradasNaoOperacionais, entradasNaoOperacionais)}
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label>Saídas não operacionais (R$)</Label>
+                  <DecimalInput
+                    name="saidasNaoOperacionaisAmount"
+                    defaultValue={saidasNaoOperacionais}
+                    fractionDigits={2}
+                    className="w-full"
+                    onValueChange={setSaidasNaoOperacionais}
+                  />
+                  {renderFieldDiff(lastTotals.saidasNaoOperacionais, saidasNaoOperacionais)}
+                </div>
+                <div className="flex flex-col gap-1">
+                  <Label>Impacto no resultado (R$)</Label>
+                  <DecimalInput
+                    key={`impacto-nao-operacional-${resultadoNaoOperacionalPreview}`}
+                    name="resultadoNaoOperacionalPreview"
+                    defaultValue={resultadoNaoOperacionalPreview}
+                    fractionDigits={2}
+                    className="w-full bg-muted text-muted-foreground font-mono"
+                    disabled
+                    readOnly
+                  />
+                  {renderFieldDiff(
+                    lastTotals.entradasNaoOperacionais - lastTotals.saidasNaoOperacionais,
+                    resultadoNaoOperacionalPreview,
+                  )}
+                  <p className="text-[11px] text-muted-foreground">
+                    Entradas menos saídas; somado ao lucro/prejuízo operacional.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className="flex justify-end">
+              <Button type="submit" disabled={saving}>
+                {saving ? "Salvando…" : "Salvar fechamento"}
+              </Button>
+            </div>
+          </>
+
+          </div>
+
+          <div className="space-y-6 xl:col-span-4">
+            <div className="rounded-xl border bg-muted/20 px-4 py-3">
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">3. Diferença</p>
+              <p className="text-sm font-semibold">
+                {hasLastClose ? `${currentPeriodLabel} vs ${lastCloseLabel}` : "Sem base para comparação"}
+              </p>
+            </div>
+            <div className="grid grid-cols-1 gap-4">
+              <Card className="rounded-2xl border bg-white/90 shadow-sm">
+                <CardHeader className="space-y-2">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-start">
+                    <CardTitle className="text-[11px] uppercase tracking-wide text-slate-900">
+                      % receita bruta
+                    </CardTitle>
+                    <div className="space-y-2 text-right sm:ml-auto sm:w-[240px]">
+                      <div className="w-full">
+                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Custos fixos</p>
+                        <p className={`font-mono text-lg font-bold ${diffTone(delta(custoFixoPercBruta, lastCustoFixoPercBruta))}`}>
+                          {hasLastClose ? diffLabel(delta(custoFixoPercBruta, lastCustoFixoPercBruta), "%") : "0.00%"}
+                        </p>
+                      </div>
+                      <div className="w-full">
+                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Custos variáveis</p>
+                        <p className={`font-mono text-lg font-bold ${diffTone(delta(custoVariavelPercBruta, lastCustoVariavelPercBruta))}`}>
+                          {hasLastClose ? diffLabel(delta(custoVariavelPercBruta, lastCustoVariavelPercBruta), "%") : "0.00%"}
+                        </p>
+                      </div>
+                      <div className="w-full">
+                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Lucro</p>
+                        <p className={`font-mono text-lg font-bold ${diffTone(delta(totals.resultadoLiquidoPercBruta, lastTotals.resultadoLiquidoPercBruta))}`}>
+                          {hasLastClose ? diffLabel(delta(totals.resultadoLiquidoPercBruta, lastTotals.resultadoLiquidoPercBruta), "%") : "0.00%"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Percentuais de custos fixos e variáveis em relação à receita bruta.
+                  </p>
+                </CardHeader>
+              </Card>
+
+              <Card className="rounded-2xl border bg-white/90 shadow-sm">
+                <CardHeader className="space-y-2">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-start">
+                    <div className="flex items-center gap-2">
+                      <CardTitle className="text-[11px] uppercase tracking-wide text-slate-900">
+                        Margem de contribuição
+                      </CardTitle>
+                      <span className={`inline-flex items-center rounded-full px-2 py-1 text-[11px] font-medium ${badgeClasses(rateDelta(delta(totals.margemContrib, lastTotals.margemContrib)).tone)}`}>
+                        {rateDelta(delta(totals.margemContrib, lastTotals.margemContrib)).label}
+                      </span>
+                    </div>
+                    <div className="space-y-2 text-right sm:ml-auto sm:w-[240px]">
+                      <div className="w-full">
+                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Valor</p>
+                        <p className={`font-mono text-lg font-bold ${diffTone(delta(totals.margemContrib, lastTotals.margemContrib))}`}>
+                          {hasLastClose ? formatMoneyString(delta(totals.margemContrib, lastTotals.margemContrib), 2) : "0,00"}
+                        </p>
+                      </div>
+                      <div className="w-full">
+                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">% Receita de caixa</p>
+                        <p className={`font-mono text-lg font-bold ${diffTone(delta(totals.margemContribPerc, lastTotals.margemContribPerc))}`}>
+                          {hasLastClose ? diffLabel(delta(totals.margemContribPerc, lastTotals.margemContribPerc), "%") : "0.00%"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Receita de caixa menos custos variáveis. É o que sobra para pagar os fixos.
+                  </p>
+                </CardHeader>
+              </Card>
+
+              <Card className="rounded-2xl border bg-white/90 shadow-sm">
+                <CardHeader className="space-y-2">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-start">
+                    <div className="flex items-center gap-2">
+                      <CardTitle className="text-[11px] uppercase tracking-wide text-slate-900">
+                        Resultado líquido
+                      </CardTitle>
+                      <span className={`inline-flex items-center rounded-full px-2 py-1 text-[11px] font-medium ${badgeClasses(rateDelta(delta(totals.resultadoLiquido, lastTotals.resultadoLiquido)).tone)}`}>
+                        {rateDelta(delta(totals.resultadoLiquido, lastTotals.resultadoLiquido)).label}
+                      </span>
+                    </div>
+                    <div className="space-y-2 text-right sm:ml-auto sm:w-[240px]">
+                      <div className="w-full">
+                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Valor</p>
+                        <p className={`font-mono text-lg font-bold ${diffTone(delta(totals.resultadoLiquido, lastTotals.resultadoLiquido))}`}>
+                          {hasLastClose ? formatMoneyString(delta(totals.resultadoLiquido, lastTotals.resultadoLiquido), 2) : "0,00"}
+                        </p>
+                      </div>
+                      <div className="w-full">
+                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Ajuste não operacional</p>
+                        <p className={`font-mono text-lg font-bold ${diffTone(delta(resultadoNaoOperacionalPreview, lastResultadoNaoOperacional))}`}>
+                          {hasLastClose ? formatMoneyString(delta(resultadoNaoOperacionalPreview, lastResultadoNaoOperacional), 2) : "0,00"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Margem de contribuição menos custos fixos. Lucro/prejuízo do mês.
+                  </p>
+                </CardHeader>
+              </Card>
+
+              <Card className="rounded-2xl border bg-white/90 shadow-sm">
+                <CardHeader className="space-y-2">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-start">
+                    <div className="flex items-center gap-2">
+                      <CardTitle className="text-[11px] uppercase tracking-wide text-slate-900">
+                        Ponto de equilíbrio
+                      </CardTitle>
+                      <span className={`inline-flex items-center rounded-full px-2 py-1 text-[11px] font-medium ${badgeClasses(rateDelta(delta(coberturaPreview, lastCoberturaPerc)).tone)}`}>
+                        {rateDelta(delta(coberturaPreview, lastCoberturaPerc)).label}
+                      </span>
+                    </div>
+                    <div className="space-y-2 text-right sm:ml-auto sm:w-[240px]">
+                      <div className="w-full">
+                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Valor</p>
+                        <p className={`font-mono text-lg font-bold ${diffTone(delta(totals.pontoEquilibrio, lastTotals.pontoEquilibrio))}`}>
+                          {hasLastClose ? formatMoneyString(delta(totals.pontoEquilibrio, lastTotals.pontoEquilibrio), 2) : "0,00"}
+                        </p>
+                      </div>
+                      <div className="w-full">
+                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Cobertura</p>
+                        <p className={`font-mono text-lg font-bold ${diffTone(delta(coberturaPreview, lastCoberturaPerc))}`}>
+                          {hasLastClose ? diffLabel(delta(coberturaPreview, lastCoberturaPerc), "%") : "0.00%"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Receita de caixa mínima para zerar lucro. Cobertura mostra o quanto a receita atual alcança do PE.
+                  </p>
+                </CardHeader>
+              </Card>
+            </div>
+
+            <Card>
+              <CardHeader className="flex flex-col gap-1">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm font-semibold">Receita Bruta</CardTitle>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span>Total:</span>
+                    <DecimalInput
+                      defaultValue={delta(receitaBruta, lastTotals.receitaBruta)}
+                      fractionDigits={2}
+                      className={`w-48 font-mono text-lg font-semibold bg-muted ${diffTone(delta(receitaBruta, lastTotals.receitaBruta))}`}
+                      disabled
+                      readOnly
+                    />
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="grid grid-cols-1 gap-4">
+                <DeltaField label="Receita extrato banco (R$)" value={delta(receitaExtratoBanco, lastReceitaBase.extrato)} />
+                <DeltaField label="Receita dinheiro (R$)" value={delta(receitaDinheiro, lastReceitaBase.dinheiro)} />
+                <div><Separator /></div>
+                <DeltaField label="Faturamento mensal (informativo)" value={delta(faturamentoMensal, lastFaturamentoMensal)} />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-col gap-1">
+                <div>
+                  <CardTitle className="text-sm font-semibold">Receita Liquida (calculo)</CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    Esses valores alimentam o cálculo da receita líquida e ficam salvos para histórico.
+                  </p>
+                </div>
+                <Separator className="my-2" />
+              </CardHeader>
+              <CardContent className="flex flex-col gap-6">
+                <div className="grid grid-cols-1 items-center gap-x-4 gap-y-3">
+                  <DeltaField label="Taxa Cartão (%)" value={delta(taxaCartaoPerc, lastTaxaCartaoPerc)} percent />
+                  <DeltaField label="Taxa marketplace (%)" value={delta(taxaMarketplacePerc, lastTaxaMarketplacePerc)} percent />
+                  <DeltaField label="Imposto sobre vendas (%)" value={delta(impostoPercPreview, lastImpostoPercPreview)} percent />
+                </div>
+                <Separator className="my-2" />
+                <div className="grid grid-cols-1 items-center gap-x-4 gap-y-3">
+                  <DeltaField label="Venda no cartão (R$)" value={delta(vendaCartaoAmount, lastVendaCartaoAmount)} />
+                  <DeltaField label="Taxa Cartão (R$)" value={delta(taxaCartaoAmountPreview, lastTaxaCartaoAmountPreview)} />
+                </div>
+                <div className="grid grid-cols-1 items-center gap-x-4 gap-y-3">
+                  <DeltaField label="Venda marketplace (R$)" value={delta(vendaMarketplaceAmount, lastVendaMarketplaceAmount)} />
+                  <DeltaField label="Taxa marketplace (R$)" value={delta(taxaMarketplaceAmountPreview, lastTaxaMarketplaceAmountPreview)} />
+                </div>
+                <div className="grid grid-cols-1 items-center gap-x-4 gap-y-3">
+                  <DeltaField label="Imposto sobre vendas (R$)" value={delta(impostoAmountPreview, lastImpostoAmountPreview)} />
+                </div>
+                <Separator className="my-2" />
+                <DeltaField label="Receita líquida (R$)" value={delta(receitaLiquidaPreview, lastTotals.receitaLiquida)} />
+              </CardContent>
+            </Card>
+
+            <div className="grid grid-cols-1 gap-4">
+              <Card>
+                <CardHeader className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-sm font-semibold">Custos variáveis (principais)</CardTitle>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <span>Total:</span>
+                      <DecimalInput
+                        defaultValue={delta(custoVarTotalEdit, lastTotals.custoVariavelTotal)}
+                        fractionDigits={2}
+                        className={`w-48 font-mono text-lg font-semibold bg-muted ${diffTone(delta(custoVarTotalEdit, lastTotals.custoVariavelTotal))}`}
+                        disabled
+                        readOnly
+                      />
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="grid grid-cols-1 gap-4">
+                  <DeltaField label="Imposto sobre vendas (R$)" value={delta(custoVarImpostos, lastCustoVarImpostos)} />
+                  <DeltaField label="Insumos (R$)" value={delta(custoVarInsumos, lastCustoVarInsumos)} />
+                  <DeltaField label="Entrega (R$)" value={delta(custoVarEntrega, lastCustoVarEntrega)} />
+                  <div><Separator /></div>
+                  <DeltaField label="Outros variáveis (R$)" value={delta(custoVariavelOutrosPreview, lastCustoVariavelOutrosPreview)} />
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-sm font-semibold">Custos fixos (principais)</CardTitle>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <span>Total:</span>
+                      <DecimalInput
+                        defaultValue={delta(custoFixoTotalEdit, lastTotals.custoFixoTotal)}
+                        fractionDigits={2}
+                        className={`w-48 font-mono text-lg font-semibold bg-muted ${diffTone(delta(custoFixoTotalEdit, lastTotals.custoFixoTotal))}`}
+                        disabled
+                        readOnly
+                      />
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between text-sm font-medium text-muted-foreground">
+                      <span className="uppercase">Despesas com pessoal</span>
+                      <span className={`font-mono font-semibold ${diffTone(delta(despesasPessoalTotal, lastDespesasPessoalTotal))}`}>
+                        {formatMoneyString(delta(despesasPessoalTotal, lastDespesasPessoalTotal), 2)}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 gap-4">
+                      <DeltaField label="Folha funcionários (R$)" value={delta(custoFixoFolhaFuncionarios, lastCustoFixoFolhaFuncionarios)} />
+                      <DeltaField label="Pró-labore (R$)" value={delta(custoFixoProlabore, lastCustoFixoProlabore)} />
+                      <DeltaField label="Retirada de lucro / pró-labore (R$)" value={delta(custoFixoRetiradaProlabore, lastCustoFixoRetiradaProlabore)} />
+                      <DeltaField label="Retirada de lucro / resultado (R$)" value={delta(custoFixoRetiradaResultado, lastCustoFixoRetiradaResultado)} />
+                      <DeltaField label="Plano de saúde (R$)" value={delta(custoFixoPlanoSaude, lastCustoFixoPlanoSaude)} />
+                    </div>
+                  </div>
+                  <Separator className="my-2" />
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between text-sm font-medium text-muted-foreground">
+                      <span className="uppercase">Marketing</span>
+                      <span className={`font-mono font-semibold ${diffTone(delta(marketingTotal, lastMarketingTotal))}`}>
+                        {formatMoneyString(delta(marketingTotal, lastMarketingTotal), 2)}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 gap-4">
+                      <DeltaField label="Assessoria (R$)" value={delta(custoFixoMarketing, lastCustoFixoMarketing)} />
+                      <DeltaField label="Tráfego pago (R$)" value={delta(custoFixoTrafegoPago, lastCustoFixoTrafegoPago)} />
+                    </div>
+                  </div>
+                  <Separator className="my-2" />
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between text-sm font-medium text-muted-foreground">
+                      <span className="uppercase">Serviço da dívida</span>
+                      <span className={`font-mono font-semibold ${diffTone(delta(servicoDividaTotal, lastServicoDividaTotal))}`}>
+                        {formatMoneyString(delta(servicoDividaTotal, lastServicoDividaTotal), 2)}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 gap-4">
+                      <DeltaField label="Parcela financiamento (R$)" value={delta(custoFixoFinanciamento, lastCustoFixoFinanciamento)} />
+                      <DeltaField label="Fatura cartão crédito (R$)" value={delta(custoFixoFaturaCartao, lastCustoFixoFaturaCartao)} />
+                    </div>
+                  </div>
+                  <Separator />
+                  <DeltaField label="Outros fixos (R$)" value={delta(custoFixoOutrosPreview, lastCustoFixoOutrosPreview)} />
+                </CardContent>
+              </Card>
+            </div>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold">Movimentos não operacionais</CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  Entradas/saídas fora da operação do mês. Elas ajustam diretamente o resultado líquido.
+                </p>
+              </CardHeader>
+              <CardContent className="grid grid-cols-1 gap-4 items-end">
+                <DeltaField label="Entradas não operacionais (R$)" value={delta(entradasNaoOperacionais, lastEntradasNaoOperacionais)} />
+                <DeltaField label="Saídas não operacionais (R$)" value={delta(saidasNaoOperacionais, lastSaidasNaoOperacionais)} />
+                <DeltaField label="Impacto no resultado (R$)" value={delta(resultadoNaoOperacionalPreview, lastResultadoNaoOperacional)} />
+              </CardContent>
+            </Card>
+          </div>
         </div>
 
         <Card>
@@ -906,506 +2027,6 @@ export default function AdminFinanceiroFechamentoMensal() {
             />
           </CardContent>
         </Card>
-
-        {formHidden ? (
-          <div className="rounded-xl border bg-muted/30 p-6 space-y-4">
-            <div className="flex items-center gap-3 text-sm text-muted-foreground">
-              <Loader2 className="h-5 w-5 animate-spin" />
-              <span>{isLoadingData ? "Carregando dados salvos..." : "Atualizando período selecionado..."}</span>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              <Skeleton className="h-24" />
-              <Skeleton className="h-24" />
-              <Skeleton className="h-24" />
-              <Skeleton className="h-20" />
-              <Skeleton className="h-20" />
-              <Skeleton className="h-20" />
-            </div>
-          </div>
-        ) : (
-          <>
-
-            <div className="grid grid-cols-1 lg:grid-cols-8 gap-4">
-              <Card className="lg:col-span-3" >
-                <CardHeader className="flex flex-col gap-1">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-sm font-semibold">Receita Bruta</CardTitle>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <span>Total:</span>
-                      <DecimalInput
-                        name="receitaBrutaAmount"
-                        defaultValue={receitaBruta}
-                        fractionDigits={2}
-                        className="w-48 font-mono text-lg font-semibold"
-                        readOnly={true}
-                      />
-                    </div>
-                  </div>
-
-                </CardHeader>
-                <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="flex flex-col gap-2">
-                    <Label>Receita extrato banco (R$)</Label>
-                    <DecimalInput
-                      name="receitaExtratoBancoAmount"
-                      defaultValue={receitaExtratoBanco}
-                      fractionDigits={2}
-                      className="w-full"
-                      onValueChange={setReceitaExtratoBanco}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <Label>Receita dinheiro (R$)</Label>
-                    <DecimalInput
-                      name="receitaDinheiroAmount"
-                      defaultValue={receitaDinheiro}
-                      fractionDigits={2}
-                      className="w-full"
-                      onValueChange={setReceitaDinheiro}
-                    />
-                  </div>
-                  <div className="md:col-span-2">
-                    <Separator />
-                  </div>
-                  <div className="flex flex-col gap-2 md:col-span-2">
-                    <div className="flex items-center justify-between gap-3">
-                      <Label>Faturamento mensal (informativo)</Label>
-                      <span className={`text-xs font-medium ${diferencaFaturamentoTone}`}>
-                        Diferença vs receita bruta: {formatMoneyString(diferencaFaturamentoReceitaBruta, 2)}
-                      </span>
-                    </div>
-                    <DecimalInput
-                      name="faturamentoMensalAmount"
-                      defaultValue={faturamentoMensal}
-                      fractionDigits={2}
-                      className="w-full"
-                      onValueChange={setFaturamentoMensal}
-                    />
-                    <p className="text-xs text-muted-foreground">Registro manual do faturamento. Não entra nos cálculos.</p>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="lg:col-span-5">
-                <CardHeader className="flex flex-col gap-1">
-                  <div className="flex items-start justify-between gap-2 flex-wrap">
-                    <div>
-                      <CardTitle className="text-sm font-semibold">Receita Liquida (calculo)</CardTitle>
-                      <p className="text-sm text-muted-foreground">
-                        Esses valores alimentam o cálculo da receita líquida e ficam salvos para histórico.
-                      </p>
-                    </div>
-                    <Separator className="my-2" />
-                    <div className="grid grid-cols-3 items-center gap-x-4">
-                      <div className="flex flex-col gap-2">
-                        <Label>Taxa Cartão (%)</Label>
-                        <DecimalInput
-                          name="taxaCartaoPerc"
-                          defaultValue={taxaCartaoPerc}
-                          fractionDigits={2}
-                          className="w-full"
-                          onValueChange={setTaxaCartaoPerc}
-                        />
-
-
-                      </div>
-                      <div className="flex flex-col gap-2">
-                        <Label>Taxa marketplace (%)</Label>
-                        <DecimalInput
-                          name="taxaMarketplacePerc"
-                          defaultValue={taxaMarketplacePerc}
-                          fractionDigits={2}
-                          className="w-full"
-                          onValueChange={setTaxaMarketplacePerc}
-                        />
-
-                      </div>
-                      <div className="flex flex-col gap-2">
-                        <Label>Imposto sobre vendas (%)</Label>
-                        <DecimalInput
-                          key={`imposto-perc-${impostoPercPreview}`}
-                          name="impostoPercPreview"
-                          defaultValue={impostoPercPreview}
-                          fractionDigits={2}
-                          className="w-full bg-muted text-muted-foreground font-mono"
-                          disabled
-                          readOnly
-                        />
-                        <input type="hidden" name="impostoPerc" value={impostoPercPreview.toFixed(2)} />
-                      </div>
-                    </div>
-
-                  </div>
-                  <Separator className="my-2" />
-                </CardHeader>
-
-                <CardContent className="flex flex-col gap-6">
-
-                  <div className="grid md:grid-cols-3 items-center gap-x-4">
-                    <div className="flex flex-col gap-2">
-                      <Label>Venda no cartão (R$)</Label>
-                      <DecimalInput
-                        name="vendaCartaoAmount"
-                        defaultValue={vendaCartaoAmount}
-                        fractionDigits={2}
-                        className="w-full"
-                        onValueChange={setVendaCartaoAmount}
-                      />
-                    </div>
-
-                    <div className="flex flex-col">
-                      <Label>Taxa Cartão (R$)</Label>
-                      <DecimalInput
-                        name="taxaCartaoAmountPreview"
-                        defaultValue={taxaCartaoAmountPreview}
-                        fractionDigits={2}
-                        className="w-full bg-muted text-muted-foreground font-mono"
-                        disabled
-                        readOnly
-                      />
-                    </div>
-                  </div>
-                  <div className="grid md:grid-cols-3 items-center gap-x-4">
-                    <div className="flex flex-col gap-2">
-                      <Label>Venda marketplace (R$)</Label>
-                      <DecimalInput
-                        name="vendaMarketplaceAmount"
-                        defaultValue={vendaMarketplaceAmount}
-                        fractionDigits={2}
-                        className="w-full"
-                        onValueChange={setVendaMarketplaceAmount}
-                      />
-                    </div>
-
-                    <div className="flex flex-col">
-                      <Label>Taxa marketplace (R$)</Label>
-                      <DecimalInput
-                        name="taxaMarketplaceAmountPreview"
-                        defaultValue={taxaMarketplaceAmountPreview}
-                        fractionDigits={2}
-                        className="w-full bg-muted text-muted-foreground font-mono"
-                        disabled
-                        readOnly
-                      />
-                    </div>
-                  </div>
-                  <div className="grid md:grid-cols-3 items-center gap-x-4">
-
-                    <div className="flex flex-col">
-                      <Label>Imposto sobre vendas (R$)</Label>
-                      <DecimalInput
-                        key={`imposto-amount-${impostoAmountPreview}`}
-                        name="impostoAmountPreview"
-                        defaultValue={impostoAmountPreview}
-                        fractionDigits={2}
-                        className="w-full bg-muted text-muted-foreground font-mono"
-                        disabled
-                        readOnly
-                      />
-                    </div>
-
-                  </div>
-
-                  <Separator className="my-2" />
-
-                  <div className="flex items-center gap-x-8">
-                    <Label>Receita líquida (R$)</Label>
-                    <DecimalInput
-                      key={`receita-liquida-${receitaLiquidaPreview}`}
-                      name="receitaLiquidaAmountPreview"
-                      defaultValue={receitaLiquidaPreview}
-                      fractionDigits={2}
-                      className="w-full bg-white border-none font-bold text-lg font-mono"
-                      disabled
-                      readOnly
-                    />
-                  </div>
-                </CardContent>
-              </Card>
-
-
-            </div>
-
-
-
-            <Separator />
-
-            {/* Custos variáveis logo após receita */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <Card>
-                <CardHeader className="flex flex-col gap-1">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-sm font-semibold">Custos variáveis (principais)</CardTitle>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <span>Total (editável):</span>
-                      <DecimalInput
-                        name="custoVariavelTotalAmount"
-                        defaultValue={custoVarTotalEdit}
-                        fractionDigits={2}
-                        className="w-48 font-mono text-lg font-semibold"
-                        onValueChange={setCustoVarTotalEdit}
-                      />
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="flex flex-col gap-2">
-                    <Label>Imposto sobre vendas (R$)</Label>
-                    <DecimalInput
-                      name="custoVariavelImpostosAmount"
-                      defaultValue={custoVarImpostos}
-                      fractionDigits={2}
-                      className="w-full"
-                      onValueChange={setCustoVarImpostos}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <Label>Insumos (R$)</Label>
-                    <DecimalInput
-                      name="custoVariavelInsumosAmount"
-                      defaultValue={custoVarInsumos}
-                      fractionDigits={2}
-                      className="w-full"
-                      onValueChange={setCustoVarInsumos}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <Label>Entrega (R$)</Label>
-                    <DecimalInput
-                      name="custoVariavelEntregaAmount"
-                      defaultValue={custoVarEntrega}
-                      fractionDigits={2}
-                      className="w-full"
-                      onValueChange={setCustoVarEntrega}
-                    />
-                  </div>
-                  <div className="md:col-span-2">
-                    <Separator />
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <Label>Outros variáveis (R$)</Label>
-                    <DecimalInput
-                      key={`outros-var-${custoVariavelOutrosPreview}`}
-                      name="custoVariavelOutrosAmount"
-                      defaultValue={custoVariavelOutrosPreview}
-                      fractionDigits={2}
-                      className="w-full bg-muted text-muted-foreground font-mono"
-                      disabled
-                      readOnly
-                    />
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-col gap-1">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-sm font-semibold">Custos fixos (principais)</CardTitle>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <span>Total (editável):</span>
-                      <DecimalInput
-                        name="custoFixoTotalAmount"
-                        defaultValue={custoFixoTotalEdit}
-                        fractionDigits={2}
-                        className="w-48 font-mono text-lg font-semibold"
-                        onValueChange={setCustoFixoTotalEdit}
-                      />
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between text-sm font-medium text-muted-foreground">
-                      <span className="uppercase">Despesas com pessoal</span>
-                      <span className="font-mono font-semibold text-foreground">{formatMoneyString(despesasPessoalTotal, 2)}</span>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="flex flex-col gap-2">
-                        <Label>Folha funcionários (R$)</Label>
-                        <DecimalInput
-                          name="custoFixoFolhaFuncionariosAmount"
-                          defaultValue={custoFixoFolhaFuncionarios}
-                          fractionDigits={2}
-                          className="w-full"
-                          onValueChange={setCustoFixoFolhaFuncionarios}
-                        />
-                      </div>
-                      <div className="flex flex-col gap-2">
-                        <Label>Pró-labore (R$)</Label>
-                        <DecimalInput
-                          name="custoFixoProlaboreAmount"
-                          defaultValue={custoFixoProlabore}
-                          fractionDigits={2}
-                          className="w-full"
-                          onValueChange={setCustoFixoProlabore}
-                        />
-                      </div>
-                      <div className="flex flex-col gap-2">
-                        <Label>Retirada de lucro / pró-labore (R$)</Label>
-                        <DecimalInput
-                          name="custoFixoRetiradaProlaboreAmount"
-                          defaultValue={custoFixoRetiradaProlabore}
-                          fractionDigits={2}
-                          className="w-full"
-                          onValueChange={setCustoFixoRetiradaProlabore}
-                        />
-                      </div>
-                      <div className="flex flex-col gap-2">
-                        <Label>Retirada de lucro / resultado (R$)</Label>
-                        <DecimalInput
-                          name="custoFixoRetiradaResultadoAmount"
-                          defaultValue={custoFixoRetiradaResultado}
-                          fractionDigits={2}
-                          className="w-full"
-                          onValueChange={setCustoFixoRetiradaResultado}
-                        />
-                      </div>
-                      <div className="flex flex-col gap-2">
-                        <Label>Plano de saúde (R$)</Label>
-                        <DecimalInput
-                          name="custoFixoPlanoSaudeAmount"
-                          defaultValue={custoFixoPlanoSaude}
-                          fractionDigits={2}
-                          className="w-full"
-                          onValueChange={setCustoFixoPlanoSaude}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  <Separator className="my-2" />
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between text-sm font-medium text-muted-foreground">
-                      <span className="uppercase">Marketing</span>
-                      <span className="font-mono font-semibold text-foreground">{formatMoneyString(marketingTotal, 2)}</span>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="flex flex-col gap-2">
-                        <Label>Assessoria (R$)</Label>
-                        <DecimalInput
-                          name="custoFixoAssessoriaMarketingAmount"
-                          defaultValue={custoFixoMarketing}
-                          fractionDigits={2}
-                          className="w-full"
-                          onValueChange={setCustoFixoMarketing}
-                        />
-                      </div>
-                      <div className="flex flex-col gap-2">
-                        <Label>Tráfego pago (R$)</Label>
-                        <DecimalInput
-                          name="custoFixoTrafegoPagoAmount"
-                          defaultValue={custoFixoTrafegoPago}
-                          fractionDigits={2}
-                          className="w-full"
-                          onValueChange={setCustoFixoTrafegoPago}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <Separator className="my-2" />
-
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between text-sm font-medium text-muted-foreground">
-                      <span className="uppercase">Serviço da dívida</span>
-                      <span className="font-mono font-semibold text-foreground">{formatMoneyString(servicoDividaTotal, 2)}</span>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="flex flex-col gap-2">
-                        <Label>Parcela financiamento (R$)</Label>
-                        <DecimalInput
-                          name="custoFixoParcelaFinanciamentoAmount"
-                          defaultValue={custoFixoFinanciamento}
-                          fractionDigits={2}
-                          className="w-full"
-                          onValueChange={setCustoFixoFinanciamento}
-                        />
-                      </div>
-                      <div className="flex flex-col gap-2">
-                        <Label>Fatura cartão crédito (R$)</Label>
-                        <DecimalInput
-                          name="custoFixoFaturaCartaoAmount"
-                          defaultValue={custoFixoFaturaCartao}
-                          fractionDigits={2}
-                          className="w-full"
-                          onValueChange={setCustoFixoFaturaCartao}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <Separator />
-
-                  <div className="flex flex-col gap-2 md:max-w-md">
-                    <Label>Outros fixos (R$)</Label>
-                    <DecimalInput
-                      key={`outros-fixo-${custoFixoOutrosPreview}`}
-                      name="custoFixoOutrosAmount"
-                      defaultValue={custoFixoOutrosPreview}
-                      fractionDigits={2}
-                      className="w-full bg-muted text-muted-foreground font-mono"
-                      disabled
-                      readOnly
-                    />
-                  </div>
-                </CardContent>
-              </Card>
-
-
-            </div>
-
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-semibold">Movimentos não operacionais</CardTitle>
-                <p className="text-xs text-muted-foreground">
-                  Entradas/saídas fora da operação do mês. Elas ajustam diretamente o resultado líquido.
-                </p>
-              </CardHeader>
-              <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-                <div className="flex flex-col gap-2">
-                  <Label>Entradas não operacionais (R$)</Label>
-                  <DecimalInput
-                    name="entradasNaoOperacionaisAmount"
-                    defaultValue={entradasNaoOperacionais}
-                    fractionDigits={2}
-                    className="w-full"
-                    onValueChange={setEntradasNaoOperacionais}
-                  />
-                </div>
-                <div className="flex flex-col gap-2">
-                  <Label>Saídas não operacionais (R$)</Label>
-                  <DecimalInput
-                    name="saidasNaoOperacionaisAmount"
-                    defaultValue={saidasNaoOperacionais}
-                    fractionDigits={2}
-                    className="w-full"
-                    onValueChange={setSaidasNaoOperacionais}
-                  />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <Label>Impacto no resultado (R$)</Label>
-                  <DecimalInput
-                    key={`impacto-nao-operacional-${resultadoNaoOperacionalPreview}`}
-                    name="resultadoNaoOperacionalPreview"
-                    defaultValue={resultadoNaoOperacionalPreview}
-                    fractionDigits={2}
-                    className="w-full bg-muted text-muted-foreground font-mono"
-                    disabled
-                    readOnly
-                  />
-                  <p className="text-[11px] text-muted-foreground">
-                    Entradas menos saídas; somado ao lucro/prejuízo operacional.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-
-            <div className="flex justify-end">
-              <Button type="submit" disabled={saving}>
-                {saving ? "Salvando…" : "Salvar fechamento"}
-              </Button>
-            </div>
-          </>
-        )}
       </Form>
 
       <Separator />
