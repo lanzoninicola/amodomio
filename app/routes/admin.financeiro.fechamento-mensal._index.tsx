@@ -2,13 +2,15 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { Form, Link, useActionData, useLoaderData, useNavigation, useSubmit } from "@remix-run/react";
-import { Loader2 } from "lucide-react";
+import { Loader2, TrendingUp, TrendingDown, Minus, Edit } from "lucide-react";
 import * as React from "react";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Progress } from "@/components/ui/progress";
 
 import prismaClient from "~/lib/prisma/client.server";
 import { DecimalInput } from "~/components/inputs/inputs";
@@ -254,7 +256,11 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 function Label({ children }: { children: React.ReactNode }) {
-  return <div className="text-sm text-muted-foreground">{children}</div>;
+  return <div className="text-xs font-medium text-slate-600">{children}</div>;
+}
+
+function FieldNote({ children }: { children?: React.ReactNode }) {
+  return <p className="min-h-[16px] text-xs text-muted-foreground truncate">{children ?? "\u00A0"}</p>;
 }
 
 function ReadonlyField({
@@ -262,22 +268,27 @@ function ReadonlyField({
   value,
   fractionDigits = 2,
   muted = true,
+  note,
 }: {
   label: string;
   value: number;
   fractionDigits?: number;
   muted?: boolean;
+  note?: string;
 }) {
+  const comparisonFieldClass =
+    "w-full border border-slate-100 bg-slate-50 text-slate-600 font-mono text-base cursor-not-allowed shadow-none";
   return (
     <div className="flex flex-col gap-2">
       <Label>{label}</Label>
       <DecimalInput
         defaultValue={value}
         fractionDigits={fractionDigits}
-        className={muted ? "w-full bg-muted text-muted-foreground font-mono" : "w-full font-mono"}
+        className={muted ? comparisonFieldClass : `${comparisonFieldClass} bg-background/60`}
         disabled
         readOnly
       />
+      <FieldNote>{note}</FieldNote>
     </div>
   );
 }
@@ -287,28 +298,35 @@ function DeltaField({
   value,
   fractionDigits = 2,
   percent = false,
+  note,
 }: {
   label: string;
   value: number;
   fractionDigits?: number;
   percent?: boolean;
+  note?: string;
 }) {
+  const deltaTextTone =
+    value > 0 ? "text-emerald-700/90" : value < 0 ? "text-red-700/90" : "text-slate-500";
   return (
     <div className="flex flex-col gap-2">
       <Label>{label}</Label>
       {percent ? (
-        <div className={`h-10 rounded-md border bg-muted px-3 flex items-center justify-end font-mono ${value > 0 ? "text-emerald-700" : value < 0 ? "text-red-700" : "text-slate-500"}`}>
+        <div
+          className={`h-10 rounded-md border border-muted bg-muted/40 px-3 flex items-center justify-end font-mono text-base ${deltaTextTone}`}
+        >
           {value > 0 ? "+" : ""}{value.toFixed(2)}%
         </div>
       ) : (
         <DecimalInput
           defaultValue={value}
           fractionDigits={fractionDigits}
-          className={`w-full bg-muted font-mono ${value > 0 ? "text-emerald-700" : value < 0 ? "text-red-700" : "text-slate-500"}`}
+          className={`w-full bg-muted/40 border-muted font-mono text-base shadow-none ${deltaTextTone}`}
           disabled
           readOnly
         />
       )}
+      <FieldNote>{note}</FieldNote>
     </div>
   );
 }
@@ -316,9 +334,38 @@ function DeltaField({
 type StatusTone = "good" | "warn" | "bad";
 
 function badgeClasses(tone: StatusTone) {
-  if (tone === "good") return "bg-emerald-100 text-emerald-700";
-  if (tone === "warn") return "bg-amber-100 text-amber-800";
-  return "bg-red-100 text-red-700";
+  if (tone === "good") return "bg-emerald-100 text-emerald-800 border border-emerald-200";
+  if (tone === "warn") return "bg-slate-100 text-slate-700 border border-slate-200";
+  return "bg-red-100 text-red-800 border border-red-200";
+}
+
+function badgeIcon(tone: StatusTone) {
+  if (tone === "good") return <TrendingUp className="h-3 w-3" />;
+  if (tone === "warn") return <Minus className="h-3 w-3" />;
+  return <TrendingDown className="h-3 w-3" />;
+}
+
+function KPICard({
+  label,
+  value,
+  tone
+}: {
+  label: string;
+  value: string;
+  tone: "positive" | "negative" | "neutral"
+}) {
+  const toneClass = {
+    positive: "text-emerald-700",
+    negative: "text-red-700",
+    neutral: "text-slate-900"
+  }[tone];
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white px-4 py-3">
+      <p className="text-xs font-medium text-slate-600 uppercase tracking-wide">{label}</p>
+      <p className={`font-mono text-2xl font-bold ${toneClass}`}>{value}</p>
+    </div>
+  );
 }
 
 function ratePercent(value: number, kind: "margem" | "resultado") {
@@ -619,7 +666,11 @@ export default function AdminFinanceiroFechamentoMensal() {
     if (value < 0) return { label: "Queda", tone: "bad" as StatusTone };
     return { label: "Estável", tone: "warn" as StatusTone };
   };
-  const renderFieldDiff = (..._args: unknown[]) => null;
+  const renderFieldDiff = (
+    _previousValue: number,
+    _currentValue: number,
+    opts?: { asPercent?: boolean; note?: string },
+  ) => <FieldNote>{opts?.note}</FieldNote>;
   const isLoadingData = loadStatus === "loading";
   const formHidden = isLoadingData || isSwitchingPeriod;
   const loadStatusMeta = {
@@ -634,6 +685,9 @@ export default function AdminFinanceiroFechamentoMensal() {
     green: "bg-emerald-100 text-emerald-800",
     amber: "bg-amber-100 text-amber-900",
   }[loadStatusMeta[loadStatus].tone];
+  const summaryHeaderGridClass =
+    "grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(210px,260px)] sm:items-start sm:gap-x-4";
+  const summaryMetricsColumnClass = "space-y-2 text-right sm:justify-self-end sm:w-full";
   const formatShortPeriodLabel = (month: number, year: number) => {
     const label = MONTH_OPTIONS.find((m) => m.value === month)?.label ?? String(month);
     return `${String(label).slice(0, 3)}/${String(year).slice(-2)}`;
@@ -688,15 +742,20 @@ export default function AdminFinanceiroFechamentoMensal() {
         ref={formRef}
       >
         <input type="hidden" name="intent" value="save" />
+        {formHidden && (
+          <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
+            <div className="h-full w-1/3 animate-pulse bg-foreground/70" />
+          </div>
+        )}
 
         <div className="z-30 rounded-2xl border bg-card/70 shadow-sm backdrop-blur p-4 md:p-6 space-y-4">
           <div className="rounded-xl border bg-muted/20 px-4 py-3 space-y-2">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div className="space-y-1">
-                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">FECHAMENTO MENSAL</p>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">FECHAMENTO MENSAL</p>
                 <div className="flex flex-wrap items-baseline gap-2">
                   <span className="text-2xl font-semibold">{currentPeriodLabel}</span>
-                  <span className="rounded-full bg-background px-2 py-1 text-[11px] font-medium text-muted-foreground">
+                  <span className="rounded-full bg-background px-2 py-1 text-xs font-medium text-muted-foreground">
                     Troque mês/ano abaixo para recalcular
                   </span>
                 </div>
@@ -760,36 +819,60 @@ export default function AdminFinanceiroFechamentoMensal() {
 
           </div>
 
+        </div>
 
-
-
+        {/* Top Summary Bar - KPIs Principais */}
+        <div className="sticky top-0 z-30 bg-background/95 backdrop-blur-sm border-b border-slate-200 shadow-sm -mx-4 px-4 py-4 mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <KPICard
+              label="Receita Líquida"
+              value={formatMoneyString(receitaLiquidaPreview, 2)}
+              tone="neutral"
+            />
+            <KPICard
+              label="Resultado Líquido"
+              value={formatMoneyString(resultadoLiquidoPreview, 2)}
+              tone={resultadoLiquidoPreview >= 0 ? "positive" : "negative"}
+            />
+            <KPICard
+              label="Margem Contribuição"
+              value={`${totals.margemContribPerc.toFixed(2)}%`}
+              tone={totals.margemContribPerc >= 35 ? "positive" : totals.margemContribPerc >= 20 ? "neutral" : "negative"}
+            />
+            <KPICard
+              label="Ponto Equilíbrio"
+              value={formatMoneyString(totals.pontoEquilibrio, 2)}
+              tone="neutral"
+            />
+          </div>
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
-          <div className="space-y-6 xl:col-span-4">
-            <div className="rounded-xl border bg-muted/20 px-4 py-3">
-              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">1. Mês anterior</p>
+          <div className="space-y-4 xl:col-span-4 rounded-lg bg-slate-50 p-3">
+            <div className="sticky top-20 z-20 bg-slate-50/95 backdrop-blur-sm shadow-sm rounded-xl border border-slate-200 px-4 py-3 -mx-1">
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-600">1. Mês anterior</p>
               <p className="text-sm font-semibold">{hasLastClose ? `${lastCloseLabel}` : "Sem referência anterior"}</p>
+              <p className="text-xs text-slate-500">Somente leitura para comparação.</p>
             </div>
 
-            <div className="grid grid-cols-1 gap-4">
-              <Card className="rounded-2xl border bg-white/90 shadow-sm">
+            <div className="grid grid-cols-1 gap-3">
+              <Card className="rounded-lg border border-slate-200 bg-white/90 shadow-none">
                 <CardHeader className="space-y-2">
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-start">
-                    <CardTitle className="text-[11px] uppercase tracking-wide text-slate-900">
+                  <div className={summaryHeaderGridClass}>
+                    <CardTitle className="text-xs uppercase tracking-wide text-slate-900">
                       % receita bruta
                     </CardTitle>
-                    <div className="space-y-2 text-right sm:ml-auto sm:w-[240px]">
+                    <div className={summaryMetricsColumnClass}>
                       <div className="w-full">
-                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Custos fixos</p>
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Custos fixos</p>
                         <p className="font-mono text-lg font-bold text-slate-900">{hasLastClose ? lastCustoFixoPercBruta.toFixed(2) : "0.00"}%</p>
                       </div>
                       <div className="w-full">
-                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Custos variáveis</p>
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Custos variáveis</p>
                         <p className="font-mono text-lg font-bold text-slate-900">{hasLastClose ? lastCustoVariavelPercBruta.toFixed(2) : "0.00"}%</p>
                       </div>
                       <div className="w-full">
-                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Lucro</p>
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Lucro</p>
                         <p className={`font-mono text-lg font-bold ${lastTotals.resultadoLiquidoPercBruta >= 0 ? "text-emerald-700" : "text-red-700"}`}>
                           {hasLastClose ? lastTotals.resultadoLiquidoPercBruta.toFixed(2) : "0.00"}%
                         </p>
@@ -802,24 +885,25 @@ export default function AdminFinanceiroFechamentoMensal() {
                 </CardHeader>
               </Card>
 
-              <Card className="rounded-2xl border bg-white/90 shadow-sm">
+              <Card className="rounded-lg border border-slate-200 bg-white/90 shadow-none">
                 <CardHeader className="space-y-2">
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-start">
+                  <div className={summaryHeaderGridClass}>
                     <div className="flex items-center gap-2">
-                      <CardTitle className="text-[11px] uppercase tracking-wide text-slate-900">
+                      <CardTitle className="text-xs uppercase tracking-wide text-slate-900">
                         Margem de contribuição
                       </CardTitle>
-                      <span className={`inline-flex items-center rounded-full px-2 py-1 text-[11px] font-medium ${badgeClasses(lastMargemStatus.tone)}`}>
+                      <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${badgeClasses(lastMargemStatus.tone)}`}>
+                        {badgeIcon(lastMargemStatus.tone)}
                         {lastMargemStatus.label}
                       </span>
                     </div>
-                    <div className="space-y-2 text-right sm:ml-auto sm:w-[240px]">
+                    <div className={summaryMetricsColumnClass}>
                       <div className="w-full">
-                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Valor</p>
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Valor</p>
                         <p className="font-mono text-lg font-bold text-slate-900">{formatMoneyString(hasLastClose ? lastTotals.margemContrib : 0, 2)}</p>
                       </div>
                       <div className="w-full">
-                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">% Receita de caixa</p>
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">% Receita de caixa</p>
                         <p className="font-mono text-lg font-bold text-slate-900">{hasLastClose ? lastTotals.margemContribPerc.toFixed(2) : "0.00"}%</p>
                       </div>
                     </div>
@@ -830,26 +914,27 @@ export default function AdminFinanceiroFechamentoMensal() {
                 </CardHeader>
               </Card>
 
-              <Card className="rounded-2xl border bg-white/90 shadow-sm">
+              <Card className="rounded-lg border border-slate-200 bg-white/90 shadow-none">
                 <CardHeader className="space-y-2">
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-start">
+                  <div className={summaryHeaderGridClass}>
                     <div className="flex items-center gap-2">
-                      <CardTitle className="text-[11px] uppercase tracking-wide text-slate-900">
+                      <CardTitle className="text-xs uppercase tracking-wide text-slate-900">
                         Resultado líquido
                       </CardTitle>
-                      <span className={`inline-flex items-center rounded-full px-2 py-1 text-[11px] font-medium ${badgeClasses(lastResultadoStatus.tone)}`}>
+                      <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${badgeClasses(lastResultadoStatus.tone)}`}>
+                        {badgeIcon(lastResultadoStatus.tone)}
                         {lastResultadoStatus.label}
                       </span>
                     </div>
-                    <div className="space-y-2 text-right sm:ml-auto sm:w-[240px]">
+                    <div className={summaryMetricsColumnClass}>
                       <div className="w-full">
-                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Valor</p>
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Valor</p>
                         <p className={`font-mono text-lg font-bold ${lastTotals.resultadoLiquido >= 0 ? "text-emerald-700" : "text-red-700"}`}>
                           {formatMoneyString(hasLastClose ? lastTotals.resultadoLiquido : 0, 2)}
                         </p>
                       </div>
                       <div className="w-full">
-                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Ajuste não operacional</p>
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Ajuste não operacional</p>
                         <p className="font-mono text-lg font-bold text-slate-900">
                           {formatMoneyString(hasLastClose ? lastTotals.entradasNaoOperacionais - lastTotals.saidasNaoOperacionais : 0, 2)}
                         </p>
@@ -862,24 +947,25 @@ export default function AdminFinanceiroFechamentoMensal() {
                 </CardHeader>
               </Card>
 
-              <Card className="rounded-2xl border bg-white/90 shadow-sm">
+              <Card className="rounded-lg border border-slate-200 bg-white/90 shadow-none">
                 <CardHeader className="space-y-2">
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-start">
+                  <div className={summaryHeaderGridClass}>
                     <div className="flex items-center gap-2">
-                      <CardTitle className="text-[11px] uppercase tracking-wide text-slate-900">
+                      <CardTitle className="text-xs uppercase tracking-wide text-slate-900">
                         Ponto de equilíbrio
                       </CardTitle>
-                      <span className={`inline-flex items-center rounded-full px-2 py-1 text-[11px] font-medium ${badgeClasses(lastCoberturaStatus.tone)}`}>
+                      <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${badgeClasses(lastCoberturaStatus.tone)}`}>
+                        {badgeIcon(lastCoberturaStatus.tone)}
                         {lastCoberturaStatus.label}
                       </span>
                     </div>
-                    <div className="space-y-2 text-right sm:ml-auto sm:w-[240px]">
+                    <div className={summaryMetricsColumnClass}>
                       <div className="w-full">
-                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Valor</p>
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Valor</p>
                         <p className="font-mono text-lg font-bold text-slate-900">{formatMoneyString(hasLastClose ? lastTotals.pontoEquilibrio : 0, 2)}</p>
                       </div>
                       <div className="w-full">
-                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Cobertura</p>
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Cobertura</p>
                         <p className="font-mono text-lg font-bold text-slate-900">{hasLastClose ? lastCoberturaPerc.toFixed(2) : "0.00"}%</p>
                       </div>
                     </div>
@@ -910,7 +996,7 @@ export default function AdminFinanceiroFechamentoMensal() {
               <CardContent className="grid grid-cols-1 gap-4">
                 <ReadonlyField label="Receita extrato banco (R$)" value={lastReceitaBase.extrato} muted={false} />
                 <ReadonlyField label="Receita dinheiro (R$)" value={lastReceitaBase.dinheiro} muted={false} />
-                <div><Separator /></div>
+                <Separator className="my-1" />
                 <ReadonlyField label="Faturamento mensal (informativo)" value={lastFaturamentoMensal} muted={false} />
               </CardContent>
             </Card>
@@ -923,7 +1009,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                     Esses valores alimentam o cálculo da receita líquida e ficam salvos para histórico.
                   </p>
                 </div>
-                <Separator className="my-2" />
+                <Separator className="my-1" />
               </CardHeader>
               <CardContent className="flex flex-col gap-6">
                 <div className="grid grid-cols-1 items-center gap-x-4 gap-y-3">
@@ -931,7 +1017,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                   <ReadonlyField label="Taxa marketplace (%)" value={lastTaxaMarketplacePerc} muted={false} />
                   <ReadonlyField label="Imposto sobre vendas (%)" value={lastImpostoPercPreview} />
                 </div>
-                <Separator className="my-2" />
+                <Separator className="my-1" />
                 <div className="grid grid-cols-1 items-center gap-x-4 gap-y-3">
                   <ReadonlyField label="Venda no cartão (R$)" value={lastVendaCartaoAmount} muted={false} />
                   <ReadonlyField label="Taxa Cartão (R$)" value={lastTaxaCartaoAmountPreview} />
@@ -943,7 +1029,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                 <div className="grid grid-cols-1 items-center gap-x-4 gap-y-3">
                   <ReadonlyField label="Imposto sobre vendas (R$)" value={lastImpostoAmountPreview} />
                 </div>
-                <Separator className="my-2" />
+                <Separator className="my-1" />
                 <ReadonlyField label="Receita líquida (R$)" value={lastTotals.receitaLiquida} muted={false} />
               </CardContent>
             </Card>
@@ -969,7 +1055,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                   <ReadonlyField label="Imposto sobre vendas (R$)" value={lastCustoVarImpostos} muted={false} />
                   <ReadonlyField label="Insumos (R$)" value={lastCustoVarInsumos} muted={false} />
                   <ReadonlyField label="Entrega (R$)" value={lastCustoVarEntrega} muted={false} />
-                  <div><Separator /></div>
+                  <Separator className="my-1" />
                   <ReadonlyField label="Outros variáveis (R$)" value={lastCustoVariavelOutrosPreview} />
                 </CardContent>
               </Card>
@@ -1004,7 +1090,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                       <ReadonlyField label="Plano de saúde (R$)" value={lastCustoFixoPlanoSaude} muted={false} />
                     </div>
                   </div>
-                  <Separator className="my-2" />
+                  <Separator className="my-1" />
                   <div className="space-y-3">
                     <div className="flex items-center justify-between text-sm font-medium text-muted-foreground">
                       <span className="uppercase">Marketing</span>
@@ -1015,7 +1101,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                       <ReadonlyField label="Tráfego pago (R$)" value={lastCustoFixoTrafegoPago} muted={false} />
                     </div>
                   </div>
-                  <Separator className="my-2" />
+                  <Separator className="my-1" />
                   <div className="space-y-3">
                     <div className="flex items-center justify-between text-sm font-medium text-muted-foreground">
                       <span className="uppercase">Serviço da dívida</span>
@@ -1026,7 +1112,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                       <ReadonlyField label="Fatura cartão crédito (R$)" value={lastCustoFixoFaturaCartao} muted={false} />
                     </div>
                   </div>
-                  <Separator />
+                  <Separator className="my-1" />
                   <ReadonlyField label="Outros fixos (R$)" value={lastCustoFixoOutrosPreview} />
                 </CardContent>
               </Card>
@@ -1047,40 +1133,44 @@ export default function AdminFinanceiroFechamentoMensal() {
             </Card>
           </div>
 
-          <div className="space-y-6 xl:col-span-4">
-            <div className="rounded-xl border bg-muted/20 px-4 py-3">
+          <div className="space-y-4 xl:col-span-4 rounded-lg border-2 border-blue-200 bg-white p-3 shadow-md ring-1 ring-blue-100">
+            <div className="sticky top-20 z-20 bg-white/95 backdrop-blur-sm shadow-sm rounded-xl border border-blue-200 px-4 py-3 -mx-1">
               <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">2. Mês corrente</p>
-                  <p className="text-sm font-semibold">{currentPeriodLabel}</p>
+                <div className="flex items-center gap-2">
+                  <Edit className="h-4 w-4 text-blue-600" />
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-slate-600">2. Mês corrente</p>
+                    <p className="text-sm font-semibold">{currentPeriodLabel}</p>
+                    <p className="text-xs text-blue-700 font-medium">Foco de edição</p>
+                  </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Resultado líquido atual</p>
-                  <p className={`font-mono text-sm font-semibold ${resultadoLiquidoPreview >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                  <p className="text-xs font-medium uppercase tracking-wide text-slate-600">Resultado líquido atual</p>
+                  <p className={`font-mono text-base font-semibold ${resultadoLiquidoPreview >= 0 ? "text-emerald-700" : "text-red-700"}`}>
                     {formatMoneyString(resultadoLiquidoPreview, 2)}
                   </p>
                 </div>
               </div>
             </div>
 
-        <div className="grid grid-cols-1 gap-4">
-          <Card className="rounded-2xl border bg-white/90 shadow-sm">
+        <div className="grid grid-cols-1 gap-3">
+          <Card className="rounded-lg border border-blue-100 bg-white shadow-sm">
             <CardHeader className="space-y-2">
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-start">
-                <CardTitle className="text-[11px] uppercase tracking-wide text-slate-900">
+              <div className={summaryHeaderGridClass}>
+                <CardTitle className="text-xs uppercase tracking-wide text-slate-900">
                   % receita bruta
                 </CardTitle>
-                <div className="space-y-2 text-right sm:ml-auto sm:w-[240px]">
+                <div className={summaryMetricsColumnClass}>
                   <div className="w-full">
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Custos fixos</p>
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Custos fixos</p>
                     <p className="font-mono text-lg font-bold text-slate-900">{custoFixoPercBruta.toFixed(2)}%</p>
                   </div>
                   <div className="w-full">
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Custos variáveis</p>
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Custos variáveis</p>
                     <p className="font-mono text-lg font-bold text-slate-900">{custoVariavelPercBruta.toFixed(2)}%</p>
                   </div>
                   <div className="w-full">
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Lucro</p>
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Lucro</p>
                     <p className={`font-mono text-lg font-bold ${totals.resultadoLiquidoPercBruta >= 0 ? "text-emerald-700" : "text-red-700"}`}>
                       {totals.resultadoLiquidoPercBruta.toFixed(2)}%
                     </p>
@@ -1093,24 +1183,25 @@ export default function AdminFinanceiroFechamentoMensal() {
             </CardHeader>
           </Card>
 
-          <Card className="rounded-2xl border bg-white/90 shadow-sm">
+          <Card className="rounded-lg border border-blue-100 bg-white shadow-sm">
             <CardHeader className="space-y-2">
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-start">
+              <div className={summaryHeaderGridClass}>
                 <div className="flex items-center gap-2">
-                  <CardTitle className="text-[11px] uppercase tracking-wide text-slate-900">
+                  <CardTitle className="text-xs uppercase tracking-wide text-slate-900">
                     Margem de contribuição
                   </CardTitle>
-                  <span className={`inline-flex items-center rounded-full px-2 py-1 text-[11px] font-medium ${badgeClasses(margemStatus.tone)}`}>
+                  <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${badgeClasses(margemStatus.tone)}`}>
+                    {badgeIcon(margemStatus.tone)}
                     {margemStatus.label}
                   </span>
                 </div>
-                <div className="space-y-2 text-right sm:ml-auto sm:w-[240px]">
+                <div className={summaryMetricsColumnClass}>
                   <div className="w-full">
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Valor</p>
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Valor</p>
                     <p className="font-mono text-lg font-bold text-slate-900">{formatMoneyString(totals.margemContrib, 2)}</p>
                   </div>
                   <div className="w-full">
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">% Receita de caixa</p>
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">% Receita de caixa</p>
                     <p className="font-mono text-lg font-bold text-slate-900">{totals.margemContribPerc.toFixed(2)}%</p>
                   </div>
                 </div>
@@ -1121,26 +1212,27 @@ export default function AdminFinanceiroFechamentoMensal() {
             </CardHeader>
           </Card>
 
-          <Card className="rounded-2xl border bg-white/90 shadow-sm">
+          <Card className="rounded-lg border border-blue-100 bg-white shadow-sm">
             <CardHeader className="space-y-2">
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-start">
+              <div className={summaryHeaderGridClass}>
                 <div className="flex items-center gap-2">
-                  <CardTitle className="text-[11px] uppercase tracking-wide text-slate-900">
+                  <CardTitle className="text-xs uppercase tracking-wide text-slate-900">
                     Resultado líquido
                   </CardTitle>
-                  <span className={`inline-flex items-center rounded-full px-2 py-1 text-[11px] font-medium ${badgeClasses(resultadoStatus.tone)}`}>
+                  <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${badgeClasses(resultadoStatus.tone)}`}>
+                    {badgeIcon(resultadoStatus.tone)}
                     {resultadoStatus.label}
                   </span>
                 </div>
-                <div className="space-y-2 text-right sm:ml-auto sm:w-[240px]">
+                <div className={summaryMetricsColumnClass}>
                   <div className="w-full">
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Valor</p>
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Valor</p>
                     <p className={`font-mono text-lg font-bold ${totals.resultadoLiquido >= 0 ? "text-emerald-700" : "text-red-700"}`}>
                       {formatMoneyString(totals.resultadoLiquido, 2)}
                     </p>
                   </div>
                   <div className="w-full">
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Ajuste não operacional</p>
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Ajuste não operacional</p>
                     <p className="font-mono text-lg font-bold text-slate-900">
                       {formatMoneyString(totals.entradasNaoOperacionais - totals.saidasNaoOperacionais, 2)}
                     </p>
@@ -1153,24 +1245,25 @@ export default function AdminFinanceiroFechamentoMensal() {
             </CardHeader>
           </Card>
 
-          <Card className="rounded-2xl border bg-white/90 shadow-sm">
+          <Card className="rounded-lg border border-blue-100 bg-white shadow-sm">
             <CardHeader className="space-y-2">
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-start">
+              <div className={summaryHeaderGridClass}>
                 <div className="flex items-center gap-2">
-                  <CardTitle className="text-[11px] uppercase tracking-wide text-slate-900">
+                  <CardTitle className="text-xs uppercase tracking-wide text-slate-900">
                     Ponto de equilíbrio
                   </CardTitle>
-                  <span className={`inline-flex items-center rounded-full px-2 py-1 text-[11px] font-medium ${badgeClasses(coberturaStatus.tone)}`}>
+                  <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${badgeClasses(coberturaStatus.tone)}`}>
+                    {badgeIcon(coberturaStatus.tone)}
                     {coberturaStatus.label}
                   </span>
                 </div>
-                <div className="space-y-2 text-right sm:ml-auto sm:w-[240px]">
+                <div className={summaryMetricsColumnClass}>
                   <div className="w-full">
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Valor</p>
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Valor</p>
                     <p className="font-mono text-lg font-bold text-slate-900">{formatMoneyString(totals.pontoEquilibrio, 2)}</p>
                   </div>
                   <div className="w-full">
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Cobertura</p>
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Cobertura</p>
                     <p className="font-mono text-lg font-bold text-slate-900">
                       {totals.receitaBruta > 0 ? ((totals.receitaBruta / (totals.pontoEquilibrio || 1)) * 100).toFixed(2) : "0.00"}%
                     </p>
@@ -1184,11 +1277,6 @@ export default function AdminFinanceiroFechamentoMensal() {
           </Card>
         </div>
 
-        {formHidden && (
-          <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
-            <div className="h-full w-1/3 animate-pulse bg-foreground/70" />
-          </div>
-        )}
         <>
 
             <div className="grid grid-cols-1 gap-4">
@@ -1205,7 +1293,6 @@ export default function AdminFinanceiroFechamentoMensal() {
                         className="w-48 font-mono text-lg font-semibold"
                         readOnly={true}
                       />
-                      {renderFieldDiff(lastTotals.receitaBruta, receitaBruta)}
                     </div>
                   </div>
 
@@ -1217,7 +1304,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                       name="receitaExtratoBancoAmount"
                       defaultValue={receitaExtratoBanco}
                       fractionDigits={2}
-                      className="w-full"
+                      className="w-full text-right border-2 border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 hover:border-slate-300 font-mono"
                       onValueChange={setReceitaExtratoBanco}
                     />
                     {renderFieldDiff(lastReceitaBase.extrato, receitaExtratoBanco)}
@@ -1228,13 +1315,13 @@ export default function AdminFinanceiroFechamentoMensal() {
                       name="receitaDinheiroAmount"
                       defaultValue={receitaDinheiro}
                       fractionDigits={2}
-                      className="w-full"
+                      className="w-full text-right border-2 border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 hover:border-slate-300 font-mono"
                       onValueChange={setReceitaDinheiro}
                     />
                     {renderFieldDiff(lastReceitaBase.dinheiro, receitaDinheiro)}
                   </div>
                   <div>
-                    <Separator />
+                    <Separator className="my-1" />
                   </div>
                   <div className="flex flex-col gap-2">
                     <div className="flex items-center justify-between gap-3">
@@ -1247,72 +1334,68 @@ export default function AdminFinanceiroFechamentoMensal() {
                       name="faturamentoMensalAmount"
                       defaultValue={faturamentoMensal}
                       fractionDigits={2}
-                      className="w-full"
+                      className="w-full text-right border-2 border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 hover:border-slate-300 font-mono"
                       onValueChange={setFaturamentoMensal}
                     />
-                    {renderFieldDiff(lastFaturamentoMensal, faturamentoMensal)}
-                    <p className="text-xs text-muted-foreground">Registro manual do faturamento. Não entra nos cálculos.</p>
+                    {renderFieldDiff(lastFaturamentoMensal, faturamentoMensal, {
+                      note: "Registro manual do faturamento. Não entra nos cálculos.",
+                    })}
                   </div>
                 </CardContent>
               </Card>
 
               <Card>
                 <CardHeader className="flex flex-col gap-1">
-                  <div className="flex items-start justify-between gap-2 flex-wrap">
-                    <div>
-                      <CardTitle className="text-sm font-semibold">Receita Liquida (calculo)</CardTitle>
-                      <p className="text-sm text-muted-foreground">
-                        Esses valores alimentam o cálculo da receita líquida e ficam salvos para histórico.
-                      </p>
-                    </div>
-                    <Separator className="my-2" />
-                    <div className="grid grid-cols-1 items-center gap-x-4 gap-y-3">
-                      <div className="flex flex-col gap-2">
-                        <Label>Taxa Cartão (%)</Label>
-                        <DecimalInput
-                          name="taxaCartaoPerc"
-                          defaultValue={taxaCartaoPerc}
-                          fractionDigits={2}
-                          className="w-full"
-                          onValueChange={setTaxaCartaoPerc}
-                        />
-                        {renderFieldDiff(lastTaxaCartaoPerc, taxaCartaoPerc, { asPercent: true })}
-
-
-                      </div>
-                      <div className="flex flex-col gap-2">
-                        <Label>Taxa marketplace (%)</Label>
-                        <DecimalInput
-                          name="taxaMarketplacePerc"
-                          defaultValue={taxaMarketplacePerc}
-                          fractionDigits={2}
-                          className="w-full"
-                          onValueChange={setTaxaMarketplacePerc}
-                        />
-                        {renderFieldDiff(lastTaxaMarketplacePerc, taxaMarketplacePerc, { asPercent: true })}
-
-                      </div>
-                      <div className="flex flex-col gap-2">
-                        <Label>Imposto sobre vendas (%)</Label>
-                        <DecimalInput
-                          key={`imposto-perc-${impostoPercPreview}`}
-                          name="impostoPercPreview"
-                          defaultValue={impostoPercPreview}
-                          fractionDigits={2}
-                          className="w-full bg-muted text-muted-foreground font-mono"
-                          disabled
-                          readOnly
-                        />
-                        {renderFieldDiff(lastImpostoPercPreview, impostoPercPreview, { asPercent: true })}
-                        <input type="hidden" name="impostoPerc" value={impostoPercPreview.toFixed(2)} />
-                      </div>
-                    </div>
-
+                  <div>
+                    <CardTitle className="text-sm font-semibold">Receita Liquida (calculo)</CardTitle>
+                    <p className="text-sm text-muted-foreground">
+                      Esses valores alimentam o cálculo da receita líquida e ficam salvos para histórico.
+                    </p>
                   </div>
-                  <Separator className="my-2" />
+                  <Separator className="my-1" />
                 </CardHeader>
 
                 <CardContent className="flex flex-col gap-6">
+                  <div className="grid grid-cols-1 items-center gap-x-4 gap-y-3">
+                    <div className="flex flex-col gap-2">
+                      <Label>Taxa Cartão (%)</Label>
+                      <DecimalInput
+                        name="taxaCartaoPerc"
+                        defaultValue={taxaCartaoPerc}
+                        fractionDigits={2}
+                        className="w-full text-right border-2 border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 hover:border-slate-300 font-mono"
+                        onValueChange={setTaxaCartaoPerc}
+                      />
+                      {renderFieldDiff(lastTaxaCartaoPerc, taxaCartaoPerc, { asPercent: true })}
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <Label>Taxa marketplace (%)</Label>
+                      <DecimalInput
+                        name="taxaMarketplacePerc"
+                        defaultValue={taxaMarketplacePerc}
+                        fractionDigits={2}
+                        className="w-full text-right border-2 border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 hover:border-slate-300 font-mono"
+                        onValueChange={setTaxaMarketplacePerc}
+                      />
+                      {renderFieldDiff(lastTaxaMarketplacePerc, taxaMarketplacePerc, { asPercent: true })}
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <Label>Imposto sobre vendas (%)</Label>
+                      <DecimalInput
+                        key={`imposto-perc-${impostoPercPreview}`}
+                        name="impostoPercPreview"
+                        defaultValue={impostoPercPreview}
+                        fractionDigits={2}
+                        className="w-full bg-muted text-muted-foreground font-mono"
+                        disabled
+                        readOnly
+                      />
+                      {renderFieldDiff(lastImpostoPercPreview, impostoPercPreview, { asPercent: true })}
+                      <input type="hidden" name="impostoPerc" value={impostoPercPreview.toFixed(2)} />
+                    </div>
+                  </div>
+
+                  <Separator className="my-1" />
 
                   <div className="grid grid-cols-1 items-center gap-x-4 gap-y-3">
                     <div className="flex flex-col gap-2">
@@ -1321,7 +1404,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                         name="vendaCartaoAmount"
                         defaultValue={vendaCartaoAmount}
                         fractionDigits={2}
-                        className="w-full"
+                        className="w-full text-right border-2 border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 hover:border-slate-300 font-mono"
                         onValueChange={setVendaCartaoAmount}
                       />
                       {renderFieldDiff(lastVendaCartaoAmount, vendaCartaoAmount)}
@@ -1347,7 +1430,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                         name="vendaMarketplaceAmount"
                         defaultValue={vendaMarketplaceAmount}
                         fractionDigits={2}
-                        className="w-full"
+                        className="w-full text-right border-2 border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 hover:border-slate-300 font-mono"
                         onValueChange={setVendaMarketplaceAmount}
                       />
                       {renderFieldDiff(lastVendaMarketplaceAmount, vendaMarketplaceAmount)}
@@ -1384,19 +1467,21 @@ export default function AdminFinanceiroFechamentoMensal() {
 
                   </div>
 
-                  <Separator className="my-2" />
+                  <Separator className="my-1" />
 
-                  <div className="flex items-center gap-x-8">
-                    <Label>Receita líquida (R$)</Label>
-                    <DecimalInput
-                      key={`receita-liquida-${receitaLiquidaPreview}`}
-                      name="receitaLiquidaAmountPreview"
-                      defaultValue={receitaLiquidaPreview}
-                      fractionDigits={2}
-                      className="w-full bg-white border-none font-bold text-lg font-mono"
-                      disabled
-                      readOnly
-                    />
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-x-8">
+                      <Label>Receita líquida (R$)</Label>
+                      <DecimalInput
+                        key={`receita-liquida-${receitaLiquidaPreview}`}
+                        name="receitaLiquidaAmountPreview"
+                        defaultValue={receitaLiquidaPreview}
+                        fractionDigits={2}
+                        className="w-full bg-white border-none font-bold text-lg font-mono"
+                        disabled
+                        readOnly
+                      />
+                    </div>
                     {renderFieldDiff(lastTotals.receitaLiquida, receitaLiquidaPreview)}
                   </div>
                 </CardContent>
@@ -1407,7 +1492,7 @@ export default function AdminFinanceiroFechamentoMensal() {
 
 
 
-            <Separator />
+            <Separator className="my-1" />
 
             {/* Custos variáveis logo após receita */}
             <div className="grid grid-cols-1 gap-4">
@@ -1424,7 +1509,6 @@ export default function AdminFinanceiroFechamentoMensal() {
                         className="w-48 font-mono text-lg font-semibold"
                         onValueChange={setCustoVarTotalEdit}
                       />
-                      {renderFieldDiff(lastTotals.custoVariavelTotal, custoVarTotalEdit)}
                     </div>
                   </div>
                 </CardHeader>
@@ -1435,7 +1519,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                       name="custoVariavelImpostosAmount"
                       defaultValue={custoVarImpostos}
                       fractionDigits={2}
-                      className="w-full"
+                      className="w-full text-right border-2 border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 hover:border-slate-300 font-mono"
                       onValueChange={setCustoVarImpostos}
                     />
                     {renderFieldDiff(lastClose?.custoVariavelImpostosAmount ?? 0, custoVarImpostos)}
@@ -1446,7 +1530,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                       name="custoVariavelInsumosAmount"
                       defaultValue={custoVarInsumos}
                       fractionDigits={2}
-                      className="w-full"
+                      className="w-full text-right border-2 border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 hover:border-slate-300 font-mono"
                       onValueChange={setCustoVarInsumos}
                     />
                     {renderFieldDiff(lastClose?.custoVariavelInsumosAmount ?? 0, custoVarInsumos)}
@@ -1457,13 +1541,13 @@ export default function AdminFinanceiroFechamentoMensal() {
                       name="custoVariavelEntregaAmount"
                       defaultValue={custoVarEntrega}
                       fractionDigits={2}
-                      className="w-full"
+                      className="w-full text-right border-2 border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 hover:border-slate-300 font-mono"
                       onValueChange={setCustoVarEntrega}
                     />
                     {renderFieldDiff(lastClose?.custoVariavelEntregaAmount ?? 0, custoVarEntrega)}
                   </div>
                   <div>
-                    <Separator />
+                    <Separator className="my-1" />
                   </div>
                   <div className="flex flex-col gap-2">
                     <Label>Outros variáveis (R$)</Label>
@@ -1494,7 +1578,6 @@ export default function AdminFinanceiroFechamentoMensal() {
                         className="w-48 font-mono text-lg font-semibold"
                         onValueChange={setCustoFixoTotalEdit}
                       />
-                      {renderFieldDiff(lastTotals.custoFixoTotal, custoFixoTotalEdit)}
                     </div>
                   </div>
                 </CardHeader>
@@ -1511,7 +1594,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                           name="custoFixoFolhaFuncionariosAmount"
                           defaultValue={custoFixoFolhaFuncionarios}
                           fractionDigits={2}
-                          className="w-full"
+                          className="w-full text-right border-2 border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 hover:border-slate-300 font-mono"
                           onValueChange={setCustoFixoFolhaFuncionarios}
                         />
                         {renderFieldDiff(lastClose?.custoFixoFolhaFuncionariosAmount ?? 0, custoFixoFolhaFuncionarios)}
@@ -1522,7 +1605,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                           name="custoFixoProlaboreAmount"
                           defaultValue={custoFixoProlabore}
                           fractionDigits={2}
-                          className="w-full"
+                          className="w-full text-right border-2 border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 hover:border-slate-300 font-mono"
                           onValueChange={setCustoFixoProlabore}
                         />
                         {renderFieldDiff(lastClose?.custoFixoProlaboreAmount ?? 0, custoFixoProlabore)}
@@ -1533,7 +1616,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                           name="custoFixoRetiradaProlaboreAmount"
                           defaultValue={custoFixoRetiradaProlabore}
                           fractionDigits={2}
-                          className="w-full"
+                          className="w-full text-right border-2 border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 hover:border-slate-300 font-mono"
                           onValueChange={setCustoFixoRetiradaProlabore}
                         />
                         {renderFieldDiff(lastClose?.custoFixoRetiradaProlaboreAmount ?? 0, custoFixoRetiradaProlabore)}
@@ -1544,7 +1627,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                           name="custoFixoRetiradaResultadoAmount"
                           defaultValue={custoFixoRetiradaResultado}
                           fractionDigits={2}
-                          className="w-full"
+                          className="w-full text-right border-2 border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 hover:border-slate-300 font-mono"
                           onValueChange={setCustoFixoRetiradaResultado}
                         />
                         {renderFieldDiff(lastClose?.custoFixoRetiradaResultadoAmount ?? 0, custoFixoRetiradaResultado)}
@@ -1555,14 +1638,14 @@ export default function AdminFinanceiroFechamentoMensal() {
                           name="custoFixoPlanoSaudeAmount"
                           defaultValue={custoFixoPlanoSaude}
                           fractionDigits={2}
-                          className="w-full"
+                          className="w-full text-right border-2 border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 hover:border-slate-300 font-mono"
                           onValueChange={setCustoFixoPlanoSaude}
                         />
                         {renderFieldDiff(lastClose?.custoFixoPlanoSaudeAmount ?? lastClose?.custoFixoFolhaAmount ?? 0, custoFixoPlanoSaude)}
                       </div>
                     </div>
                   </div>
-                  <Separator className="my-2" />
+                  <Separator className="my-1" />
                   <div className="space-y-3">
                     <div className="flex items-center justify-between text-sm font-medium text-muted-foreground">
                       <span className="uppercase">Marketing</span>
@@ -1575,7 +1658,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                           name="custoFixoAssessoriaMarketingAmount"
                           defaultValue={custoFixoMarketing}
                           fractionDigits={2}
-                          className="w-full"
+                          className="w-full text-right border-2 border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 hover:border-slate-300 font-mono"
                           onValueChange={setCustoFixoMarketing}
                         />
                         {renderFieldDiff(lastClose?.custoFixoAssessoriaMarketingAmount ?? 0, custoFixoMarketing)}
@@ -1586,7 +1669,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                           name="custoFixoTrafegoPagoAmount"
                           defaultValue={custoFixoTrafegoPago}
                           fractionDigits={2}
-                          className="w-full"
+                          className="w-full text-right border-2 border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 hover:border-slate-300 font-mono"
                           onValueChange={setCustoFixoTrafegoPago}
                         />
                         {renderFieldDiff(lastClose?.custoFixoTrafegoPagoAmount ?? lastClose?.custoVariavelMarketingAmount ?? 0, custoFixoTrafegoPago)}
@@ -1594,7 +1677,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                     </div>
                   </div>
 
-                  <Separator className="my-2" />
+                  <Separator className="my-1" />
 
                   <div className="space-y-3">
                     <div className="flex items-center justify-between text-sm font-medium text-muted-foreground">
@@ -1608,7 +1691,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                           name="custoFixoParcelaFinanciamentoAmount"
                           defaultValue={custoFixoFinanciamento}
                           fractionDigits={2}
-                          className="w-full"
+                          className="w-full text-right border-2 border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 hover:border-slate-300 font-mono"
                           onValueChange={setCustoFixoFinanciamento}
                         />
                         {renderFieldDiff(lastClose?.custoFixoParcelaFinanciamentoAmount ?? 0, custoFixoFinanciamento)}
@@ -1619,7 +1702,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                           name="custoFixoFaturaCartaoAmount"
                           defaultValue={custoFixoFaturaCartao}
                           fractionDigits={2}
-                          className="w-full"
+                          className="w-full text-right border-2 border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 hover:border-slate-300 font-mono"
                           onValueChange={setCustoFixoFaturaCartao}
                         />
                         {renderFieldDiff(lastClose?.custoFixoFaturaCartaoAmount ?? 0, custoFixoFaturaCartao)}
@@ -1627,7 +1710,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                     </div>
                   </div>
 
-                  <Separator />
+                  <Separator className="my-1" />
 
                   <div className="flex flex-col gap-2 md:max-w-md">
                     <Label>Outros fixos (R$)</Label>
@@ -1662,7 +1745,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                     name="entradasNaoOperacionaisAmount"
                     defaultValue={entradasNaoOperacionais}
                     fractionDigits={2}
-                    className="w-full"
+                    className="w-full text-right border-2 border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 hover:border-slate-300 font-mono"
                     onValueChange={setEntradasNaoOperacionais}
                   />
                   {renderFieldDiff(lastTotals.entradasNaoOperacionais, entradasNaoOperacionais)}
@@ -1673,7 +1756,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                     name="saidasNaoOperacionaisAmount"
                     defaultValue={saidasNaoOperacionais}
                     fractionDigits={2}
-                    className="w-full"
+                    className="w-full text-right border-2 border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 hover:border-slate-300 font-mono"
                     onValueChange={setSaidasNaoOperacionais}
                   />
                   {renderFieldDiff(lastTotals.saidasNaoOperacionais, saidasNaoOperacionais)}
@@ -1692,10 +1775,8 @@ export default function AdminFinanceiroFechamentoMensal() {
                   {renderFieldDiff(
                     lastTotals.entradasNaoOperacionais - lastTotals.saidasNaoOperacionais,
                     resultadoNaoOperacionalPreview,
+                    { note: "Entradas menos saídas; somado ao lucro/prejuízo operacional." },
                   )}
-                  <p className="text-[11px] text-muted-foreground">
-                    Entradas menos saídas; somado ao lucro/prejuízo operacional.
-                  </p>
                 </div>
               </CardContent>
             </Card>
@@ -1709,35 +1790,36 @@ export default function AdminFinanceiroFechamentoMensal() {
 
           </div>
 
-          <div className="space-y-6 xl:col-span-4">
-            <div className="rounded-xl border bg-muted/20 px-4 py-3">
-              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">3. Diferença</p>
+          <div className="space-y-4 xl:col-span-4 rounded-lg bg-slate-50 p-3">
+            <div className="sticky top-20 z-20 bg-slate-50/95 backdrop-blur-sm shadow-sm rounded-xl border border-slate-200 px-4 py-3 -mx-1">
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-600">3. Diferença</p>
               <p className="text-sm font-semibold">
                 {hasLastClose ? `${currentPeriodLabel} vs ${lastCloseLabel}` : "Sem base para comparação"}
               </p>
+              <p className="text-xs text-slate-500">Somente leitura de deltas.</p>
             </div>
-            <div className="grid grid-cols-1 gap-4">
-              <Card className="rounded-2xl border bg-white/90 shadow-sm">
+            <div className="grid grid-cols-1 gap-3">
+              <Card className="rounded-lg border border-slate-200 bg-white/90 shadow-none">
                 <CardHeader className="space-y-2">
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-start">
-                    <CardTitle className="text-[11px] uppercase tracking-wide text-slate-900">
+                  <div className={summaryHeaderGridClass}>
+                    <CardTitle className="text-xs uppercase tracking-wide text-slate-900">
                       % receita bruta
                     </CardTitle>
-                    <div className="space-y-2 text-right sm:ml-auto sm:w-[240px]">
+                    <div className={summaryMetricsColumnClass}>
                       <div className="w-full">
-                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Custos fixos</p>
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Custos fixos</p>
                         <p className={`font-mono text-lg font-bold ${diffTone(delta(custoFixoPercBruta, lastCustoFixoPercBruta))}`}>
                           {hasLastClose ? diffLabel(delta(custoFixoPercBruta, lastCustoFixoPercBruta), "%") : "0.00%"}
                         </p>
                       </div>
                       <div className="w-full">
-                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Custos variáveis</p>
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Custos variáveis</p>
                         <p className={`font-mono text-lg font-bold ${diffTone(delta(custoVariavelPercBruta, lastCustoVariavelPercBruta))}`}>
                           {hasLastClose ? diffLabel(delta(custoVariavelPercBruta, lastCustoVariavelPercBruta), "%") : "0.00%"}
                         </p>
                       </div>
                       <div className="w-full">
-                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Lucro</p>
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Lucro</p>
                         <p className={`font-mono text-lg font-bold ${diffTone(delta(totals.resultadoLiquidoPercBruta, lastTotals.resultadoLiquidoPercBruta))}`}>
                           {hasLastClose ? diffLabel(delta(totals.resultadoLiquidoPercBruta, lastTotals.resultadoLiquidoPercBruta), "%") : "0.00%"}
                         </p>
@@ -1750,26 +1832,27 @@ export default function AdminFinanceiroFechamentoMensal() {
                 </CardHeader>
               </Card>
 
-              <Card className="rounded-2xl border bg-white/90 shadow-sm">
+              <Card className="rounded-lg border border-slate-200 bg-white/90 shadow-none">
                 <CardHeader className="space-y-2">
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-start">
+                  <div className={summaryHeaderGridClass}>
                     <div className="flex items-center gap-2">
-                      <CardTitle className="text-[11px] uppercase tracking-wide text-slate-900">
+                      <CardTitle className="text-xs uppercase tracking-wide text-slate-900">
                         Margem de contribuição
                       </CardTitle>
-                      <span className={`inline-flex items-center rounded-full px-2 py-1 text-[11px] font-medium ${badgeClasses(rateDelta(delta(totals.margemContrib, lastTotals.margemContrib)).tone)}`}>
+                      <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${badgeClasses(rateDelta(delta(totals.margemContrib, lastTotals.margemContrib)).tone)}`}>
+                        {badgeIcon(rateDelta(delta(totals.margemContrib, lastTotals.margemContrib)).tone)}
                         {rateDelta(delta(totals.margemContrib, lastTotals.margemContrib)).label}
                       </span>
                     </div>
-                    <div className="space-y-2 text-right sm:ml-auto sm:w-[240px]">
+                    <div className={summaryMetricsColumnClass}>
                       <div className="w-full">
-                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Valor</p>
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Valor</p>
                         <p className={`font-mono text-lg font-bold ${diffTone(delta(totals.margemContrib, lastTotals.margemContrib))}`}>
                           {hasLastClose ? formatMoneyString(delta(totals.margemContrib, lastTotals.margemContrib), 2) : "0,00"}
                         </p>
                       </div>
                       <div className="w-full">
-                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">% Receita de caixa</p>
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">% Receita de caixa</p>
                         <p className={`font-mono text-lg font-bold ${diffTone(delta(totals.margemContribPerc, lastTotals.margemContribPerc))}`}>
                           {hasLastClose ? diffLabel(delta(totals.margemContribPerc, lastTotals.margemContribPerc), "%") : "0.00%"}
                         </p>
@@ -1782,26 +1865,27 @@ export default function AdminFinanceiroFechamentoMensal() {
                 </CardHeader>
               </Card>
 
-              <Card className="rounded-2xl border bg-white/90 shadow-sm">
+              <Card className="rounded-lg border border-slate-200 bg-white/90 shadow-none">
                 <CardHeader className="space-y-2">
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-start">
+                  <div className={summaryHeaderGridClass}>
                     <div className="flex items-center gap-2">
-                      <CardTitle className="text-[11px] uppercase tracking-wide text-slate-900">
+                      <CardTitle className="text-xs uppercase tracking-wide text-slate-900">
                         Resultado líquido
                       </CardTitle>
-                      <span className={`inline-flex items-center rounded-full px-2 py-1 text-[11px] font-medium ${badgeClasses(rateDelta(delta(totals.resultadoLiquido, lastTotals.resultadoLiquido)).tone)}`}>
+                      <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${badgeClasses(rateDelta(delta(totals.resultadoLiquido, lastTotals.resultadoLiquido)).tone)}`}>
+                        {badgeIcon(rateDelta(delta(totals.resultadoLiquido, lastTotals.resultadoLiquido)).tone)}
                         {rateDelta(delta(totals.resultadoLiquido, lastTotals.resultadoLiquido)).label}
                       </span>
                     </div>
-                    <div className="space-y-2 text-right sm:ml-auto sm:w-[240px]">
+                    <div className={summaryMetricsColumnClass}>
                       <div className="w-full">
-                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Valor</p>
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Valor</p>
                         <p className={`font-mono text-lg font-bold ${diffTone(delta(totals.resultadoLiquido, lastTotals.resultadoLiquido))}`}>
                           {hasLastClose ? formatMoneyString(delta(totals.resultadoLiquido, lastTotals.resultadoLiquido), 2) : "0,00"}
                         </p>
                       </div>
                       <div className="w-full">
-                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Ajuste não operacional</p>
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Ajuste não operacional</p>
                         <p className={`font-mono text-lg font-bold ${diffTone(delta(resultadoNaoOperacionalPreview, lastResultadoNaoOperacional))}`}>
                           {hasLastClose ? formatMoneyString(delta(resultadoNaoOperacionalPreview, lastResultadoNaoOperacional), 2) : "0,00"}
                         </p>
@@ -1814,26 +1898,27 @@ export default function AdminFinanceiroFechamentoMensal() {
                 </CardHeader>
               </Card>
 
-              <Card className="rounded-2xl border bg-white/90 shadow-sm">
+              <Card className="rounded-lg border border-slate-200 bg-white/90 shadow-none">
                 <CardHeader className="space-y-2">
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-start">
+                  <div className={summaryHeaderGridClass}>
                     <div className="flex items-center gap-2">
-                      <CardTitle className="text-[11px] uppercase tracking-wide text-slate-900">
+                      <CardTitle className="text-xs uppercase tracking-wide text-slate-900">
                         Ponto de equilíbrio
                       </CardTitle>
-                      <span className={`inline-flex items-center rounded-full px-2 py-1 text-[11px] font-medium ${badgeClasses(rateDelta(delta(coberturaPreview, lastCoberturaPerc)).tone)}`}>
+                      <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${badgeClasses(rateDelta(delta(coberturaPreview, lastCoberturaPerc)).tone)}`}>
+                        {badgeIcon(rateDelta(delta(coberturaPreview, lastCoberturaPerc)).tone)}
                         {rateDelta(delta(coberturaPreview, lastCoberturaPerc)).label}
                       </span>
                     </div>
-                    <div className="space-y-2 text-right sm:ml-auto sm:w-[240px]">
+                    <div className={summaryMetricsColumnClass}>
                       <div className="w-full">
-                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Valor</p>
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Valor</p>
                         <p className={`font-mono text-lg font-bold ${diffTone(delta(totals.pontoEquilibrio, lastTotals.pontoEquilibrio))}`}>
                           {hasLastClose ? formatMoneyString(delta(totals.pontoEquilibrio, lastTotals.pontoEquilibrio), 2) : "0,00"}
                         </p>
                       </div>
                       <div className="w-full">
-                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Cobertura</p>
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Cobertura</p>
                         <p className={`font-mono text-lg font-bold ${diffTone(delta(coberturaPreview, lastCoberturaPerc))}`}>
                           {hasLastClose ? diffLabel(delta(coberturaPreview, lastCoberturaPerc), "%") : "0.00%"}
                         </p>
@@ -1866,7 +1951,7 @@ export default function AdminFinanceiroFechamentoMensal() {
               <CardContent className="grid grid-cols-1 gap-4">
                 <DeltaField label="Receita extrato banco (R$)" value={delta(receitaExtratoBanco, lastReceitaBase.extrato)} />
                 <DeltaField label="Receita dinheiro (R$)" value={delta(receitaDinheiro, lastReceitaBase.dinheiro)} />
-                <div><Separator /></div>
+                <Separator className="my-1" />
                 <DeltaField label="Faturamento mensal (informativo)" value={delta(faturamentoMensal, lastFaturamentoMensal)} />
               </CardContent>
             </Card>
@@ -1879,7 +1964,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                     Esses valores alimentam o cálculo da receita líquida e ficam salvos para histórico.
                   </p>
                 </div>
-                <Separator className="my-2" />
+                <Separator className="my-1" />
               </CardHeader>
               <CardContent className="flex flex-col gap-6">
                 <div className="grid grid-cols-1 items-center gap-x-4 gap-y-3">
@@ -1887,7 +1972,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                   <DeltaField label="Taxa marketplace (%)" value={delta(taxaMarketplacePerc, lastTaxaMarketplacePerc)} percent />
                   <DeltaField label="Imposto sobre vendas (%)" value={delta(impostoPercPreview, lastImpostoPercPreview)} percent />
                 </div>
-                <Separator className="my-2" />
+                <Separator className="my-1" />
                 <div className="grid grid-cols-1 items-center gap-x-4 gap-y-3">
                   <DeltaField label="Venda no cartão (R$)" value={delta(vendaCartaoAmount, lastVendaCartaoAmount)} />
                   <DeltaField label="Taxa Cartão (R$)" value={delta(taxaCartaoAmountPreview, lastTaxaCartaoAmountPreview)} />
@@ -1899,7 +1984,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                 <div className="grid grid-cols-1 items-center gap-x-4 gap-y-3">
                   <DeltaField label="Imposto sobre vendas (R$)" value={delta(impostoAmountPreview, lastImpostoAmountPreview)} />
                 </div>
-                <Separator className="my-2" />
+                <Separator className="my-1" />
                 <DeltaField label="Receita líquida (R$)" value={delta(receitaLiquidaPreview, lastTotals.receitaLiquida)} />
               </CardContent>
             </Card>
@@ -1925,7 +2010,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                   <DeltaField label="Imposto sobre vendas (R$)" value={delta(custoVarImpostos, lastCustoVarImpostos)} />
                   <DeltaField label="Insumos (R$)" value={delta(custoVarInsumos, lastCustoVarInsumos)} />
                   <DeltaField label="Entrega (R$)" value={delta(custoVarEntrega, lastCustoVarEntrega)} />
-                  <div><Separator /></div>
+                  <Separator className="my-1" />
                   <DeltaField label="Outros variáveis (R$)" value={delta(custoVariavelOutrosPreview, lastCustoVariavelOutrosPreview)} />
                 </CardContent>
               </Card>
@@ -1962,7 +2047,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                       <DeltaField label="Plano de saúde (R$)" value={delta(custoFixoPlanoSaude, lastCustoFixoPlanoSaude)} />
                     </div>
                   </div>
-                  <Separator className="my-2" />
+                  <Separator className="my-1" />
                   <div className="space-y-3">
                     <div className="flex items-center justify-between text-sm font-medium text-muted-foreground">
                       <span className="uppercase">Marketing</span>
@@ -1975,7 +2060,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                       <DeltaField label="Tráfego pago (R$)" value={delta(custoFixoTrafegoPago, lastCustoFixoTrafegoPago)} />
                     </div>
                   </div>
-                  <Separator className="my-2" />
+                  <Separator className="my-1" />
                   <div className="space-y-3">
                     <div className="flex items-center justify-between text-sm font-medium text-muted-foreground">
                       <span className="uppercase">Serviço da dívida</span>
@@ -1988,7 +2073,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                       <DeltaField label="Fatura cartão crédito (R$)" value={delta(custoFixoFaturaCartao, lastCustoFixoFaturaCartao)} />
                     </div>
                   </div>
-                  <Separator />
+                  <Separator className="my-1" />
                   <DeltaField label="Outros fixos (R$)" value={delta(custoFixoOutrosPreview, lastCustoFixoOutrosPreview)} />
                 </CardContent>
               </Card>
@@ -2029,7 +2114,7 @@ export default function AdminFinanceiroFechamentoMensal() {
         </Card>
       </Form>
 
-      <Separator />
+      <Separator className="my-1" />
 
       <section className="space-y-4">
         <h3 className="font-semibold">Fechamentos recentes</h3>
@@ -2060,7 +2145,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                   <span>Cartão: {formatMoneyString(c.taxaCartaoAmount, 2)}</span>
                   <span>Marketplace: {formatMoneyString(c.taxaMarketplaceAmount, 2)}</span>
                   {c.notes && (
-                    <p className="col-span-2 text-[11px] text-muted-foreground leading-relaxed">
+                    <p className="col-span-2 text-xs text-muted-foreground leading-relaxed">
                       <span className="font-semibold text-foreground">Anotações:</span> {c.notes}
                     </p>
                   )}
