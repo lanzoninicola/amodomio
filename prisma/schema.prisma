@@ -491,45 +491,49 @@ model FinancialDailyGoalSettings {
 
   targetProfitPerc Float @default(0) @map("target_profit_perc")
 
-  // % contribuição da receita bruta por dia da semana
-  participacaoDia01Perc Float @default(0) @map("participacao_dia_01_perc") // Quarta
-  participacaoDia02Perc Float @default(0) @map("participacao_dia_02_perc") // Quinta
-  participacaoDia03Perc Float @default(0) @map("participacao_dia_03_perc") // Sexta
-  participacaoDia04Perc Float @default(0) @map("participacao_dia_04_perc") // Sábado
-  participacaoDia05Perc Float @default(0) @map("participacao_dia_05_perc") // Domingo
+  // % sales distribution by weekday
+  salesDistributionPctDay01 Float @default(0) @map("sales_distribution_pct_day_01") // Quarta
+  salesDistributionPctDay02 Float @default(0) @map("sales_distribution_pct_day_02") // Quinta
+  salesDistributionPctDay03 Float @default(0) @map("sales_distribution_pct_day_03") // Sexta
+  salesDistributionPctDay04 Float @default(0) @map("sales_distribution_pct_day_04") // Sábado
+  salesDistributionPctDay05 Float @default(0) @map("sales_distribution_pct_day_05") // Domingo
+
+  @@map("financial_daily_goal_settings")
 }
 
 model FinancialDailyGoal {
   id String @id @default(uuid())
 
-  financialSummaryId String           @map("financial_summary_id")
-  financialSummary   FinancialSummary @relation(fields: [financialSummaryId], references: [id])
+  financialSummaryId String?           @map("financial_summary_id")
+  financialSummary   FinancialSummary? @relation(fields: [financialSummaryId], references: [id])
 
   // NOVO: apenas um registro "válido" por vez
   isActive Boolean @default(true) @map("is_active")
 
   targetProfitPerc Float @default(0) @map("target_profit_perc")
 
-  participacaoDia01Perc Float @default(0) @map("participacao_dia_01_perc")
-  participacaoDia02Perc Float @default(0) @map("participacao_dia_02_perc")
-  participacaoDia03Perc Float @default(0) @map("participacao_dia_03_perc")
-  participacaoDia04Perc Float @default(0) @map("participacao_dia_04_perc")
-  participacaoDia05Perc Float @default(0) @map("participacao_dia_05_perc")
+  salesDistributionPctDay01 Float @default(0) @map("sales_distribution_pct_day_01")
+  salesDistributionPctDay02 Float @default(0) @map("sales_distribution_pct_day_02")
+  salesDistributionPctDay03 Float @default(0) @map("sales_distribution_pct_day_03")
+  salesDistributionPctDay04 Float @default(0) @map("sales_distribution_pct_day_04")
+  salesDistributionPctDay05 Float @default(0) @map("sales_distribution_pct_day_05")
 
-  minimumGoalDia01Amount Float @default(0) @map("minimum_goal_dia_01_amount")
-  minimumGoalDia02Amount Float @default(0) @map("minimum_goal_dia_02_amount")
-  minimumGoalDia03Amount Float @default(0) @map("minimum_goal_dia_03_amount")
-  minimumGoalDia04Amount Float @default(0) @map("minimum_goal_dia_04_amount")
-  minimumGoalDia05Amount Float @default(0) @map("minimum_goal_dia_05_amount")
+  minSalesGoalAmountDia01 Float @default(0) @map("min_sales_goal_amount_dia_01")
+  minSalesGoalAmountDia02 Float @default(0) @map("min_sales_goal_amount_dia_02")
+  minSalesGoalAmountDia03 Float @default(0) @map("min_sales_goal_amount_dia_03")
+  minSalesGoalAmountDia04 Float @default(0) @map("min_sales_goal_amount_dia_04")
+  minSalesGoalAmountDia05 Float @default(0) @map("min_sales_goal_amount_dia_05")
 
-  targetProfitDia01Amount Float @default(0) @map("target_profit_dia_01_amount")
-  targetProfitDia02Amount Float @default(0) @map("target_profit_dia_02_amount")
-  targetProfitDia03Amount Float @default(0) @map("target_profit_dia_03_amount")
-  targetProfitDia04Amount Float @default(0) @map("target_profit_dia_04_amount")
-  targetProfitDia05Amount Float @default(0) @map("target_profit_dia_05_amount")
+  targetSalesGoalAmountDia01 Float @default(0) @map("target_sales_goal_amount_dia_01")
+  targetSalesGoalAmountDia02 Float @default(0) @map("target_sales_goal_amount_dia_02")
+  targetSalesGoalAmountDia03 Float @default(0) @map("target_sales_goal_amount_dia_03")
+  targetSalesGoalAmountDia04 Float @default(0) @map("target_sales_goal_amount_dia_04")
+  targetSalesGoalAmountDia05 Float @default(0) @map("target_sales_goal_amount_dia_05")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
+
+  kdsDailyOrders KdsDailyOrder[]
 
   // Índices
   // Se você usa isActive no loader:
@@ -1166,8 +1170,8 @@ model KdsDailyOrder {
   /// Total dos pedidos do dia (soma de orderAmount dos detalhes)
   totOrdersAmount Decimal @default(0) @map("tot_orders_amount") @db.Decimal(10, 2)
 
-  minimumGoalProfitAmount Decimal @default(0) @map("minimum_goal_profit_amount") @db.Decimal(10, 2)
-  targetGoalProfitAmount  Decimal @default(0) @map("target_goal_profit_amount") @db.Decimal(10, 2)
+  financialDailyGoalId String?             @map("financial_daily_goal_id")
+  financialDailyGoal   FinancialDailyGoal? @relation(fields: [financialDailyGoalId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -1181,6 +1185,7 @@ model KdsDailyOrder {
   /// Um cabeçalho por dia
   @@unique([dateInt])
   @@index([dateInt])
+  @@index([financialDailyGoalId])
   @@map("kds_daily_orders")
 }
 

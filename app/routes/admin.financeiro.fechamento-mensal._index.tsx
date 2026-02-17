@@ -2,7 +2,7 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { Form, Link, useActionData, useLoaderData, useNavigation, useSubmit } from "@remix-run/react";
-import { Loader2, TrendingUp, TrendingDown, Minus, Edit } from "lucide-react";
+import { Loader2, TrendingUp, TrendingDown, Minus, Edit, ChevronDown } from "lucide-react";
 import * as React from "react";
 
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,8 @@ import { Separator } from "@/components/ui/separator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 import prismaClient from "~/lib/prisma/client.server";
 import { DecimalInput } from "~/components/inputs/inputs";
@@ -19,6 +21,7 @@ import { FinancialMonthlyClose } from "@prisma/client";
 import { computeNetRevenueAmount } from "~/domain/finance/compute-net-revenue-amount";
 import { useToast } from "~/components/ui/use-toast";
 import { calcMonthlyCloseTotals } from "~/domain/finance/calc-monthly-close-totals";
+import { getMarginContribStatus } from "~/domain/finance/get-margin-contrib-status";
 
 type LoaderData = {
   closes: FinancialMonthlyClose[];
@@ -263,6 +266,65 @@ function FieldNote({ children }: { children?: React.ReactNode }) {
   return <p className="min-h-[16px] text-xs text-muted-foreground truncate">{children ?? "\u00A0"}</p>;
 }
 
+function FieldContainer({
+  label,
+  note,
+  children,
+  className = "flex flex-col gap-2",
+}: {
+  label: string;
+  note?: React.ReactNode;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={className}>
+      <Label>{label}</Label>
+      {children}
+      <FieldNote>{note}</FieldNote>
+    </div>
+  );
+}
+
+function EditableField({
+  label,
+  name,
+  value,
+  onValueChange,
+  fractionDigits = 2,
+  note,
+  disabled = false,
+  readOnly = false,
+  className = "w-full text-right border-2 border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 hover:border-slate-300 font-mono",
+  keyValue,
+}: {
+  label: string;
+  name: string;
+  value: number;
+  onValueChange?: (value: number) => void;
+  fractionDigits?: number;
+  note?: string;
+  disabled?: boolean;
+  readOnly?: boolean;
+  className?: string;
+  keyValue?: string;
+}) {
+  return (
+    <FieldContainer label={label} note={note}>
+      <DecimalInput
+        key={keyValue}
+        name={name}
+        defaultValue={value}
+        fractionDigits={fractionDigits}
+        className={className}
+        onValueChange={onValueChange}
+        disabled={disabled}
+        readOnly={readOnly}
+      />
+    </FieldContainer>
+  );
+}
+
 function ReadonlyField({
   label,
   value,
@@ -279,8 +341,7 @@ function ReadonlyField({
   const comparisonFieldClass =
     "w-full border border-slate-100 bg-slate-50 text-slate-600 font-mono text-base cursor-not-allowed shadow-none";
   return (
-    <div className="flex flex-col gap-2">
-      <Label>{label}</Label>
+    <FieldContainer label={label} note={note}>
       <DecimalInput
         defaultValue={value}
         fractionDigits={fractionDigits}
@@ -288,8 +349,7 @@ function ReadonlyField({
         disabled
         readOnly
       />
-      <FieldNote>{note}</FieldNote>
-    </div>
+    </FieldContainer>
   );
 }
 
@@ -309,8 +369,7 @@ function DeltaField({
   const deltaTextTone =
     value > 0 ? "text-emerald-700/90" : value < 0 ? "text-red-700/90" : "text-slate-500";
   return (
-    <div className="flex flex-col gap-2">
-      <Label>{label}</Label>
+    <FieldContainer label={label} note={note}>
       {percent ? (
         <div
           className={`h-10 rounded-md border border-muted bg-muted/40 px-3 flex items-center justify-end font-mono text-base ${deltaTextTone}`}
@@ -326,8 +385,7 @@ function DeltaField({
           readOnly
         />
       )}
-      <FieldNote>{note}</FieldNote>
-    </div>
+    </FieldContainer>
   );
 }
 
@@ -368,13 +426,148 @@ function KPICard({
   );
 }
 
-function ratePercent(value: number, kind: "margem" | "resultado") {
-  const good = kind === "margem" ? 35 : 15;
-  const warn = kind === "margem" ? 20 : 5;
-  if (value >= good) {
+function CurrentMonthBlock({
+  title,
+  isOpen,
+  onToggle,
+  summary,
+  tone = "blue",
+  children,
+}: {
+  title: string;
+  isOpen: boolean;
+  onToggle: () => void;
+  summary?: React.ReactNode;
+  tone?: "blue" | "slate";
+  children: React.ReactNode;
+}) {
+  const isBlueTone = tone === "blue";
+
+  return (
+    <section className={`rounded-lg border p-2 ${isBlueTone ? "border-blue-200 bg-blue-50/40" : "border-slate-200 bg-slate-100/50"}`}>
+      <button
+        type="button"
+        onClick={onToggle}
+        className={`flex w-full items-center justify-between rounded-md px-2 py-1 text-left ${isBlueTone ? "hover:bg-blue-100/60" : "hover:bg-slate-200/60"}`}
+      >
+        <span className="text-xs font-semibold uppercase tracking-wide text-slate-700">{title}</span>
+        <div className="flex items-center gap-2">
+          {summary ? (
+            <span className={`text-xs font-mono ${isOpen ? "text-slate-500" : "text-slate-800 font-semibold"}`}>
+              {summary}
+            </span>
+          ) : null}
+          <ChevronDown className={`h-4 w-4 text-slate-600 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+        </div>
+      </button>
+      {isOpen ? <div className="pt-2">{children}</div> : null}
+    </section>
+  );
+}
+
+function FormulaHelpModal({
+  title,
+  formulaText,
+  appliedText,
+  badgeLabel,
+  badgeReason,
+  metricValue,
+  ruleBands,
+}: {
+  title: string;
+  formulaText: string;
+  appliedText: string;
+  badgeLabel?: string;
+  badgeReason?: string;
+  metricValue?: string;
+  ruleBands?: string[];
+}) {
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <button
+          type="button"
+          aria-label={`Ver fórmula e aplicação de ${title}`}
+          className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-300 bg-white text-[11px] font-bold text-slate-600 hover:bg-slate-50"
+        >
+          ?
+        </button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle className="text-3xl font-bold text-black">{title}</DialogTitle>
+        </DialogHeader>
+        <div className="text-black">
+          <div className="space-y-1 pb-6">
+            <p className="text-xs font-bold uppercase tracking-wide text-black">Fórmula</p>
+            <p className="font-mono text-lg leading-relaxed text-black">{formulaText.replace(/^Fórmula:\s*/, "")}</p>
+          </div>
+
+          <div className="h-px bg-slate-300" />
+
+          <div className="space-y-1 py-6">
+            <p className="text-xs font-bold uppercase tracking-wide text-black">Aplicação</p>
+            <p className="font-mono text-lg leading-relaxed text-black">{appliedText.replace(/^Aplicação:\s*/, "")}</p>
+          </div>
+
+          {badgeReason ? (
+            <>
+              <div className="h-px bg-slate-300" />
+              <div className="space-y-3 pt-6">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-6">
+                  <div className="space-y-1">
+                    <p className="text-xs font-bold uppercase tracking-wide text-black">Status</p>
+                    {badgeLabel ? (
+                      <span className="inline-flex rounded-full border border-slate-400 px-2 py-0.5 text-xs font-semibold text-black">
+                        {badgeLabel}
+                      </span>
+                    ) : (
+                      <span className="text-sm text-black">-</span>
+                    )}
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs font-bold uppercase tracking-wide text-black">Descrição</p>
+                    <p className="text-base leading-relaxed text-black">{badgeReason}</p>
+                  </div>
+                </div>
+                {metricValue ? (
+                  <p className="text-lg leading-relaxed text-black">
+                    <span className="font-semibold">Valor avaliado:</span> {metricValue}
+                  </p>
+                ) : null}
+                {ruleBands && ruleBands.length > 0 ? (
+                  <div className="pt-1">
+                    <div className="mb-4 h-px bg-slate-300" />
+                    <p className="text-xs font-bold uppercase tracking-wide text-black">Regra de negócio</p>
+                    <ul className="mt-2 space-y-2 text-base leading-relaxed text-black">
+                      {ruleBands.map((band) => (
+                        <li key={band}>{band}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              </div>
+            </>
+          ) : null}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function rateMargemPercent(value: number) {
+  const status = getMarginContribStatus(value);
+  if (!status) {
+    return { label: "Abaixo do ideal", tone: "bad" as StatusTone, text: "Abaixo do ideal." };
+  }
+  return { label: status.label, tone: status.badgeTone as StatusTone, text: status.note };
+}
+
+function rateResultadoPercent(value: number) {
+  if (value >= 15) {
     return { label: "Saudável", tone: "good" as StatusTone, text: "Acima da referência: boa folga." };
   }
-  if (value >= warn) {
+  if (value >= 5) {
     return { label: "Atenção", tone: "warn" as StatusTone, text: "Ok, mas acompanhe custos e receita." };
   }
   return { label: "Crítico", tone: "bad" as StatusTone, text: "Abaixo do ideal: reveja custos/receita." };
@@ -402,10 +595,11 @@ export default function AdminFinanceiroFechamentoMensal() {
   const now = new Date();
   const [referenceMonth, setReferenceMonth] = React.useState<number>(now.getMonth() + 1);
   const [referenceYear, setReferenceYear] = React.useState<number>(now.getFullYear());
+  const [selectedReferenceMonth, setSelectedReferenceMonth] = React.useState<number>(now.getMonth() + 1);
+  const [selectedReferenceYear, setSelectedReferenceYear] = React.useState<number>(now.getFullYear());
 
   const currentDefaults =
-    closes.find((c) => c.referenceMonth === referenceMonth && c.referenceYear === referenceYear) ??
-    closes[0];
+    closes.find((c) => c.referenceMonth === referenceMonth && c.referenceYear === referenceYear);
   const totals = calcMonthlyCloseTotals(currentDefaults);
   const lastClose = React.useMemo(() => {
     if (!currentDefaults) return undefined;
@@ -468,6 +662,17 @@ export default function AdminFinanceiroFechamentoMensal() {
   const [notes, setNotes] = React.useState<string>(currentDefaults?.notes ?? "");
   const [loadStatus, setLoadStatus] = React.useState<"idle" | "loading" | "ok" | "notfound">("idle");
   const [isSwitchingPeriod, setIsSwitchingPeriod] = React.useState(false);
+  const loadFrameRef = React.useRef<number | null>(null);
+  const [currentBlocksOpen, setCurrentBlocksOpen] = React.useState({
+    indicadores: true,
+    receitas: true,
+    custos: true,
+    movimentos: true,
+  });
+
+  const toggleCurrentBlock = React.useCallback((block: keyof typeof currentBlocksOpen) => {
+    setCurrentBlocksOpen((prev) => ({ ...prev, [block]: !prev[block] }));
+  }, []);
 
   const resetFormValues = React.useCallback(() => {
     setReceitaExtratoBanco(0);
@@ -529,27 +734,44 @@ export default function AdminFinanceiroFechamentoMensal() {
     setNotes(close?.notes ?? "");
   }, []);
 
-  const loadSavedValues = React.useCallback((opts?: { resetOnMissing?: boolean }) => {
+  const loadSavedValues = React.useCallback((opts?: { resetOnMissing?: boolean; month?: number; year?: number }) => {
+    if (loadFrameRef.current != null) {
+      cancelAnimationFrame(loadFrameRef.current);
+      loadFrameRef.current = null;
+    }
+
+    const targetMonth = opts?.month ?? referenceMonth;
+    const targetYear = opts?.year ?? referenceYear;
+
     setIsSwitchingPeriod(true);
     setLoadStatus("loading");
 
-    setTimeout(() => {
-      const match = closes.find((c) => c.referenceMonth === referenceMonth && c.referenceYear === referenceYear);
+    loadFrameRef.current = requestAnimationFrame(() => {
+      loadFrameRef.current = null;
+      setReferenceMonth(targetMonth);
+      setReferenceYear(targetYear);
+      const match = closes.find((c) => c.referenceMonth === targetMonth && c.referenceYear === targetYear);
       if (!match) {
         if (opts?.resetOnMissing ?? true) {
           resetFormValues();
         }
         setLoadStatus("notfound");
         setIsSwitchingPeriod(false);
-        setTimeout(() => setLoadStatus("idle"), 1200);
         return;
       }
       applyCloseValues(match);
       setLoadStatus("ok");
       setIsSwitchingPeriod(false);
-      setTimeout(() => setLoadStatus("idle"), 1200);
-    }, 450);
+    });
   }, [applyCloseValues, closes, referenceMonth, referenceYear, resetFormValues]);
+
+  React.useEffect(() => {
+    return () => {
+      if (loadFrameRef.current != null) {
+        cancelAnimationFrame(loadFrameRef.current);
+      }
+    };
+  }, []);
 
   const didInit = React.useRef(false);
   React.useEffect(() => {
@@ -557,16 +779,6 @@ export default function AdminFinanceiroFechamentoMensal() {
     applyCloseValues(currentDefaults);
     didInit.current = true;
   }, [applyCloseValues, currentDefaults]);
-
-  const hasAutoLoaded = React.useRef(false);
-  React.useEffect(() => {
-    if (!didInit.current) return;
-    if (!hasAutoLoaded.current) {
-      hasAutoLoaded.current = true;
-      return;
-    }
-    loadSavedValues({ resetOnMissing: true });
-  }, [loadSavedValues, referenceMonth, referenceYear]);
 
   const receitaBruta = receitaExtratoBanco + receitaDinheiro;
   const taxaCartaoAmountPreview = vendaCartaoAmount > 0 ? (vendaCartaoAmount * taxaCartaoPerc) / 100 : 0;
@@ -594,7 +806,20 @@ export default function AdminFinanceiroFechamentoMensal() {
   const resultadoNaoOperacionalPreview = entradasNaoOperacionais - saidasNaoOperacionais;
   const resultadoLiquidoPreview = (margemContribPreview - custoFixoTotalPreview) + resultadoNaoOperacionalPreview;
   const resultadoLiquidoPercPreview = receitaBruta > 0 ? (resultadoLiquidoPreview / receitaBruta) * 100 : 0;
+  const pontoEquilibrioDenominatorPreview = receitaBruta > 0
+    ? 1 - (custoVariavelTotalPreview / receitaBruta)
+    : 0;
   const coberturaPreview = totals.pontoEquilibrio > 0 ? (totals.receitaBruta / totals.pontoEquilibrio) * 100 : 0;
+  const margemContribFormulaText = "Fórmula: Margem de contribuição = receita bruta - custos variáveis.";
+  const margemContribAppliedText = `Aplicação: ${formatMoneyString(receitaBruta, 2)} - ${formatMoneyString(custoVariavelTotalPreview, 2)} = ${formatMoneyString(margemContribPreview, 2)}.`;
+  const resultadoLiquidoFormulaText = "Fórmula: Resultado líquido = margem de contribuição - custos fixos + ajuste não operacional.";
+  const resultadoLiquidoAppliedText = `Aplicação: ${formatMoneyString(margemContribPreview, 2)} - ${formatMoneyString(custoFixoTotalPreview, 2)} + ${formatMoneyString(resultadoNaoOperacionalPreview, 2)} = ${formatMoneyString(resultadoLiquidoPreview, 2)}.`;
+  const pontoEquilibrioFormulaText = receitaBruta > 0 && pontoEquilibrioDenominatorPreview !== 0
+    ? "Fórmula: Ponto de equilíbrio = custos fixos / (1 - margem de contribuição percentual)."
+    : "Fórmula: Ponto de equilíbrio = custos fixos / (1 - margem de contribuição percentual).";
+  const pontoEquilibrioAppliedText = receitaBruta > 0 && pontoEquilibrioDenominatorPreview !== 0
+    ? `Aplicação: ${formatMoneyString(custoFixoTotalPreview, 2)} ÷ (1 - (${formatMoneyString(custoVariavelTotalPreview, 2)} ÷ ${formatMoneyString(receitaBruta, 2)})) = ${formatMoneyString(totals.pontoEquilibrio, 2)}.`
+    : "Aplicação: informe receita bruta e custos variáveis para calcular o ponto de equilíbrio.";
   const diferencaFaturamentoReceitaBruta = faturamentoMensal - receitaBruta;
   const diferencaFaturamentoTone =
     diferencaFaturamentoReceitaBruta === 0
@@ -603,16 +828,16 @@ export default function AdminFinanceiroFechamentoMensal() {
         ? "text-emerald-600"
         : "text-red-600";
 
-  const margemStatus = ratePercent(totals.margemContribPerc, "margem");
-  const resultadoStatus = ratePercent(totals.resultadoLiquidoPercBruta, "resultado");
+  const margemStatus = rateMargemPercent(totals.margemContribPerc);
+  const resultadoStatus = rateResultadoPercent(totals.resultadoLiquidoPercBruta);
   const coberturaStatus = rateCobertura(coberturaPreview);
   const custoFixoPercBruta = totals.receitaBruta > 0 ? (totals.custoFixoTotal / totals.receitaBruta) * 100 : 0;
   const custoVariavelPercBruta = totals.receitaBruta > 0 ? (totals.custoVariavelTotal / totals.receitaBruta) * 100 : 0;
   const lastCustoFixoPercBruta = lastTotals.receitaBruta > 0 ? (lastTotals.custoFixoTotal / lastTotals.receitaBruta) * 100 : 0;
   const lastCustoVariavelPercBruta = lastTotals.receitaBruta > 0 ? (lastTotals.custoVariavelTotal / lastTotals.receitaBruta) * 100 : 0;
   const lastCoberturaPerc = lastTotals.pontoEquilibrio > 0 ? (lastTotals.receitaBruta / lastTotals.pontoEquilibrio) * 100 : 0;
-  const lastMargemStatus = ratePercent(lastTotals.margemContribPerc, "margem");
-  const lastResultadoStatus = ratePercent(lastTotals.resultadoLiquidoPercBruta, "resultado");
+  const lastMargemStatus = rateMargemPercent(lastTotals.margemContribPerc);
+  const lastResultadoStatus = rateResultadoPercent(lastTotals.resultadoLiquidoPercBruta);
   const lastCoberturaStatus = rateCobertura(lastCoberturaPerc);
   const hasLastClose = Boolean(lastClose);
   const lastFaturamentoMensal = (lastClose as any)?.faturamentoMensalAmount ?? 0;
@@ -673,8 +898,9 @@ export default function AdminFinanceiroFechamentoMensal() {
   ) => <FieldNote>{opts?.note}</FieldNote>;
   const isLoadingData = loadStatus === "loading";
   const formHidden = isLoadingData || isSwitchingPeriod;
+  const hasPendingPeriodChange = selectedReferenceMonth !== referenceMonth || selectedReferenceYear !== referenceYear;
   const loadStatusMeta = {
-    idle: { label: "Pronto para carregar", tone: "muted" as const },
+    idle: { label: "Selecione mês/ano e carregue", tone: "muted" as const },
     loading: { label: "Carregando dados...", tone: "blue" as const },
     ok: { label: "Valores carregados", tone: "green" as const },
     notfound: { label: "Nenhum fechamento para este período", tone: "amber" as const },
@@ -734,6 +960,16 @@ export default function AdminFinanceiroFechamentoMensal() {
     });
   }, [monthlyCloseRepoMissing, toast]);
 
+  const handleLoadPeriod = React.useCallback(() => {
+    if (isSwitchingPeriod) return;
+    if (!hasPendingPeriodChange) return;
+    loadSavedValues({
+      resetOnMissing: true,
+      month: selectedReferenceMonth,
+      year: selectedReferenceYear,
+    });
+  }, [hasPendingPeriodChange, isSwitchingPeriod, loadSavedValues, selectedReferenceMonth, selectedReferenceYear]);
+
   return (
     <div className="space-y-6 mb-12">
       <Form
@@ -742,6 +978,8 @@ export default function AdminFinanceiroFechamentoMensal() {
         ref={formRef}
       >
         <input type="hidden" name="intent" value="save" />
+        <input type="hidden" name="referenceMonth" value={referenceMonth} />
+        <input type="hidden" name="referenceYear" value={referenceYear} />
         {formHidden && (
           <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
             <div className="h-full w-1/3 animate-pulse bg-foreground/70" />
@@ -756,7 +994,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                 <div className="flex flex-wrap items-baseline gap-2">
                   <span className="text-2xl font-semibold">{currentPeriodLabel}</span>
                   <span className="rounded-full bg-background px-2 py-1 text-xs font-medium text-muted-foreground">
-                    Troque mês/ano abaixo para recalcular
+                    Selecione mês/ano e clique em carregar dados
                   </span>
                 </div>
               </div>
@@ -777,38 +1015,55 @@ export default function AdminFinanceiroFechamentoMensal() {
                 </div>
               )}
             </div>
-            <div className="flex flex-col gap-3 md:grid md:grid-cols-8 md:items-center ">
-              <div className="grid grid-cols-1 md:grid-cols-8 gap-3 items-end md:col-span-6">
+            <div className="flex flex-col gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-8 gap-3 items-end">
                 <div className="flex flex-col gap-1 col-span-2">
                   <Label>Mês</Label>
-                  <select
-                    name="referenceMonth"
-                    value={referenceMonth}
-                    onChange={(e) => setReferenceMonth(Number(e.target.value))}
-                    className="h-11 rounded-md border bg-background px-3 text-sm shadow-sm transition focus-visible:border-foreground"
+                  <Select
+                    value={String(selectedReferenceMonth)}
+                    onValueChange={(value) => setSelectedReferenceMonth(Number(value))}
                   >
-                    {MONTH_OPTIONS.map((m) => (
-                      <option key={m.value} value={m.value}>{m.label}</option>
-                    ))}
-                  </select>
+                    <SelectTrigger className="h-11 bg-background px-3 text-sm shadow-sm">
+                      <SelectValue placeholder="Selecione o mês" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {MONTH_OPTIONS.map((m) => (
+                        <SelectItem key={m.value} value={String(m.value)}>
+                          {m.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="flex flex-col gap-1 col-span-1">
                   <Label>Ano</Label>
                   <input
-                    name="referenceYear"
                     type="number"
                     className="h-11 rounded-md border bg-background px-3 text-sm shadow-sm transition focus-visible:border-foreground"
-                    value={referenceYear}
-                    onChange={(e) => setReferenceYear(Number(e.target.value))}
+                    value={selectedReferenceYear}
+                    onChange={(e) => setSelectedReferenceYear(Number(e.target.value))}
                     min={2020}
                   />
                 </div>
+                <div className="flex flex-col gap-1 col-span-2">
+                  <div className="text-xs font-medium text-slate-600 opacity-0">Carregar</div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleLoadPeriod}
+                    disabled={!hasPendingPeriodChange || isSwitchingPeriod}
+                    className="h-11 w-full gap-2 border-blue-200 bg-blue-50 text-blue-900 hover:bg-blue-100 hover:text-blue-950 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
+                  >
+                    {isSwitchingPeriod && <Loader2 className="h-4 w-4 animate-spin" />}
+                    {isSwitchingPeriod ? "Carregando..." : "Carregar dados"}
+                  </Button>
+                </div>
               </div>
-              <Badge variant="secondary" className={`flex items-center gap-2 px-3 py-2 text-xs font-medium md:col-span-2 ${loadToneClass}`}>
+              <Badge variant="secondary" className={`w-fit justify-center md:justify-start flex items-center gap-2 px-3 py-2 text-xs font-medium ${loadToneClass}`}>
                 {isLoadingData && <Loader2 className="h-4 w-4 animate-spin" />}
                 {loadStatusMeta[loadStatus].label}
               </Badge>
-              <div className="md:col-span-8 flex justify-end">
+              <div className="flex justify-end">
                 <Button asChild variant="outline" size="sm">
                   <Link to="/admin/financeiro/fechamento-mensal/visualizar">
                     Ver visão anual de fechamentos
@@ -837,7 +1092,7 @@ export default function AdminFinanceiroFechamentoMensal() {
             <KPICard
               label="Margem Contribuição"
               value={`${totals.margemContribPerc.toFixed(2)}%`}
-              tone={totals.margemContribPerc >= 35 ? "positive" : totals.margemContribPerc >= 20 ? "neutral" : "negative"}
+              tone={getMarginContribStatus(totals.margemContribPerc)?.kpiTone ?? "negative"}
             />
             <KPICard
               label="Ponto Equilíbrio"
@@ -855,6 +1110,13 @@ export default function AdminFinanceiroFechamentoMensal() {
               <p className="text-xs text-slate-500">Somente leitura para comparação.</p>
             </div>
 
+            <CurrentMonthBlock
+              title="Indicadores principais"
+              isOpen={currentBlocksOpen.indicadores}
+              onToggle={() => toggleCurrentBlock("indicadores")}
+              summary={formatMoneyString(hasLastClose ? lastTotals.resultadoLiquido : 0, 2)}
+              tone="slate"
+            >
             <div className="grid grid-cols-1 gap-3">
               <Card className="rounded-lg border border-slate-200 bg-white/90 shadow-none">
                 <CardHeader className="space-y-2">
@@ -888,7 +1150,7 @@ export default function AdminFinanceiroFechamentoMensal() {
               <Card className="rounded-lg border border-slate-200 bg-white/90 shadow-none">
                 <CardHeader className="space-y-2">
                   <div className={summaryHeaderGridClass}>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-col items-start gap-1">
                       <CardTitle className="text-xs uppercase tracking-wide text-slate-900">
                         Margem de contribuição
                       </CardTitle>
@@ -917,7 +1179,7 @@ export default function AdminFinanceiroFechamentoMensal() {
               <Card className="rounded-lg border border-slate-200 bg-white/90 shadow-none">
                 <CardHeader className="space-y-2">
                   <div className={summaryHeaderGridClass}>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-col items-start gap-1">
                       <CardTitle className="text-xs uppercase tracking-wide text-slate-900">
                         Resultado líquido
                       </CardTitle>
@@ -950,7 +1212,7 @@ export default function AdminFinanceiroFechamentoMensal() {
               <Card className="rounded-lg border border-slate-200 bg-white/90 shadow-none">
                 <CardHeader className="space-y-2">
                   <div className={summaryHeaderGridClass}>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-col items-start gap-1">
                       <CardTitle className="text-xs uppercase tracking-wide text-slate-900">
                         Ponto de equilíbrio
                       </CardTitle>
@@ -971,12 +1233,20 @@ export default function AdminFinanceiroFechamentoMensal() {
                     </div>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Receita de caixa mínima para zerar lucro. Cobertura mostra o quanto a receita atual alcança do PE.
+                    Receita bruta mínima para zerar lucro. Cobertura mostra o quanto a receita atual alcança do PE.
                   </p>
                 </CardHeader>
               </Card>
             </div>
+            </CurrentMonthBlock>
 
+            <CurrentMonthBlock
+              title="Receitas"
+              isOpen={currentBlocksOpen.receitas}
+              onToggle={() => toggleCurrentBlock("receitas")}
+              summary={`${formatMoneyString(lastTotals.receitaBruta, 2)} (${formatMoneyString(lastTotals.receitaLiquida, 2)})`}
+              tone="slate"
+            >
             <Card>
               <CardHeader className="flex flex-col gap-1">
                 <div className="flex items-center justify-between">
@@ -1033,7 +1303,15 @@ export default function AdminFinanceiroFechamentoMensal() {
                 <ReadonlyField label="Receita líquida (R$)" value={lastTotals.receitaLiquida} muted={false} />
               </CardContent>
             </Card>
+            </CurrentMonthBlock>
 
+            <CurrentMonthBlock
+              title="Custos"
+              isOpen={currentBlocksOpen.custos}
+              onToggle={() => toggleCurrentBlock("custos")}
+              summary={formatMoneyString(lastTotals.custoFixoTotal + lastTotals.custoVariavelTotal, 2)}
+              tone="slate"
+            >
             <div className="grid grid-cols-1 gap-4">
               <Card>
                 <CardHeader className="flex flex-col gap-1">
@@ -1117,7 +1395,15 @@ export default function AdminFinanceiroFechamentoMensal() {
                 </CardContent>
               </Card>
             </div>
+            </CurrentMonthBlock>
 
+            <CurrentMonthBlock
+              title="Movimentos não operacionais"
+              isOpen={currentBlocksOpen.movimentos}
+              onToggle={() => toggleCurrentBlock("movimentos")}
+              summary={formatMoneyString(lastResultadoNaoOperacional, 2)}
+              tone="slate"
+            >
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-semibold">Movimentos não operacionais</CardTitle>
@@ -1131,6 +1417,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                 <ReadonlyField label="Impacto no resultado (R$)" value={lastResultadoNaoOperacional} />
               </CardContent>
             </Card>
+            </CurrentMonthBlock>
           </div>
 
           <div className="space-y-4 xl:col-span-4 rounded-lg border-2 border-blue-200 bg-white p-3 shadow-md ring-1 ring-blue-100">
@@ -1153,6 +1440,12 @@ export default function AdminFinanceiroFechamentoMensal() {
               </div>
             </div>
 
+        <CurrentMonthBlock
+          title="Indicadores principais"
+          isOpen={currentBlocksOpen.indicadores}
+          onToggle={() => toggleCurrentBlock("indicadores")}
+          summary={formatMoneyString(resultadoLiquidoPreview, 2)}
+        >
         <div className="grid grid-cols-1 gap-3">
           <Card className="rounded-lg border border-blue-100 bg-white shadow-sm">
             <CardHeader className="space-y-2">
@@ -1186,10 +1479,26 @@ export default function AdminFinanceiroFechamentoMensal() {
           <Card className="rounded-lg border border-blue-100 bg-white shadow-sm">
             <CardHeader className="space-y-2">
               <div className={summaryHeaderGridClass}>
-                <div className="flex items-center gap-2">
-                  <CardTitle className="text-xs uppercase tracking-wide text-slate-900">
-                    Margem de contribuição
-                  </CardTitle>
+                <div className="flex flex-col items-start gap-1">
+                  <div className="flex items-center gap-1.5">
+                    <CardTitle className="text-xs uppercase tracking-wide text-slate-900">
+                      Margem de contribuição
+                    </CardTitle>
+                    <FormulaHelpModal
+                      title="Margem de contribuição"
+                      formulaText={margemContribFormulaText}
+                      appliedText={margemContribAppliedText}
+                      badgeLabel={margemStatus.label}
+                      badgeReason={margemStatus.text}
+                      metricValue={`${totals.margemContribPerc.toFixed(2)}% da receita bruta`}
+                      ruleBands={[
+                        "Excelente: acima de 60%",
+                        "Zona saudável: de 50% a 60%",
+                        "Operação sensível: de 45% a 49,99%",
+                        "Abaixo do ideal: abaixo de 45%",
+                      ]}
+                    />
+                  </div>
                   <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${badgeClasses(margemStatus.tone)}`}>
                     {badgeIcon(margemStatus.tone)}
                     {margemStatus.label}
@@ -1215,10 +1524,25 @@ export default function AdminFinanceiroFechamentoMensal() {
           <Card className="rounded-lg border border-blue-100 bg-white shadow-sm">
             <CardHeader className="space-y-2">
               <div className={summaryHeaderGridClass}>
-                <div className="flex items-center gap-2">
-                  <CardTitle className="text-xs uppercase tracking-wide text-slate-900">
-                    Resultado líquido
-                  </CardTitle>
+                <div className="flex flex-col items-start gap-1">
+                  <div className="flex items-center gap-1.5">
+                    <CardTitle className="text-xs uppercase tracking-wide text-slate-900">
+                      Resultado líquido
+                    </CardTitle>
+                    <FormulaHelpModal
+                      title="Resultado líquido"
+                      formulaText={resultadoLiquidoFormulaText}
+                      appliedText={resultadoLiquidoAppliedText}
+                      badgeLabel={resultadoStatus.label}
+                      badgeReason={resultadoStatus.text}
+                      metricValue={`${totals.resultadoLiquidoPercBruta.toFixed(2)}% da receita bruta`}
+                      ruleBands={[
+                        "Saudável: 15% ou mais",
+                        "Atenção: de 5% a 14,99%",
+                        "Crítico: abaixo de 5%",
+                      ]}
+                    />
+                  </div>
                   <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${badgeClasses(resultadoStatus.tone)}`}>
                     {badgeIcon(resultadoStatus.tone)}
                     {resultadoStatus.label}
@@ -1248,10 +1572,25 @@ export default function AdminFinanceiroFechamentoMensal() {
           <Card className="rounded-lg border border-blue-100 bg-white shadow-sm">
             <CardHeader className="space-y-2">
               <div className={summaryHeaderGridClass}>
-                <div className="flex items-center gap-2">
-                  <CardTitle className="text-xs uppercase tracking-wide text-slate-900">
-                    Ponto de equilíbrio
-                  </CardTitle>
+                <div className="flex flex-col items-start gap-1">
+                  <div className="flex items-center gap-1.5">
+                    <CardTitle className="text-xs uppercase tracking-wide text-slate-900">
+                      Ponto de equilíbrio
+                    </CardTitle>
+                    <FormulaHelpModal
+                      title="Ponto de equilíbrio"
+                      formulaText={pontoEquilibrioFormulaText}
+                      appliedText={pontoEquilibrioAppliedText}
+                      badgeLabel={coberturaStatus.label}
+                      badgeReason={coberturaStatus.text}
+                      metricValue={`${coberturaPreview.toFixed(2)}% de cobertura`}
+                      ruleBands={[
+                        "Coberto: 110% ou mais",
+                        "No limite: de 90% a 109,99%",
+                        "Descoberto: abaixo de 90%",
+                      ]}
+                    />
+                  </div>
                   <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${badgeClasses(coberturaStatus.tone)}`}>
                     {badgeIcon(coberturaStatus.tone)}
                     {coberturaStatus.label}
@@ -1271,14 +1610,20 @@ export default function AdminFinanceiroFechamentoMensal() {
                 </div>
               </div>
               <p className="text-xs text-muted-foreground">
-                Receita de caixa mínima para zerar lucro. Cobertura mostra o quanto a receita atual alcança do PE.
+                Receita bruta mínima para zerar lucro. Cobertura mostra o quanto a receita atual alcança do PE.
               </p>
             </CardHeader>
           </Card>
         </div>
+        </CurrentMonthBlock>
 
         <>
-
+            <CurrentMonthBlock
+              title="Receitas"
+              isOpen={currentBlocksOpen.receitas}
+              onToggle={() => toggleCurrentBlock("receitas")}
+              summary={`${formatMoneyString(receitaBruta, 2)} (${formatMoneyString(receitaLiquidaPreview, 2)})`}
+            >
             <div className="grid grid-cols-1 gap-4">
               <Card>
                 <CardHeader className="flex flex-col gap-1">
@@ -1298,28 +1643,18 @@ export default function AdminFinanceiroFechamentoMensal() {
 
                 </CardHeader>
                 <CardContent className="grid grid-cols-1 gap-4">
-                  <div className="flex flex-col gap-2">
-                    <Label>Receita extrato banco (R$)</Label>
-                    <DecimalInput
-                      name="receitaExtratoBancoAmount"
-                      defaultValue={receitaExtratoBanco}
-                      fractionDigits={2}
-                      className="w-full text-right border-2 border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 hover:border-slate-300 font-mono"
-                      onValueChange={setReceitaExtratoBanco}
-                    />
-                    {renderFieldDiff(lastReceitaBase.extrato, receitaExtratoBanco)}
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <Label>Receita dinheiro (R$)</Label>
-                    <DecimalInput
-                      name="receitaDinheiroAmount"
-                      defaultValue={receitaDinheiro}
-                      fractionDigits={2}
-                      className="w-full text-right border-2 border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 hover:border-slate-300 font-mono"
-                      onValueChange={setReceitaDinheiro}
-                    />
-                    {renderFieldDiff(lastReceitaBase.dinheiro, receitaDinheiro)}
-                  </div>
+                  <EditableField
+                    label="Receita extrato banco (R$)"
+                    name="receitaExtratoBancoAmount"
+                    value={receitaExtratoBanco}
+                    onValueChange={setReceitaExtratoBanco}
+                  />
+                  <EditableField
+                    label="Receita dinheiro (R$)"
+                    name="receitaDinheiroAmount"
+                    value={receitaDinheiro}
+                    onValueChange={setReceitaDinheiro}
+                  />
                   <div>
                     <Separator className="my-1" />
                   </div>
@@ -1337,9 +1672,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                       className="w-full text-right border-2 border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 hover:border-slate-300 font-mono"
                       onValueChange={setFaturamentoMensal}
                     />
-                    {renderFieldDiff(lastFaturamentoMensal, faturamentoMensal, {
-                      note: "Registro manual do faturamento. Não entra nos cálculos.",
-                    })}
+                    <FieldNote>Registro manual do faturamento. Não entra nos cálculos.</FieldNote>
                   </div>
                 </CardContent>
               </Card>
@@ -1357,113 +1690,74 @@ export default function AdminFinanceiroFechamentoMensal() {
 
                 <CardContent className="flex flex-col gap-6">
                   <div className="grid grid-cols-1 items-center gap-x-4 gap-y-3">
-                    <div className="flex flex-col gap-2">
-                      <Label>Taxa Cartão (%)</Label>
-                      <DecimalInput
+                      <EditableField
+                        label="Taxa Cartão (%)"
                         name="taxaCartaoPerc"
-                        defaultValue={taxaCartaoPerc}
-                        fractionDigits={2}
-                        className="w-full text-right border-2 border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 hover:border-slate-300 font-mono"
+                        value={taxaCartaoPerc}
                         onValueChange={setTaxaCartaoPerc}
                       />
-                      {renderFieldDiff(lastTaxaCartaoPerc, taxaCartaoPerc, { asPercent: true })}
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      <Label>Taxa marketplace (%)</Label>
-                      <DecimalInput
+                      <EditableField
+                        label="Taxa marketplace (%)"
                         name="taxaMarketplacePerc"
-                        defaultValue={taxaMarketplacePerc}
-                        fractionDigits={2}
-                        className="w-full text-right border-2 border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 hover:border-slate-300 font-mono"
+                        value={taxaMarketplacePerc}
                         onValueChange={setTaxaMarketplacePerc}
                       />
-                      {renderFieldDiff(lastTaxaMarketplacePerc, taxaMarketplacePerc, { asPercent: true })}
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      <Label>Imposto sobre vendas (%)</Label>
-                      <DecimalInput
-                        key={`imposto-perc-${impostoPercPreview}`}
+                      <EditableField
+                        label="Imposto sobre vendas (%)"
                         name="impostoPercPreview"
-                        defaultValue={impostoPercPreview}
-                        fractionDigits={2}
-                        className="w-full bg-muted text-muted-foreground font-mono"
+                        value={impostoPercPreview}
                         disabled
                         readOnly
+                        className="w-full bg-muted text-muted-foreground font-mono"
+                        keyValue={`imposto-perc-${impostoPercPreview}`}
                       />
-                      {renderFieldDiff(lastImpostoPercPreview, impostoPercPreview, { asPercent: true })}
                       <input type="hidden" name="impostoPerc" value={impostoPercPreview.toFixed(2)} />
                     </div>
-                  </div>
 
                   <Separator className="my-1" />
 
                   <div className="grid grid-cols-1 items-center gap-x-4 gap-y-3">
-                    <div className="flex flex-col gap-2">
-                      <Label>Venda no cartão (R$)</Label>
-                      <DecimalInput
-                        name="vendaCartaoAmount"
-                        defaultValue={vendaCartaoAmount}
-                        fractionDigits={2}
-                        className="w-full text-right border-2 border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 hover:border-slate-300 font-mono"
-                        onValueChange={setVendaCartaoAmount}
-                      />
-                      {renderFieldDiff(lastVendaCartaoAmount, vendaCartaoAmount)}
-                    </div>
-
-                    <div className="flex flex-col">
-                      <Label>Taxa Cartão (R$)</Label>
-                      <DecimalInput
-                        name="taxaCartaoAmountPreview"
-                        defaultValue={taxaCartaoAmountPreview}
-                        fractionDigits={2}
-                        className="w-full bg-muted text-muted-foreground font-mono"
-                        disabled
-                        readOnly
-                      />
-                      {renderFieldDiff(lastTaxaCartaoAmountPreview, taxaCartaoAmountPreview)}
-                    </div>
+                    <EditableField
+                      label="Venda no cartão (R$)"
+                      name="vendaCartaoAmount"
+                      value={vendaCartaoAmount}
+                      onValueChange={setVendaCartaoAmount}
+                    />
+                    <EditableField
+                      label="Taxa Cartão (R$)"
+                      name="taxaCartaoAmountPreview"
+                      value={taxaCartaoAmountPreview}
+                      disabled
+                      readOnly
+                      className="w-full bg-muted text-muted-foreground font-mono"
+                    />
                   </div>
                   <div className="grid grid-cols-1 items-center gap-x-4 gap-y-3">
-                    <div className="flex flex-col gap-2">
-                      <Label>Venda marketplace (R$)</Label>
-                      <DecimalInput
-                        name="vendaMarketplaceAmount"
-                        defaultValue={vendaMarketplaceAmount}
-                        fractionDigits={2}
-                        className="w-full text-right border-2 border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 hover:border-slate-300 font-mono"
-                        onValueChange={setVendaMarketplaceAmount}
-                      />
-                      {renderFieldDiff(lastVendaMarketplaceAmount, vendaMarketplaceAmount)}
-                    </div>
-
-                    <div className="flex flex-col">
-                      <Label>Taxa marketplace (R$)</Label>
-                      <DecimalInput
-                        name="taxaMarketplaceAmountPreview"
-                        defaultValue={taxaMarketplaceAmountPreview}
-                        fractionDigits={2}
-                        className="w-full bg-muted text-muted-foreground font-mono"
-                        disabled
-                        readOnly
-                      />
-                      {renderFieldDiff(lastTaxaMarketplaceAmountPreview, taxaMarketplaceAmountPreview)}
-                    </div>
+                    <EditableField
+                      label="Venda marketplace (R$)"
+                      name="vendaMarketplaceAmount"
+                      value={vendaMarketplaceAmount}
+                      onValueChange={setVendaMarketplaceAmount}
+                    />
+                    <EditableField
+                      label="Taxa marketplace (R$)"
+                      name="taxaMarketplaceAmountPreview"
+                      value={taxaMarketplaceAmountPreview}
+                      disabled
+                      readOnly
+                      className="w-full bg-muted text-muted-foreground font-mono"
+                    />
                   </div>
                   <div className="grid grid-cols-1 items-center gap-x-4 gap-y-3">
-
-                    <div className="flex flex-col">
-                      <Label>Imposto sobre vendas (R$)</Label>
-                      <DecimalInput
-                        key={`imposto-amount-${impostoAmountPreview}`}
-                        name="impostoAmountPreview"
-                        defaultValue={impostoAmountPreview}
-                        fractionDigits={2}
-                        className="w-full bg-muted text-muted-foreground font-mono"
-                        disabled
-                        readOnly
-                      />
-                      {renderFieldDiff(lastImpostoAmountPreview, impostoAmountPreview)}
-                    </div>
+                    <EditableField
+                      label="Imposto sobre vendas (R$)"
+                      name="impostoAmountPreview"
+                      value={impostoAmountPreview}
+                      disabled
+                      readOnly
+                      className="w-full bg-muted text-muted-foreground font-mono"
+                      keyValue={`imposto-amount-${impostoAmountPreview}`}
+                    />
 
                   </div>
 
@@ -1489,11 +1783,18 @@ export default function AdminFinanceiroFechamentoMensal() {
 
 
             </div>
+            </CurrentMonthBlock>
 
 
 
             <Separator className="my-1" />
 
+            <CurrentMonthBlock
+              title="Custos"
+              isOpen={currentBlocksOpen.custos}
+              onToggle={() => toggleCurrentBlock("custos")}
+              summary={formatMoneyString(custoFixoTotalPreview + custoVariavelTotalPreview, 2)}
+            >
             {/* Custos variáveis logo após receita */}
             <div className="grid grid-cols-1 gap-4">
               <Card>
@@ -1730,7 +2031,14 @@ export default function AdminFinanceiroFechamentoMensal() {
 
 
             </div>
+            </CurrentMonthBlock>
 
+            <CurrentMonthBlock
+              title="Movimentos não operacionais"
+              isOpen={currentBlocksOpen.movimentos}
+              onToggle={() => toggleCurrentBlock("movimentos")}
+              summary={formatMoneyString(resultadoNaoOperacionalPreview, 2)}
+            >
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-semibold">Movimentos não operacionais</CardTitle>
@@ -1780,6 +2088,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                 </div>
               </CardContent>
             </Card>
+            </CurrentMonthBlock>
 
             <div className="flex justify-end">
               <Button type="submit" disabled={saving}>
@@ -1798,6 +2107,13 @@ export default function AdminFinanceiroFechamentoMensal() {
               </p>
               <p className="text-xs text-slate-500">Somente leitura de deltas.</p>
             </div>
+            <CurrentMonthBlock
+              title="Indicadores principais"
+              isOpen={currentBlocksOpen.indicadores}
+              onToggle={() => toggleCurrentBlock("indicadores")}
+              summary={hasLastClose ? formatMoneyString(delta(totals.resultadoLiquido, lastTotals.resultadoLiquido), 2) : "0,00"}
+              tone="slate"
+            >
             <div className="grid grid-cols-1 gap-3">
               <Card className="rounded-lg border border-slate-200 bg-white/90 shadow-none">
                 <CardHeader className="space-y-2">
@@ -1835,7 +2151,7 @@ export default function AdminFinanceiroFechamentoMensal() {
               <Card className="rounded-lg border border-slate-200 bg-white/90 shadow-none">
                 <CardHeader className="space-y-2">
                   <div className={summaryHeaderGridClass}>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-col items-start gap-1">
                       <CardTitle className="text-xs uppercase tracking-wide text-slate-900">
                         Margem de contribuição
                       </CardTitle>
@@ -1868,7 +2184,7 @@ export default function AdminFinanceiroFechamentoMensal() {
               <Card className="rounded-lg border border-slate-200 bg-white/90 shadow-none">
                 <CardHeader className="space-y-2">
                   <div className={summaryHeaderGridClass}>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-col items-start gap-1">
                       <CardTitle className="text-xs uppercase tracking-wide text-slate-900">
                         Resultado líquido
                       </CardTitle>
@@ -1901,7 +2217,7 @@ export default function AdminFinanceiroFechamentoMensal() {
               <Card className="rounded-lg border border-slate-200 bg-white/90 shadow-none">
                 <CardHeader className="space-y-2">
                   <div className={summaryHeaderGridClass}>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-col items-start gap-1">
                       <CardTitle className="text-xs uppercase tracking-wide text-slate-900">
                         Ponto de equilíbrio
                       </CardTitle>
@@ -1926,12 +2242,22 @@ export default function AdminFinanceiroFechamentoMensal() {
                     </div>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Receita de caixa mínima para zerar lucro. Cobertura mostra o quanto a receita atual alcança do PE.
+                    Receita bruta mínima para zerar lucro. Cobertura mostra o quanto a receita atual alcança do PE.
                   </p>
                 </CardHeader>
               </Card>
             </div>
+            </CurrentMonthBlock>
 
+            <CurrentMonthBlock
+              title="Receitas"
+              isOpen={currentBlocksOpen.receitas}
+              onToggle={() => toggleCurrentBlock("receitas")}
+              summary={hasLastClose
+                ? `${formatMoneyString(delta(receitaBruta, lastTotals.receitaBruta), 2)} (${formatMoneyString(delta(receitaLiquidaPreview, lastTotals.receitaLiquida), 2)})`
+                : "0,00 (0,00)"}
+              tone="slate"
+            >
             <Card>
               <CardHeader className="flex flex-col gap-1">
                 <div className="flex items-center justify-between">
@@ -1988,7 +2314,15 @@ export default function AdminFinanceiroFechamentoMensal() {
                 <DeltaField label="Receita líquida (R$)" value={delta(receitaLiquidaPreview, lastTotals.receitaLiquida)} />
               </CardContent>
             </Card>
+            </CurrentMonthBlock>
 
+            <CurrentMonthBlock
+              title="Custos"
+              isOpen={currentBlocksOpen.custos}
+              onToggle={() => toggleCurrentBlock("custos")}
+              summary={hasLastClose ? formatMoneyString(delta(custoFixoTotalEdit + custoVarTotalEdit, lastTotals.custoFixoTotal + lastTotals.custoVariavelTotal), 2) : "0,00"}
+              tone="slate"
+            >
             <div className="grid grid-cols-1 gap-4">
               <Card>
                 <CardHeader className="flex flex-col gap-1">
@@ -2078,7 +2412,15 @@ export default function AdminFinanceiroFechamentoMensal() {
                 </CardContent>
               </Card>
             </div>
+            </CurrentMonthBlock>
 
+            <CurrentMonthBlock
+              title="Movimentos não operacionais"
+              isOpen={currentBlocksOpen.movimentos}
+              onToggle={() => toggleCurrentBlock("movimentos")}
+              summary={hasLastClose ? formatMoneyString(delta(resultadoNaoOperacionalPreview, lastResultadoNaoOperacional), 2) : "0,00"}
+              tone="slate"
+            >
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-semibold">Movimentos não operacionais</CardTitle>
@@ -2092,6 +2434,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                 <DeltaField label="Impacto no resultado (R$)" value={delta(resultadoNaoOperacionalPreview, lastResultadoNaoOperacional)} />
               </CardContent>
             </Card>
+            </CurrentMonthBlock>
           </div>
         </div>
 

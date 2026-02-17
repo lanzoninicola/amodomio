@@ -155,10 +155,15 @@ export function AdminHeader({ urlSegment, slug }: AdminHeaderProps) {
                 setOpenSearch((curr) => !curr);
             }
         };
+        const onOpenNavSearch = () => {
+            setOpenSearch(true);
+        };
 
         window.addEventListener("keydown", onKeyDown);
+        window.addEventListener("admin:open-nav-search", onOpenNavSearch);
         return () => {
             window.removeEventListener("keydown", onKeyDown);
+            window.removeEventListener("admin:open-nav-search", onOpenNavSearch);
         };
     }, []);
 
@@ -190,18 +195,6 @@ export function AdminHeader({ urlSegment, slug }: AdminHeaderProps) {
                         {/* <CommandMenu /> */}
                     </div>
                     <nav className="flex items-center justify-center gap-3 lg:gap-4">
-                        <button
-                            type="button"
-                            onClick={() => setOpenSearch(true)}
-                            className="inline-flex h-9 items-center gap-2 rounded-full border border-slate-200 bg-white/80 px-3 text-xs font-semibold uppercase tracking-[0.16em] text-slate-700 shadow-sm backdrop-blur-md transition hover:border-slate-300 hover:bg-white"
-                            aria-label="Buscar item de menu"
-                        >
-                            <Search size={14} className="text-slate-500" />
-                            <span>Buscar</span>
-                            <kbd className="hidden rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium tracking-normal text-slate-500 sm:inline-block">
-                                ⌘K
-                            </kbd>
-                        </button>
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button

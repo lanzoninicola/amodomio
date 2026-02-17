@@ -268,8 +268,8 @@ function mapGoalForDate(goal: any, dateStr: string): { min: number; target: numb
   const key = map[dow];
   if (!key) return { min: 0, target: 0 };
 
-  const minField = `minimumGoalDia0${key}Amount`;
-  const targetField = `targetProfitDia0${key}Amount`;
+  const minField = `minSalesGoalAmountDia0${key}`;
+  const targetField = `targetSalesGoalAmountDia0${key}`;
 
   const min = Number(goal?.[minField] ?? 0) || 0;
   const target = Number(goal?.[targetField] ?? 0) || 0;
@@ -297,7 +297,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
   const listPromise = listByDate(dateInt);
   const header = await prisma.kdsDailyOrder.findUnique({
     where: { dateInt },
-    select: { id: true, operationStatus: true },
+    select: { id: true, operationStatus: true, financialDailyGoalId: true },
   });
 
   const deliveryZones = await prisma.deliveryZone.findMany({
@@ -357,29 +357,79 @@ export async function loader({ params }: LoaderFunctionArgs) {
   const grossPrevMonthAmount = Number(grossPrevMonthRow._sum.orderAmount ?? 0);
   const marketplaceAmount = Number(marketplaceRow._sum.orderAmount ?? 0);
 
-  // Taxas vigentes (snapshot=false)
-  const fs = await prisma.financialSummary.findFirst({
-    where: { isSnapshot: false },
+  const hasConfiguredRates = (close: {
+    taxaCartaoPerc: number;
+    impostoPerc: number;
+    taxaMarketplacePerc: number;
+  } | null) =>
+    Number(close?.taxaCartaoPerc ?? 0) > 0 ||
+    Number(close?.impostoPerc ?? 0) > 0 ||
+    Number(close?.taxaMarketplacePerc ?? 0) > 0;
+
+  const monthlyCloseRates = await prisma.financialMonthlyClose.findUnique({
+    where: {
+      referenceYear_referenceMonth: {
+        referenceYear: year,
+        referenceMonth: month,
+      },
+    },
     select: { taxaCartaoPerc: true, impostoPerc: true, taxaMarketplacePerc: true },
   });
-  const taxPerc = Number(fs?.impostoPerc ?? 0);       // ex.: 4 para 4%
-  const cardFeePerc = Number(fs?.taxaCartaoPerc ?? 0); // ex.: 3.2 para 3,2%
-  const taxaMarketplacePerc = Number(fs?.taxaMarketplacePerc ?? 0);
 
-  // Meta ativa
-  const activeGoal = await prisma.financialDailyGoal.findFirst({
+  const fallbackMonthlyCloseRates = hasConfiguredRates(monthlyCloseRates)
+    ? monthlyCloseRates
+    : await prisma.financialMonthlyClose.findFirst({
+      where: {
+        AND: [
+          {
+            OR: [
+              { referenceYear: { lt: year } },
+              { referenceYear: year, referenceMonth: { lte: month } },
+            ],
+          },
+          {
+            OR: [
+              { taxaCartaoPerc: { gt: 0 } },
+              { impostoPerc: { gt: 0 } },
+              { taxaMarketplacePerc: { gt: 0 } },
+            ],
+          },
+        ],
+      },
+      orderBy: [{ referenceYear: "desc" }, { referenceMonth: "desc" }],
+      select: { taxaCartaoPerc: true, impostoPerc: true, taxaMarketplacePerc: true },
+    });
+
+  const rates = fallbackMonthlyCloseRates;
+  const taxPerc = Number(rates?.impostoPerc ?? 0); // ex.: 4 para 4%
+  const cardFeePerc = Number(rates?.taxaCartaoPerc ?? 0); // ex.: 3.2 para 3,2%
+  const taxaMarketplacePerc = Number(rates?.taxaMarketplacePerc ?? 0);
+
+  const goalSelect = {
+    minSalesGoalAmountDia01: true,
+    minSalesGoalAmountDia02: true,
+    minSalesGoalAmountDia03: true,
+    minSalesGoalAmountDia04: true,
+    minSalesGoalAmountDia05: true,
+    targetSalesGoalAmountDia01: true,
+    targetSalesGoalAmountDia02: true,
+    targetSalesGoalAmountDia03: true,
+    targetSalesGoalAmountDia04: true,
+    targetSalesGoalAmountDia05: true,
+  } as const;
+
+  // Meta do dia (snapshot via FK no header); fallback para meta ativa.
+  const goalForDay = header?.financialDailyGoalId
+    ? await prisma.financialDailyGoal.findUnique({
+        where: { id: header.financialDailyGoalId },
+        select: goalSelect,
+      })
+    : null;
+  const activeGoal = goalForDay ?? await prisma.financialDailyGoal.findFirst({
     where: { isActive: true },
+    orderBy: { createdAt: "desc" },
     select: {
-      minimumGoalDia01Amount: true,
-      minimumGoalDia02Amount: true,
-      minimumGoalDia03Amount: true,
-      minimumGoalDia04Amount: true,
-      minimumGoalDia05Amount: true,
-      targetProfitDia01Amount: true,
-      targetProfitDia02Amount: true,
-      targetProfitDia03Amount: true,
-      targetProfitDia04Amount: true,
-      targetProfitDia05Amount: true,
+      ...goalSelect,
     },
   });
 
@@ -401,9 +451,9 @@ export async function loader({ params }: LoaderFunctionArgs) {
   else if (netAmount >= goalMinAmount) status = "between";
 
   const pctOfMin =
-    goalMinAmount > 0 ? Math.min(100, (netAmount / goalMinAmount) * 100) : 0;
+    goalMinAmount > 0 ? Math.min(100, (grossAmount / goalMinAmount) * 100) : 0;
   const pctOfTarget =
-    goalTargetAmount > 0 ? Math.min(100, (netAmount / goalTargetAmount) * 100) : 0;
+    goalTargetAmount > 0 ? Math.min(100, (grossAmount / goalTargetAmount) * 100) : 0;
 
   const monthlyCloseRepo = (prisma as any).financialMonthlyClose;
   let costFixedPerc = 0;
