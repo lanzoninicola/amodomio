@@ -28,6 +28,8 @@ function addDaysYMD(ymd: string, delta: number) {
 export async function loader({ params }: LoaderFunctionArgs) {
   const dateStr = isValidYMD(params.date) ? params.date : todayLocalYMD();
   const dateInt = ymdToDateInt(dateStr);
+  const year = Number(dateStr.slice(0, 4));
+  const month = Number(dateStr.slice(5, 7));
 
   const prevDayStr = addDaysYMD(dateStr, -1);
   const prevWeekStr = addDaysYMD(dateStr, -7);
@@ -35,20 +37,59 @@ export async function loader({ params }: LoaderFunctionArgs) {
   const prevDayInt = ymdToDateInt(prevDayStr);
   const prevWeekInt = ymdToDateInt(prevWeekStr);
 
-  const [agg, aggPrev, aggWeek, motoList, finance] = await Promise.all([
+  const [agg, aggPrev, aggWeek, motoList, ratesFromMonthlyClose] = await Promise.all([
     getDailyAggregates(dateInt),
     getDailyAggregates(prevDayInt),
     getDailyAggregates(prevWeekInt),
     listMotoboy(dateInt),
-    prisma.financialSummary.findFirst({
-      where: { isSnapshot: false },
-      select: { taxaCartaoPerc: true, impostoPerc: true, taxaMarketplacePerc: true },
-    }),
+    (async () => {
+      const hasConfiguredRates = (close: {
+        taxaCartaoPerc: number;
+        impostoPerc: number;
+        taxaMarketplacePerc: number;
+      } | null) =>
+        Number(close?.taxaCartaoPerc ?? 0) > 0 ||
+        Number(close?.impostoPerc ?? 0) > 0 ||
+        Number(close?.taxaMarketplacePerc ?? 0) > 0;
+
+      const monthlyCloseRates = await prisma.financialMonthlyClose.findUnique({
+        where: {
+          referenceYear_referenceMonth: {
+            referenceYear: year,
+            referenceMonth: month,
+          },
+        },
+        select: { taxaCartaoPerc: true, impostoPerc: true, taxaMarketplacePerc: true },
+      });
+      if (hasConfiguredRates(monthlyCloseRates)) return monthlyCloseRates;
+
+      return prisma.financialMonthlyClose.findFirst({
+        where: {
+          AND: [
+            {
+              OR: [
+                { referenceYear: { lt: year } },
+                { referenceYear: year, referenceMonth: { lte: month } },
+              ],
+            },
+            {
+              OR: [
+                { taxaCartaoPerc: { gt: 0 } },
+                { impostoPerc: { gt: 0 } },
+                { taxaMarketplacePerc: { gt: 0 } },
+              ],
+            },
+          ],
+        },
+        orderBy: [{ referenceYear: "desc" }, { referenceMonth: "desc" }],
+        select: { taxaCartaoPerc: true, impostoPerc: true, taxaMarketplacePerc: true },
+      });
+    })(),
   ]);
 
-  const taxPerc = Number(finance?.impostoPerc ?? 0);
-  const cardFeePerc = Number(finance?.taxaCartaoPerc ?? 0);
-  const taxaMarketplacePerc = Number(finance?.taxaMarketplacePerc ?? 0);
+  const taxPerc = Number(ratesFromMonthlyClose?.impostoPerc ?? 0);
+  const cardFeePerc = Number(ratesFromMonthlyClose?.taxaCartaoPerc ?? 0);
+  const taxaMarketplacePerc = Number(ratesFromMonthlyClose?.taxaMarketplacePerc ?? 0);
 
   const netAmount = computeNetRevenueAmount({
     receitaBrutaAmount: agg.total,

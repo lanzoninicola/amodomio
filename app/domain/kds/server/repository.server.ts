@@ -2,6 +2,12 @@ import { Prisma } from "@prisma/client";
 import prisma from "~/lib/prisma/client.server";
 import { CHANNELS } from "~/domain/kds/constants";
 export async function ensureHeader(dateInt: number, currentDate: Date) {
+  const activeGoal = await prisma.financialDailyGoal.findFirst({
+    where: { isActive: true },
+    orderBy: { createdAt: "desc" },
+    select: { id: true },
+  });
+
   return prisma.kdsDailyOrder.upsert({
     where: { dateInt },
     update: {},
@@ -9,6 +15,7 @@ export async function ensureHeader(dateInt: number, currentDate: Date) {
       date: currentDate,
       dateInt,
       totOrdersAmount: new Prisma.Decimal(0),
+      financialDailyGoalId: activeGoal?.id ?? null,
     },
     select: { id: true },
   });

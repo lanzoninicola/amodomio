@@ -24,6 +24,33 @@ Documentação da API REST do KDS (criação de pedidos e delivery zones):
 
 - `app/domain/kds/README.md`
 
+## Painel WhatsApp Sem Resposta (Admin)
+
+O painel flutuante de alertas no admin lista conversas que precisam de ação do atendente.
+
+### Regra de exibição
+
+- A lista considera eventos do dia (timezone `America/Sao_Paulo`).
+- Para cada cliente, avalia o último evento registrado.
+- O cliente aparece no painel quando o último evento é `WHATSAPP_SENT` e já passou o tempo mínimo (`DEFAULT_REPLY_WAIT_SECONDS`, hoje `90s`).
+- Se o último evento for `WHATSAPP_RECEIVED`, o cliente não aparece no painel.
+
+### Resposta rápida via Settings
+
+O botão de resposta rápida usa mensagem configurável em `setting`:
+
+- `context=whatsapp-no-response`
+- `name=quick-reply-message`
+
+Compatibilidade legada:
+
+- `context=admin-wpp-alert-panel` (fallback de leitura)
+
+Implementação:
+
+- `app/routes/admin.tsx` (loader/query do painel)
+- `app/routes/api.admin-wpp-alerts.tsx` (ações e leitura da mensagem)
+
 ## Deployment
 
 First, build your app for production:
