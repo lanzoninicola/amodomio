@@ -197,12 +197,6 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
       title: "Financeiro",
       items: [
         {
-          title: "Resumo financeiro",
-          href: "/admin/financeiro/resumo-financeiro",
-          items: [],
-          disabled: false,
-        },
-        {
           title: "Metas financeiras",
           href: "/admin/financeiro/metas",
           items: [],
@@ -215,12 +209,6 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
           disabled: false,
         },
 
-        {
-          title: "Fechamento do dia",
-          href: "/admin/financeiro/fechamento-dia",
-          items: [],
-          disabled: false,
-        },
         {
           title: "Importador",
           href: "/admin/financeiro/importer",

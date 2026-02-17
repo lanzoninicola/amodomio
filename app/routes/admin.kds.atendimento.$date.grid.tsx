@@ -357,14 +357,53 @@ export async function loader({ params }: LoaderFunctionArgs) {
   const grossPrevMonthAmount = Number(grossPrevMonthRow._sum.orderAmount ?? 0);
   const marketplaceAmount = Number(marketplaceRow._sum.orderAmount ?? 0);
 
-  // Taxas vigentes (snapshot=false)
-  const fs = await prisma.financialSummary.findFirst({
-    where: { isSnapshot: false },
+  const hasConfiguredRates = (close: {
+    taxaCartaoPerc: number;
+    impostoPerc: number;
+    taxaMarketplacePerc: number;
+  } | null) =>
+    Number(close?.taxaCartaoPerc ?? 0) > 0 ||
+    Number(close?.impostoPerc ?? 0) > 0 ||
+    Number(close?.taxaMarketplacePerc ?? 0) > 0;
+
+  const monthlyCloseRates = await prisma.financialMonthlyClose.findUnique({
+    where: {
+      referenceYear_referenceMonth: {
+        referenceYear: year,
+        referenceMonth: month,
+      },
+    },
     select: { taxaCartaoPerc: true, impostoPerc: true, taxaMarketplacePerc: true },
   });
-  const taxPerc = Number(fs?.impostoPerc ?? 0);       // ex.: 4 para 4%
-  const cardFeePerc = Number(fs?.taxaCartaoPerc ?? 0); // ex.: 3.2 para 3,2%
-  const taxaMarketplacePerc = Number(fs?.taxaMarketplacePerc ?? 0);
+
+  const fallbackMonthlyCloseRates = hasConfiguredRates(monthlyCloseRates)
+    ? monthlyCloseRates
+    : await prisma.financialMonthlyClose.findFirst({
+      where: {
+        AND: [
+          {
+            OR: [
+              { referenceYear: { lt: year } },
+              { referenceYear: year, referenceMonth: { lte: month } },
+            ],
+          },
+          {
+            OR: [
+              { taxaCartaoPerc: { gt: 0 } },
+              { impostoPerc: { gt: 0 } },
+              { taxaMarketplacePerc: { gt: 0 } },
+            ],
+          },
+        ],
+      },
+      orderBy: [{ referenceYear: "desc" }, { referenceMonth: "desc" }],
+      select: { taxaCartaoPerc: true, impostoPerc: true, taxaMarketplacePerc: true },
+    });
+
+  const rates = fallbackMonthlyCloseRates;
+  const taxPerc = Number(rates?.impostoPerc ?? 0); // ex.: 4 para 4%
+  const cardFeePerc = Number(rates?.taxaCartaoPerc ?? 0); // ex.: 3.2 para 3,2%
+  const taxaMarketplacePerc = Number(rates?.taxaMarketplacePerc ?? 0);
 
   const goalSelect = {
     minSalesGoalAmountDia01: true,

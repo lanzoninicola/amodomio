@@ -16,7 +16,7 @@ import {
 import { SidebarNavigationSection, WebsiteNavigationConfig } from "../types/navigation-types";
 import { Link, useFetcher, useRevalidator } from "@remix-run/react";
 import { cn } from "~/lib/utils";
-import { Loader2, Pin } from "lucide-react";
+import { Loader2, Pin, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "~/components/ui/use-toast";
 
@@ -255,7 +255,22 @@ export function AdminSidebar({ navigationLinks, pinnedHrefs }: AdminSidebarProps
 
   return (
     <Sidebar variant="floating">
-      <SidebarHeader />
+      <SidebarHeader className="px-3 pt-3 pb-2">
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new Event("admin:open-nav-search"))}
+          className="inline-flex h-9 w-full items-center justify-between gap-2 rounded-full border border-slate-200 bg-white/80 px-3 text-xs font-semibold uppercase tracking-[0.16em] text-slate-700 shadow-sm backdrop-blur-md transition hover:border-slate-300 hover:bg-white"
+          aria-label="Buscar item de menu"
+        >
+          <span className="inline-flex items-center gap-2">
+            <Search size={14} className="text-slate-500" />
+            <span>Buscar</span>
+          </span>
+          <kbd className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium tracking-normal text-slate-500">
+            ⌘K
+          </kbd>
+        </button>
+      </SidebarHeader>
       <SidebarContent>
         <div className="px-3 pb-2">
           <button

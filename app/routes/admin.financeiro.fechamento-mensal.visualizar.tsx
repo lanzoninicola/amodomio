@@ -25,6 +25,7 @@ import { useToast } from "@/components/ui/use-toast";
 import prismaClient from "~/lib/prisma/client.server";
 import formatMoneyString from "~/utils/format-money-string";
 import { calcMonthlyCloseTotals } from "~/domain/finance/calc-monthly-close-totals";
+import { getMarginContribStatus } from "~/domain/finance/get-margin-contrib-status";
 
 type LoaderData = {
   selectedYear: number | null;
@@ -546,7 +547,7 @@ function MetricsTable({
                   const isHighlightRow = isMargemRow || isResultadoRow;
                   const numericValue = getNumericValue(rawValue, row.kind);
                   const isNegativeResult = isResultadoRow && numericValue != null && numericValue < 0;
-                  const marginStatus = isMargemRow ? getMarginStatus(inlinePercent) : null;
+                  const marginStatus = isMargemRow ? getMarginContribStatus(inlinePercent) : null;
                   const valueTone = isMargemRow && marginStatus
                     ? marginStatus.valueTone
                     : isNegativeResult
@@ -690,20 +691,6 @@ function inlinePercentForRow(
   if (rowKey === "resultadoLiquido") return close.resultadoLiquidoPercBruta ?? null;
   if (rowKey === "coberturaPe") return close.pontoEquilibrio > 0 ? (close.receitaBruta / close.pontoEquilibrio) * 100 : null;
   return null;
-}
-
-function getMarginStatus(percent: number | null): { valueTone: string; noteTone: string; note: string | null } | null {
-  if (percent == null) return null;
-  if (percent > 60) {
-    return { valueTone: "text-emerald-800", noteTone: "text-emerald-800", note: "Excelente" };
-  }
-  if (percent >= 50) {
-    return { valueTone: "text-foreground", noteTone: "text-foreground", note: "Zona saudável" };
-  }
-  if (percent >= 45) {
-    return { valueTone: "text-amber-700", noteTone: "text-amber-700", note: "Operação sensível — promoções e descontos são arriscados" };
-  }
-  return { valueTone: "text-red-700", noteTone: "text-red-700", note: "Abaixo do ideal" };
 }
 
 function calculateMetricTotals(

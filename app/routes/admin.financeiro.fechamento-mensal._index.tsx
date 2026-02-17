@@ -11,6 +11,8 @@ import { Separator } from "@/components/ui/separator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 import prismaClient from "~/lib/prisma/client.server";
 import { DecimalInput } from "~/components/inputs/inputs";
@@ -19,6 +21,7 @@ import { FinancialMonthlyClose } from "@prisma/client";
 import { computeNetRevenueAmount } from "~/domain/finance/compute-net-revenue-amount";
 import { useToast } from "~/components/ui/use-toast";
 import { calcMonthlyCloseTotals } from "~/domain/finance/calc-monthly-close-totals";
+import { getMarginContribStatus } from "~/domain/finance/get-margin-contrib-status";
 
 type LoaderData = {
   closes: FinancialMonthlyClose[];
@@ -462,13 +465,109 @@ function CurrentMonthBlock({
   );
 }
 
-function ratePercent(value: number, kind: "margem" | "resultado") {
-  const good = kind === "margem" ? 35 : 15;
-  const warn = kind === "margem" ? 20 : 5;
-  if (value >= good) {
+function FormulaHelpModal({
+  title,
+  formulaText,
+  appliedText,
+  badgeLabel,
+  badgeReason,
+  metricValue,
+  ruleBands,
+}: {
+  title: string;
+  formulaText: string;
+  appliedText: string;
+  badgeLabel?: string;
+  badgeReason?: string;
+  metricValue?: string;
+  ruleBands?: string[];
+}) {
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <button
+          type="button"
+          aria-label={`Ver fórmula e aplicação de ${title}`}
+          className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-300 bg-white text-[11px] font-bold text-slate-600 hover:bg-slate-50"
+        >
+          ?
+        </button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle className="text-3xl font-bold text-black">{title}</DialogTitle>
+        </DialogHeader>
+        <div className="text-black">
+          <div className="space-y-1 pb-6">
+            <p className="text-xs font-bold uppercase tracking-wide text-black">Fórmula</p>
+            <p className="font-mono text-lg leading-relaxed text-black">{formulaText.replace(/^Fórmula:\s*/, "")}</p>
+          </div>
+
+          <div className="h-px bg-slate-300" />
+
+          <div className="space-y-1 py-6">
+            <p className="text-xs font-bold uppercase tracking-wide text-black">Aplicação</p>
+            <p className="font-mono text-lg leading-relaxed text-black">{appliedText.replace(/^Aplicação:\s*/, "")}</p>
+          </div>
+
+          {badgeReason ? (
+            <>
+              <div className="h-px bg-slate-300" />
+              <div className="space-y-3 pt-6">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-6">
+                  <div className="space-y-1">
+                    <p className="text-xs font-bold uppercase tracking-wide text-black">Status</p>
+                    {badgeLabel ? (
+                      <span className="inline-flex rounded-full border border-slate-400 px-2 py-0.5 text-xs font-semibold text-black">
+                        {badgeLabel}
+                      </span>
+                    ) : (
+                      <span className="text-sm text-black">-</span>
+                    )}
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs font-bold uppercase tracking-wide text-black">Descrição</p>
+                    <p className="text-base leading-relaxed text-black">{badgeReason}</p>
+                  </div>
+                </div>
+                {metricValue ? (
+                  <p className="text-lg leading-relaxed text-black">
+                    <span className="font-semibold">Valor avaliado:</span> {metricValue}
+                  </p>
+                ) : null}
+                {ruleBands && ruleBands.length > 0 ? (
+                  <div className="pt-1">
+                    <div className="mb-4 h-px bg-slate-300" />
+                    <p className="text-xs font-bold uppercase tracking-wide text-black">Regra de negócio</p>
+                    <ul className="mt-2 space-y-2 text-base leading-relaxed text-black">
+                      {ruleBands.map((band) => (
+                        <li key={band}>{band}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              </div>
+            </>
+          ) : null}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function rateMargemPercent(value: number) {
+  const status = getMarginContribStatus(value);
+  if (!status) {
+    return { label: "Abaixo do ideal", tone: "bad" as StatusTone, text: "Abaixo do ideal." };
+  }
+  return { label: status.label, tone: status.badgeTone as StatusTone, text: status.note };
+}
+
+function rateResultadoPercent(value: number) {
+  if (value >= 15) {
     return { label: "Saudável", tone: "good" as StatusTone, text: "Acima da referência: boa folga." };
   }
-  if (value >= warn) {
+  if (value >= 5) {
     return { label: "Atenção", tone: "warn" as StatusTone, text: "Ok, mas acompanhe custos e receita." };
   }
   return { label: "Crítico", tone: "bad" as StatusTone, text: "Abaixo do ideal: reveja custos/receita." };
@@ -496,10 +595,11 @@ export default function AdminFinanceiroFechamentoMensal() {
   const now = new Date();
   const [referenceMonth, setReferenceMonth] = React.useState<number>(now.getMonth() + 1);
   const [referenceYear, setReferenceYear] = React.useState<number>(now.getFullYear());
+  const [selectedReferenceMonth, setSelectedReferenceMonth] = React.useState<number>(now.getMonth() + 1);
+  const [selectedReferenceYear, setSelectedReferenceYear] = React.useState<number>(now.getFullYear());
 
   const currentDefaults =
-    closes.find((c) => c.referenceMonth === referenceMonth && c.referenceYear === referenceYear) ??
-    closes[0];
+    closes.find((c) => c.referenceMonth === referenceMonth && c.referenceYear === referenceYear);
   const totals = calcMonthlyCloseTotals(currentDefaults);
   const lastClose = React.useMemo(() => {
     if (!currentDefaults) return undefined;
@@ -562,6 +662,7 @@ export default function AdminFinanceiroFechamentoMensal() {
   const [notes, setNotes] = React.useState<string>(currentDefaults?.notes ?? "");
   const [loadStatus, setLoadStatus] = React.useState<"idle" | "loading" | "ok" | "notfound">("idle");
   const [isSwitchingPeriod, setIsSwitchingPeriod] = React.useState(false);
+  const loadFrameRef = React.useRef<number | null>(null);
   const [currentBlocksOpen, setCurrentBlocksOpen] = React.useState({
     indicadores: true,
     receitas: true,
@@ -633,27 +734,44 @@ export default function AdminFinanceiroFechamentoMensal() {
     setNotes(close?.notes ?? "");
   }, []);
 
-  const loadSavedValues = React.useCallback((opts?: { resetOnMissing?: boolean }) => {
+  const loadSavedValues = React.useCallback((opts?: { resetOnMissing?: boolean; month?: number; year?: number }) => {
+    if (loadFrameRef.current != null) {
+      cancelAnimationFrame(loadFrameRef.current);
+      loadFrameRef.current = null;
+    }
+
+    const targetMonth = opts?.month ?? referenceMonth;
+    const targetYear = opts?.year ?? referenceYear;
+
     setIsSwitchingPeriod(true);
     setLoadStatus("loading");
 
-    setTimeout(() => {
-      const match = closes.find((c) => c.referenceMonth === referenceMonth && c.referenceYear === referenceYear);
+    loadFrameRef.current = requestAnimationFrame(() => {
+      loadFrameRef.current = null;
+      setReferenceMonth(targetMonth);
+      setReferenceYear(targetYear);
+      const match = closes.find((c) => c.referenceMonth === targetMonth && c.referenceYear === targetYear);
       if (!match) {
         if (opts?.resetOnMissing ?? true) {
           resetFormValues();
         }
         setLoadStatus("notfound");
         setIsSwitchingPeriod(false);
-        setTimeout(() => setLoadStatus("idle"), 1200);
         return;
       }
       applyCloseValues(match);
       setLoadStatus("ok");
       setIsSwitchingPeriod(false);
-      setTimeout(() => setLoadStatus("idle"), 1200);
-    }, 450);
+    });
   }, [applyCloseValues, closes, referenceMonth, referenceYear, resetFormValues]);
+
+  React.useEffect(() => {
+    return () => {
+      if (loadFrameRef.current != null) {
+        cancelAnimationFrame(loadFrameRef.current);
+      }
+    };
+  }, []);
 
   const didInit = React.useRef(false);
   React.useEffect(() => {
@@ -661,16 +779,6 @@ export default function AdminFinanceiroFechamentoMensal() {
     applyCloseValues(currentDefaults);
     didInit.current = true;
   }, [applyCloseValues, currentDefaults]);
-
-  const hasAutoLoaded = React.useRef(false);
-  React.useEffect(() => {
-    if (!didInit.current) return;
-    if (!hasAutoLoaded.current) {
-      hasAutoLoaded.current = true;
-      return;
-    }
-    loadSavedValues({ resetOnMissing: true });
-  }, [loadSavedValues, referenceMonth, referenceYear]);
 
   const receitaBruta = receitaExtratoBanco + receitaDinheiro;
   const taxaCartaoAmountPreview = vendaCartaoAmount > 0 ? (vendaCartaoAmount * taxaCartaoPerc) / 100 : 0;
@@ -720,16 +828,16 @@ export default function AdminFinanceiroFechamentoMensal() {
         ? "text-emerald-600"
         : "text-red-600";
 
-  const margemStatus = ratePercent(totals.margemContribPerc, "margem");
-  const resultadoStatus = ratePercent(totals.resultadoLiquidoPercBruta, "resultado");
+  const margemStatus = rateMargemPercent(totals.margemContribPerc);
+  const resultadoStatus = rateResultadoPercent(totals.resultadoLiquidoPercBruta);
   const coberturaStatus = rateCobertura(coberturaPreview);
   const custoFixoPercBruta = totals.receitaBruta > 0 ? (totals.custoFixoTotal / totals.receitaBruta) * 100 : 0;
   const custoVariavelPercBruta = totals.receitaBruta > 0 ? (totals.custoVariavelTotal / totals.receitaBruta) * 100 : 0;
   const lastCustoFixoPercBruta = lastTotals.receitaBruta > 0 ? (lastTotals.custoFixoTotal / lastTotals.receitaBruta) * 100 : 0;
   const lastCustoVariavelPercBruta = lastTotals.receitaBruta > 0 ? (lastTotals.custoVariavelTotal / lastTotals.receitaBruta) * 100 : 0;
   const lastCoberturaPerc = lastTotals.pontoEquilibrio > 0 ? (lastTotals.receitaBruta / lastTotals.pontoEquilibrio) * 100 : 0;
-  const lastMargemStatus = ratePercent(lastTotals.margemContribPerc, "margem");
-  const lastResultadoStatus = ratePercent(lastTotals.resultadoLiquidoPercBruta, "resultado");
+  const lastMargemStatus = rateMargemPercent(lastTotals.margemContribPerc);
+  const lastResultadoStatus = rateResultadoPercent(lastTotals.resultadoLiquidoPercBruta);
   const lastCoberturaStatus = rateCobertura(lastCoberturaPerc);
   const hasLastClose = Boolean(lastClose);
   const lastFaturamentoMensal = (lastClose as any)?.faturamentoMensalAmount ?? 0;
@@ -790,8 +898,9 @@ export default function AdminFinanceiroFechamentoMensal() {
   ) => <FieldNote>{opts?.note}</FieldNote>;
   const isLoadingData = loadStatus === "loading";
   const formHidden = isLoadingData || isSwitchingPeriod;
+  const hasPendingPeriodChange = selectedReferenceMonth !== referenceMonth || selectedReferenceYear !== referenceYear;
   const loadStatusMeta = {
-    idle: { label: "Pronto para carregar", tone: "muted" as const },
+    idle: { label: "Selecione mês/ano e carregue", tone: "muted" as const },
     loading: { label: "Carregando dados...", tone: "blue" as const },
     ok: { label: "Valores carregados", tone: "green" as const },
     notfound: { label: "Nenhum fechamento para este período", tone: "amber" as const },
@@ -851,6 +960,16 @@ export default function AdminFinanceiroFechamentoMensal() {
     });
   }, [monthlyCloseRepoMissing, toast]);
 
+  const handleLoadPeriod = React.useCallback(() => {
+    if (isSwitchingPeriod) return;
+    if (!hasPendingPeriodChange) return;
+    loadSavedValues({
+      resetOnMissing: true,
+      month: selectedReferenceMonth,
+      year: selectedReferenceYear,
+    });
+  }, [hasPendingPeriodChange, isSwitchingPeriod, loadSavedValues, selectedReferenceMonth, selectedReferenceYear]);
+
   return (
     <div className="space-y-6 mb-12">
       <Form
@@ -859,6 +978,8 @@ export default function AdminFinanceiroFechamentoMensal() {
         ref={formRef}
       >
         <input type="hidden" name="intent" value="save" />
+        <input type="hidden" name="referenceMonth" value={referenceMonth} />
+        <input type="hidden" name="referenceYear" value={referenceYear} />
         {formHidden && (
           <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
             <div className="h-full w-1/3 animate-pulse bg-foreground/70" />
@@ -873,7 +994,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                 <div className="flex flex-wrap items-baseline gap-2">
                   <span className="text-2xl font-semibold">{currentPeriodLabel}</span>
                   <span className="rounded-full bg-background px-2 py-1 text-xs font-medium text-muted-foreground">
-                    Troque mês/ano abaixo para recalcular
+                    Selecione mês/ano e clique em carregar dados
                   </span>
                 </div>
               </div>
@@ -894,38 +1015,55 @@ export default function AdminFinanceiroFechamentoMensal() {
                 </div>
               )}
             </div>
-            <div className="flex flex-col gap-3 md:grid md:grid-cols-8 md:items-center ">
-              <div className="grid grid-cols-1 md:grid-cols-8 gap-3 items-end md:col-span-6">
+            <div className="flex flex-col gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-8 gap-3 items-end">
                 <div className="flex flex-col gap-1 col-span-2">
                   <Label>Mês</Label>
-                  <select
-                    name="referenceMonth"
-                    value={referenceMonth}
-                    onChange={(e) => setReferenceMonth(Number(e.target.value))}
-                    className="h-11 rounded-md border bg-background px-3 text-sm shadow-sm transition focus-visible:border-foreground"
+                  <Select
+                    value={String(selectedReferenceMonth)}
+                    onValueChange={(value) => setSelectedReferenceMonth(Number(value))}
                   >
-                    {MONTH_OPTIONS.map((m) => (
-                      <option key={m.value} value={m.value}>{m.label}</option>
-                    ))}
-                  </select>
+                    <SelectTrigger className="h-11 bg-background px-3 text-sm shadow-sm">
+                      <SelectValue placeholder="Selecione o mês" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {MONTH_OPTIONS.map((m) => (
+                        <SelectItem key={m.value} value={String(m.value)}>
+                          {m.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="flex flex-col gap-1 col-span-1">
                   <Label>Ano</Label>
                   <input
-                    name="referenceYear"
                     type="number"
                     className="h-11 rounded-md border bg-background px-3 text-sm shadow-sm transition focus-visible:border-foreground"
-                    value={referenceYear}
-                    onChange={(e) => setReferenceYear(Number(e.target.value))}
+                    value={selectedReferenceYear}
+                    onChange={(e) => setSelectedReferenceYear(Number(e.target.value))}
                     min={2020}
                   />
                 </div>
+                <div className="flex flex-col gap-1 col-span-2">
+                  <div className="text-xs font-medium text-slate-600 opacity-0">Carregar</div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleLoadPeriod}
+                    disabled={!hasPendingPeriodChange || isSwitchingPeriod}
+                    className="h-11 w-full gap-2 border-blue-200 bg-blue-50 text-blue-900 hover:bg-blue-100 hover:text-blue-950 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
+                  >
+                    {isSwitchingPeriod && <Loader2 className="h-4 w-4 animate-spin" />}
+                    {isSwitchingPeriod ? "Carregando..." : "Carregar dados"}
+                  </Button>
+                </div>
               </div>
-              <Badge variant="secondary" className={`flex items-center gap-2 px-3 py-2 text-xs font-medium md:col-span-2 ${loadToneClass}`}>
+              <Badge variant="secondary" className={`w-fit justify-center md:justify-start flex items-center gap-2 px-3 py-2 text-xs font-medium ${loadToneClass}`}>
                 {isLoadingData && <Loader2 className="h-4 w-4 animate-spin" />}
                 {loadStatusMeta[loadStatus].label}
               </Badge>
-              <div className="md:col-span-8 flex justify-end">
+              <div className="flex justify-end">
                 <Button asChild variant="outline" size="sm">
                   <Link to="/admin/financeiro/fechamento-mensal/visualizar">
                     Ver visão anual de fechamentos
@@ -954,7 +1092,7 @@ export default function AdminFinanceiroFechamentoMensal() {
             <KPICard
               label="Margem Contribuição"
               value={`${totals.margemContribPerc.toFixed(2)}%`}
-              tone={totals.margemContribPerc >= 35 ? "positive" : totals.margemContribPerc >= 20 ? "neutral" : "negative"}
+              tone={getMarginContribStatus(totals.margemContribPerc)?.kpiTone ?? "negative"}
             />
             <KPICard
               label="Ponto Equilíbrio"
@@ -1012,7 +1150,7 @@ export default function AdminFinanceiroFechamentoMensal() {
               <Card className="rounded-lg border border-slate-200 bg-white/90 shadow-none">
                 <CardHeader className="space-y-2">
                   <div className={summaryHeaderGridClass}>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-col items-start gap-1">
                       <CardTitle className="text-xs uppercase tracking-wide text-slate-900">
                         Margem de contribuição
                       </CardTitle>
@@ -1041,7 +1179,7 @@ export default function AdminFinanceiroFechamentoMensal() {
               <Card className="rounded-lg border border-slate-200 bg-white/90 shadow-none">
                 <CardHeader className="space-y-2">
                   <div className={summaryHeaderGridClass}>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-col items-start gap-1">
                       <CardTitle className="text-xs uppercase tracking-wide text-slate-900">
                         Resultado líquido
                       </CardTitle>
@@ -1074,7 +1212,7 @@ export default function AdminFinanceiroFechamentoMensal() {
               <Card className="rounded-lg border border-slate-200 bg-white/90 shadow-none">
                 <CardHeader className="space-y-2">
                   <div className={summaryHeaderGridClass}>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-col items-start gap-1">
                       <CardTitle className="text-xs uppercase tracking-wide text-slate-900">
                         Ponto de equilíbrio
                       </CardTitle>
@@ -1341,10 +1479,26 @@ export default function AdminFinanceiroFechamentoMensal() {
           <Card className="rounded-lg border border-blue-100 bg-white shadow-sm">
             <CardHeader className="space-y-2">
               <div className={summaryHeaderGridClass}>
-                <div className="flex items-center gap-2">
-                  <CardTitle className="text-xs uppercase tracking-wide text-slate-900">
-                    Margem de contribuição
-                  </CardTitle>
+                <div className="flex flex-col items-start gap-1">
+                  <div className="flex items-center gap-1.5">
+                    <CardTitle className="text-xs uppercase tracking-wide text-slate-900">
+                      Margem de contribuição
+                    </CardTitle>
+                    <FormulaHelpModal
+                      title="Margem de contribuição"
+                      formulaText={margemContribFormulaText}
+                      appliedText={margemContribAppliedText}
+                      badgeLabel={margemStatus.label}
+                      badgeReason={margemStatus.text}
+                      metricValue={`${totals.margemContribPerc.toFixed(2)}% da receita bruta`}
+                      ruleBands={[
+                        "Excelente: acima de 60%",
+                        "Zona saudável: de 50% a 60%",
+                        "Operação sensível: de 45% a 49,99%",
+                        "Abaixo do ideal: abaixo de 45%",
+                      ]}
+                    />
+                  </div>
                   <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${badgeClasses(margemStatus.tone)}`}>
                     {badgeIcon(margemStatus.tone)}
                     {margemStatus.label}
@@ -1364,22 +1518,31 @@ export default function AdminFinanceiroFechamentoMensal() {
               <p className="text-xs text-muted-foreground">
                 Receita de caixa menos custos variáveis. É o que sobra para pagar os fixos.
               </p>
-              <p className="text-[11px] text-slate-500 font-mono leading-relaxed">
-                {margemContribFormulaText}
-              </p>
-              <p className="text-[11px] text-slate-500 font-mono leading-relaxed">
-                {margemContribAppliedText}
-              </p>
             </CardHeader>
           </Card>
 
           <Card className="rounded-lg border border-blue-100 bg-white shadow-sm">
             <CardHeader className="space-y-2">
               <div className={summaryHeaderGridClass}>
-                <div className="flex items-center gap-2">
-                  <CardTitle className="text-xs uppercase tracking-wide text-slate-900">
-                    Resultado líquido
-                  </CardTitle>
+                <div className="flex flex-col items-start gap-1">
+                  <div className="flex items-center gap-1.5">
+                    <CardTitle className="text-xs uppercase tracking-wide text-slate-900">
+                      Resultado líquido
+                    </CardTitle>
+                    <FormulaHelpModal
+                      title="Resultado líquido"
+                      formulaText={resultadoLiquidoFormulaText}
+                      appliedText={resultadoLiquidoAppliedText}
+                      badgeLabel={resultadoStatus.label}
+                      badgeReason={resultadoStatus.text}
+                      metricValue={`${totals.resultadoLiquidoPercBruta.toFixed(2)}% da receita bruta`}
+                      ruleBands={[
+                        "Saudável: 15% ou mais",
+                        "Atenção: de 5% a 14,99%",
+                        "Crítico: abaixo de 5%",
+                      ]}
+                    />
+                  </div>
                   <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${badgeClasses(resultadoStatus.tone)}`}>
                     {badgeIcon(resultadoStatus.tone)}
                     {resultadoStatus.label}
@@ -1403,22 +1566,31 @@ export default function AdminFinanceiroFechamentoMensal() {
               <p className="text-xs text-muted-foreground">
                 Margem de contribuição menos custos fixos. Lucro/prejuízo do mês.
               </p>
-              <p className="text-[11px] text-slate-500 font-mono leading-relaxed">
-                {resultadoLiquidoFormulaText}
-              </p>
-              <p className="text-[11px] text-slate-500 font-mono leading-relaxed">
-                {resultadoLiquidoAppliedText}
-              </p>
             </CardHeader>
           </Card>
 
           <Card className="rounded-lg border border-blue-100 bg-white shadow-sm">
             <CardHeader className="space-y-2">
               <div className={summaryHeaderGridClass}>
-                <div className="flex items-center gap-2">
-                  <CardTitle className="text-xs uppercase tracking-wide text-slate-900">
-                    Ponto de equilíbrio
-                  </CardTitle>
+                <div className="flex flex-col items-start gap-1">
+                  <div className="flex items-center gap-1.5">
+                    <CardTitle className="text-xs uppercase tracking-wide text-slate-900">
+                      Ponto de equilíbrio
+                    </CardTitle>
+                    <FormulaHelpModal
+                      title="Ponto de equilíbrio"
+                      formulaText={pontoEquilibrioFormulaText}
+                      appliedText={pontoEquilibrioAppliedText}
+                      badgeLabel={coberturaStatus.label}
+                      badgeReason={coberturaStatus.text}
+                      metricValue={`${coberturaPreview.toFixed(2)}% de cobertura`}
+                      ruleBands={[
+                        "Coberto: 110% ou mais",
+                        "No limite: de 90% a 109,99%",
+                        "Descoberto: abaixo de 90%",
+                      ]}
+                    />
+                  </div>
                   <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${badgeClasses(coberturaStatus.tone)}`}>
                     {badgeIcon(coberturaStatus.tone)}
                     {coberturaStatus.label}
@@ -1439,12 +1611,6 @@ export default function AdminFinanceiroFechamentoMensal() {
               </div>
               <p className="text-xs text-muted-foreground">
                 Receita bruta mínima para zerar lucro. Cobertura mostra o quanto a receita atual alcança do PE.
-              </p>
-              <p className="text-[11px] text-slate-500 font-mono leading-relaxed">
-                {pontoEquilibrioFormulaText}
-              </p>
-              <p className="text-[11px] text-slate-500 font-mono leading-relaxed">
-                {pontoEquilibrioAppliedText}
               </p>
             </CardHeader>
           </Card>
@@ -1985,7 +2151,7 @@ export default function AdminFinanceiroFechamentoMensal() {
               <Card className="rounded-lg border border-slate-200 bg-white/90 shadow-none">
                 <CardHeader className="space-y-2">
                   <div className={summaryHeaderGridClass}>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-col items-start gap-1">
                       <CardTitle className="text-xs uppercase tracking-wide text-slate-900">
                         Margem de contribuição
                       </CardTitle>
@@ -2018,7 +2184,7 @@ export default function AdminFinanceiroFechamentoMensal() {
               <Card className="rounded-lg border border-slate-200 bg-white/90 shadow-none">
                 <CardHeader className="space-y-2">
                   <div className={summaryHeaderGridClass}>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-col items-start gap-1">
                       <CardTitle className="text-xs uppercase tracking-wide text-slate-900">
                         Resultado líquido
                       </CardTitle>
@@ -2051,7 +2217,7 @@ export default function AdminFinanceiroFechamentoMensal() {
               <Card className="rounded-lg border border-slate-200 bg-white/90 shadow-none">
                 <CardHeader className="space-y-2">
                   <div className={summaryHeaderGridClass}>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-col items-start gap-1">
                       <CardTitle className="text-xs uppercase tracking-wide text-slate-900">
                         Ponto de equilíbrio
                       </CardTitle>
