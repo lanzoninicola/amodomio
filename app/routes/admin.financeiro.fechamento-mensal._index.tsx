@@ -263,6 +263,65 @@ function FieldNote({ children }: { children?: React.ReactNode }) {
   return <p className="min-h-[16px] text-xs text-muted-foreground truncate">{children ?? "\u00A0"}</p>;
 }
 
+function FieldContainer({
+  label,
+  note,
+  children,
+  className = "flex flex-col gap-2",
+}: {
+  label: string;
+  note?: React.ReactNode;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={className}>
+      <Label>{label}</Label>
+      {children}
+      <FieldNote>{note}</FieldNote>
+    </div>
+  );
+}
+
+function EditableField({
+  label,
+  name,
+  value,
+  onValueChange,
+  fractionDigits = 2,
+  note,
+  disabled = false,
+  readOnly = false,
+  className = "w-full text-right border-2 border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 hover:border-slate-300 font-mono",
+  keyValue,
+}: {
+  label: string;
+  name: string;
+  value: number;
+  onValueChange?: (value: number) => void;
+  fractionDigits?: number;
+  note?: string;
+  disabled?: boolean;
+  readOnly?: boolean;
+  className?: string;
+  keyValue?: string;
+}) {
+  return (
+    <FieldContainer label={label} note={note}>
+      <DecimalInput
+        key={keyValue}
+        name={name}
+        defaultValue={value}
+        fractionDigits={fractionDigits}
+        className={className}
+        onValueChange={onValueChange}
+        disabled={disabled}
+        readOnly={readOnly}
+      />
+    </FieldContainer>
+  );
+}
+
 function ReadonlyField({
   label,
   value,
@@ -279,8 +338,7 @@ function ReadonlyField({
   const comparisonFieldClass =
     "w-full border border-slate-100 bg-slate-50 text-slate-600 font-mono text-base cursor-not-allowed shadow-none";
   return (
-    <div className="flex flex-col gap-2">
-      <Label>{label}</Label>
+    <FieldContainer label={label} note={note}>
       <DecimalInput
         defaultValue={value}
         fractionDigits={fractionDigits}
@@ -288,8 +346,7 @@ function ReadonlyField({
         disabled
         readOnly
       />
-      <FieldNote>{note}</FieldNote>
-    </div>
+    </FieldContainer>
   );
 }
 
@@ -309,8 +366,7 @@ function DeltaField({
   const deltaTextTone =
     value > 0 ? "text-emerald-700/90" : value < 0 ? "text-red-700/90" : "text-slate-500";
   return (
-    <div className="flex flex-col gap-2">
-      <Label>{label}</Label>
+    <FieldContainer label={label} note={note}>
       {percent ? (
         <div
           className={`h-10 rounded-md border border-muted bg-muted/40 px-3 flex items-center justify-end font-mono text-base ${deltaTextTone}`}
@@ -326,8 +382,7 @@ function DeltaField({
           readOnly
         />
       )}
-      <FieldNote>{note}</FieldNote>
-    </div>
+    </FieldContainer>
   );
 }
 
@@ -1298,28 +1353,18 @@ export default function AdminFinanceiroFechamentoMensal() {
 
                 </CardHeader>
                 <CardContent className="grid grid-cols-1 gap-4">
-                  <div className="flex flex-col gap-2">
-                    <Label>Receita extrato banco (R$)</Label>
-                    <DecimalInput
-                      name="receitaExtratoBancoAmount"
-                      defaultValue={receitaExtratoBanco}
-                      fractionDigits={2}
-                      className="w-full text-right border-2 border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 hover:border-slate-300 font-mono"
-                      onValueChange={setReceitaExtratoBanco}
-                    />
-                    {renderFieldDiff(lastReceitaBase.extrato, receitaExtratoBanco)}
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <Label>Receita dinheiro (R$)</Label>
-                    <DecimalInput
-                      name="receitaDinheiroAmount"
-                      defaultValue={receitaDinheiro}
-                      fractionDigits={2}
-                      className="w-full text-right border-2 border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 hover:border-slate-300 font-mono"
-                      onValueChange={setReceitaDinheiro}
-                    />
-                    {renderFieldDiff(lastReceitaBase.dinheiro, receitaDinheiro)}
-                  </div>
+                  <EditableField
+                    label="Receita extrato banco (R$)"
+                    name="receitaExtratoBancoAmount"
+                    value={receitaExtratoBanco}
+                    onValueChange={setReceitaExtratoBanco}
+                  />
+                  <EditableField
+                    label="Receita dinheiro (R$)"
+                    name="receitaDinheiroAmount"
+                    value={receitaDinheiro}
+                    onValueChange={setReceitaDinheiro}
+                  />
                   <div>
                     <Separator className="my-1" />
                   </div>
@@ -1337,9 +1382,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                       className="w-full text-right border-2 border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 hover:border-slate-300 font-mono"
                       onValueChange={setFaturamentoMensal}
                     />
-                    {renderFieldDiff(lastFaturamentoMensal, faturamentoMensal, {
-                      note: "Registro manual do faturamento. Não entra nos cálculos.",
-                    })}
+                    <FieldNote>Registro manual do faturamento. Não entra nos cálculos.</FieldNote>
                   </div>
                 </CardContent>
               </Card>
@@ -1357,113 +1400,74 @@ export default function AdminFinanceiroFechamentoMensal() {
 
                 <CardContent className="flex flex-col gap-6">
                   <div className="grid grid-cols-1 items-center gap-x-4 gap-y-3">
-                    <div className="flex flex-col gap-2">
-                      <Label>Taxa Cartão (%)</Label>
-                      <DecimalInput
+                      <EditableField
+                        label="Taxa Cartão (%)"
                         name="taxaCartaoPerc"
-                        defaultValue={taxaCartaoPerc}
-                        fractionDigits={2}
-                        className="w-full text-right border-2 border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 hover:border-slate-300 font-mono"
+                        value={taxaCartaoPerc}
                         onValueChange={setTaxaCartaoPerc}
                       />
-                      {renderFieldDiff(lastTaxaCartaoPerc, taxaCartaoPerc, { asPercent: true })}
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      <Label>Taxa marketplace (%)</Label>
-                      <DecimalInput
+                      <EditableField
+                        label="Taxa marketplace (%)"
                         name="taxaMarketplacePerc"
-                        defaultValue={taxaMarketplacePerc}
-                        fractionDigits={2}
-                        className="w-full text-right border-2 border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 hover:border-slate-300 font-mono"
+                        value={taxaMarketplacePerc}
                         onValueChange={setTaxaMarketplacePerc}
                       />
-                      {renderFieldDiff(lastTaxaMarketplacePerc, taxaMarketplacePerc, { asPercent: true })}
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      <Label>Imposto sobre vendas (%)</Label>
-                      <DecimalInput
-                        key={`imposto-perc-${impostoPercPreview}`}
+                      <EditableField
+                        label="Imposto sobre vendas (%)"
                         name="impostoPercPreview"
-                        defaultValue={impostoPercPreview}
-                        fractionDigits={2}
-                        className="w-full bg-muted text-muted-foreground font-mono"
+                        value={impostoPercPreview}
                         disabled
                         readOnly
+                        className="w-full bg-muted text-muted-foreground font-mono"
+                        keyValue={`imposto-perc-${impostoPercPreview}`}
                       />
-                      {renderFieldDiff(lastImpostoPercPreview, impostoPercPreview, { asPercent: true })}
                       <input type="hidden" name="impostoPerc" value={impostoPercPreview.toFixed(2)} />
                     </div>
-                  </div>
 
                   <Separator className="my-1" />
 
                   <div className="grid grid-cols-1 items-center gap-x-4 gap-y-3">
-                    <div className="flex flex-col gap-2">
-                      <Label>Venda no cartão (R$)</Label>
-                      <DecimalInput
-                        name="vendaCartaoAmount"
-                        defaultValue={vendaCartaoAmount}
-                        fractionDigits={2}
-                        className="w-full text-right border-2 border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 hover:border-slate-300 font-mono"
-                        onValueChange={setVendaCartaoAmount}
-                      />
-                      {renderFieldDiff(lastVendaCartaoAmount, vendaCartaoAmount)}
-                    </div>
-
-                    <div className="flex flex-col">
-                      <Label>Taxa Cartão (R$)</Label>
-                      <DecimalInput
-                        name="taxaCartaoAmountPreview"
-                        defaultValue={taxaCartaoAmountPreview}
-                        fractionDigits={2}
-                        className="w-full bg-muted text-muted-foreground font-mono"
-                        disabled
-                        readOnly
-                      />
-                      {renderFieldDiff(lastTaxaCartaoAmountPreview, taxaCartaoAmountPreview)}
-                    </div>
+                    <EditableField
+                      label="Venda no cartão (R$)"
+                      name="vendaCartaoAmount"
+                      value={vendaCartaoAmount}
+                      onValueChange={setVendaCartaoAmount}
+                    />
+                    <EditableField
+                      label="Taxa Cartão (R$)"
+                      name="taxaCartaoAmountPreview"
+                      value={taxaCartaoAmountPreview}
+                      disabled
+                      readOnly
+                      className="w-full bg-muted text-muted-foreground font-mono"
+                    />
                   </div>
                   <div className="grid grid-cols-1 items-center gap-x-4 gap-y-3">
-                    <div className="flex flex-col gap-2">
-                      <Label>Venda marketplace (R$)</Label>
-                      <DecimalInput
-                        name="vendaMarketplaceAmount"
-                        defaultValue={vendaMarketplaceAmount}
-                        fractionDigits={2}
-                        className="w-full text-right border-2 border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 hover:border-slate-300 font-mono"
-                        onValueChange={setVendaMarketplaceAmount}
-                      />
-                      {renderFieldDiff(lastVendaMarketplaceAmount, vendaMarketplaceAmount)}
-                    </div>
-
-                    <div className="flex flex-col">
-                      <Label>Taxa marketplace (R$)</Label>
-                      <DecimalInput
-                        name="taxaMarketplaceAmountPreview"
-                        defaultValue={taxaMarketplaceAmountPreview}
-                        fractionDigits={2}
-                        className="w-full bg-muted text-muted-foreground font-mono"
-                        disabled
-                        readOnly
-                      />
-                      {renderFieldDiff(lastTaxaMarketplaceAmountPreview, taxaMarketplaceAmountPreview)}
-                    </div>
+                    <EditableField
+                      label="Venda marketplace (R$)"
+                      name="vendaMarketplaceAmount"
+                      value={vendaMarketplaceAmount}
+                      onValueChange={setVendaMarketplaceAmount}
+                    />
+                    <EditableField
+                      label="Taxa marketplace (R$)"
+                      name="taxaMarketplaceAmountPreview"
+                      value={taxaMarketplaceAmountPreview}
+                      disabled
+                      readOnly
+                      className="w-full bg-muted text-muted-foreground font-mono"
+                    />
                   </div>
                   <div className="grid grid-cols-1 items-center gap-x-4 gap-y-3">
-
-                    <div className="flex flex-col">
-                      <Label>Imposto sobre vendas (R$)</Label>
-                      <DecimalInput
-                        key={`imposto-amount-${impostoAmountPreview}`}
-                        name="impostoAmountPreview"
-                        defaultValue={impostoAmountPreview}
-                        fractionDigits={2}
-                        className="w-full bg-muted text-muted-foreground font-mono"
-                        disabled
-                        readOnly
-                      />
-                      {renderFieldDiff(lastImpostoAmountPreview, impostoAmountPreview)}
-                    </div>
+                    <EditableField
+                      label="Imposto sobre vendas (R$)"
+                      name="impostoAmountPreview"
+                      value={impostoAmountPreview}
+                      disabled
+                      readOnly
+                      className="w-full bg-muted text-muted-foreground font-mono"
+                      keyValue={`imposto-amount-${impostoAmountPreview}`}
+                    />
 
                   </div>
 

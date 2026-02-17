@@ -4,10 +4,10 @@ import { defer, json } from "@remix-run/node";
 import {
   Await,
   Form,
+  Link,
   useActionData,
   useLoaderData,
   useNavigation,
-  useFetcher,
 } from "@remix-run/react";
 import * as React from "react";
 
@@ -24,8 +24,7 @@ import formatDecimalPlaces from "~/utils/format-decimal-places";
 import { QuestionMarkCircledIcon } from "@radix-ui/react-icons";
 import formatMoneyString from "~/utils/format-money-string";
 import { cn } from "~/lib/utils";
-import { FinancialDailyGoal } from "@prisma/client";
-import { fmtDDMMYY, fmtYYYMMDD } from "~/domain/kds";
+import { fmtDDMMYY } from "~/domain/kds";
 
 /* -------------------------------
    Types
@@ -55,16 +54,6 @@ type FinancialSummary = {
   updatedAt: string;
 };
 
-type FinancialDailyGoalSettings = {
-  id?: string;
-  targetProfitPerc: number;
-  participacaoDia01Perc: number;
-  participacaoDia02Perc: number;
-  participacaoDia03Perc: number;
-  participacaoDia04Perc: number;
-  participacaoDia05Perc: number;
-};
-
 /* -------------------------------
    Loader com defer
 ------------------------------- */
@@ -80,21 +69,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
     take: 50,
   });
 
-  const settingsPromise = await prismaClient.financialDailyGoalSettings.findFirst({
-    orderBy: { id: "desc" },
-  });
-
-  const dailyGoalsPromise = await prismaClient.financialDailyGoal.findMany({
-    orderBy: {
-      createdAt: "desc"
-    }
-  })
-
   return defer({
     current: currentPromise,
     snapshots: snapshotsPromise,
-    settings: settingsPromise,
-    dailyGoals: dailyGoalsPromise
   });
 }
 
@@ -104,8 +81,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
 type ActionData = {
   ok: boolean;
   message: string;
-  suggestRecalcMetas?: boolean;
-  keepSettingsOpen?: boolean;
 };
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -119,166 +94,6 @@ export async function action({ request }: ActionFunctionArgs) {
   };
 
   try {
-    /* ------------------------------------------------------
-       CRUD dos Settings (inline) - via fetcher (mesma rota)
-       (continua funcionando aqui)
-    ------------------------------------------------------ */
-    if (intent === "settings.upsert") {
-      const id = String(form.get("settingsId") || "");
-      const targetProfitPerc = num("settings_targetProfitPerc");
-      const p1 = num("settings_participacaoDia01Perc");
-      const p2 = num("settings_participacaoDia02Perc");
-      const p3 = num("settings_participacaoDia03Perc");
-      const p4 = num("settings_participacaoDia04Perc");
-      const p5 = num("settings_participacaoDia05Perc");
-      const soma = p1 + p2 + p3 + p4 + p5;
-
-      if (Math.abs(soma - 100) > 0.01) {
-        return json({
-          ok: false,
-          message: `A soma das participações por dia é ${soma.toFixed(2)}%. Ajuste para 100%.`,
-          keepSettingsOpen: true,
-        });
-      }
-
-      if (id) {
-        await prismaClient.financialDailyGoalSettings.update({
-          where: { id },
-          data: {
-            targetProfitPerc,
-            participacaoDia01Perc: p1,
-            participacaoDia02Perc: p2,
-            participacaoDia03Perc: p3,
-            participacaoDia04Perc: p4,
-            participacaoDia05Perc: p5,
-          },
-        });
-        return json({ ok: true, message: "Configurações atualizadas.", keepSettingsOpen: true });
-      } else {
-        await prismaClient.financialDailyGoalSettings.create({
-          data: {
-            targetProfitPerc,
-            participacaoDia01Perc: p1,
-            participacaoDia02Perc: p2,
-            participacaoDia03Perc: p3,
-            participacaoDia04Perc: p4,
-            participacaoDia05Perc: p5,
-          },
-        });
-        return json({ ok: true, message: "Configurações criadas.", keepSettingsOpen: true });
-      }
-    }
-
-    if (intent === "settings.delete") {
-      const id = String(form.get("settingsId"));
-      if (!id) return json({ ok: false, message: "ID inválido para remover configurações.", keepSettingsOpen: true });
-      await prismaClient.financialDailyGoalSettings.delete({ where: { id } });
-      return json({ ok: true, message: "Configurações removidas." });
-    }
-
-    /* ------------------------------------------------------
-       Recalcular metas (usa settings) - também via fetcher
-    ------------------------------------------------------ */
-    if (intent === "generateDailyGoals") {
-      const monthlyClose = await prismaClient.financialMonthlyClose.findFirst({
-        orderBy: [
-          { referenceYear: "desc" },
-          { referenceMonth: "desc" },
-        ],
-      });
-
-      const summary = await prismaClient.financialSummary.findFirst({
-        where: { isSnapshot: false },
-        orderBy: { createdAt: "desc" },
-        select: { id: true, pontoEquilibrioAmount: true },
-      });
-
-      if (!summary) {
-        return json({ ok: false, message: "Não há resumo financeiro corrente para calcular o PE." });
-      }
-
-      const settings = await prismaClient.financialDailyGoalSettings.findFirst({
-        orderBy: { id: "desc" },
-      });
-
-      if (!settings) {
-        return json({
-          ok: false,
-          message: "Nenhuma configuração de metas encontrada. Preencha o formulário de padrões abaixo e salve.",
-          keepSettingsOpen: true,
-        });
-      }
-
-      const pe = monthlyClose?.pontoEquilibrioAmount ?? summary.pontoEquilibrioAmount ?? 0;
-      if (pe <= 0) {
-        return json({
-          ok: false,
-          message: "Não foi possível calcular o ponto de equilíbrio a partir do fechamento mensal ou resumo atual.",
-        });
-      }
-      const p1 = settings.participacaoDia01Perc ?? 0;
-      const p2 = settings.participacaoDia02Perc ?? 0;
-      const p3 = settings.participacaoDia03Perc ?? 0;
-      const p4 = settings.participacaoDia04Perc ?? 0;
-      const p5 = settings.participacaoDia05Perc ?? 0;
-      const tgt = settings.targetProfitPerc ?? 0;
-
-      const WEEKDAY_COUNT_IN_MONTH = 4
-
-      const soma = p1 + p2 + p3 + p4 + p5;
-      if (Math.abs(soma - 100) > 0.01) {
-        return json({
-          ok: false,
-          message: `A soma das participações por dia é ${soma.toFixed(2)}%. Ajuste para 100% nas configurações e tente novamente.`,
-          keepSettingsOpen: true,
-        });
-      }
-
-      const min = (perc: number) => (pe * (perc / 100)) / WEEKDAY_COUNT_IN_MONTH;
-      const mult = 1 + tgt / 100;
-
-      const existingActive = await prismaClient.financialDailyGoal.findFirst({
-        where: { isActive: true },
-        orderBy: { createdAt: "desc" },
-        select: { id: true },
-      });
-      if (existingActive) {
-        await prismaClient.financialDailyGoal.update({
-          where: { id: existingActive.id },
-          data: { isActive: false },
-        });
-      }
-
-      await prismaClient.financialDailyGoal.create({
-        data: {
-          financialSummaryId: summary.id,
-          isActive: true,
-          targetProfitPerc: tgt,
-          participacaoDia01Perc: p1,
-          participacaoDia02Perc: p2,
-          participacaoDia03Perc: p3,
-          participacaoDia04Perc: p4,
-          participacaoDia05Perc: p5,
-          minimumGoalDia01Amount: min(p1),
-          minimumGoalDia02Amount: min(p2),
-          minimumGoalDia03Amount: min(p3),
-          minimumGoalDia04Amount: min(p4),
-          minimumGoalDia05Amount: min(p5),
-          targetProfitDia01Amount: min(p1) * mult,
-          targetProfitDia02Amount: min(p2) * mult,
-          targetProfitDia03Amount: min(p3) * mult,
-          targetProfitDia04Amount: min(p4) * mult,
-          targetProfitDia05Amount: min(p5) * mult,
-        },
-      });
-
-      return json({
-        ok: true,
-        message:
-          "Metas diárias recalculadas a partir do PE corrente e das configurações padrão. O goal anterior (se havia) foi arquivado.",
-      });
-    }
-
     /* ------------------------------------------------------
        Remover snapshot
     ------------------------------------------------------ */
@@ -361,8 +176,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
       return json({
         ok: true,
-        message: "Resumo salvo. Deseja recalcular as metas com o novo PE?",
-        suggestRecalcMetas: true,
+        message: "Resumo salvo.",
       });
     }
 
@@ -434,33 +248,8 @@ export default function AdminFinanceiroResumoFinanceiro() {
   const nav = useNavigation();
   const saving = nav.state !== "idle";
 
-  // fetchers sem navegação (não resetam scroll)
-  const settingsFetcher = useFetcher<ActionData>();
-  const goalsFetcher = useFetcher<ActionData>();
-
   const [showGuide, setShowGuide] = React.useState(false);
-  const [showSettings, setShowSettings] = React.useState(false);
-
-  // ref para scroll suave até o painel de settings
-  const settingsRef = React.useRef<HTMLDivElement | null>(null);
-
-  const [currentSection, setCurrentSection] = React.useState<"resumo" | "metas" | "snapshots">("resumo")
-
-  // manter painel aberto após salvar/erro via action OU fetcher
-  React.useEffect(() => {
-    if (action?.keepSettingsOpen) setShowSettings(true);
-    if (settingsFetcher.data?.keepSettingsOpen) setShowSettings(true);
-  }, [action?.keepSettingsOpen, settingsFetcher.data?.keepSettingsOpen]);
-
-  const handleToggleSettings = () => {
-    setShowSettings((v) => !v);
-    // ao abrir, rola suavemente até o painel
-    requestAnimationFrame(() => {
-      if (!showSettings && settingsRef.current) {
-        settingsRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
-      }
-    });
-  };
+  const [currentSection, setCurrentSection] = React.useState<"resumo" | "snapshots">("resumo");
 
   return (
 
@@ -475,12 +264,6 @@ export default function AdminFinanceiroResumoFinanceiro() {
         <span className={
           cn(
             "text-xs uppercase hover:underline hover:cursor-pointer",
-            currentSection === "metas" && "font-semibold"
-          )
-        } onClick={() => setCurrentSection("metas")}>Metas</span>
-        <span className={
-          cn(
-            "text-xs uppercase hover:underline hover:cursor-pointer",
             currentSection === "snapshots" && "font-semibold"
           )
         } onClick={() => setCurrentSection("snapshots")}>Snapshots</span>
@@ -490,7 +273,7 @@ export default function AdminFinanceiroResumoFinanceiro() {
         <h2 className="text-xl font-semibold">
           {
             currentSection === "resumo" ? "Resumo financeiro"
-              : currentSection === "metas" ? "Metas Diarias" : "Snapshots"
+              : "Snapshots"
           }
         </h2>
       </div>
@@ -508,10 +291,15 @@ export default function AdminFinanceiroResumoFinanceiro() {
               <span className="text-sm">
                 Os valores abaixo são a media dos ultímo 3 meses
               </span>
-              <button className=" text-sm underline flex items-center gap-2 font-semibold" onClick={() => setShowGuide(!showGuide)}>
-                <span><QuestionMarkCircledIcon /></span>
-                Receita bruta ou líquida
-              </button>
+              <div className="flex items-center gap-3">
+                <Link to="/admin/financeiro/metas" className="text-sm underline font-semibold">
+                  Gerenciar metas em /admin/financeiro/metas
+                </Link>
+                <button className=" text-sm underline flex items-center gap-2 font-semibold" onClick={() => setShowGuide(!showGuide)}>
+                  <span><QuestionMarkCircledIcon /></span>
+                  Receita bruta ou líquida
+                </button>
+              </div>
             </div>
 
             {showGuide && (
@@ -691,14 +479,8 @@ export default function AdminFinanceiroResumoFinanceiro() {
                           {action && (
                             <Alert variant={action.ok ? "default" : "destructive"}>
                               <AlertTitle>{action.ok ? "Sucesso" : "Erro"}</AlertTitle>
-                              <AlertDescription className="flex items-center gap-3">
+                              <AlertDescription>
                                 <span>{action.message}</span>
-                                {action.ok && action.suggestRecalcMetas && (
-                                  <goalsFetcher.Form method="post">
-                                    <input type="hidden" name="intent" value="generateDailyGoals" />
-                                    <Button type="submit" variant="secondary" size="sm">Recalcular metas</Button>
-                                  </goalsFetcher.Form>
-                                )}
                               </AlertDescription>
                             </Alert>
                           )}
@@ -720,224 +502,6 @@ export default function AdminFinanceiroResumoFinanceiro() {
         )
       }
       {/* ------------------------ FIM DO FORM PRINCIPAL ------------------------ */}
-
-      {/* ------------------------ METAS / PADRÕES (FORA DO FORM PRINCIPAL) ------------------------ */}
-
-      {
-        currentSection === "metas" && (
-          <>
-            <div className="flex flex-wrap items-center gap-2 justify-end">
-              {/* 1 clique para gerar/recalcular metas com base no PE + Settings (fetcher, sem navegação) */}
-              <goalsFetcher.Form method="post">
-                <input type="hidden" name="intent" value="generateDailyGoals" />
-                <Button type="submit" className="uppercase tracking-wide bg-blue-500" >
-                  Recalcular metas agora
-                </Button>
-              </goalsFetcher.Form>
-
-
-            </div>
-
-            {/* Alertas locais (fetchers) */}
-            {(settingsFetcher.data || goalsFetcher.data) && (
-              <Alert variant={(settingsFetcher.data?.ok ?? goalsFetcher.data?.ok) ? "default" : "destructive"}>
-                <AlertTitle>{(settingsFetcher.data?.ok ?? goalsFetcher.data?.ok) ? "Sucesso" : "Erro"}</AlertTitle>
-                <AlertDescription>
-                  {settingsFetcher.data?.message || goalsFetcher.data?.message}
-                </AlertDescription>
-              </Alert>
-            )}
-
-            {/* CRUD inline de FinancialDailyGoalSettings (fora do form principal) */}
-            <React.Suspense fallback={<p>Carregando padrões…</p>}>
-              <Await resolve={data.settings}>
-                {(settings: Partial<FinancialDailyGoalSettings> | null) => {
-                  const [sp1, setSp1] = React.useState<number>(settings?.participacaoDia01Perc ?? 0);
-                  const [sp2, setSp2] = React.useState<number>(settings?.participacaoDia02Perc ?? 0);
-                  const [sp3, setSp3] = React.useState<number>(settings?.participacaoDia03Perc ?? 0);
-                  const [sp4, setSp4] = React.useState<number>(settings?.participacaoDia04Perc ?? 0);
-                  const [sp5, setSp5] = React.useState<number>(settings?.participacaoDia05Perc ?? 0);
-                  const [stgt, setStgt] = React.useState<number>(settings?.targetProfitPerc ?? 0);
-                  const sSum = sp1 + sp2 + sp3 + sp4 + sp5;
-
-                  return (
-                    <div ref={settingsRef} className="space-y-4">
-                      <div className="flex flex-col gap-1">
-                        <h4 className="font-semibold">Padrões de metas (FinancialDailyGoalSettings)</h4>
-                        <p className="text-xs text-muted-foreground">
-                          O recálculo usa o ponto de equilíbrio atual e as configurações padrão (participação por dia e % de lucro-alvo).
-                          O goal ativo anterior é arquivado automaticamente.
-                        </p>
-                      </div>
-
-                      <settingsFetcher.Form method="post" className="space-y-4">
-                        <input type="hidden" name="intent" value="settings.upsert" />
-                        {settings?.id && <input type="hidden" name="settingsId" value={String(settings.id)} />}
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <Row>
-                            <Label>Lucro-alvo sobre o mínimo (%)</Label>
-                            <DecimalInput
-                              name="settings_targetProfitPerc"
-                              defaultValue={stgt}
-                              fractionDigits={2}
-                              className="w-full"
-                              onChange={(e: any) => setStgt(Number(e?.target?.value ?? 0))}
-                            />
-                          </Row>
-
-                        </div>
-
-                        <Separator />
-
-                        <Row>
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm">Somatório das participações:</span>
-                            <span className={`text-sm font-semibold ${Math.abs(sSum - 100) < 0.001 ? "text-green-600" : "text-red-600"}`}>
-                              {sSum.toFixed(2)}%
-                            </span>
-                          </div>
-                          <div />
-                        </Row>
-
-                        <div className="grid grid-cols-1 md:grid-cols-8 items-end gap-4">
-                          <div className="grid grid-cols-5 col-span-6 gap-x-4">
-                            <div>
-                              <Label>DIA 1 (Quarta) – %</Label>
-                              <DecimalInput
-                                name="settings_participacaoDia01Perc"
-                                defaultValue={sp1}
-                                fractionDigits={2}
-                                className="w-full"
-                                onChange={(e: any) => setSp1(Number(e?.target?.value ?? 0))}
-                              />
-                            </div>
-                            <div>
-                              <Label>DIA 2 (Quinta) – %</Label>
-                              <DecimalInput
-                                name="settings_participacaoDia02Perc"
-                                defaultValue={sp2}
-                                fractionDigits={2}
-                                className="w-full"
-                                onChange={(e: any) => setSp2(Number(e?.target?.value ?? 0))}
-                              />
-                            </div>
-                            <div>
-                              <Label>DIA 3 (Sexta) – %</Label>
-                              <DecimalInput
-                                name="settings_participacaoDia03Perc"
-                                defaultValue={sp3}
-                                fractionDigits={2}
-                                className="w-full"
-                                onChange={(e: any) => setSp3(Number(e?.target?.value ?? 0))}
-                              />
-                            </div>
-                            <div>
-                              <Label>DIA 4 (Sábado) – %</Label>
-                              <DecimalInput
-                                name="settings_participacaoDia04Perc"
-                                defaultValue={sp4}
-                                fractionDigits={2}
-                                className="w-full"
-                                onChange={(e: any) => setSp4(Number(e?.target?.value ?? 0))}
-                              />
-                            </div>
-                            <div>
-                              <Label>DIA 5 (Domingo) – %</Label>
-                              <DecimalInput
-                                name="settings_participacaoDia05Perc"
-                                defaultValue={sp5}
-                                fractionDigits={2}
-                                className="w-full"
-                                onChange={(e: any) => setSp5(Number(e?.target?.value ?? 0))}
-                              />
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2 col-span-2">
-                            <Button type="submit" disabled={settingsFetcher.state !== "idle"}>
-                              {settingsFetcher.state !== "idle" ? (
-                                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Salvando…</>
-                              ) : (
-                                <span className="leading-[110%] uppercase text-sm tracking-wide font-semibold">Salvar padrões</span>
-                              )}
-                            </Button>
-
-                            {settings?.id && (
-                              <settingsFetcher.Form method="post" onSubmit={(e) => {
-                                if (!confirm("Remover as configurações atuais?")) e.preventDefault();
-                              }}>
-                                <input type="hidden" name="intent" value="settings.delete" />
-                                <input type="hidden" name="settingsId" value={String(settings.id)} />
-                                <Button type="submit" variant="destructive">
-                                  <span className="leading-[110%] uppercase text-sm tracking-wide font-semibold">Remover padrões</span>
-                                </Button>
-                              </settingsFetcher.Form>
-                            )}
-                          </div>
-                        </div>
-
-
-
-                        <p className="text-xs text-muted-foreground">
-                          Essas configurações são usadas para gerar a meta diária a partir do ponto de equilíbrio atual.
-                        </p>
-                      </settingsFetcher.Form>
-                    </div>
-                  );
-                }}
-              </Await>
-            </React.Suspense>
-
-            <React.Suspense fallback={<p>Carregando metas</p>}>
-              <Await resolve={data.dailyGoals}>
-                {(dailyGoals: Partial<FinancialDailyGoal> | null) => {
-
-
-                  return (
-
-                    <div className="flex flex-col space-y-4 ">
-                      <Separator />
-                      <h3 className="font-semibold">Historico metas</h3>
-                      <div className="grid grid-cols-6">
-                        <span className="font-semibold text-sm">Criado</span>
-                        <span className="font-semibold text-sm">DIA 1</span>
-                        <span className="font-semibold text-sm">DIA 2</span>
-                        <span className="font-semibold text-sm">DIA 3</span>
-                        <span className="font-semibold text-sm">DIA 4</span>
-                        <span className="font-semibold text-sm">DIA 5</span>
-                      </div>
-                      <ul >
-
-                        {Array.isArray(dailyGoals) && dailyGoals.map((dg: FinancialDailyGoal) => {
-
-
-                          return (
-                            <li key={dg?.id} className="grid grid-cols-6">
-                              <span>{fmtDDMMYY(new Date(dg?.createdAt))}</span>
-                              <span className="font-mono">{formatMoneyString(dg.minimumGoalDia01Amount)}</span>
-                              <span className="font-mono">{formatMoneyString(dg.minimumGoalDia02Amount)}</span>
-                              <span className="font-mono">{formatMoneyString(dg.minimumGoalDia03Amount)}</span>
-                              <span className="font-mono">{formatMoneyString(dg.minimumGoalDia04Amount)}</span>
-                              <span className="font-mono">{formatMoneyString(dg.minimumGoalDia05Amount)}</span>
-                            </li>
-                          )
-                        })}
-
-                      </ul>
-                    </div>
-                  )
-
-
-                }}
-              </Await>
-            </React.Suspense>
-          </>
-        )
-      }
-
-
-      {/* ------------------------ FIM: METAS / PADRÕES ------------------------ */}
-
 
       {
         currentSection === "snapshots" && (

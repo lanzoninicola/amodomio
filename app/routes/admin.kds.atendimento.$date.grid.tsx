@@ -268,8 +268,8 @@ function mapGoalForDate(goal: any, dateStr: string): { min: number; target: numb
   const key = map[dow];
   if (!key) return { min: 0, target: 0 };
 
-  const minField = `minimumGoalDia0${key}Amount`;
-  const targetField = `targetProfitDia0${key}Amount`;
+  const minField = `minSalesGoalAmountDia0${key}`;
+  const targetField = `targetSalesGoalAmountDia0${key}`;
 
   const min = Number(goal?.[minField] ?? 0) || 0;
   const target = Number(goal?.[targetField] ?? 0) || 0;
@@ -370,16 +370,16 @@ export async function loader({ params }: LoaderFunctionArgs) {
   const activeGoal = await prisma.financialDailyGoal.findFirst({
     where: { isActive: true },
     select: {
-      minimumGoalDia01Amount: true,
-      minimumGoalDia02Amount: true,
-      minimumGoalDia03Amount: true,
-      minimumGoalDia04Amount: true,
-      minimumGoalDia05Amount: true,
-      targetProfitDia01Amount: true,
-      targetProfitDia02Amount: true,
-      targetProfitDia03Amount: true,
-      targetProfitDia04Amount: true,
-      targetProfitDia05Amount: true,
+      minSalesGoalAmountDia01: true,
+      minSalesGoalAmountDia02: true,
+      minSalesGoalAmountDia03: true,
+      minSalesGoalAmountDia04: true,
+      minSalesGoalAmountDia05: true,
+      targetSalesGoalAmountDia01: true,
+      targetSalesGoalAmountDia02: true,
+      targetSalesGoalAmountDia03: true,
+      targetSalesGoalAmountDia04: true,
+      targetSalesGoalAmountDia05: true,
     },
   });
 
