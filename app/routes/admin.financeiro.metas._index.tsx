@@ -140,11 +140,29 @@ function asPct(value: number) {
   return `${formatMoneyString(value ?? 0, 2)}%`;
 }
 
+function normalizeDiff(value: number) {
+  return Math.abs(value) < 0.005 ? 0 : value;
+}
+
+function asSignedMoneyDiff(value: number) {
+  const normalized = normalizeDiff(value);
+  const sign = normalized > 0 ? "+" : normalized < 0 ? "-" : "";
+  return `${sign}R$ ${formatMoneyString(Math.abs(normalized), 2)}`;
+}
+
 function formatDate(value: string) {
   return new Date(value).toLocaleString("pt-BR");
 }
 
-function GoalDaysGrid({ goal, highlightActive = false }: { goal: any; highlightActive?: boolean }) {
+function GoalDaysGrid({
+  goal,
+  highlightActive = false,
+  baselineGoal,
+}: {
+  goal: any;
+  highlightActive?: boolean;
+  baselineGoal?: any | null;
+}) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
       {dayConfig.map(({ dayLabel, pctKey, minKey, targetKey }) => (
@@ -158,10 +176,42 @@ function GoalDaysGrid({ goal, highlightActive = false }: { goal: any; highlightA
             <div className={highlightActive ? "rounded-md border border-emerald-200 bg-emerald-50 p-2" : ""}>
               <p className="text-muted-foreground">Meta mínima</p>
               <p className="font-mono text-lg">{asMoney(Number(goal?.[minKey] ?? 0))}</p>
+              {baselineGoal ? (
+                <p
+                  className={`font-mono text-sm ${
+                    normalizeDiff(Number(goal?.[minKey] ?? 0) - Number(baselineGoal?.[minKey] ?? 0)) > 0
+                      ? "text-emerald-700"
+                      : normalizeDiff(Number(goal?.[minKey] ?? 0) - Number(baselineGoal?.[minKey] ?? 0)) < 0
+                        ? "text-red-700"
+                        : "text-muted-foreground"
+                  }`}
+                >
+                  Δ{" "}
+                  {asSignedMoneyDiff(
+                    Number(goal?.[minKey] ?? 0) - Number(baselineGoal?.[minKey] ?? 0),
+                  )}
+                </p>
+              ) : null}
             </div>
             <div className={highlightActive ? "rounded-md border border-blue-200 bg-blue-50 p-2" : ""}>
               <p className="text-muted-foreground">Meta target</p>
               <p className={`font-mono text-lg ${highlightActive ? "font-semibold" : ""}`}>{asMoney(Number(goal?.[targetKey] ?? 0))}</p>
+              {baselineGoal ? (
+                <p
+                  className={`font-mono text-sm ${
+                    normalizeDiff(Number(goal?.[targetKey] ?? 0) - Number(baselineGoal?.[targetKey] ?? 0)) > 0
+                      ? "text-emerald-700"
+                      : normalizeDiff(Number(goal?.[targetKey] ?? 0) - Number(baselineGoal?.[targetKey] ?? 0)) < 0
+                        ? "text-red-700"
+                        : "text-muted-foreground"
+                  }`}
+                >
+                  Δ{" "}
+                  {asSignedMoneyDiff(
+                    Number(goal?.[targetKey] ?? 0) - Number(baselineGoal?.[targetKey] ?? 0),
+                  )}
+                </p>
+              ) : null}
             </div>
           </div>
         </div>
@@ -177,6 +227,7 @@ export default function AdminFinanceiroMetasIndexRoute() {
   const activeGoal = data.activeGoal;
   const history = data.history;
   const isSubmitting = navigation.state !== "idle";
+  const latestHistoryGoal = history[0] ?? null;
   const activeDistributionSum = activeGoal
     ? Number(activeGoal.salesDistributionPctDay01) +
       Number(activeGoal.salesDistributionPctDay02) +
@@ -189,16 +240,32 @@ export default function AdminFinanceiroMetasIndexRoute() {
     <div className="space-y-4">
       <Card className="bg-muted/40">
         <CardContent className="pt-6">
-          <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-            <p className="text-base leading-relaxed text-black max-w-prose">
-              A Meta Mínima representa a receita líquida diária mínima necessária para sustentar o
-              Ponto de Equilíbrio (PE). A Meta Target é calculada aplicando o percentual de lucro
-              desejado sobre a Meta Mínima, definindo a receita diária líquida esperada com margem
-              de lucro.
-            </p>
-            <Button asChild className="shrink-0 text-base font-semibold">
-              <Link to="/admin/financeiro/metas/create">Criar meta</Link>
-            </Button>
+          <div className="space-y-3">
+            <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+              <p className="text-base leading-relaxed text-black max-w-prose">
+                A Meta Mínima representa a receita bruta diária mínima necessária para sustentar o
+                Ponto de Equilíbrio (PE). A Meta Target é calculada aplicando o percentual de lucro
+                desejado sobre a Meta Mínima, definindo a receita diária bruta esperada com margem
+                de lucro.
+              </p>
+              <Button asChild className="shrink-0 text-base font-semibold">
+                <Link to="/admin/financeiro/metas/create">Criar meta</Link>
+              </Button>
+            </div>
+
+            <details className="rounded-md border bg-background/70 p-3">
+              <summary className="cursor-pointer text-sm font-medium">
+                Como esta meta é calculada
+              </summary>
+              <p className="mt-2 text-sm text-muted-foreground leading-relaxed max-w-prose">
+                As metas são calculadas sobre <strong>receita bruta</strong>.
+                A base vem da média do campo <code>pontoEquilibrioAmount</code> dos últimos meses
+                fechados no modelo <code>FinancialMonthlyClose</code> (página{" "}
+                <code>/fechamento-mensal</code>). Esse PE é calculado na lógica atual com base
+                na receita bruta. Depois, aplicamos o{" "}
+                <code>targetProfitPerc</code> sobre a Meta mínima para obter a Meta target.
+              </p>
+            </details>
           </div>
         </CardContent>
       </Card>
@@ -228,7 +295,12 @@ export default function AdminFinanceiroMetasIndexRoute() {
                 </div>
               </div>
 
-              <GoalDaysGrid goal={activeGoal} highlightActive />
+              {latestHistoryGoal ? (
+                <p className="text-xs text-muted-foreground">
+                  Δ comparado com a última meta do histórico.
+                </p>
+              ) : null}
+              <GoalDaysGrid goal={activeGoal} highlightActive baselineGoal={latestHistoryGoal} />
             </>
           )}
         </CardContent>
@@ -289,7 +361,16 @@ export default function AdminFinanceiroMetasIndexRoute() {
                       </div>
                     </div>
 
-                    {isExpanded ? <GoalDaysGrid goal={goal} /> : null}
+                    {isExpanded ? (
+                      <div className="space-y-2">
+                        {activeGoal ? (
+                          <p className="text-xs text-muted-foreground">
+                            Δ comparado com a meta ativa atual.
+                          </p>
+                        ) : null}
+                        <GoalDaysGrid goal={goal} baselineGoal={activeGoal} />
+                      </div>
+                    ) : null}
                   </div>
                 );
               })}

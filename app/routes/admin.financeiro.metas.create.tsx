@@ -288,11 +288,24 @@ export default function AdminFinanceiroMetasCreateRoute() {
             <p className="text-sm leading-relaxed">
               A meta será criada com base na média do Ponto de Equilíbrio (PE) dos últimos meses
               fechados em contabilidade e nas configurações de distribuição por dia. Primeiro
-              calculamos a <strong>Meta mínima</strong> de cada dia para sustentar essa base média
-              de PE. Depois aplicamos o <strong>% de lucro desejado</strong> sobre essa base para
-              gerar a <strong>Meta target</strong>. Ao confirmar, essa nova meta passa a ser a meta
-              ativa.
+              calculamos a <strong>Meta mínima</strong> de cada dia para sustentar essa base média de PE.
+              Depois aplicamos o <strong>% de lucro desejado</strong> sobre essa base para gerar a{" "}
+              <strong>Meta target</strong>. Ao confirmar, essa nova meta passa a ser a meta ativa.
+              Essas metas representam <strong>receita bruta diária</strong>.
             </p>
+            <details className="mt-3 rounded-md border bg-background/70 p-3">
+              <summary className="cursor-pointer text-sm font-medium">
+                Como esta meta é calculada
+              </summary>
+              <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
+                As metas são calculadas sobre <strong>receita bruta</strong>. A base vem do campo{" "}
+                <code>pontoEquilibrioAmount</code> do modelo{" "}
+                <code>FinancialMonthlyClose</code> (página <code>/fechamento-mensal</code>). Esse
+                PE é calculado hoje na lógica do fechamento mensal em base de receita bruta. Em
+                seguida, o{" "}
+                <code>targetProfitPerc</code> é aplicado sobre a Meta mínima para gerar a Meta target.
+              </p>
+            </details>
           </div>
 
           {!data.settings ? (
@@ -400,7 +413,7 @@ export default function AdminFinanceiroMetasCreateRoute() {
 
               {data.preview ? (
                 <div className="space-y-2">
-                  <p className="text-sm font-medium">Pré-visualização da nova meta</p>
+                  <p className="text-sm font-medium">Pré-visualização da nova meta (receita bruta diária)</p>
                   {hasActiveGoal ? (
                     <p className="text-xs text-muted-foreground">
                       Δ mostra a diferença da nova meta em relação à meta ativa atual.

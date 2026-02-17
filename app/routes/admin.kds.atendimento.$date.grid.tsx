@@ -297,7 +297,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
   const listPromise = listByDate(dateInt);
   const header = await prisma.kdsDailyOrder.findUnique({
     where: { dateInt },
-    select: { id: true, operationStatus: true },
+    select: { id: true, operationStatus: true, financialDailyGoalId: true },
   });
 
   const deliveryZones = await prisma.deliveryZone.findMany({
@@ -366,20 +366,31 @@ export async function loader({ params }: LoaderFunctionArgs) {
   const cardFeePerc = Number(fs?.taxaCartaoPerc ?? 0); // ex.: 3.2 para 3,2%
   const taxaMarketplacePerc = Number(fs?.taxaMarketplacePerc ?? 0);
 
-  // Meta ativa
-  const activeGoal = await prisma.financialDailyGoal.findFirst({
+  const goalSelect = {
+    minSalesGoalAmountDia01: true,
+    minSalesGoalAmountDia02: true,
+    minSalesGoalAmountDia03: true,
+    minSalesGoalAmountDia04: true,
+    minSalesGoalAmountDia05: true,
+    targetSalesGoalAmountDia01: true,
+    targetSalesGoalAmountDia02: true,
+    targetSalesGoalAmountDia03: true,
+    targetSalesGoalAmountDia04: true,
+    targetSalesGoalAmountDia05: true,
+  } as const;
+
+  // Meta do dia (snapshot via FK no header); fallback para meta ativa.
+  const goalForDay = header?.financialDailyGoalId
+    ? await prisma.financialDailyGoal.findUnique({
+        where: { id: header.financialDailyGoalId },
+        select: goalSelect,
+      })
+    : null;
+  const activeGoal = goalForDay ?? await prisma.financialDailyGoal.findFirst({
     where: { isActive: true },
+    orderBy: { createdAt: "desc" },
     select: {
-      minSalesGoalAmountDia01: true,
-      minSalesGoalAmountDia02: true,
-      minSalesGoalAmountDia03: true,
-      minSalesGoalAmountDia04: true,
-      minSalesGoalAmountDia05: true,
-      targetSalesGoalAmountDia01: true,
-      targetSalesGoalAmountDia02: true,
-      targetSalesGoalAmountDia03: true,
-      targetSalesGoalAmountDia04: true,
-      targetSalesGoalAmountDia05: true,
+      ...goalSelect,
     },
   });
 
@@ -401,9 +412,9 @@ export async function loader({ params }: LoaderFunctionArgs) {
   else if (netAmount >= goalMinAmount) status = "between";
 
   const pctOfMin =
-    goalMinAmount > 0 ? Math.min(100, (netAmount / goalMinAmount) * 100) : 0;
+    goalMinAmount > 0 ? Math.min(100, (grossAmount / goalMinAmount) * 100) : 0;
   const pctOfTarget =
-    goalTargetAmount > 0 ? Math.min(100, (netAmount / goalTargetAmount) * 100) : 0;
+    goalTargetAmount > 0 ? Math.min(100, (grossAmount / goalTargetAmount) * 100) : 0;
 
   const monthlyCloseRepo = (prisma as any).financialMonthlyClose;
   let costFixedPerc = 0;

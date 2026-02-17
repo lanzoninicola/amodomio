@@ -533,6 +533,8 @@ model FinancialDailyGoal {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  kdsDailyOrders KdsDailyOrder[]
+
   // Índices
   // Se você usa isActive no loader:
   @@index([isActive, createdAt], map: "fdg_is_active_created_at_idx")
@@ -1168,8 +1170,8 @@ model KdsDailyOrder {
   /// Total dos pedidos do dia (soma de orderAmount dos detalhes)
   totOrdersAmount Decimal @default(0) @map("tot_orders_amount") @db.Decimal(10, 2)
 
-  minimumGoalProfitAmount Decimal @default(0) @map("minimum_goal_profit_amount") @db.Decimal(10, 2)
-  targetGoalProfitAmount  Decimal @default(0) @map("target_goal_profit_amount") @db.Decimal(10, 2)
+  financialDailyGoalId String?             @map("financial_daily_goal_id")
+  financialDailyGoal   FinancialDailyGoal? @relation(fields: [financialDailyGoalId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -1183,6 +1185,7 @@ model KdsDailyOrder {
   /// Um cabeçalho por dia
   @@unique([dateInt])
   @@index([dateInt])
+  @@index([financialDailyGoalId])
   @@map("kds_daily_orders")
 }
 
