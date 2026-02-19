@@ -74,6 +74,7 @@ describe("cardapio._index loader (blocker guard)", () => {
 
     mocks.settingFindFirst
       .mockResolvedValueOnce({ value: "false" }) // contingencia.simula.erro
+      .mockResolvedValueOnce({ value: "true" }) // reels.enabled
       .mockResolvedValueOnce({ value: null }) // reel.urls
       .mockResolvedValueOnce({ value: "true" }); // menu-item-interest-enabled
   });
@@ -120,5 +121,28 @@ describe("cardapio._index loader (blocker guard)", () => {
 
     await expect(loader(buildArgs())).rejects.toThrow("ITEMS_QUERY_FAILED");
     expect(mocks.notifyContingency).toHaveBeenCalledTimes(1);
+  });
+
+  it("nao carrega reel.urls quando reels.enabled estiver desligado", async () => {
+    mocks.settingFindFirst.mockReset();
+    mocks.settingFindFirst
+      .mockResolvedValueOnce({ value: "false" }) // contingencia.simula.erro
+      .mockResolvedValueOnce({ value: "false" }) // reels.enabled
+      .mockResolvedValueOnce({ value: "true" }); // menu-item-interest-enabled
+
+    const result: any = await loader(buildArgs());
+
+    expect(result.data.reelsEnabled).toBe(false);
+    expect(result.data.reelUrls).toEqual([]);
+    expect(mocks.settingFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { context: "cardapio", name: "reels.enabled" },
+      }),
+    );
+    expect(mocks.settingFindFirst).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { context: "cardapio", name: "reel.urls" },
+      }),
+    );
   });
 });

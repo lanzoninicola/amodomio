@@ -18,6 +18,8 @@ import {
 } from "~/domain/cardapio/engagement-settings.server";
 
 const SETTING_TYPES = ["string", "boolean", "float", "int", "json"] as const;
+const REELS_SETTINGS_CONTEXT = "cardapio";
+const REELS_ENABLED_SETTING_NAME = "reels.enabled";
 
 export const meta: MetaFunction = () => ([{ title: "Configurações globais" }]);
 
@@ -52,13 +54,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const where = filters.length ? { AND: filters } : {};
 
-  const [likesSetting, sharesSetting] = await Promise.all([
+  const [likesSetting, sharesSetting, reelsEnabledSetting] = await Promise.all([
     prismaClient.setting.findFirst({
       where: { context: ENGAGEMENT_SETTINGS_CONTEXT, name: LIKE_SETTING_NAME },
       orderBy: [{ createdAt: "desc" }],
     }),
     prismaClient.setting.findFirst({
       where: { context: ENGAGEMENT_SETTINGS_CONTEXT, name: SHARE_SETTING_NAME },
+      orderBy: [{ createdAt: "desc" }],
+    }),
+    prismaClient.setting.findFirst({
+      where: { context: REELS_SETTINGS_CONTEXT, name: REELS_ENABLED_SETTING_NAME },
       orderBy: [{ createdAt: "desc" }],
     }),
   ]);
@@ -80,6 +86,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
       data: {
         context: ENGAGEMENT_SETTINGS_CONTEXT,
         name: SHARE_SETTING_NAME,
+        type: "boolean",
+        value: "true",
+        createdAt: new Date(),
+      },
+    });
+  }
+
+  if (!reelsEnabledSetting) {
+    await prismaClient.setting.create({
+      data: {
+        context: REELS_SETTINGS_CONTEXT,
+        name: REELS_ENABLED_SETTING_NAME,
         type: "boolean",
         value: "true",
         createdAt: new Date(),
