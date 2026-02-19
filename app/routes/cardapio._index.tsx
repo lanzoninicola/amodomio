@@ -58,6 +58,7 @@ import WEBSITE_LINKS from "~/domain/website-navigation/links/website-links";
 
 const INTEREST_ENDPOINT = "/api/menu-item-interest";
 const REELS_SETTING_KEY = "reel.urls";
+const REELS_ENABLED_SETTING_NAME = "reels.enabled";
 const REELS_SETTING_CONTEXT = "cardapio";
 const MENU_ITEM_INTEREST_SETTING_CONTEXT = "cardapio";
 const MENU_ITEM_INTEREST_SETTING_NAME = "menu-item-interest-enabled";
@@ -117,13 +118,27 @@ export async function loader({ request }: LoaderFunctionArgs) {
                 _count: { PostLike: number; PostShare: number };
             } | null;
             reelUrls: string[];
+            reelsEnabled?: boolean;
             menuItemInterestEnabled: boolean;
             likesEnabled: boolean;
             sharesEnabled: boolean;
         }>(CARDAPIO_INDEX_CACHE_KEY);
 
+        const reelsEnabledSetting = await prismaClient.setting.findFirst({
+            where: {
+                context: REELS_SETTING_CONTEXT,
+                name: REELS_ENABLED_SETTING_NAME,
+            },
+            orderBy: [{ createdAt: "desc" }],
+        });
+        const reelsEnabled = parseBooleanSetting(reelsEnabledSetting?.value, true);
+
         if (cachedPayload) {
-            return defer(cachedPayload);
+            return defer({
+                ...cachedPayload,
+                reelsEnabled,
+                reelUrls: reelsEnabled ? cachedPayload.reelUrls : [],
+            });
         }
 
         // itens agrupados do cardápio
@@ -168,15 +183,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
             }
         });
 
-        const reelSetting = await prismaClient.setting.findFirst({
-            where: {
-                context: REELS_SETTING_CONTEXT,
-                name: REELS_SETTING_KEY
-            },
-            orderBy: [{ createdAt: "desc" }],
-        });
-
-        const reelUrls = parseReelUrls(reelSetting?.value);
+        let reelUrls: string[] = [];
+        if (reelsEnabled) {
+            const reelSetting = await prismaClient.setting.findFirst({
+                where: {
+                    context: REELS_SETTING_CONTEXT,
+                    name: REELS_SETTING_KEY
+                },
+                orderBy: [{ createdAt: "desc" }],
+            });
+            reelUrls = parseReelUrls(reelSetting?.value);
+        }
 
         const menuItemInterestSetting = await prismaClient.setting.findFirst({
             where: {
@@ -194,6 +211,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
             tags,
             postFeatured,
             reelUrls,
+            reelsEnabled,
             menuItemInterestEnabled,
             likesEnabled,
             sharesEnabled
@@ -292,8 +310,7 @@ export async function action({ request }: LoaderFunctionArgs) {
 // PAGE
 // ======================================================
 export default function CardapioWebIndex() {
-    const { items, tags, postFeatured, reelUrls, menuItemInterestEnabled, likesEnabled, sharesEnabled } = useLoaderData<typeof loader>();
-    const hasReels = reelUrls.length > 0;
+    const { items, tags, postFeatured, reelUrls, reelsEnabled, menuItemInterestEnabled, likesEnabled, sharesEnabled } = useLoaderData<typeof loader>();
     const [showLikeCelebration, setShowLikeCelebration] = useState(false);
     const [likeCelebrationSeed, setLikeCelebrationSeed] = useState(1);
     const forceLikeOverlay = false;
@@ -458,7 +475,7 @@ export default function CardapioWebIndex() {
                 </Suspense>
             </div>
 
-            {reelUrls.length > 0 ? (
+            {reelsEnabled && reelUrls.length > 0 ? (
                 <div className="mx-4 md:mx-0 my-6">
                     <h3 className="font-neue text-base md:text-xl font-semibold tracking-wide mb-3">
                         Reels sugeridos
