@@ -1,4 +1,4 @@
-import { Await, defer, useActionData, useLoaderData } from "@remix-run/react";
+import { Await, Link, defer, useActionData, useLoaderData } from "@remix-run/react";
 import Container from "~/components/layout/container/container";
 import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { Suspense, useState } from "react";
@@ -17,10 +17,9 @@ import { toast } from "~/components/ui/use-toast";
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from "~/components/ui/dialog";
 import { Button } from "~/components/ui/button";
 import { DialogTitle } from "@radix-ui/react-dialog";
-import { Car, ExpandIcon } from "lucide-react";
+import { Car, CopyIcon, ExpandIcon } from "lucide-react";
 import OptionTab from "~/components/layout/option-tab/option-tab";
 import MenuItemSwitchActivationSubmit from "~/domain/cardapio/components/menu-item-switch-activation.tsx/menu-item-switch-activation-submit";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { MenuItemSellingPriceVariation } from "@prisma/client";
 import { Badge } from "~/components/ui/badge";
 import formatDecimalPlaces from "~/utils/format-decimal-places";
@@ -148,7 +147,8 @@ export default function AdminAtendimentoListaSabores() {
 
 
             const [items] = useState<MenuItemWithAssociations[]>(cardapioItems) // original completo
-            const [filteredItems, setFilteredItems] = useState<MenuItemWithAssociations[]>(cardapioItems.filter(i => i.visible === true && i.active === true) || [])
+            const activeItems = items.filter(item => item.active === true)
+            const [filteredItems, setFilteredItems] = useState<MenuItemWithAssociations[]>(activeItems.filter(i => i.visible === true) || [])
             const [profitRanges, setProfitRanges] = useState({
               critical: false,
               low: false,
@@ -157,6 +157,7 @@ export default function AdminAtendimentoListaSabores() {
             })
 
             const [isSearching, setIsSearching] = useState(false)
+            const [selectedLetter, setSelectedLetter] = useState<string | null>(null)
 
 
             const [visible, setVisible] = useState(false)
@@ -178,15 +179,20 @@ export default function AdminAtendimentoListaSabores() {
               })
             }
 
-            const handleOptionVisibileItems = (state: boolean) => {
-              setFilteredItems(items.filter(item => item.visible === state && item.active === true))
-            }
+            const allActiveItemsWithProfitFilter = applyProfitFilter(activeItems)
+            const displayedItemsBase = applyProfitFilter(
+              selectedLetter && !isSearching ? activeItems : filteredItems
+            )
+            const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("")
+            const availableLetters = new Set(
+              allActiveItemsWithProfitFilter
+                .map((item) => getInitialLetter(item.name))
+                .filter((letter): letter is string => !!letter)
+            )
 
-            const handleOptionActiveItems = (state: boolean) => {
-              setFilteredItems(items.filter(item => item.active === state))
-            }
-
-            const displayedItems = applyProfitFilter(filteredItems)
+            const displayedItems = selectedLetter
+              ? displayedItemsBase.filter((item) => getInitialLetter(item.name) === selectedLetter)
+              : displayedItemsBase
 
             // @ts-ignore
             return (
@@ -196,25 +202,6 @@ export default function AdminAtendimentoListaSabores() {
                     Lista de sabores
                   </h1>
                   <CardapioItemSearch items={items} setFilteredItems={setFilteredItems} setIsSearching={setIsSearching} />
-
-                  <Select
-                    onValueChange={(value) => {
-                      if (value === "active") handleOptionVisibileItems(true)
-                      else if (value === "paused") handleOptionVisibileItems(false)
-                      else if (value === "inactive") handleOptionActiveItems(false)
-                    }}
-                    defaultValue={"active"}
-
-                  >
-                    <SelectTrigger className="w-[200px] col-span-2 bg-white">
-                      <SelectValue placeholder="Filtrar vendas" />
-                    </SelectTrigger>
-                    <SelectContent >
-                      <SelectItem value="active">Venda ativa</SelectItem>
-                      <SelectItem value="paused">Venda pausada</SelectItem>
-                      <SelectItem value="inactive">Inativos</SelectItem>
-                    </SelectContent>
-                  </Select>
 
                   <div className="col-span-full flex flex-wrap items-center justify-center gap-4 text-center">
                     <span className="text-xs text-muted-foreground">Faixa de lucro</span>
@@ -272,10 +259,51 @@ export default function AdminAtendimentoListaSabores() {
                 </div>
 
                 <div className="flex flex-col items-center">
+                  <div className="mb-4 flex flex-wrap items-center justify-center gap-2 rounded-md border bg-white px-3 py-2">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedLetter(null)}
+                      className={cn(
+                        "text-xs font-semibold px-2 py-1 rounded",
+                        selectedLetter === null ? "bg-slate-900 text-white" : "hover:bg-slate-100"
+                      )}
+                    >
+                      Todos
+                    </button>
+                    {alphabet.map((letter) => {
+                      const isAvailable = availableLetters.has(letter)
+                      const isSelected = selectedLetter === letter
+
+                      if (!isAvailable) {
+                        return (
+                          <span
+                            key={letter}
+                            className="text-xs font-semibold text-muted-foreground/50 px-1.5 py-1"
+                          >
+                            {letter}
+                          </span>
+                        )
+                      }
+
+                      return (
+                        <button
+                          type="button"
+                          key={letter}
+                          onClick={() => setSelectedLetter((prev) => prev === letter ? null : letter)}
+                          className={cn(
+                            "text-xs font-semibold px-1.5 py-1 rounded",
+                            isSelected ? "bg-slate-900 text-white" : "hover:bg-slate-100"
+                          )}
+                        >
+                          {letter}
+                        </button>
+                      )
+                    })}
+                  </div>
 
                   <ul className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-4">
                     {
-                      displayedItems.map(item => {
+                      displayedItems.map((item) => {
                         return (
                           <CardapioItem
                             key={item.id}
@@ -284,7 +312,7 @@ export default function AdminAtendimentoListaSabores() {
                             visible={visible}
                             active={active}
                             setActive={setActive}
-                            isSearching={isSearching}
+                            isSearching={isSearching || !!selectedLetter}
                           />
 
                         )
@@ -324,25 +352,44 @@ function CardapioItem({ item, setVisible, visible, active, setActive, showExpand
   const profitBadge = getProfitBadgeConfig(profitPerc);
 
   return (
-    <div className={
+    <div
+      className={
       cn(
         "border rounded-lg p-4",
         item?.visible === false && "border-red-500/50 bg-red-500/10",
       )
-    } key={item.id}>
+      }
+      key={item.id}
+    >
       <div className="flex flex-col  mb-2">
 
         <div className="flex justify-between items-center">
           <div className="flex flex-col gap-1">
-            <h2 className="text-xs uppercase font-semibold tracking-wide">{item.name}</h2>
-            <Badge
-              className={cn(
-                "text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 w-max",
-                profitBadge.className
+            <h2 className="text-xs uppercase font-semibold tracking-wide">
+              <Link
+                to={`/admin/gerenciamento/cardapio/${item.id}/main`}
+                target="_blank"
+                rel="noreferrer"
+                className="hover:underline"
+              >
+                {item.name}
+              </Link>
+            </h2>
+            <div className="flex flex-wrap gap-1">
+              <Badge
+                className={cn(
+                  "text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 w-max",
+                  profitBadge.className
+                )}
+              >
+                {profitBadge.label}
+              </Badge>
+              {item.upcoming === true && (
+                <Badge className="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 w-max bg-blue-100 text-blue-700">
+                  Lancamento futuro
+                </Badge>
               )}
-            >
-              {profitBadge.label}
-            </Badge>
+            </div>
           </div>
           <div className="flex gap-2 items-center">
             {isSearching && (
@@ -363,13 +410,17 @@ function CardapioItem({ item, setVisible, visible, active, setActive, showExpand
               )
             }
 
-            <CopyButton
-              // label="Copiar elenco para imprimir"
-              classNameLabel="text-sm md:text-xs "
-              classNameButton="border-none text-sm md:text-xs p-1 mr-0 h-max hover:bg-black/20 hover:text-white"
-              textToCopy={`*${item.name}*: ${item.ingredients}`}
-              variant="outline"
-            />
+            {item.visible ? (
+              <CopyButton
+                // label="Copiar elenco para imprimir"
+                classNameLabel="text-sm md:text-xs "
+                classNameButton="border-none text-sm md:text-xs p-1 mr-0 h-max hover:bg-black/20 hover:text-white"
+                textToCopy={`*${item.name}*: ${item.ingredients}`}
+                variant="outline"
+              />
+            ) : (
+              <HiddenFlavorCopyWarningDialog item={item} />
+            )}
           </div>
         </div>
 
@@ -442,9 +493,56 @@ function getProfitPercForItem(item: MenuItemWithAssociations) {
   return profitVariation ? Number(profitVariation.profitActualPerc ?? 0) : null;
 }
 
+function getInitialLetter(value?: string | null) {
+  if (!value) return null;
+
+  const normalized = value
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase();
+
+  const firstChar = normalized.charAt(0);
+
+  return /[A-Z]/.test(firstChar) ? firstChar : null;
+}
+
 interface CardapioItemDialogProps {
   children?: React.ReactNode;
   triggerComponent?: React.ReactNode;
+}
+
+function HiddenFlavorCopyWarningDialog({ item }: { item: MenuItemWithAssociations }) {
+  const isUpcoming = item.upcoming === true
+
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          className="border-none text-sm md:text-xs p-1 mr-0 h-max hover:bg-black/20 hover:text-white"
+        >
+          <CopyIcon size={16} className="text-black" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-sm">
+        <DialogTitle className="text-base font-semibold">
+          {isUpcoming ? "Lancamento futuro" : "Sabor pausado"}
+        </DialogTitle>
+        <p className="text-sm text-muted-foreground">
+          {isUpcoming
+            ? "Este sabor e um lancamento futuro e nao esta disponivel agora no cardapio."
+            : "Este sabor esta pausado e nao esta disponivel no cardapio."}
+        </p>
+        <DialogClose asChild>
+          <Button type="button" variant="secondary" className="mt-2 w-full">
+            Fechar
+          </Button>
+        </DialogClose>
+      </DialogContent>
+    </Dialog>
+  )
 }
 
 function CardapioItemDialog({ children, triggerComponent }: CardapioItemDialogProps) {
@@ -495,14 +593,17 @@ function CardapioItemSearch({
   const applySearch = (value: string, shouldIncludeHidden: boolean) => {
     if (!value) {
       setIsSearching(false)
-      return setFilteredItems(items.filter(i => i.visible === true && i.active === true))
+      return setFilteredItems(
+        items
+          .filter(item => item.active === true)
+          .filter(item => (shouldIncludeHidden ? true : item.visible === true))
+      )
     }
 
     setIsSearching(true)
 
     const searchedItems = items
       .filter(item => item.active === true)
-      .filter(item => (shouldIncludeHidden ? true : item.visible === true))
       .filter(item => {
         const tags = item?.tags?.public || []
 
