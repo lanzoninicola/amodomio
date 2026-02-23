@@ -21,7 +21,7 @@ export default function SelectUM({ required = true, className }: SelectUMProps) 
             </SelectTrigger>
             <SelectContent id="um">
 
-                {umEntity.units().map(u => <SelectItem key={randomReactKey()} value={u}>u</SelectItem>)}
+                {umEntity.units().map(u => <SelectItem key={randomReactKey()} value={u}>{u}</SelectItem>)}
             </SelectContent>
         </Select>
     )

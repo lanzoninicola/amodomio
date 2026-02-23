@@ -1,6 +1,5 @@
 import { serverError } from "~/utils/http-response.server";
 import {
-  ProductModel,
   type Product,
   type ProductComponent,
   type ProductInfo,
@@ -338,7 +337,181 @@ export class ProductPrismaEntity {
   }
 }
 
-export const productEntity = new ProductEntity(ProductModel);
+class ProductPrismaCompatEntity {
+  client;
+  constructor({ client }: PrismaEntityProps) {
+    this.client = client;
+  }
+
+  private getByPath(obj: any, path: string) {
+    return path.split(".").reduce((acc: any, key: string) => {
+      if (acc === null || acc === undefined) return undefined;
+      return acc[key];
+    }, obj);
+  }
+
+  private matchesCondition(product: any, condition: any) {
+    const left = this.getByPath(product, String(condition.field || ""));
+    const op = condition.op;
+    const right = condition.value;
+
+    if (op === "==") return left === right;
+    if (op === "in") return Array.isArray(right) && right.includes(left);
+
+    return true;
+  }
+
+  async findAll(conditions?: any[]) {
+    const products = await this.client.product.findMany();
+    if (!conditions || conditions.length === 0) {
+      return products;
+    }
+
+    return products.filter((product: any) =>
+      conditions.every((condition) => this.matchesCondition(product, condition))
+    );
+  }
+
+  async findById(id: string) {
+    return await this.client.product.findUnique({ where: { id } });
+  }
+
+  async create(data: Prisma.ProductCreateInput) {
+    return await this.client.product.create({ data });
+  }
+
+  async update(id: string, data: Prisma.ProductUpdateInput) {
+    return await this.client.product.update({ where: { id }, data });
+  }
+
+  async delete(id: string) {
+    return await this.client.product.delete({ where: { id } });
+  }
+
+  async findAllOrderedBy(field: FieldOrderBy, orientation: "asc" | "desc") {
+    const products = await this.findAll();
+
+    const compareFunction = (a: any, b: any) => {
+      if (field === "name") {
+        return String(a.name || "").localeCompare(String(b.name || ""));
+      }
+
+      if (field === "createdAt") {
+        const createdAtA = dayjs(a.createdAt);
+        const createdAtB = dayjs(b.createdAt);
+        if (createdAtA.isBefore(createdAtB)) return -1;
+        if (createdAtA.isAfter(createdAtB)) return 1;
+        return 0;
+      }
+
+      const updatedAtA = dayjs(a.updatedAt);
+      const updatedAtB = dayjs(b.updatedAt);
+      if (updatedAtA.isBefore(updatedAtB)) return -1;
+      if (updatedAtA.isAfter(updatedAtB)) return 1;
+      return 0;
+    };
+
+    return orientation === "asc"
+      ? products.slice().sort(compareFunction)
+      : products.slice().sort(compareFunction).reverse();
+  }
+
+  async findAllGroupedByCategory() {
+    const products = (await this.findAllOrderedBy("name", "asc")) as any[];
+
+    return products.reduce((acc, product) => {
+      const categoryRaw = product?.info?.category;
+      const category =
+        typeof categoryRaw === "string" ? jsonParse(categoryRaw) : categoryRaw;
+      const categoryName =
+        category?.name || product?.Category?.name || "Não definido";
+
+      if (!acc[categoryName]) {
+        acc[categoryName] = [];
+      }
+
+      acc[categoryName].push(product);
+      return acc;
+    }, {} as TCategoryProducts);
+  }
+
+  async findByType(type: ProductType) {
+    const products = await this.findAll();
+    return products.filter((p: any) => p?.info?.type === type);
+  }
+
+  async findCompositionWithProduct(id: string): Promise<any[]> {
+    const products = await this.findAll();
+    return products.filter((p: any) =>
+      Array.isArray(p?.components)
+        ? p.components.some((c: any) => c?.product?.id === id)
+        : false
+    );
+  }
+
+  async isProductPartOfComposition(id: string): Promise<boolean> {
+    const products = await this.findAll();
+    return products.some((p: any) =>
+      Array.isArray(p?.components)
+        ? p.components.some((c: any) => c?.product?.id === id)
+        : false
+    );
+  }
+
+  async addComponent(productId: string, component: ProductComponent) {
+    const product: any = await this.findById(productId);
+    const components = Array.isArray(product?.components)
+      ? [...product.components]
+      : [];
+
+    const componentExists = components.some(
+      (c: any) => c?.product?.id === component?.product?.id
+    );
+
+    if (!componentExists) {
+      components.push(component);
+    }
+
+    return await this.update(productId, { components } as any);
+  }
+
+  async updateComponent(
+    productId: string,
+    componentId: string,
+    updatedData: any
+  ) {
+    const product: any = await this.findById(productId);
+    const components = Array.isArray(product?.components)
+      ? product.components
+      : [];
+
+    const updatedComponents = components.map((component: any) => {
+      if (component?.product?.id === componentId) {
+        return { ...component, ...updatedData };
+      }
+      return component;
+    });
+
+    return await this.update(productId, { components: updatedComponents } as any);
+  }
+
+  async removeComponent(productId: string, componentId: string) {
+    const product: any = await this.findById(productId);
+    const components = Array.isArray(product?.components)
+      ? product.components
+      : [];
+
+    const updatedComponents = components.filter(
+      (component: any) => component?.product?.id !== componentId
+    );
+
+    return await this.update(productId, { components: updatedComponents } as any);
+  }
+}
+
+export const productEntity: any = new ProductPrismaCompatEntity({
+  client: prismaClient,
+});
 export const productPrismaEntity = new ProductPrismaEntity({
   client: prismaClient,
 });

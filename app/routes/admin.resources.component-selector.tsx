@@ -1,7 +1,6 @@
 import type { LoaderFunctionArgs } from '@remix-run/node';
 import { json } from '@remix-run/node';
 import { Form, Link, useFetcher, useSearchParams } from '@remix-run/react';
-import { FieldPath } from 'firebase/firestore';
 import { Plus } from 'lucide-react';
 import { useState } from 'react';
 import AlphabetSelector from '~/components/primitives/alphabet-selector/alphabet-selector';
@@ -10,22 +9,15 @@ import GenericError from '~/components/primitives/generi-error/generic-error';
 import NoRecordsFound from '~/components/primitives/no-records-found/no-records-found';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
-import { productEntity } from '~/domain/product/product.entity';
+import { productPrismaEntity } from '~/domain/product/product.entity';
 import type { Product } from '~/domain/product/product.model.server';
 import { jsonStringify } from '~/utils/json-helper';
 import toLowerCase from '~/utils/to-lower-case';
 
 export async function loader({ request }: LoaderFunctionArgs) {
-
-    const products = await productEntity.findAll([
-        {
-            field: new FieldPath("info", "type"),
-            op: "in",
-            value: ["simple", "processed"]
-        }
-    ])
-
-    return json({ products })
+    const products = await productPrismaEntity.findAll()
+    const productsAllowed = products.filter((p: any) => ["simple", "processed"].includes(p?.info?.type))
+    return json({ products: productsAllowed })
 }
 
 export function ComponentSelector({ parentProductId }: { parentProductId: string | undefined }) {

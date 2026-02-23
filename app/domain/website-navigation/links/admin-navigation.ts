@@ -117,6 +117,12 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
               items: [],
               disabled: false,
             },
+            {
+              title: "Produtos",
+              href: "/admin/products",
+              items: [],
+              disabled: false,
+            },
           ],
           disabled: false,
         },
@@ -227,8 +233,8 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
           disabled: false,
         },
         {
-          title: "Receitas",
-          href: "/admin/recipes",
+          title: "Fichas técnicas",
+          href: "/admin/recipe-sheets",
           items: [],
           disabled: false,
         },

@@ -10,34 +10,27 @@ import { Label } from "~/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { Separator } from "~/components/ui/separator";
 import { toast } from "~/components/ui/use-toast";
-import { categoryEntity } from "~/domain/category/category.entity.server";
-import { Category } from "~/domain/category/category.model.server";
-import SelectProductUnit from "~/domain/product/components/select-product-unit/select-product-unit";
-import { ProductEntity, ProductTypeHTMLSelectOption, productPrismaEntity } from "~/domain/product/product.entity";
-import type { Product, ProductType, ProductUnit } from "~/domain/product/product.model.server";
-import getSearchParam from "~/utils/get-search-param";
+import type { Product } from "~/domain/product/product.model.server";
+import type { ProductTypeOption, ProductUnitOption } from "~/modules/products/product.constants";
+import { createProduct, getProductCreatePageData } from "~/modules/products/product.service.server";
 import { ok, serverError } from "~/utils/http-response.server";
-import { jsonStringify } from "~/utils/json-helper";
 import tryit from "~/utils/try-it";
+import type { Category } from "@prisma/client";
 
 
-export async function loader({ request, params }: ActionFunctionArgs) {
-    const products = await productPrismaEntity.findAll()
-    const categories = await categoryEntity.findAll()
-    const types = ProductEntity.findAllProductTypes()
-
-    // this is used when a component is added to the product
-    const callbackUrl = getSearchParam({ request, paramName: "callbackUrl" })
+export async function loader({ request }: ActionFunctionArgs) {
+    const payload = await getProductCreatePageData(request)
 
     return ok({
-        products,
-        callbackUrl: callbackUrl || "",
-        categories: categories.filter(c => c.type === "product"),
-        types
+        products: payload.products,
+        callbackUrl: payload.callbackUrl,
+        categories: payload.categories,
+        types: payload.productTypes,
+        units: payload.productUnits,
     })
 }
 
-export async function action({ request, params }: ActionFunctionArgs) {
+export async function action({ request }: ActionFunctionArgs) {
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);
 
@@ -45,17 +38,16 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
     if (_action === "product-create") {
 
-        const type = values.type as ProductType
-        const category = await categoryEntity.findById(values?.categoryId as string)
-
-
-        const [err, data] = await tryit(productPrismaEntity.create({
+        const purchaseUnit = values.purchaseUnit as any
+        const consumptionUnit = values.consumptionUnit as any
+        const purchaseToConsumptionFactor = Number(values.purchaseToConsumptionFactor || 1)
+        const [err, data] = await tryit(createProduct({
             name: values.name as string,
-            unit: values.unit as ProductUnit,
-            info: {
-                type,
-                // @ts-ignore
-                category: jsonStringify(category),
+            categoryId: values?.categoryId as string,
+            measurement: {
+                purchaseUnit,
+                consumptionUnit,
+                purchaseToConsumptionFactor,
             }
         }))
 
@@ -80,7 +72,8 @@ export default function SingleProductNew() {
     const products: Product[] = loaderData?.payload.products || []
     const callbackUrl = loaderData?.payload.callbackUrl
     const categories: Category[] = loaderData?.payload.categories || []
-    const types: ProductTypeHTMLSelectOption[] = loaderData?.payload.types || []
+    const types: ProductTypeOption[] = loaderData?.payload.types || []
+    const units: ProductUnitOption[] = loaderData?.payload.units || []
 
     const actionData = useActionData<typeof action>()
     const status = actionData?.status
@@ -94,7 +87,7 @@ export default function SingleProductNew() {
     }
 
     const [searchTerm, setSearchTerm] = useState("")
-    const productsFilteredBySearch = products.filter(p => p.info?.type !== "topping").filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()))
+    const productsFilteredBySearch = products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()))
 
     return (
         <Container>
@@ -117,10 +110,20 @@ export default function SingleProductNew() {
                                         }} />
                                 </Fieldset>
                                 <Fieldset>
-
-                                    <div className="max-w-[150px]">
-                                        <Label htmlFor="unit">Unidade</Label>
-                                        <SelectProductUnit />
+                                    <div className="max-w-[180px]">
+                                        <Label htmlFor="consumptionUnit">Unidade de consumo</Label>
+                                        <Select name="consumptionUnit" required defaultValue="g">
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Selecionar..." />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectGroup>
+                                                    {units.map((unit) => (
+                                                        <SelectItem key={unit.value} value={unit.value}>{unit.label}</SelectItem>
+                                                    ))}
+                                                </SelectGroup>
+                                            </SelectContent>
+                                        </Select>
                                     </div>
                                 </Fieldset>
                             </div>
@@ -158,6 +161,32 @@ export default function SingleProductNew() {
                                             </SelectGroup>
                                         </SelectContent>
                                     </Select>
+                                    <div className="rounded-md border bg-slate-50 p-3 text-xs text-slate-700 space-y-3">
+                                        <div className="space-y-1">
+                                            <p className="font-semibold text-slate-900">Sabor</p>
+                                            <p>Produto final de cardápio (ex.: sabor de pizza). É o item que o cliente escolhe.</p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <p className="font-semibold text-slate-900">Semi-acabado</p>
+                                            <p>Base/subpreparo interno que vira componente de outros produtos (ex.: massa pré-preparada, molho base).</p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <p className="font-semibold text-slate-900">Produzido</p>
+                                            <p>Item transformado pela produção e usado na composição de receitas (não é item de compra direta).</p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <p className="font-semibold text-slate-900">Simples</p>
+                                            <p>Insumo básico, sem transformação (ex.: farinha, azeite, tomate).</p>
+                                        </div>
+
+                                        <div className="border-t pt-3 space-y-1">
+                                            <p className="font-semibold text-slate-900">Como escolher o tipo?</p>
+                                            <p>Se o cliente compra diretamente: <span className="font-semibold">Sabor</span></p>
+                                            <p>Se é base para outra preparação: <span className="font-semibold">Semi-acabado</span></p>
+                                            <p>Se foi produzido e entra em composições: <span className="font-semibold">Produzido</span></p>
+                                            <p>Se é matéria-prima direta: <span className="font-semibold">Simples</span></p>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </Fieldset>
@@ -180,6 +209,51 @@ export default function SingleProductNew() {
                                             </SelectGroup>
                                         </SelectContent>
                                     </Select>
+                                </div>
+                            </div>
+                        </Fieldset>
+
+                        {/* Unidades e conversão */}
+
+                        <Fieldset>
+                            <div className="flex justify-between items-start ">
+                                <Label htmlFor="purchaseUnit" className="pt-2">Unidade de compra</Label>
+                                <div className="flex flex-col gap-2 w-[300px]">
+                                    <Select name="purchaseUnit" required defaultValue="un">
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Selecionar..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectGroup >
+                                                {units.map((unit) => {
+                                                    return <SelectItem key={`purchase-${unit.value}`} value={unit.value}>{unit.label}</SelectItem>
+                                                })}
+                                            </SelectGroup>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+                        </Fieldset>
+
+                        <Fieldset>
+                            <div className="flex justify-between items-start ">
+                                <Label htmlFor="purchaseToConsumptionFactor" className="pt-2">Fator compra → consumo</Label>
+                                <div className="flex flex-col gap-2 w-[300px]">
+                                    <Input
+                                        id="purchaseToConsumptionFactor"
+                                        name="purchaseToConsumptionFactor"
+                                        type="number"
+                                        min="0.000001"
+                                        step="0.000001"
+                                        defaultValue="1"
+                                        required
+                                    />
+                                    <div className="rounded-md border bg-slate-50 p-3 text-xs text-slate-700 space-y-1">
+                                        <p className="font-semibold text-slate-900">Como funciona</p>
+                                        <p>Informe quantas unidades de <b>consumo</b> existem em 1 unidade de <b>compra</b>.</p>
+                                        <p>Exemplo: Manjericão comprado por UN e consumido em KG. Se 1 UN = 0,08 KG, fator = <b>0.08</b>.</p>
+                                        <p>Exemplo: Queijo comprado em KG e consumido em G. Se 1 KG = 1000 G, fator = <b>1000</b>.</p>
+                                    </div>
                                 </div>
                             </div>
                         </Fieldset>

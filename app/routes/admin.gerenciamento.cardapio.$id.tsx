@@ -8,7 +8,8 @@ const menuItemNavigation = [
     { name: 'Galeria', href: 'images' },
     { name: 'Venda', href: 'venda/prices' },
     { name: 'Tags', href: 'tags' },
-    { name: 'Custos', href: 'costs' }
+    { name: 'Custos', href: 'costs' },
+    { name: 'Ficha Tecnica', href: 'recipe-sheets' }
 ]
 
 
@@ -60,5 +61,3 @@ export default function SingleCardapioItem() {
         </div>
     );
 }
-
-

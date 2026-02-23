@@ -1,13 +1,9 @@
-import {
-  TFirestoreModel,
-  createFirestoreModel,
-} from "~/lib/firestore-model/src";
 import type { LatestSellPrice } from "../sell-price/sell-price.model.server";
 import { type SellPrice } from "../sell-price/sell-price.model.server";
 import type { LatestCost } from "../purchase-price/purchase-price.model.server";
 import { type PurchasePrice } from "../purchase-price/purchase-price.model.server";
-import { ProductMenu } from "./product-menu.model.server";
-import { Category } from "../category/category.model.server";
+import type { ProductMenu } from "./product-menu.model.server";
+import type { Category } from "../category/category.model.server";
 
 export interface Product {
   id?: string;
@@ -33,6 +29,7 @@ export interface ProductInfo {
   type: ProductType;
   description?: string;
   category?: Category | undefined | null;
+  measurement?: ProductMeasurementConfig;
 }
 
 export interface ProductStock {
@@ -43,7 +40,14 @@ export interface ProductStock {
   stockStatus: "in-stock" | "out-of-stock";
 }
 
-export type ProductUnit = "gr" | "lt" | "un";
+export type ProductUnit = "kg" | "g" | "l" | "ml" | "un" | "gr" | "lt";
+
+export interface ProductMeasurementConfig {
+  purchaseUnit: ProductUnit;
+  consumptionUnit: ProductUnit;
+  // how many consumption units exist in 1 purchase unit
+  purchaseToConsumptionFactor: number;
+}
 
 export interface ProductComponent {
   parentId: string;
@@ -62,7 +66,3 @@ export interface ProductPricing {
   sellPrices: SellPrice[];
   purchasePrices: PurchasePrice[];
 }
-
-const ProductModel = createFirestoreModel<Product>("products");
-
-export { ProductModel };

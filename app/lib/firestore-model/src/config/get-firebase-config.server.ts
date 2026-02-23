@@ -1,14 +1,23 @@
 const getFirebaseConfig = () => {
-  // Seems like the only key that is needed is the project_id
+  // Firestore is legacy in this project. Keep disabled by default.
+  const firestoreEnabled = process.env.ENABLE_FIRESTORE === "true";
+  const projectId = process.env.project_id;
 
-  if (!process.env.project_id) {
-    // throw new Error("Missing information to connect to firebase: project_id");
-    console.error("Missing information to connect to firebase: project_id");
+  if (!firestoreEnabled) {
+    return {
+      project_id: "",
+    };
+  }
+
+  if (!projectId) {
+    console.error(
+      "ENABLE_FIRESTORE=true but project_id is missing. Firestore will stay disabled."
+    );
   }
 
   return {
     // type: process.env.type,
-    project_id: "process.env.project_id",
+    project_id: projectId || "",
     // private_key_id: process.env.private_key_id,
     // private_key: process.env.private_key,
     // client_email: process.env.client_email,

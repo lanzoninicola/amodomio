@@ -8,7 +8,7 @@ import { Input } from "~/components/ui/input"
 import { Category } from "~/domain/category/category.model.server"
 import ProductTypeBadge from "~/domain/product/components/product-type-badge/product-type-badge"
 import { TCategoryProducts, productEntity } from "~/domain/product/product.entity"
-import { Product } from "~/domain/product/product.model.server"
+import type { Product } from "~/domain/product/product.model.server"
 import { cn } from "~/lib/utils"
 import { serverError, ok } from "~/utils/http-response.server"
 import { jsonParse } from "~/utils/json-helper"
@@ -58,4 +58,3 @@ export default function ProductsExport() {
 
 
 }
-

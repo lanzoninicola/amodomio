@@ -24,6 +24,12 @@ Documentação da API REST do KDS (criação de pedidos e delivery zones):
 
 - `app/domain/kds/README.md`
 
+## Domínio Cardápio (RecipeSheet)
+
+Regras de modelagem para evitar duplicação entre `Recipe` (base técnica) e `RecipeSheet` (aplicação comercial por item+tamanho):
+
+- `app/domain/cardapio/recipe-sheet/README.md`
+
 ## Painel WhatsApp Sem Resposta (Admin)
 
 O painel flutuante de alertas no admin lista conversas que precisam de ação do atendente.
