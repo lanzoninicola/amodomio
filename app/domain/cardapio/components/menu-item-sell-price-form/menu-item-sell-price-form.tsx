@@ -92,7 +92,7 @@ export default function MenuItemSellPriceForm({ menuItemId, sellPriceVariation, 
       {(sellPriceVariation.computedSellingPriceBreakdown?.custoFichaTecnica ?? 0) === 0 && (
         <div className="flex gap-2 items-center mt-2">
           <AlertCircleIcon className="h-4 w-4 text-red-500" />
-          <span className="text-red-500 text-xs font font-semibold">Custo ficha tecnica não definido</span>
+          <span className="text-red-500 text-xs font font-semibold">Custo da ficha de custo não definido</span>
         </div>
       )}
 

@@ -1,8 +1,7 @@
 import { badRequest } from "~/utils/http-response.server";
 import { BaseEntity } from "../base.entity";
 import { MenuItemModel, type MenuItem } from "./menu-item.model.server";
-import { CategoryModel } from "../category/category.model.server";
-import { categoryEntity } from "../category/category.entity.server";
+import { categoryPrismaEntity } from "../category/category.entity.server";
 
 class MenuItemEntity extends BaseEntity<MenuItem> {
   override async create(menuItem: MenuItem): Promise<MenuItem> {
@@ -12,7 +11,7 @@ class MenuItemEntity extends BaseEntity<MenuItem> {
       badRequest("Categoria não informada");
     }
 
-    const defaultCategory = await categoryEntity.getDefaultCategory("menu");
+    const defaultCategory = await categoryPrismaEntity.getDefaultCategory("menu");
 
     const latest = await this.getLatestByCategory(
       defaultCategory!.id as string
@@ -46,7 +45,7 @@ class MenuItemEntity extends BaseEntity<MenuItem> {
       let itemCategorySortOrder = 1000;
 
       if (itemCategoryId) {
-        const itemCategory = await CategoryModel.findById(itemCategoryId);
+        const itemCategory = await categoryPrismaEntity.findById(itemCategoryId);
 
         if (itemCategory) {
           itemCategorySortOrder = itemCategory.sortOrder || 1000;
@@ -63,7 +62,7 @@ class MenuItemEntity extends BaseEntity<MenuItem> {
 
   async sortDown(id: string, categoryId: string): Promise<MenuItem> {
     const current = await this.findById(id);
-    const currentCategory = await CategoryModel.findById(categoryId);
+    const currentCategory = await categoryPrismaEntity.findById(categoryId);
 
     const currentCategorySortOrder = currentCategory?.sortOrder || 1000;
 
@@ -119,7 +118,7 @@ class MenuItemEntity extends BaseEntity<MenuItem> {
 
   async sortUp(id: string, categoryId: string): Promise<MenuItem> {
     const current = await this.findById(id);
-    const currentCategory = await CategoryModel.findById(categoryId);
+    const currentCategory = await categoryPrismaEntity.findById(categoryId);
 
     const currentCategorySortOrder = currentCategory?.sortOrder || 1000;
 

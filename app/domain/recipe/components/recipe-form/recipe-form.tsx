@@ -11,9 +11,11 @@ import { Switch } from "~/components/ui/switch";
 interface RecipeFormProps {
     recipe?: Recipe;
     actionName: "recipe-create" | "recipe-update";
+    items?: Array<{ id: string; name: string }>;
+    variations?: Array<{ id: string; name: string; kind?: string | null }>;
 }
 
-export default function RecipeForm({ recipe, actionName }: RecipeFormProps) {
+export default function RecipeForm({ recipe, actionName, items = [], variations = [] }: RecipeFormProps) {
     return (
         <Form method="post">
             <input type="hidden" name="recipeId" value={recipe?.id} />
@@ -35,6 +37,38 @@ export default function RecipeForm({ recipe, actionName }: RecipeFormProps) {
                         <Fieldset className="grid-cols-3">
                             <Label htmlFor="description">Descrição</Label>
                             <Textarea id="description" name="description" defaultValue={recipe?.description || ""} className="col-span-2" />
+                        </Fieldset>
+                        <Fieldset className="grid-cols-3">
+                            <Label htmlFor="linkedItemId">Item vinculado</Label>
+                            <select
+                                id="linkedItemId"
+                                name="linkedItemId"
+                                defaultValue={recipe?.itemId || ""}
+                                className="col-span-2 h-10 rounded-md border border-input bg-transparent px-3 py-2 text-sm"
+                            >
+                                <option value="">Criar/vincular automaticamente pelo nome</option>
+                                {items.map((item) => (
+                                    <option key={item.id} value={item.id}>
+                                        {item.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </Fieldset>
+                        <Fieldset className="grid-cols-3">
+                            <Label htmlFor="linkedVariationId">Variação vinculada</Label>
+                            <select
+                                id="linkedVariationId"
+                                name="linkedVariationId"
+                                defaultValue={((recipe as any)?.variationId as string) || ""}
+                                className="col-span-2 h-10 rounded-md border border-input bg-transparent px-3 py-2 text-sm"
+                            >
+                                <option value="">Sem variação vinculada</option>
+                                {variations.map((variation) => (
+                                    <option key={variation.id} value={variation.id}>
+                                        {variation.name}{variation.kind ? ` (${variation.kind})` : ""}
+                                    </option>
+                                ))}
+                            </select>
                         </Fieldset>
                         <Fieldset className="grid-cols-3">
                             <Label htmlFor="hasVariations">Variações</Label>

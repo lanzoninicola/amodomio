@@ -1,20 +1,9 @@
-import { serverError } from "~/utils/http-response.server";
-import {
-  type Product,
-  type ProductComponent,
-  type ProductInfo,
-  type ProductType,
+import type {
+  Product,
+  ProductComponent,
+  ProductType,
 } from "./product.model.server";
-import type { LatestSellPrice } from "../sell-price/sell-price.model.server";
-import { BaseEntity } from "../base.entity";
-import tryit from "~/utils/try-it";
-import dayjs from "dayjs";
-import { Category } from "../category/category.model.server";
-import { jsonParse } from "~/utils/json-helper";
-import prismaClient from "~/lib/prisma/client.server";
-import { Prisma, PrismaClient } from "@prisma/client";
-import { DefaultArgs } from "@prisma/client/runtime/library";
-import { PrismaEntityProps } from "~/lib/prisma/types.server";
+import type { Category } from "../category/category.model.server";
 
 export interface ProductTypeHTMLSelectOption {
   value: ProductType;
@@ -23,495 +12,93 @@ export interface ProductTypeHTMLSelectOption {
 
 export type TCategoryProducts = Record<Category["name"], Product[]>;
 
-type FieldOrderBy = "name" | "createdAt" | "updatedAt";
+type MaybeProduct = Product | null;
 
-export class ProductEntity extends BaseEntity<Product> {
-  async findAllOrderedBy(field: FieldOrderBy, orientation: "asc" | "desc") {
-    const products = await this.findAll();
+function notAvailableError() {
+  return new Error("Fluxo de Product foi removido. Use Item/Recipe/ItemCostSheet.");
+}
 
-    const compareFunction = (a: Product, b: Product) => {
-      if (field === "name") {
-        return a.name.localeCompare(b.name);
-      }
-
-      if (field === "createdAt") {
-        // @ts-ignore
-        const createdAtA = dayjs(a.createdAt);
-        // @ts-ignore
-        const createdAtB = dayjs(b.createdAt);
-
-        if (createdAtA.isBefore(createdAtB)) {
-          return -1;
-        }
-        if (createdAtA.isAfter(createdAtB)) {
-          return 1;
-        }
-        return 0;
-      }
-
-      if (field === "updatedAt") {
-        // @ts-ignore
-        const updatedAtA = dayjs(a.updatedAt);
-        // @ts-ignore
-        const updatedAtB = dayjs(b.updatedAt);
-
-        if (updatedAtA.isBefore(updatedAtB)) {
-          return -1;
-        }
-        if (updatedAtA.isAfter(updatedAtB)) {
-          return 1;
-        }
-        return 0;
-      }
-
-      return 0;
-    };
-
-    return orientation === "asc"
-      ? products.slice().sort(compareFunction)
-      : products.slice().sort(compareFunction).reverse();
-  }
-
-  async findAllGroupedByCategory() {
-    const products = await this.findAllOrderedBy("name", "asc");
-
-    const categories = products.reduce((acc, product) => {
-      const categoryStringify = product.info?.category;
-
-      const category = jsonParse(categoryStringify) as Category;
-
-      const categoryName = category?.name || "Não definido";
-
-      if (!acc[categoryName]) {
-        acc[categoryName] = [];
-      }
-      acc[categoryName].push(product);
-
-      return acc;
-    }, {} as TCategoryProducts);
-
-    return categories;
-  }
-
-  async deleteProduct(id: Product["id"]) {
-    if (!id) {
-      throw new Error("Não foi passado o ID do produto da eliminar");
-    }
-
-    // check if the product is part of a composition, if so, throw an error
-    const isPartOfComposition = await this.isProductPartOfComposition(id);
-
-    if (isPartOfComposition === true) {
-      throw new Error("O produto está em composição, não pode ser deletado.");
-    }
-
-    const [err, data] = await tryit(productEntity._delete(id));
-
-    if (err) {
-      throw new Error(err.message);
-    }
-
-    return data;
-  }
-
-  async findByType(type: ProductType) {
-    const [err, products] = await tryit(
-      productEntity.findAll([
-        {
-          field: "info.type",
-          op: "==",
-          value: type,
-        },
-      ])
-    );
-
-    if (err) {
-      throw new Error(err.message);
-    }
-
-    return products;
-  }
-
-  /**
-   * This retrieves the main product containing the item I wish to verify within its composition.
-   *
-   * @param id The product ID that could be inside a composition
-   * @return
-   */
-  async findCompositionWithProduct(id: Product["id"]): Promise<Product[]> {
-    const products = await this.findAll();
-    return products.filter((p) => {
-      const composition = p.components?.filter((c) => c.product.id === id);
-
-      if (composition && composition?.length > 0) {
-        return p;
-      }
-      return false;
-    });
-  }
-
-  /**
-   * This detect if a product is part of a composition.
-   *
-   * @param id The product ID that could be inside a composition
-   * @return boolean
-   */
-  async isProductPartOfComposition(id: Product["id"]): Promise<boolean> {
-    const products = await this.findAll();
-
-    return products.some((p) => {
-      const composition = p.components?.some((c) => c.product.id === id);
-
-      if (composition && composition === true) {
-        return true;
-      }
-      return false;
-    });
-  }
-
-  async addComponent(productId: string, component: ProductComponent) {
-    const product = await this.findById(productId);
-    const components = product?.components || [];
-
-    const componentExists = components.some(
-      (c) => c.product.id === component.product.id
-    );
-
-    if (componentExists === false) {
-      components.push(component);
-    }
-
-    return await this.update(productId, {
-      components: components,
-    });
-  }
-
-  async updateComponent(
-    productId: string,
-    componentId: string,
-    updatedData: any
-  ) {
-    const product = await this.findById(productId);
-    const components = product?.components || [];
-
-    const updatedComponents = components.map((component) => {
-      if (component.product.id === componentId) {
-        return {
-          ...component,
-          ...updatedData,
-        };
-      }
-
-      return component;
-    });
-
-    return await this.update(productId, {
-      components: updatedComponents,
-    });
-  }
-
-  async removeComponent(productId: string, componentId: string) {
-    const product = await this.findById(productId);
-    const components = product?.components || [];
-
-    const updatedComponents = components.filter(
-      (component) => component.product.id !== componentId
-    );
-
-    return await this.update(productId, {
-      components: updatedComponents,
-    });
-  }
-
-  async getSellingPrice(productId: string): Promise<LatestSellPrice> {
-    const product = await this.findById(productId);
-
-    if (!product) {
-      return {
-        unitPrice: 0,
-        unitPromotionalPrice: 0,
-      };
-    }
-
-    const productType = product?.info?.type;
-
-    if (!productType) {
-      return {
-        unitPrice: 0,
-        unitPromotionalPrice: 0,
-      };
-    }
-
-    return (
-      product.pricing?.latestSellPrice || {
-        unitPrice: 0,
-        unitPromotionalPrice: 0,
-      }
-    );
-  }
-
-  static findProductTypeByName(type: ProductInfo["type"] | null | undefined) {
-    switch (type) {
-      // case "pizza":
-      //   return "Pizza";
-      // case "ingredient":
-      //   return "Ingrediente";
-      case "topping":
-        return "Sabor";
-      case "processed":
-        return "Produzido";
-      case "simple":
-        return "Simples";
-      case null:
-      case undefined:
-        return "Não definido";
-      default:
-        return "Não definido";
-    }
-  }
+export class ProductEntity {
+  constructor(_: unknown = undefined) {}
 
   static findAllProductTypes(): ProductTypeHTMLSelectOption[] {
-    return [
-      // { value: "pizza", label: "Pizza" },
-      // { value: "ingredient", label: "Ingrediente" },
-      { value: "topping", label: "Sabor" },
-      { value: "semi-finished", label: "Semi-acabado" },
-      { value: "processed", label: "Produzido" },
-      { value: "simple", label: "Simples" },
-    ];
+    return [];
   }
 
-  validate(product: Product) {
-    if (!product.name) {
-      serverError("O nome do produto é obrigatório", { throwIt: true });
-    }
+  static findProductTypeLabel(): string {
+    return "Descontinuado";
   }
 
-  findAllByCategory(categoryId: string) {
-    return this.findAll([
-      {
-        field: "info.category.id",
-        op: "==",
-        value: categoryId,
-      },
-    ]);
-  }
-}
-
-export class ProductPrismaEntity {
-  client;
-  constructor({ client }: PrismaEntityProps) {
-    this.client = client;
+  async findAll(): Promise<Product[]> {
+    return [];
   }
 
-  async findAll(where?: Prisma.ProductWhereInput) {
-    if (!where) {
-      return await this.client.product.findMany();
-    }
-
-    return await this.client.product.findMany({ where });
+  async findAllOrderedBy(): Promise<Product[]> {
+    return [];
   }
 
-  async findAllByCategory(categoryId: string) {
-    return await this.client.product.findMany({
-      where: {
-        categoryId: categoryId,
-      },
-    });
+  async findAllGroupedByCategory(): Promise<TCategoryProducts> {
+    return {} as TCategoryProducts;
   }
 
-  async findById(id: string) {
-    return await this.client.product.findUnique({ where: { id } });
+  async findAllByCategory(): Promise<Product[]> {
+    return [];
   }
 
-  async create(data: Prisma.ProductCreateInput) {
-    return await this.client.product.create({ data });
+  async findById(): Promise<MaybeProduct> {
+    return null;
   }
 
-  async update(id: string, data: Prisma.ProductUpdateInput) {
-    return await this.client.product.update({ where: { id }, data });
+  async findByType(): Promise<Product[]> {
+    return [];
   }
 
-  async delete(id: string) {
-    return await this.client.product.delete({ where: { id } });
-  }
-}
-
-class ProductPrismaCompatEntity {
-  client;
-  constructor({ client }: PrismaEntityProps) {
-    this.client = client;
+  async findCompositionWithProduct(): Promise<Product[]> {
+    return [];
   }
 
-  private getByPath(obj: any, path: string) {
-    return path.split(".").reduce((acc: any, key: string) => {
-      if (acc === null || acc === undefined) return undefined;
-      return acc[key];
-    }, obj);
+  async isProductPartOfComposition(): Promise<boolean> {
+    return false;
   }
 
-  private matchesCondition(product: any, condition: any) {
-    const left = this.getByPath(product, String(condition.field || ""));
-    const op = condition.op;
-    const right = condition.value;
-
-    if (op === "==") return left === right;
-    if (op === "in") return Array.isArray(right) && right.includes(left);
-
-    return true;
+  async addComponent(): Promise<never> {
+    throw notAvailableError();
   }
 
-  async findAll(conditions?: any[]) {
-    const products = await this.client.product.findMany();
-    if (!conditions || conditions.length === 0) {
-      return products;
-    }
-
-    return products.filter((product: any) =>
-      conditions.every((condition) => this.matchesCondition(product, condition))
-    );
+  async updateComponent(): Promise<never> {
+    throw notAvailableError();
   }
 
-  async findById(id: string) {
-    return await this.client.product.findUnique({ where: { id } });
+  async removeComponent(): Promise<never> {
+    throw notAvailableError();
   }
 
-  async create(data: Prisma.ProductCreateInput) {
-    return await this.client.product.create({ data });
+  async create(): Promise<never> {
+    throw notAvailableError();
   }
 
-  async update(id: string, data: Prisma.ProductUpdateInput) {
-    return await this.client.product.update({ where: { id }, data });
+  async update(): Promise<never> {
+    throw notAvailableError();
   }
 
-  async delete(id: string) {
-    return await this.client.product.delete({ where: { id } });
+  async delete(): Promise<never> {
+    throw notAvailableError();
   }
 
-  async findAllOrderedBy(field: FieldOrderBy, orientation: "asc" | "desc") {
-    const products = await this.findAll();
-
-    const compareFunction = (a: any, b: any) => {
-      if (field === "name") {
-        return String(a.name || "").localeCompare(String(b.name || ""));
-      }
-
-      if (field === "createdAt") {
-        const createdAtA = dayjs(a.createdAt);
-        const createdAtB = dayjs(b.createdAt);
-        if (createdAtA.isBefore(createdAtB)) return -1;
-        if (createdAtA.isAfter(createdAtB)) return 1;
-        return 0;
-      }
-
-      const updatedAtA = dayjs(a.updatedAt);
-      const updatedAtB = dayjs(b.updatedAt);
-      if (updatedAtA.isBefore(updatedAtB)) return -1;
-      if (updatedAtA.isAfter(updatedAtB)) return 1;
-      return 0;
-    };
-
-    return orientation === "asc"
-      ? products.slice().sort(compareFunction)
-      : products.slice().sort(compareFunction).reverse();
-  }
-
-  async findAllGroupedByCategory() {
-    const products = (await this.findAllOrderedBy("name", "asc")) as any[];
-
-    return products.reduce((acc, product) => {
-      const categoryRaw = product?.info?.category;
-      const category =
-        typeof categoryRaw === "string" ? jsonParse(categoryRaw) : categoryRaw;
-      const categoryName =
-        category?.name || product?.Category?.name || "Não definido";
-
-      if (!acc[categoryName]) {
-        acc[categoryName] = [];
-      }
-
-      acc[categoryName].push(product);
-      return acc;
-    }, {} as TCategoryProducts);
-  }
-
-  async findByType(type: ProductType) {
-    const products = await this.findAll();
-    return products.filter((p: any) => p?.info?.type === type);
-  }
-
-  async findCompositionWithProduct(id: string): Promise<any[]> {
-    const products = await this.findAll();
-    return products.filter((p: any) =>
-      Array.isArray(p?.components)
-        ? p.components.some((c: any) => c?.product?.id === id)
-        : false
-    );
-  }
-
-  async isProductPartOfComposition(id: string): Promise<boolean> {
-    const products = await this.findAll();
-    return products.some((p: any) =>
-      Array.isArray(p?.components)
-        ? p.components.some((c: any) => c?.product?.id === id)
-        : false
-    );
-  }
-
-  async addComponent(productId: string, component: ProductComponent) {
-    const product: any = await this.findById(productId);
-    const components = Array.isArray(product?.components)
-      ? [...product.components]
-      : [];
-
-    const componentExists = components.some(
-      (c: any) => c?.product?.id === component?.product?.id
-    );
-
-    if (!componentExists) {
-      components.push(component);
-    }
-
-    return await this.update(productId, { components } as any);
-  }
-
-  async updateComponent(
-    productId: string,
-    componentId: string,
-    updatedData: any
-  ) {
-    const product: any = await this.findById(productId);
-    const components = Array.isArray(product?.components)
-      ? product.components
-      : [];
-
-    const updatedComponents = components.map((component: any) => {
-      if (component?.product?.id === componentId) {
-        return { ...component, ...updatedData };
-      }
-      return component;
-    });
-
-    return await this.update(productId, { components: updatedComponents } as any);
-  }
-
-  async removeComponent(productId: string, componentId: string) {
-    const product: any = await this.findById(productId);
-    const components = Array.isArray(product?.components)
-      ? product.components
-      : [];
-
-    const updatedComponents = components.filter(
-      (component: any) => component?.product?.id !== componentId
-    );
-
-    return await this.update(productId, { components: updatedComponents } as any);
+  async deleteProduct(): Promise<never> {
+    throw notAvailableError();
   }
 }
 
-export const productEntity: any = new ProductPrismaCompatEntity({
-  client: prismaClient,
-});
-export const productPrismaEntity = new ProductPrismaEntity({
-  client: prismaClient,
-});
+export class ProductPrismaEntity extends ProductEntity {
+  constructor(_: unknown = undefined) {
+    super();
+  }
+}
+
+// Legacy aliases kept for compile compatibility while Product is being removed.
+export const productEntity: any = new ProductEntity();
+export const productPrismaEntity: any = new ProductPrismaEntity();
+
+// Keep the imported type referenced so TS doesn't flag it as unused in stricter setups.
+void (0 as unknown as ProductComponent | undefined);

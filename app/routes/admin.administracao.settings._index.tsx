@@ -16,6 +16,11 @@ import {
   LIKE_SETTING_NAME,
   SHARE_SETTING_NAME,
 } from "~/domain/cardapio/engagement-settings.server";
+import {
+  DEFAULT_ITEM_COST_AVERAGE_WINDOW_DAYS,
+  ITEM_COST_AVERAGE_WINDOW_DAYS_SETTING,
+  ITEM_COST_SETTINGS_CONTEXT,
+} from "~/domain/item/item-cost-metrics.server";
 
 const SETTING_TYPES = ["string", "boolean", "float", "int", "json"] as const;
 const REELS_SETTINGS_CONTEXT = "cardapio";
@@ -54,7 +59,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const where = filters.length ? { AND: filters } : {};
 
-  const [likesSetting, sharesSetting, reelsEnabledSetting] = await Promise.all([
+  const [likesSetting, sharesSetting, reelsEnabledSetting, itemCostAverageWindowSetting] = await Promise.all([
     prismaClient.setting.findFirst({
       where: { context: ENGAGEMENT_SETTINGS_CONTEXT, name: LIKE_SETTING_NAME },
       orderBy: [{ createdAt: "desc" }],
@@ -65,6 +70,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
     }),
     prismaClient.setting.findFirst({
       where: { context: REELS_SETTINGS_CONTEXT, name: REELS_ENABLED_SETTING_NAME },
+      orderBy: [{ createdAt: "desc" }],
+    }),
+    prismaClient.setting.findFirst({
+      where: {
+        context: ITEM_COST_SETTINGS_CONTEXT,
+        name: ITEM_COST_AVERAGE_WINDOW_DAYS_SETTING,
+      },
       orderBy: [{ createdAt: "desc" }],
     }),
   ]);
@@ -100,6 +112,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
         name: REELS_ENABLED_SETTING_NAME,
         type: "boolean",
         value: "true",
+        createdAt: new Date(),
+      },
+    });
+  }
+
+  if (!itemCostAverageWindowSetting) {
+    await prismaClient.setting.create({
+      data: {
+        context: ITEM_COST_SETTINGS_CONTEXT,
+        name: ITEM_COST_AVERAGE_WINDOW_DAYS_SETTING,
+        type: "int",
+        value: String(DEFAULT_ITEM_COST_AVERAGE_WINDOW_DAYS),
         createdAt: new Date(),
       },
     });

@@ -8,8 +8,7 @@ const menuItemNavigation = [
     { name: 'Galeria', href: 'images' },
     { name: 'Venda', href: 'venda/prices' },
     { name: 'Tags', href: 'tags' },
-    { name: 'Custos', href: 'costs' },
-    { name: 'Ficha Tecnica', href: 'recipe-sheets' }
+    { name: 'Custos', href: 'costs' }
 ]
 
 

@@ -1,16 +1,15 @@
 import { Recipe } from "@prisma/client"
-import { Separator } from "@radix-ui/react-separator"
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node"
-import { useLoaderData, Form, useActionData } from "@remix-run/react"
+import { useLoaderData, Form, useActionData, Link } from "@remix-run/react"
 import { useState } from "react"
-import Container from "~/components/layout/container/container"
-import Badge from "~/components/primitives/badge/badge"
 import { EditItemButton, DeleteItemButton } from "~/components/primitives/table-list"
+import { Badge } from "~/components/ui/badge"
 import { Input } from "~/components/ui/input"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~/components/ui/table"
 import { toast } from "~/components/ui/use-toast"
 import RecipeBadge from "~/domain/recipe/components/recipe-badge/recipe-badge"
 import { recipeEntity } from "~/domain/recipe/recipe.entity.server"
-import { cn } from "~/lib/utils"
+import { Search } from "lucide-react"
 
 import { ok, serverError } from "~/utils/http-response.server"
 import tryit from "~/utils/try-it"
@@ -35,13 +34,13 @@ export async function action({ request }: ActionFunctionArgs) {
 
     if (_action === "recipe-delete") {
 
-        const [err, data] = await tryit(recipeEntity.delete(values.id as string))
+        const [err] = await tryit(recipeEntity.delete(values.id as string))
 
         if (err) {
             return serverError(err)
         }
 
-        return ok({ message: "Produto deletado com sucesso" })
+        return ok({ message: "Receita deletada com sucesso" })
     }
 
     return null
@@ -49,7 +48,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
 
 
-export default function ProducstIndex() {
+export default function RecipesIndex() {
     const loaderData = useLoaderData<typeof loader>()
     const recipes = loaderData?.payload.recipes as Recipe[]
 
@@ -69,25 +68,53 @@ export default function ProducstIndex() {
     const recipesFilteredBySearch = recipes.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()))
 
     return (
-        <Container>
-            <div className="flex flex-col gap-2">
-                <div data-element="filters" className="flex justify-between border rounded-md p-4 mb-2">
+        <div className="flex flex-col gap-4">
+            <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div className="space-y-1">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Receitas</div>
+                    <div className="text-2xl font-black text-slate-900 tabular-nums">{recipesFilteredBySearch.length}</div>
+                    <div className="text-xs text-slate-500">itens encontrados</div>
+                </div>
 
-                    {/* <RecipesFilters /> */}
-
+                <div className="flex w-full md:w-auto items-center gap-2">
                     <RecipesSearch onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                         const value = e.target.value
                         setSearchTerm(value)
                     }} />
                 </div>
-
-                <ul data-element="recipes" className="flex flex-col gap-4 md:grid md:grid-cols-3">
-                    {
-                        recipesFilteredBySearch.map(p => <RecipeItem item={p} key={p.id} />)
-                    }
-                </ul>
             </div>
-        </Container>
+
+            <div className="rounded-xl border border-slate-200 bg-white">
+                <Table className="min-w-[760px]">
+                    <TableHeader className="bg-slate-50/90">
+                        <TableRow className="hover:bg-slate-50/90">
+                            <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Receita</TableHead>
+                            <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Tipo</TableHead>
+                            <TableHead className="h-10 px-4 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Ações</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {recipesFilteredBySearch.length === 0 ? (
+                            <TableRow className="hover:bg-transparent">
+                                <TableCell colSpan={3} className="px-4 py-8 text-sm text-slate-500">
+                                    Nenhuma receita encontrada.
+                                </TableCell>
+                            </TableRow>
+                        ) : (
+                            recipesFilteredBySearch.map((recipe) => <RecipeRow item={recipe} key={recipe.id} />)
+                        )}
+                    </TableBody>
+                </Table>
+                <div className="flex items-center justify-between border-t border-slate-200 px-4 py-3 text-sm text-slate-500">
+                    <span>0 of {recipesFilteredBySearch.length} row(s) selected.</span>
+                    <div className="flex items-center gap-4">
+                        <span className="text-xs font-semibold text-slate-700">Rows per page</span>
+                        <Badge variant="outline" className="border-slate-200 bg-white text-slate-700">{recipesFilteredBySearch.length || 0}</Badge>
+                        <span className="text-xs font-semibold text-slate-900">Page 1 of 1</span>
+                    </div>
+                </div>
+            </div>
+        </div>
     )
 }
 
@@ -95,28 +122,30 @@ interface RecipeItemProps {
     item: Recipe
 }
 
-function RecipeItem({ item }: RecipeItemProps) {
-
-    console.log({ recipe: item })
-
+function RecipeRow({ item }: RecipeItemProps) {
     return (
-        <Form method="post"
-            className="flex flex-col p-4
-                                rounded-lg border border-muted hover:border-muted-foreground hover:cursor-pointer w-full">
-
-            <div className="flex items-center justify-between w-full mb-4">
-                <h3 className="text-md font-semibold tracking-tight">{item.name}</h3>
-                <EditItemButton to={`/admin/recipes/${item.id}`} />
-            </div>
-
-            <RecipeBadge item={item} />
-            <Separator className="mb-4" />
-
-            <div className="flex gap-2 md:gap-2 justify-end">
-                <DeleteItemButton actionName="recipe-delete" />
-                <Input type="hidden" name="id" value={item.id} />
-            </div>
-        </Form>
+        <TableRow className="border-slate-100 hover:bg-slate-50/50">
+            <TableCell className="px-4 py-3">
+                <div className="flex min-w-0 flex-col gap-0.5">
+                    <Link to={`/admin/recipes/${item.id}`} className="truncate font-semibold text-slate-900 hover:underline" title={item.name}>
+                        {item.name}
+                    </Link>
+                    <span className="text-xs text-slate-500">ID: {item.id}</span>
+                </div>
+            </TableCell>
+            <TableCell className="px-4 py-3">
+                <RecipeBadge item={item} />
+            </TableCell>
+            <TableCell className="px-4 py-3">
+                <div className="flex items-center justify-end gap-1">
+                    <EditItemButton to={`/admin/recipes/${item.id}`} />
+                    <Form method="post">
+                        <Input type="hidden" name="id" value={item.id} />
+                        <DeleteItemButton actionName="recipe-delete" />
+                    </Form>
+                </div>
+            </TableCell>
+        </TableRow>
     )
 }
 
@@ -161,8 +190,9 @@ function RecipesFilters() {
 
 function RecipesSearch({ ...props }) {
     return (
-        <div className="flex gap-4">
-            <Input type="text" name="search" placeholder="Buscar" className="w-full" {...props} />
+        <div className="relative flex-1 min-w-[220px]">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Input type="text" name="search" placeholder="Buscar receita..." className="w-full pl-9" {...props} />
         </div>
     )
 }
