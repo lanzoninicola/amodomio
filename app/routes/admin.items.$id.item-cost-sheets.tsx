@@ -128,7 +128,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     if (!itemId) return badRequest("Item inválido");
 
     const url = new URL(request.url);
-    const sheetId = String(url.searchParams.get("sheetId") || "").trim();
+    const itemCostSheetIdFromQuery = String(url.searchParams.get("itemCostSheetId") || "").trim();
     const db = prismaClient as any;
 
     const [recipeSheets, recipes, referenceSheets, recipeSheetDependencyAgg] = await Promise.all([
@@ -172,7 +172,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     ]);
 
     const selectedSheet =
-      recipeSheets.find((sheet: any) => sheet.id === sheetId) ||
+      recipeSheets.find((sheet: any) => sheet.id === itemCostSheetIdFromQuery) ||
       recipeSheets.find((sheet: any) => sheet.isActive) ||
       recipeSheets[0] ||
       null;
@@ -218,23 +218,23 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const db = prismaClient as any;
 
     if (_action === "item-cost-sheet-line-add-recipe") {
-      const recipeSheetId = String(formData.get("recipeSheetId") || "").trim();
+      const itemCostSheetId = String(formData.get("itemCostSheetId") || "").trim();
       const recipeId = String(formData.get("recipeId") || "").trim();
       const quantity = Number(String(formData.get("quantity") || "1").replace(",", "."));
-      if (!recipeSheetId) return badRequest("Ficha de custo inválida");
+      if (!itemCostSheetId) return badRequest("Ficha de custo inválida");
       if (!recipeId) return badRequest("Selecione a receita");
       if (!(quantity > 0)) return badRequest("Informe uma quantidade válida");
 
       const [sheet, snapshot] = await Promise.all([
-        db.itemCostSheet.findFirst({ where: { id: recipeSheetId, itemId }, select: { id: true } }),
+        db.itemCostSheet.findFirst({ where: { id: itemCostSheetId, itemId }, select: { id: true } }),
         getRecipeSnapshot(db, recipeId),
       ]);
       if (!sheet) return badRequest("Ficha de custo não encontrada para este item");
 
-      const lineCount = await db.itemCostSheetLine.count({ where: { itemCostSheetId: recipeSheetId } });
+      const lineCount = await db.itemCostSheetLine.count({ where: { itemCostSheetId } });
       await db.itemCostSheetLine.create({
         data: {
-          itemCostSheetId: recipeSheetId,
+          itemCostSheetId,
           type: "recipe",
           refId: recipeId,
           name: snapshot.recipe.name,
@@ -247,30 +247,30 @@ export async function action({ request, params }: ActionFunctionArgs) {
         },
       });
 
-      await recalcItemCostSheetTotals(db, recipeSheetId);
-      return redirect(`/admin/items/${itemId}/item-cost-sheets?sheetId=${recipeSheetId}`);
+      await recalcItemCostSheetTotals(db, itemCostSheetId);
+      return redirect(`/admin/items/${itemId}/item-cost-sheets?itemCostSheetId=${itemCostSheetId}`);
     }
 
     if (_action === "item-cost-sheet-line-add-manual") {
-      const recipeSheetId = String(formData.get("recipeSheetId") || "").trim();
+      const itemCostSheetId = String(formData.get("itemCostSheetId") || "").trim();
       const name = String(formData.get("name") || "").trim();
       const unit = String(formData.get("unit") || "").trim() || null;
       const quantity = Number(String(formData.get("quantity") || "1").replace(",", "."));
       const unitCostAmount = Number(String(formData.get("unitCostAmount") || "0").replace(",", "."));
       const notes = String(formData.get("notes") || "").trim();
 
-      if (!recipeSheetId) return badRequest("Ficha de custo inválida");
+      if (!itemCostSheetId) return badRequest("Ficha de custo inválida");
       if (!name) return badRequest("Informe o nome do custo");
       if (!(quantity > 0)) return badRequest("Informe uma quantidade válida");
       if (!(unitCostAmount >= 0)) return badRequest("Informe um custo unitário válido");
 
-      const sheet = await db.itemCostSheet.findFirst({ where: { id: recipeSheetId, itemId }, select: { id: true } });
+      const sheet = await db.itemCostSheet.findFirst({ where: { id: itemCostSheetId, itemId }, select: { id: true } });
       if (!sheet) return badRequest("Ficha de custo não encontrada para este item");
 
-      const lineCount = await db.itemCostSheetLine.count({ where: { itemCostSheetId: recipeSheetId } });
+      const lineCount = await db.itemCostSheetLine.count({ where: { itemCostSheetId } });
       await db.itemCostSheetLine.create({
         data: {
-          itemCostSheetId: recipeSheetId,
+          itemCostSheetId,
           type: "manual",
           name,
           unit,
@@ -282,29 +282,29 @@ export async function action({ request, params }: ActionFunctionArgs) {
         },
       });
 
-      await recalcItemCostSheetTotals(db, recipeSheetId);
-      return redirect(`/admin/items/${itemId}/item-cost-sheets?sheetId=${recipeSheetId}`);
+      await recalcItemCostSheetTotals(db, itemCostSheetId);
+      return redirect(`/admin/items/${itemId}/item-cost-sheets?itemCostSheetId=${itemCostSheetId}`);
     }
 
     if (_action === "item-cost-sheet-line-add-labor") {
-      const recipeSheetId = String(formData.get("recipeSheetId") || "").trim();
+      const itemCostSheetId = String(formData.get("itemCostSheetId") || "").trim();
       const name = String(formData.get("name") || "").trim() || "Mão de obra";
       const unit = String(formData.get("unit") || "").trim() || "h";
       const quantity = Number(String(formData.get("quantity") || "1").replace(",", "."));
       const unitCostAmount = Number(String(formData.get("unitCostAmount") || "0").replace(",", "."));
       const notes = String(formData.get("notes") || "").trim();
 
-      if (!recipeSheetId) return badRequest("Ficha de custo inválida");
+      if (!itemCostSheetId) return badRequest("Ficha de custo inválida");
       if (!(quantity > 0)) return badRequest("Informe uma quantidade válida");
       if (!(unitCostAmount >= 0)) return badRequest("Informe um custo unitário válido");
 
-      const sheet = await db.itemCostSheet.findFirst({ where: { id: recipeSheetId, itemId }, select: { id: true } });
+      const sheet = await db.itemCostSheet.findFirst({ where: { id: itemCostSheetId, itemId }, select: { id: true } });
       if (!sheet) return badRequest("Ficha de custo não encontrada para este item");
 
-      const lineCount = await db.itemCostSheetLine.count({ where: { itemCostSheetId: recipeSheetId } });
+      const lineCount = await db.itemCostSheetLine.count({ where: { itemCostSheetId } });
       await db.itemCostSheetLine.create({
         data: {
-          itemCostSheetId: recipeSheetId,
+          itemCostSheetId,
           type: "labor",
           name,
           unit,
@@ -315,34 +315,34 @@ export async function action({ request, params }: ActionFunctionArgs) {
           notes: notes || null,
         },
       });
-      await recalcItemCostSheetTotals(db, recipeSheetId);
-      return redirect(`/admin/items/${itemId}/item-cost-sheets?sheetId=${recipeSheetId}`);
+      await recalcItemCostSheetTotals(db, itemCostSheetId);
+      return redirect(`/admin/items/${itemId}/item-cost-sheets?itemCostSheetId=${itemCostSheetId}`);
     }
 
     if (_action === "item-cost-sheet-line-add-sheet") {
-      const recipeSheetId = String(formData.get("recipeSheetId") || "").trim();
+      const itemCostSheetId = String(formData.get("itemCostSheetId") || "").trim();
       const refSheetId = String(formData.get("refRecipeSheetId") || "").trim();
       const quantity = Number(String(formData.get("quantity") || "1").replace(",", "."));
-      if (!recipeSheetId) return badRequest("Ficha de custo inválida");
+      if (!itemCostSheetId) return badRequest("Ficha de custo inválida");
       if (!refSheetId) return badRequest("Selecione a ficha de custo de referência");
-      if (recipeSheetId === refSheetId) return badRequest("Não é permitido referenciar a própria ficha");
+      if (itemCostSheetId === refSheetId) return badRequest("Não é permitido referenciar a própria ficha");
       if (!(quantity > 0)) return badRequest("Informe uma quantidade válida");
 
-      const createsCycle = await wouldCreateRecipeSheetCycle(db, recipeSheetId, refSheetId);
+      const createsCycle = await wouldCreateRecipeSheetCycle(db, itemCostSheetId, refSheetId);
       if (createsCycle) {
         return badRequest("Esta referência criaria ciclo entre fichas de custo");
       }
 
       const [sheet, refSnapshot] = await Promise.all([
-        db.itemCostSheet.findFirst({ where: { id: recipeSheetId, itemId }, select: { id: true } }),
+        db.itemCostSheet.findFirst({ where: { id: itemCostSheetId, itemId }, select: { id: true } }),
         getItemCostSheetSnapshot(db, refSheetId),
       ]);
       if (!sheet) return badRequest("Ficha de custo não encontrada para este item");
 
-      const lineCount = await db.itemCostSheetLine.count({ where: { itemCostSheetId: recipeSheetId } });
+      const lineCount = await db.itemCostSheetLine.count({ where: { itemCostSheetId } });
       await db.itemCostSheetLine.create({
         data: {
-          itemCostSheetId: recipeSheetId,
+          itemCostSheetId,
           type: "recipeSheet",
           refId: refSheetId,
           name: refSnapshot.sheet.name,
@@ -354,19 +354,19 @@ export async function action({ request, params }: ActionFunctionArgs) {
           notes: refSnapshot.note,
         },
       });
-      await recalcItemCostSheetTotals(db, recipeSheetId);
-      return redirect(`/admin/items/${itemId}/item-cost-sheets?sheetId=${recipeSheetId}`);
+      await recalcItemCostSheetTotals(db, itemCostSheetId);
+      return redirect(`/admin/items/${itemId}/item-cost-sheets?itemCostSheetId=${itemCostSheetId}`);
     }
 
     if (_action === "item-cost-sheet-line-move") {
-      const recipeSheetId = String(formData.get("recipeSheetId") || "").trim();
+      const itemCostSheetId = String(formData.get("itemCostSheetId") || "").trim();
       const lineId = String(formData.get("lineId") || "").trim();
       const direction = String(formData.get("direction") || "").trim();
-      if (!recipeSheetId || !lineId) return badRequest("Linha inválida");
+      if (!itemCostSheetId || !lineId) return badRequest("Linha inválida");
       if (!["up", "down"].includes(direction)) return badRequest("Direção inválida");
 
       const lines = await db.itemCostSheetLine.findMany({
-        where: { itemCostSheetId: recipeSheetId },
+        where: { itemCostSheetId },
         select: { id: true, sortOrderIndex: true, createdAt: true },
         orderBy: [{ sortOrderIndex: "asc" }, { createdAt: "asc" }],
       });
@@ -376,7 +376,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
       const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
       if (targetIndex < 0 || targetIndex >= lines.length) {
-        return redirect(`/admin/items/${itemId}/item-cost-sheets?sheetId=${recipeSheetId}`);
+        return redirect(`/admin/items/${itemId}/item-cost-sheets?itemCostSheetId=${itemCostSheetId}`);
       }
 
       const current = lines[currentIndex];
@@ -393,23 +393,23 @@ export async function action({ request, params }: ActionFunctionArgs) {
         }),
       ]);
 
-      return redirect(`/admin/items/${itemId}/item-cost-sheets?sheetId=${recipeSheetId}`);
+      return redirect(`/admin/items/${itemId}/item-cost-sheets?itemCostSheetId=${itemCostSheetId}`);
     }
 
     if (_action === "item-cost-sheet-line-update") {
-      const recipeSheetId = String(formData.get("recipeSheetId") || "").trim();
+      const itemCostSheetId = String(formData.get("itemCostSheetId") || "").trim();
       const lineId = String(formData.get("lineId") || "").trim();
       const name = String(formData.get("name") || "").trim();
       const unitRaw = String(formData.get("unit") || "").trim();
       const quantity = Number(String(formData.get("quantity") || "0").replace(",", "."));
       const unitCostAmount = Number(String(formData.get("unitCostAmount") || "0").replace(",", "."));
       const notes = String(formData.get("notes") || "").trim();
-      if (!recipeSheetId || !lineId) return badRequest("Linha inválida");
+      if (!itemCostSheetId || !lineId) return badRequest("Linha inválida");
       if (!(quantity > 0)) return badRequest("Informe uma quantidade válida");
       if (!(unitCostAmount >= 0)) return badRequest("Informe um custo unitário válido");
 
       const line = await db.itemCostSheetLine.findFirst({
-        where: { id: lineId, itemCostSheetId: recipeSheetId },
+        where: { id: lineId, itemCostSheetId },
         select: { id: true, type: true, refId: true },
       });
       if (!line) return badRequest("Linha não encontrada");
@@ -424,8 +424,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
             notes: notes || null,
           },
         });
-        await recalcItemCostSheetTotals(db, recipeSheetId);
-        return redirect(`/admin/items/${itemId}/item-cost-sheets?sheetId=${recipeSheetId}`);
+        await recalcItemCostSheetTotals(db, itemCostSheetId);
+        return redirect(`/admin/items/${itemId}/item-cost-sheets?itemCostSheetId=${itemCostSheetId}`);
       }
 
       await db.itemCostSheetLine.update({
@@ -439,31 +439,31 @@ export async function action({ request, params }: ActionFunctionArgs) {
           notes: notes || null,
         },
       });
-      await recalcItemCostSheetTotals(db, recipeSheetId);
-      return redirect(`/admin/items/${itemId}/item-cost-sheets?sheetId=${recipeSheetId}`);
+      await recalcItemCostSheetTotals(db, itemCostSheetId);
+      return redirect(`/admin/items/${itemId}/item-cost-sheets?itemCostSheetId=${itemCostSheetId}`);
     }
 
     if (_action === "item-cost-sheet-line-delete") {
-      const recipeSheetId = String(formData.get("recipeSheetId") || "").trim();
+      const itemCostSheetId = String(formData.get("itemCostSheetId") || "").trim();
       const lineId = String(formData.get("lineId") || "").trim();
-      if (!recipeSheetId || !lineId) return badRequest("Linha inválida");
+      if (!itemCostSheetId || !lineId) return badRequest("Linha inválida");
 
       const line = await db.itemCostSheetLine.findFirst({
-        where: { id: lineId, itemCostSheetId: recipeSheetId },
+        where: { id: lineId, itemCostSheetId },
         select: { id: true },
       });
       if (!line) return badRequest("Linha não encontrada");
 
       await db.itemCostSheetLine.delete({ where: { id: lineId } });
-      await recalcItemCostSheetTotals(db, recipeSheetId);
-      return redirect(`/admin/items/${itemId}/item-cost-sheets?sheetId=${recipeSheetId}`);
+      await recalcItemCostSheetTotals(db, itemCostSheetId);
+      return redirect(`/admin/items/${itemId}/item-cost-sheets?itemCostSheetId=${itemCostSheetId}`);
     }
 
     if (_action === "item-cost-sheet-line-recalc") {
-      const recipeSheetId = String(formData.get("recipeSheetId") || "").trim();
-      if (!recipeSheetId) return badRequest("Ficha de custo inválida");
-      await recalcItemCostSheetTotals(db, recipeSheetId);
-      return redirect(`/admin/items/${itemId}/item-cost-sheets?sheetId=${recipeSheetId}`);
+      const itemCostSheetId = String(formData.get("itemCostSheetId") || "").trim();
+      if (!itemCostSheetId) return badRequest("Ficha de custo inválida");
+      await recalcItemCostSheetTotals(db, itemCostSheetId);
+      return redirect(`/admin/items/${itemId}/item-cost-sheets?itemCostSheetId=${itemCostSheetId}`);
     }
 
     return badRequest("Ação inválida");
@@ -528,7 +528,7 @@ export default function AdminItemCostSheetsTab() {
                 </div>
                 <div className="flex items-center gap-2">
                   <Link
-                    to={`?sheetId=${sheet.id}`}
+                    to={`?itemCostSheetId=${sheet.id}`}
                     className="rounded-md border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                   >
                     Abrir
@@ -568,7 +568,7 @@ export default function AdminItemCostSheetsTab() {
               </p>
             </div>
             <Form method="post">
-              <input type="hidden" name="recipeSheetId" value={selectedSheet.id} />
+              <input type="hidden" name="itemCostSheetId" value={selectedSheet.id} />
               <Button type="submit" variant="outline" name="_action" value="item-cost-sheet-line-recalc" className="rounded-lg">
                 Recalcular ficha
               </Button>
@@ -577,7 +577,7 @@ export default function AdminItemCostSheetsTab() {
 
           <div className="mt-4 grid gap-4 lg:grid-cols-3">
             <Form method="post" className="rounded-lg border border-slate-200 bg-white p-4 space-y-3">
-              <input type="hidden" name="recipeSheetId" value={selectedSheet.id} />
+              <input type="hidden" name="itemCostSheetId" value={selectedSheet.id} />
               <h4 className="text-sm font-semibold text-slate-900">Adicionar receita</h4>
               <div>
                 <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="recipeId">Receita</label>
@@ -602,7 +602,7 @@ export default function AdminItemCostSheetsTab() {
             </Form>
 
             <Form method="post" className="rounded-lg border border-slate-200 bg-white p-4 space-y-3">
-              <input type="hidden" name="recipeSheetId" value={selectedSheet.id} />
+              <input type="hidden" name="itemCostSheetId" value={selectedSheet.id} />
               <h4 className="text-sm font-semibold text-slate-900">Adicionar outro custo</h4>
               <div>
                 <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="manualName">Nome</label>
@@ -634,7 +634,7 @@ export default function AdminItemCostSheetsTab() {
             </Form>
 
             <Form method="post" className="rounded-lg border border-slate-200 bg-white p-4 space-y-3">
-              <input type="hidden" name="recipeSheetId" value={selectedSheet.id} />
+              <input type="hidden" name="itemCostSheetId" value={selectedSheet.id} />
               <h4 className="text-sm font-semibold text-slate-900">Adicionar mão de obra</h4>
               <div>
                 <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="laborName">Nome</label>
@@ -666,7 +666,7 @@ export default function AdminItemCostSheetsTab() {
             </Form>
 
             <Form method="post" className="rounded-lg border border-slate-200 bg-white p-4 space-y-3">
-              <input type="hidden" name="recipeSheetId" value={selectedSheet.id} />
+              <input type="hidden" name="itemCostSheetId" value={selectedSheet.id} />
               <h4 className="text-sm font-semibold text-slate-900">Adicionar ficha de custo</h4>
               <div>
                 <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="refRecipeSheetId">Ficha referência</label>
@@ -728,7 +728,7 @@ export default function AdminItemCostSheetsTab() {
                       <td className="px-3 py-2">{line.type}</td>
                       <td className="px-3 py-2">
                         <Form method="post" className="flex flex-col gap-1">
-                          <input type="hidden" name="recipeSheetId" value={selectedSheet.id} />
+                          <input type="hidden" name="itemCostSheetId" value={selectedSheet.id} />
                           <input type="hidden" name="lineId" value={line.id} />
                           <input
                             name="name"
@@ -787,7 +787,7 @@ export default function AdminItemCostSheetsTab() {
                       <td className="px-3 py-2 text-right">
                         <div className="inline-flex items-center gap-1">
                           <Form method="post" className="inline">
-                            <input type="hidden" name="recipeSheetId" value={selectedSheet.id} />
+                            <input type="hidden" name="itemCostSheetId" value={selectedSheet.id} />
                             <input type="hidden" name="lineId" value={line.id} />
                             <input type="hidden" name="direction" value="up" />
                             <button
@@ -801,7 +801,7 @@ export default function AdminItemCostSheetsTab() {
                             </button>
                           </Form>
                           <Form method="post" className="inline">
-                            <input type="hidden" name="recipeSheetId" value={selectedSheet.id} />
+                            <input type="hidden" name="itemCostSheetId" value={selectedSheet.id} />
                             <input type="hidden" name="lineId" value={line.id} />
                             <input type="hidden" name="direction" value="down" />
                             <button
@@ -815,7 +815,7 @@ export default function AdminItemCostSheetsTab() {
                             </button>
                           </Form>
                           <Form method="post" className="inline">
-                            <input type="hidden" name="recipeSheetId" value={selectedSheet.id} />
+                            <input type="hidden" name="itemCostSheetId" value={selectedSheet.id} />
                             <input type="hidden" name="lineId" value={line.id} />
                             <button
                               type="submit"

@@ -1,7 +1,6 @@
 import { RecipeType } from "@prisma/client";
 import { ActionFunctionArgs, LoaderFunctionArgs, redirect } from "@remix-run/node";
-import { useLoaderData } from "@remix-run/react";
-import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { useActionData, useLoaderData } from "@remix-run/react";
 import RecipeForm from "~/domain/recipe/components/recipe-form/recipe-form";
 import { recipeEntity } from "~/domain/recipe/recipe.entity.server";
 import prismaClient from "~/lib/prisma/client.server";
@@ -40,14 +39,16 @@ export async function action({ request }: ActionFunctionArgs) {
     const { _action, ...values } = Object.fromEntries(formData);
 
     if (_action === "recipe-create") {
+        const recipeType = ((values.type as RecipeType) || RecipeType.semiFinished)
 
         const [err, data] = await prismaIt(recipeEntity.create({
             name: values.name as string,
-            type: values.type as RecipeType,
+            type: recipeType,
             description: values?.description as string || "",
-            hasVariations: values.hasVariations === "on" ? true : false,
+            hasVariations: false,
             isGlutenFree: values.isGlutenFree === "on" ? true : false,
             isVegetarian: values.isVegetarian === "on" ? true : false,
+            createdAt: new Date(),
         }))
 
         if (err) {
@@ -101,22 +102,43 @@ export async function action({ request }: ActionFunctionArgs) {
 
 
 export default function AdminRecipesNew() {
+    const actionData = useActionData<typeof action>() as any
     const loaderData = useLoaderData<typeof loader>() as any
     const items = (loaderData?.payload?.items || []) as Array<{ id: string; name: string }>
     const variations = (loaderData?.payload?.variations || []) as Array<{ id: string; name: string; kind?: string | null }>
+    const hasError = Number(actionData?.status || 0) >= 400
+    const errorMessage = actionData?.message || "Erro ao salvar receita"
+    const errorDetails =
+        typeof actionData?.payload === "string"
+            ? actionData.payload
+            : actionData?.payload
+                ? JSON.stringify(actionData.payload, null, 2)
+                : ""
 
     return (
-        <Card className="border-slate-200 shadow-sm">
-            <CardHeader>
-                <CardTitle>Nova receita</CardTitle>
-            </CardHeader>
-            <CardContent>
-                <RecipeForm
-                    actionName="recipe-create"
-                    items={items}
-                    variations={variations}
-                />
-            </CardContent>
-        </Card>
+        <section className="space-y-4">
+            {hasError ? (
+                <div className="rounded-md border border-red-200 bg-red-50 p-4 text-red-900">
+                    <p className="text-sm font-semibold">Erro ao salvar receita</p>
+                    <p className="mt-1 text-sm">{errorMessage}</p>
+                    {errorDetails ? (
+                        <details className="mt-3">
+                            <summary className="cursor-pointer text-xs font-medium text-red-800">
+                                Ver detalhes técnicos
+                            </summary>
+                            <pre className="mt-2 max-h-56 overflow-auto rounded border border-red-200 bg-white p-2 text-xs text-red-900 whitespace-pre-wrap">
+                                {errorDetails}
+                            </pre>
+                        </details>
+                    ) : null}
+                </div>
+            ) : null}
+            <RecipeForm
+                title="Nova receita"
+                actionName="recipe-create"
+                items={items}
+                variations={variations}
+            />
+        </section>
     )
 }

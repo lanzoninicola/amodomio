@@ -110,7 +110,9 @@ export async function action({ request }: ActionFunctionArgs) {
     const itemId = String(formData.get("itemId") || url.searchParams.get("itemId") || "").trim();
     if (!itemId) return badRequest("Item não informado");
     const _action = String(formData.get("_action") || "");
-    if (_action !== "recipe-sheet-create") return badRequest("Ação inválida");
+    if (_action !== "item-cost-sheet-create") {
+      return badRequest("Ação inválida");
+    }
 
     const variationId = String(formData.get("variationId") || formData.get("itemVariationId") || "").trim();
     const name = String(formData.get("name") || "").trim();
@@ -379,7 +381,7 @@ export default function AdminItemCostSheetsNew() {
             <Button
               type="submit"
               name="_action"
-              value="recipe-sheet-create"
+              value="item-cost-sheet-create"
               className="rounded-lg"
               disabled={!selectedVariationId}
             >

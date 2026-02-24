@@ -2,6 +2,9 @@ import { Recipe, RecipeType } from "@prisma/client";
 import { redirect, type ActionFunctionArgs, type LoaderFunctionArgs } from "@remix-run/node";
 import { Form, Link, useActionData, useLoaderData } from "@remix-run/react";
 import { ChevronLeft } from "lucide-react";
+import { useState } from "react";
+import { Button } from "~/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "~/components/ui/dialog";
 import { toast } from "~/components/ui/use-toast";
 import RecipeForm from "~/domain/recipe/components/recipe-form/recipe-form";
 import { itemVariationPrismaEntity } from "~/domain/item/item-variation.prisma.entity.server";
@@ -324,9 +327,10 @@ export async function action({ request }: ActionFunctionArgs) {
                     name: `${sourceRecipe.name} (${targetVariation.name})`,
                     description: sourceRecipe.description,
                     type: sourceRecipe.type,
-                    hasVariations: sourceRecipe.hasVariations,
+                    hasVariations: false,
                     isGlutenFree: sourceRecipe.isGlutenFree,
                     isVegetarian: sourceRecipe.isVegetarian,
+                    createdAt: new Date(),
                     itemId: sourceRecipe.itemId,
                     variationId: targetVariation.id,
                 }
@@ -376,7 +380,7 @@ export async function action({ request }: ActionFunctionArgs) {
             name: values.name as string,
             type: values.type as RecipeType,
             description: values?.description as string || "",
-            hasVariations: values.hasVariations === "on" ? true : false,
+            hasVariations: false,
             isGlutenFree: values.isGlutenFree === "on" ? true : false,
             isVegetarian: values.isVegetarian === "on" ? true : false,
         }
@@ -457,15 +461,6 @@ export async function action({ request }: ActionFunctionArgs) {
                     })
                 }
 
-                if (itemId) {
-                    await db.item.update({
-                        where: { id: itemId },
-                        data: {
-                            name: updatedRecipe.name,
-                            description: updatedRecipe.description || null,
-                        }
-                    })
-                }
             }
         } catch (_error) {
             // best effort: preserve legacy behavior when migrations are pending
@@ -486,6 +481,12 @@ export default function SingleRecipe() {
     const variations = (loaderData?.payload?.variations || []) as Array<{ id: string; name: string; kind?: string | null }>
     const recipeLines = (loaderData?.payload?.recipeLines || []) as any[]
     const actionData = useActionData<typeof action>()
+    const linkedItem = items.find((item) => item.id === recipe?.itemId)
+    const linkedVariation = variations.find((variation) => variation.id === (recipe as any)?.variationId)
+    const recipeLineCount = recipeLines.length
+    const avgCompositionCost = recipeLines.reduce((acc, line) => acc + Number(line.avgTotalCostAmount || 0), 0)
+    const lastCompositionCost = recipeLines.reduce((acc, line) => acc + Number(line.lastTotalCostAmount || 0), 0)
+    const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false)
 
     if (actionData && actionData.status !== 200) {
         toast({
@@ -496,20 +497,110 @@ export default function SingleRecipe() {
 
     return (
         <div className="flex flex-col gap-4">
-            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                <div className="flex items-center justify-between gap-3">
-                    <div>
+            <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                    <div className="min-w-0">
                         <Link to="/admin/recipes" className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-800">
                             <ChevronLeft size={14} />
                             Voltar para receitas
                         </Link>
-                        <h1 className="mt-2 text-lg font-semibold text-slate-900">{recipe?.name}</h1>
-                        <p className="text-sm text-slate-600">{recipe?.id}</p>
+                        <h1 className="mt-2 text-xl font-semibold leading-tight text-slate-900">{recipe?.name}</h1>
+                        <p className="mt-1 break-all text-xs text-slate-500">{recipe?.id}</p>
                     </div>
+                    <div className="grid grid-cols-2 gap-2 md:min-w-[320px]">
+                        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Tipo</p>
+                            <p className="mt-1 text-sm font-medium text-slate-900">
+                                {recipe?.type === "pizzaTopping" ? "Sabor Pizza" : "Produzido"}
+                            </p>
+                        </div>
+                        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Itens na composição</p>
+                            <p className="mt-1 text-sm font-medium text-slate-900">{recipeLineCount}</p>
+                        </div>
+                        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Custo médio</p>
+                            <p className="mt-1 text-sm font-medium text-slate-900">R$ {avgCompositionCost.toFixed(4)}</p>
+                        </div>
+                        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Último custo</p>
+                            <p className="mt-1 text-sm font-medium text-slate-900">R$ {lastCompositionCost.toFixed(4)}</p>
+                        </div>
+                    </div>
+                </div>
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                    <Form method="post">
+                        <input type="hidden" name="recipeId" value={recipe?.id} />
+                        <Button type="submit" name="_action" value="recipe-lines-recalc" className="h-9">
+                            Recalcular custos
+                        </Button>
+                    </Form>
+                    <Dialog open={duplicateDialogOpen} onOpenChange={setDuplicateDialogOpen}>
+                        <DialogTrigger asChild>
+                            <Button type="button" className="h-9">
+                                Duplicar para outra variação
+                            </Button>
+                        </DialogTrigger>
+                        <DialogContent className="sm:max-w-2xl">
+                            <DialogHeader>
+                                <DialogTitle>Duplicar receita para outra variação</DialogTitle>
+                                <DialogDescription>
+                                    Cria uma nova receita copiando a composição e ajustando as quantidades por fator (multiplica ou divide).
+                                </DialogDescription>
+                            </DialogHeader>
+                            <Form method="post" className="grid gap-3 md:grid-cols-4">
+                                <input type="hidden" name="recipeId" value={recipe?.id} />
+                                <div className="md:col-span-2">
+                                    <label htmlFor="duplicateVariationId" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Variação destino</label>
+                                    <select id="duplicateVariationId" name="duplicateVariationId" className="h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm" required>
+                                        <option value="">Selecionar variação</option>
+                                        {variations.map((variation) => (
+                                            <option key={variation.id} value={variation.id}>
+                                                {variation.name}{variation.kind ? ` (${variation.kind})` : ""}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label htmlFor="duplicateFactorMode" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Operação</label>
+                                    <select id="duplicateFactorMode" name="duplicateFactorMode" defaultValue="multiply" className="h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm">
+                                        <option value="multiply">Multiplica (x)</option>
+                                        <option value="divide">Divide (/)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label htmlFor="duplicateFactorValue" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Fator</label>
+                                    <input id="duplicateFactorValue" name="duplicateFactorValue" type="number" min="0.0001" step="0.0001" defaultValue="1" className="h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm" required />
+                                </div>
+                                <div className="md:col-span-4 flex justify-end gap-2">
+                                    <Button type="button" variant="ghost" onClick={() => setDuplicateDialogOpen(false)}>
+                                        Cancelar
+                                    </Button>
+                                    <Button type="submit" name="_action" value="recipe-duplicate-variation">
+                                        Duplicar receita
+                                    </Button>
+                                </div>
+                            </Form>
+                        </DialogContent>
+                    </Dialog>
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                    <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-700">
+                        Item: {linkedItem?.name || "Não vinculado"}
+                    </span>
+                    <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-700">
+                        Variação: {linkedVariation ? `${linkedVariation.name}${linkedVariation.kind ? ` (${linkedVariation.kind})` : ""}` : "Base/sem vínculo"}
+                    </span>
                 </div>
             </div>
 
             <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="mb-4 border-b border-slate-100 pb-3">
+                    <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Configuração da receita</h2>
+                    <p className="mt-1 text-sm text-slate-600">
+                        Atualize nome, vínculo com item/variação e atributos da receita.
+                    </p>
+                </div>
                 <RecipeForm
                     recipe={recipe}
                     actionName="recipe-update"
@@ -519,11 +610,27 @@ export default function SingleRecipe() {
             </div>
 
             <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Composição da receita</h2>
-                <p className="mt-2 text-sm text-slate-600">
-                    A composição desta receita deve ser cadastrada nesta área (itens, unidade de consumo e quantidade). As fichas de custo do item apenas consomem receitas e outros custos.
-                </p>
-                <div className="mt-4 rounded-lg border border-slate-200 p-4">
+                <div className="flex flex-col gap-2 border-b border-slate-100 pb-4 md:flex-row md:items-end md:justify-between">
+                    <div>
+                        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Composição da receita</h2>
+                        <p className="mt-2 text-sm text-slate-600">
+                            A composição desta receita deve ser cadastrada nesta área (itens, unidade de consumo e quantidade). As fichas de custo do item apenas consomem receitas e outros custos.
+                        </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+                            <span className="font-semibold">{recipeLineCount}</span> item(ns)
+                        </div>
+                        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+                            Custo médio: <span className="font-semibold">R$ {avgCompositionCost.toFixed(4)}</span>
+                        </div>
+                    </div>
+                </div>
+                <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50/60 p-4">
+                    <div className="mb-3">
+                        <h3 className="text-sm font-semibold text-slate-900">Adicionar item à composição</h3>
+                        <p className="text-xs text-slate-500">Informe item, variação (opcional), unidade de consumo e quantidade.</p>
+                    </div>
                     <Form method="post" className="grid gap-3 md:grid-cols-5">
                         <input type="hidden" name="recipeId" value={recipe?.id} />
                         <div className="md:col-span-2">
@@ -587,8 +694,11 @@ export default function SingleRecipe() {
                         <tbody>
                             {recipeLines.length === 0 ? (
                                 <tr>
-                                    <td colSpan={9} className="px-3 py-6 text-center text-slate-500">
-                                        Nenhum item na composição desta receita.
+                                    <td colSpan={9} className="px-3 py-8 text-center">
+                                        <div className="mx-auto max-w-md rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-slate-600">
+                                            <p className="text-sm font-medium text-slate-700">Nenhum item na composição</p>
+                                            <p className="mt-1 text-xs">Use o formulário acima para adicionar o primeiro ingrediente/item.</p>
+                                        </div>
                                     </td>
                                 </tr>
                             ) : (
@@ -651,75 +761,6 @@ export default function SingleRecipe() {
                     </table>
                 </div>
 
-                <div className="mt-4 flex flex-wrap gap-2">
-                    <Form method="post">
-                        <input type="hidden" name="recipeId" value={recipe?.id} />
-                        <button
-                            type="submit"
-                            name="_action"
-                            value="recipe-lines-recalc"
-                            className="inline-flex h-10 items-center rounded-lg border border-slate-200 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                        >
-                            Recalcular custos da composição
-                        </button>
-                    </Form>
-                </div>
-
-                <div className="mt-4 rounded-lg border border-slate-200 p-4">
-                    <h3 className="text-sm font-semibold text-slate-900">Duplicar receita para outra variação</h3>
-                    <p className="mt-1 text-xs text-slate-500">
-                        Cria uma nova receita copiando a composição e ajustando as quantidades por fator (multiplica ou divide).
-                    </p>
-                    <Form method="post" className="mt-3 grid gap-3 md:grid-cols-4">
-                        <input type="hidden" name="recipeId" value={recipe?.id} />
-                        <div className="md:col-span-2">
-                            <label htmlFor="duplicateVariationId" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Variação destino</label>
-                            <select id="duplicateVariationId" name="duplicateVariationId" className="h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm" required>
-                                <option value="">Selecionar variação</option>
-                                {variations.map((variation) => (
-                                    <option key={variation.id} value={variation.id}>
-                                        {variation.name}{variation.kind ? ` (${variation.kind})` : ""}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                        <div>
-                            <label htmlFor="duplicateFactorMode" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Operação</label>
-                            <select id="duplicateFactorMode" name="duplicateFactorMode" defaultValue="multiply" className="h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm">
-                                <option value="multiply">Multiplica (x)</option>
-                                <option value="divide">Divide (/)</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label htmlFor="duplicateFactorValue" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Fator</label>
-                            <input id="duplicateFactorValue" name="duplicateFactorValue" type="number" min="0.0001" step="0.0001" defaultValue="1" className="h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm" required />
-                        </div>
-                        <div className="md:col-span-4 flex justify-end">
-                            <button
-                                type="submit"
-                                name="_action"
-                                value="recipe-duplicate-variation"
-                                className="inline-flex h-10 items-center rounded-lg bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-700"
-                            >
-                                Duplicar receita
-                            </button>
-                        </div>
-                    </Form>
-                </div>
-                {recipe?.itemId ? (
-                    <div className="mt-4">
-                        <Link
-                            to={`/admin/items/${recipe.itemId}/item-cost-sheets`}
-                            className="inline-flex items-center rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700"
-                        >
-                            Abrir fichas de custo do item (vinculação)
-                        </Link>
-                    </div>
-                ) : (
-                    <p className="mt-4 text-sm text-amber-700">
-                        Esta receita ainda não está vinculada a um item. Salve novamente para tentar criar/vincular o item.
-                    </p>
-                )}
             </div>
         </div>
     )

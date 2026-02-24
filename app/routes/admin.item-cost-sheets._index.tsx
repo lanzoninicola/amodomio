@@ -158,7 +158,7 @@ export default function AdminItemCostSheetsIndex() {
                   </TableCell>
                   <TableCell className="px-4 py-3 text-right">
                     <Link
-                      to={`/admin/items/${sheet.itemId}/item-cost-sheets?sheetId=${sheet.id}&itemVariationId=${sheet.itemVariationId}`}
+                      to={`/admin/items/${sheet.itemId}/item-cost-sheets?itemCostSheetId=${sheet.id}&itemVariationId=${sheet.itemVariationId}`}
                     >
                       <Button type="button" variant="outline" size="sm" className="rounded-md">
                         Abrir

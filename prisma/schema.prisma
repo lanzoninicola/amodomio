@@ -27,7 +27,7 @@ model Recipe {
   hasVariations          Boolean                  @default(false) @map("has_variations")
   isVegetarian           Boolean                  @default(false) @map("is_vegetarian")
   isGlutenFree           Boolean                  @default(false) @map("is_gluten_free")
-  createdAt              DateTime                 @map("created_at")
+  createdAt              DateTime                 @default(now()) @map("created_at")
   updatedAt              DateTime                 @default(now()) @updatedAt @map("updated_at")
   Item                   Item?                    @relation(fields: [itemId], references: [id])
   Variation              Variation?               @relation(fields: [variationId], references: [id])
@@ -622,6 +622,8 @@ enum ItemCostSheetStatus {
   draft
   active
   archived
+
+  @@map("RecipeSheetStatus")
 }
 
 enum ItemCostSheetLineType {
@@ -629,6 +631,8 @@ enum ItemCostSheetLineType {
   recipeSheet
   manual
   labor
+
+  @@map("RecipeSheetLineType")
 }
 
 model ItemCostSheet {

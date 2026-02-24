@@ -24,11 +24,11 @@ Documentação da API REST do KDS (criação de pedidos e delivery zones):
 
 - `app/domain/kds/README.md`
 
-## Domínio Cardápio (RecipeSheet)
+## Domínio Cardápio (ItemCostSheet)
 
-Regras de modelagem para evitar duplicação entre `Recipe` (base técnica) e `RecipeSheet` (aplicação comercial por item+tamanho):
+Regras de modelagem para evitar duplicação entre `Recipe` (base técnica) e `ItemCostSheet` (aplicação comercial por item+variação):
 
-- `app/domain/cardapio/recipe-sheet/README.md`
+- `app/domain/cardapio/item-cost-sheet/README.md`
 
 ## Gerenciamento de Custos por Classificação (Estado Atual)
 
@@ -52,8 +52,8 @@ Referência rápida para evolução futura do fluxo de custos por `Item`.
 ### Como está sendo usado por classificação (hoje)
 
 - `insumo`: normalmente custo manual/compra alimentando `ItemCostHistory`.
-- `semi_acabado`: custo operacional deve vir de `RecipeSheet` (ficha técnica), por referência.
-- `produto_final`: custo operacional do cardápio/precificação deve vir de `RecipeSheet` ativa por item+tamanho.
+- `semi_acabado`: custo operacional deve vir de `ItemCostSheet` (ficha de custo), por referência.
+- `produto_final`: custo operacional do cardápio/precificação deve vir de `ItemCostSheet` ativa por item+variação.
 - `embalagem`: pode ter custo próprio no `ItemCostHistory` e também compor custo específico de venda em ficha técnica.
 - `servico`: usa o fluxo genérico de custo por item (sem regra específica de classificação no cadastro de custo).
 - `outro`: usa o fluxo genérico de custo por item.
@@ -61,14 +61,14 @@ Referência rápida para evolução futura do fluxo de custos por `Item`.
 ### Observações importantes
 
 - A classificação hoje é mais organizacional/semântica e de fluxo do que uma trava de cadastro de custo.
-- Existe sincronização de snapshot de custo de `RecipeSheet` ativa para `ItemCostHistory` (fonte `recipe-sheet`) quando aplicável.
+- Existe sincronização de snapshot de custo de `ItemCostSheet` ativa para `ItemCostHistory` (fonte `item-cost-sheet`) quando aplicável.
 - Este bloco documenta o comportamento atual e pode ser refinado quando o fluxo por classificação for formalizado.
 
 ### Último custo e custo médio (como é gerenciado hoje)
 
 - `Último custo`:
   - vem do registro mais recente em `ItemCostHistory` (ordenação por `validFrom` desc e depois `createdAt` desc)
-  - pode ter origem manual (aba `Custos`) ou automática (`source = recipe-sheet`)
+  - pode ter origem manual (aba `Custos`) ou automática (`source = item-cost-sheet`)
 
 - `Custo médio`:
   - é calculado por item com base nos registros de `ItemCostHistory` dentro de uma janela de dias configurável
@@ -81,12 +81,12 @@ Referência rápida para evolução futura do fluxo de custos por `Item`.
 - Regras de normalização (resumo):
   - se o custo já estiver na unidade de consumo, usa o valor direto
   - se o custo estiver na unidade de compra e houver fator de conversão válido, converte para unidade de consumo
-  - se `source = recipe-sheet` e a unidade vier vazia, o valor é tratado como custo já normalizado do item
+  - se `source = item-cost-sheet` e a unidade vier vazia, o valor é tratado como custo já normalizado do item
   - se não for possível normalizar, o registro não entra no cálculo do custo médio
 
 - Frequência de atualização (estado atual):
   - não há agendamento automático por classificação
-  - a atualização é por evento (registro manual de custo ou sincronização de `RecipeSheet`)
+  - a atualização é por evento (registro manual de custo ou sincronização de `ItemCostSheet`)
   - `último custo` reflete imediatamente o novo lançamento em `ItemCostHistory`
 - `custo médio` é recalculado na leitura/tela com base no histórico e na janela configurada
 
@@ -122,7 +122,7 @@ Objetivo: ter uma única fonte de verdade para custo atual e histórico, cobrind
   - `costAmount`
   - `previousCostAmount`
   - `unit`
-  - `source` (`manual`, `purchase`, `recipe-sheet`, `import`, `adjustment`, etc.)
+  - `source` (`manual`, `purchase`, `item-cost-sheet`, `import`, `adjustment`, etc.)
   - `referenceType`, `referenceId`
   - `validFrom`
   - `updatedBy`
@@ -160,7 +160,7 @@ Objetivo: ter uma única fonte de verdade para custo atual e histórico, cobrind
 
 - Custo derivado de ficha técnica (ex.: tamanho):
   - resolve a `ItemVariation` correspondente (ex.: `kind=size`, `code=pizza-medium`)
-  - atualiza `ItemCostVariation` com `source=recipe-sheet`
+  - atualiza `ItemCostVariation` com `source=item-cost-sheet`
   - grava snapshot com `referenceType/referenceId` da origem
 
 - Consulta de custo atual:

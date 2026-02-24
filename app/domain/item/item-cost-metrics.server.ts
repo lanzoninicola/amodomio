@@ -46,8 +46,9 @@ function normalizeCostToConsumptionUnit(
     return amount;
   }
 
-  // Recipe-sheet snapshots are already item-cost values (usually in item consumption basis).
-  if (!costUnit && String(cost.source || "").trim().toLowerCase() === "recipe-sheet") {
+  // Item cost sheet snapshots may arrive already normalized.
+  const source = String(cost.source || "").trim().toLowerCase();
+  if (!costUnit && source === "item-cost-sheet") {
     return amount;
   }
 

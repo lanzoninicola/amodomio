@@ -4,7 +4,7 @@ import { PrismaEntityProps } from "~/lib/prisma/types.server";
 export type ItemCostVariationSource =
   | "manual"
   | "purchase"
-  | "recipe-sheet"
+  | "item-cost-sheet"
   | "import"
   | "adjustment"
   | string;
@@ -222,4 +222,3 @@ class ItemCostVariationPrismaEntity {
 export const itemCostVariationPrismaEntity = new ItemCostVariationPrismaEntity({
   client: prismaClient,
 });
-
