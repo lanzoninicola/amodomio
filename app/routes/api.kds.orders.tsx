@@ -7,9 +7,12 @@ import {
   ensureHeader,
   getMaxes,
   getOrderForApiByCommandNumber,
+  getOrderForApiById,
   listOrdersForApiByDate,
   recalcHeaderTotal,
   type KdsOrderApiRow,
+  setOrderStatus,
+  type KdsStatus,
 } from "~/domain/kds/server";
 import { todayLocalYMD, ymdToDateInt, ymdToUtcNoon } from "~/domain/kds/utils/date";
 
@@ -39,8 +42,22 @@ type KdsOrderPayload = {
   status?: string;
 };
 
+type KdsOrderStatusUpdatePayload = {
+  id?: string;
+  date?: string;
+  commandNumber?: number | string | null;
+  status?: string;
+};
+
 const RATE_LIMIT_BUCKET = "kds-orders";
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const UPDATABLE_KDS_STATUSES: readonly KdsStatus[] = [
+  "novoPedido",
+  "emProducao",
+  "aguardandoForno",
+  "assando",
+  "finalizado",
+] as const;
 
 function toDecimal(value: unknown): Prisma.Decimal {
   const raw = String(value ?? "0").replace(",", ".");
@@ -372,16 +389,84 @@ async function handleCreateOrder(request: Request) {
   });
 }
 
+async function handleUpdateOrderStatus(request: Request) {
+  const accessError = checkApiAccess(request);
+  if (accessError) return accessError;
+
+  let body: KdsOrderStatusUpdatePayload;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ error: "invalid_json" }, { status: 400 });
+  }
+
+  const requestedStatus = typeof body?.status === "string" ? body.status.trim() : "";
+  if (!requestedStatus || !UPDATABLE_KDS_STATUSES.includes(requestedStatus as KdsStatus)) {
+    return json(
+      { error: "invalid_status", allowed: UPDATABLE_KDS_STATUSES },
+      { status: 400 }
+    );
+  }
+
+  const id = typeof body?.id === "string" && body.id.trim() ? body.id.trim() : null;
+
+  let target = id ? await getOrderForApiById(id) : null;
+
+  if (!target) {
+    const dateParsed = parseDateOrResponse(body?.date);
+    if ("error" in dateParsed) return dateParsed.error;
+
+    const rawCmd =
+      body?.commandNumber === null || body?.commandNumber === undefined
+        ? null
+        : String(body.commandNumber);
+    const cmdParsed = parseCommandNumberOrResponse(rawCmd);
+    if ("error" in cmdParsed) return cmdParsed.error;
+
+    if (cmdParsed.commandNumber == null) {
+      return json(
+        { error: "missing_target", message: "Informe `id` ou (`date` + `commandNumber`)." },
+        { status: 400 }
+      );
+    }
+
+    target = await getOrderForApiByCommandNumber(dateParsed.dateInt, cmdParsed.commandNumber);
+  }
+
+  if (!target) {
+    return json({ error: "order_not_found" }, { status: 404 });
+  }
+
+  await setOrderStatus(target.id, requestedStatus as KdsStatus);
+
+  const updated = await getOrderForApiById(target.id);
+  if (!updated) {
+    return json({ error: "order_not_found" }, { status: 404 });
+  }
+
+  return json({
+    ok: true,
+    mode: "status_updated",
+    id: updated.id,
+    commandNumber: updated.commandNumber,
+    status: updated.status,
+    order: serializeOrder(updated),
+  });
+}
+
 export async function action({ request }: ActionFunctionArgs) {
   if (request.method === "OPTIONS") {
     return new Response(null, { status: 204 });
   }
 
-  if (request.method !== "POST") {
+  if (request.method !== "POST" && request.method !== "PATCH") {
     return json({ error: "method_not_allowed" }, { status: 405 });
   }
 
   try {
+    if (request.method === "PATCH") {
+      return await handleUpdateOrderStatus(request);
+    }
     return await handleCreateOrder(request);
   } catch (e: any) {
     if (e?.code === "P2003") {

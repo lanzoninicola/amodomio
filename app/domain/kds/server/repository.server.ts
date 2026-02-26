@@ -101,6 +101,13 @@ export async function getOrderForApiByCommandNumber(dateInt: number, commandNumb
     select: kdsOrderApiSelect,
   });
 }
+
+export async function getOrderForApiById(id: string) {
+  return prisma.kdsDailyOrderDetail.findFirst({
+    where: { id, deletedAt: null },
+    select: kdsOrderApiSelect,
+  });
+}
 export async function getDailyAggregates(dateInt: number) {
   const agg = await prisma.kdsDailyOrderDetail.aggregate({
     where: { dateInt, status: { not: "pendente" } },
