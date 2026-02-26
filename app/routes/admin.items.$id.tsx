@@ -38,6 +38,8 @@ function normalizeUnit(value: FormDataEntryValue | null) {
   return normalized || null;
 }
 
+const RECIPE_VARIATION_POLICY_OPTIONS = ["auto", "hide", "show"] as const;
+
 async function getAvailableItemUnits() {
   const db = prismaClient as any;
   const staticUnits = ITEM_UNIT_OPTIONS;
@@ -258,6 +260,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
       const consumptionUm = normalizeUnit(formData.get("consumptionUm"));
       const categoryIdRaw = String(formData.get("categoryId") || "").trim();
       const categoryId = categoryIdRaw || null;
+      const recipeVariationPolicyRaw = String(formData.get("recipeVariationPolicy") || "auto").trim().toLowerCase();
+      const recipeVariationPolicy = RECIPE_VARIATION_POLICY_OPTIONS.includes(recipeVariationPolicyRaw as any)
+        ? recipeVariationPolicyRaw
+        : "auto";
 
       if (!name) return badRequest("Informe o nome do item");
       if (!classification) return badRequest("Informe a classificação");
@@ -286,6 +292,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
           description: description || null,
           classification,
           categoryId,
+          recipeVariationPolicy,
           consumptionUm,
           active: toBool(formData.get("active")),
           canPurchase: toBool(formData.get("canPurchase")),

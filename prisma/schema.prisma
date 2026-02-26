@@ -236,6 +236,7 @@ model Item {
   name          String
   description   String?
   classification String
+  recipeVariationPolicy String @default("auto") @map("recipe_variation_policy") // auto | hide | show
   categoryId    String?    @map("category_id")
   purchaseUm    String?    @map("purchase_um")
   consumptionUm String?    @map("consumption_um")
@@ -255,6 +256,9 @@ model Item {
   RecipeLine  RecipeLine[]
   ItemCostSheet ItemCostSheet[]
   ItemVariation ItemVariation[]
+  StockNfImportBatchLine StockNfImportBatchLine[]
+  StockNfImportAppliedChange StockNfImportAppliedChange[]
+  ItemImportAlias ItemImportAlias[]
 
   @@index([categoryId], map: "items_category_id_idx")
   @@index([classification], map: "items_classification_idx")
@@ -330,6 +334,7 @@ model ItemVariation {
   RecipeLine           RecipeLine[]
   ItemCostVariation        ItemCostVariation?
   ItemCostVariationHistory ItemCostVariationHistory[]
+  StockNfImportAppliedChange StockNfImportAppliedChange[]
 
   @@unique([itemId, variationId], map: "item_variations_item_variation_unique")
   @@index([itemId], map: "item_variations_item_id_idx")
@@ -1973,4 +1978,139 @@ model CrmCampaignSend {
   @@index([customer_id], name: "crm_campaign_send_customer_id_idx")
   @@index([source, external_id], name: "crm_campaign_send_source_external_id_idx")
   @@map("crm_campaign_send")
+}
+
+model StockNfImportBatch {
+  id              String   @id @default(uuid())
+  name            String
+  sourceSystem    String   @default("saipos") @map("source_system")
+  sourceType      String   @default("entrada_nf") @map("source_type")
+  status          String   @default("draft") // draft | validated | applied | rolled_back | partial | archived
+  originalFileName String? @map("original_file_name")
+  worksheetName   String?  @map("worksheet_name")
+  periodStart     DateTime? @map("period_start")
+  periodEnd       DateTime? @map("period_end")
+  uploadedBy      String?  @map("uploaded_by")
+  appliedAt       DateTime? @map("applied_at")
+  rolledBackAt    DateTime? @map("rolled_back_at")
+  summary         Json?
+  notes           String?  @db.Text
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at")
+  archivedAt      DateTime? @map("archived_at")
+
+  Lines          StockNfImportBatchLine[]
+  AppliedChanges StockNfImportAppliedChange[]
+
+  @@index([status, createdAt], map: "stock_nf_import_batches_status_created_at_idx")
+  @@map("stock_nf_import_batches")
+}
+
+model StockNfImportBatchLine {
+  id                        String   @id @default(uuid())
+  batchId                   String   @map("batch_id")
+  rowNumber                 Int      @map("row_number")
+  status                    String   @default("parsed") // parsed | invalid | pending_mapping | pending_conversion | ready | applied | skipped_duplicate | error
+  errorCode                 String?  @map("error_code")
+  errorMessage              String?  @map("error_message") @db.Text
+  rawData                   Json?    @map("raw_data")
+  movementAt                DateTime? @map("movement_at")
+  ingredientName            String   @map("ingredient_name")
+  ingredientNameNormalized  String   @map("ingredient_name_normalized")
+  motivo                    String?
+  identification            String?
+  invoiceNumber             String?  @map("invoice_number")
+  qtyEntry                  Float?   @map("qty_entry")
+  unitEntry                 String?  @map("unit_entry")
+  qtyConsumption            Float?   @map("qty_consumption")
+  unitConsumption           String?  @map("unit_consumption")
+  movementUnit              String?  @map("movement_unit")
+  costAmount                Float?   @map("cost_amount")
+  costTotalAmount           Float?   @map("cost_total_amount")
+  observation               String?
+  sourceFingerprint         String   @map("source_fingerprint")
+  duplicateOfLineId         String?  @map("duplicate_of_line_id")
+  mappedItemId              String?  @map("mapped_item_id")
+  mappedItemName            String?  @map("mapped_item_name")
+  mappingSource             String?  @map("mapping_source") // exact | alias | manual | suggestion
+  manualConversionFactor    Float?   @map("manual_conversion_factor") // destination units per 1 source unit
+  conversionSource          String?  @map("conversion_source") // direct | reverse | item_purchase_factor | manual
+  conversionFactorUsed      Float?   @map("conversion_factor_used")
+  targetUnit                String?  @map("target_unit")
+  convertedCostAmount       Float?   @map("converted_cost_amount")
+  appliedAt                 DateTime? @map("applied_at")
+  rolledBackAt              DateTime? @map("rolled_back_at")
+  metadata                  Json?
+  createdAt                 DateTime @default(now()) @map("created_at")
+  updatedAt                 DateTime @default(now()) @updatedAt @map("updated_at")
+
+  Batch           StockNfImportBatch            @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  MappedItem      Item?                         @relation(fields: [mappedItemId], references: [id], onDelete: SetNull)
+  AppliedChanges  StockNfImportAppliedChange[]
+
+  @@unique([batchId, rowNumber], map: "stock_nf_import_batch_lines_batch_row_unique")
+  @@unique([batchId, sourceFingerprint], map: "stock_nf_import_batch_lines_batch_fingerprint_unique")
+  @@index([batchId, status], map: "stock_nf_import_batch_lines_batch_status_idx")
+  @@index([ingredientNameNormalized], map: "stock_nf_import_batch_lines_ingredient_norm_idx")
+  @@index([sourceFingerprint], map: "stock_nf_import_batch_lines_fingerprint_idx")
+  @@index([mappedItemId], map: "stock_nf_import_batch_lines_mapped_item_idx")
+  @@map("stock_nf_import_batch_lines")
+}
+
+model StockNfImportAppliedChange {
+  id                     String   @id @default(uuid())
+  batchId                String   @map("batch_id")
+  lineId                 String   @map("line_id")
+  itemId                 String   @map("item_id")
+  itemVariationId        String   @map("item_variation_id")
+  previousCostVariationId String? @map("previous_cost_variation_id")
+  previousCostAmount     Float?   @map("previous_cost_amount")
+  previousCostUnit       String?  @map("previous_cost_unit")
+  newCostAmount          Float    @map("new_cost_amount")
+  newCostUnit            String?  @map("new_cost_unit")
+  movementUnit           String?  @map("movement_unit")
+  conversionSource       String?  @map("conversion_source")
+  conversionFactorUsed   Float?   @map("conversion_factor_used")
+  invoiceNumber          String?  @map("invoice_number")
+  movementAt             DateTime? @map("movement_at")
+  appliedBy              String?  @map("applied_by")
+  appliedAt              DateTime @default(now()) @map("applied_at")
+  rolledBackAt           DateTime? @map("rolled_back_at")
+  rollbackStatus         String?  @map("rollback_status") // success | conflict | error
+  rollbackMessage        String?  @map("rollback_message") @db.Text
+  metadata               Json?
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @default(now()) @updatedAt @map("updated_at")
+
+  Batch  StockNfImportBatch     @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  Line   StockNfImportBatchLine @relation(fields: [lineId], references: [id], onDelete: Cascade)
+  Item   Item                   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  ItemVariation ItemVariation   @relation(fields: [itemVariationId], references: [id], onDelete: Cascade)
+
+  @@unique([lineId], map: "stock_nf_import_applied_changes_line_unique")
+  @@index([batchId], map: "stock_nf_import_applied_changes_batch_idx")
+  @@index([itemId], map: "stock_nf_import_applied_changes_item_idx")
+  @@index([rolledBackAt], map: "stock_nf_import_applied_changes_rolled_back_at_idx")
+  @@map("stock_nf_import_applied_changes")
+}
+
+model ItemImportAlias {
+  id             String   @id @default(uuid())
+  sourceSystem    String   @default("saipos") @map("source_system")
+  sourceType      String   @default("entrada_nf") @map("source_type")
+  aliasName       String   @map("alias_name")
+  aliasNormalized String   @map("alias_normalized")
+  itemId          String   @map("item_id")
+  active          Boolean  @default(true)
+  notes           String?  @db.Text
+  createdBy       String?  @map("created_by")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at")
+
+  Item Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceSystem, sourceType, aliasNormalized], map: "item_import_aliases_source_type_alias_unique")
+  @@index([itemId], map: "item_import_aliases_item_idx")
+  @@index([active, aliasNormalized], map: "item_import_aliases_active_alias_idx")
+  @@map("item_import_aliases")
 }

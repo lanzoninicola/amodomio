@@ -13,7 +13,7 @@ export async function loader({}: LoaderFunctionArgs) {
         const [items, variations] = await Promise.all([
             db.item.findMany({
                 where: { active: true },
-                select: { id: true, name: true },
+                select: { id: true, name: true, classification: true },
                 orderBy: [{ name: "asc" }],
                 take: 500,
             }),
@@ -104,7 +104,7 @@ export async function action({ request }: ActionFunctionArgs) {
 export default function AdminRecipesNew() {
     const actionData = useActionData<typeof action>() as any
     const loaderData = useLoaderData<typeof loader>() as any
-    const items = (loaderData?.payload?.items || []) as Array<{ id: string; name: string }>
+    const items = (loaderData?.payload?.items || []) as Array<{ id: string; name: string; classification?: string | null }>
     const variations = (loaderData?.payload?.variations || []) as Array<{ id: string; name: string; kind?: string | null }>
     const hasError = Number(actionData?.status || 0) >= 400
     const errorMessage = actionData?.message || "Erro ao salvar receita"

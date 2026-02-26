@@ -18,7 +18,7 @@ import { cn } from "~/lib/utils";
 interface RecipeFormProps {
     recipe?: Recipe;
     actionName: "recipe-create" | "recipe-update";
-    items?: Array<{ id: string; name: string }>;
+    items?: Array<{ id: string; name: string; classification?: string | null }>;
     variations?: Array<{ id: string; name: string; kind?: string | null }>;
     title?: string;
 }
@@ -42,6 +42,10 @@ export default function RecipeForm({ recipe, actionName, items = [], variations 
         () => items.find((item) => item.id === linkedItemId) || null,
         [items, linkedItemId]
     );
+    const selectedItemLabel = useMemo(() => {
+        if (!selectedItem?.name) return "Automático pelo nome";
+        return selectedItem.classification ? `${selectedItem.name} (${selectedItem.classification})` : selectedItem.name;
+    }, [selectedItem]);
     const selectedItemName = useMemo(
         () => selectedItem?.name || "",
         [selectedItem]
@@ -58,6 +62,14 @@ export default function RecipeForm({ recipe, actionName, items = [], variations 
         () => Boolean(generatedName) && name.trim() === generatedName,
         [generatedName, name]
     );
+
+    useEffect(() => {
+        if (isCreate || !recipe) return;
+        setName(recipe.name || "");
+        setNameTouched(Boolean(recipe.name));
+        setLinkedItemId(recipe.itemId || "");
+        setLinkedVariationId((((recipe as any)?.variationId as string) || ""));
+    }, [isCreate, recipe?.id, recipe?.updatedAt, recipe?.name, recipe?.itemId, (recipe as any)?.variationId]);
 
     useEffect(() => {
         if (!isCreate) return;
@@ -80,7 +92,7 @@ export default function RecipeForm({ recipe, actionName, items = [], variations 
                 </div>
                 <div className="flex flex-col gap-4">
                     <div className="border rounded-md p-4">
-                        <div className="flex flex-col gap-1">
+                        <div className="grid gap-4 lg:grid-cols-2">
                             <Fieldset className="grid-cols-3">
                                 <Label htmlFor="linkedItemId">Item vinculado</Label>
                                 <div className="col-span-2">
@@ -96,7 +108,7 @@ export default function RecipeForm({ recipe, actionName, items = [], variations 
                                                 className="w-full justify-between font-normal"
                                             >
                                                 <span className="truncate text-left">
-                                                    {selectedItem?.name || "Automático pelo nome"}
+                                                    {selectedItemLabel}
                                                 </span>
                                                 <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                             </Button>
@@ -104,7 +116,7 @@ export default function RecipeForm({ recipe, actionName, items = [], variations 
                                         <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
                                             <Command>
                                                 <CommandInput placeholder="Buscar item..." />
-                                                <CommandList>
+                                                <CommandList className="max-h-[50vh]">
                                                     <CommandEmpty>Nenhum item encontrado.</CommandEmpty>
                                                     <CommandItem
                                                         value="automatico criar vincular pelo nome"
@@ -126,7 +138,7 @@ export default function RecipeForm({ recipe, actionName, items = [], variations 
                                                     {items.map((item) => (
                                                         <CommandItem
                                                             key={item.id}
-                                                            value={`${item.name} ${item.id}`}
+                                                            value={`${item.name} ${item.classification || ""} ${item.id}`}
                                                             onSelect={() => {
                                                                 setLinkedItemId(item.id);
                                                                 setItemComboboxOpen(false);
@@ -138,7 +150,10 @@ export default function RecipeForm({ recipe, actionName, items = [], variations 
                                                                     linkedItemId === item.id ? "opacity-100" : "opacity-0"
                                                                 )}
                                                             />
-                                                            <span className="truncate">{item.name}</span>
+                                                            <span className="truncate">
+                                                                {item.name}
+                                                                {item.classification ? ` (${item.classification})` : ""}
+                                                            </span>
                                                         </CommandItem>
                                                     ))}
                                                 </CommandList>

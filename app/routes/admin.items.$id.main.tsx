@@ -13,6 +13,7 @@ export default function AdminItemMainTab() {
   const [classificationValue, setClassificationValue] = useState(item.classification || classifications[0] || "");
   const [categoryIdValue, setCategoryIdValue] = useState(item.categoryId || "__EMPTY__");
   const [consumptionUmValue, setConsumptionUmValue] = useState(item.consumptionUm || "__EMPTY__");
+  const [recipeVariationPolicyValue, setRecipeVariationPolicyValue] = useState(item.recipeVariationPolicy || "auto");
 
   return (
     <div className="space-y-4">
@@ -70,6 +71,23 @@ export default function AdminItemMainTab() {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+              <div>
+                <Label htmlFor="recipeVariationPolicy">Variação na receita</Label>
+                <input type="hidden" name="recipeVariationPolicy" value={recipeVariationPolicyValue} />
+                <Select value={recipeVariationPolicyValue} onValueChange={setRecipeVariationPolicyValue}>
+                  <SelectTrigger id="recipeVariationPolicy" className="mt-1">
+                    <SelectValue placeholder="Selecionar..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="auto">Automático (regra)</SelectItem>
+                    <SelectItem value="hide">Ocultar variação</SelectItem>
+                    <SelectItem value="show">Sempre mostrar variação</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="mt-1 text-xs text-slate-600">
+                  Auto mostra o campo só quando existir mais de uma variação com custo diferente.
+                </p>
               </div>
               <div>
                 <Label htmlFor="categoryId">Categoria</Label>

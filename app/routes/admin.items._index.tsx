@@ -354,6 +354,14 @@ export default function AdminItemsIndex() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h1 className="text-lg font-semibold text-slate-900">Itens </h1>
+            <div className="mt-2">
+              <Link
+                to="/admin/items/import-stock-nf"
+                className="inline-flex items-center rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Importar movimentação NF (SAIPOS)
+              </Link>
+            </div>
           </div>
           <Link to="/admin" className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-800">
             <ChevronLeft size={14} />
