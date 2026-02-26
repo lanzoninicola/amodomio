@@ -6,5 +6,7 @@ export {
   kdsOrderApiSelect,
   listOrdersForApiByDate,
   getOrderForApiByCommandNumber,
+  getOrderForApiById,
+  setOrderStatus,
 } from "./repository.server";
-export type { KdsOrderApiRow } from "./repository.server";
+export type { KdsOrderApiRow, KdsStatus } from "./repository.server";
