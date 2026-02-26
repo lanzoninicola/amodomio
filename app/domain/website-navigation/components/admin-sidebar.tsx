@@ -14,7 +14,7 @@ import {
   SidebarMenuSubItem,
 } from "@/components/ui/sidebar"
 import { SidebarNavigationSection, WebsiteNavigationConfig } from "../types/navigation-types";
-import { Link, useFetcher, useRevalidator } from "@remix-run/react";
+import { NavLink, useFetcher, useRevalidator } from "@remix-run/react";
 import { cn } from "~/lib/utils";
 import { Loader2, Pin, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -152,8 +152,9 @@ export function AdminSidebar({ navigationLinks, pinnedHrefs }: AdminSidebarProps
                       )}
                     </button>
                   ) : null}
-                  <Link
+                  <NavLink
                     to={item.href}
+                    end={item.href === "/admin"}
                     prefetch="none"
                     onClick={() =>
                       trackNavClick({
@@ -162,14 +163,19 @@ export function AdminSidebar({ navigationLinks, pinnedHrefs }: AdminSidebarProps
                         groupTitle,
                       })
                     }
-                    className="flex min-w-0 flex-1 items-center gap-2"
+                    className={({ isActive }) =>
+                      cn(
+                        "flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1",
+                        isActive && "bg-amber-100 text-black font-semibold"
+                      )
+                    }
                     title={item.title}
                   >
                     {item.icon && <item.icon size={14} />}
                     <span className={cn("min-w-0 truncate whitespace-nowrap text-[12px]", item.highlight && "font-semibold")}>
                       {item.title}
                     </span>
-                  </Link>
+                  </NavLink>
                 </div>
               ) : (
                 <span className="flex min-w-0 items-center gap-2" title={item.title}>
@@ -221,10 +227,16 @@ export function AdminSidebar({ navigationLinks, pinnedHrefs }: AdminSidebarProps
                     )}
                   </button>
                 ) : null}
-                <Link
+                <NavLink
                   to={item.href}
+                  end={item.href === "/admin"}
                   prefetch="none"
-                  className="flex min-w-0 flex-1 items-center gap-2 text-sm"
+                  className={({ isActive }) =>
+                    cn(
+                      "flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1 text-sm",
+                      isActive && "bg-amber-100 text-black font-semibold"
+                    )
+                  }
                   onClick={() =>
                     trackNavClick({
                       href: item.href,
@@ -238,7 +250,7 @@ export function AdminSidebar({ navigationLinks, pinnedHrefs }: AdminSidebarProps
                   <span className={cn("min-w-0 truncate whitespace-nowrap", item.highlight && "font-semibold")}>
                     {item.title}
                   </span>
-                </Link>
+                </NavLink>
               </div>
             ) : (
               <span className="flex min-w-0 items-center gap-2 text-sm" title={item.title}>

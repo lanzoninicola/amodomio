@@ -9,7 +9,7 @@ import { toast } from "~/components/ui/use-toast";
 import { groceryListEntity } from "~/domain/grocery-list/grocery-list.entity.server";
 import { GroceryListItem } from "~/domain/grocery-list/grocery-list.model.server";
 import { TCategoryProducts, productEntity } from "~/domain/product/product.entity";
-import { Product } from "~/domain/product/product.model.server";
+import type { Product } from "~/domain/product/product.model.server";
 import { cn } from "~/lib/utils";
 import { serverError, ok } from "~/utils/http-response.server";
 import { jsonParse, jsonStringify } from "~/utils/json-helper";

@@ -221,8 +221,14 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
       title: "Cadastro",
       items: [
         {
-          title: "Produtos",
-          href: "/admin/products",
+          title: "Itens",
+          href: "/admin/items",
+          items: [],
+          disabled: false,
+        },
+        {
+          title: "Variações",
+          href: "/admin/variations",
           items: [],
           disabled: false,
         },
@@ -233,8 +239,26 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
           disabled: false,
         },
         {
+          title: "Fornecedores",
+          href: "/admin/suppliers",
+          items: [],
+          disabled: false,
+        },
+        {
+          title: "Fichas de custo",
+          href: "/admin/item-cost-sheets",
+          items: [],
+          disabled: false,
+        },
+        {
           title: "Categorias",
           href: "/admin/categorias",
+          items: [],
+          disabled: false,
+        },
+        {
+          title: "Unidades de consumo",
+          href: "/admin/unidades-consumo",
           items: [],
           disabled: false,
         },

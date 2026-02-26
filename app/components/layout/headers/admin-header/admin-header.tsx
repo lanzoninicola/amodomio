@@ -2,16 +2,17 @@ import { User2 } from "lucide-react";
 import Navbar from "~/components/primitives/navbar/navbar";
 
 
-// catalogo => produtos, categorias, unidades de medida
-// cadastros => produtos, clientes e fornecedores
+// catalogo => itens, categorias, unidades de medida
+// cadastros => itens, receitas e fornecedores
 
 
 const navLinks = [
     { label: "Iniçio", href: "/admin" },
     { label: "Cardápio", href: "/admin/menu" },
     { label: "Catálogos", href: "/admin/catalogs" },
-    { label: "Produtos", href: "/admin/products" },
-    { label: "Forneçedores", href: "/admin/suppliers" },
+    { label: "Itens", href: "/admin/items" },
+    { label: "Receitas", href: "/admin/recipes" },
+    { label: "Fornecedores", href: "/admin/suppliers" },
     { label: "Categorias", href: "/admin/categories" },
     { label: "Tamanhos", href: "/admin/sizes" },
 ]
@@ -32,4 +33,3 @@ export default function AdminHeader() {
         </header>
     )
 }
-

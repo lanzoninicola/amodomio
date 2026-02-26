@@ -1,6 +1,47 @@
 import { Prisma } from "@prisma/client";
 import prisma from "~/lib/prisma/client.server";
 import { CHANNELS } from "~/domain/kds/constants";
+
+export const kdsOrderApiSelect = {
+  id: true,
+  orderId: true,
+  dateInt: true,
+  createdAt: true,
+  updatedAt: true,
+  deletedAt: true,
+  deliveredAt: true,
+  commandNumber: true,
+  size: true,
+  hasMoto: true,
+  motoValue: true,
+  orderAmount: true,
+  channel: true,
+  status: true,
+  customerName: true,
+  customerPhone: true,
+  takeAway: true,
+  requestedForOven: true,
+  sortOrderIndex: true,
+  isVendaLivre: true,
+  isCreditCard: true,
+  novoPedidoAt: true,
+  emProducaoAt: true,
+  aguardandoFornoAt: true,
+  assandoAt: true,
+  finalizadoAt: true,
+  deliveryZoneId: true,
+  DeliveryZone: {
+    select: {
+      id: true,
+      name: true,
+      city: true,
+      state: true,
+      zipCode: true,
+    },
+  },
+} satisfies Prisma.KdsDailyOrderDetailSelect;
+
+export type KdsOrderApiRow = Prisma.KdsDailyOrderDetailGetPayload<{ select: typeof kdsOrderApiSelect }>;
 export async function ensureHeader(dateInt: number, currentDate: Date) {
   const activeGoal = await prisma.financialDailyGoal.findFirst({
     where: { isActive: true },
@@ -44,6 +85,20 @@ export async function listByDate(dateInt: number) {
   return prisma.kdsDailyOrderDetail.findMany({
     where: { dateInt },
     orderBy: [{ sortOrderIndex: "asc" }, { createdAt: "asc" }],
+  });
+}
+export async function listOrdersForApiByDate(dateInt: number) {
+  return prisma.kdsDailyOrderDetail.findMany({
+    where: { dateInt, deletedAt: null },
+    orderBy: [{ sortOrderIndex: "asc" }, { createdAt: "asc" }],
+    select: kdsOrderApiSelect,
+  });
+}
+
+export async function getOrderForApiByCommandNumber(dateInt: number, commandNumber: number) {
+  return prisma.kdsDailyOrderDetail.findFirst({
+    where: { dateInt, commandNumber, deletedAt: null },
+    select: kdsOrderApiSelect,
   });
 }
 export async function getDailyAggregates(dateInt: number) {

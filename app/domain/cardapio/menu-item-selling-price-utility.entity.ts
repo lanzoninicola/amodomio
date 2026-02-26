@@ -193,7 +193,7 @@ class MenuItemSellingPriceUtilityEntity {
     const priceWithoutProfit = amount / divisorWithoutProfit;
 
     return {
-      formulaExplanation: `(Custo ficha técnica + Desperdício + Custo embalagem) / (1 - (% Dna + % Profito))`,
+      formulaExplanation: `(Custo ficha de custo + Desperdício + Custo embalagem) / (1 - (% Dna + % Profito))`,
       formulaExpression: `(${formatDecimalPlaces(
         amount
       )} / (1 - (${formatDecimalPlaces(dnaPerc)} / 100 + ${formatDecimalPlaces(

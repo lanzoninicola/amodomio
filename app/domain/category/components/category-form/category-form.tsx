@@ -1,23 +1,19 @@
 import { Label } from "@radix-ui/react-label"
-import { useLoaderData, Form } from "@remix-run/react"
+import { Form } from "@remix-run/react"
 import SubmitButton from "~/components/primitives/submit-button/submit-button"
 import Fieldset from "~/components/ui/fieldset"
 import { Input } from "~/components/ui/input"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select"
-import { loader } from "~/routes/admin.gerenciamento.cardapio._index333"
 import { CategoryTypeSelectElement } from "../../category.entity.server"
 import { Category } from "../../category.model.server"
 
 interface CategoryFormProps {
     action: "category-create" | "category-update"
     category?: Category
+    types: CategoryTypeSelectElement[]
 }
 
-export default function CategoryForm({ action, category }: CategoryFormProps) {
-    const loaderData = useLoaderData<typeof loader>()
-    const types = loaderData?.payload.types as CategoryTypeSelectElement[]
-
-
+export default function CategoryForm({ action, category, types }: CategoryFormProps) {
     return (
         <Form method="post">
             <input type="hidden" name="id" value={category?.id} />

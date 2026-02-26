@@ -3,7 +3,14 @@ import { json } from "@remix-run/node";
 import { Prisma } from "@prisma/client";
 import prisma from "~/lib/prisma/client.server";
 import { restApi } from "~/domain/rest-api/rest-api.entity.server";
-import { ensureHeader, getMaxes, recalcHeaderTotal } from "~/domain/kds/server";
+import {
+  ensureHeader,
+  getMaxes,
+  getOrderForApiByCommandNumber,
+  listOrdersForApiByDate,
+  recalcHeaderTotal,
+  type KdsOrderApiRow,
+} from "~/domain/kds/server";
 import { todayLocalYMD, ymdToDateInt, ymdToUtcNoon } from "~/domain/kds/utils/date";
 
 type SizeCounts = {
@@ -33,6 +40,7 @@ type KdsOrderPayload = {
 };
 
 const RATE_LIMIT_BUCKET = "kds-orders";
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 function toDecimal(value: unknown): Prisma.Decimal {
   const raw = String(value ?? "0").replace(",", ".");
@@ -78,23 +86,7 @@ function normalizeSizes(payload: KdsOrderPayload): SizeCounts {
 
 const stringifySize = (c: SizeCounts) => JSON.stringify(c);
 
-export async function loader({ request }: LoaderFunctionArgs) {
-  if (request.method === "OPTIONS") {
-    return new Response(null, { status: 204 });
-  }
-  return json({ error: "method_not_allowed" }, { status: 405 });
-}
-
-export async function action({ request }: ActionFunctionArgs) {
-  if (request.method === "OPTIONS") {
-    return new Response(null, { status: 204 });
-  }
-
-  if (request.method !== "POST") {
-    return json({ error: "method_not_allowed" }, { status: 405 });
-  }
-
-  try {
+function checkApiAccess(request: Request) {
   const rateLimit = restApi.rateLimitCheck(request, { bucket: RATE_LIMIT_BUCKET });
   if (!rateLimit.success) {
     const retrySeconds = rateLimit.retryIn ? Math.ceil(rateLimit.retryIn / 1000) : 60;
@@ -110,6 +102,157 @@ export async function action({ request }: ActionFunctionArgs) {
     return json({ error: "unauthorized", message: auth.message }, { status });
   }
 
+  return null;
+}
+
+function parseDateOrResponse(raw: unknown) {
+  const date =
+    typeof raw === "string" && raw.trim()
+      ? raw.trim()
+      : todayLocalYMD();
+  if (!DATE_RE.test(date)) {
+    return {
+      error: json({ error: "invalid_date_format", message: "Use YYYY-MM-DD" }, { status: 400 }),
+    };
+  }
+
+  const dateInt = ymdToDateInt(date);
+  if (!Number.isFinite(dateInt)) {
+    return { error: json({ error: "invalid_date" }, { status: 400 }) };
+  }
+
+  return { date, dateInt };
+}
+
+function parseCommandNumberOrResponse(raw: string | null) {
+  if (raw == null || raw.trim() === "") return { commandNumber: null };
+  const commandNumber = Number(raw);
+  if (!Number.isFinite(commandNumber)) {
+    return { error: json({ error: "invalid_command_number" }, { status: 400 }) };
+  }
+  return { commandNumber };
+}
+
+function parseSizeValue(raw: string | null): SizeCounts | null {
+  if (!raw || !raw.trim()) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    return {
+      F: Number(parsed?.F ?? 0) || 0,
+      M: Number(parsed?.M ?? 0) || 0,
+      P: Number(parsed?.P ?? 0) || 0,
+      I: Number(parsed?.I ?? 0) || 0,
+      FT: Number(parsed?.FT ?? 0) || 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function serializeOrder(row: KdsOrderApiRow) {
+  return {
+    id: row.id,
+    orderId: row.orderId,
+    dateInt: row.dateInt,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    deletedAt: row.deletedAt,
+    deliveredAt: row.deliveredAt,
+    commandNumber: row.commandNumber,
+    size: row.size,
+    sizes: parseSizeValue(row.size ?? null),
+    hasMoto: row.hasMoto,
+    motoValue: Number(row.motoValue ?? 0),
+    orderAmount: Number(row.orderAmount ?? 0),
+    channel: row.channel ?? "",
+    status: row.status,
+    customerName: row.customerName,
+    customerPhone: row.customerPhone,
+    takeAway: row.takeAway,
+    requestedForOven: row.requestedForOven,
+    sortOrderIndex: row.sortOrderIndex,
+    isVendaLivre: row.isVendaLivre,
+    isCreditCard: row.isCreditCard,
+    novoPedidoAt: row.novoPedidoAt,
+    emProducaoAt: row.emProducaoAt,
+    aguardandoFornoAt: row.aguardandoFornoAt,
+    assandoAt: row.assandoAt,
+    finalizadoAt: row.finalizadoAt,
+    deliveryZoneId: row.deliveryZoneId,
+    deliveryZone: row.DeliveryZone
+      ? {
+          id: row.DeliveryZone.id,
+          name: row.DeliveryZone.name,
+          city: row.DeliveryZone.city,
+          state: row.DeliveryZone.state,
+          zipCode: row.DeliveryZone.zipCode,
+        }
+      : null,
+  };
+}
+
+async function handleListOrders(request: Request) {
+  const accessError = checkApiAccess(request);
+  if (accessError) return accessError;
+
+  const url = new URL(request.url);
+  const dateParsed = parseDateOrResponse(url.searchParams.get("date"));
+  if ("error" in dateParsed) return dateParsed.error;
+
+  const cmdParsed = parseCommandNumberOrResponse(url.searchParams.get("commandNumber"));
+  if ("error" in cmdParsed) return cmdParsed.error;
+
+  const { date, dateInt } = dateParsed;
+  const { commandNumber } = cmdParsed;
+
+  if (commandNumber != null) {
+    const row = await getOrderForApiByCommandNumber(dateInt, commandNumber);
+
+    if (!row) {
+      return json(
+        { error: "order_not_found", date, dateInt, commandNumber },
+        { status: 404 }
+      );
+    }
+
+    return json({
+      ok: true,
+      mode: "single",
+      date,
+      dateInt,
+      commandNumber,
+      order: serializeOrder(row),
+    });
+  }
+
+  const rows = await listOrdersForApiByDate(dateInt);
+
+  return json({
+    ok: true,
+    mode: "list",
+    date,
+    dateInt,
+    count: rows.length,
+    orders: rows.map(serializeOrder),
+  });
+}
+
+export async function loader({ request }: LoaderFunctionArgs) {
+  if (request.method === "OPTIONS") {
+    return new Response(null, { status: 204 });
+  }
+
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    return json({ error: "method_not_allowed" }, { status: 405 });
+  }
+
+  return handleListOrders(request);
+}
+
+async function handleCreateOrder(request: Request) {
+  const accessError = checkApiAccess(request);
+  if (accessError) return accessError;
+
   let body: KdsOrderPayload;
   try {
     body = await request.json();
@@ -117,15 +260,9 @@ export async function action({ request }: ActionFunctionArgs) {
     return json({ error: "invalid_json" }, { status: 400 });
   }
 
-  const date = typeof body?.date === "string" && body.date.trim() ? body.date.trim() : todayLocalYMD();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    return json({ error: "invalid_date_format", message: "Use YYYY-MM-DD" }, { status: 400 });
-  }
-
-  const dateInt = ymdToDateInt(date);
-  if (!Number.isFinite(dateInt)) {
-    return json({ error: "invalid_date" }, { status: 400 });
-  }
+  const dateParsed = parseDateOrResponse(body?.date);
+  if ("error" in dateParsed) return dateParsed.error;
+  const { date, dateInt } = dateParsed;
 
   const isVendaLivre = toBool(body?.isVendaLivre);
   const rawCmd = body?.commandNumber;
@@ -154,7 +291,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
   if (!isVendaLivre && cmd != null) {
     const dup = await prisma.kdsDailyOrderDetail.findFirst({
-      where: { dateInt, commandNumber: cmd },
+      where: { dateInt, commandNumber: cmd, deletedAt: null },
       select: { id: true },
     });
     if (dup) {
@@ -172,7 +309,10 @@ export async function action({ request }: ActionFunctionArgs) {
       select: { id: true },
     });
     if (!exists) {
-      return json({ error: "invalid_delivery_zone_id", deliveryZoneId: deliveryZoneIdRaw }, { status: 400 });
+      return json(
+        { error: "invalid_delivery_zone_id", deliveryZoneId: deliveryZoneIdRaw },
+        { status: 400 }
+      );
     }
   }
 
@@ -206,12 +346,14 @@ export async function action({ request }: ActionFunctionArgs) {
       size: stringifySize(sizeCounts),
       deliveryZoneId: deliveryZoneIdRaw,
       isCreditCard: toBool(body?.isCreditCard),
-      customerName: typeof body?.customerName === "string" && body.customerName.trim()
-        ? body.customerName.trim()
-        : null,
-      customerPhone: typeof body?.customerPhone === "string" && body.customerPhone.trim()
-        ? body.customerPhone.trim()
-        : null,
+      customerName:
+        typeof body?.customerName === "string" && body.customerName.trim()
+          ? body.customerName.trim()
+          : null,
+      customerPhone:
+        typeof body?.customerPhone === "string" && body.customerPhone.trim()
+          ? body.customerPhone.trim()
+          : null,
       status,
       ...(status === "novoPedido" ? { novoPedidoAt: new Date() } : {}),
     },
@@ -228,6 +370,19 @@ export async function action({ request }: ActionFunctionArgs) {
     date,
     dateInt,
   });
+}
+
+export async function action({ request }: ActionFunctionArgs) {
+  if (request.method === "OPTIONS") {
+    return new Response(null, { status: 204 });
+  }
+
+  if (request.method !== "POST") {
+    return json({ error: "method_not_allowed" }, { status: 405 });
+  }
+
+  try {
+    return await handleCreateOrder(request);
   } catch (e: any) {
     if (e?.code === "P2003") {
       const field = typeof e?.meta?.field_name === "string" ? e.meta.field_name : undefined;
