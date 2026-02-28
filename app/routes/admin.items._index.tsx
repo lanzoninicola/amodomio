@@ -1,7 +1,7 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { Form, Link, useActionData, useLoaderData } from "@remix-run/react";
 import { useEffect, useState } from "react";
-import { ChevronLeft, ChevronsLeft, ChevronsRight } from "lucide-react";
+import { ChevronLeft, ChevronsLeft, ChevronsRight, Plus } from "lucide-react";
 import { Badge } from "~/components/ui/badge";
 import {
   Pagination,
@@ -24,6 +24,7 @@ const ITEM_CLASSIFICATIONS = [
   "servico",
   "outro",
 ] as const;
+const ITEM_STATUS_FILTERS = ["active", "inactive", "all"] as const;
 
 const PAGE_SIZE = 20;
 const BRL_FORMATTER = new Intl.NumberFormat("pt-BR", {
@@ -41,12 +42,14 @@ function buildPageHref(params: {
   q: string;
   categoryId: string;
   classification: string;
+  status: string;
   page: number;
 }) {
   const searchParams = new URLSearchParams();
   if (params.q) searchParams.set("q", params.q);
   if (params.categoryId) searchParams.set("categoryId", params.categoryId);
   if (params.classification) searchParams.set("classification", params.classification);
+  if (params.status) searchParams.set("status", params.status);
   searchParams.set("page", String(params.page));
   return `/admin/items?${searchParams.toString()}`;
 }
@@ -83,10 +86,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const classification = ITEM_CLASSIFICATIONS.includes(classificationParam as (typeof ITEM_CLASSIFICATIONS)[number])
       ? classificationParam
       : "";
+    const statusParam = String(url.searchParams.get("status") || "").trim().toLowerCase();
+    const status = ITEM_STATUS_FILTERS.includes(statusParam as (typeof ITEM_STATUS_FILTERS)[number])
+      ? statusParam
+      : "active";
     const requestedPage = parsePage(url.searchParams.get("page"));
     const averageWindowDays = await getItemAverageCostWindowDays();
 
     const where: any = {};
+    if (status === "active") where.active = true;
+    if (status === "inactive") where.active = false;
 
     if (q) {
       where.OR = [
@@ -211,6 +220,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         q,
         categoryId,
         classification,
+        status,
       },
       categories,
       pagination: {
@@ -251,12 +261,14 @@ export async function action({ request }: ActionFunctionArgs) {
 
     const classificationRaw = String(formData.get("bulkClassification") || "").trim();
     const categoryRaw = String(formData.get("bulkCategoryId") || "").trim();
+    const activeRaw = String(formData.get("bulkActive") || "").trim();
 
     const shouldUpdateClassification = classificationRaw && classificationRaw !== "__NO_CHANGE__";
     const shouldUpdateCategory = categoryRaw && categoryRaw !== "__NO_CHANGE__";
+    const shouldUpdateActive = activeRaw && activeRaw !== "__NO_CHANGE__";
 
-    if (!shouldUpdateClassification && !shouldUpdateCategory) {
-      return badRequest("Selecione uma categoria e/ou classificação para atualizar");
+    if (!shouldUpdateClassification && !shouldUpdateCategory && !shouldUpdateActive) {
+      return badRequest("Selecione uma categoria, classificação e/ou status para atualizar");
     }
 
     const data: any = {};
@@ -281,6 +293,13 @@ export async function action({ request }: ActionFunctionArgs) {
         }
         data.categoryId = category.id;
       }
+    }
+
+    if (shouldUpdateActive) {
+      if (activeRaw !== "active" && activeRaw !== "inactive") {
+        return badRequest("Status inválido");
+      }
+      data.active = activeRaw === "active";
     }
 
     const result = await db.item.updateMany({
@@ -308,16 +327,18 @@ export default function AdminItemsIndex() {
 
   const items = payload.items || [];
   const stats = payload.stats || { totalItems: 0, menuItemsLinked: 0 };
-  const filters = payload.filters || { q: "", categoryId: "", classification: "" };
+  const filters = payload.filters || { q: "", categoryId: "", classification: "", status: "active" };
   const categories = payload.categories || [];
   const categoryNameById = new Map<string, string>(categories.map((category: any) => [category.id, category.name]));
   const pagination = payload.pagination || { page: 1, pageSize: PAGE_SIZE, totalItems: 0, totalPages: 1 };
   const averageWindowDays = payload.averageWindowDays || 30;
   const [categoryFilterValue, setCategoryFilterValue] = useState(filters.categoryId || "__all__");
   const [classificationFilterValue, setClassificationFilterValue] = useState(filters.classification || "__all__");
+  const [statusFilterValue, setStatusFilterValue] = useState(filters.status || "active");
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
   const [bulkCategoryValue, setBulkCategoryValue] = useState("__NO_CHANGE__");
   const [bulkClassificationValue, setBulkClassificationValue] = useState("__NO_CHANGE__");
+  const [bulkActiveValue, setBulkActiveValue] = useState("__NO_CHANGE__");
 
   const pageItemIds = items.map((item: any) => item.id);
   const allPageSelected = pageItemIds.length > 0 && pageItemIds.every((id: string) => selectedItemIds.includes(id));
@@ -326,11 +347,12 @@ export default function AdminItemsIndex() {
   useEffect(() => {
     setCategoryFilterValue(filters.categoryId || "__all__");
     setClassificationFilterValue(filters.classification || "__all__");
-  }, [filters.categoryId, filters.classification]);
+    setStatusFilterValue(filters.status || "active");
+  }, [filters.categoryId, filters.classification, filters.status]);
 
   useEffect(() => {
     setSelectedItemIds([]);
-  }, [pagination.page, filters.q, filters.categoryId, filters.classification]);
+  }, [pagination.page, filters.q, filters.categoryId, filters.classification, filters.status]);
 
   function toggleItemSelection(itemId: string, checked: boolean) {
     setSelectedItemIds((current) => {
@@ -363,10 +385,20 @@ export default function AdminItemsIndex() {
               </Link>
             </div>
           </div>
-          <Link to="/admin" className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-800">
-            <ChevronLeft size={14} />
-            Voltar
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              to="/admin/items/new"
+              reloadDocument
+              className="inline-flex items-center gap-1 rounded-md bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-700"
+            >
+              <Plus size={14} />
+              Novo item
+            </Link>
+            <Link to="/admin" className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-800">
+              <ChevronLeft size={14} />
+              Voltar
+            </Link>
+          </div>
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-700">
           <span>Custo médio: janela {averageWindowDays} dias</span>
@@ -381,99 +413,34 @@ export default function AdminItemsIndex() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <Form method="get" className="grid gap-3 md:grid-cols-4">
-          <div className="md:col-span-2">
-            <label htmlFor="q" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Busca
-            </label>
-            <input
-              id="q"
-              name="q"
-              type="search"
-              defaultValue={filters.q}
-              placeholder="Nome ou descricao"
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="categoryId" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Categoria
-            </label>
-            <input type="hidden" name="categoryId" value={categoryFilterValue === "__all__" ? "" : categoryFilterValue} />
-            <Select value={categoryFilterValue} onValueChange={setCategoryFilterValue}>
-              <SelectTrigger id="categoryId" className="mt-1 w-full">
-                <SelectValue placeholder="Todas" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">Todas</SelectItem>
-                {categories.map((category: any) => (
-                  <SelectItem key={category.id} value={category.id}>
-                    {category.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div>
-            <label htmlFor="classification" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Classificacao
-            </label>
-            <input
-              type="hidden"
-              name="classification"
-              value={classificationFilterValue === "__all__" ? "" : classificationFilterValue}
-            />
-            <Select value={classificationFilterValue} onValueChange={setClassificationFilterValue}>
-              <SelectTrigger id="classification" className="mt-1 w-full">
-                <SelectValue placeholder="Todas" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">Todas</SelectItem>
-                {ITEM_CLASSIFICATIONS.map((value) => (
-                  <SelectItem key={value} value={value}>
-                    {value}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="flex items-end gap-2 md:col-span-4">
-            <button
-              type="submit"
-              className="inline-flex items-center rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700"
-            >
-              Filtrar
-            </button>
-            <Link
-              to="/admin/items"
-              className="inline-flex items-center rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              Limpar
-            </Link>
-          </div>
-        </Form>
-      </div>
-
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <Form method="post" className="space-y-3">
-          <input type="hidden" name="_action" value="items-bulk-update" />
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
-            <div className="min-w-[220px]">
-              <label htmlFor="bulkCategoryId" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Categoria (lote)
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <Form method="get" className="flex flex-wrap items-end gap-3">
+            <div className="min-w-[260px] flex-1">
+              <label htmlFor="q" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Busca
               </label>
-              <input type="hidden" name="bulkCategoryId" value={bulkCategoryValue} />
-              <Select value={bulkCategoryValue} onValueChange={setBulkCategoryValue}>
-                <SelectTrigger id="bulkCategoryId" className="mt-1 w-full">
-                  <SelectValue placeholder="Sem alteração" />
+              <input
+                id="q"
+                name="q"
+                type="search"
+                defaultValue={filters.q}
+                placeholder="Nome ou descricao"
+                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              />
+            </div>
+
+            <div className="min-w-[220px]">
+              <label htmlFor="categoryId" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Categoria
+              </label>
+              <input type="hidden" name="categoryId" value={categoryFilterValue === "__all__" ? "" : categoryFilterValue} />
+              <Select value={categoryFilterValue} onValueChange={setCategoryFilterValue}>
+                <SelectTrigger id="categoryId" className="mt-1 w-full">
+                  <SelectValue placeholder="Todas" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__NO_CHANGE__">Sem alteração</SelectItem>
-                  <SelectItem value="__EMPTY__">Remover categoria</SelectItem>
+                  <SelectItem value="__all__">Todas</SelectItem>
                   {categories.map((category: any) => (
                     <SelectItem key={category.id} value={category.id}>
                       {category.name}
@@ -484,16 +451,20 @@ export default function AdminItemsIndex() {
             </div>
 
             <div className="min-w-[220px]">
-              <label htmlFor="bulkClassification" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Classificação (lote)
+              <label htmlFor="classification" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Classificacao
               </label>
-              <input type="hidden" name="bulkClassification" value={bulkClassificationValue} />
-              <Select value={bulkClassificationValue} onValueChange={setBulkClassificationValue}>
-                <SelectTrigger id="bulkClassification" className="mt-1 w-full">
-                  <SelectValue placeholder="Sem alteração" />
+              <input
+                type="hidden"
+                name="classification"
+                value={classificationFilterValue === "__all__" ? "" : classificationFilterValue}
+              />
+              <Select value={classificationFilterValue} onValueChange={setClassificationFilterValue}>
+                <SelectTrigger id="classification" className="mt-1 w-full">
+                  <SelectValue placeholder="Todas" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__NO_CHANGE__">Sem alteração</SelectItem>
+                  <SelectItem value="__all__">Todas</SelectItem>
                   {ITEM_CLASSIFICATIONS.map((value) => (
                     <SelectItem key={value} value={value}>
                       {value}
@@ -503,45 +474,142 @@ export default function AdminItemsIndex() {
               </Select>
             </div>
 
-            <div className="flex items-center gap-2">
-              {selectedItemIds.map((id) => (
-                <input key={id} type="hidden" name="itemIds" value={id} />
-              ))}
+            <div className="min-w-[180px]">
+              <label htmlFor="status" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Status
+              </label>
+              <input type="hidden" name="status" value={statusFilterValue} />
+              <Select value={statusFilterValue} onValueChange={setStatusFilterValue}>
+                <SelectTrigger id="status" className="mt-1 w-full">
+                  <SelectValue placeholder="Ativos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Ativos</SelectItem>
+                  <SelectItem value="inactive">Inativos</SelectItem>
+                  <SelectItem value="all">Todos</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex items-end gap-2">
               <button
                 type="submit"
-                className="inline-flex items-center rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
-                disabled={selectedCount === 0}
+                className="inline-flex items-center rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700"
               >
-                Atualizar selecionados
+                Filtrar
               </button>
+              <Link
+                to="/admin/items"
+                className="inline-flex items-center rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Limpar
+              </Link>
             </div>
-          </div>
+          </Form>
+        </div>
 
-          <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
-            <span>{selectedCount} item(ns) selecionado(s) nesta página</span>
-            {selectedCount > 0 ? (
-              <button
-                type="button"
-                className="underline"
-                onClick={() => setSelectedItemIds([])}
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <Form method="post" className="space-y-3">
+            <input type="hidden" name="_action" value="items-bulk-update" />
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="min-w-[220px]">
+                <label htmlFor="bulkCategoryId" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Categoria (lote)
+                </label>
+                <input type="hidden" name="bulkCategoryId" value={bulkCategoryValue} />
+                <Select value={bulkCategoryValue} onValueChange={setBulkCategoryValue}>
+                  <SelectTrigger id="bulkCategoryId" className="mt-1 w-full">
+                    <SelectValue placeholder="Sem alteração" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__NO_CHANGE__">Sem alteração</SelectItem>
+                    <SelectItem value="__EMPTY__">Remover categoria</SelectItem>
+                    {categories.map((category: any) => (
+                      <SelectItem key={category.id} value={category.id}>
+                        {category.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="min-w-[220px]">
+                <label htmlFor="bulkClassification" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Classificação (lote)
+                </label>
+                <input type="hidden" name="bulkClassification" value={bulkClassificationValue} />
+                <Select value={bulkClassificationValue} onValueChange={setBulkClassificationValue}>
+                  <SelectTrigger id="bulkClassification" className="mt-1 w-full">
+                    <SelectValue placeholder="Sem alteração" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__NO_CHANGE__">Sem alteração</SelectItem>
+                    {ITEM_CLASSIFICATIONS.map((value) => (
+                      <SelectItem key={value} value={value}>
+                        {value}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="min-w-[220px]">
+                <label htmlFor="bulkActive" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Status (lote)
+                </label>
+                <input type="hidden" name="bulkActive" value={bulkActiveValue} />
+                <Select value={bulkActiveValue} onValueChange={setBulkActiveValue}>
+                  <SelectTrigger id="bulkActive" className="mt-1 w-full">
+                    <SelectValue placeholder="Sem alteração" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__NO_CHANGE__">Sem alteração</SelectItem>
+                    <SelectItem value="active">Ativar</SelectItem>
+                    <SelectItem value="inactive">Desativar</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {selectedItemIds.map((id) => (
+                  <input key={id} type="hidden" name="itemIds" value={id} />
+                ))}
+                <button
+                  type="submit"
+                  className="inline-flex items-center rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+                  disabled={selectedCount === 0}
+                >
+                  Atualizar selecionados
+                </button>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+              <span>{selectedCount} item(ns) selecionado(s) nesta página</span>
+              {selectedCount > 0 ? (
+                <button
+                  type="button"
+                  className="underline"
+                  onClick={() => setSelectedItemIds([])}
+                >
+                  Limpar seleção
+                </button>
+              ) : null}
+            </div>
+
+            {actionData?.message ? (
+              <div
+                className={`rounded-md px-3 py-2 text-sm ${
+                  actionData?.status === 200
+                    ? "border border-emerald-200 bg-emerald-50 text-emerald-800"
+                    : "border border-amber-200 bg-amber-50 text-amber-900"
+                }`}
               >
-                Limpar seleção
-              </button>
+                {actionData.message}
+              </div>
             ) : null}
-          </div>
-
-          {actionData?.message ? (
-            <div
-              className={`rounded-md px-3 py-2 text-sm ${
-                actionData?.status === 200
-                  ? "border border-emerald-200 bg-emerald-50 text-emerald-800"
-                  : "border border-amber-200 bg-amber-50 text-amber-900"
-              }`}
-            >
-              {actionData.message}
-            </div>
-          ) : null}
-        </Form>
+          </Form>
+        </div>
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white">
@@ -566,6 +634,9 @@ export default function AdminItemsIndex() {
               <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Categoria
               </TableHead>
+              <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Status
+              </TableHead>
               <TableHead className="h-10 px-4 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Ultimo custo
               </TableHead>
@@ -577,7 +648,7 @@ export default function AdminItemsIndex() {
           <TableBody>
             {items.length === 0 ? (
               <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={7} className="px-4 py-8 text-sm text-slate-500">
+                <TableCell colSpan={8} className="px-4 py-8 text-sm text-slate-500">
                   Nenhum item encontrado (rode migration e backfill).
                 </TableCell>
               </TableRow>
@@ -637,6 +708,17 @@ export default function AdminItemsIndex() {
                         <span className="text-sm text-slate-400">Não definido</span>
                       )}
                     </TableCell>
+                    <TableCell className="px-4 py-3">
+                      {item.active ? (
+                        <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">
+                          Ativo
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="border-slate-200 bg-slate-100 text-slate-700">
+                          Inativo
+                        </Badge>
+                      )}
+                    </TableCell>
                     <TableCell className="px-4 py-3 text-right font-medium text-slate-800">{latestLabel}</TableCell>
                     <TableCell className="px-4 py-3 text-right font-medium text-slate-800">{avgLabel}</TableCell>
                   </TableRow>
@@ -676,6 +758,7 @@ export default function AdminItemsIndex() {
                             q: filters.q,
                             categoryId: filters.categoryId,
                             classification: filters.classification,
+                            status: filters.status,
                             page: 1,
                           })
                         : "#"
@@ -696,6 +779,7 @@ export default function AdminItemsIndex() {
                             q: filters.q,
                             categoryId: filters.categoryId,
                             classification: filters.classification,
+                            status: filters.status,
                             page: pagination.page - 1,
                           })
                         : "#"
@@ -716,6 +800,7 @@ export default function AdminItemsIndex() {
                             q: filters.q,
                             categoryId: filters.categoryId,
                             classification: filters.classification,
+                            status: filters.status,
                             page: pagination.page + 1,
                           })
                         : "#"
@@ -736,6 +821,7 @@ export default function AdminItemsIndex() {
                             q: filters.q,
                             categoryId: filters.categoryId,
                             classification: filters.classification,
+                            status: filters.status,
                             page: pagination.totalPages,
                           })
                         : "#"

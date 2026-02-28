@@ -1,4 +1,4 @@
-import { Await, Link, defer, useActionData, useLoaderData } from "@remix-run/react";
+import { Await, Form, Link, defer, useActionData, useLoaderData } from "@remix-run/react";
 import Container from "~/components/layout/container/container";
 import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { Suspense, useState } from "react";
@@ -27,6 +27,9 @@ import formatMoneyString from "~/utils/format-money-string";
 import { Switch } from "~/components/ui/switch";
 import { Label } from "~/components/ui/label";
 import { Checkbox } from "~/components/ui/checkbox";
+import { MoneyInput } from "~/components/money-input/MoneyInput";
+import toFixedNumber from "~/utils/to-fixed-number";
+import prismaClient from "~/lib/prisma/client.server";
 
 export const meta: MetaFunction = () => [
   { title: "Lista de sabores | Admin" },
@@ -96,6 +99,74 @@ export async function action({ request }: LoaderFunctionArgs) {
     const returnedMessage = !item.active === true ? `Sabor "${item.name}" ativado` : `Sabor "${item.name}" desativado`;
 
     return ok(returnedMessage);
+  }
+
+  if (_action === "menu-item-selling-price-quick-update") {
+    const menuItemId = values?.menuItemId as string;
+
+    if (!menuItemId) {
+      return badRequest("Item não encontrado");
+    }
+
+    const [errVariations, variations] = await prismaIt(
+      prismaClient.menuItemSellingPriceVariation.findMany({
+        where: {
+          menuItemId,
+          MenuItemSellingChannel: {
+            key: "cardapio",
+          },
+        },
+        include: {
+          MenuItemSize: true,
+        },
+      })
+    );
+
+    if (errVariations) {
+      return badRequest(errVariations);
+    }
+
+    const nextValuesByAbbreviation = {
+      IN: toFixedNumber(values?.priceIN, 2),
+      PE: toFixedNumber(values?.pricePE, 2),
+      ME: toFixedNumber(values?.priceME, 2),
+      FA: toFixedNumber(values?.priceFA, 2),
+    } as const;
+
+    const updates = (variations || [])
+      .map((variation) => {
+        const abbr = String(variation?.MenuItemSize?.nameAbbreviated || "").toUpperCase();
+        const nextValue = nextValuesByAbbreviation[abbr as keyof typeof nextValuesByAbbreviation];
+
+        if (nextValue === undefined || Number.isNaN(nextValue)) {
+          return null;
+        }
+
+        return prismaClient.menuItemSellingPriceVariation.update({
+          where: {
+            id: variation.id,
+          },
+          data: {
+            priceAmount: nextValue,
+            previousPriceAmount: Number(variation.priceAmount ?? 0),
+            updatedBy: "admin.atendimento.lista-sabores",
+            updatedAt: new Date(),
+          },
+        });
+      })
+      .filter(Boolean) as any[];
+
+    if (updates.length === 0) {
+      return badRequest("Nenhuma variação de preço encontrada para atualizar");
+    }
+
+    const [errUpdate] = await prismaIt(prismaClient.$transaction(updates));
+
+    if (errUpdate) {
+      return badRequest(errUpdate);
+    }
+
+    return ok("Preços de venda atualizados com sucesso");
   }
 
   return null
@@ -350,6 +421,7 @@ interface CardapioItemProps {
 function CardapioItem({ item, setVisible, visible, active, setActive, showExpandButton = true, isSearching = false }: CardapioItemProps) {
   const profitPerc = getProfitPercForItem(item);
   const profitBadge = getProfitBadgeConfig(profitPerc);
+  const [isQuickPriceDialogOpen, setIsQuickPriceDialogOpen] = useState(false);
 
   return (
     <div
@@ -432,12 +504,24 @@ function CardapioItem({ item, setVisible, visible, active, setActive, showExpand
           item.MenuItemSellingPriceVariation.filter(spv => spv.priceAmount > 0).map((spv) => {
             return (
               <li className="flex flex-col" key={spv.id}>
-                <p className="text-xs text-left">{spv.MenuItemSize.nameAbbreviated}: <span className="font-semibold font-mono">{formatMoneyString(spv.priceAmount)}</span></p>
+                <button
+                  type="button"
+                  onClick={() => setIsQuickPriceDialogOpen(true)}
+                  className="text-xs text-left hover:underline"
+                >
+                  {spv.MenuItemSize.nameAbbreviated}: <span className="font-semibold font-mono">{formatMoneyString(spv.priceAmount)}</span>
+                </button>
               </li>
             )
           })
         }
       </ul>
+
+      <QuickSellPriceDialog
+        item={item}
+        open={isQuickPriceDialogOpen}
+        onOpenChange={setIsQuickPriceDialogOpen}
+      />
 
       <p className="text-xs text-muted-foreground line-clamp-2 text-left">{item.ingredients}</p>
       <Separator className="my-3" />
@@ -448,6 +532,62 @@ function CardapioItem({ item, setVisible, visible, active, setActive, showExpand
       </div>
     </div>
   )
+}
+
+function QuickSellPriceDialog({
+  item,
+  open,
+  onOpenChange,
+}: {
+  item: MenuItemWithAssociations;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const pricesByAbbreviation = item.MenuItemSellingPriceVariation.reduce<Record<string, number>>((acc, variation) => {
+    const abbreviation = String(variation?.MenuItemSize?.nameAbbreviated || "").toUpperCase();
+    if (!abbreviation) return acc;
+    acc[abbreviation] = Number(variation.priceAmount ?? 0);
+    return acc;
+  }, {});
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogTitle className="text-base font-semibold">
+          Atualizar preco de venda
+        </DialogTitle>
+        <p className="text-sm text-muted-foreground">{item.name}</p>
+
+        <Form method="post" className="mt-3 flex flex-col gap-4">
+          <input type="hidden" name="_action" value="menu-item-selling-price-quick-update" />
+          <input type="hidden" name="menuItemId" value={item.id} />
+
+          <div className="grid grid-cols-2 gap-3">
+            <label className="flex flex-col gap-1 text-xs font-semibold">
+              IN
+              <MoneyInput name="priceIN" defaultValue={pricesByAbbreviation.IN ?? 0} className="w-full" />
+            </label>
+            <label className="flex flex-col gap-1 text-xs font-semibold">
+              PE
+              <MoneyInput name="pricePE" defaultValue={pricesByAbbreviation.PE ?? 0} className="w-full" />
+            </label>
+            <label className="flex flex-col gap-1 text-xs font-semibold">
+              ME
+              <MoneyInput name="priceME" defaultValue={pricesByAbbreviation.ME ?? 0} className="w-full" />
+            </label>
+            <label className="flex flex-col gap-1 text-xs font-semibold">
+              FA
+              <MoneyInput name="priceFA" defaultValue={pricesByAbbreviation.FA ?? 0} className="w-full" />
+            </label>
+          </div>
+
+          <Button type="submit" className="w-full">
+            Salvar
+          </Button>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 function getProfitBadgeConfig(profitPerc: number | null) {

@@ -1,5 +1,5 @@
 import { LoaderFunction, type LinksFunction, MetaFunction, LoaderFunctionArgs, redirect } from "@remix-run/node";
-import { Link, Outlet, useFetcher, useLoaderData, useRevalidator, useRouteError } from "@remix-run/react";
+import { Link, Outlet, useFetcher, useLoaderData, useLocation, useRevalidator, useRouteError } from "@remix-run/react";
 import { AdminHeader } from "~/components/layout/admin-header/admin-header";
 import { SidebarProvider, SidebarTrigger } from "~/components/ui/sidebar";
 import { authenticator } from "~/domain/auth/google.server";
@@ -75,6 +75,8 @@ export const links: LinksFunction = () => [
 export const loader: LoaderFunction = async ({ request }: LoaderFunctionArgs) => {
     const environment = process.env.NODE_ENV
     const prismaDbName = prismaClient.dbName
+    const pathname = new URL(request.url).pathname;
+    const isMobileRoute = pathname.startsWith("/admin/mobile");
 
     let user = await authenticator.isAuthenticated(request);
 
@@ -84,43 +86,46 @@ export const loader: LoaderFunction = async ({ request }: LoaderFunctionArgs) =>
 
     const slug = lastUrlSegment(request.url)
 
-    const pinnedNav = await prismaClient.adminNavigationClick.findMany({
-        where: { pinned: true },
-        select: { href: true },
-        orderBy: [{ lastClickedAt: "desc" }],
-        take: 50,
-    });
-
-    const pendingReplyAlerts = await prismaClient.$queryRaw<Array<{
-        customer_id: string;
-        phone_e164: string;
-        name: string | null;
-        seconds_waiting: number;
-        message_preview: string | null;
-    }>>`
-        WITH last_event_today AS (
-            SELECT DISTINCT ON (e.customer_id)
-                e.customer_id,
-                e.event_type,
-                e.created_at,
-                NULLIF(TRIM(COALESCE(e.payload ->> 'messageText', '')), '') AS message_preview
-            FROM crm_customer_event e
-            WHERE (e.created_at AT TIME ZONE 'America/Sao_Paulo')::date = (now() AT TIME ZONE 'America/Sao_Paulo')::date
-            ORDER BY e.customer_id, e.created_at DESC, e.id DESC
-        )
-        SELECT
-            c.id AS customer_id,
-            c.phone_e164,
-            c.name,
-            EXTRACT(EPOCH FROM (now() - le.created_at))::INT AS seconds_waiting,
-            le.message_preview
-        FROM last_event_today le
-        INNER JOIN crm_customer c ON c.id = le.customer_id
-        WHERE le.event_type = 'WHATSAPP_SENT'
-          AND EXTRACT(EPOCH FROM (now() - le.created_at))::INT >= ${DEFAULT_REPLY_WAIT_SECONDS}
-        ORDER BY le.created_at ASC
-        LIMIT 15
-    `;
+    const [pinnedNav, pendingReplyAlerts] = isMobileRoute
+        ? [[], []]
+        : await Promise.all([
+            prismaClient.adminNavigationClick.findMany({
+                where: { pinned: true },
+                select: { href: true },
+                orderBy: [{ lastClickedAt: "desc" }],
+                take: 50,
+            }),
+            prismaClient.$queryRaw<Array<{
+                customer_id: string;
+                phone_e164: string;
+                name: string | null;
+                seconds_waiting: number;
+                message_preview: string | null;
+            }>>`
+                WITH last_event_today AS (
+                    SELECT DISTINCT ON (e.customer_id)
+                        e.customer_id,
+                        e.event_type,
+                        e.created_at,
+                        NULLIF(TRIM(COALESCE(e.payload ->> 'messageText', '')), '') AS message_preview
+                    FROM crm_customer_event e
+                    WHERE (e.created_at AT TIME ZONE 'America/Sao_Paulo')::date = (now() AT TIME ZONE 'America/Sao_Paulo')::date
+                    ORDER BY e.customer_id, e.created_at DESC, e.id DESC
+                )
+                SELECT
+                    c.id AS customer_id,
+                    c.phone_e164,
+                    c.name,
+                    EXTRACT(EPOCH FROM (now() - le.created_at))::INT AS seconds_waiting,
+                    le.message_preview
+                FROM last_event_today le
+                INNER JOIN crm_customer c ON c.id = le.customer_id
+                WHERE le.event_type = 'WHATSAPP_SENT'
+                  AND EXTRACT(EPOCH FROM (now() - le.created_at))::INT >= ${DEFAULT_REPLY_WAIT_SECONDS}
+                ORDER BY le.created_at ASC
+                LIMIT 15
+            `,
+        ]);
 
     return ok({
         user,
@@ -144,6 +149,7 @@ export const loader: LoaderFunction = async ({ request }: LoaderFunctionArgs) =>
 
 export default function AdminOutlet() {
     const loaderData = useLoaderData<typeof loader>();
+    const location = useLocation();
     const alertsActionFetcher = useFetcher();
     const revalidator = useRevalidator();
 
@@ -160,6 +166,8 @@ export default function AdminOutlet() {
     const panelRef = useRef<HTMLElement | null>(null);
     const dragOffsetRef = useRef({ x: 0, y: 0 });
     const previousAlertsFetcherStateRef = useRef(alertsActionFetcher.state);
+    const alertsFormData = alertsActionFetcher.formData as FormData | undefined;
+    const isMobileRoute = location.pathname.startsWith("/admin/mobile");
 
     useEffect(() => {
         const timer = setInterval(() => {
@@ -192,7 +200,7 @@ export default function AdminOutlet() {
             return;
         }
 
-        const intent = String(alertsActionFetcher.formData?.get("_intent") ?? "");
+        const intent = String(alertsFormData?.get("_intent") ?? "");
         const successTitle =
             intent === "ignore"
                 ? "Conversa ignorada"
@@ -205,7 +213,7 @@ export default function AdminOutlet() {
             description: response?.message || "Painel atualizado.",
         });
         revalidator.revalidate();
-    }, [alertsActionFetcher.state, alertsActionFetcher.data, alertsActionFetcher.formData, revalidator]);
+    }, [alertsActionFetcher.state, alertsActionFetcher.data, alertsFormData, revalidator]);
 
     useEffect(() => {
         if (pendingReplyAlerts.length === 0) return;
@@ -286,6 +294,15 @@ export default function AdminOutlet() {
         }
     }, []);
 
+    if (isMobileRoute) {
+        return (
+            <div className="min-h-screen bg-slate-50">
+                <RouteProgressBar />
+                <Outlet context={{ loggedUser }} />
+            </div>
+        );
+    }
+
     return (
         <SidebarProvider data-element="sidebar-provider">
             <RouteProgressBar />
@@ -354,9 +371,9 @@ export default function AdminOutlet() {
                         {pendingReplyAlerts.map((item) => {
                             const isSubmittingItem =
                                 alertsActionFetcher.state !== "idle" &&
-                                String(alertsActionFetcher.formData?.get("customerId") ?? "") === item.customerId;
-                            const isSubmittingQuickReply = isSubmittingItem && String(alertsActionFetcher.formData?.get("_intent") ?? "") === "quick-reply";
-                            const isSubmittingIgnore = isSubmittingItem && String(alertsActionFetcher.formData?.get("_intent") ?? "") === "ignore";
+                                String(alertsFormData?.get("customerId") ?? "") === item.customerId;
+                            const isSubmittingQuickReply = isSubmittingItem && String(alertsFormData?.get("_intent") ?? "") === "quick-reply";
+                            const isSubmittingIgnore = isSubmittingItem && String(alertsFormData?.get("_intent") ?? "") === "ignore";
 
                             return (
                                 <div

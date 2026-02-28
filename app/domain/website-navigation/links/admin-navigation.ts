@@ -227,6 +227,12 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
           disabled: false,
         },
         {
+          title: "Importação NF (Estoque)",
+          href: "/admin/items/import-stock-nf",
+          items: [],
+          disabled: false,
+        },
+        {
           title: "Variações",
           href: "/admin/variations",
           items: [],
