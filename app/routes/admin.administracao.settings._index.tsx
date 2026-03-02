@@ -21,10 +21,15 @@ import {
   ITEM_COST_AVERAGE_WINDOW_DAYS_SETTING,
   ITEM_COST_SETTINGS_CONTEXT,
 } from "~/domain/item/item-cost-metrics.server";
+import { invalidateCardapioIndexCache } from "~/domain/cardapio/cardapio-cache.server";
 
 const SETTING_TYPES = ["string", "boolean", "float", "int", "json"] as const;
 const REELS_SETTINGS_CONTEXT = "cardapio";
 const REELS_ENABLED_SETTING_NAME = "reels.enabled";
+
+function shouldInvalidateCardapioCache(context: string) {
+  return context.trim().toLowerCase() === "cardapio";
+}
 
 export const meta: MetaFunction = () => ([{ title: "Configurações globais" }]);
 
@@ -184,6 +189,10 @@ export async function action({ request }: ActionFunctionArgs) {
           },
         });
 
+        if (shouldInvalidateCardapioCache(context)) {
+          await invalidateCardapioIndexCache();
+        }
+
         return redirect("/admin/administracao/settings");
       }
 
@@ -220,13 +229,24 @@ export async function action({ request }: ActionFunctionArgs) {
           data: { context, name, type, value },
         });
 
+        if (shouldInvalidateCardapioCache(context)) {
+          await invalidateCardapioIndexCache();
+        }
+
         return json({ ok: true });
       }
 
       case "delete": {
         const id = str(formData.get("id"));
         if (!isUUID(id)) return json({ fieldError: { id: "ID invalido" } }, { status: 400 });
+        const setting = await prismaClient.setting.findUnique({
+          where: { id },
+          select: { context: true },
+        });
         await prismaClient.setting.delete({ where: { id } });
+        if (setting?.context && shouldInvalidateCardapioCache(setting.context)) {
+          await invalidateCardapioIndexCache();
+        }
         return json({ ok: true });
       }
       default:
