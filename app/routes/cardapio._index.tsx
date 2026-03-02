@@ -1080,9 +1080,16 @@ function CardapioGridItem({
     sharesEnabled: boolean;
 }) {
     const localRef = useRef<HTMLLIElement | null>(null);
+    const [isMediaFullscreen, setIsMediaFullscreen] = useState(false);
     const featuredImage =
         item.MenuItemGalleryImage?.find((img) => img.isPrimary) ||
         item.MenuItemGalleryImage?.[0];
+    const featuredMediaUrl = featuredImage?.secureUrl || "";
+    const featuredMediaKind =
+        featuredImage?.kind === "video" ||
+            /\.(mp4|mov|webm|m4v|ogg|ogv)(\?|$)/i.test(featuredMediaUrl)
+            ? "video"
+            : "image";
 
     const setRefs = useCallback(
         (el: HTMLLIElement | null) => {
@@ -1111,6 +1118,23 @@ function CardapioGridItem({
         observer.observe(element);
         return () => observer.disconnect();
     }, [onView]);
+
+    useEffect(() => {
+        if (!isMediaFullscreen) return;
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = "hidden";
+        return () => {
+            document.body.style.overflow = previousOverflow;
+        };
+    }, [isMediaFullscreen]);
+
+    const handleMobileMediaClick = () => {
+        if (!isExpanded) {
+            onClick();
+            return;
+        }
+        setIsMediaFullscreen(true);
+    };
 
     return (
         <li
@@ -1187,13 +1211,13 @@ function CardapioGridItem({
                     </div>
                 </Link>
             ) : (
-                <div
-                    className="flex flex-col cursor-pointer"
-                    onClick={onClick}
-                    role="button"
-                    aria-label={`Abrir ${item.name}`}
-                >
-                    <div className="group overflow-hidden rounded-t-md relative focus:outline-none focus:ring-2 focus:ring-black/20">
+                <div className="flex flex-col">
+                    <div
+                        className="group overflow-hidden rounded-t-md relative focus:outline-none focus:ring-2 focus:ring-black/20 cursor-pointer"
+                        role="button"
+                        aria-label={isExpanded ? `Abrir mídia de ${item.name} em tela cheia` : `Expandir ${item.name}`}
+                        onClick={handleMobileMediaClick}
+                    >
                         <div
                             className={cn(
                                 "relative transition-all duration-300 ease-in-out",
@@ -1226,7 +1250,12 @@ function CardapioGridItem({
                         </div>
                     </div>
 
-                    <div className="px-1 pb-2 pt-1 flex flex-col bg-white rounded-b-md">
+                    <div
+                        className="px-1 pb-2 pt-1 flex flex-col bg-white rounded-b-md cursor-pointer"
+                        onClick={onClick}
+                        role="button"
+                        aria-label={`Alternar detalhes de ${item.name}`}
+                    >
                         <span
                             className={cn(
                                 "font-neue line-clamp-1 font-medium text-xs tracking-wide sm:text-base",
@@ -1249,6 +1278,45 @@ function CardapioGridItem({
                             {!isExpanded && <span aria-hidden="true">...</span>}
                         </span>
                     </div>
+                </div>
+            )}
+
+            {!isDesktop && isMediaFullscreen && (
+                <div
+                    className="fixed inset-0 z-[95] flex items-center justify-center bg-black/95"
+                    onClick={() => setIsMediaFullscreen(false)}
+                    role="button"
+                    aria-label={`Fechar mídia de ${item.name}`}
+                >
+                    <button
+                        type="button"
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            setIsMediaFullscreen(false);
+                        }}
+                        className="absolute right-4 top-4 inline-flex h-10 w-10 items-center justify-center rounded-full bg-black/70 text-white"
+                        aria-label="Fechar"
+                    >
+                        <X className="h-5 w-5" />
+                    </button>
+
+                    {featuredMediaKind === "video" ? (
+                        <video
+                            src={featuredMediaUrl}
+                            className="max-h-[100dvh] w-full object-contain"
+                            autoPlay
+                            muted
+                            playsInline
+                            onClick={(event) => event.stopPropagation()}
+                        />
+                    ) : (
+                        <img
+                            src={featuredMediaUrl}
+                            alt={item.name}
+                            className="max-h-[100dvh] w-full object-contain"
+                            onClick={(event) => event.stopPropagation()}
+                        />
+                    )}
                 </div>
             )}
 
