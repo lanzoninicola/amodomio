@@ -198,10 +198,10 @@ function BannerFechado() {
 
     return (
         <>
-            <ScrollingBanner cnContainer="fixed top-0 inset-x-0 w-screen bg-red-500 z-50" data-element="banner-fechado">
+            <ScrollingBanner cnContainer="fixed top-0 right-0 w-fit bg-red-500 z-50" data-element="banner-fechado">
                 <span className="font-neue text-white  font-semibold uppercase tracking-wide">{text}</span>
             </ScrollingBanner>
-            <ScrollingBanner cnContainer="fixed bottom-0 w-screen bg-red-500 z-50" data-element="banner-fechado">
+            <ScrollingBanner cnContainer="fixed bottom-0 right-0 w-fit bg-red-500 z-50" data-element="banner-fechado">
                 <span className="font-neue text-white font-semibold uppercase tracking-wide">{text}</span>
             </ScrollingBanner>
         </>

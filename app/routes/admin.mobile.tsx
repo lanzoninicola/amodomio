@@ -1,12 +1,19 @@
 import { Link, Outlet, useLocation } from "@remix-run/react";
-import { CalendarDays, Pizza } from "lucide-react";
+import { CalendarDays, Images, Pizza } from "lucide-react";
 
 export default function AdminMobileLayout() {
   const { pathname } = useLocation();
   const isHome = pathname === "/admin/mobile";
   const isEstoque = pathname.startsWith("/admin/mobile/estoque-massa");
   const isProgramacao = pathname.startsWith("/admin/mobile/programacao-diaria");
-  const pageTitle = isEstoque ? "Estoque de massa" : isProgramacao ? "Programação diária" : "Atalhos";
+  const isAssetsBatch = pathname.startsWith("/admin/mobile/cardapio-assets-batch");
+  const pageTitle = isEstoque
+    ? "Estoque de massa"
+    : isProgramacao
+      ? "Programação diária"
+      : isAssetsBatch
+        ? "Assets do cardápio"
+        : "Atalhos";
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -55,6 +62,19 @@ export default function AdminMobileLayout() {
               <span>
                 <span className="block text-sm font-semibold text-slate-900">Programação diária</span>
                 <span className="block text-xs text-slate-600">Previsão de produção por tamanho</span>
+              </span>
+            </Link>
+
+            <Link
+              to="/admin/mobile/cardapio-assets-batch"
+              className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+            >
+              <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+                <Images className="h-5 w-5" />
+              </span>
+              <span>
+                <span className="block text-sm font-semibold text-slate-900">Assets do cardápio</span>
+                <span className="block text-xs text-slate-600">Upload e organização de capa/galeria</span>
               </span>
             </Link>
           </main>

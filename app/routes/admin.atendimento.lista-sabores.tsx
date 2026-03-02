@@ -550,35 +550,38 @@ function QuickSellPriceDialog({
     return acc;
   }, {});
 
+  const sizeFields = [
+    { abbreviation: "IN", label: "Individual", inputName: "priceIN" },
+    { abbreviation: "PE", label: "Pequena", inputName: "pricePE" },
+    { abbreviation: "ME", label: "Media", inputName: "priceME" },
+    { abbreviation: "FA", label: "Familia", inputName: "priceFA" },
+  ] as const;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogTitle className="text-base font-semibold">
           Atualizar preco de venda
         </DialogTitle>
-        <p className="text-sm text-muted-foreground">{item.name}</p>
+        <p className="mt-1 inline-flex w-fit rounded-md bg-slate-900 px-2.5 py-1 text-sm font-semibold uppercase tracking-wide text-white">
+          {item.name}
+        </p>
 
         <Form method="post" className="mt-3 flex flex-col gap-4">
           <input type="hidden" name="_action" value="menu-item-selling-price-quick-update" />
           <input type="hidden" name="menuItemId" value={item.id} />
 
           <div className="grid grid-cols-2 gap-3">
-            <label className="flex flex-col gap-1 text-xs font-semibold">
-              IN
-              <MoneyInput name="priceIN" defaultValue={pricesByAbbreviation.IN ?? 0} className="w-full" />
-            </label>
-            <label className="flex flex-col gap-1 text-xs font-semibold">
-              PE
-              <MoneyInput name="pricePE" defaultValue={pricesByAbbreviation.PE ?? 0} className="w-full" />
-            </label>
-            <label className="flex flex-col gap-1 text-xs font-semibold">
-              ME
-              <MoneyInput name="priceME" defaultValue={pricesByAbbreviation.ME ?? 0} className="w-full" />
-            </label>
-            <label className="flex flex-col gap-1 text-xs font-semibold">
-              FA
-              <MoneyInput name="priceFA" defaultValue={pricesByAbbreviation.FA ?? 0} className="w-full" />
-            </label>
+            {sizeFields.map((size) => (
+              <label key={size.abbreviation} className="flex flex-col gap-1 text-xs font-semibold text-muted-foreground">
+                {size.label} ({size.abbreviation}) | R$ {formatMoneyString(pricesByAbbreviation[size.abbreviation] ?? 0)}
+                <MoneyInput
+                  name={size.inputName}
+                  defaultValue={pricesByAbbreviation[size.abbreviation] ?? 0}
+                  className="w-full text-black font-medium"
+                />
+              </label>
+            ))}
           </div>
 
           <Button type="submit" className="w-full">

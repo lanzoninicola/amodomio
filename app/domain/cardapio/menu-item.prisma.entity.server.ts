@@ -19,7 +19,6 @@ import { PrismaEntityProps } from "~/lib/prisma/types.server";
 import { menuItemTagPrismaEntity } from "./menu-item-tags.prisma.entity.server";
 import MenuItemPriceVariationUtility from "./menu-item-price-variations-utility";
 import { v4 as uuidv4 } from "uuid";
-import { CloudinaryUtils } from "~/lib/cloudinary";
 import {
   MenuItemWithCostVariations,
   MenuItemWithSellPriceVariations,
@@ -35,7 +34,6 @@ import {
   SellingChannelKey,
 } from "./menu-item-selling-channel.entity.server";
 import { slugifyString } from "~/utils/slugify";
-import { group } from "console";
 import { invalidateCardapioIndexCache } from "./cardapio-cache.server";
 
 export interface MenuItemWithAssociations extends MenuItem {
@@ -98,6 +96,80 @@ interface MenuItemEntityProps extends PrismaEntityProps {
   menuItemSellingChannel: typeof menuItemSellingChannelPrismaEntity;
 }
 
+type MenuItemMediaLike = {
+  secureUrl?: string | null;
+  thumbnailUrl?: string | null;
+  kind?: string | null;
+  isPrimary?: boolean | null;
+  visible?: boolean | null;
+};
+
+function normalizeMediaUrl(url?: string | null): string {
+  return typeof url === "string" ? url.trim() : "";
+}
+
+function isCloudinaryUrl(url: string): boolean {
+  return /^https?:\/\/res\.cloudinary\.com\//i.test(url);
+}
+
+function normalizeNonCloudinaryMediaUrl(url?: string | null): string {
+  const normalized = normalizeMediaUrl(url);
+  if (!normalized) return "";
+  return isCloudinaryUrl(normalized) ? "" : normalized;
+}
+
+function isVideoMedia(media?: MenuItemMediaLike | null): boolean {
+  const kind = String(media?.kind || "").toLowerCase();
+  if (kind === "video") return true;
+  return /\.(mp4|mov|webm|m4v|ogg|ogv)(\?|$)/i.test(
+    normalizeNonCloudinaryMediaUrl(media?.secureUrl)
+  );
+}
+
+function getFeaturedMedia(
+  gallery?: MenuItemMediaLike[] | null
+): MenuItemMediaLike | null {
+  const assets = (gallery ?? []).filter(
+    (asset) =>
+      asset?.visible !== false &&
+      Boolean(normalizeNonCloudinaryMediaUrl(asset?.secureUrl))
+  );
+
+  if (!assets.length) return null;
+  return assets.find((asset) => asset?.isPrimary) ?? assets[0];
+}
+
+function resolveMenuItemMedia(item: {
+  MenuItemImage?: { secureUrl?: string | null; thumbnailUrl?: string | null } | null;
+  MenuItemGalleryImage?: MenuItemMediaLike[] | null;
+}) {
+  const featured = getFeaturedMedia(item.MenuItemGalleryImage);
+  const imageAsset =
+    (item.MenuItemGalleryImage ?? []).find(
+      (asset) =>
+        asset?.visible !== false &&
+        Boolean(normalizeNonCloudinaryMediaUrl(asset?.secureUrl)) &&
+        !isVideoMedia(asset)
+    ) ?? null;
+
+  const mediaUrl =
+    normalizeNonCloudinaryMediaUrl(featured?.secureUrl) ||
+    normalizeNonCloudinaryMediaUrl(item.MenuItemImage?.secureUrl);
+  const imageUrl =
+    normalizeNonCloudinaryMediaUrl(imageAsset?.secureUrl) ||
+    normalizeNonCloudinaryMediaUrl(item.MenuItemImage?.secureUrl) ||
+    mediaUrl;
+  const placeholderUrl =
+    normalizeNonCloudinaryMediaUrl(imageAsset?.thumbnailUrl) ||
+    normalizeNonCloudinaryMediaUrl(item.MenuItemImage?.thumbnailUrl);
+
+  return {
+    mediaUrl,
+    imageUrl,
+    placeholderUrl,
+  };
+}
+
 export class MenuItemPrismaEntity {
   client;
 
@@ -133,8 +205,6 @@ export class MenuItemPrismaEntity {
       imageScaleWidth: 1280,
     }
   ) {
-    const { imageScaleWidth = 1280 } = options || {};
-
     if (process.env.NODE_ENV === "development") {
       const stack = new Error().stack?.split("\n").slice(1, 6).join("\n");
       console.log("[MenuItem.findAll] chamado", {
@@ -164,7 +234,12 @@ export class MenuItemPrismaEntity {
         },
         MenuItemShare: true,
         MenuItemImage: true,
-        MenuItemGalleryImage: true,
+        MenuItemGalleryImage: {
+          where: {
+            visible: true,
+          },
+          orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }, { createdAt: "asc" }],
+        },
         MenuItemGroup: true,
         MenuItemSellingPriceVariation: {
           where: {
@@ -183,39 +258,39 @@ export class MenuItemPrismaEntity {
       },
     });
 
-    const records = recordsFounded.map((r) => ({
-      ...r,
-      imageTransformedURL: CloudinaryUtils.scaleWidth(
-        r.MenuItemImage?.publicId || "",
-        { width: imageScaleWidth }
-      ),
-      tags: {
-        all: r.tags.map((t) => t.Tag?.name ?? ""),
-        public: r.tags
-          .filter((t) => t.Tag?.public === true)
-          .map((t) => t.Tag?.name ?? ""),
-        models: r.tags.map((t) => t.Tag),
-      },
-      likes: { amount: r.MenuItemLike.length },
-      shares: { amount: r.MenuItemShare.length },
-      meta: {
-        isItalyProduct: r.tags.some(
-          (t) => t.Tag?.name.toLowerCase() === "produtos-italiano"
-        ),
-        isBestSeller: r.tags.some(
-          (t) => t.Tag?.name.toLowerCase() === "mais-vendido"
-        ),
-        isMonthlyBestSeller: r.tags.some(
-          (t) => t.Tag?.name.toLowerCase() === "mais-vendido-mes"
-        ),
-        isChefSpecial: r.tags.some(
-          (t) => t.Tag?.name.toLowerCase() === "especial-chef"
-        ),
-        isMonthlySpecial: r.tags.some(
-          (t) => t.Tag?.name.toLowerCase() === "especial-mes"
-        ),
-      },
-    }));
+    const records = recordsFounded.map((r) => {
+      const media = resolveMenuItemMedia(r);
+      return {
+        ...r,
+        imageTransformedURL: media.imageUrl,
+        tags: {
+          all: r.tags.map((t) => t.Tag?.name ?? ""),
+          public: r.tags
+            .filter((t) => t.Tag?.public === true)
+            .map((t) => t.Tag?.name ?? ""),
+          models: r.tags.map((t) => t.Tag),
+        },
+        likes: { amount: r.MenuItemLike.length },
+        shares: { amount: r.MenuItemShare.length },
+        meta: {
+          isItalyProduct: r.tags.some(
+            (t) => t.Tag?.name.toLowerCase() === "produtos-italiano"
+          ),
+          isBestSeller: r.tags.some(
+            (t) => t.Tag?.name.toLowerCase() === "mais-vendido"
+          ),
+          isMonthlyBestSeller: r.tags.some(
+            (t) => t.Tag?.name.toLowerCase() === "mais-vendido-mes"
+          ),
+          isChefSpecial: r.tags.some(
+            (t) => t.Tag?.name.toLowerCase() === "especial-chef"
+          ),
+          isMonthlySpecial: r.tags.some(
+            (t) => t.Tag?.name.toLowerCase() === "especial-mes"
+          ),
+        },
+      };
+    });
 
     const returnedRecords = params?.option?.sorted
       ? records.sort((a, b) => {
@@ -238,8 +313,6 @@ export class MenuItemPrismaEntity {
       imageScaleWidth: 1280,
     }
   ) {
-    const { imageScaleWidth = 1280 } = options || {};
-
     if (params?.mock) {
       return [] as MenuItemWithAssociations[];
     }
@@ -257,19 +330,28 @@ export class MenuItemPrismaEntity {
         upcoming: true,
         MenuItemImage: {
           select: {
-            publicId: true,
+            secureUrl: true,
+            thumbnailUrl: true,
           },
         },
         MenuItemGalleryImage: {
+          where: {
+            visible: true,
+          },
+          orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }, { createdAt: "asc" }],
           select: {
             isPrimary: true,
             secureUrl: true,
+            thumbnailUrl: true,
+            visible: true,
+            kind: true,
           },
         },
         MenuItemGroup: {
           select: {
             id: true,
             name: true,
+            description: true,
             sortOrderIndex: true,
           },
         },
@@ -339,45 +421,42 @@ export class MenuItemPrismaEntity {
       },
     });
 
-    const records = recordsFounded.map((r) => ({
-      ...r,
-      MenuItemLike: [] as MenuItemLike[],
-      MenuItemShare: [] as MenuItemShare[],
-      imageTransformedURL: CloudinaryUtils.scaleWidth(
-        r.MenuItemImage?.publicId || "",
-        { width: imageScaleWidth }
-      ),
-      imagePlaceholderURL: CloudinaryUtils.scaleWidth(
-        r.MenuItemImage?.publicId || "",
-        { width: 20, quality: 1, blur: 1000 }
-      ),
-      tags: {
-        all: r.tags.map((t) => t.Tag?.name ?? ""),
-        public: r.tags
-          .filter((t) => t.Tag?.public === true)
-          .map((t) => t.Tag?.name ?? ""),
-        models: r.tags.map((t) => t.Tag),
-      },
-      likes: { amount: r.MenuItemLike?.length ?? 0 },
-      shares: { amount: r._count.MenuItemShare },
-      meta: {
-        isItalyProduct: r.tags.some(
-          (t) => t.Tag?.name.toLowerCase() === "produtos-italiano"
-        ),
-        isBestSeller: r.tags.some(
-          (t) => t.Tag?.name.toLowerCase() === "mais-vendido"
-        ),
-        isMonthlyBestSeller: r.tags.some(
-          (t) => t.Tag?.name.toLowerCase() === "mais-vendido-mes"
-        ),
-        isChefSpecial: r.tags.some(
-          (t) => t.Tag?.name.toLowerCase() === "especial-chef"
-        ),
-        isMonthlySpecial: r.tags.some(
-          (t) => t.Tag?.name.toLowerCase() === "especial-mes"
-        ),
-      },
-    })) as MenuItemWithAssociations[];
+    const records = recordsFounded.map((r) => {
+      const media = resolveMenuItemMedia(r);
+      return {
+        ...r,
+        MenuItemLike: [] as MenuItemLike[],
+        MenuItemShare: [] as MenuItemShare[],
+        imageTransformedURL: media.imageUrl,
+        imagePlaceholderURL: media.placeholderUrl,
+        tags: {
+          all: r.tags.map((t) => t.Tag?.name ?? ""),
+          public: r.tags
+            .filter((t) => t.Tag?.public === true)
+            .map((t) => t.Tag?.name ?? ""),
+          models: r.tags.map((t) => t.Tag),
+        },
+        likes: { amount: r.MenuItemLike?.length ?? 0 },
+        shares: { amount: r._count.MenuItemShare },
+        meta: {
+          isItalyProduct: r.tags.some(
+            (t) => t.Tag?.name.toLowerCase() === "produtos-italiano"
+          ),
+          isBestSeller: r.tags.some(
+            (t) => t.Tag?.name.toLowerCase() === "mais-vendido"
+          ),
+          isMonthlyBestSeller: r.tags.some(
+            (t) => t.Tag?.name.toLowerCase() === "mais-vendido-mes"
+          ),
+          isChefSpecial: r.tags.some(
+            (t) => t.Tag?.name.toLowerCase() === "especial-chef"
+          ),
+          isMonthlySpecial: r.tags.some(
+            (t) => t.Tag?.name.toLowerCase() === "especial-mes"
+          ),
+        },
+      };
+    }) as MenuItemWithAssociations[];
 
     const returnedRecords = params?.option?.sorted
       ? records.sort((a, b) => {
@@ -443,6 +522,7 @@ export class MenuItemPrismaEntity {
         acc[key] = {
           id: key,
           name: g?.name ?? "Sem grupo",
+          description: g?.description ?? "",
           sortOrderIndex:
             typeof g?.sortOrderIndex === "number"
               ? g.sortOrderIndex
@@ -453,7 +533,13 @@ export class MenuItemPrismaEntity {
 
       acc[key].items.push(menuItem);
       return acc;
-    }, {} as Record<string, { id: string; name: string; sortOrderIndex: number; items: MenuItemWithAssociations[] }>);
+    }, {} as Record<string, {
+      id: string;
+      name: string;
+      description: string;
+      sortOrderIndex: number;
+      items: MenuItemWithAssociations[];
+    }>);
 
     // Converte em array e ordena pelo índice do grupo
     const result = Object.values(grouped)
@@ -465,6 +551,7 @@ export class MenuItemPrismaEntity {
       .map((g) => ({
         groupId: g.id,
         group: g.name,
+        description: g.description,
         sortOrderIndex: g.sortOrderIndex,
         menuItems: g.items,
       }));
@@ -491,6 +578,7 @@ export class MenuItemPrismaEntity {
         acc[key] = {
           id: key,
           name: g?.name ?? "Sem grupo",
+          description: g?.description ?? "",
           sortOrderIndex:
             typeof g?.sortOrderIndex === "number"
               ? g.sortOrderIndex
@@ -501,7 +589,13 @@ export class MenuItemPrismaEntity {
 
       acc[key].items.push(menuItem);
       return acc;
-    }, {} as Record<string, { id: string; name: string; sortOrderIndex: number; items: MenuItemWithAssociations[] }>);
+    }, {} as Record<string, {
+      id: string;
+      name: string;
+      description: string;
+      sortOrderIndex: number;
+      items: MenuItemWithAssociations[];
+    }>);
 
     const result = Object.values(grouped)
       .sort(
@@ -512,6 +606,7 @@ export class MenuItemPrismaEntity {
       .map((g) => ({
         groupId: g.id,
         group: g.name,
+        description: g.description,
         sortOrderIndex: g.sortOrderIndex,
         menuItems: g.items,
       }));
@@ -739,7 +834,9 @@ export class MenuItemPrismaEntity {
         },
         MenuItemShare: true,
         MenuItemImage: true,
-        MenuItemGalleryImage: true,
+        MenuItemGalleryImage: {
+          orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }, { createdAt: "asc" }],
+        },
         MenuItemNote: true,
         MenuItemCostVariation: true,
         MenuItemSellingPriceVariation: true,
@@ -751,21 +848,11 @@ export class MenuItemPrismaEntity {
       return null;
     }
 
+    const media = resolveMenuItemMedia(item);
     return {
       ...item,
-      // imageURL: CloudinaryUtils.scaleWidth("livhax0d1aiiszxqgpc6", {
-      //   width: options.imageScaleWidth,
-      // }),
-      imageTransformedURL: CloudinaryUtils.scaleWidth(
-        item.MenuItemImage?.publicId || "",
-        {
-          width: options.imageScaleWidth,
-        }
-      ),
-      imagePlaceholderURL: CloudinaryUtils.scaleWidth(
-        item.MenuItemImage?.publicId || "",
-        { width: 20, quality: 1, blur: 1000 }
-      ),
+      imageTransformedURL: media.imageUrl,
+      imagePlaceholderURL: media.placeholderUrl,
       tags: {
         all: item.tags.map((t) => t.Tag?.name),
         public: item.tags
@@ -806,7 +893,13 @@ export class MenuItemPrismaEntity {
           },
         },
         MenuItemShare: true,
-        MenuItemGalleryImage: true,
+        MenuItemImage: true,
+        MenuItemGalleryImage: {
+          where: {
+            visible: true,
+          },
+          orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }, { createdAt: "asc" }],
+        },
         MenuItemSellingPriceVariation: {
           include: {
             MenuItemSellingChannel: true,
@@ -820,18 +913,11 @@ export class MenuItemPrismaEntity {
       return null;
     }
 
+    const media = resolveMenuItemMedia(item);
     return {
       ...item,
-      imageTransformedURL: CloudinaryUtils.scaleWidth(
-        item.MenuItemImage?.publicId || "",
-        {
-          width: options.imageScaleWidth,
-        }
-      ),
-      imagePlaceholderURL: CloudinaryUtils.scaleWidth(
-        item.MenuItemImage?.publicId || "",
-        { width: 20, quality: 1, blur: 1000 }
-      ),
+      imageTransformedURL: media.imageUrl,
+      imagePlaceholderURL: media.placeholderUrl,
       tags: {
         all: item.tags.map((t) => t.Tag?.name),
         public: item.tags

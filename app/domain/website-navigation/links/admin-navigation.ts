@@ -151,6 +151,12 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
           items: [],
           disabled: false,
         },
+        {
+          title: "Vínculo assets (lote)",
+          href: "/admin/gerenciamento/cardapio/assets-batch",
+          items: [],
+          disabled: false,
+        },
       ],
     },
     {
@@ -409,6 +415,12 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
         {
           title: "Importador de dados",
           href: "/admin/importer",
+          items: [],
+          disabled: false,
+        },
+        {
+          title: "Gerenciamento de assets",
+          href: "/admin/assets",
           items: [],
           disabled: false,
         },

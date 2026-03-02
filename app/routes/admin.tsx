@@ -495,7 +495,7 @@ export default function AdminOutlet() {
             <div className="flex flex-col w-screen">
                 {pendingReplyAlerts.length > 0 ? (
                     <>
-                        <div className="fixed inset-x-0 top-0 z-[70] flex h-6 items-center justify-end border-b border-red-300 bg-red-50/95 px-3 text-red-900 shadow-sm md:h-7 md:px-4">
+                        <div className="fixed right-0 top-0 z-[70] flex h-6 w-fit items-center justify-end border-b border-red-300 bg-red-50/95 px-3 text-red-900 shadow-sm md:h-7 md:px-4">
                             <div className="flex items-center gap-2">
                                 <p className="flex items-center gap-1.5 text-[11px] font-semibold md:text-xs">
                                     <AlertTriangle className="h-3.5 w-3.5 animate-pulse text-red-600" />

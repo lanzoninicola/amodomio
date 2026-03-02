@@ -1,23 +1,23 @@
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
+  SidebarHeader,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
-  SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarMenuSub,
   SidebarMenuSubButton,
   SidebarMenuSubItem,
-} from "@/components/ui/sidebar"
+} from "@/components/ui/sidebar";
 import { SidebarNavigationSection, WebsiteNavigationConfig } from "../types/navigation-types";
 import { NavLink, useFetcher, useRevalidator } from "@remix-run/react";
 import { cn } from "~/lib/utils";
-import { Loader2, Pin, Search } from "lucide-react";
+import type { CSSProperties } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Loader2, Pin, Search } from "lucide-react";
 import { toast } from "~/components/ui/use-toast";
 
 export interface AdminSidebarProps {
@@ -60,7 +60,7 @@ export function AdminSidebar({ navigationLinks, pinnedHrefs }: AdminSidebarProps
     if (response?.status && response.status >= 400) {
       toast({
         title: "Erro ao atualizar pin",
-        description: response.message || "Não foi possível fixar/desfixar o link.",
+        description: response.message || "Nao foi possivel fixar/desfixar o link.",
       });
       return;
     }
@@ -69,11 +69,9 @@ export function AdminSidebar({ navigationLinks, pinnedHrefs }: AdminSidebarProps
 
     toast({
       title: pinned ? "Link fixado" : "Link desfixado",
-      description: pinned
-        ? "Atalho adicionado aos fixados."
-        : "Atalho removido dos fixados.",
+      description: pinned ? "Atalho adicionado aos fixados." : "Atalho removido dos fixados.",
     });
-  }, [pinFetcher.state, pinFetcher.data]);
+  }, [pinFetcher.state, pinFetcher.data, revalidator]);
 
   const trackNavClick = (payload: { href?: string; title: string; groupTitle?: string }) => {
     if (!payload.href || payload.href === "/admin") {
@@ -116,20 +114,20 @@ export function AdminSidebar({ navigationLinks, pinnedHrefs }: AdminSidebarProps
   };
 
   const renderSubItems = (items: SidebarNavigationSection[], groupTitle: string) => (
-    <SidebarMenuSub className="gap-0.5 py-0">
+    <SidebarMenuSub className="!mx-2.5 !gap-0.5 !px-2 !py-0.5">
       {items
         .filter((item) => item.disabled === false)
         .map((item) => (
           <SidebarMenuSubItem key={`${groupTitle}-${item.title}-${item.href ?? "no-link"}-sub`}>
-            <SidebarMenuSubButton asChild size="sm" className="h-6 px-1.5">
+            <SidebarMenuSubButton asChild size="sm" className="h-[24px] px-0.5">
               {item.href ? (
-                <div className="flex w-full items-center gap-2">
+                <div className="flex w-full items-center gap-1">
                   {showPins ? (
                     <button
                       type="button"
                       className={cn(
-                        "shrink-0",
-                        pinnedSet.has(item.href) ? "text-amber-600" : "text-muted-foreground hover:text-slate-900"
+                        "inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-sm transition",
+                        pinnedSet.has(item.href) ? "text-amber-600" : "text-slate-400 hover:text-slate-700"
                       )}
                       disabled={pendingHref === item.href && pinFetcher.state !== "idle"}
                       aria-label={pinnedSet.has(item.href) ? `Desfixar ${item.title}` : `Fixar ${item.title}`}
@@ -146,9 +144,9 @@ export function AdminSidebar({ navigationLinks, pinnedHrefs }: AdminSidebarProps
                       }}
                     >
                       {pendingHref === item.href && pinFetcher.state !== "idle" ? (
-                        <Loader2 size={14} className="animate-spin" />
+                        <Loader2 size={12} className="animate-spin" />
                       ) : (
-                        <Pin size={14} />
+                        <Pin size={12} />
                       )}
                     </button>
                   ) : null}
@@ -165,24 +163,20 @@ export function AdminSidebar({ navigationLinks, pinnedHrefs }: AdminSidebarProps
                     }
                     className={({ isActive }) =>
                       cn(
-                        "flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1",
-                        isActive && "bg-amber-100 text-black font-semibold"
+                        "flex w-full items-center rounded-md px-2 py-1 text-[0.76rem] font-medium transition",
+                        isActive ? "bg-slate-100 text-slate-900" : "text-slate-900 hover:bg-slate-100/80"
                       )
                     }
                     title={item.title}
                   >
                     {item.icon && <item.icon size={14} />}
-                    <span className={cn("min-w-0 truncate whitespace-nowrap text-[12px]", item.highlight && "font-semibold")}>
-                      {item.title}
-                    </span>
+                    <span className={cn("truncate", item.highlight && "font-semibold")}>{item.title}</span>
                   </NavLink>
                 </div>
               ) : (
-                <span className="flex min-w-0 items-center gap-2" title={item.title}>
+                <span className="flex min-w-0 items-center gap-2 px-2 py-1 text-[0.76rem] text-slate-900" title={item.title}>
                   {item.icon && <item.icon size={14} />}
-                  <span className={cn("min-w-0 truncate whitespace-nowrap text-[12px]", item.highlight && "font-semibold")}>
-                    {item.title}
-                  </span>
+                  <span className={cn("truncate", item.highlight && "font-semibold")}>{item.title}</span>
                 </span>
               )}
             </SidebarMenuSubButton>
@@ -196,15 +190,15 @@ export function AdminSidebar({ navigationLinks, pinnedHrefs }: AdminSidebarProps
       .filter((item) => item.disabled === false)
       .map((item) => (
         <SidebarMenuItem key={`${groupTitle}-${item.title}-${item.href ?? "no-link"}`}>
-          <SidebarMenuButton asChild>
+          <SidebarMenuButton asChild className="h-[30px] px-1">
             {item.href ? (
-              <div className="flex w-full items-center gap-2">
+              <div className="flex w-full items-center gap-1">
                 {showPins ? (
                   <button
                     type="button"
                     className={cn(
-                      "text-muted-foreground hover:text-slate-900",
-                      pinnedSet.has(item.href) && "text-amber-600"
+                      "inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-sm transition",
+                      pinnedSet.has(item.href) ? "text-amber-600" : "text-slate-400 hover:text-slate-700"
                     )}
                     disabled={pendingHref === item.href && pinFetcher.state !== "idle"}
                     aria-label={pinnedSet.has(item.href) ? `Desfixar ${item.title}` : `Fixar ${item.title}`}
@@ -221,9 +215,9 @@ export function AdminSidebar({ navigationLinks, pinnedHrefs }: AdminSidebarProps
                     }}
                   >
                     {pendingHref === item.href && pinFetcher.state !== "idle" ? (
-                      <Loader2 size={14} className="animate-spin" />
+                      <Loader2 size={12} className="animate-spin" />
                     ) : (
-                      <Pin size={14} />
+                      <Pin size={12} />
                     )}
                   </button>
                 ) : null}
@@ -233,8 +227,8 @@ export function AdminSidebar({ navigationLinks, pinnedHrefs }: AdminSidebarProps
                   prefetch="none"
                   className={({ isActive }) =>
                     cn(
-                      "flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1 text-sm",
-                      isActive && "bg-amber-100 text-black font-semibold"
+                      "flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-[0.76rem] font-medium transition",
+                      isActive ? "bg-slate-100 text-slate-900" : "text-slate-900 hover:bg-slate-100/80"
                     )
                   }
                   onClick={() =>
@@ -247,17 +241,13 @@ export function AdminSidebar({ navigationLinks, pinnedHrefs }: AdminSidebarProps
                   title={item.title}
                 >
                   {item.icon && <item.icon size={15} />}
-                  <span className={cn("min-w-0 truncate whitespace-nowrap", item.highlight && "font-semibold")}>
-                    {item.title}
-                  </span>
+                  <span className={cn("truncate", item.highlight && "font-semibold")}>{item.title}</span>
                 </NavLink>
               </div>
             ) : (
-              <span className="flex min-w-0 items-center gap-2 text-sm" title={item.title}>
+              <span className="flex min-w-0 items-center gap-2 px-2.5 py-1.5 text-[0.76rem] text-slate-900" title={item.title}>
                 {item.icon && <item.icon size={15} />}
-                <span className={cn("min-w-0 truncate whitespace-nowrap", item.highlight && "font-semibold")}>
-                  {item.title}
-                </span>
+                <span className={cn("truncate", item.highlight && "font-semibold")}>{item.title}</span>
               </span>
             )}
           </SidebarMenuButton>
@@ -266,54 +256,52 @@ export function AdminSidebar({ navigationLinks, pinnedHrefs }: AdminSidebarProps
       ));
 
   return (
-    <Sidebar variant="floating">
-      <SidebarHeader className="px-3 pt-3 pb-2">
-        <button
-          type="button"
-          onClick={() => window.dispatchEvent(new Event("admin:open-nav-search"))}
-          className="inline-flex h-9 w-full items-center justify-between gap-2 rounded-full border border-slate-200 bg-white/80 px-3 text-xs font-semibold uppercase tracking-[0.16em] text-slate-700 shadow-sm backdrop-blur-md transition hover:border-slate-300 hover:bg-white"
-          aria-label="Buscar item de menu"
-        >
-          <span className="inline-flex items-center gap-2">
-            <Search size={14} className="text-slate-500" />
-            <span>Buscar</span>
-          </span>
-          <kbd className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium tracking-normal text-slate-500">
-            ⌘K
-          </kbd>
-        </button>
-      </SidebarHeader>
-      <SidebarContent>
-        <div className="px-3 pb-2">
-          <button
-            type="button"
-            className={cn(
-              "inline-flex items-center gap-2 rounded-md border px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] transition",
-              showPins ? "border-amber-200 text-amber-700 bg-amber-50" : "border-muted text-muted-foreground hover:text-slate-900"
-            )}
-            onClick={() => setShowPins((curr) => !curr)}
-            aria-pressed={showPins}
-          >
-            <Pin size={12} />
-            <span>{showPins ? "Ocultar pins" : "Fixar links"}</span>
-          </button>
-        </div>
-
-        {navigationLinks?.sidebarNav && navigationLinks.sidebarNav.map((group: SidebarNavigationSection) => (
-          <SidebarGroup key={group.title} className="font-body">
-            <SidebarGroupLabel className="font-semibold">{group.title}</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {renderSidebarItems(group.items, group.title)}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-
-
-
-        ))}
-      </SidebarContent>
-      <SidebarFooter />
+    <Sidebar
+      variant="sidebar"
+      className="!top-[calc(var(--header-height,3.5rem)+0.6rem)] !h-[calc(100svh-5rem)] bg-transparent [&_[data-sidebar=sidebar]]:bg-transparent"
+      style={{ "--sidebar-width": "16rem" } as CSSProperties}
+    >
+      <div className="relative flex h-full min-h-0 w-full flex-col">
+        <SidebarHeader className="mx-auto w-[12.75rem] px-3 pt-4">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new Event("admin:open-nav-search"))}
+              className="inline-flex h-7 items-center gap-1 rounded-md border border-slate-200 px-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-600 transition hover:bg-slate-100"
+              aria-label="Buscar item de menu"
+            >
+              <Search size={12} />
+              Buscar
+            </button>
+            <button
+              type="button"
+              className={cn(
+                "inline-flex h-7 items-center gap-1 rounded-md border px-2 text-[10px] font-semibold uppercase tracking-[0.08em] transition",
+                showPins
+                  ? "border-amber-300 bg-amber-50 text-amber-700"
+                  : "border-slate-200 text-slate-600 hover:bg-slate-100"
+              )}
+              onClick={() => setShowPins((curr) => !curr)}
+              aria-pressed={showPins}
+            >
+              <Pin size={12} />
+              {showPins ? "Fixando" : "Fixar"}
+            </button>
+          </div>
+        </SidebarHeader>
+        <SidebarContent className="mx-auto h-full min-h-0 w-[12.75rem] overflow-y-auto overflow-x-hidden px-3 pt-4 pb-10 font-sans [scrollbar-width:thin] [scrollbar-color:rgba(100,116,139,0.35)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-400/35 hover:[&::-webkit-scrollbar-thumb]:bg-slate-400/55">
+          {navigationLinks?.sidebarNav?.map((group: SidebarNavigationSection) => (
+            <SidebarGroup key={group.title} className="w-full px-1 py-4">
+              <SidebarGroupLabel className="px-2.5 text-[0.78rem] font-medium text-muted-foreground">{group.title}</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu className="gap-1">
+                  {renderSidebarItems(group.items, group.title)}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          ))}
+        </SidebarContent>
+      </div>
     </Sidebar>
-  )
+  );
 }
