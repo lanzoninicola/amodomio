@@ -185,20 +185,23 @@ export function CardapioSizesSections({ hideTitle = false, className, sizes }: C
             const flavors =
                 size.maxToppingsAmountDescription ||
                 (size.maxToppingsAmount
-                    ? `Máximo ${size.maxToppingsAmount} sabores`
-                    : "Máximo de sabores sob consulta");
+                    ? `Até ${size.maxToppingsAmount} ${size.maxToppingsAmount === 1 ? "sabor" : "sabores"}`
+                    : "Sabores sob consulta");
             const priceText =
                 size.minPrice != null
                     ? size.maxPrice != null && size.maxPrice !== size.minPrice
-                        ? `de ${formatMoneyString(size.minPrice)} até ${formatMoneyString(size.maxPrice)}`
+                        ? `${formatMoneyString(size.minPrice)} – ${formatMoneyString(size.maxPrice)}`
                         : `${formatMoneyString(size.minPrice)}`
                     : null;
 
             return {
                 key: size.id,
                 label: size.name,
-                primary: serves,
-                details: [flavors, priceText].filter(Boolean) as string[],
+                serves,
+                serveCount: size.maxServeAmount ?? 1,
+                flavors,
+                toppingCount: size.maxToppingsAmount ?? 1,
+                priceText,
             };
         })
         : SIZE_ORDER.map((size) => {
@@ -206,8 +209,11 @@ export function CardapioSizesSections({ hideTitle = false, className, sizes }: C
             return {
                 key: size,
                 label: info.label,
-                primary: info.serves,
-                details: [info.flavors, info.dims],
+                serves: info.serves,
+                serveCount: size === "familia" ? 6 : size === "medio" ? 2 : 1,
+                flavors: info.flavors,
+                toppingCount: info.donuts,
+                priceText: info.dims,
             };
         });
 
@@ -220,25 +226,47 @@ export function CardapioSizesSections({ hideTitle = false, className, sizes }: C
                 </div>
             )}
 
-            <div className="divide-y divide-zinc-200 rounded-2xl bg-white/80 px-4 shadow-sm">
-                {sections.map((section) => (
-                    <div key={section.key} className="flex flex-col gap-3 py-5">
-                        <span className="text-lg font-semibold text-brand-blue">{section.label}</span>
-                        <div className="text-[12px] font-semibold uppercase tracking-[0.14em] text-zinc-900">
-                            {section.primary}
-                        </div>
-                        <div className="flex flex-col gap-2 text-sm text-muted-foreground">
-                            {section.details.map((detail, index) => (
-                                <div
-                                    key={`${section.key}-detail-${index}`}
-                                    className={cn("text-zinc-700", index > 0 && "text-zinc-500 text-right")}
-                                >
-                                    {detail}
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                {sections.map((section) => {
+                    const ServeIcon = section.serveCount > 2 ? Users : section.serveCount > 1 ? Users : User;
+                    const donutCount = Math.min(section.toppingCount, 4);
+
+                    return (
+                        <div
+                            key={section.key}
+                            className="flex flex-col gap-4 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm"
+                        >
+                            <span className="text-xs font-bold uppercase tracking-[0.16em] text-brand-blue">
+                                {section.label}
+                            </span>
+
+                            <div className="flex flex-col gap-3">
+                                <div className="flex items-center gap-2">
+                                    <ServeIcon size={16} className="shrink-0 text-zinc-400" />
+                                    <span className="text-sm text-zinc-700">{section.serves}</span>
                                 </div>
-                            ))}
+
+                                <div className="flex items-center gap-2">
+                                    <div className="flex shrink-0 gap-0.5">
+                                        {Array.from({ length: donutCount }).map((_, i) => (
+                                            <Donut key={i} size={16} className="text-zinc-400" />
+                                        ))}
+                                    </div>
+                                    <span className="text-sm text-zinc-700">{section.flavors}</span>
+                                </div>
+                            </div>
+
+                            {section.priceText && (
+                                <div className="mt-auto border-t border-zinc-100 pt-3">
+                                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-400">
+                                        Faixa de preço
+                                    </p>
+                                    <p className="text-sm font-semibold text-zinc-900">{section.priceText}</p>
+                                </div>
+                            )}
                         </div>
-                    </div>
-                ))}
+                    );
+                })}
             </div>
         </div>
     );
