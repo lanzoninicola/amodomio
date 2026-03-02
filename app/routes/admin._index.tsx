@@ -8,7 +8,7 @@ import tryit from "~/utils/try-it";
 import { toast } from "~/components/ui/use-toast";
 import prismaClient from "~/lib/prisma/client.server";
 import { Suspense, useEffect, useRef, useState } from "react";
-import { Loader2, Pin, PinOff, Settings } from "lucide-react";
+import { Loader2, Pin, PinOff, Settings, Smartphone } from "lucide-react";
 
 export async function loader() {
     const topNav = (async () => {
@@ -192,6 +192,21 @@ export default function AdminIndex() {
                     </div>
                 </div>
                 <div className="w-full max-w-5xl grid gap-6 lg:grid-cols-1">
+                    <section className="rounded-2xl border border-blue-200 bg-blue-50/70 p-4 shadow-sm">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                                <h2 className="text-sm font-semibold text-slate-900">Navegação com dispositivo móvel</h2>
+                                <p className="text-xs text-slate-600">Abrir interface otimizada para uso no celular na cozinha.</p>
+                            </div>
+                            <Link
+                                to="/admin/mobile"
+                                className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-blue-600 px-4 text-sm font-semibold text-white shadow-[0_10px_20px_-14px_rgba(37,99,235,0.9)] transition hover:bg-blue-500"
+                            >
+                                <Smartphone className="h-4 w-4" />
+                                Abrir Admin Mobile
+                            </Link>
+                        </div>
+                    </section>
                     <Suspense
                         fallback={(
                             <div className="rounded-lg border border-muted bg-white p-5 shadow-sm">

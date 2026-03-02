@@ -12,6 +12,12 @@ import { menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { getEngagementSettings } from "~/domain/cardapio/engagement-settings.server";
 
+function sanitizeMediaUrl(url?: string | null) {
+  const normalized = typeof url === "string" ? url.trim() : "";
+  if (!normalized) return "";
+  return /^https?:\/\/res\.cloudinary\.com\//i.test(normalized) ? "" : normalized;
+}
+
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const { slug } = params;
 
@@ -39,7 +45,23 @@ export default function SingleCardapioItem() {
         {([err, item]) => {
           if (err || !item) return <NotFound />;
 
-          const imageUrl = item.MenuItemGalleryImage?.[0]?.secureUrl;
+          const allMedia = (item.MenuItemGalleryImage || []).filter((media) =>
+            Boolean(
+              sanitizeMediaUrl(media?.secureUrl) ||
+              sanitizeMediaUrl((media as { url?: string | null })?.url)
+            )
+          );
+          const featuredImage = allMedia.find((img) => img.isPrimary) || allMedia[0] || null;
+          const galleryMedia = allMedia.filter((media) => media.id !== featuredImage?.id);
+          const imageUrl =
+            sanitizeMediaUrl(featuredImage?.secureUrl) ||
+            sanitizeMediaUrl((featuredImage as { url?: string | null })?.url) ||
+            "";
+          const featuredKind =
+            featuredImage?.kind === "video" ||
+              /\.(mp4|mov|webm|m4v|ogg|ogv)(\?|$)/i.test(imageUrl)
+              ? "video"
+              : "image";
           const ingredients = item.ingredients || "";
 
           console.log({ price: item?.MenuItemSellingPriceVariation })
@@ -56,6 +78,7 @@ export default function SingleCardapioItem() {
                   <div className="h-[40vh] sm:h-[70vh] md:h-[60vh] overflow-hidden">
                     <CardapioItemImageSingle
                       src={imageUrl || ""}
+                      kind={featuredKind}
                       placeholder={item.imagePlaceholderURL || ""}
                       placeholderIcon={true}
                       cnContainer="h-full w-full object-cover"
@@ -108,6 +131,50 @@ export default function SingleCardapioItem() {
                   <p className="font-neue text-base leading-snug tracking-wide">
                     {ingredients}
                   </p>
+
+                  {galleryMedia.length > 0 && (
+                    <>
+                      <Separator className="my-4" />
+                      <div className="flex gap-2 overflow-x-auto pb-1">
+                        {galleryMedia.slice(0, 8).map((media, index) => {
+                          const mediaUrl =
+                            sanitizeMediaUrl(media?.secureUrl) ||
+                            sanitizeMediaUrl((media as { url?: string | null })?.url) ||
+                            "";
+                          const mediaKind =
+                            media?.kind === "video" ||
+                              /\.(mp4|mov|webm|m4v|ogg|ogv)(\?|$)/i.test(mediaUrl)
+                              ? "video"
+                              : "image";
+
+                          if (mediaKind === "video") {
+                            return (
+                              <video
+                                key={`${item.id}-detail-gallery-${index}`}
+                                src={mediaUrl}
+                                className="h-16 w-16 shrink-0 rounded-md object-cover border border-zinc-200 bg-black"
+                                muted
+                                loop
+                                autoPlay
+                                playsInline
+                                preload="metadata"
+                              />
+                            );
+                          }
+
+                          return (
+                            <img
+                              key={`${item.id}-detail-gallery-${index}`}
+                              src={mediaUrl}
+                              alt={`${item.name} galeria ${index + 1}`}
+                              className="h-16 w-16 shrink-0 rounded-md object-cover border border-zinc-200"
+                              loading="lazy"
+                            />
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
 
                   <Separator className="my-8" />
 

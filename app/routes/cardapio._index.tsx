@@ -51,6 +51,10 @@ import Logo from "~/components/primitives/logo/logo";
 import { parseBooleanSetting } from "~/utils/parse-boolean-setting";
 import { getEngagementSettings } from "~/domain/cardapio/engagement-settings.server";
 import CardapioErrorRedirect from "~/domain/cardapio/components/cardapio-error-redirect/cardapio-error-redirect";
+import SectionThreadHeader, {
+    THREAD_PROFILE_MOCKS,
+    ThreadSectionProfile
+} from "~/domain/cardapio/components/section-thread-header/section-thread-header";
 import { redisGetJson, redisSetJson } from "~/lib/cache/redis.server";
 import { CARDAPIO_INDEX_CACHE_KEY } from "~/domain/cardapio/cardapio-cache.server";
 import { notifyCardapioContingencyByWhatsapp } from "~/domain/cardapio/cardapio-contingency-alert.server";
@@ -65,6 +69,12 @@ const MENU_ITEM_INTEREST_SETTING_NAME = "menu-item-interest-enabled";
 const SIMULATE_ERROR_SETTING_CONTEXT = "cardapio";
 const SIMULATE_ERROR_SETTING_NAME = "contingencia.simula.erro";
 const CARDAPIO_INDEX_CACHE_TTL_SECONDS = Number(process.env.CARDAPIO_INDEX_CACHE_TTL_SECONDS ?? 60);
+
+const SECTION_THREAD_PROFILE_BY_SECTION: Record<"chef" | "likes" | "reels", ThreadSectionProfile> = {
+    chef: THREAD_PROFILE_MOCKS["chef.nicola"],
+    likes: THREAD_PROFILE_MOCKS["chef.nicola"],
+    reels: THREAD_PROFILE_MOCKS["chef.nicola"],
+};
 
 function getCardapioItemHref(item: Pick<MenuItemWithAssociations, "id" | "slug">) {
     const identifier = item.slug?.trim() || item.id;
@@ -185,14 +195,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
         let reelUrls: string[] = [];
         if (reelsEnabled) {
-            const reelSetting = await prismaClient.setting.findFirst({
-                where: {
-                    context: REELS_SETTING_CONTEXT,
-                    name: REELS_SETTING_KEY
-                },
-                orderBy: [{ createdAt: "desc" }],
-            });
-            reelUrls = parseReelUrls(reelSetting?.value);
+            reelUrls = await loadReelUrls(request);
         }
 
         const menuItemInterestSetting = await prismaClient.setting.findFirst({
@@ -414,9 +417,10 @@ export default function CardapioWebIndex() {
                                         className="flex flex-col gap-4 mx-2 md:flex-1"
                                     >
                                         <ChefSuggestionsCarousel
-                                            title="Sugestões do nosso chef"
-                                            subtitle="Os sabores selecionados pelo chef para vocês, com combinações especiais e ótimas escolhas para aproveitar o melhor do cardápio."
+                                            title="O que vou sugerir para vocês hoje: "
+                                            subtitle="selecionei uma combinação que valoriza ingredientes nobres e equilíbrio de sabores."
                                             groups={chefSuggestionGroups}
+                                            headerProfile={SECTION_THREAD_PROFILE_BY_SECTION.chef}
                                         />
                                     </section>
 
@@ -426,15 +430,12 @@ export default function CardapioWebIndex() {
                                             className="flex flex-col gap-4 mx-2 md:flex-1"
                                         >
                                             <div className="p-2">
-                                                <h3 className="font-neue text-base md:text-xl font-semibold tracking-wide mb-2 flex items-center gap-2">
-                                                    <Heart aria-hidden="true" className="h-4 w-4 md:h-5 md:w-5" />
-                                                    <span>Mais curtidas</span>
-                                                    <Heart aria-hidden="true" className="h-4 w-4 md:h-5 md:w-5" />
-                                                </h3>
-                                                <p className="font-neue text-xs md:text-sm tracking-wide text-muted-foreground mb-3">
-                                                    Nossos clientes gostam de mostrar o que é bom. Aqui está uma seleção dos
-                                                    sabores que eles mais curtem e querem compartilhar com todo mundo.
-                                                </p>
+                                                <SectionThreadHeader
+                                                    profile={SECTION_THREAD_PROFILE_BY_SECTION.likes}
+                                                    title="Mais curtidas: "
+                                                    subtitle="nossos clientes gostam de mostrar o que é bom. Aqui está uma seleção dos sabores que eles mais curtem e querem compartilhar com todo mundo."
+                                                    className="mb-3"
+                                                />
                                                 <div className="grid grid-cols-2 gap-3 md:grid-cols-2">
                                                     {topLikedItems.map((i) => {
                                                         const featuredImage =
@@ -477,9 +478,12 @@ export default function CardapioWebIndex() {
 
             {reelsEnabled && reelUrls.length > 0 ? (
                 <div className="mx-4 md:mx-0 my-6">
-                    <h3 className="font-neue text-base md:text-xl font-semibold tracking-wide mb-3">
-                        Reels sugeridos
-                    </h3>
+                    <SectionThreadHeader
+                        profile={SECTION_THREAD_PROFILE_BY_SECTION.reels}
+                        title="Reels sugeridos"
+                        subtitle="Conteúdos curtos da equipe para inspirar seu próximo pedido."
+                        className="mb-3 px-2"
+                    />
                     <ReelsCarousel urls={reelUrls} />
                 </div>
             ) : null}
@@ -518,6 +522,7 @@ export default function CardapioWebIndex() {
                             ? (currentItems as Array<{
                                 groupId: string;
                                 group: string;
+                                description?: string;
                                 sortOrderIndex?: number;
                                 menuItems: any[];
                             }>).sort((a, b) => (a.sortOrderIndex ?? 0) - (b.sortOrderIndex ?? 0))
@@ -570,9 +575,11 @@ export default function CardapioWebIndex() {
                                     />
                                 </div>
 
+
+
                                 {/* ===== NOVO: BARRA HORIZONTAL DESLIZÁVEL ===== */}
                                 {isGrouped && orderedGroups.length > 0 && (
-                                    <div className="flex gap-2 overflow-x-auto pb-2 mt-1 mb-3 no-scrollbar">
+                                    <div className="flex gap-2 overflow-x-auto pb-2 mt-1 no-scrollbar">
                                         {orderedGroups.map((g) => (
                                             <button
                                                 key={g.groupId}
@@ -585,6 +592,8 @@ export default function CardapioWebIndex() {
                                     </div>
                                 )}
 
+                                <Separator className="my-4" />
+
                                 {/* ===== LISTA POR GRUPO ===== */}
                                 {isGrouped
                                     ? orderedGroups.map((g) => (
@@ -593,9 +602,16 @@ export default function CardapioWebIndex() {
                                             ref={(el) => (groupRefs.current[g.groupId] = el)}
                                             className="mb-6 scroll-mt-28"
                                         >
-                                            <h3 className="font-neue text-base md:text-xl font-semibold tracking-wide mb-2 border-b">
-                                                {g.group}
-                                            </h3>
+                                            <SectionThreadHeader
+                                                profile={SECTION_THREAD_PROFILE_BY_SECTION.chef}
+                                                title={g.group}
+                                                subtitle={
+                                                    g.description?.trim() ||
+                                                    g.menuItems?.[0]?.MenuItemGroup?.description?.trim() ||
+                                                    ""
+                                                }
+                                                className="mb-2 border-b pb-2"
+                                            />
                                             <CardapioItemsGrid
                                                 items={g.menuItems}
                                                 interestTrackingEnabled={menuItemInterestEnabled}
@@ -1375,6 +1391,7 @@ type MenuItem = {
 type GroupedItems = {
     groupId: string;
     group: string;
+    description?: string;
     sortOrderIndex?: number;
     menuItems: MenuItem[];
 };
@@ -1430,6 +1447,44 @@ function parseReelUrls(raw?: string | null) {
             .filter(Boolean);
     }
     return [];
+}
+
+async function loadReelUrls(request: Request) {
+    const endpoint = new URL("/api/media/folder-assets?folder=reels&kind=video", request.url).toString();
+
+    try {
+        const response = await fetch(endpoint, { method: "GET" });
+        if (response.ok) {
+            const payload = await response.json().catch(() => null);
+            const urls = parseReelUrlsFromMediaPayload(payload);
+            if (urls.length > 0) return urls;
+        }
+    } catch (error) {
+        console.warn("[cardapio._index] failed loading reels from media API, trying settings fallback", error);
+    }
+
+    const reelSetting = await prismaClient.setting.findFirst({
+        where: {
+            context: REELS_SETTING_CONTEXT,
+            name: REELS_SETTING_KEY
+        },
+        orderBy: [{ createdAt: "desc" }],
+    });
+
+    return parseReelUrls(reelSetting?.value);
+}
+
+function parseReelUrlsFromMediaPayload(payload: unknown) {
+    if (!payload || typeof payload !== "object") return [];
+    const items = (payload as { items?: unknown }).items;
+    if (!Array.isArray(items)) return [];
+    return items
+        .map((item) => {
+            if (!item || typeof item !== "object") return "";
+            const url = (item as { url?: unknown }).url;
+            return typeof url === "string" ? url.trim() : "";
+        })
+        .filter(Boolean);
 }
 
 function ReelsCarousel({ urls }: { urls: string[] }) {
@@ -1611,13 +1666,15 @@ type ChefSuggestionsCarouselProps = {
     subtitle?: string;
     groups: MenuItemWithAssociations[][];
     carouselDelay?: number;
+    headerProfile?: ThreadSectionProfile;
 };
 
 function ChefSuggestionsCarousel({
     title,
     subtitle,
     groups,
-    carouselDelay = 2500
+    carouselDelay = 2500,
+    headerProfile,
 }: ChefSuggestionsCarouselProps) {
     const { playNavigation } = useSoundEffects();
     const [api, setApi] = React.useState<CarouselApi | null>(null);
@@ -1640,16 +1697,12 @@ function ChefSuggestionsCarousel({
     return (
         <div className="p-2">
             {title ? (
-                <div className="mb-2">
-                    <h3 className="font-neue text-base md:text-xl font-semibold tracking-wide mb-1">
-                        {title}
-                    </h3>
-                    {subtitle ? (
-                        <p className="font-neue text-xs md:text-sm tracking-wide text-muted-foreground">
-                            {subtitle}
-                        </p>
-                    ) : null}
-                </div>
+                <SectionThreadHeader
+                    profile={headerProfile ?? SECTION_THREAD_PROFILE_BY_SECTION.chef}
+                    title={title}
+                    subtitle={subtitle}
+                    className="mb-3"
+                />
             ) : null}
 
             <Carousel

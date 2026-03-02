@@ -11,6 +11,7 @@ export type ItemClassification =
   | "outro";
 
 type ItemFindManyParams = {
+  includeInactive?: boolean;
   where?: Record<string, unknown>;
   orderBy?: Record<string, "asc" | "desc"> | Array<Record<string, "asc" | "desc">>;
 };
@@ -43,8 +44,13 @@ class ItemPrismaEntity {
   }
 
   async findAll(params: ItemFindManyParams = {}) {
+    const where = { ...(params.where || {}) } as Record<string, unknown>;
+    if (!params.includeInactive && where.active === undefined) {
+      where.active = true;
+    }
+
     return await this.model.findMany({
-      where: params.where,
+      where,
       orderBy: params.orderBy ?? [{ name: "asc" }],
     });
   }

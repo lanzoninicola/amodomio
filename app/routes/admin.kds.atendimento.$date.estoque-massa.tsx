@@ -1,6 +1,6 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useFetcher, useLoaderData, useNavigate } from "@remix-run/react";
+import { useFetcher, useLoaderData, useLocation, useNavigate } from "@remix-run/react";
 import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -56,6 +56,11 @@ export default function EstoqueMassaPage() {
   const { dateStr, sizes, stock } = useLoaderData<typeof loader>();
   const fx = useFetcher<{ ok: boolean; stock: DoughStockSnapshot }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const isMobileRoute = location.pathname.startsWith("/admin/mobile/estoque-massa/");
+  const formData = fx.formData as FormData | undefined;
+  const today = todayLocalYMD();
+  const isTodaySelected = dateStr === today;
 
   const [draftManual, setDraftManual] = useState<SizeCounts>(stock?.effective ?? stock?.base ?? defaultSizeCounts());
 
@@ -80,43 +85,73 @@ export default function EstoqueMassaPage() {
   const effective = useMemo<SizeCounts>(() => ({ ...draftManual }), [draftManual]);
 
   return (
-    <div className="mx-auto max-w-6xl space-y-4 mt-6">
-      <header className="space-y-2">
-        <div className="text-xs text-slate-500">Data</div>
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="text-lg font-semibold">{dateStr}</div>
-          <label className="flex items-center gap-2 text-sm text-slate-600">
-            <span>Selecionar dia</span>
+    <div className={`mx-auto max-w-6xl space-y-4 ${isMobileRoute ? "mt-1 pb-28" : "mt-6"}`}>
+      <header className={isMobileRoute ? "space-y-0" : "space-y-2"}>
+        {isMobileRoute ? (
+          <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white p-2">
             <input
               type="date"
               value={dateStr}
               onChange={(event) => {
                 const nextDate = event.target.value;
                 if (nextDate) {
-                  navigate(`/admin/kds/atendimento/${nextDate}/estoque-massa`);
+                  navigate(`/admin/mobile/estoque-massa/${nextDate}`);
                 }
               }}
-              className="h-9 rounded-md border border-slate-200 bg-white px-3 text-sm shadow-sm"
+              className="h-10 flex-1 rounded-md border border-slate-200 bg-white px-3 text-sm"
             />
-          </label>
-        </div>
+            {!isTodaySelected ? (
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => navigate(`/admin/mobile/estoque-massa/${today}`)}
+                className="h-10 px-3 text-sm"
+              >
+                Hoje
+              </Button>
+            ) : null}
+          </div>
+        ) : (
+          <>
+            <div className="text-xs text-slate-500">Data</div>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="text-lg font-semibold">{dateStr}</div>
+              <label className="flex items-center gap-2 text-sm text-slate-600">
+                <span>Selecionar dia</span>
+                <input
+                  type="date"
+                  value={dateStr}
+                  onChange={(event) => {
+                    const nextDate = event.target.value;
+                    if (nextDate) {
+                      navigate(`/admin/kds/atendimento/${nextDate}/estoque-massa`);
+                    }
+                  }}
+                  className="h-9 rounded-md border border-slate-200 bg-white px-3 text-sm shadow-sm"
+                />
+              </label>
+            </div>
+          </>
+        )}
       </header>
 
-      <fx.Form method="post" className="space-y-4 ">
+      <fx.Form method="post" className="space-y-4">
         <input type="hidden" name="date" value={dateStr} />
 
         <div className="flex flex-col gap-4">
           <section className="space-y-2">
             <div className="flex flex-col gap-0.5">
-              <div className="text-sm font-semibold">Saldo manual</div>
-              <p className="text-sm text-slate-600">Defina o saldo atual. Use quando o número real de discos mudar (perdas, queima, doações, etc.).</p>
+              <div className="text-sm font-semibold">{isMobileRoute ? "Saldo atual" : "Saldo manual"}</div>
+              {!isMobileRoute ? (
+                <p className="text-sm text-slate-600">Defina o saldo atual. Use quando o número real de discos mudar (perdas, queima, doações, etc.).</p>
+              ) : null}
             </div>
 
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-3">
               {inputs.map((k) => {
                 const size = sizes.find((s) => s.key === k)!;
                 return (
-                  <label key={k} className="flex flex-col gap-2 rounded-lg border-0 p-0 sm:border sm:p-3 bg-white shadow-sm">
+                  <label key={k} className="flex flex-col gap-2 rounded-lg border bg-white p-3 shadow-sm">
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-semibold">{size.label}</span>
                       <span className="text-xs text-slate-500">{size.abbr || size.key}</span>
@@ -126,7 +161,7 @@ export default function EstoqueMassaPage() {
                       value={draftManual[k]}
                       onChange={(e) => onChangeManual(k, e.target.value)}
                       inputMode="numeric"
-                      className="h-12 text-center text-2xl font-mono"
+                      className={`text-center font-mono ${isMobileRoute ? "h-14 text-3xl" : "h-12 text-2xl"}`}
                     />
                   </label>
                 );
@@ -135,54 +170,87 @@ export default function EstoqueMassaPage() {
           </section>
         </div>
 
-        <div className="rounded-lg border bg-slate-50 p-3">
-          <div className="text-xs text-slate-500">Saldo atual (manual)</div>
-          <div className="mt-1 flex flex-wrap gap-2">
-            {inputs.map((k) => {
-              const size = sizes.find((s) => s.key === k)!;
-              return (
-                <span key={k} className="rounded-full bg-white border px-3 py-1 text-sm font-semibold">
-                  {size.abbr || size.key}: {effective[k]}
-                </span>
-              );
-            })}
+        {!isMobileRoute ? (
+          <div className="rounded-lg border bg-slate-50 p-3">
+            <div className="text-xs text-slate-500">Saldo atual (manual)</div>
+            <div className="mt-1 flex flex-wrap gap-2">
+              {inputs.map((k) => {
+                const size = sizes.find((s) => s.key === k)!;
+                return (
+                  <span key={k} className="rounded-full bg-white border px-3 py-1 text-sm font-semibold">
+                    {size.abbr || size.key}: {effective[k]}
+                  </span>
+                );
+              })}
+            </div>
           </div>
-        </div>
+        ) : null}
 
-        <div className="grid grid-cols-2 gap-3">
-          <Button
-            type="submit"
-            name="_action"
-            value="reset"
-            variant="destructive"
-            disabled={fx.state !== "idle"}
-            className="w-full text-base h-11"
-          >
-            {fx.state !== "idle" && fx.formData?.get("_action") === "reset" ? "Zerando…" : "Zerar estoque"}
-          </Button>
+        {isMobileRoute ? (
+          <div className="fixed inset-x-0 bottom-0 z-20 border-t border-slate-200 bg-white/95 p-3 backdrop-blur">
+            <div className="mx-auto grid w-full max-w-md grid-cols-2 gap-3">
+              <Button
+                type="submit"
+                name="_action"
+                value="reset"
+                variant="destructive"
+                disabled={fx.state !== "idle"}
+                className="h-12 w-full text-base"
+              >
+                {fx.state !== "idle" && formData?.get("_action") === "reset" ? "Zerando…" : "Zerar"}
+              </Button>
 
-          <Button
-            type="submit"
-            name="_action"
-            value="save"
-            disabled={fx.state !== "idle"}
-            className="w-full text-base h-11"
-          >
-            {fx.state !== "idle" && fx.formData?.get("_action") === "save" ? "Salvando…" : "Salvar estoque"}
-          </Button>
-        </div>
+              <Button
+                type="submit"
+                name="_action"
+                value="save"
+                disabled={fx.state !== "idle"}
+                className="h-12 w-full text-base"
+              >
+                {fx.state !== "idle" && formData?.get("_action") === "save" ? "Salvando…" : "Salvar"}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            <Button
+              type="submit"
+              name="_action"
+              value="reset"
+              variant="destructive"
+              disabled={fx.state !== "idle"}
+              className="h-11 w-full text-base"
+            >
+              {fx.state !== "idle" && formData?.get("_action") === "reset" ? "Zerando…" : "Zerar estoque"}
+            </Button>
+
+            <Button
+              type="submit"
+              name="_action"
+              value="save"
+              disabled={fx.state !== "idle"}
+              className="h-11 w-full text-base"
+            >
+              {fx.state !== "idle" && formData?.get("_action") === "save" ? "Salvando…" : "Salvar estoque"}
+            </Button>
+          </div>
+        )}
 
         {fx.data?.ok && (
           <div className="text-sm text-emerald-700 text-center">Estoque atualizado.</div>
         )}
       </fx.Form>
 
-      <Separator />
+      {!isMobileRoute ? (
+        <>
+          <Separator />
 
-      <section className="space-y-2">
-        <div className="text-sm font-semibold">Dica</div>
-        <p className="text-sm text-slate-600">Atualize o saldo sempre que houver perda, queima ou reposicao; o grid do atendimento usa esses numeros para avisar o time.</p>
-      </section>
+          <section className="space-y-2">
+            <div className="text-sm font-semibold">Dica</div>
+            <p className="text-sm text-slate-600">Atualize o saldo sempre que houver perda, queima ou reposicao; o grid do atendimento usa esses numeros para avisar o time.</p>
+          </section>
+        </>
+      ) : null}
     </div>
   );
 }

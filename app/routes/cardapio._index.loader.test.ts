@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   redisGetJson: vi.fn(),
   redisSetJson: vi.fn(),
   notifyContingency: vi.fn(),
+  fetch: vi.fn(),
 }));
 
 vi.mock("~/domain/cardapio/menu-item.prisma.entity.server", () => ({
@@ -59,7 +60,8 @@ function buildArgs(url = "http://localhost/cardapio") {
 
 describe("cardapio._index loader (blocker guard)", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
+    vi.stubGlobal("fetch", mocks.fetch);
 
     mocks.findItems.mockReturnValue(Promise.resolve([{ id: "item-1" }]));
     mocks.findTags.mockReturnValue(Promise.resolve([{ id: "tag-1", name: "pizza" }]));
@@ -71,11 +73,17 @@ describe("cardapio._index loader (blocker guard)", () => {
     mocks.redisGetJson.mockResolvedValue(undefined);
     mocks.redisSetJson.mockResolvedValue(undefined);
     mocks.notifyContingency.mockResolvedValue(undefined);
+    mocks.fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ok: true,
+        items: [],
+      }),
+    });
 
     mocks.settingFindFirst
       .mockResolvedValueOnce({ value: "false" }) // contingencia.simula.erro
       .mockResolvedValueOnce({ value: "true" }) // reels.enabled
-      .mockResolvedValueOnce({ value: null }) // reel.urls
       .mockResolvedValueOnce({ value: "true" }); // menu-item-interest-enabled
   });
 
@@ -104,6 +112,7 @@ describe("cardapio._index loader (blocker guard)", () => {
 
     expect(mocks.findItems).not.toHaveBeenCalled();
     expect(mocks.findTags).not.toHaveBeenCalled();
+    expect(mocks.fetch).not.toHaveBeenCalled();
     expect(result.data.items[0].id).toBe("cached-item-1");
   });
 
@@ -123,7 +132,32 @@ describe("cardapio._index loader (blocker guard)", () => {
     expect(mocks.notifyContingency).toHaveBeenCalledTimes(1);
   });
 
-  it("nao carrega reel.urls quando reels.enabled estiver desligado", async () => {
+  it("carrega reels a partir de /api/media/folder-assets quando habilitado", async () => {
+    mocks.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        ok: true,
+        items: [
+          { url: "https://media.amodomio.com.br/videos/reels/a.mp4" },
+          { url: "https://media.amodomio.com.br/videos/reels/b.mp4" },
+        ],
+      }),
+    });
+
+    const result: any = await loader(buildArgs("http://localhost/cardapio?_data=routes/cardapio._index"));
+
+    expect(mocks.fetch).toHaveBeenCalledTimes(1);
+    expect(mocks.fetch).toHaveBeenCalledWith(
+      "http://localhost/api/media/folder-assets?folder=reels&kind=video",
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(result.data.reelUrls).toEqual([
+      "https://media.amodomio.com.br/videos/reels/a.mp4",
+      "https://media.amodomio.com.br/videos/reels/b.mp4",
+    ]);
+  });
+
+  it("nao carrega reels quando reels.enabled estiver desligado", async () => {
     mocks.settingFindFirst.mockReset();
     mocks.settingFindFirst
       .mockResolvedValueOnce({ value: "false" }) // contingencia.simula.erro
@@ -139,10 +173,6 @@ describe("cardapio._index loader (blocker guard)", () => {
         where: { context: "cardapio", name: "reels.enabled" },
       }),
     );
-    expect(mocks.settingFindFirst).not.toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { context: "cardapio", name: "reel.urls" },
-      }),
-    );
+    expect(mocks.fetch).not.toHaveBeenCalled();
   });
 });

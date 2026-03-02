@@ -1,12 +1,17 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from '@remix-run/node';
 import { Form, Link, useActionData, useLoaderData, useSearchParams } from '@remix-run/react';
 import { redirect } from '@remix-run/node';
+import { Check, ChevronsUpDown } from 'lucide-react';
+import { useRef, useState } from 'react';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
+import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '~/components/ui/command';
 import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
+import { Popover, PopoverContent, PopoverTrigger } from '~/components/ui/popover';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '~/components/ui/table';
 import { authenticator } from '~/domain/auth/google.server';
+import { itemPrismaEntity } from '~/domain/item/item.prisma.entity.server';
 import {
   applyStockNfImportBatch,
   archiveStockNfImportBatch,
@@ -17,7 +22,17 @@ import {
   rollbackStockNfImportBatch,
   setBatchLineManualConversion,
 } from '~/domain/stock-nf-import/stock-nf-import.server';
+import { cn } from '~/lib/utils';
 import { badRequest, ok, serverError } from '~/utils/http-response.server';
+
+const ITEM_CLASSIFICATIONS = [
+  'insumo',
+  'semi_acabado',
+  'produto_final',
+  'embalagem',
+  'servico',
+  'outro',
+] as const;
 
 function str(value: FormDataEntryValue | null) {
   return String(value || '').trim();
@@ -71,6 +86,134 @@ function statusBadgeClass(status: string) {
     default:
       return 'border-slate-200 bg-white text-slate-700';
   }
+}
+
+function ItemSystemMapperCell({
+  line,
+  items,
+  batchId,
+}: {
+  line: any;
+  items: any[];
+  batchId: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [selectedItemId, setSelectedItemId] = useState(String(line.mappedItemId || ''));
+  const mapFormRef = useRef<HTMLFormElement | null>(null);
+  const selectedItem = items.find((item) => item.id === selectedItemId);
+  const buttonLabel = selectedItem
+    ? `${selectedItem.name} [${selectedItem.classification || '-'}] (${selectedItem.purchaseUm || selectedItem.consumptionUm || '-'})`
+    : line.mappedItemName || 'Selecionar item...';
+
+  return (
+    <div className="space-y-1">
+      <Form method="post" className="space-y-1" ref={mapFormRef}>
+        <input type="hidden" name="_action" value="batch-map-item" />
+        <input type="hidden" name="batchId" value={batchId} />
+        <input type="hidden" name="lineId" value={line.id} />
+        <input type="hidden" name="ingredientNameNormalized" value={line.ingredientNameNormalized || ''} />
+        <input type="hidden" name="itemId" value={selectedItemId} />
+        <input type="hidden" name="saveAlias" value="on" />
+        <div className="flex min-w-[320px] items-center gap-2">
+          <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+              <Button type="button" variant="outline" role="combobox" aria-expanded={open} className="h-9 flex-1 justify-between">
+                <span className="truncate text-left">{buttonLabel}</span>
+                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[420px] p-0" align="start">
+              <Command>
+                <CommandInput placeholder="Buscar item do sistema..." />
+                <CommandList className="max-h-[45vh]">
+                  <CommandEmpty>Nenhum item encontrado.</CommandEmpty>
+                  {items.map((item) => (
+                    <CommandItem
+                      key={item.id}
+                      value={`${item.name} ${item.classification || ''} ${item.purchaseUm || ''} ${item.consumptionUm || ''} ${item.id}`}
+                      onSelect={() => {
+                        setSelectedItemId(item.id);
+                        setOpen(false);
+                        const form = mapFormRef.current;
+                        if (!form) return;
+                        const itemIdInput = form.querySelector('input[name=\"itemId\"]') as HTMLInputElement | null;
+                        if (itemIdInput) itemIdInput.value = item.id;
+                        form.requestSubmit();
+                      }}
+                    >
+                      <Check className={cn('mr-2 h-4 w-4', selectedItemId === item.id ? 'opacity-100' : 'opacity-0')} />
+                      <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
+                        <span className="truncate">
+                          {item.name} [{item.classification || '-'}] ({item.purchaseUm || item.consumptionUm || '-'})
+                        </span>
+                        <Link
+                          to={`/admin/items/${item.id}/main`}
+                          className="shrink-0 rounded border border-slate-300 px-2 py-0.5 text-[11px] font-medium text-slate-700 hover:bg-slate-100"
+                          onMouseDown={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                          }}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                          }}
+                        >
+                          Abrir
+                        </Link>
+                      </div>
+                    </CommandItem>
+                  ))}
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
+          <label className="inline-flex items-center gap-1 whitespace-nowrap text-[11px] text-slate-600">
+            <input type="checkbox" name="applyToAllSameIngredient" className="h-3.5 w-3.5" />
+            todas iguais
+          </label>
+          <Button type="submit" variant="outline" className="h-9" disabled={!selectedItemId}>
+            Vincular
+          </Button>
+        </div>
+        <div className="text-[11px] text-slate-500">{line.mappingSource || '-'}</div>
+      </Form>
+
+      <details className="rounded-md border border-slate-200 bg-slate-50 p-2">
+        <summary className="cursor-pointer text-[11px] font-semibold text-slate-700">
+          + Criar novo item
+        </summary>
+        <Form method="post" className="mt-2 space-y-1">
+          <input type="hidden" name="_action" value="batch-create-and-map-item" />
+          <input type="hidden" name="batchId" value={batchId} />
+          <input type="hidden" name="lineId" value={line.id} />
+          <input type="hidden" name="ingredientNameNormalized" value={line.ingredientNameNormalized || ''} />
+          <input type="hidden" name="consumptionUm" value={line.movementUnit || ''} />
+          <div className="flex min-w-[320px] items-center gap-2">
+            <Input
+              name="itemName"
+              defaultValue={line.ingredientName || ''}
+              placeholder="Novo item"
+              className="h-8"
+              required
+            />
+            <select
+              name="classification"
+              defaultValue="insumo"
+              className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+            >
+              {ITEM_CLASSIFICATIONS.map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
+            </select>
+            <Button type="submit" variant="outline" className="h-8 px-2 text-[11px]">
+              Criar e vincular
+            </Button>
+          </div>
+        </Form>
+      </details>
+    </div>
+  );
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -146,6 +289,41 @@ export async function action({ request }: ActionFunctionArgs) {
       return redirect(`/admin/items/import-stock-nf?batchId=${batchId}`);
     }
 
+    if (_action === 'batch-create-and-map-item') {
+      const lineId = str(formData.get('lineId'));
+      const ingredientNameNormalized = str(formData.get('ingredientNameNormalized')) || null;
+      const itemName = str(formData.get('itemName'));
+      const classificationRaw = str(formData.get('classification')).toLowerCase();
+      const consumptionUm = str(formData.get('consumptionUm')).toUpperCase() || null;
+
+      if (!batchId || !lineId) return badRequest('Linha inválida');
+      if (!itemName) return badRequest('Informe o nome do novo item');
+      if (!ITEM_CLASSIFICATIONS.includes(classificationRaw as (typeof ITEM_CLASSIFICATIONS)[number])) {
+        return badRequest('Classificação inválida');
+      }
+
+      const created = await itemPrismaEntity.create({
+        name: itemName,
+        classification: classificationRaw,
+        consumptionUm,
+        active: true,
+        canPurchase: true,
+        canStock: true,
+      });
+
+      await mapBatchLinesToItem({
+        batchId,
+        lineId,
+        ingredientNameNormalized,
+        itemId: created.id,
+        applyToAllSameIngredient: false,
+        saveAlias: true,
+        actor,
+      });
+
+      return redirect(`/admin/items/import-stock-nf?batchId=${batchId}`);
+    }
+
     if (_action === 'batch-apply') {
       if (!batchId) return badRequest('Lote inválido');
       await applyStockNfImportBatch({ batchId, actor });
@@ -178,7 +356,6 @@ export default function AdminItemsImportStockNfRoute() {
   const selected = payload.selected as any;
   const selectedBatch = selected?.batch || null;
   const lines = (selected?.lines || []) as any[];
-  const pendingMappingGroups = (selected?.pendingMappingGroups || []) as any[];
   const items = (selected?.items || []) as any[];
   const appliedChanges = (selected?.appliedChanges || []) as any[];
   const summary = summaryFromAny(selected?.summary || selectedBatch?.summary);
@@ -206,60 +383,59 @@ export default function AdminItemsImportStockNfRoute() {
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[420px_minmax(0,1fr)]">
-        <div className="flex flex-col gap-4">
-          <Form method="post" encType="multipart/form-data" className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
-            <input type="hidden" name="_action" value="batch-upload" />
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Novo lote</h2>
-            <div>
-              <Label htmlFor="batchName">Nome da importação</Label>
-              <Input id="batchName" name="batchName" placeholder="ex: NF SAIPOS Fev/2026 - Semana 1" />
-            </div>
-            <div>
-              <Label htmlFor="file">Arquivo .xlsx</Label>
-              <Input id="file" name="file" type="file" accept=".xlsx" required />
-            </div>
-            <Button type="submit" className="bg-slate-900 hover:bg-slate-700 w-full">Upload e validar</Button>
-          </Form>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Form method="post" encType="multipart/form-data" className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+          <input type="hidden" name="_action" value="batch-upload" />
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Novo lote</h2>
+          <div>
+            <Label htmlFor="batchName">Nome da importação</Label>
+            <Input id="batchName" name="batchName" placeholder="ex: NF SAIPOS Fev/2026 - Semana 1" />
+          </div>
+          <div>
+            <Label htmlFor="file">Arquivo .xlsx</Label>
+            <Input id="file" name="file" type="file" accept=".xlsx" required />
+          </div>
+          <Button type="submit" className="bg-slate-900 hover:bg-slate-700 w-full">Upload e validar</Button>
+        </Form>
 
-          <div className="rounded-xl border border-slate-200 bg-white p-4">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Lotes recentes</h2>
-            <div className="mt-3 space-y-2">
-              {batches.length === 0 ? (
-                <p className="text-sm text-slate-500">Nenhum lote cadastrado.</p>
-              ) : (
-                batches.map((batch) => {
-                  const isActive = String(batch.id) === String(searchParams.get('batchId') || '');
-                  const batchSummary = summaryFromAny(batch.summary);
-                  return (
-                    <Link
-                      key={batch.id}
-                      to={`?batchId=${batch.id}`}
-                      className={`block rounded-lg border p-3 ${isActive ? 'border-slate-900 bg-slate-50' : 'border-slate-200 hover:bg-slate-50'}`}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="font-medium text-sm text-slate-900 truncate">{batch.name}</div>
-                        <Badge variant="outline" className={statusBadgeClass(String(batch.status))}>{batch.status}</Badge>
-                      </div>
-                      <div className="mt-1 text-xs text-slate-500 truncate">{batch.originalFileName || '-'} • {formatDate(batch.createdAt)}</div>
-                      <div className="mt-2 text-xs text-slate-600">
-                        {batchSummary.total} linhas • {batchSummary.applied} aplicadas • {batchSummary.ready} prontas
-                      </div>
-                    </Link>
-                  );
-                })
-              )}
-            </div>
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Lotes recentes</h2>
+          <div className="mt-3 space-y-2">
+            {batches.length === 0 ? (
+              <p className="text-sm text-slate-500">Nenhum lote cadastrado.</p>
+            ) : (
+              batches.map((batch) => {
+                const isActive = String(batch.id) === String(searchParams.get('batchId') || '');
+                const batchSummary = summaryFromAny(batch.summary);
+                return (
+                  <Link
+                    key={batch.id}
+                    to={`?batchId=${batch.id}`}
+                    className={`block rounded-lg border p-3 ${isActive ? 'border-slate-900 bg-slate-50' : 'border-slate-200 hover:bg-slate-50'}`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="font-medium text-sm text-slate-900 truncate">{batch.name}</div>
+                      <Badge variant="outline" className={statusBadgeClass(String(batch.status))}>{batch.status}</Badge>
+                    </div>
+                    <div className="mt-1 text-xs text-slate-500 truncate">{batch.originalFileName || '-'} • {formatDate(batch.createdAt)}</div>
+                    <div className="mt-2 text-xs text-slate-600">
+                      {batchSummary.total} linhas • {batchSummary.applied} aplicadas • {batchSummary.ready} prontas
+                    </div>
+                  </Link>
+                );
+              })
+            )}
           </div>
         </div>
+      </div>
 
-        <div className="flex flex-col gap-4 min-w-0">
-          {!selectedBatch ? (
-            <div className="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">
-              Selecione um lote à esquerda ou faça upload de um novo arquivo para começar.
-            </div>
-          ) : (
-            <>
+      <div className="flex flex-col gap-4 min-w-0">
+        {!selectedBatch ? (
+          <div className="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">
+            Selecione um lote acima ou faça upload de um novo arquivo para começar.
+          </div>
+        ) : (
+          <>
               <div className="rounded-xl border border-slate-200 bg-white p-4">
                 <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                   <div>
@@ -317,81 +493,6 @@ export default function AdminItemsImportStockNfRoute() {
                 </div>
               </div>
 
-              {pendingMappingGroups.length > 0 ? (
-                <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-4">
-                  <h3 className="text-sm font-semibold uppercase tracking-wide text-amber-800">Pendências de vínculo</h3>
-                  <p className="text-xs text-amber-700 mt-1">Mapeie ingredientes para itens do sistema. Você pode aplicar o vínculo em massa e salvar alias.</p>
-                  <div className="mt-3 space-y-3">
-                    {pendingMappingGroups.map((group) => (
-                      <Form key={group.ingredientNameNormalized} method="post" className="rounded-lg border border-amber-200 bg-white p-3">
-                        <input type="hidden" name="_action" value="batch-map-item" />
-                        <input type="hidden" name="batchId" value={selectedBatch.id} />
-                        <input type="hidden" name="ingredientNameNormalized" value={group.ingredientNameNormalized} />
-                        <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
-                          <div className="min-w-0 flex-1">
-                            <div className="text-sm font-medium text-slate-900 truncate">{group.ingredientName}</div>
-                            <div className="text-xs text-slate-500">{group.count} linha(s) pendentes</div>
-                            {group.suggestions?.length ? (
-                              <div className="mt-1 text-xs text-slate-600 truncate">
-                                Sugestões: {group.suggestions.map((s: any) => s.name).join(' • ')}
-                              </div>
-                            ) : null}
-                          </div>
-                          <div className="w-full lg:w-[320px]">
-                            <Label className="text-xs">Item do sistema</Label>
-                            <select
-                              name="itemId"
-                              className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                              required
-                              defaultValue={group.suggestions?.[0]?.id || ''}
-                            >
-                              <option value="">Selecionar...</option>
-                              {items.map((item) => (
-                                <option key={item.id} value={item.id}>
-                                  {item.name} ({item.purchaseUm || item.consumptionUm || '-'})
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                          <div className="flex flex-col gap-1 text-xs text-slate-700">
-                            <label className="inline-flex items-center gap-2"><input type="checkbox" name="applyToAllSameIngredient" defaultChecked /> Aplicar para todas iguais</label>
-                            <label className="inline-flex items-center gap-2"><input type="checkbox" name="saveAlias" defaultChecked /> Salvar alias</label>
-                          </div>
-                          <Button type="submit" variant="outline">Vincular</Button>
-                        </div>
-                      </Form>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-
-              {lines.some((line) => line.status === 'pending_conversion') ? (
-                <div className="rounded-xl border border-amber-200 bg-white p-4">
-                  <h3 className="text-sm font-semibold uppercase tracking-wide text-amber-800">Pendências de conversão de UM</h3>
-                  <div className="mt-3 space-y-2">
-                    {lines.filter((line) => line.status === 'pending_conversion').slice(0, 50).map((line) => (
-                      <Form key={line.id} method="post" className="grid gap-2 rounded-lg border border-slate-200 p-3 lg:grid-cols-[minmax(0,1fr)_140px_auto] lg:items-end">
-                        <input type="hidden" name="_action" value="batch-set-manual-conversion" />
-                        <input type="hidden" name="batchId" value={selectedBatch.id} />
-                        <input type="hidden" name="lineId" value={line.id} />
-                        <div className="min-w-0">
-                          <div className="text-sm font-medium text-slate-900 truncate">Linha {line.rowNumber} • {line.ingredientName}</div>
-                          <div className="text-xs text-slate-600">
-                            {formatMoney(line.costAmount)} / {line.movementUnit || '-'} → {line.targetUnit || '-'}
-                            {line.errorMessage ? ` • ${line.errorMessage}` : ''}
-                          </div>
-                        </div>
-                        <div>
-                          <Label className="text-xs">Fator (destino por 1 origem)</Label>
-                          <Input name="factor" type="number" min="0" step="0.000001" placeholder="ex: 1000" />
-                        </div>
-                        <Button type="submit" variant="outline">Salvar fator</Button>
-                      </Form>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-
               <div className="rounded-xl border border-slate-200 bg-white p-4">
                 <div className="flex items-center justify-between gap-2">
                   <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Linhas do lote</h3>
@@ -406,7 +507,7 @@ export default function AdminItemsImportStockNfRoute() {
                         <TableHead className="px-3 py-2 text-xs">Ingrediente</TableHead>
                         <TableHead className="px-3 py-2 text-xs">Mov.</TableHead>
                         <TableHead className="px-3 py-2 text-xs">Custo</TableHead>
-                        <TableHead className="px-3 py-2 text-xs">Mapeamento</TableHead>
+                        <TableHead className="px-3 py-2 text-xs">Item do sistema</TableHead>
                         <TableHead className="px-3 py-2 text-xs">Conversão</TableHead>
                         <TableHead className="px-3 py-2 text-xs">Status</TableHead>
                       </TableRow>
@@ -432,16 +533,32 @@ export default function AdminItemsImportStockNfRoute() {
                             <div className="text-slate-500">total: {formatMoney(line.costTotalAmount)}</div>
                           </TableCell>
                           <TableCell className="px-3 py-2 text-xs text-slate-700">
-                            <div>{line.mappedItemName || '-'}</div>
-                            <div className="text-slate-500">{line.mappingSource || '-'}</div>
+                            <ItemSystemMapperCell line={line} items={items} batchId={selectedBatch.id} />
                           </TableCell>
                           <TableCell className="px-3 py-2 text-xs text-slate-700">
-                            <div>
-                              {line.convertedCostAmount != null ? `${formatMoney(line.convertedCostAmount)} / ${line.targetUnit || '-'}` : '-'}
-                            </div>
-                            <div className="text-slate-500">
-                              {line.conversionSource || '-'}{line.conversionFactorUsed ? ` • fator ${Number(line.conversionFactorUsed).toFixed(6)}` : ''}
-                            </div>
+                            {line.status === 'pending_conversion' ? (
+                              <Form method="post" className="space-y-1">
+                                <input type="hidden" name="_action" value="batch-set-manual-conversion" />
+                                <input type="hidden" name="batchId" value={selectedBatch.id} />
+                                <input type="hidden" name="lineId" value={line.id} />
+                                <div className="flex items-center gap-2">
+                                  <Input name="factor" type="number" min="0" step="0.000001" placeholder="fator" className="h-8 w-24" />
+                                  <Button type="submit" variant="outline" className="h-8 px-2 text-[11px]">
+                                    Salvar
+                                  </Button>
+                                </div>
+                                <div className="text-[11px] text-slate-500">destino por 1 origem</div>
+                              </Form>
+                            ) : (
+                              <>
+                                <div>
+                                  {line.convertedCostAmount != null ? `${formatMoney(line.convertedCostAmount)} / ${line.targetUnit || '-'}` : '-'}
+                                </div>
+                                <div className="text-slate-500">
+                                  {line.conversionSource || '-'}{line.conversionFactorUsed ? ` • fator ${Number(line.conversionFactorUsed).toFixed(6)}` : ''}
+                                </div>
+                              </>
+                            )}
                           </TableCell>
                           <TableCell className="px-3 py-2 text-xs">
                             <Badge variant="outline" className={statusBadgeClass(String(line.status))}>{line.status}</Badge>
@@ -492,9 +609,8 @@ export default function AdminItemsImportStockNfRoute() {
                   </div>
                 </div>
               ) : null}
-            </>
-          )}
-        </div>
+          </>
+        )}
       </div>
     </div>
   );

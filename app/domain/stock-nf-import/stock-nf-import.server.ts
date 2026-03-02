@@ -1107,7 +1107,7 @@ export async function getStockNfImportBatchView(batchId: string) {
     db.stockNfImportBatchLine.findMany({ where: { batchId }, orderBy: [{ rowNumber: 'asc' }] }),
     db.item.findMany({
       where: { active: true },
-      select: { id: true, name: true, purchaseUm: true, consumptionUm: true },
+      select: { id: true, name: true, classification: true, purchaseUm: true, consumptionUm: true },
       orderBy: [{ name: 'asc' }],
       take: 2000,
     }),

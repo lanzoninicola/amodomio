@@ -1,4 +1,4 @@
-import { MetaFunction, json } from "@remix-run/node";
+import { LoaderFunctionArgs, MetaFunction, json } from "@remix-run/node";
 import { Link, useLoaderData } from "@remix-run/react";
 import React from "react";
 import { ArrowLeft, RefreshCcw, RotateCcw } from "lucide-react";
@@ -7,6 +7,48 @@ import { Button } from "~/components/ui/button";
 import { CardapioSizesSections } from "~/domain/cardapio/components/cardapio-sizes-content";
 import WEBSITE_LINKS from "~/domain/website-navigation/links/website-links";
 import prismaClient from "~/lib/prisma/client.server";
+
+type FolderAssetItem = {
+    url?: string | null;
+};
+
+type FolderAssetsResponse = {
+    ok?: boolean;
+    items?: FolderAssetItem[];
+};
+
+function sanitizeMediaUrl(url?: string | null) {
+    const normalized = typeof url === "string" ? url.trim() : "";
+    if (!normalized) return "";
+    return /^https?:\/\/res\.cloudinary\.com\//i.test(normalized) ? "" : normalized;
+}
+
+async function loadSizesVideoUrl(requestUrl: string) {
+    const foldersToTry = ["cardapio/tamanhos", "tamanhos", "reels"];
+
+    for (const folder of foldersToTry) {
+        const endpoint = new URL("/api/media/folder-assets", requestUrl);
+        endpoint.searchParams.set("folder", folder);
+        endpoint.searchParams.set("kind", "video");
+        endpoint.searchParams.set("limit", "1");
+
+        try {
+            const response = await fetch(endpoint.toString(), {
+                method: "GET",
+                headers: { Accept: "application/json" },
+            });
+
+            if (!response.ok) continue;
+            const payload = (await response.json()) as FolderAssetsResponse;
+            const firstUrl = sanitizeMediaUrl(payload?.items?.[0]?.url);
+            if (firstUrl) return firstUrl;
+        } catch (_error) {
+            continue;
+        }
+    }
+
+    return "";
+}
 
 export const meta: MetaFunction = () => {
     return [
@@ -28,7 +70,7 @@ export const meta: MetaFunction = () => {
     ];
 };
 
-export async function loader() {
+export async function loader({ request }: LoaderFunctionArgs) {
     const sizes = await prismaClient.menuItemSize.findMany({
         where: {
             visible: true,
@@ -92,11 +134,13 @@ export async function loader() {
         };
     });
 
-    return json({ sizes: sizesWithPrices });
+    const videoUrl = await loadSizesVideoUrl(request.url);
+
+    return json({ sizes: sizesWithPrices, videoUrl });
 }
 
 export default function CardapioTamanhosPage() {
-    const { sizes } = useLoaderData<typeof loader>();
+    const { sizes, videoUrl } = useLoaderData<typeof loader>();
     const videoRef = React.useRef<HTMLVideoElement>(null);
 
     const handleRestartVideo = () => {
@@ -121,10 +165,7 @@ export default function CardapioTamanhosPage() {
                         ref={videoRef}
                         poster="/images/cardapio-web-app/pizza-placeholder-sm.png"
                     >
-                        <source
-                            src="https://res.cloudinary.com/dy8gw8ahl/video/upload/v1767722031/2026_tamanhos_pizzas_h7mvsf.mp4"
-                            type="video/mp4"
-                        />
+                        {videoUrl ? <source src={videoUrl} type="video/mp4" /> : null}
                         Seu navegador não suporta vídeos HTML5.
                     </video>
 

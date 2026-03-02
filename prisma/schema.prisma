@@ -489,8 +489,12 @@ model MenuItemGalleryImage {
   id               String   @id @default(uuid())
   menuItemId       String   @map("menu_item_id")
   menuItem         MenuItem @relation(fields: [menuItemId], references: [id])
+  kind             String   @default("image") @map("kind")
   secureUrl        String?  @map("secure_url")
+  slot             String?  @map("slot")
   assetId          String?  @map("asset_id")
+  mediaAssetId     String?  @map("media_asset_id")
+  mediaAsset       MediaAsset? @relation(fields: [mediaAssetId], references: [id])
   assetFolder      String?  @map("asset_folder")
   originalFileName String?  @map("original_file_name")
   displayName      String?  @map("display_name")
@@ -500,6 +504,10 @@ model MenuItemGalleryImage {
   format           String?  @map("format")
   publicId         String?  @map("public_id")
   isPrimary        Boolean  @default(false) /// Para destacar uma imagem principal
+  visible          Boolean  @default(true) @map("visible")
+  sortOrder        Int      @default(0) @map("sort_order")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at")
 
   @@map("menu_item_gallery_images")
 }
@@ -2113,4 +2121,32 @@ model ItemImportAlias {
   @@index([itemId], map: "item_import_aliases_item_idx")
   @@index([active, aliasNormalized], map: "item_import_aliases_active_alias_idx")
   @@map("item_import_aliases")
+}
+
+model MediaFolder {
+  id         String   @id @default(uuid())
+  path       String   @unique
+  name       String
+  parentPath String?  @map("parent_path")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@index([parentPath], map: "media_folders_parent_path_idx")
+  @@map("media_folders")
+}
+
+model MediaAsset {
+  id         String   @id @default(uuid())
+  kind       String
+  url        String
+  folderPath String   @map("folder_path")
+  fileName   String   @map("file_name")
+  storageKey String?  @map("storage_key")
+  sizeBytes  BigInt?  @map("size_bytes")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at")
+  menuItemGalleryImages MenuItemGalleryImage[]
+
+  @@index([folderPath, createdAt], map: "media_assets_folder_path_created_at_idx")
+  @@map("media_assets")
 }
