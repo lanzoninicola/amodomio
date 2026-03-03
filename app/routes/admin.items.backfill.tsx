@@ -38,14 +38,12 @@ async function runBackfillMenuItemsToItems() {
         canTransform: true,
         canSell: true,
         canStock: true,
-        canBeInMenu: true,
       },
       update: {
         name: menuItem.name,
         description: menuItem.description || null,
         active: menuItem.active ?? true,
         canSell: true,
-        canBeInMenu: true,
       },
     });
     createdOrUpdated += 1;
@@ -107,7 +105,6 @@ async function runBackfillMenuItemsToItems() {
             canTransform: true,
             canSell: !isSemiFinished,
             canStock: true,
-            canBeInMenu: false,
           },
         });
 

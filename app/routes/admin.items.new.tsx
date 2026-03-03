@@ -127,7 +127,6 @@ export async function action({ request }: ActionFunctionArgs) {
         canTransform: toBool(formData.get("canTransform")),
         canSell: toBool(formData.get("canSell")),
         canStock: toBool(formData.get("canStock")),
-        canBeInMenu: toBool(formData.get("canBeInMenu")),
       },
       select: { id: true },
     });
@@ -237,6 +236,9 @@ export default function AdminItemsNewPage() {
 
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <h3 className="text-sm font-semibold text-slate-900">Configurações do item</h3>
+          <p className="mt-1 text-xs text-slate-500">
+            Disponível no cardápio é derivado de <span className="font-semibold">Pode vender</span>.
+          </p>
           <div className="mt-3 grid gap-3 md:grid-cols-2">
             <label className="flex items-center gap-2 text-sm text-slate-700">
               <input type="checkbox" name="active" defaultChecked />
@@ -257,10 +259,6 @@ export default function AdminItemsNewPage() {
             <label className="flex items-center gap-2 text-sm text-slate-700">
               <input type="checkbox" name="canStock" defaultChecked />
               Tem estoque
-            </label>
-            <label className="flex items-center gap-2 text-sm text-slate-700">
-              <input type="checkbox" name="canBeInMenu" />
-              Pode ir ao cardápio
             </label>
           </div>
         </div>

@@ -299,7 +299,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
           canTransform: toBool(formData.get("canTransform")),
           canSell: toBool(formData.get("canSell")),
           canStock: toBool(formData.get("canStock")),
-          canBeInMenu: toBool(formData.get("canBeInMenu")),
         },
       });
 

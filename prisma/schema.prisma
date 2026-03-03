@@ -246,7 +246,6 @@ model Item {
   canTransform  Boolean    @default(false) @map("can_transform")
   canSell       Boolean    @default(false) @map("can_sell")
   canStock      Boolean    @default(false) @map("can_stock")
-  canBeInMenu   Boolean    @default(false) @map("can_be_in_menu")
   createdAt     DateTime   @default(now()) @map("created_at")
   updatedAt     DateTime   @default(now()) @updatedAt @map("updated_at")
 

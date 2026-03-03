@@ -28,7 +28,6 @@ type CreateItemInput = {
   canTransform?: boolean;
   canSell?: boolean;
   canStock?: boolean;
-  canBeInMenu?: boolean;
 };
 
 class ItemPrismaEntity {
@@ -92,14 +91,12 @@ class ItemPrismaEntity {
         canTransform: true,
         canSell: true,
         canStock: true,
-        canBeInMenu: true,
       },
       update: {
         name: menuItem.name,
         description: menuItem.description || null,
         active: menuItem.active ?? true,
         canSell: true,
-        canBeInMenu: true,
       },
     });
 

@@ -78,7 +78,6 @@ export async function action({ request }: ActionFunctionArgs) {
                         canTransform: true,
                         canSell: !isSemiFinished,
                         canStock: true,
-                        canBeInMenu: false,
                     }
                 })
             }

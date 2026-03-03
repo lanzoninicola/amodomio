@@ -42,14 +42,12 @@ async function main() {
         canTransform: true,
         canSell: true,
         canStock: true,
-        canBeInMenu: true,
       },
       update: {
         name: menuItem.name,
         description: menuItem.description || null,
         active: menuItem.active ?? true,
         canSell: true,
-        canBeInMenu: true,
       },
     });
 
@@ -110,7 +108,6 @@ async function main() {
             canTransform: true,
             canSell: !isSemiFinished,
             canStock: true,
-            canBeInMenu: false,
           },
         });
 
@@ -155,7 +152,6 @@ async function main() {
             canTransform: false,
             canSell: false,
             canStock: true,
-            canBeInMenu: false,
           },
         });
         productItemsCreated += 1;

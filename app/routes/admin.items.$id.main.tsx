@@ -149,25 +149,18 @@ export default function AdminItemMainTab() {
                   id="canSell"
                   name="canSell"
                   label="Pode vender"
-                  description="Permite vender este item diretamente."
+                  description="Permite vender este item diretamente. Disponibilidade no cardápio é derivada desta opção."
                   defaultChecked={!!item.canSell}
                 />
               </FlagSection>
 
-              <FlagSection title="Estoque e cardápio">
+              <FlagSection title="Estoque">
                 <FlagSwitchField
                   id="canStock"
                   name="canStock"
                   label="Tem estoque"
                   description="Controla se o item deve movimentar e manter saldo em estoque."
                   defaultChecked={!!item.canStock}
-                />
-                <FlagSwitchField
-                  id="canBeInMenu"
-                  name="canBeInMenu"
-                  label="Pode ir ao cardápio"
-                  description="Permite vincular o item ao cardápio e produtos exibidos."
-                  defaultChecked={!!item.canBeInMenu}
                 />
               </FlagSection>
             </div>
