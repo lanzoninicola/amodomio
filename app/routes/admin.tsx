@@ -538,6 +538,38 @@ export default function AdminOutlet() {
 
 export function ErrorBoundary() {
     const error = useRouteError();
+    const [showDetails, setShowDetails] = useState(false);
+
+    const errorDetails = (() => {
+        if (error instanceof Error) {
+            return [error.message, error.stack].filter(Boolean).join("\n\n");
+        }
+
+        try {
+            return JSON.stringify(error, null, 2);
+        } catch (stringifyError) {
+            return String(error);
+        }
+    })();
+
+    const handleCopyDetails = async () => {
+        if (typeof navigator === "undefined" || !navigator.clipboard) return;
+
+        try {
+            await navigator.clipboard.writeText(errorDetails || "Sem detalhes disponíveis.");
+            toast({
+                title: "Detalhes copiados",
+                description: "Os detalhes do erro foram copiados para a área de transferência.",
+            });
+        } catch (copyError) {
+            console.error("Falha ao copiar detalhes do erro", copyError);
+            toast({
+                title: "Não foi possível copiar",
+                description: "Tente novamente ou copie manualmente.",
+                variant: "destructive",
+            });
+        }
+    };
 
     console.error("[admin] route error boundary", error);
 
@@ -549,7 +581,7 @@ export function ErrorBoundary() {
                 <p className="text-sm md:text-base text-slate-600">
                     Atualize a página ou volte para o painel. Se o problema continuar, acione o suporte interno.
                 </p>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                     <Link
                         to="/admin"
                         className="inline-flex items-center rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
@@ -562,7 +594,29 @@ export function ErrorBoundary() {
                     >
                         Ir para o site
                     </Link>
+                    <button
+                        type="button"
+                        onClick={() => setShowDetails((current) => !current)}
+                        className="inline-flex items-center rounded-md border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                    >
+                        {showDetails ? "Ocultar detalhes" : "Ver detalhes"}
+                    </button>
+                    {showDetails ? (
+                        <button
+                            type="button"
+                            onClick={handleCopyDetails}
+                            className="inline-flex items-center gap-2 rounded-md border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                        >
+                            <Copy className="h-4 w-4" />
+                            Copiar detalhes
+                        </button>
+                    ) : null}
                 </div>
+                {showDetails ? (
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-700">
+                        <pre className="max-h-72 overflow-auto whitespace-pre-wrap">{errorDetails || "Sem detalhes disponíveis."}</pre>
+                    </div>
+                ) : null}
             </div>
         </div>
     );

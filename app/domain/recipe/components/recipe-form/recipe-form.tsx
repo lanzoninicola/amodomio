@@ -12,7 +12,6 @@ import SelectRecipeType from "../select-recipe-type/select-recipe-type";
 import { Label } from "~/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
 import { Switch } from "~/components/ui/switch";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { cn } from "~/lib/utils";
 
 interface RecipeFormProps {
@@ -21,22 +20,22 @@ interface RecipeFormProps {
     items?: Array<{ id: string; name: string; classification?: string | null }>;
     variations?: Array<{ id: string; name: string; kind?: string | null }>;
     title?: string;
+    requireItemRemapConfirmation?: boolean;
 }
 
-function buildRecipeName(itemName?: string, variationName?: string) {
+function buildRecipeName(itemName?: string) {
     if (!itemName) return "";
-    return variationName ? `Receita ${itemName} (${variationName})` : `Receita ${itemName}`;
+    return `Receita ${itemName}`;
 }
 
-const NO_LINKED_VARIATION_VALUE = "__no_linked_variation__";
-
-export default function RecipeForm({ recipe, actionName, items = [], variations = [], title }: RecipeFormProps) {
+export default function RecipeForm({ recipe, actionName, items = [], title, requireItemRemapConfirmation = false }: RecipeFormProps) {
     const isCreate = actionName === "recipe-create";
+    const initialLinkedItemId = String(recipe?.itemId || "");
     const [name, setName] = useState(recipe?.name || "");
     const [nameTouched, setNameTouched] = useState(Boolean(recipe?.name));
     const [linkedItemId, setLinkedItemId] = useState(recipe?.itemId || "");
-    const [linkedVariationId, setLinkedVariationId] = useState((((recipe as any)?.variationId as string) || ""));
     const [itemComboboxOpen, setItemComboboxOpen] = useState(false);
+    const [confirmItemRemap, setConfirmItemRemap] = useState(false);
 
     const selectedItem = useMemo(
         () => items.find((item) => item.id === linkedItemId) || null,
@@ -50,26 +49,22 @@ export default function RecipeForm({ recipe, actionName, items = [], variations 
         () => selectedItem?.name || "",
         [selectedItem]
     );
-    const selectedVariationName = useMemo(
-        () => variations.find((variation) => variation.id === linkedVariationId)?.name || "",
-        [variations, linkedVariationId]
-    );
     const generatedName = useMemo(
-        () => buildRecipeName(selectedItemName, selectedVariationName),
-        [selectedItemName, selectedVariationName]
+        () => buildRecipeName(selectedItemName),
+        [selectedItemName]
     );
     const isNameMatchingSuggestion = useMemo(
         () => Boolean(generatedName) && name.trim() === generatedName,
         [generatedName, name]
     );
+    const hasItemChanged = !isCreate && String(linkedItemId || "") !== initialLinkedItemId;
 
     useEffect(() => {
         if (isCreate || !recipe) return;
         setName(recipe.name || "");
         setNameTouched(Boolean(recipe.name));
         setLinkedItemId(recipe.itemId || "");
-        setLinkedVariationId((((recipe as any)?.variationId as string) || ""));
-    }, [isCreate, recipe?.id, recipe?.updatedAt, recipe?.name, recipe?.itemId, (recipe as any)?.variationId]);
+    }, [isCreate, recipe?.id, recipe?.updatedAt, recipe?.name, recipe?.itemId]);
 
     useEffect(() => {
         if (!isCreate) return;
@@ -80,19 +75,32 @@ export default function RecipeForm({ recipe, actionName, items = [], variations 
         }
     }, [generatedName, isCreate, name, nameTouched]);
 
+    useEffect(() => {
+        if (!hasItemChanged) {
+            setConfirmItemRemap(false);
+        }
+    }, [hasItemChanged]);
+
     return (
         <Form method="post">
             <input type="hidden" name="recipeId" value={recipe?.id} />
+            <input type="hidden" name="confirmItemRemap" value={confirmItemRemap ? "yes" : "no"} />
             <div className="mb-8">
                 <div className={`mb-4 flex items-center gap-3 ${title ? "justify-between" : "justify-end"}`}>
                     {title ? (
                         <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
                     ) : null}
-                    <SaveItemButton actionName={actionName} label="Salvar" labelClassName="uppercase font-semibold tracking-wider text-xs" variant={"outline"} />
+                    <SaveItemButton
+                        actionName={actionName}
+                        label="Salvar"
+                        labelClassName="uppercase font-semibold tracking-wider text-xs"
+                        variant={"outline"}
+                        disabled={requireItemRemapConfirmation && hasItemChanged && !confirmItemRemap}
+                    />
                 </div>
                 <div className="flex flex-col gap-4">
                     <div className="border rounded-md p-4">
-                        <div className="grid gap-4 lg:grid-cols-2">
+                        <div className="grid gap-4 lg:grid-cols-1">
                             <Fieldset className="grid-cols-3">
                                 <Label htmlFor="linkedItemId">Item vinculado</Label>
                                 <div className="col-span-2">
@@ -165,30 +173,22 @@ export default function RecipeForm({ recipe, actionName, items = [], variations 
                                             O sistema tenta vincular automaticamente pelo nome da receita.
                                         </p>
                                     ) : null}
-                                </div>
-                            </Fieldset>
-                            <Fieldset className="grid-cols-3">
-                                <Label htmlFor="linkedVariationId">Variação vinculada</Label>
-                                <div className="col-span-2">
-                                    <input type="hidden" name="linkedVariationId" value={linkedVariationId} />
-                                    <Select
-                                        value={linkedVariationId || NO_LINKED_VARIATION_VALUE}
-                                        onValueChange={(value) => setLinkedVariationId(value === NO_LINKED_VARIATION_VALUE ? "" : value)}
-                                    >
-                                        <SelectTrigger id="linkedVariationId">
-                                            <SelectValue placeholder="Sem variação vinculada" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value={NO_LINKED_VARIATION_VALUE}>
-                                                Sem variação vinculada
-                                            </SelectItem>
-                                            {variations.map((variation) => (
-                                                <SelectItem key={variation.id} value={variation.id}>
-                                                    {variation.name}{variation.kind ? ` (${variation.kind})` : ""}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                                    {requireItemRemapConfirmation && hasItemChanged ? (
+                                        <div className="mt-2 rounded-md border border-amber-300 bg-amber-50 p-2">
+                                            <p className="text-xs font-semibold text-amber-900">
+                                                Trocar o item apaga os dados por variação (UM, quantidade e custos) e exige remapeamento.
+                                            </p>
+                                            <label className="mt-1 inline-flex items-center gap-2 text-xs text-amber-900">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={confirmItemRemap}
+                                                    onChange={(event) => setConfirmItemRemap(event.target.checked)}
+                                                    className="h-3.5 w-3.5 rounded border-amber-400"
+                                                />
+                                                Confirmo a troca e o remapeamento de variações.
+                                            </label>
+                                        </div>
+                                    ) : null}
                                 </div>
                             </Fieldset>
                         </div>
@@ -207,14 +207,14 @@ export default function RecipeForm({ recipe, actionName, items = [], variations 
                                             setName(event.target.value);
                                             setNameTouched(true);
                                         }}
-                                        placeholder="Receita {item vinculado} ({variação})"
+                                        placeholder="Receita {item vinculado}"
                                         className="text-sm"
                                         required
                                     />
                                     {isCreate && generatedName ? (
                                         isNameMatchingSuggestion ? (
                                             <p className="text-xs text-muted-foreground leading-4">
-                                                Nome gerado automaticamente a partir do item e da variação.
+                                                Nome gerado automaticamente a partir do item.
                                             </p>
                                         ) : (
                                             <p className="text-xs text-muted-foreground leading-4">

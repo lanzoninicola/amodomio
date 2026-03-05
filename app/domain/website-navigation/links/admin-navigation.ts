@@ -239,6 +239,12 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
           disabled: false,
         },
         {
+          title: "Aliases de Importação",
+          href: "/admin/item-import-aliases",
+          items: [],
+          disabled: false,
+        },
+        {
           title: "Variações",
           href: "/admin/variations",
           items: [],
@@ -246,7 +252,7 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
         },
         {
           title: "Receitas",
-          href: "/admin/recipes",
+          href: "/admin/recipes/worksheet?view=flat",
           items: [],
           disabled: false,
         },
@@ -403,6 +409,12 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
         {
           title: "Configurações globais",
           href: "/admin/administracao/settings",
+          items: [],
+          disabled: false,
+        },
+        {
+          title: "AI Context Profile",
+          href: "/admin/administracao/ai-context-profile",
           items: [],
           disabled: false,
         },

@@ -1,134 +1,32 @@
 import { Recipe, RecipeType } from "@prisma/client";
 import { redirect, type ActionFunctionArgs, type LoaderFunctionArgs } from "@remix-run/node";
-import { Form, Link, Outlet, useActionData, useLoaderData, useLocation } from "@remix-run/react";
-import { ChevronLeft, ChevronsUpDown, HelpCircle } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Form, Link, useActionData, useFetcher, useLoaderData } from "@remix-run/react";
+import { ChevronLeft, ChevronsUpDown } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from "~/components/ui/command";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "~/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { toast } from "~/components/ui/use-toast";
+import { DecimalInput } from "~/components/inputs/inputs";
 import RecipeForm from "~/domain/recipe/components/recipe-form/recipe-form";
 import { itemVariationPrismaEntity } from "~/domain/item/item-variation.prisma.entity.server";
 import { recipeEntity } from "~/domain/recipe/recipe.entity.server";
+import {
+    applyRecipeCompositionLineToVariations,
+    createRecipeCompositionIngredientSkeleton,
+    deleteRecipeCompositionLine,
+    listRecipeLinkedVariations,
+    listRecipeCompositionLines,
+    updateRecipeCompositionIngredientDefaultLoss,
+    updateRecipeCompositionLine,
+} from "~/domain/recipe/recipe-composition.server";
 import prismaClient from "~/lib/prisma/client.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { cn } from "~/lib/utils";
+import formatDecimalPlaces from "~/utils/format-decimal-places";
 import type { HttpResponse } from "~/utils/http-response.server";
 import { badRequest, ok } from "~/utils/http-response.server";
-
-type RecipeVariationPolicy = "auto" | "hide" | "show"
-
-type ItemVariationRuleRow = {
-    id: string
-    itemId: string
-    createdAt?: Date | string | null
-    Variation?: { id: string; kind?: string | null; code?: string | null } | null
-    ItemCostVariation?: { costAmount?: number | null; deletedAt?: Date | null } | null
-}
-
-type ItemRecipeVariationRule = {
-    policy: RecipeVariationPolicy
-    availableVariationCount: number
-    costedVariationCount: number
-    hasDistinctVariationCosts: boolean
-    shouldShowVariation: boolean
-    defaultVariationId: string | null
-}
-
-const RECIPE_LINE_UNIT_FALLBACK_OPTIONS = ["UN", "L", "ML", "KG", "G"]
-
-function normalizeRecipeVariationPolicy(value: unknown): RecipeVariationPolicy {
-    const normalized = String(value || "auto").trim().toLowerCase()
-    if (normalized === "hide" || normalized === "show" || normalized === "auto") return normalized
-    return "auto"
-}
-
-function buildItemRecipeVariationRule(rows: ItemVariationRuleRow[], policyRaw?: unknown): ItemRecipeVariationRule {
-    const policy = normalizeRecipeVariationPolicy(policyRaw)
-    const availableRows = [...rows]
-    const costedRows = availableRows.filter((row) => row.ItemCostVariation && !row.ItemCostVariation.deletedAt)
-    const distinctCosts = new Set(
-        costedRows.map((row) => Math.round(Number(row.ItemCostVariation?.costAmount || 0) * 100))
-    )
-    const hasDistinctVariationCosts = distinctCosts.size > 1
-
-    const baseRow =
-        availableRows.find((row) =>
-            row.Variation?.kind === "base" && String(row.Variation?.code || "").toLowerCase() === "base"
-        ) || null
-
-    const defaultRow = baseRow || costedRows[0] || availableRows[0] || null
-
-    const shouldShowVariation =
-        policy === "show"
-            ? true
-            : policy === "hide"
-                ? false
-                : costedRows.length > 1 && hasDistinctVariationCosts
-
-    return {
-        policy,
-        availableVariationCount: availableRows.length,
-        costedVariationCount: costedRows.length,
-        hasDistinctVariationCosts,
-        shouldShowVariation,
-        defaultVariationId: defaultRow?.Variation?.id || null,
-    }
-}
-
-async function getItemRecipeVariationRule(db: any, itemId: string): Promise<ItemRecipeVariationRule> {
-    let item: { id: string; recipeVariationPolicy?: string | null } | null = null
-    try {
-        item = await db.item.findUnique({
-            where: { id: itemId },
-            select: { id: true, recipeVariationPolicy: true },
-        })
-    } catch (_error) {
-        item = await db.item.findUnique({
-            where: { id: itemId },
-            select: { id: true },
-        })
-    }
-
-    const rows = await db.itemVariation.findMany({
-        where: { itemId, deletedAt: null },
-        select: {
-            id: true,
-            itemId: true,
-            createdAt: true,
-            Variation: { select: { id: true, kind: true, code: true } },
-            ItemCostVariation: { select: { costAmount: true, deletedAt: true } },
-        },
-        orderBy: [{ createdAt: "asc" }],
-    })
-
-    return buildItemRecipeVariationRule(rows, item?.recipeVariationPolicy)
-}
-
-async function getRecipeLineUnitOptions(db: any) {
-    const measurementUnitModel = db.measurementUnit
-    if (typeof measurementUnitModel?.findMany !== "function") {
-        return [...RECIPE_LINE_UNIT_FALLBACK_OPTIONS].sort((a, b) => a.localeCompare(b, "pt-BR"))
-    }
-
-    try {
-        const rows = await measurementUnitModel.findMany({
-            where: { active: true },
-            select: { code: true },
-            orderBy: [{ code: "asc" }],
-        })
-        const merged = new Set<string>(RECIPE_LINE_UNIT_FALLBACK_OPTIONS)
-        for (const row of rows || []) {
-            const code = String(row?.code || "").trim().toUpperCase()
-            if (code) merged.add(code)
-        }
-        return Array.from(merged).sort((a, b) => a.localeCompare(b, "pt-BR"))
-    } catch (_error) {
-        return [...RECIPE_LINE_UNIT_FALLBACK_OPTIONS].sort((a, b) => a.localeCompare(b, "pt-BR"))
-    }
-}
 
 async function resolveRecipeLineCosts(
     db: any,
@@ -183,14 +81,34 @@ async function resolveRecipeLineCosts(
     return { itemVariationId, lastUnitCostAmount, avgUnitCostAmount }
 }
 
-function buildRecipeLineCostSnapshot(costInfo: { itemVariationId: string | null; lastUnitCostAmount: number; avgUnitCostAmount: number }, quantity: number) {
+function buildRecipeLineCostSnapshot(
+    costInfo: { itemVariationId: string | null; lastUnitCostAmount: number; avgUnitCostAmount: number },
+    quantity: number,
+    lossPct: number = 0
+) {
+    const safeLossPct = Math.min(99.9999, Math.max(0, Number(lossPct || 0)))
+    const grossQuantity = safeLossPct > 0
+        ? Number((quantity / (1 - safeLossPct / 100)).toFixed(6))
+        : Number(quantity || 0)
     return {
         itemVariationId: costInfo.itemVariationId,
         lastUnitCostAmount: Number(costInfo.lastUnitCostAmount || 0),
         avgUnitCostAmount: Number(costInfo.avgUnitCostAmount || 0),
-        lastTotalCostAmount: Number(((costInfo.lastUnitCostAmount || 0) * quantity).toFixed(6)),
-        avgTotalCostAmount: Number(((costInfo.avgUnitCostAmount || 0) * quantity).toFixed(6)),
+        lastTotalCostAmount: Number(((costInfo.lastUnitCostAmount || 0) * grossQuantity).toFixed(6)),
+        avgTotalCostAmount: Number(((costInfo.avgUnitCostAmount || 0) * grossQuantity).toFixed(6)),
     }
+}
+
+function parseLossPctInput(value: unknown): number | null {
+    const normalized = String(value ?? "").trim()
+    if (!normalized) return null
+    const parsed = Number(normalized.replace(",", "."))
+    if (!Number.isFinite(parsed)) return Number.NaN
+    return parsed
+}
+
+function formatMoney(value: number, decimals: number = 2) {
+    return `R$ ${formatDecimalPlaces(Number(value || 0), decimals)}`
 }
 
 export async function loader({ params }: LoaderFunctionArgs) {
@@ -208,79 +126,20 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
     try {
         const db = prismaClient as any
-        const itemsPromise = (async () => {
-            try {
-                return await db.item.findMany({
-                    where: { active: true },
-                    select: { id: true, name: true, classification: true, consumptionUm: true, recipeVariationPolicy: true },
-                    orderBy: [{ name: "asc" }],
-                    take: 500,
-                })
-            } catch (_error) {
-                return await db.item.findMany({
-                    where: { active: true },
-                    select: { id: true, name: true, classification: true, consumptionUm: true },
-                    orderBy: [{ name: "asc" }],
-                    take: 500,
-                })
-            }
-        })()
-
-        const [itemsRaw, variations, recipeLines, unitOptions] = await Promise.all([
-            itemsPromise,
-            db.variation.findMany({
-                where: { deletedAt: null },
-                select: { id: true, name: true, kind: true },
-                orderBy: [{ kind: "asc" }, { name: "asc" }],
-                take: 200,
-            }),
-            typeof db.recipeLine?.findMany === "function"
-                ? db.recipeLine.findMany({
-                    where: { recipeId },
-                    include: {
-                        Item: { select: { id: true, name: true } },
-                        ItemVariation: { include: { Variation: true } },
-                    },
-                    orderBy: [{ sortOrderIndex: "asc" }, { createdAt: "asc" }],
-                })
-                : [],
-            getRecipeLineUnitOptions(db),
-        ])
-
-        const itemIds = (itemsRaw || []).map((item: any) => item.id).filter(Boolean)
-        const itemVariationRows = itemIds.length > 0
-            ? await db.itemVariation.findMany({
-                where: { itemId: { in: itemIds }, deletedAt: null },
-                select: {
-                    id: true,
-                    itemId: true,
-                    createdAt: true,
-                    Variation: { select: { id: true, kind: true, code: true } },
-                    ItemCostVariation: { select: { costAmount: true, deletedAt: true } },
-                },
-                orderBy: [{ itemId: "asc" }, { createdAt: "asc" }],
-            })
-            : []
-
-        const rowsByItemId = new Map<string, ItemVariationRuleRow[]>()
-        for (const row of itemVariationRows as ItemVariationRuleRow[]) {
-            const list = rowsByItemId.get(row.itemId) || []
-            list.push(row)
-            rowsByItemId.set(row.itemId, list)
-        }
-
-        const items = (itemsRaw || []).map((item: any) => ({
-            ...item,
-            recipeVariationPolicy: normalizeRecipeVariationPolicy(item.recipeVariationPolicy),
-            recipeVariationRule: buildItemRecipeVariationRule(rowsByItemId.get(item.id) || [], item.recipeVariationPolicy),
-        }))
+        const items = await db.item.findMany({
+            where: { active: true },
+            select: { id: true, name: true, classification: true, consumptionUm: true },
+            orderBy: [{ name: "asc" }],
+            take: 500,
+        })
+        const recipeLines = await listRecipeCompositionLines(db, recipeId)
+        const linkedVariations = await listRecipeLinkedVariations(db, recipeId)
 
         return ok({
             recipe,
             items,
-            variations,
             recipeLines,
-            unitOptions,
+            linkedVariations,
         })
     } catch (error) {
         return badRequest((error as Error)?.message || "Erro ao carregar catálogos")
@@ -292,50 +151,51 @@ export async function action({ request }: ActionFunctionArgs) {
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);
 
-    if (_action === "recipe-line-add") {
+    if (_action === "recipe-ingredient-add") {
         const recipeId = String(values.recipeId || "").trim()
         const itemId = String(values.lineItemId || "").trim()
-        const requestedVariationId = String(values.lineVariationId || "").trim() || null
-        const unit = String(values.lineUnit || "").trim().toUpperCase()
-        const quantity = Number(String(values.lineQuantity || "0").replace(",", "."))
 
         if (!recipeId) return badRequest("Receita inválida")
-        if (!itemId) return badRequest("Selecione o item da composição")
-        if (!unit) return badRequest("Informe a unidade de consumo")
-        if (!Number.isFinite(quantity) || quantity <= 0) return badRequest("Informe uma quantidade válida")
+        if (!itemId) return badRequest("Selecione um ingrediente")
 
         try {
             const db = prismaClient as any
-            if (typeof db.recipeLine?.create !== "function") {
-                return badRequest("Tabela de composição da receita indisponível. Rode a migração Prisma.")
-            }
-
-            const itemVariationRule = await getItemRecipeVariationRule(db, itemId)
-            const variationId = itemVariationRule.shouldShowVariation ? requestedVariationId : null
-
-            const [recipeLineCount, costInfo] = await Promise.all([
-                db.recipeLine.count({ where: { recipeId } }),
-                resolveRecipeLineCosts(db, itemId, variationId),
-            ])
-
-            await db.recipeLine.create({
-                data: {
-                    recipeId,
-                    itemId,
-                    itemVariationId: costInfo.itemVariationId,
-                    unit,
-                    quantity,
-                    lastUnitCostAmount: costInfo.lastUnitCostAmount,
-                    avgUnitCostAmount: costInfo.avgUnitCostAmount,
-                    lastTotalCostAmount: Number((costInfo.lastUnitCostAmount * quantity).toFixed(6)),
-                    avgTotalCostAmount: Number((costInfo.avgUnitCostAmount * quantity).toFixed(6)),
-                    sortOrderIndex: Number(recipeLineCount || 0),
-                }
+            const item = await db.item.findUnique({
+                where: { id: itemId },
+                select: { consumptionUm: true },
             })
+            const defaultUnit = String(item?.consumptionUm || "UN").trim().toUpperCase() || "UN"
+            await createRecipeCompositionIngredientSkeleton({ db, recipeId, itemId, defaultUnit })
 
             return redirect(`/admin/recipes/${recipeId}`)
         } catch (error) {
-            return badRequest((error as Error)?.message || "Erro ao adicionar item da composição")
+            return badRequest((error as Error)?.message || "Erro ao adicionar ingrediente")
+        }
+    }
+
+    if (_action === "recipe-ingredient-batch-add") {
+        const recipeId = String(values.recipeId || "").trim()
+        const targetItemIdsRaw = String(values.targetItemIds || "").trim()
+        const targetItemIds = targetItemIdsRaw
+            .split(",")
+            .map((value) => value.trim())
+            .filter(Boolean)
+        if (!recipeId) return badRequest("Receita inválida")
+        if (targetItemIds.length === 0) return badRequest("Selecione ao menos um ingrediente")
+
+        try {
+            const db = prismaClient as any
+            for (const itemId of targetItemIds) {
+                const item = await db.item.findUnique({
+                    where: { id: itemId },
+                    select: { consumptionUm: true },
+                })
+                const defaultUnit = String(item?.consumptionUm || "UN").trim().toUpperCase() || "UN"
+                await createRecipeCompositionIngredientSkeleton({ db, recipeId, itemId, defaultUnit })
+            }
+            return redirect(`/admin/recipes/${recipeId}`)
+        } catch (error) {
+            return badRequest((error as Error)?.message || "Erro ao adicionar ingredientes")
         }
     }
 
@@ -346,13 +206,38 @@ export async function action({ request }: ActionFunctionArgs) {
 
         try {
             const db = prismaClient as any
-            if (typeof db.recipeLine?.delete !== "function") {
-                return badRequest("Tabela de composição da receita indisponível. Rode a migração Prisma.")
-            }
-            await db.recipeLine.delete({ where: { id: recipeLineId } })
+            await deleteRecipeCompositionLine(db, recipeLineId)
             return redirect(`/admin/recipes/${recipeId}`)
         } catch (error) {
             return badRequest((error as Error)?.message || "Erro ao remover item da composição")
+        }
+    }
+
+    if (_action === "recipe-ingredient-delete") {
+        const recipeId = String(values.recipeId || "").trim()
+        const recipeIngredientId = String(values.recipeIngredientId || "").trim()
+        const recipeLineId = String(values.recipeLineId || "").trim()
+        if (!recipeId) return badRequest("Linha inválida")
+
+        try {
+            const db = prismaClient as any
+            if (recipeIngredientId && typeof db?.recipeVariationIngredient?.findMany === "function") {
+                const lines = await db.recipeVariationIngredient.findMany({
+                    where: { recipeIngredientId },
+                    select: { id: true },
+                })
+                for (const line of lines) {
+                    await deleteRecipeCompositionLine(db, String(line.id))
+                }
+                return redirect(`/admin/recipes/${recipeId}`)
+            }
+            if (recipeLineId) {
+                await deleteRecipeCompositionLine(db, recipeLineId)
+                return redirect(`/admin/recipes/${recipeId}`)
+            }
+            return badRequest("Linha inválida")
+        } catch (error) {
+            return badRequest((error as Error)?.message || "Erro ao remover ingrediente da composição")
         }
     }
 
@@ -361,48 +246,37 @@ export async function action({ request }: ActionFunctionArgs) {
         const recipeLineId = String(values.recipeLineId || "").trim()
         const unit = String(values.lineUnit || "").trim().toUpperCase()
         const quantity = Number(String(values.lineQuantity || "0").replace(",", "."))
+        const requestedLossPct = parseLossPctInput(values.lineLossPct)
 
         if (!recipeId || !recipeLineId) return badRequest("Linha inválida")
         if (!unit) return badRequest("Informe a unidade de consumo")
         if (!Number.isFinite(quantity) || quantity <= 0) return badRequest("Informe uma quantidade válida")
+        if (Number.isNaN(requestedLossPct)) return badRequest("Perda inválida")
+        if (requestedLossPct !== null && (requestedLossPct < 0 || requestedLossPct >= 100)) {
+            return badRequest("Perda deve ser entre 0 e 99,9999")
+        }
 
         try {
             const db = prismaClient as any
-            if (typeof db.recipeLine?.findUnique !== "function" || typeof db.recipeLine?.update !== "function") {
-                return badRequest("Tabela de composição da receita indisponível. Rode a migração Prisma.")
-            }
-
-            const line = await db.recipeLine.findUnique({
-                where: { id: recipeLineId },
-                select: { id: true, recipeId: true, itemId: true, itemVariationId: true },
-            })
-
-            if (!line || line.recipeId !== recipeId) {
+            const lines = await listRecipeCompositionLines(db, recipeId)
+            const line = lines.find((current) => current.id === recipeLineId)
+            if (!line) {
                 return badRequest("Linha da receita não encontrada")
             }
 
-            const variationId =
-                line.itemVariationId
-                    ? (await db.itemVariation.findUnique({
-                        where: { id: line.itemVariationId },
-                        select: { variationId: true },
-                    }))?.variationId || null
-                    : null
-
+            const variationId = line.ItemVariation?.variationId || null
+            const effectiveLossPct = requestedLossPct ?? Number(line.lossPct ?? line.defaultLossPct ?? 0)
             const costInfo = await resolveRecipeLineCosts(db, line.itemId, variationId)
-            const snapshot = buildRecipeLineCostSnapshot(costInfo, quantity)
+            const snapshot = buildRecipeLineCostSnapshot(costInfo, quantity, effectiveLossPct)
 
-            await db.recipeLine.update({
-                where: { id: recipeLineId },
-                data: {
-                    unit,
-                    quantity,
-                    itemVariationId: snapshot.itemVariationId,
-                    lastUnitCostAmount: snapshot.lastUnitCostAmount,
-                    avgUnitCostAmount: snapshot.avgUnitCostAmount,
-                    lastTotalCostAmount: snapshot.lastTotalCostAmount,
-                    avgTotalCostAmount: snapshot.avgTotalCostAmount,
-                }
+            await updateRecipeCompositionLine({
+                db,
+                lineId: recipeLineId,
+                recipeId,
+                unit,
+                quantity,
+                lossPct: effectiveLossPct,
+                snapshot,
             })
 
             return redirect(`/admin/recipes/${recipeId}`)
@@ -417,30 +291,22 @@ export async function action({ request }: ActionFunctionArgs) {
 
         try {
             const db = prismaClient as any
-            if (typeof db.recipeLine?.findMany !== "function" || typeof db.recipeLine?.update !== "function") {
-                return badRequest("Tabela de composição da receita indisponível. Rode a migração Prisma.")
-            }
-
-            const lines = await db.recipeLine.findMany({
-                where: { recipeId },
-                orderBy: [{ sortOrderIndex: "asc" }, { createdAt: "asc" }],
-            })
+            const lines = await listRecipeCompositionLines(db, recipeId)
 
             for (const line of lines) {
-                const variationId =
-                    line.itemVariationId
-                        ? (await db.itemVariation.findUnique({
-                            where: { id: line.itemVariationId },
-                            select: { variationId: true },
-                        }))?.variationId || null
-                        : null
-
+                const variationId = line.ItemVariation?.variationId || null
+                const effectiveLossPct = Number(line.lossPct ?? line.defaultLossPct ?? 0)
                 const costInfo = await resolveRecipeLineCosts(db, line.itemId, variationId)
-                const snapshot = buildRecipeLineCostSnapshot(costInfo, Number(line.quantity || 0))
+                const snapshot = buildRecipeLineCostSnapshot(costInfo, Number(line.quantity || 0), effectiveLossPct)
 
-                await db.recipeLine.update({
-                    where: { id: line.id },
-                    data: snapshot,
+                await updateRecipeCompositionLine({
+                    db,
+                    lineId: line.id,
+                    recipeId,
+                    unit: line.unit,
+                    quantity: Number(line.quantity || 0),
+                    lossPct: effectiveLossPct,
+                    snapshot,
                 })
             }
 
@@ -450,92 +316,124 @@ export async function action({ request }: ActionFunctionArgs) {
         }
     }
 
-    if (_action === "recipe-duplicate-variation") {
-        const sourceRecipeId = String(values.recipeId || "").trim()
-        const targetVariationId = String(values.duplicateVariationId || "").trim()
-        const factorMode = String(values.duplicateFactorMode || "multiply").trim()
-        const factorValue = Number(String(values.duplicateFactorValue || "1").replace(",", "."))
+    if (_action === "recipe-line-apply-variations") {
+        const recipeId = String(values.recipeId || "").trim()
+        const recipeLineId = String(values.recipeLineId || "").trim()
+        const formVariationIds = formData.getAll("variationId").map((value) => String(value || "").trim()).filter(Boolean)
+        const variationIdsRaw = String(values.targetVariationIds || "").trim()
+        const variationIds = formVariationIds.length > 0
+            ? formVariationIds
+            : variationIdsRaw.split(",").map((value) => value.trim()).filter(Boolean)
 
-        if (!sourceRecipeId) return badRequest("Receita inválida")
-        if (!targetVariationId) return badRequest("Selecione a variação de destino")
-        if (!Number.isFinite(factorValue) || factorValue <= 0) return badRequest("Informe um fator válido")
+        if (!recipeId || !recipeLineId) return badRequest("Linha inválida")
+        if (variationIds.length === 0) return badRequest("Selecione ao menos uma variação")
 
         try {
             const db = prismaClient as any
-            if (typeof db.recipeLine?.findMany !== "function" || typeof db.recipeLine?.create !== "function") {
-                return badRequest("Tabela de composição da receita indisponível. Rode a migração Prisma.")
+            await applyRecipeCompositionLineToVariations({
+                db,
+                recipeId,
+                lineId: recipeLineId,
+                variationIds,
+                resolveCostByVariationId: async (variationId, itemId, quantity, lossPct) => {
+                    const costInfo = await resolveRecipeLineCosts(db, itemId, variationId)
+                    return buildRecipeLineCostSnapshot(costInfo, quantity, lossPct)
+                },
+            })
+
+            return redirect(`/admin/recipes/${recipeId}`)
+        } catch (error) {
+            return badRequest((error as Error)?.message || "Erro ao aplicar para variações selecionadas")
+        }
+    }
+
+    if (_action === "recipe-ingredient-unit-update") {
+        const recipeId = String(values.recipeId || "").trim()
+        const recipeIngredientId = String(values.recipeIngredientId || "").trim()
+        const unit = String(values.lineUnit || "").trim().toUpperCase()
+        if (!recipeId || !recipeIngredientId) return badRequest("Ingrediente inválido")
+        if (!unit) return badRequest("Informe a UM")
+
+        try {
+            const db = prismaClient as any
+            const lines = await listRecipeCompositionLines(db, recipeId)
+            const targetLines = lines.filter((line) => String(line.recipeIngredientId || "") === recipeIngredientId)
+            for (const line of targetLines) {
+                const variationId = line.ItemVariation?.variationId || null
+                const effectiveLossPct = Number(line.lossPct ?? line.defaultLossPct ?? 0)
+                const costInfo = await resolveRecipeLineCosts(db, line.itemId, variationId)
+                const snapshot = buildRecipeLineCostSnapshot(costInfo, Number(line.quantity || 0), effectiveLossPct)
+                await updateRecipeCompositionLine({
+                    db,
+                    lineId: line.id,
+                    recipeId,
+                    unit,
+                    quantity: Number(line.quantity || 0),
+                    lossPct: effectiveLossPct,
+                    snapshot,
+                })
             }
+            return redirect(`/admin/recipes/${recipeId}`)
+        } catch (error) {
+            return badRequest((error as Error)?.message || "Erro ao atualizar UM do ingrediente")
+        }
+    }
 
-            const sourceRecipe = await db.recipe.findUnique({
-                where: { id: sourceRecipeId },
-            })
-            if (!sourceRecipe) return badRequest("Receita origem não encontrada")
+    if (_action === "recipe-ingredient-loss-update") {
+        const recipeId = String(values.recipeId || "").trim()
+        const recipeIngredientId = String(values.recipeIngredientId || "").trim()
+        const requestedLossPct = parseLossPctInput(values.defaultLossPct)
+        const applyToLines = String(values.applyToLines || "").trim().toLowerCase() === "yes"
+        if (!recipeId || !recipeIngredientId) return badRequest("Ingrediente inválido")
+        if (requestedLossPct === null || Number.isNaN(requestedLossPct)) return badRequest("Perda padrão inválida")
+        if (requestedLossPct < 0 || requestedLossPct >= 100) return badRequest("Perda deve ser entre 0 e 99,9999")
 
-            const targetVariation = await db.variation.findUnique({
-                where: { id: targetVariationId },
-                select: { id: true, name: true, kind: true, deletedAt: true },
-            })
-            if (!targetVariation || targetVariation.deletedAt) return badRequest("Variação de destino inválida")
-
-            const factor = factorMode === "divide" ? (1 / factorValue) : factorValue
-
-            const sourceLines = await db.recipeLine.findMany({
-                where: { recipeId: sourceRecipeId },
-                orderBy: [{ sortOrderIndex: "asc" }, { createdAt: "asc" }],
-            })
-
-            const duplicatedRecipe = await db.recipe.create({
-                data: {
-                    name: `${sourceRecipe.name} (${targetVariation.name})`,
-                    description: sourceRecipe.description,
-                    type: sourceRecipe.type,
-                    hasVariations: false,
-                    isGlutenFree: sourceRecipe.isGlutenFree,
-                    isVegetarian: sourceRecipe.isVegetarian,
-                    createdAt: new Date(),
-                    itemId: sourceRecipe.itemId,
-                    variationId: targetVariation.id,
-                }
+        try {
+            const db = prismaClient as any
+            await updateRecipeCompositionIngredientDefaultLoss({
+                db,
+                recipeId,
+                recipeIngredientId,
+                defaultLossPct: requestedLossPct,
+                applyToVariationLines: applyToLines,
             })
 
-            for (const line of sourceLines) {
-                const sourceLineVariationId =
-                    line.itemVariationId
-                        ? (await db.itemVariation.findUnique({
-                            where: { id: line.itemVariationId },
-                            select: { variationId: true },
-                        }))?.variationId || null
-                        : null
-
-                const nextQuantity = Number((Number(line.quantity || 0) * factor).toFixed(6))
-                const costInfo = await resolveRecipeLineCosts(db, line.itemId, sourceLineVariationId)
-                const snapshot = buildRecipeLineCostSnapshot(costInfo, nextQuantity)
-
-                await db.recipeLine.create({
-                    data: {
-                        recipeId: duplicatedRecipe.id,
-                        itemId: line.itemId,
-                        itemVariationId: snapshot.itemVariationId,
-                        unit: line.unit,
-                        quantity: nextQuantity,
-                        lastUnitCostAmount: snapshot.lastUnitCostAmount,
-                        avgUnitCostAmount: snapshot.avgUnitCostAmount,
-                        lastTotalCostAmount: snapshot.lastTotalCostAmount,
-                        avgTotalCostAmount: snapshot.avgTotalCostAmount,
-                        sortOrderIndex: line.sortOrderIndex,
-                        notes: line.notes || null,
-                    }
+            const lines = await listRecipeCompositionLines(db, recipeId)
+            const targetLines = lines.filter((line) => String(line.recipeIngredientId || "") === recipeIngredientId)
+            for (const line of targetLines) {
+                const variationId = line.ItemVariation?.variationId || null
+                const effectiveLossPct = applyToLines
+                    ? requestedLossPct
+                    : Number(line.lossPct ?? requestedLossPct)
+                const costInfo = await resolveRecipeLineCosts(db, line.itemId, variationId)
+                const snapshot = buildRecipeLineCostSnapshot(costInfo, Number(line.quantity || 0), effectiveLossPct)
+                await updateRecipeCompositionLine({
+                    db,
+                    lineId: line.id,
+                    recipeId,
+                    unit: line.unit,
+                    quantity: Number(line.quantity || 0),
+                    lossPct: applyToLines ? effectiveLossPct : line.lossPct,
+                    snapshot,
                 })
             }
 
-            return redirect(`/admin/recipes/${duplicatedRecipe.id}`)
+            return redirect(`/admin/recipes/${recipeId}`)
         } catch (error) {
-            return badRequest((error as Error)?.message || "Erro ao duplicar receita para outra variação")
+            return badRequest((error as Error)?.message || "Erro ao atualizar perda padrão")
         }
     }
 
     if (_action === "recipe-update") {
         const recipe = await recipeEntity.findById(values?.recipeId as string)
+        const requestedItemIdRaw = String(values.linkedItemId || "").trim()
+        const currentItemId = String((recipe as any)?.itemId || "").trim()
+        const isItemChangeRequested = requestedItemIdRaw !== currentItemId
+        const confirmItemRemap = String(values.confirmItemRemap || "").trim().toLowerCase() === "yes"
+
+        if (isItemChangeRequested && !confirmItemRemap) {
+            return badRequest("Troca de item requer confirmação: os dados por variação serão apagados e será necessário remapeamento.")
+        }
 
         const nextRecipe = {
             ...recipe,
@@ -566,7 +464,8 @@ export async function action({ request }: ActionFunctionArgs) {
             })
 
             if (updatedRecipe) {
-                let itemId = updatedRecipe.itemId as string | null
+                const previousItemId = updatedRecipe.itemId as string | null
+                let itemId = previousItemId
 
                 if (explicitItemId && explicitItemId !== itemId) {
                     const explicitItem = await db.item.findUnique({ where: { id: explicitItemId } })
@@ -576,7 +475,7 @@ export async function action({ request }: ActionFunctionArgs) {
                             where: { id: updatedRecipe.id },
                             data: {
                                 itemId,
-                                variationId: String(values.linkedVariationId || "").trim() || null,
+                                variationId: null,
                             }
                         })
                     }
@@ -610,7 +509,7 @@ export async function action({ request }: ActionFunctionArgs) {
                         where: { id: updatedRecipe.id },
                         data: {
                             itemId,
-                            variationId: String(values.linkedVariationId || "").trim() || null,
+                            variationId: null,
                         }
                     })
                 }
@@ -618,8 +517,70 @@ export async function action({ request }: ActionFunctionArgs) {
                 if (itemId) {
                     await db.recipe.update({
                         where: { id: updatedRecipe.id },
-                        data: { variationId: String(values.linkedVariationId || "").trim() || null }
+                        data: { variationId: null }
                     })
+                }
+
+                if (itemId && previousItemId !== itemId) {
+                    const [targetVariations, recipeIngredients] = await Promise.all([
+                        db.itemVariation.findMany({
+                            where: { itemId, deletedAt: null },
+                            select: { id: true },
+                            orderBy: [{ createdAt: "asc" }],
+                        }),
+                        typeof db?.recipeIngredient?.findMany === "function"
+                            ? db.recipeIngredient.findMany({
+                                where: { recipeId: updatedRecipe.id },
+                                select: { id: true },
+                            })
+                            : Promise.resolve([]),
+                    ])
+
+                    await db.itemVariation.updateMany({
+                        where: { recipeId: updatedRecipe.id, deletedAt: null },
+                        data: { recipeId: null },
+                    })
+
+                    if (targetVariations.length > 0) {
+                        await db.itemVariation.updateMany({
+                            where: { id: { in: targetVariations.map((row: { id: string }) => row.id) } },
+                            data: { recipeId: updatedRecipe.id },
+                        })
+                    }
+
+                    if (recipeIngredients.length > 0 && typeof db?.recipeVariationIngredient?.deleteMany === "function") {
+                        await db.recipeVariationIngredient.deleteMany({
+                            where: {
+                                recipeIngredientId: { in: recipeIngredients.map((row: { id: string }) => row.id) },
+                            },
+                        })
+                    }
+
+                    if (
+                        recipeIngredients.length > 0 &&
+                        targetVariations.length > 0 &&
+                        typeof db?.recipeVariationIngredient?.createMany === "function"
+                    ) {
+                        const data = recipeIngredients.flatMap((ingredient: { id: string }) =>
+                            targetVariations.map((variation: { id: string }) => ({
+                                recipeIngredientId: ingredient.id,
+                                itemVariationId: variation.id,
+                                unit: "UN",
+                                quantity: 0,
+                                lossPct: null,
+                                lastUnitCostAmount: 0,
+                                avgUnitCostAmount: 0,
+                                lastTotalCostAmount: 0,
+                                avgTotalCostAmount: 0,
+                            }))
+                        )
+                        if (data.length > 0) {
+                            await db.recipeVariationIngredient.createMany({
+                                data,
+                                skipDuplicates: true,
+                            })
+                        }
+                    }
                 }
 
             }
@@ -633,10 +594,218 @@ export async function action({ request }: ActionFunctionArgs) {
     return null
 }
 
+function InlineVariationCellEditor({
+    recipeId,
+    line,
+    lineUnit,
+}: {
+    recipeId: string
+    line: any
+    lineUnit: string
+}) {
+    const fetcher = useFetcher()
+    const formRef = useRef<HTMLFormElement>(null)
+    const [lineQuantity, setLineQuantity] = useState(Number(line.quantity || 0))
+    const [lineLossPct, setLineLossPct] = useState(Number(line.lossPct ?? line.defaultLossPct ?? 0))
+    const [defaultQty, setDefaultQty] = useState(Number(line.quantity || 0))
+    const [defaultLossPct, setDefaultLossPct] = useState(Number(line.lossPct ?? line.defaultLossPct ?? 0))
+    const baselineRef = useRef({
+        quantity: Number(line.quantity || 0),
+        lossPct: Number(line.lossPct ?? line.defaultLossPct ?? 0),
+    })
+
+    useEffect(() => {
+        const nextQuantity = Number(line.quantity || 0)
+        const nextLossPct = Number(line.lossPct ?? line.defaultLossPct ?? 0)
+        setLineQuantity(nextQuantity)
+        setLineLossPct(nextLossPct)
+        setDefaultQty(nextQuantity)
+        setDefaultLossPct(nextLossPct)
+        baselineRef.current = {
+            quantity: Number(line.quantity || 0),
+            lossPct: Number(line.lossPct ?? line.defaultLossPct ?? 0),
+        }
+    }, [line.id, line.quantity, line.lossPct, line.defaultLossPct])
+
+    function hasPendingChanges() {
+        const nextQuantity = Number(lineQuantity || 0)
+        const nextLossPct = Number(lineLossPct || 0)
+        if (!Number.isFinite(nextQuantity) || nextQuantity <= 0) return false
+        if (!Number.isFinite(nextLossPct) || nextLossPct < 0 || nextLossPct >= 100) return false
+        return Math.abs(nextQuantity - baselineRef.current.quantity) > 0.0000001 ||
+            Math.abs(nextLossPct - baselineRef.current.lossPct) > 0.0000001
+    }
+
+    function submitAutoUpdate() {
+        if (!formRef.current) return
+        if (!hasPendingChanges()) return
+        const formData = new FormData(formRef.current)
+        formData.set("_action", "recipe-line-update")
+        fetcher.submit(formData, { method: "post" })
+    }
+
+    const safeLossPct = Math.min(99.9999, Math.max(0, Number(lineLossPct || 0)))
+    const grossQty = safeLossPct > 0
+        ? Number(lineQuantity || 0) / (1 - safeLossPct / 100)
+        : Number(lineQuantity || 0)
+
+    return (
+        <fetcher.Form
+            method="post"
+            ref={formRef}
+            className="space-y-1.5"
+            onBlurCapture={() => {
+                window.setTimeout(() => {
+                    const activeElement = document.activeElement
+                    if (formRef.current?.contains(activeElement)) return
+                    submitAutoUpdate()
+                }, 0)
+            }}
+        >
+            <input type="hidden" name="recipeId" value={recipeId} />
+            <input type="hidden" name="recipeLineId" value={line.id} />
+            <input type="hidden" name="lineUnit" value={String(lineUnit || "UN").toUpperCase()} />
+            <div className="flex items-center gap-1.5">
+                <DecimalInput
+                    name="lineQuantity"
+                    defaultValue={defaultQty}
+                    fractionDigits={4}
+                    onValueChange={setLineQuantity}
+                    className="w-24 h-7 border border-slate-200 rounded px-2 py-0 text-[11px] text-right"
+                />
+                <DecimalInput
+                    name="lineLossPct"
+                    defaultValue={defaultLossPct}
+                    fractionDigits={4}
+                    onValueChange={setLineLossPct}
+                    className="w-20 h-7 border border-slate-200 rounded px-2 py-0 text-[11px] text-right"
+                />
+                <span className="text-[10px] text-slate-500">%</span>
+                <span className={`rounded-md border px-2 py-0.5 text-[10px] font-semibold ${hasPendingChanges() ? "border-blue-200 bg-blue-50 text-blue-700" : "border-slate-200 bg-slate-50 text-slate-500"}`}>
+                    {hasPendingChanges() ? "Pendente" : "Auto"}
+                </span>
+            </div>
+            <div className="text-[10px]">
+                <div className="grid grid-cols-[1fr_auto] items-center gap-x-2">
+                    <span className="text-slate-500">Qtd bruta</span>
+                    <span className="font-semibold text-slate-700">
+                        {formatDecimalPlaces(Number(grossQty || 0), 4)}
+                    </span>
+                </div>
+                <div className="grid grid-cols-[1fr_auto] items-center gap-x-2">
+                    <span className="text-slate-500">Total</span>
+                    <span className={Number(line.lastTotalCostAmount || 0) <= 0 ? "font-semibold text-amber-700" : "font-semibold text-slate-700"}>
+                        {formatMoney(Number(line.lastTotalCostAmount || 0), 4)}
+                    </span>
+                </div>
+                <div className="grid grid-cols-[1fr_auto] items-center gap-x-2">
+                    <span className="text-slate-500">Médio total</span>
+                    <span className="font-semibold text-slate-700">{formatMoney(Number(line.avgTotalCostAmount || 0), 4)}</span>
+                </div>
+            </div>
+        </fetcher.Form>
+    )
+}
+
+function IngredientUnitEditor({
+    recipeId,
+    recipeIngredientId,
+    currentUnit,
+    options,
+}: {
+    recipeId: string
+    recipeIngredientId: string | null
+    currentUnit: string
+    options: string[]
+}) {
+    const fetcher = useFetcher()
+    const [unit, setUnit] = useState(currentUnit)
+
+    useEffect(() => {
+        setUnit(currentUnit)
+    }, [currentUnit, recipeIngredientId])
+
+    return (
+        <fetcher.Form method="post" className="flex w-full max-w-[92px] flex-col items-start gap-1 pt-1">
+            <input type="hidden" name="recipeId" value={recipeId} />
+            <input type="hidden" name="recipeIngredientId" value={recipeIngredientId || ""} />
+            <input type="hidden" name="lineUnit" value={unit} />
+            <Select value={unit} onValueChange={setUnit}>
+                <SelectTrigger className="h-7 w-full text-[11px]">
+                    <SelectValue placeholder="UM" />
+                </SelectTrigger>
+                <SelectContent>
+                    {options.map((option) => (
+                        <SelectItem key={option} value={option}>{option}</SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
+            <button
+                type="submit"
+                name="_action"
+                value="recipe-ingredient-unit-update"
+                className="h-7 w-full rounded-md border border-slate-200 px-2 py-0 text-[10px] font-semibold text-slate-700 hover:bg-slate-100"
+            >
+                Aplicar
+            </button>
+        </fetcher.Form>
+    )
+}
+
+function IngredientLossEditor({
+    recipeId,
+    recipeIngredientId,
+    defaultLossPct,
+}: {
+    recipeId: string
+    recipeIngredientId: string | null
+    defaultLossPct: number
+}) {
+    const [lossPct, setLossPct] = useState(Number(defaultLossPct || 0))
+
+    useEffect(() => {
+        setLossPct(Number(defaultLossPct || 0))
+    }, [defaultLossPct, recipeIngredientId])
+
+    return (
+        <Form method="post" className="flex w-full max-w-[96px] flex-col items-start gap-1 pt-1">
+            <input type="hidden" name="recipeId" value={recipeId} />
+            <input type="hidden" name="recipeIngredientId" value={recipeIngredientId || ""} />
+            <input type="hidden" name="defaultLossPct" value={String(lossPct)} />
+            <input type="hidden" name="_action" value="recipe-ingredient-loss-update" />
+            <DecimalInput
+                name="defaultLossPctInput"
+                defaultValue={Number(defaultLossPct || 0)}
+                fractionDigits={4}
+                onValueChange={setLossPct}
+                className="h-7 w-full border border-slate-200 rounded px-2 py-0 text-[11px] text-right"
+            />
+            <span className="pl-1 text-[10px] text-slate-500">%</span>
+            <button
+                type="submit"
+                name="applyToLines"
+                value="no"
+                className="h-7 w-full rounded-md border border-slate-200 px-2 py-0 text-[10px] font-semibold text-slate-700 hover:bg-slate-100"
+                title="Aplicar perda padrão"
+            >
+                Padrao
+            </button>
+            <button
+                type="submit"
+                name="applyToLines"
+                value="yes"
+                className="h-7 w-full rounded-md border border-amber-200 px-2 py-0 text-center text-[10px] font-semibold leading-tight text-amber-700 hover:bg-amber-50"
+                title="Aplicar para todas as linhas"
+            >
+                Aplicar tudo
+            </button>
+        </Form>
+    )
+}
+
 
 export default function SingleRecipe() {
     const loaderData: HttpResponse | null = useLoaderData<typeof loader>()
-    const location = useLocation()
 
     const recipe = loaderData?.payload?.recipe as Recipe
     const items = (loaderData?.payload?.items || []) as Array<{
@@ -644,45 +813,136 @@ export default function SingleRecipe() {
         name: string
         classification?: string | null
         consumptionUm?: string | null
-        recipeVariationPolicy?: RecipeVariationPolicy
-        recipeVariationRule?: ItemRecipeVariationRule
     }>
-    const variations = (loaderData?.payload?.variations || []) as Array<{ id: string; name: string; kind?: string | null }>
     const recipeLines = (loaderData?.payload?.recipeLines || []) as any[]
-    const unitOptions = (loaderData?.payload?.unitOptions || RECIPE_LINE_UNIT_FALLBACK_OPTIONS) as string[]
+    const linkedVariations = (loaderData?.payload?.linkedVariations || []) as Array<{
+        itemVariationId: string
+        variationId: string | null
+        variationName: string | null
+        variationKind?: string | null
+        variationCode?: string | null
+        isReference?: boolean
+    }>
     const actionData = useActionData<typeof action>()
     const linkedItem = items.find((item) => item.id === recipe?.itemId)
-    const linkedVariation = variations.find((variation) => variation.id === (recipe as any)?.variationId)
     const recipeLineCount = recipeLines.length
     const avgCompositionCost = recipeLines.reduce((acc, line) => acc + Number(line.avgTotalCostAmount || 0), 0)
     const lastCompositionCost = recipeLines.reduce((acc, line) => acc + Number(line.lastTotalCostAmount || 0), 0)
-    const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false)
-    const [lineItemId, setLineItemId] = useState("")
-    const [lineItemComboboxOpen, setLineItemComboboxOpen] = useState(false)
-    const [lineVariationId, setLineVariationId] = useState("__none__")
-    const [lineUnit, setLineUnit] = useState("")
-    const [duplicateVariationId, setDuplicateVariationId] = useState("")
-    const [duplicateFactorMode, setDuplicateFactorMode] = useState("multiply")
-    const selectedLineItem = items.find((item) => item.id === lineItemId) || null
-    const selectedLineItemLabel =
-        selectedLineItem
-            ? `${selectedLineItem.name}${selectedLineItem.classification ? ` (${selectedLineItem.classification})` : ""}`
-            : "Selecionar item"
-    const selectedLineItemVariationRule = selectedLineItem?.recipeVariationRule || null
-    const shouldShowLineVariation = !!selectedLineItemVariationRule?.shouldShowVariation
-
-    useEffect(() => {
-        if (!shouldShowLineVariation && lineVariationId !== "__none__") {
-            setLineVariationId("__none__")
+    const [activeCompositionTab, setActiveCompositionTab] = useState<"base" | "variation">("base")
+    const [builderSearch, setBuilderSearch] = useState("")
+    const [builderSelectedItemIds, setBuilderSelectedItemIds] = useState<string[]>([])
+    const [hiddenVariationIds, setHiddenVariationIds] = useState<string[]>(() => {
+        const baseIds = linkedVariations
+            .filter((variation) => variation.variationKind === "base" && variation.variationCode === "base")
+            .map((variation) => variation.itemVariationId)
+        return Array.from(new Set(baseIds))
+    })
+    const itemById = new Map(items.map((item) => [item.id, item]))
+    const baseVariationIds = linkedVariations
+        .filter((variation) => variation.variationKind === "base" && variation.variationCode === "base")
+        .map((variation) => variation.itemVariationId)
+    const hasAnyLinkedVariation = linkedVariations.some((variation) => Boolean(variation.variationId))
+    const variationColumns = linkedVariations.filter((variation) =>
+        variation.variationId &&
+        !hiddenVariationIds.includes(variation.itemVariationId)
+    )
+    const columnToggleVariations = linkedVariations
+        .filter((variation) => variation.variationId)
+        .sort((a, b) => Number(Boolean(b.isReference)) - Number(Boolean(a.isReference)))
+    const orderedVariationColumns = [...variationColumns]
+        .sort((a, b) => Number(Boolean(b.isReference)) - Number(Boolean(a.isReference)))
+    const effectiveVariationColumns = orderedVariationColumns.length > 0
+        ? orderedVariationColumns
+        : (hasAnyLinkedVariation ? [] : [{ itemVariationId: "__base__", variationId: null, variationName: "Base/auto" }])
+    const groupedLines = recipeLines.reduce((acc, line) => {
+        const key = String(line.recipeIngredientId || line.id)
+        const current = acc.get(key) || {
+            key,
+            recipeIngredientId: line.recipeIngredientId || null,
+            itemName: line.Item?.name || "-",
+            itemId: line.itemId,
+            linesByVariation: new Map<string, any>(),
         }
-    }, [shouldShowLineVariation, lineVariationId])
-
-    useEffect(() => {
-        const itemUm = String(selectedLineItem?.consumptionUm || "").trim().toUpperCase()
-        if (!itemUm) return
-        setLineUnit((current) => (current === itemUm ? current : itemUm))
-    }, [selectedLineItem?.id, selectedLineItem?.consumptionUm])
-
+        const mapKey = String(line.ItemVariation?.id || "__base__")
+        current.linesByVariation.set(mapKey, line)
+        acc.set(key, current)
+        return acc
+    }, new Map<string, {
+        key: string
+        recipeIngredientId: string | null
+        itemName: string
+        itemId: string
+        linesByVariation: Map<string, any>
+    }>())
+    const compositionRows = Array.from(groupedLines.values()) as Array<{
+        key: string
+        recipeIngredientId: string | null
+        itemName: string
+        itemId: string
+        linesByVariation: Map<string, any>
+    }>
+    const compositionRowsWithUnit = compositionRows.map((row) => {
+        const firstVisibleLine = effectiveVariationColumns
+            .map((variation) => row.linesByVariation.get(String(variation.itemVariationId)))
+            .find(Boolean)
+        const firstLine = firstVisibleLine || row.linesByVariation.values().next().value
+        const itemConsumptionUm = String(itemById.get(row.itemId)?.consumptionUm || "").trim().toUpperCase()
+        const currentLineUnit = String(firstLine?.unit || "").trim().toUpperCase()
+        const resolvedUnit = itemConsumptionUm || currentLineUnit || "UN"
+        const defaultLossPct = Number(firstLine?.defaultLossPct || 0)
+        return {
+            ...row,
+            unit: resolvedUnit,
+            itemConsumptionUm,
+            defaultLossPct,
+            lastUnitCostAmount: Number(firstLine?.lastUnitCostAmount || 0),
+            avgUnitCostAmount: Number(firstLine?.avgUnitCostAmount || 0),
+        }
+    })
+    const baseIngredients = compositionRows.map((row, idx) => ({
+        sortOrderIndex: idx + 1,
+        recipeIngredientId: row.recipeIngredientId,
+        itemId: row.itemId,
+        itemName: row.itemName,
+    }))
+    const builderItems = items
+        .filter((item) => {
+            const q = builderSearch.trim().toLowerCase()
+            if (!q) return true
+            return `${item.name} ${item.classification || ""}`.toLowerCase().includes(q)
+        })
+        .slice(0, 80)
+    const variationMetrics = effectiveVariationColumns.map((variation) => {
+        let totalLast = 0
+        let totalAvg = 0
+        let filledCells = 0
+        let filledQtyCells = 0
+        let zeroCostCells = 0
+        for (const row of compositionRowsWithUnit) {
+            const line = row.linesByVariation.get(String(variation.itemVariationId))
+            if (!line) continue
+            filledCells += 1
+            totalLast += Number(line.lastTotalCostAmount || 0)
+            totalAvg += Number(line.avgTotalCostAmount || 0)
+            if (String(line.unit || "").trim() && Number(line.quantity || 0) > 0) {
+                filledQtyCells += 1
+            }
+            if (Number(line.lastTotalCostAmount || 0) <= 0 && Number(line.quantity || 0) > 0) {
+                zeroCostCells += 1
+            }
+        }
+        return {
+            itemVariationId: variation.itemVariationId,
+            filledCells,
+            filledQtyCells,
+            zeroCostCells,
+            totalLast,
+            totalAvg,
+        }
+    })
+    const requiredCellCount = compositionRowsWithUnit.length
+    const hasVariationPendingCells = variationMetrics.some((metric) => metric.filledQtyCells < requiredCellCount)
+    const hasVariationCostZero = variationMetrics.some((metric) => metric.zeroCostCells > 0)
     if (actionData && actionData.status !== 200) {
         toast({
             title: "Erro",
@@ -690,8 +950,20 @@ export default function SingleRecipe() {
         })
     }
 
-    if (location.pathname.endsWith("/composition-builder")) {
-        return <Outlet />
+    const toggleBuilderItem = (itemId: string) => {
+        setBuilderSelectedItemIds((current) =>
+            current.includes(itemId)
+                ? current.filter((id) => id !== itemId)
+                : [...current, itemId]
+        )
+    }
+    const toggleVariationColumn = (itemVariationId: string) => {
+        if (baseVariationIds.includes(itemVariationId)) return
+        setHiddenVariationIds((current) =>
+            current.includes(itemVariationId)
+                ? current.filter((id) => id !== itemVariationId)
+                : [...current, itemVariationId]
+        )
     }
 
     return (
@@ -707,11 +979,10 @@ export default function SingleRecipe() {
                     <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
                             <h1 className="text-2xl font-bold leading-tight text-slate-900">{recipe?.name}</h1>
-                            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ${
-                                recipe?.type === "pizzaTopping"
-                                    ? "bg-orange-50 text-orange-700 ring-orange-200"
-                                    : "bg-blue-50 text-blue-700 ring-blue-200"
-                            }`}>
+                            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ${recipe?.type === "pizzaTopping"
+                                ? "bg-orange-50 text-orange-700 ring-orange-200"
+                                : "bg-blue-50 text-blue-700 ring-blue-200"
+                                }`}>
                                 {recipe?.type === "pizzaTopping" ? "Sabor Pizza" : "Produzido"}
                             </span>
                         </div>
@@ -719,13 +990,6 @@ export default function SingleRecipe() {
                             <span>
                                 <span className="text-slate-400">Item:</span>{" "}
                                 <span className="font-medium text-slate-700">{linkedItem?.name || <span className="italic">Não vinculado</span>}</span>
-                            </span>
-                            <span className="text-slate-300">·</span>
-                            <span>
-                                <span className="text-slate-400">Variação:</span>{" "}
-                                <span className="font-medium text-slate-700">
-                                    {linkedVariation ? `${linkedVariation.name}${linkedVariation.kind ? ` (${linkedVariation.kind})` : ""}` : "Base"}
-                                </span>
                             </span>
                         </div>
                     </div>
@@ -736,359 +1000,329 @@ export default function SingleRecipe() {
                         </div>
                         <div className="text-center">
                             <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Custo médio</p>
-                            <p className="mt-0.5 text-2xl font-bold text-slate-900">R$ {avgCompositionCost.toFixed(2)}</p>
+                            <p className="mt-0.5 text-2xl font-bold text-slate-900">{formatMoney(avgCompositionCost, 2)}</p>
                         </div>
                         <div className="text-center">
                             <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Último custo</p>
-                            <p className="mt-0.5 text-2xl font-bold text-slate-900">R$ {lastCompositionCost.toFixed(2)}</p>
+                            <p className="mt-0.5 text-2xl font-bold text-slate-900">{formatMoney(lastCompositionCost, 2)}</p>
                         </div>
-                        <Dialog open={duplicateDialogOpen} onOpenChange={setDuplicateDialogOpen}>
-                            <DialogTrigger asChild>
-                                <Button type="button" variant="outline" size="sm">
-                                    Duplicar variação
-                                </Button>
-                            </DialogTrigger>
-                            <DialogContent className="sm:max-w-2xl">
-                                <DialogHeader>
-                                    <DialogTitle>Duplicar receita para outra variação</DialogTitle>
-                                    <DialogDescription>
-                                        Cria uma nova receita copiando a composição e ajustando as quantidades por fator.
-                                    </DialogDescription>
-                                </DialogHeader>
-                                <Form method="post" className="grid gap-4 md:grid-cols-4">
-                                    <input type="hidden" name="recipeId" value={recipe?.id} />
-                                    <input type="hidden" name="duplicateVariationId" value={duplicateVariationId} />
-                                    <input type="hidden" name="duplicateFactorMode" value={duplicateFactorMode} />
-                                    <div className="md:col-span-2">
-                                        <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Variação destino</label>
-                                        <Select value={duplicateVariationId} onValueChange={setDuplicateVariationId}>
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="Selecionar variação" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {variations.map((variation) => (
-                                                    <SelectItem key={variation.id} value={variation.id}>
-                                                        {variation.name}{variation.kind ? ` (${variation.kind})` : ""}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                    <div>
-                                        <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Operação</label>
-                                        <Select value={duplicateFactorMode} onValueChange={setDuplicateFactorMode}>
-                                            <SelectTrigger>
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="multiply">Multiplica (×)</SelectItem>
-                                                <SelectItem value="divide">Divide (÷)</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                    <div>
-                                        <label htmlFor="duplicateFactorValue" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Fator</label>
-                                        <input id="duplicateFactorValue" name="duplicateFactorValue" type="number" min="0.0001" step="0.0001" defaultValue="1" className="h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm" required />
-                                    </div>
-                                    <div className="md:col-span-4 flex justify-end gap-2">
-                                        <Button type="button" variant="ghost" onClick={() => setDuplicateDialogOpen(false)}>
-                                            Cancelar
-                                        </Button>
-                                        <Button type="submit" name="_action" value="recipe-duplicate-variation">
-                                            Duplicar receita
-                                        </Button>
-                                    </div>
-                                </Form>
-                            </DialogContent>
-                        </Dialog>
                     </div>
                 </div>
             </div>
 
             {/* ── Configuração ── */}
-            <div className="py-6">
+            <div className="pt-6 pb-16">
                 <h2 className="text-base font-semibold text-slate-900">Configuração da receita</h2>
-                <p className="mt-0.5 mb-4 text-sm text-slate-500">Atualize nome, vínculo com item/variação e atributos.</p>
+                <p className="mt-0.5 mb-4 text-sm text-slate-500">Atualize nome, vínculo com item e atributos.</p>
                 <RecipeForm
                     recipe={recipe}
                     actionName="recipe-update"
                     items={items}
-                    variations={variations}
+                    requireItemRemapConfirmation
                 />
             </div>
 
             {/* ── Composição ── */}
-            <div className="py-6">
-                <div className="mb-5 flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
-                    <div>
-                        <div className="flex items-center gap-2">
-                            <h2 className="text-base font-semibold text-slate-900">Composição da receita</h2>
-                            <Dialog>
-                                <DialogTrigger asChild>
-                                    <button
-                                        type="button"
-                                        className="inline-flex h-5 w-5 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-                                        aria-label="Regra de variação na composição"
-                                    >
-                                        <HelpCircle className="h-4 w-4" />
-                                    </button>
-                                </DialogTrigger>
-                                <DialogContent className="sm:max-w-lg">
-                                    <DialogHeader>
-                                        <DialogTitle>Regra de variação na composição</DialogTitle>
-                                        <DialogDescription>
-                                            Como o sistema decide quando pedir variação para um item da receita.
-                                        </DialogDescription>
-                                    </DialogHeader>
-                                    <div className="space-y-3 text-sm text-slate-700">
-                                        <div>
-                                            <p className="font-semibold text-slate-900">Regra prática</p>
-                                            <p>
-                                                A variação é opcional por padrão. O sistema só mostra o campo quando o item tem 2 ou mais variações com custo ativo e os custos são diferentes.
-                                            </p>
-                                        </div>
-                                        <div>
-                                            <p className="font-semibold text-slate-900">Resumo</p>
-                                            <p>
-                                                Insumos comuns (sal, temperos, molho) normalmente usam Base/auto. Itens com custo diferente por variação podem exigir seleção manual.
-                                            </p>
-                                        </div>
-                                        <div>
-                                            <p className="font-semibold text-slate-900">Override no item</p>
-                                            <p>
-                                                Na tela do item, use o campo "Variação na receita" para forçar: automático, ocultar ou sempre mostrar.
-                                            </p>
-                                        </div>
+            <div className="py-6 pb-32">
+                <div className="mb-4 flex items-center gap-2 border-b border-slate-200 pb-3">
+                    <button
+                        type="button"
+                        onClick={() => setActiveCompositionTab("base")}
+                        className={`rounded-md px-3 py-1.5 text-sm font-semibold ${activeCompositionTab === "base" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700"}`}
+                    >
+                        Tab 1 · Composição Base
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setActiveCompositionTab("variation")}
+                        className={`rounded-md px-3 py-1.5 text-sm font-semibold ${activeCompositionTab === "variation" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700"}`}
+                    >
+                        Tab 2 · Variações
+                    </button>
+                </div>
+
+                <div className="mb-4 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+                    <p className="font-semibold text-slate-900">Como funciona a perda na composição</p>
+                    <p className="mt-1">
+                        A quantidade que você digita na receita é a quantidade final que quer entregar no prato. A perda (%) representa o que se perde no preparo
+                        (evaporação, redução, gordura que fica na panela, sobra de manipulação etc.).
+                    </p>
+                    <p className="mt-1">
+                        Exemplo simples: você quer <strong>1,000 kg</strong> de molho de costela pronto e definiu <strong>20% de perda</strong>. O sistema calcula uma
+                        quantidade bruta de <strong>1,250 kg</strong> para comprar/consumir, e o custo total usa essa quantidade bruta. Ou seja: quanto maior a perda,
+                        maior o custo real da variação.
+                    </p>
+                </div>
+
+                {activeCompositionTab === "base" ? (
+                    <div className="space-y-4">
+                        <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+                            <div className="rounded-lg border border-slate-200 p-3 min-h-[520px]">
+                                <h3 className="text-sm font-semibold text-slate-900">Montador rápido inline</h3>
+                                <p className="text-xs text-slate-500">Selecione ingredientes e vincule na receita sem quantidade/custo.</p>
+                                <div className="mt-3 space-y-2">
+                                    <input
+                                        value={builderSearch}
+                                        onChange={(event) => setBuilderSearch(event.target.value)}
+                                        placeholder="Buscar ingrediente..."
+                                        className="h-9 w-full rounded-md border border-slate-200 px-3 text-sm"
+                                    />
+                                    <div className="min-h-[280px] max-h-[360px] overflow-auto rounded-md border border-slate-200">
+                                        {builderItems.map((item) => {
+                                            const checked = builderSelectedItemIds.includes(item.id)
+                                            return (
+                                                <label key={item.id} className="flex cursor-pointer items-center gap-2 border-b border-slate-100 px-3 py-2 text-sm last:border-b-0">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={checked}
+                                                        onChange={() => toggleBuilderItem(item.id)}
+                                                        className="h-3.5 w-3.5 rounded border-slate-300"
+                                                    />
+                                                    <span className="truncate">{item.name}</span>
+                                                    {item.classification ? (
+                                                        <span className="ml-auto rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] text-slate-600">{item.classification}</span>
+                                                    ) : null}
+                                                </label>
+                                            )
+                                        })}
                                     </div>
-                                </DialogContent>
-                            </Dialog>
+                                </div>
+                                <Form method="post" preventScrollReset className="mt-3 flex items-center justify-end gap-2">
+                                    <input type="hidden" name="recipeId" value={recipe?.id} />
+                                    <input type="hidden" name="targetItemIds" value={builderSelectedItemIds.join(",")} />
+                                    <Button type="submit" name="_action" value="recipe-ingredient-batch-add" size="sm">
+                                        Adicionar selecionados
+                                    </Button>
+                                </Form>
+                            </div>
+                            <div className="overflow-x-auto rounded-lg border border-slate-200 min-h-[520px]">
+                                <table className="min-w-full text-sm">
+                                    <thead className="bg-slate-50">
+                                        <tr>
+                                            <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Ordem</th>
+                                            <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Ingrediente</th>
+                                            <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Opcional</th>
+                                            <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Ação</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {baseIngredients.length === 0 ? (
+                                            <tr>
+                                                <td colSpan={4} className="px-3 py-8 text-center text-sm text-slate-500">
+                                                    Nenhum ingrediente base. Adicione no montador acima.
+                                                </td>
+                                            </tr>
+                                        ) : (
+                                            baseIngredients.map((ingredient) => (
+                                                <tr key={ingredient.recipeIngredientId || ingredient.itemId} className="border-t border-slate-100">
+                                                    <td className="px-3 py-2 text-slate-500">{ingredient.sortOrderIndex}</td>
+                                                    <td className="px-3 py-2 font-medium text-slate-900">{ingredient.itemName}</td>
+                                                    <td className="px-3 py-2 text-xs text-slate-500">Nota / obrigatório / substituível (em breve)</td>
+                                                    <td className="px-3 py-2 text-right">
+                                                        <Form method="post" preventScrollReset className="inline">
+                                                            <input type="hidden" name="recipeId" value={recipe?.id} />
+                                                            <input type="hidden" name="recipeIngredientId" value={ingredient.recipeIngredientId || ""} />
+                                                            <button type="submit" name="_action" value="recipe-ingredient-delete" className="rounded-md border border-red-200 px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50">
+                                                                Remover
+                                                            </button>
+                                                        </Form>
+                                                    </td>
+                                                </tr>
+                                            ))
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
-                        <p className="mt-0.5 text-sm text-slate-500">Ingredientes e materiais com unidade de consumo e quantidade.</p>
                     </div>
-                    <Form method="post" className="shrink-0">
-                        <div className="flex items-center gap-2">
-                            <Button asChild type="button" variant="outline" size="sm">
-                                <Link to={`/admin/recipes/${recipe?.id}/composition-builder`}>
-                                    Montador rápido
-                                </Link>
-                            </Button>
+                ) : (
+                    <div className="space-y-4">
+                        {(hasVariationPendingCells || hasVariationCostZero) ? (
+                            <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+                                Não pronto para produção: existem células sem UM/QTD ou com custo 0 em alguma variação.
+                            </div>
+                        ) : (
+                            <div className="rounded-md border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-900">
+                                Pronto para produção: todas as variações estão completas e sem custo 0.
+                            </div>
+                        )}
+
+                        <Form method="post" preventScrollReset className="flex justify-end">
                             <input type="hidden" name="recipeId" value={recipe?.id} />
                             <Button type="submit" name="_action" value="recipe-lines-recalc" variant="outline" size="sm">
                                 Recalcular custos
                             </Button>
-                        </div>
-                    </Form>
-                </div>
-
-                {/* Adicionar item */}
-                <div className="mb-6">
-                    <h3 className="mb-3 text-sm font-semibold text-slate-700">Adicionar item</h3>
-                    <Form method="post" className="grid gap-3 md:grid-cols-5">
-                        <input type="hidden" name="recipeId" value={recipe?.id} />
-                        <input type="hidden" name="lineItemId" value={lineItemId} />
-                        <input type="hidden" name="lineUnit" value={lineUnit} />
-                        <input
-                            type="hidden"
-                            name="lineVariationId"
-                            value={shouldShowLineVariation && lineVariationId !== "__none__" ? lineVariationId : ""}
-                        />
-                        <div className="md:col-span-2">
-                            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Item</label>
-                            <Popover open={lineItemComboboxOpen} onOpenChange={setLineItemComboboxOpen}>
-                                <PopoverTrigger asChild>
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        role="combobox"
-                                        aria-expanded={lineItemComboboxOpen}
-                                        className="w-full justify-between font-normal"
-                                    >
-                                        <span className="truncate text-left">{selectedLineItemLabel}</span>
-                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent
-                                    className="w-[var(--radix-popover-trigger-width)] p-0"
-                                    align="start"
-                                    sideOffset={4}
-                                >
-                                    <Command>
-                                        <CommandInput placeholder="Buscar item..." />
-                                        <CommandList className="max-h-[50vh]">
-                                            <CommandEmpty>Nenhum item encontrado.</CommandEmpty>
-                                            {items.map((item) => (
-                                                <CommandItem
-                                                    key={item.id}
-                                                    value={`${item.name} ${item.classification || ""} ${item.id}`}
-                                                    onSelect={() => {
-                                                        setLineItemId(item.id)
-                                                        setLineItemComboboxOpen(false)
-                                                    }}
-                                                >
-                                                    <span
-                                                        className={cn(
-                                                            "mr-2 inline-block h-2 w-2 rounded-full",
-                                                            lineItemId === item.id ? "bg-slate-900" : "bg-transparent border border-slate-300"
-                                                        )}
-                                                    />
-                                                    <span className="truncate">
-                                                        {item.name}
-                                                        {item.classification ? ` (${item.classification})` : ""}
+                        </Form>
+                        <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                            <div className="flex flex-wrap items-center gap-3">
+                                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Colunas visíveis</span>
+                                {columnToggleVariations.length === 0 ? (
+                                    <span className="text-xs text-slate-500">Nenhuma variação disponível.</span>
+                                ) : (
+                                    columnToggleVariations.map((variation) => {
+                                        const checked = !hiddenVariationIds.includes(variation.itemVariationId)
+                                        return (
+                                            <label key={`toggle-${variation.itemVariationId}`} className="inline-flex items-center gap-1.5 text-xs text-slate-700">
+                                                <input
+                                                    type="checkbox"
+                                                    className="h-3.5 w-3.5 rounded border-slate-300 text-slate-900"
+                                                    checked={checked}
+                                                    onChange={() => toggleVariationColumn(variation.itemVariationId)}
+                                                />
+                                                <span>{variation.variationName || "Variação"}</span>
+                                                {(variation.variationKind === "base" && variation.variationCode === "base") ? (
+                                                    <span className="rounded border border-slate-300 bg-slate-50 px-1 py-0 text-[10px] text-slate-600">
+                                                        Base
                                                     </span>
-                                                </CommandItem>
-                                            ))}
-                                        </CommandList>
-                                    </Command>
-                                </PopoverContent>
-                            </Popover>
+                                                ) : null}
+                                                {variation.isReference ? (
+                                                    <span className="rounded border border-emerald-300 bg-emerald-50 px-1 py-0 text-[10px] text-emerald-700">
+                                                        Ref
+                                                    </span>
+                                                ) : null}
+                                            </label>
+                                        )
+                                    })
+                                )}
+                                {baseVariationIds.length > 0 ? (
+                                    <span className="text-[11px] text-slate-500">A variação Base inicia oculta, mas pode ser exibida.</span>
+                                ) : null}
+                            </div>
                         </div>
-                        <div>
-                            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Variação</label>
-                            {shouldShowLineVariation ? (
-                                <Select value={lineVariationId} onValueChange={setLineVariationId}>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Base/auto" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="__none__">Base/auto</SelectItem>
-                                        {variations.map((variation) => (
-                                            <SelectItem key={variation.id} value={variation.id}>
-                                                {variation.name}{variation.kind ? ` (${variation.kind})` : ""}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            ) : (
-                                <div className="flex h-10 items-center rounded-md border border-dashed border-slate-200 bg-slate-50 px-3 text-sm text-slate-500">
-                                    Base/auto
-                                </div>
-                            )}
-                            {selectedLineItem ? (
-                                <p className="mt-1 text-xs text-slate-500">
-                                    {shouldShowLineVariation
-                                        ? "Este item tem múltiplas variações com custo diferente."
-                                        : "Variação oculta: custo será resolvido automaticamente (base/auto)."}
-                                </p>
-                            ) : null}
-                        </div>
-                        <div>
-                            <label htmlFor="lineUnit" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">UM consumo</label>
-                            <Select value={lineUnit || "__empty__"} onValueChange={(value) => setLineUnit(value === "__empty__" ? "" : value)}>
-                                <SelectTrigger id="lineUnit">
-                                    <SelectValue placeholder="Selecionar UM" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="__empty__">Selecionar UM</SelectItem>
-                                    {unitOptions.map((unit) => (
-                                        <SelectItem key={unit} value={unit}>
-                                            {unit}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                            {selectedLineItem?.consumptionUm ? (
-                                <p className="mt-1 text-xs text-slate-500">
-                                    UM sugerida do item: {String(selectedLineItem.consumptionUm).toUpperCase()}
-                                </p>
-                            ) : null}
-                        </div>
-                        <div>
-                            <label htmlFor="lineQuantity" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Quantidade</label>
-                            <input id="lineQuantity" name="lineQuantity" type="number" min="0.0001" step="0.0001" placeholder="0" className="h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm" required />
-                        </div>
-                        <div className="md:col-span-5 flex justify-end">
-                            <button
-                                type="submit"
-                                name="_action"
-                                value="recipe-line-add"
-                                className="inline-flex h-10 items-center rounded-lg bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-700"
-                            >
-                                Adicionar item
-                            </button>
-                        </div>
-                    </Form>
-                </div>
 
-                {/* Tabela */}
-                <div className="overflow-x-auto rounded-lg border border-slate-200">
-                    <table className="min-w-full text-sm">
-                        <thead className="bg-slate-50">
-                            <tr>
-                                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Item</th>
-                                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Variação</th>
-                                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">UM / Quantidade</th>
-                                <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Últ. custo un.</th>
-                                <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Custo méd. un.</th>
-                                <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Últ. total</th>
-                                <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Méd. total</th>
-                                <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Ação</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {recipeLines.length === 0 ? (
-                                <tr>
-                                    <td colSpan={8} className="px-3 py-10 text-center text-sm text-slate-500">
-                                        Nenhum item na composição. Use o formulário acima para adicionar.
-                                    </td>
-                                </tr>
-                            ) : (
-                                recipeLines.map((line) => (
-                                    <tr key={line.id} className="border-t border-slate-100 hover:bg-slate-50/50">
-                                        <td className="px-3 py-2 font-medium text-slate-900">{line.Item?.name || "-"}</td>
-                                        <td className="px-3 py-2 text-slate-500">{line.ItemVariation?.Variation?.name || "Base"}</td>
-                                        <td className="px-3 py-2">
-                                            <Form method="post" className="flex items-center gap-2">
-                                                <input type="hidden" name="recipeId" value={recipe?.id} />
-                                                <input type="hidden" name="recipeLineId" value={line.id} />
-                                                <input
-                                                    name="lineUnit"
-                                                    defaultValue={line.unit}
-                                                    className="h-8 w-20 rounded border border-slate-200 px-2 text-xs"
-                                                    required
-                                                />
-                                                <input
-                                                    name="lineQuantity"
-                                                    type="number"
-                                                    min="0.0001"
-                                                    step="0.0001"
-                                                    defaultValue={Number(line.quantity || 0)}
-                                                    className="h-8 w-28 rounded border border-slate-200 px-2 text-xs text-right"
-                                                    required
-                                                />
-                                                <button
-                                                    type="submit"
-                                                    name="_action"
-                                                    value="recipe-line-update"
-                                                    className="rounded-md border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
-                                                >
-                                                    Salvar
-                                                </button>
-                                            </Form>
-                                        </td>
-                                        <td className="px-3 py-2 text-right text-slate-500">R$ {Number(line.lastUnitCostAmount || 0).toFixed(4)}</td>
-                                        <td className="px-3 py-2 text-right text-slate-500">R$ {Number(line.avgUnitCostAmount || 0).toFixed(4)}</td>
-                                        <td className="px-3 py-2 text-right font-medium text-slate-900">R$ {Number(line.lastTotalCostAmount || 0).toFixed(4)}</td>
-                                        <td className="px-3 py-2 text-right font-medium text-slate-900">R$ {Number(line.avgTotalCostAmount || 0).toFixed(4)}</td>
-                                        <td className="px-3 py-2 text-right">
-                                            <Form method="post" className="inline">
-                                                <input type="hidden" name="recipeId" value={recipe?.id} />
-                                                <input type="hidden" name="recipeLineId" value={line.id} />
-                                                <button
-                                                    type="submit"
-                                                    name="_action"
-                                                    value="recipe-line-delete"
-                                                    className="rounded-md border border-red-200 px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50"
-                                                >
-                                                    Remover
-                                                </button>
-                                            </Form>
-                                        </td>
+                        <div className="overflow-x-auto rounded-lg border border-slate-200">
+                            <table className="min-w-full text-sm">
+                                <thead className="bg-slate-50">
+                                    <tr className="border-b border-slate-200">
+                                        <th colSpan={3} className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
+                                            Total da composição
+                                        </th>
+                                        {effectiveVariationColumns.map((variation, index) => {
+                                            const metric = variationMetrics[index]
+                                            return (
+                                                <th key={`total-head-${variation.itemVariationId}`} className={`px-3 py-2 text-left align-top text-[11px] ${variation.isReference ? "bg-emerald-50/50" : ""}`}>
+                                                    <div className="grid grid-cols-[1fr_auto] items-center gap-x-2">
+                                                        <span className="text-slate-500">Total custo</span>
+                                                        <span className="font-semibold text-slate-700">{formatMoney(metric.totalLast, 2)}</span>
+                                                    </div>
+                                                    <div className="grid grid-cols-[1fr_auto] items-center gap-x-2">
+                                                        <span className="text-slate-500">Custo médio</span>
+                                                        <span className="font-semibold text-slate-700">{formatMoney(metric.totalAvg, 2)}</span>
+                                                    </div>
+                                                </th>
+                                            )
+                                        })}
+                                        <th className="px-3 py-2" />
                                     </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
-                </div>
+                                    <tr>
+                                        <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Ingrediente</th>
+                                        <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 w-[104px]">UM</th>
+                                        <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 w-[108px]">Perda</th>
+                                        {effectiveVariationColumns.map((variation, index) => {
+                                            const metric = variationMetrics[index]
+                                            const complete = metric.filledQtyCells === requiredCellCount && metric.zeroCostCells === 0
+                                            const missing = metric.filledQtyCells < requiredCellCount
+                                            const hasZero = metric.zeroCostCells > 0
+                                            return (
+                                                <th key={variation.itemVariationId} className={`px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 min-w-[230px] ${variation.isReference ? "bg-emerald-50/50" : ""}`}>
+                                                    <div className="space-y-1">
+                                                        <div className="flex items-center gap-1.5 font-semibold text-slate-700">
+                                                            <span>{variation.variationName || "Base/auto"}</span>
+                                                            {variation.isReference ? (
+                                                                <span className="rounded border border-emerald-300 bg-emerald-50 px-1.5 py-0.5 text-[10px] text-emerald-700 normal-case tracking-normal">
+                                                                    Referência
+                                                                </span>
+                                                            ) : null}
+                                                        </div>
+                                                        <div className="flex items-center gap-1.5 normal-case tracking-normal">
+                                                            {complete ? <span className="rounded border border-emerald-300 bg-emerald-50 px-1.5 py-0.5 text-[10px] text-emerald-700">Completo</span> : null}
+                                                            {missing ? <span className="rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-700">Faltando</span> : null}
+                                                            {hasZero ? <span className="rounded border border-red-300 bg-red-50 px-1.5 py-0.5 text-[10px] text-red-700">Custo 0</span> : null}
+                                                        </div>
+                                                    </div>
+                                                </th>
+                                            )
+                                        })}
+                                        <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Ação</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {compositionRows.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={effectiveVariationColumns.length + 4} className="px-3 py-10 text-center text-sm text-slate-500">
+                                                Nenhum item na composição. Primeiro monte a base na Tab 1.
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        compositionRowsWithUnit.map((row) => (
+                                            <tr key={row.key} className="border-t border-slate-100 align-top hover:bg-slate-50/50">
+                                                <td className="px-3 py-3 font-medium text-slate-900 align-top">
+                                                    <span className="block truncate max-w-[240px]" title={row.itemName}>{row.itemName}</span>
+                                                    <div className="mt-1 text-[10px] font-normal">
+                                                        <div className="grid grid-cols-[1fr_auto] items-center gap-x-2">
+                                                            <span className="text-slate-500">Custo unitário</span>
+                                                            <span className="font-semibold text-slate-700">{formatMoney(row.lastUnitCostAmount, 4)}</span>
+                                                        </div>
+                                                        <div className="grid grid-cols-[1fr_auto] items-center gap-x-2">
+                                                            <span className="text-slate-500">Custo médio</span>
+                                                            <span className="font-semibold text-slate-700">{formatMoney(row.avgUnitCostAmount, 4)}</span>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="px-3 py-3 align-top">
+                                                    <IngredientUnitEditor
+                                                        recipeId={String(recipe?.id || "")}
+                                                        recipeIngredientId={row.recipeIngredientId}
+                                                        currentUnit={row.unit}
+                                                        options={(() => {
+                                                            const options = Array.from(new Set([
+                                                                String(row.itemConsumptionUm || "").trim().toUpperCase(),
+                                                                String(row.unit || "").trim().toUpperCase(),
+                                                            ].filter(Boolean)))
+                                                            return options.length > 0 ? options : ["UN"]
+                                                        })()}
+                                                    />
+                                                </td>
+                                                <td className="px-3 py-3 align-top">
+                                                    <IngredientLossEditor
+                                                        recipeId={String(recipe?.id || "")}
+                                                        recipeIngredientId={row.recipeIngredientId}
+                                                        defaultLossPct={Number(row.defaultLossPct || 0)}
+                                                    />
+                                                </td>
+                                                {effectiveVariationColumns.map((variation) => {
+                                                    const line = row.linesByVariation.get(String(variation.itemVariationId))
+                                                    if (!line) {
+                                                        return <td key={`${row.key}-${variation.itemVariationId}`} className={`px-3 py-3 align-top text-xs text-slate-400 ${variation.isReference ? "bg-emerald-50/50" : ""}`}>—</td>
+                                                    }
+                                                    return (
+                                                        <td key={`${row.key}-${variation.itemVariationId}`} className={`px-3 py-3 align-top ${variation.isReference ? "bg-emerald-50/50" : ""}`}>
+                                                            <InlineVariationCellEditor
+                                                                recipeId={String(recipe?.id || "")}
+                                                                line={line}
+                                                                lineUnit={row.unit}
+                                                            />
+                                                        </td>
+                                                    )
+                                                })}
+                                                <td className="px-3 py-3 text-right align-top">
+                                                    <Form method="post" preventScrollReset className="inline">
+                                                        <input type="hidden" name="recipeId" value={recipe?.id} />
+                                                        <input type="hidden" name="recipeIngredientId" value={row.recipeIngredientId || ""} />
+                                                        <input type="hidden" name="recipeLineId" value={row.linesByVariation.values().next().value?.id || ""} />
+                                                        <button type="submit" name="_action" value="recipe-ingredient-delete" className="rounded-md border border-red-200 px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50">
+                                                            Remover
+                                                        </button>
+                                                    </Form>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     )

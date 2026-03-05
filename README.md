@@ -18,6 +18,16 @@ Prisma configuration, env vars, and migration notes are documented in:
 
 - `prisma/README.md`
 
+## Itens - Exclusão
+
+Regras atuais para eliminar itens na lista de administração:
+
+- Não é permitido eliminar quando há movimentações de estoque (NF aplicada).
+- Não é permitido eliminar quando o item está usado em receitas (linhas de receita).
+- Não é permitido eliminar quando o item está vinculado a uma receita base.
+- Não é permitido eliminar quando o item está vinculado ao cardápio.
+- Não é permitido eliminar quando existem fichas de custo para o item.
+
 ## KDS REST API
 
 Documentação da API REST do KDS (criação de pedidos e delivery zones):

@@ -3,7 +3,8 @@
     "allow": [
       "Bash(node scripts/create-recipes-from-menu-items.mjs:*)",
       "Bash(node -e:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(npx remix vite:build:*)"
     ]
   }
 }

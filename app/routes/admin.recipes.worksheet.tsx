@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, useCallback } from "react"
+import { useEffect, useRef, useState, useCallback, Fragment } from "react"
 import { type ActionFunctionArgs, type LoaderFunctionArgs } from "@remix-run/node"
-import { useLoaderData, useFetcher, Link } from "@remix-run/react"
+import { useLoaderData, useFetcher, Link, useSearchParams } from "@remix-run/react"
 import {
     ChevronDown, ChevronRight, Plus, Trash2, Search, Check, X, ExternalLink,
 } from "lucide-react"
@@ -16,8 +16,20 @@ import {
 import {
     Popover, PopoverContent, PopoverTrigger,
 } from "~/components/ui/popover"
+import {
+    Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "~/components/ui/select"
 import RecipeBadge from "~/domain/recipe/components/recipe-badge/recipe-badge"
 import { DecimalInput } from "~/components/inputs/inputs"
+import {
+    applyRecipeCompositionLineToVariations,
+    createRecipeCompositionLine,
+    deleteRecipeCompositionLine,
+    listRecipeCompositionLines,
+    listRecipeLinkedVariations,
+    updateRecipeCompositionLine,
+    updateRecipeCompositionLineItem,
+} from "~/domain/recipe/recipe-composition.server"
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -34,6 +46,7 @@ type WorksheetRecipeLine = {
     Item: { id: string; name: string }
     ItemVariation: {
         id: string
+        variationId?: string | null
         Variation: { id: string; name: string; kind: string | null; code: string | null }
     } | null
 }
@@ -47,10 +60,12 @@ type WorksheetRecipe = {
     Item: { id: string; name: string } | null
     Variation: { id: string; name: string; kind: string | null } | null
     RecipeLine: WorksheetRecipeLine[]
+    linkedVariations?: LinkedVariation[]
 }
 
 type WorksheetItem = { id: string; name: string; classification: string; consumptionUm: string | null }
 type WorksheetVariation = { id: string; name: string; kind: string | null }
+type LinkedVariation = { itemVariationId: string; variationId: string | null; variationName: string | null }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -71,6 +86,31 @@ async function getUnitOptions(db: any): Promise<string[]> {
         return Array.from(merged).sort((a, b) => a.localeCompare(b, "pt-BR"))
     } catch {
         return [...UNIT_FALLBACK].sort((a, b) => a.localeCompare(b, "pt-BR"))
+    }
+}
+
+async function resolveLineCostSnapshot(db: any, itemId: string, variationId?: string | null) {
+    const baseWhere: Record<string, any> = { itemId, deletedAt: null }
+    if (variationId) baseWhere.variationId = variationId
+
+    let itemVariation = await db.itemVariation.findFirst({
+        where: baseWhere,
+        include: { ItemCostVariation: true },
+        orderBy: [{ createdAt: "asc" }],
+    })
+
+    if (!itemVariation && variationId) {
+        itemVariation = await db.itemVariation.findFirst({
+            where: { itemId, deletedAt: null },
+            include: { ItemCostVariation: true },
+            orderBy: [{ createdAt: "asc" }],
+        })
+    }
+
+    const lastUnitCostAmount = Number(itemVariation?.ItemCostVariation?.costAmount ?? 0)
+    return {
+        lastUnitCostAmount,
+        avgUnitCostAmount: lastUnitCostAmount,
     }
 }
 
@@ -109,18 +149,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
             include: {
                 Item: { select: { id: true, name: true } },
                 Variation: { select: { id: true, name: true, kind: true } },
-                RecipeLine: {
-                    include: {
-                        Item: { select: { id: true, name: true } },
-                        ItemVariation: {
-                            select: {
-                                id: true,
-                                Variation: { select: { id: true, name: true, kind: true, code: true } },
-                            },
-                        },
-                    },
-                    orderBy: [{ sortOrderIndex: "asc" }, { createdAt: "asc" }],
-                },
             },
             orderBy: [{ name: "asc" }],
         }),
@@ -140,7 +168,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
     ]))
 
     if (err) return badRequest(err.message)
-    const [recipes, items, unitOptions, variations] = result
+    const [recipesRaw, items, unitOptions, variations] = result
+    const recipes = await Promise.all(
+        (recipesRaw || []).map(async (recipe: any) => ({
+            ...recipe,
+            RecipeLine: await listRecipeCompositionLines(db, recipe.id),
+            linkedVariations: await listRecipeLinkedVariations(db, recipe.id),
+        }))
+    )
     return ok({ recipes, items, unitOptions, variations })
 }
 
@@ -151,7 +186,7 @@ export async function action({ request }: ActionFunctionArgs) {
     const { _action, ...values } = Object.fromEntries(formData)
     const db = prismaClient as any
 
-    // ── Update recipe (name / item / variation) ────────────────────────────
+    // ── Update recipe (name / item) ────────────────────────────────────────
     if (_action === "recipe-update") {
         const recipeId = String(values.recipeId || "").trim()
         if (!recipeId) return badRequest("ID da receita inválido")
@@ -164,11 +199,30 @@ export async function action({ request }: ActionFunctionArgs) {
         }
         if (values.recipeItemId !== undefined)
             data.itemId = String(values.recipeItemId).trim() || null
-        if (values.recipeVariationId !== undefined)
-            data.variationId = String(values.recipeVariationId).trim() || null
+        data.variationId = null
 
         const [err] = await tryit(db.recipe.update({ where: { id: recipeId }, data }))
         if (err) return badRequest("Erro ao atualizar receita")
+
+        const updatedRecipe = await db.recipe.findUnique({
+            where: { id: recipeId },
+            select: { itemId: true, variationId: true },
+        })
+        const itemId = String(updatedRecipe?.itemId || "").trim()
+        const variationId = String(updatedRecipe?.variationId || "").trim()
+        if (itemId && variationId) {
+            const itemVariation = await db.itemVariation.findFirst({
+                where: { itemId, variationId, deletedAt: null },
+                select: { id: true },
+            }) || await db.itemVariation.create({
+                data: { itemId, variationId, recipeId },
+                select: { id: true },
+            })
+            await db.itemVariation.update({
+                where: { id: itemVariation.id },
+                data: { recipeId },
+            })
+        }
         return ok({ message: "Receita atualizada" })
     }
 
@@ -178,9 +232,8 @@ export async function action({ request }: ActionFunctionArgs) {
         if (!name) return badRequest("Informe o nome da receita")
 
         const itemId = String(values.recipeItemId || "").trim() || null
-        const variationId = String(values.recipeVariationId || "").trim() || null
 
-        const [err] = await tryit(db.recipe.create({
+        const [err, created] = await tryit(db.recipe.create({
             data: {
                 name,
                 type: "semiFinished",
@@ -188,7 +241,7 @@ export async function action({ request }: ActionFunctionArgs) {
                 isVegetarian: false,
                 isGlutenFree: false,
                 ...(itemId ? { itemId } : {}),
-                ...(variationId ? { variationId } : {}),
+                variationId: null,
             },
         }))
         if (err) return badRequest("Erro ao criar receita")
@@ -197,32 +250,31 @@ export async function action({ request }: ActionFunctionArgs) {
 
     // ── Update recipe line ─────────────────────────────────────────────────
     if (_action === "recipe-line-update") {
+        const recipeId = String(values.recipeId || "").trim()
         const lineId = String(values.lineId || "").trim()
         const unit = String(values.lineUnit || "").trim().toUpperCase()
         const quantity = Number(String(values.lineQuantity || "0").replace(",", "."))
 
-        if (!lineId) return badRequest("ID da linha inválido")
+        if (!recipeId || !lineId) return badRequest("ID da linha inválido")
         if (!unit) return badRequest("Informe a unidade")
         if (!Number.isFinite(quantity) || quantity <= 0) return badRequest("Quantidade inválida")
 
-        const line = await db.recipeLine.findUnique({
-            where: { id: lineId },
-            include: { ItemVariation: { include: { ItemCostVariation: true } } },
-        })
+        const lines = await listRecipeCompositionLines(db, recipeId)
+        const line = lines.find((current) => current.id === lineId)
         if (!line) return badRequest("Linha não encontrada")
 
-        const lastUnitCost = Number(
-            line.ItemVariation?.ItemCostVariation?.costAmount ?? line.lastUnitCostAmount ?? 0
-        )
-        const avgUnitCost = Number(line.avgUnitCostAmount || lastUnitCost)
-
-        const [err] = await tryit(db.recipeLine.update({
-            where: { id: lineId },
-            data: {
-                unit,
-                quantity,
-                lastTotalCostAmount: Number((lastUnitCost * quantity).toFixed(6)),
-                avgTotalCostAmount: Number((avgUnitCost * quantity).toFixed(6)),
+        const cost = await resolveLineCostSnapshot(db, line.itemId, line.ItemVariation?.variationId || null)
+        const [err] = await tryit(updateRecipeCompositionLine({
+            db,
+            lineId,
+            recipeId,
+            unit,
+            quantity,
+            snapshot: {
+                lastUnitCostAmount: Number(cost.lastUnitCostAmount || 0),
+                avgUnitCostAmount: Number(cost.avgUnitCostAmount || 0),
+                lastTotalCostAmount: Number(((cost.lastUnitCostAmount || 0) * quantity).toFixed(6)),
+                avgTotalCostAmount: Number(((cost.avgUnitCostAmount || 0) * quantity).toFixed(6)),
             },
         }))
         if (err) return badRequest("Erro ao atualizar linha")
@@ -233,7 +285,7 @@ export async function action({ request }: ActionFunctionArgs) {
     if (_action === "recipe-line-delete") {
         const lineId = String(values.lineId || "").trim()
         if (!lineId) return badRequest("ID inválido")
-        const [err] = await tryit(db.recipeLine.delete({ where: { id: lineId } }))
+        const [err] = await tryit(deleteRecipeCompositionLine(db, lineId))
         if (err) return badRequest("Erro ao remover linha")
         return ok({ message: "Linha removida" })
     }
@@ -250,23 +302,18 @@ export async function action({ request }: ActionFunctionArgs) {
         if (!unit) return badRequest("Informe a unidade")
         if (!Number.isFinite(quantity) || quantity <= 0) return badRequest("Informe uma quantidade válida")
 
-        const itemVariation = await db.itemVariation.findFirst({
-            where: { itemId, deletedAt: null },
-            include: { ItemCostVariation: true },
-            orderBy: [{ createdAt: "asc" }],
-        })
-
-        const itemVariationId = itemVariation?.id ?? null
-        const lastUnitCostAmount = Number(itemVariation?.ItemCostVariation?.costAmount ?? 0)
-        const lineCount = await db.recipeLine.count({ where: { recipeId } })
-
-        const [err] = await tryit(db.recipeLine.create({
-            data: {
-                recipeId, itemId, itemVariationId, unit, quantity,
-                lastUnitCostAmount, avgUnitCostAmount: lastUnitCostAmount,
-                lastTotalCostAmount: Number((lastUnitCostAmount * quantity).toFixed(6)),
-                avgTotalCostAmount: Number((lastUnitCostAmount * quantity).toFixed(6)),
-                sortOrderIndex: lineCount, notes: null,
+        const cost = await resolveLineCostSnapshot(db, itemId, null)
+        const [err] = await tryit(createRecipeCompositionLine({
+            db,
+            recipeId,
+            itemId,
+            unit,
+            quantity,
+            snapshot: {
+                lastUnitCostAmount: Number(cost.lastUnitCostAmount || 0),
+                avgUnitCostAmount: Number(cost.avgUnitCostAmount || 0),
+                lastTotalCostAmount: Number(((cost.lastUnitCostAmount || 0) * quantity).toFixed(6)),
+                avgTotalCostAmount: Number(((cost.avgUnitCostAmount || 0) * quantity).toFixed(6)),
             },
         }))
         if (err) return badRequest("Erro ao adicionar ingrediente: " + err.message)
@@ -275,35 +322,73 @@ export async function action({ request }: ActionFunctionArgs) {
 
     // ── Update recipe line item ────────────────────────────────────────────
     if (_action === "recipe-line-item-update") {
+        const recipeId = String(values.recipeId || "").trim()
         const lineId = String(values.lineId || "").trim()
         const itemId = String(values.lineItemId || "").trim()
-        if (!lineId || !itemId) return badRequest("IDs inválidos")
+        if (!recipeId || !lineId || !itemId) return badRequest("IDs inválidos")
 
-        const line = await db.recipeLine.findUnique({ where: { id: lineId } })
+        const lines = await listRecipeCompositionLines(db, recipeId)
+        const line = lines.find((current) => current.id === lineId)
         if (!line) return badRequest("Linha não encontrada")
 
-        const itemVariation = await db.itemVariation.findFirst({
-            where: { itemId, deletedAt: null },
-            include: { ItemCostVariation: true },
-            orderBy: [{ createdAt: "asc" }],
-        })
-        const itemVariationId = itemVariation?.id ?? null
-        const lastUnitCostAmount = Number(itemVariation?.ItemCostVariation?.costAmount ?? 0)
-        const qty = Number(line.quantity ?? 0)
+        const qty = Number(line.quantity || 0)
+        const lossPct = Number(line.lossPct ?? line.defaultLossPct ?? 0)
+        const normalizedLoss = Math.min(99.9999, Math.max(0, lossPct))
+        const grossQty = normalizedLoss > 0
+            ? Number((qty / (1 - normalizedLoss / 100)).toFixed(6))
+            : qty
+        const cost = await resolveLineCostSnapshot(db, itemId, line.ItemVariation?.variationId || null)
 
-        const [err] = await tryit(db.recipeLine.update({
-            where: { id: lineId },
-            data: {
-                itemId,
-                itemVariationId,
-                lastUnitCostAmount,
-                avgUnitCostAmount: lastUnitCostAmount,
-                lastTotalCostAmount: Number((lastUnitCostAmount * qty).toFixed(6)),
-                avgTotalCostAmount: Number((lastUnitCostAmount * qty).toFixed(6)),
+        const [err] = await tryit(updateRecipeCompositionLineItem({
+            db,
+            lineId,
+            recipeId,
+            itemId,
+            quantity: qty,
+            unit: line.unit,
+            snapshot: {
+                lastUnitCostAmount: Number(cost.lastUnitCostAmount || 0),
+                avgUnitCostAmount: Number(cost.avgUnitCostAmount || 0),
+                lastTotalCostAmount: Number(((cost.lastUnitCostAmount || 0) * grossQty).toFixed(6)),
+                avgTotalCostAmount: Number(((cost.avgUnitCostAmount || 0) * grossQty).toFixed(6)),
             },
         }))
         if (err) return badRequest("Erro ao atualizar ingrediente")
         return ok({ message: "Ingrediente atualizado" })
+    }
+
+    if (_action === "recipe-line-apply-variations") {
+        const recipeId = String(values.recipeId || "").trim()
+        const lineId = String(values.lineId || "").trim()
+        const formVariationIds = formData.getAll("variationId").map((value) => String(value || "").trim()).filter(Boolean)
+        const variationIdsRaw = String(values.targetVariationIds || "").trim()
+        const variationIds = formVariationIds.length > 0
+            ? formVariationIds
+            : variationIdsRaw.split(",").map((value) => value.trim()).filter(Boolean)
+        if (!recipeId || !lineId) return badRequest("Linha inválida")
+        if (variationIds.length === 0) return badRequest("Selecione ao menos uma variação")
+
+        const [err] = await tryit(applyRecipeCompositionLineToVariations({
+            db,
+            recipeId,
+            lineId,
+            variationIds,
+            resolveCostByVariationId: async (variationId, itemId, quantity, lossPct) => {
+                const normalizedLoss = Math.min(99.9999, Math.max(0, Number(lossPct || 0)))
+                const grossQty = normalizedLoss > 0
+                    ? Number((quantity / (1 - normalizedLoss / 100)).toFixed(6))
+                    : quantity
+                const cost = await resolveLineCostSnapshot(db, itemId, variationId)
+                return {
+                    lastUnitCostAmount: Number(cost.lastUnitCostAmount || 0),
+                    avgUnitCostAmount: Number(cost.avgUnitCostAmount || 0),
+                    lastTotalCostAmount: Number(((cost.lastUnitCostAmount || 0) * grossQty).toFixed(6)),
+                    avgTotalCostAmount: Number(((cost.avgUnitCostAmount || 0) * grossQty).toFixed(6)),
+                }
+            },
+        }))
+        if (err) return badRequest("Erro ao aplicar variações")
+        return ok({ message: "Variações atualizadas" })
     }
 
     return null
@@ -332,9 +417,34 @@ const INPUT_BASE = "w-full h-full px-2 bg-transparent border-0 outline-none text
 //   8  │  36px  │ link / count         │ delete
 
 // ─── Column widths (default px) — col 1 (name) is the widest / most flexible ──
-const DEFAULT_COL_WIDTHS = [36, 240, 160, 96, 106, 112, 112, 36]
+const DEFAULT_COL_WIDTHS = [36, 240, 120, 72, 100, 100, 100, 36]
 // Minimum widths per column (don't shrink below these)
-const MIN_COL_WIDTHS    = [36,  80,  80, 60,  60,  80,  80, 36]
+const MIN_COL_WIDTHS = [36, 80, 60, 50, 60, 60, 60, 36]
+
+// ─── Flat view column widths: # | Receita | Ingrediente | Variação | UM | Qtd | Custo Un. | Total | Del
+const FLAT_DEFAULT_COL_WIDTHS = [36, 180, 200, 120, 72, 100, 100, 100, 36]
+const FLAT_MIN_COL_WIDTHS     = [36,  80, 100,  60, 50,  60,  60,  60, 36]
+const LINE_PAGE_SIZE = 100
+
+function limitRecipesByLines(recipes: WorksheetRecipe[], limit: number): WorksheetRecipe[] {
+    if (limit <= 0) return []
+    const output: WorksheetRecipe[] = []
+    let remaining = limit
+
+    for (const recipe of recipes) {
+        if (remaining <= 0) break
+        const lineCount = recipe.RecipeLine.length
+        if (lineCount <= remaining) {
+            output.push(recipe)
+            remaining -= lineCount
+        } else {
+            output.push({ ...recipe, RecipeLine: recipe.RecipeLine.slice(0, remaining) })
+            remaining = 0
+        }
+    }
+
+    return output
+}
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
@@ -345,30 +455,50 @@ export default function RecipeWorksheet() {
     const unitOptions = (loaderData?.payload?.unitOptions ?? UNIT_FALLBACK) as string[]
     const variations = (loaderData?.payload?.variations ?? []) as WorksheetVariation[]
 
+    const [searchParams, setSearchParams] = useSearchParams()
+    const view = searchParams.get("view") ?? "grouped"
+
     const [search, setSearch] = useState("")
+    const [filterItemId, setFilterItemId] = useState("__all__")
+    const [filterVariationId, setFilterVariationId] = useState("__all__")
+    const [visibleLineCount, setVisibleLineCount] = useState(LINE_PAGE_SIZE)
     const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
     const [isCreating, setIsCreating] = useState(false)
 
     // ── Column resizing ──────────────────────────────────────────────────────
     const [colWidths, setColWidths] = useState(DEFAULT_COL_WIDTHS)
-    const resizeRef = useRef<{ col: number; startX: number; startW: number } | null>(null)
+    const [flatColWidths, setFlatColWidths] = useState(FLAT_DEFAULT_COL_WIDTHS)
+    const resizeRef = useRef<{ col: number; startX: number; startW: number; flat: boolean } | null>(null)
     const [isResizing, setIsResizing] = useState(false)
 
     const startResize = useCallback((col: number, clientX: number) => {
-        resizeRef.current = { col, startX: clientX, startW: colWidths[col] }
+        resizeRef.current = { col, startX: clientX, startW: colWidths[col], flat: false }
         setIsResizing(true)
     }, [colWidths])
+
+    const startFlatResize = useCallback((col: number, clientX: number) => {
+        resizeRef.current = { col, startX: clientX, startW: flatColWidths[col], flat: true }
+        setIsResizing(true)
+    }, [flatColWidths])
 
     useEffect(() => {
         const onMove = (e: MouseEvent) => {
             if (!resizeRef.current) return
-            const { col, startX, startW } = resizeRef.current
+            const { col, startX, startW, flat } = resizeRef.current
             const delta = e.clientX - startX
-            setColWidths(prev => {
-                const next = [...prev]
-                next[col] = Math.max(MIN_COL_WIDTHS[col], startW + delta)
-                return next
-            })
+            if (flat) {
+                setFlatColWidths(prev => {
+                    const next = [...prev]
+                    next[col] = Math.max(FLAT_MIN_COL_WIDTHS[col], startW + delta)
+                    return next
+                })
+            } else {
+                setColWidths(prev => {
+                    const next = [...prev]
+                    next[col] = Math.max(MIN_COL_WIDTHS[col], startW + delta)
+                    return next
+                })
+            }
         }
         const onUp = () => { resizeRef.current = null; setIsResizing(false) }
         window.addEventListener("mousemove", onMove)
@@ -379,10 +509,20 @@ export default function RecipeWorksheet() {
         }
     }, [])
 
-    const filteredRecipes = recipes.filter(r =>
-        r.name.toLowerCase().includes(search.toLowerCase())
-    )
+    const filteredRecipes = recipes.filter(r => {
+        if (!r.name.toLowerCase().includes(search.toLowerCase())) return false
+        if (filterItemId !== "__all__" && r.itemId !== filterItemId) return false
+        if (filterVariationId !== "__all__" && r.variationId !== filterVariationId) return false
+        return true
+    })
     const totalLines = filteredRecipes.reduce((acc, r) => acc + r.RecipeLine.length, 0)
+    const limitedRecipes = limitRecipesByLines(filteredRecipes, visibleLineCount)
+    const shownLines = limitedRecipes.reduce((acc, r) => acc + r.RecipeLine.length, 0)
+    const hasMoreLines = totalLines > shownLines
+
+    useEffect(() => {
+        setVisibleLineCount(LINE_PAGE_SIZE)
+    }, [search, filterItemId, filterVariationId])
 
     const toggleCollapse = (id: string) => {
         setCollapsed(prev => {
@@ -399,97 +539,176 @@ export default function RecipeWorksheet() {
         <div className="flex flex-col gap-2">
             {/* ── Toolbar ── */}
             <div className="rounded-lg border border-slate-200 bg-white shadow-sm px-3 py-2 flex items-center gap-3 flex-wrap">
-                <span className="text-xs text-slate-500 tabular-nums shrink-0">
-                    <span className="font-bold text-slate-700">{filteredRecipes.length}</span> receitas
-                    {" · "}
-                    <span className="font-bold text-slate-700">{totalLines}</span> ingredientes
-                </span>
-                <div className="flex-1" />
                 <div className="relative">
                     <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
                     <Input placeholder="Buscar receita..." className="pl-8 h-7 text-xs min-w-[200px]"
                         value={search} onChange={e => setSearch(e.target.value)} />
                 </div>
-                <Button variant="outline" size="sm" className="h-7 text-xs px-2" onClick={() => setCollapsed(new Set())}>Expandir tudo</Button>
-                <Button variant="outline" size="sm" className="h-7 text-xs px-2" onClick={() => setCollapsed(new Set(filteredRecipes.map(r => r.id)))}>Recolher tudo</Button>
+                <Select value={filterItemId} onValueChange={setFilterItemId}>
+                    <SelectTrigger className="h-7 text-xs px-2 border-slate-200 w-auto min-w-[150px] focus:ring-0 focus:ring-offset-0">
+                        <SelectValue placeholder="Item vinculado" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="__all__">Todos os itens</SelectItem>
+                        {items.map(item => (
+                            <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+                <Select value={filterVariationId} onValueChange={setFilterVariationId}>
+                    <SelectTrigger className="h-7 text-xs px-2 border-slate-200 w-auto min-w-[150px] focus:ring-0 focus:ring-offset-0">
+                        <SelectValue placeholder="Variação" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="__all__">Todas as variações</SelectItem>
+                        {variations.map(v => (
+                            <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+                {view === "grouped" && <>
+                    <Button variant="outline" size="sm" className="h-7 text-xs px-2" onClick={() => setCollapsed(new Set())}>Expandir tudo</Button>
+                    <Button variant="outline" size="sm" className="h-7 text-xs px-2" onClick={() => setCollapsed(new Set(filteredRecipes.map(r => r.id)))}>Recolher tudo</Button>
+                </>}
+                <div className="flex items-center border border-slate-200 rounded-md overflow-hidden divide-x divide-slate-200">
+                    <Button variant="ghost" size="sm"
+                        className={cn("h-7 px-3 text-xs rounded-none",
+                            view === "grouped" ? "bg-slate-100 text-slate-700 font-medium" : "text-slate-400 hover:text-slate-600 hover:bg-slate-50")}
+                        onClick={() => setSearchParams(prev => { const n = new URLSearchParams(prev); n.set("view", "grouped"); return n })}
+                    >Agrupada</Button>
+                    <Button variant="ghost" size="sm"
+                        className={cn("h-7 px-3 text-xs rounded-none",
+                            view === "flat" ? "bg-slate-100 text-slate-700 font-medium" : "text-slate-400 hover:text-slate-600 hover:bg-slate-50")}
+                        onClick={() => setSearchParams(prev => { const n = new URLSearchParams(prev); n.set("view", "flat"); return n })}
+                    >Plana</Button>
+                </div>
+                <div className="flex-1" />
+                <span className="text-xs text-slate-500 tabular-nums shrink-0">
+                    <span className="font-bold text-slate-700">{filteredRecipes.length}</span> receitas
+                    {" · "}
+                    <span className="font-bold text-slate-700">{totalLines}</span> ingredientes
+                </span>
+                <span className="text-xs text-slate-500 tabular-nums shrink-0">
+                    Mostrando <span className="font-bold text-slate-700">{shownLines}</span> de{" "}
+                    <span className="font-bold text-slate-700">{totalLines}</span> linhas
+                </span>
             </div>
 
             {/* ── Grid ── */}
             <div className={cn("rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm", isResizing && "select-none")}>
                 <div className="overflow-x-auto">
-                    <table
-                        className="border-collapse"
-                        style={{ tableLayout: "fixed", width: `${colWidths.reduce((a, b) => a + b, 0)}px`, minWidth: "100%" }}
-                    >
-                        <colgroup>
-                            {colWidths.map((w, i) => <col key={i} style={{ width: `${w}px` }} />)}
-                        </colgroup>
-
-                        {/* ── Header ── */}
-                        <thead>
-                            <tr>
-                                <th className={CELL_HDR} />
-                                <ColHeader colIndex={1} onStartResize={startResize}>Nome / Ingrediente</ColHeader>
-                                <ColHeader colIndex={2} onStartResize={startResize}>Item Vinc. / Variação</ColHeader>
-                                <ColHeader colIndex={3} onStartResize={startResize}>Variante / UM</ColHeader>
-                                <ColHeader colIndex={4} onStartResize={startResize} align="right">Nome Calc. / Qtd</ColHeader>
-                                <ColHeader colIndex={5} onStartResize={startResize} align="right">Custo Un.</ColHeader>
-                                <ColHeader colIndex={6} onStartResize={startResize} align="right">Total</ColHeader>
-                                <th className={CELL_HDR} />
-                            </tr>
-                        </thead>
-
-                        <tbody>
-                            {filteredRecipes.length === 0 && !isCreating && (
+                    {view === "flat" ? (
+                        <table className="border-collapse"
+                            style={{ tableLayout: "fixed", width: `${flatColWidths.reduce((a, b) => a + b, 0)}px`, minWidth: "100%" }}>
+                            <colgroup>
+                                {flatColWidths.map((w, i) => <col key={i} style={{ width: `${w}px` }} />)}
+                            </colgroup>
+                            <thead>
                                 <tr>
-                                    <td colSpan={8} className="border border-slate-200 px-4 py-10 text-center text-sm text-slate-400">
-                                        Nenhuma receita encontrada.
-                                    </td>
+                                    <th className={CELL_HDR} />
+                                    <ColHeader colIndex={1} onStartResize={startFlatResize}>Receita</ColHeader>
+                                    <ColHeader colIndex={2} onStartResize={startFlatResize}>Ingrediente</ColHeader>
+                                    <ColHeader colIndex={3} onStartResize={startFlatResize}>Variação</ColHeader>
+                                    <ColHeader colIndex={4} onStartResize={startFlatResize}>UM</ColHeader>
+                                    <ColHeader colIndex={5} onStartResize={startFlatResize} align="right">Quantidade</ColHeader>
+                                    <ColHeader colIndex={6} onStartResize={startFlatResize} align="right">Custo Un.</ColHeader>
+                                    <ColHeader colIndex={7} onStartResize={startFlatResize} align="right">Total</ColHeader>
+                                    <th className={CELL_HDR} />
                                 </tr>
-                            )}
+                            </thead>
+                            <FlatTableBody
+                                recipes={limitedRecipes}
+                                items={items}
+                                unitOptions={unitOptions}
+                            />
+                        </table>
+                    ) : (
+                        <table
+                            className="border-collapse"
+                            style={{ tableLayout: "fixed", width: `${colWidths.reduce((a, b) => a + b, 0)}px`, minWidth: "100%" }}
+                        >
+                            <colgroup>
+                                {colWidths.map((w, i) => <col key={i} style={{ width: `${w}px` }} />)}
+                            </colgroup>
 
-                            {filteredRecipes.map(recipe => {
-                                const startIndex = globalRowIndex
-                                globalRowIndex += recipe.RecipeLine.length
-                                return (
-                                    <RecipeGroup
-                                        key={recipe.id}
-                                        recipe={recipe}
-                                        collapsed={collapsed.has(recipe.id)}
-                                        onToggle={() => toggleCollapse(recipe.id)}
+                            {/* ── Header ── */}
+                            <thead>
+                                <tr>
+                                    <th className={CELL_HDR} />
+                                    <ColHeader colIndex={1} onStartResize={startResize}>Ingrediente</ColHeader>
+                                    <ColHeader colIndex={2} onStartResize={startResize}>Variação</ColHeader>
+                                    <ColHeader colIndex={3} onStartResize={startResize}>UM</ColHeader>
+                                    <ColHeader colIndex={4} onStartResize={startResize} align="right">Quantidade</ColHeader>
+                                    <ColHeader colIndex={5} onStartResize={startResize} align="right">Custo Un.</ColHeader>
+                                    <ColHeader colIndex={6} onStartResize={startResize} align="right">Total</ColHeader>
+                                    <th className={CELL_HDR} />
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                {filteredRecipes.length === 0 && !isCreating && (
+                                    <tr>
+                                        <td colSpan={8} className="border border-slate-200 px-4 py-10 text-center text-sm text-slate-400">
+                                            Nenhuma receita encontrada.
+                                        </td>
+                                    </tr>
+                                )}
+
+                                {limitedRecipes.map(recipe => {
+                                    const startIndex = globalRowIndex
+                                    globalRowIndex += recipe.RecipeLine.length
+                                    return (
+                                        <RecipeGroup
+                                            key={recipe.id}
+                                            recipe={recipe}
+                                            collapsed={collapsed.has(recipe.id)}
+                                            onToggle={() => toggleCollapse(recipe.id)}
+                                            items={items}
+                                            unitOptions={unitOptions}
+                                            linkedVariations={recipe.linkedVariations || []}
+                                            rowStartIndex={startIndex}
+                                        />
+                                    )
+                                })}
+
+                                {/* ── Create new recipe ── */}
+                                {isCreating ? (
+                                    <CreatingRecipeRow
                                         items={items}
-                                        unitOptions={unitOptions}
-                                        variations={variations}
-                                        rowStartIndex={startIndex}
+                                        onDone={() => setIsCreating(false)}
                                     />
-                                )
-                            })}
-
-                            {/* ── Create new recipe ── */}
-                            {isCreating ? (
-                                <CreatingRecipeRow
-                                    items={items}
-                                    variations={variations}
-                                    onDone={() => setIsCreating(false)}
-                                />
-                            ) : (
-                                <tr className="h-7 bg-slate-50/60">
-                                    <td className="border border-slate-200" />
-                                    <td colSpan={7} className="border border-slate-200 px-1">
-                                        <Button type="button" variant="ghost" size="sm"
-                                            onClick={() => setIsCreating(true)}
-                                            className="h-6 px-2 text-xs font-medium text-slate-500 hover:text-blue-600 hover:bg-blue-50 gap-1.5">
-                                            <Plus size={12} />
-                                            Nova Receita
-                                        </Button>
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
+                                ) : (
+                                    <tr className="h-7 bg-slate-50/60">
+                                        <td className="border border-slate-200" />
+                                        <td colSpan={7} className="border border-slate-200 p-3">
+                                            <Button
+                                                onClick={() => setIsCreating(true)}
+                                                className="h-7 px-2 text-sm font-medium gap-1.5">
+                                                <Plus size={12} />
+                                                Nova Receita
+                                            </Button>
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    )}
                 </div>
             </div>
 
+            {hasMoreLines && (
+                <div className="flex items-center justify-center">
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 px-3 text-xs text-slate-600"
+                        onClick={() => setVisibleLineCount((prev) => prev + LINE_PAGE_SIZE)}
+                    >
+                        Carregar mais ({shownLines} de {totalLines})
+                    </Button>
+                </div>
+            )}
         </div>
     )
 }
@@ -518,13 +737,13 @@ function ColHeader({ children, align = "left", colIndex, onStartResize }: {
 
 // ─── Recipe Group ─────────────────────────────────────────────────────────────
 
-function RecipeGroup({ recipe, collapsed, onToggle, items, unitOptions, variations, rowStartIndex }: {
+function RecipeGroup({ recipe, collapsed, onToggle, items, unitOptions, linkedVariations, rowStartIndex }: {
     recipe: WorksheetRecipe
     collapsed: boolean
     onToggle: () => void
     items: WorksheetItem[]
     unitOptions: string[]
-    variations: WorksheetVariation[]
+    linkedVariations: LinkedVariation[]
     rowStartIndex: number
 }) {
     const [isAdding, setIsAdding] = useState(false)
@@ -543,7 +762,6 @@ function RecipeGroup({ recipe, collapsed, onToggle, items, unitOptions, variatio
                 collapsed={collapsed}
                 onToggle={onToggle}
                 items={items}
-                variations={variations}
             />
 
             {/* ── Ingredient rows ── */}
@@ -551,6 +769,8 @@ function RecipeGroup({ recipe, collapsed, onToggle, items, unitOptions, variatio
                 <RecipeLineRow
                     key={line.id}
                     line={line}
+                    recipeId={recipe.id}
+                    linkedVariations={linkedVariations}
                     unitOptions={unitOptions}
                     items={items}
                     rowNumber={rowStartIndex + idx + 1}
@@ -588,12 +808,11 @@ function RecipeGroup({ recipe, collapsed, onToggle, items, unitOptions, variatio
 
 // ─── Recipe Header Row ────────────────────────────────────────────────────────
 
-function RecipeHeaderRow({ recipe, collapsed, onToggle, items, variations }: {
+function RecipeHeaderRow({ recipe, collapsed, onToggle, items }: {
     recipe: WorksheetRecipe
     collapsed: boolean
     onToggle: () => void
     items: WorksheetItem[]
-    variations: WorksheetVariation[]
 }) {
     const fetcher = useFetcher()
 
@@ -608,7 +827,7 @@ function RecipeHeaderRow({ recipe, collapsed, onToggle, items, variations }: {
     // Sync name if server data changes
     useEffect(() => { setName(recipe.name) }, [recipe.name, recipe.id])
 
-    const saveRecipe = (data: { recipeName?: string; recipeItemId?: string | null; recipeVariationId?: string | null }) => {
+    const saveRecipe = (data: { recipeName?: string; recipeItemId?: string | null }) => {
         fetcher.submit(
             { _action: "recipe-update", recipeId: recipe.id, ...data as any },
             { method: "post" }
@@ -618,136 +837,143 @@ function RecipeHeaderRow({ recipe, collapsed, onToggle, items, variations }: {
     const totalCost = recipe.RecipeLine.reduce((acc, l) => acc + l.lastTotalCostAmount, 0)
     const nomeCalculado = calcNome(recipe)
     const filteredItems = filterItems(items, itemSearch).slice(0, 50)
+    const hasZeroCost = recipe.RecipeLine.some(l => Number(l.lastTotalCostAmount) <= 0)
 
     return (
-        <tr className="h-9 border-t-2 border-slate-200">
+        <tr className="h-9 border-t-2 border-slate-300">
             {/* Expand / collapse */}
-            <td className={cn(CELL_RECIPE, "text-center cursor-pointer")} onClick={onToggle}>
-                <span className="text-slate-400">
+            <td
+                className={cn(CELL_RECIPE, "text-center cursor-pointer select-none")}
+                onClick={onToggle}
+            >
+                <span className="text-slate-400 flex items-center justify-center">
                     {collapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
                 </span>
             </td>
 
-            {/* Nome Receita — editable */}
-            <td className={cn(CELL_RECIPE_EDITABLE, "p-0")} onClick={() => !isEditingName && setIsEditingName(true)}>
-                {isEditingName ? (
-                    <input
-                        autoFocus
-                        value={name}
-                        onChange={e => setName(e.target.value)}
-                        onBlur={() => { saveRecipe({ recipeName: name }); setIsEditingName(false) }}
-                        onKeyDown={e => {
-                            if (e.key === "Enter") { saveRecipe({ recipeName: name }); setIsEditingName(false) }
-                            if (e.key === "Escape") { setName(recipe.name); setIsEditingName(false) }
-                        }}
-                        className="w-full h-full px-2 bg-transparent border-0 outline-none text-sm font-semibold text-slate-800"
-                    />
-                ) : (
-                    <div className="flex items-center gap-2 h-full px-2 cursor-text">
-                        <Link
-                            to={`/admin/recipes/${recipe.id}`}
-                            className="font-semibold text-sm text-slate-800 hover:underline truncate"
-                            onClick={e => e.stopPropagation()}
-                        >
-                            {recipe.name}
-                        </Link>
-                        <RecipeBadge item={recipe as any} />
-                    </div>
-                )}
-            </td>
+            {/* Recipe metadata — spans all 7 remaining columns */}
+            <td colSpan={7} className={cn(CELL_RECIPE, "px-2")}>
+                <div className="flex items-center gap-2 h-full min-w-0">
 
-            {/* Item Vinculado — combobox */}
-            <td className={cn(CELL_RECIPE, "p-0")}>
-                <Popover open={itemComboOpen} onOpenChange={setItemComboOpen}>
-                    <PopoverTrigger asChild>
-                        <button
-                            type="button"
-                            className="w-full h-full px-2 text-left text-xs focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+                    {/* Nome — click to edit */}
+                    {isEditingName ? (
+                        <input
+                            autoFocus
+                            value={name}
+                            onChange={e => setName(e.target.value)}
+                            onBlur={() => { saveRecipe({ recipeName: name }); setIsEditingName(false) }}
+                            onKeyDown={e => {
+                                if (e.key === "Enter") { saveRecipe({ recipeName: name }); setIsEditingName(false) }
+                                if (e.key === "Escape") { setName(recipe.name); setIsEditingName(false) }
+                            }}
+                            className="font-semibold text-sm text-slate-800 bg-white border border-blue-400 rounded px-1.5 h-6 outline-none min-w-0 w-48 shrink-0"
+                        />
+                    ) : (
+                        <div className="flex items-center gap-1.5 min-w-0 shrink-0 max-w-[260px]">
+                            <Link
+                                to={`/admin/recipes/${recipe.id}`}
+                                onClick={e => e.stopPropagation()}
+                                className="font-semibold text-sm text-slate-800 hover:text-blue-600 hover:underline truncate text-left"
+                                title={recipe.name}
+                            >
+                                {recipe.name}
+                            </Link>
+                            <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); setIsEditingName(true) }}
+                                className="text-[10px] text-slate-400 hover:text-slate-700 shrink-0"
+                                title="Editar nome"
+                            >
+                                Editar
+                            </button>
+                        </div>
+                    )}
+
+                    <RecipeBadge item={recipe as any} />
+                    {hasZeroCost && (
+                        <span
+                            className="text-[10px] px-1.5 py-0.5 rounded-full border border-amber-300 text-amber-700 bg-amber-50 shrink-0"
+                            title="Ingredientes com custo total zero"
                         >
-                            {recipe.Item
-                                ? <span className="text-slate-700">{recipe.Item.name}</span>
-                                : <span className="text-slate-300 italic">Item vinculado...</span>
-                            }
-                        </button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[280px] p-0" align="start">
-                        <Command>
-                            <CommandInput placeholder="Buscar item..." value={itemSearch} onValueChange={setItemSearch} />
-                            <CommandList className="max-h-[180px]">
-                                <CommandEmpty>Nenhum item encontrado.</CommandEmpty>
-                                {recipe.itemId && (
-                                    <CommandItem value="__clear__" onSelect={() => {
-                                        saveRecipe({ recipeItemId: null, recipeVariationId: null })
-                                        setItemComboOpen(false)
-                                    }}>
-                                        <X size={12} className="mr-1 text-slate-400" />
-                                        <span className="text-slate-400 italic">Remover vínculo</span>
-                                    </CommandItem>
+                            CUSTO 0
+                        </span>
+                    )}
+
+                    <span className="text-slate-200 select-none shrink-0">|</span>
+
+                    {/* Item vinculado — combobox as compact badge */}
+                    <Popover open={itemComboOpen} onOpenChange={setItemComboOpen}>
+                        <PopoverTrigger asChild>
+                            <button
+                                type="button"
+                                className={cn(
+                                    "text-xs px-2 py-0.5 rounded-full border whitespace-nowrap shrink-0 transition-colors",
+                                    recipe.Item
+                                        ? "border-slate-300 text-slate-600 hover:border-blue-400 hover:text-blue-600"
+                                        : "border-dashed border-slate-300 text-slate-400 italic hover:border-blue-300 hover:text-blue-500"
                                 )}
-                                {filteredItems.map(item => (
-                                    <CommandItem key={item.id} value={itemLabel(item)} onSelect={() => {
-                                        saveRecipe({ recipeItemId: item.id })
-                                        setItemComboOpen(false)
-                                        setItemSearch("")
-                                    }}>
-                                        <div className="flex items-center justify-between w-full gap-2 min-w-0">
-                                            <span className="font-medium truncate">{item.name}</span>
-                                            <div className="flex items-center gap-1.5 shrink-0">
-                                                {item.classification && <span className="text-xs text-slate-400">{item.classification}</span>}
-                                                {item.consumptionUm && <span className="text-xs font-mono text-slate-500 bg-slate-100 px-1 rounded">{item.consumptionUm}</span>}
+                            >
+                                {recipe.Item ? recipe.Item.name : "↳ item"}
+                            </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[280px] p-0" align="start">
+                            <Command>
+                                <CommandInput placeholder="Buscar item..." value={itemSearch} onValueChange={setItemSearch} />
+                                <CommandList className="max-h-[180px]">
+                                        <CommandEmpty>Nenhum item encontrado.</CommandEmpty>
+                                    {recipe.itemId && (
+                                        <CommandItem value="__clear__" onSelect={() => {
+                                            saveRecipe({ recipeItemId: null })
+                                            setItemComboOpen(false)
+                                        }}>
+                                            <X size={12} className="mr-1 text-slate-400" />
+                                            <span className="text-slate-400 italic">Remover vínculo</span>
+                                        </CommandItem>
+                                    )}
+                                    {filteredItems.map(item => (
+                                        <CommandItem key={item.id} value={itemLabel(item)} onSelect={() => {
+                                            saveRecipe({ recipeItemId: item.id })
+                                            setItemComboOpen(false)
+                                            setItemSearch("")
+                                        }}>
+                                            <div className="flex items-center justify-between w-full gap-2 min-w-0">
+                                                <span className="font-medium truncate">{item.name}</span>
+                                                <div className="flex items-center gap-1.5 shrink-0">
+                                                    {item.classification && <span className="text-xs text-slate-400">{item.classification}</span>}
+                                                    {item.consumptionUm && <span className="text-xs font-mono text-slate-500 bg-slate-100 px-1 rounded">{item.consumptionUm}</span>}
+                                                </div>
                                             </div>
-                                        </div>
-                                    </CommandItem>
-                                ))}
-                            </CommandList>
-                        </Command>
-                    </PopoverContent>
-                </Popover>
-            </td>
+                                        </CommandItem>
+                                    ))}
+                                </CommandList>
+                            </Command>
+                        </PopoverContent>
+                    </Popover>
 
-            {/* Variante — native select */}
-            <td className={CELL_RECIPE_EDITABLE}>
-                <select
-                    value={recipe.variationId ?? ""}
-                    onChange={e => saveRecipe({ recipeVariationId: e.target.value || null })}
-                    className={cn(INPUT_BASE, "cursor-pointer text-xs")}
-                >
-                    <option value="">— variante</option>
-                    {variations.map(v => (
-                        <option key={v.id} value={v.id}>{v.name}</option>
-                    ))}
-                </select>
-            </td>
+                    {/* Nome calculado */}
+                    {nomeCalculado && (
+                        <span className="text-xs text-slate-400 truncate max-w-[120px]" title={nomeCalculado}>
+                            {nomeCalculado}
+                        </span>
+                    )}
 
-            {/* Nome Calculado — read-only */}
-            <td className={cn(CELL_RECIPE, "px-2")}>
-                {nomeCalculado
-                    ? <span className="text-xs text-slate-600 block truncate" title={nomeCalculado}>{nomeCalculado}</span>
-                    : <span className="text-xs text-slate-300">—</span>
-                }
-            </td>
+                    <div className="flex-1" />
 
-            {/* Custo Un. — empty for recipe */}
-            <td className={CELL_RECIPE} />
+                    {/* Total */}
+                    {totalCost > 0 && (
+                        <span className="text-sm font-semibold text-slate-700 tabular-nums whitespace-nowrap shrink-0">
+                            R$ {totalCost.toFixed(2)}
+                        </span>
+                    )}
 
-            {/* Total */}
-            <td className={cn(CELL_RECIPE, "px-2 text-right")}>
-                {totalCost > 0
-                    ? <span className="text-sm font-semibold text-slate-700 tabular-nums">R$ {totalCost.toFixed(2)}</span>
-                    : <span className="text-xs text-slate-300">—</span>
-                }
-            </td>
-
-            {/* Actions */}
-            <td className={cn(CELL_RECIPE, "text-center")}>
-                <Link
-                    to={`/admin/recipes/${recipe.id}`}
-                    title="Abrir receita"
-                    className="text-slate-400 hover:text-slate-700 inline-flex p-1"
-                    onClick={e => e.stopPropagation()}
-                >
-                    <ExternalLink size={12} />
-                </Link>
+                    {/* Link */}
+                    <Button variant="outline" size="icon" title="Abrir receita"
+                        className="h-7 w-7 shrink-0 text-slate-400 hover:text-slate-700" asChild>
+                        <Link to={`/admin/recipes/${recipe.id}`} onClick={e => e.stopPropagation()}>
+                            <ExternalLink size={14} />
+                        </Link>
+                    </Button>
+                </div>
             </td>
         </tr>
     )
@@ -755,14 +981,19 @@ function RecipeHeaderRow({ recipe, collapsed, onToggle, items, variations }: {
 
 // ─── Recipe Line Row ──────────────────────────────────────────────────────────
 
-function RecipeLineRow({ line, unitOptions, items, rowNumber }: {
+function RecipeLineRow({ line, recipeId, linkedVariations, unitOptions, items, rowNumber, flatRecipe }: {
     line: WorksheetRecipeLine
+    recipeId: string
+    linkedVariations: LinkedVariation[]
     unitOptions: string[]
     items: WorksheetItem[]
     rowNumber: number
+    /** undefined = grouped view (no Receita cell); null = flat view non-first row (empty cell); object = flat view first row (shows name) */
+    flatRecipe?: { id: string; name: string } | null
 }) {
     const fetcher = useFetcher()
     const itemFetcher = useFetcher()
+    const applyFetcher = useFetcher()
 
     // Item combobox state
     const [itemComboOpen, setItemComboOpen] = useState(false)
@@ -789,12 +1020,12 @@ function RecipeLineRow({ line, unitOptions, items, rowNumber }: {
     const save = useCallback(() => {
         if (!isDirty || currentQty <= 0) return
         fetcher.submit(
-            { _action: "recipe-line-update", lineId: line.id, lineUnit: unit, lineQuantity: String(currentQty) },
+            { _action: "recipe-line-update", recipeId, lineId: line.id, lineUnit: unit, lineQuantity: String(currentQty) },
             { method: "post" }
         )
         savedUnit.current = unit
         savedQty.current = currentQty
-    }, [isDirty, unit, currentQty, line.id])
+    }, [isDirty, unit, currentQty, line.id, recipeId])
 
     const cancel = useCallback(() => {
         setUnit(savedUnit.current)
@@ -804,13 +1035,35 @@ function RecipeLineRow({ line, unitOptions, items, rowNumber }: {
 
     const isPending = fetcher.state !== "idle"
     const displayTotal = line.lastUnitCostAmount * currentQty
+    const [selectedVariationIds, setSelectedVariationIds] = useState<string[]>([])
+
+    useEffect(() => {
+        const defaultId = String(line.ItemVariation?.variationId || "").trim()
+        setSelectedVariationIds(defaultId ? [defaultId] : [])
+    }, [line.id, line.ItemVariation?.variationId])
 
     return (
-        <tr className={cn("group h-8", isPending && "opacity-50", isDirty && "bg-amber-50/40")}>
+        <tr className={cn("group h-8", isPending && "opacity-50", isDirty && "bg-amber-50/40",
+            !!flatRecipe && "border-t-2 border-slate-200")}>
             {/* Row # */}
             <td className={cn(CELL, "text-center text-xs text-slate-400 bg-slate-50/30 select-none tabular-nums")}>
                 {rowNumber}
             </td>
+
+            {/* Receita cell — flat view only */}
+            {flatRecipe !== undefined && (
+                <td className={cn(CELL, "px-2")}>
+                    {flatRecipe && (
+                        <Link
+                            to={`/admin/recipes/${flatRecipe.id}`}
+                            className="text-xs font-semibold text-slate-700 hover:text-blue-600 hover:underline truncate block"
+                            title={flatRecipe.name}
+                        >
+                            {flatRecipe.name}
+                        </Link>
+                    )}
+                </td>
+            )}
 
             {/* Ingrediente — combobox */}
             <td className={cn(CELL_EDITABLE, "p-0")}>
@@ -831,7 +1084,7 @@ function RecipeLineRow({ line, unitOptions, items, rowNumber }: {
                                         setItemComboOpen(false)
                                         setItemSearch("")
                                         itemFetcher.submit(
-                                            { _action: "recipe-line-item-update", lineId: line.id, lineItemId: item.id },
+                                            { _action: "recipe-line-item-update", recipeId, lineId: line.id, lineItemId: item.id },
                                             { method: "post" }
                                         )
                                     }}>
@@ -855,15 +1108,73 @@ function RecipeLineRow({ line, unitOptions, items, rowNumber }: {
                 <span className="text-xs text-slate-500 block truncate">
                     {line.ItemVariation?.Variation?.name ?? <span className="text-slate-300">—</span>}
                 </span>
+                {linkedVariations.length > 1 && (
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                        {linkedVariations
+                            .filter((variation) => variation.variationId)
+                            .map((variation) => {
+                                const variationId = String(variation.variationId || "")
+                                const checked = selectedVariationIds.includes(variationId)
+                                return (
+                                    <label key={variation.itemVariationId} className="inline-flex items-center gap-1 text-[10px] text-slate-600">
+                                        <input
+                                            type="checkbox"
+                                            className="h-3 w-3 rounded border-slate-300"
+                                            checked={checked}
+                                            onChange={(event) => {
+                                                setSelectedVariationIds((current) => {
+                                                    if (event.target.checked) {
+                                                        if (current.includes(variationId)) return current
+                                                        return [...current, variationId]
+                                                    }
+                                                    return current.filter((id) => id !== variationId)
+                                                })
+                                            }}
+                                        />
+                                        <span>{variation.variationName || "Variação"}</span>
+                                    </label>
+                                )
+                            })}
+                        <button
+                            type="button"
+                            disabled={selectedVariationIds.length === 0 || applyFetcher.state !== "idle"}
+                            onClick={() => {
+                                applyFetcher.submit({
+                                    _action: "recipe-line-apply-variations",
+                                    recipeId,
+                                    lineId: line.id,
+                                    targetVariationIds: selectedVariationIds.join(","),
+                                }, { method: "post" })
+                            }}
+                            className="rounded border border-blue-200 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+                        >
+                            Aplicar selecionadas
+                        </button>
+                    </div>
+                )}
             </td>
 
             {/* UM — editable */}
             <td className={CELL_EDITABLE}>
-                <select value={unit} onChange={e => setUnit(e.target.value)} onBlur={save}
-                    className={cn(INPUT_BASE, "cursor-pointer")}>
-                    {unitOptions.map(u => <option key={u} value={u}>{u}</option>)}
-                    {!unitOptions.includes(unit) && <option value={unit}>{unit}</option>}
-                </select>
+                <Select value={unit} onValueChange={(newUnit) => {
+                    setUnit(newUnit)
+                    if (currentQty > 0) {
+                        fetcher.submit(
+                            { _action: "recipe-line-update", recipeId, lineId: line.id, lineUnit: newUnit, lineQuantity: String(currentQty) },
+                            { method: "post" }
+                        )
+                        savedUnit.current = newUnit
+                        savedQty.current = currentQty
+                    }
+                }}>
+                    <SelectTrigger className="h-8 w-full border-0 rounded-none shadow-none text-sm text-slate-700 focus:ring-0 focus:ring-offset-0 bg-transparent px-2">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {unitOptions.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                        {!unitOptions.includes(unit) && <SelectItem value={unit}>{unit}</SelectItem>}
+                    </SelectContent>
+                </Select>
             </td>
 
             {/* Quantidade — editable */}
@@ -904,11 +1215,12 @@ function RecipeLineRow({ line, unitOptions, items, rowNumber }: {
             <td className={cn(CELL, "text-center")}>
                 <fetcher.Form method="post">
                     <input type="hidden" name="_action" value="recipe-line-delete" />
+                    <input type="hidden" name="recipeId" value={recipeId} />
                     <input type="hidden" name="lineId" value={line.id} />
-                    <button type="submit" title="Remover"
-                        className="opacity-0 group-hover:opacity-100 p-1 text-slate-300 hover:text-red-500 transition-all rounded">
-                        <Trash2 size={12} />
-                    </button>
+                    <Button type="submit" variant="outline" size="icon" title="Remover"
+                        className="h-7 w-7 text-red-400 border-red-200 hover:text-red-600 hover:bg-red-50 hover:border-red-300">
+                        <Trash2 size={14} />
+                    </Button>
                 </fetcher.Form>
             </td>
         </tr>
@@ -917,12 +1229,13 @@ function RecipeLineRow({ line, unitOptions, items, rowNumber }: {
 
 // ─── Adding Row ───────────────────────────────────────────────────────────────
 
-function AddingRow({ recipeId, items, unitOptions, onDone, rowNumber }: {
+function AddingRow({ recipeId, items, unitOptions, onDone, rowNumber, flatView }: {
     recipeId: string
     items: WorksheetItem[]
     unitOptions: string[]
     onDone: () => void
     rowNumber: number
+    flatView?: boolean
 }) {
     const fetcher = useFetcher()
     const [selectedItem, setSelectedItem] = useState<WorksheetItem | null>(null)
@@ -957,6 +1270,7 @@ function AddingRow({ recipeId, items, unitOptions, onDone, rowNumber }: {
     return (
         <tr className={cn("h-8 bg-blue-50/20", isPending && "opacity-60")}>
             <td className={cn(CELL, "text-center text-xs text-slate-400 bg-blue-50/30 select-none tabular-nums")}>{rowNumber}</td>
+            {flatView && <td className={CELL} />}
 
             {/* Item combobox */}
             <td className={cn(CELL_EDITABLE, "p-0")}>
@@ -997,10 +1311,14 @@ function AddingRow({ recipeId, items, unitOptions, onDone, rowNumber }: {
 
             {/* UM */}
             <td className={CELL_EDITABLE}>
-                <select value={unit} onChange={e => setUnit(e.target.value)}
-                    className={cn(INPUT_BASE, "cursor-pointer")}>
-                    {unitOptions.map(u => <option key={u} value={u}>{u}</option>)}
-                </select>
+                <Select value={unit} onValueChange={setUnit}>
+                    <SelectTrigger className="h-8 w-full border-0 rounded-none shadow-none text-sm text-slate-700 focus:ring-0 focus:ring-offset-0 bg-transparent px-2">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {unitOptions.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                    </SelectContent>
+                </Select>
             </td>
 
             {/* Qtd */}
@@ -1027,16 +1345,18 @@ function AddingRow({ recipeId, items, unitOptions, onDone, rowNumber }: {
             <td className={CELL} />
 
             <td className={cn(CELL, "text-center")}>
-                <div className="flex items-center justify-center gap-0.5">
-                    <button type="button" onClick={submit} disabled={!selectedItem || qtyValue <= 0 || isPending}
+                <div className="flex items-center justify-center gap-1">
+                    <Button type="button" variant="outline" size="icon" onClick={submit}
+                        disabled={!selectedItem || qtyValue <= 0 || isPending}
                         title="Confirmar (Enter)"
-                        className="p-1 rounded text-green-600 hover:bg-green-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
-                        <Check size={12} />
-                    </button>
-                    <button type="button" onClick={onDone} title="Cancelar (Esc)"
-                        className="p-1 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
-                        <X size={12} />
-                    </button>
+                        className="h-7 w-7 text-green-600 border-green-200 hover:bg-green-50 hover:border-green-300">
+                        <Check size={14} />
+                    </Button>
+                    <Button type="button" variant="outline" size="icon" onClick={onDone}
+                        title="Cancelar (Esc)"
+                        className="h-7 w-7 text-slate-400 border-slate-200 hover:text-slate-600">
+                        <X size={14} />
+                    </Button>
                 </div>
             </td>
         </tr>
@@ -1045,19 +1365,18 @@ function AddingRow({ recipeId, items, unitOptions, onDone, rowNumber }: {
 
 // ─── Creating Recipe Row ──────────────────────────────────────────────────────
 
-function CreatingRecipeRow({ items, variations, onDone }: {
+function CreatingRecipeRow({ items, onDone, flatView }: {
     items: WorksheetItem[]
-    variations: WorksheetVariation[]
     onDone: () => void
+    flatView?: boolean
 }) {
     const fetcher = useFetcher()
     const [selectedItem, setSelectedItem] = useState<WorksheetItem | null>(null)
     const [itemSearch, setItemSearch] = useState("")
     // Auto-open item combobox — item is the primary field
     const [itemComboOpen, setItemComboOpen] = useState(true)
-    const [variationId, setVariationId] = useState("")
     const [name, setName] = useState("")
-    // Track if name was auto-generated so variation changes can also update it
+    // Track if name was auto-generated so item changes can also update it
     const [nameAutoSet, setNameAutoSet] = useState(false)
     const nameRef = useRef<HTMLInputElement>(null)
 
@@ -1069,27 +1388,18 @@ function CreatingRecipeRow({ items, variations, onDone }: {
         }
     }, [fetcher.state, fetcher.data, onDone])
 
-    const buildAutoName = (item: WorksheetItem, varId: string) => {
-        const varName = variations.find(v => v.id === varId)?.name
-        return varName ? `Receita ${item.name} (${varName})` : `Receita ${item.name}`
+    const buildAutoName = (item: WorksheetItem) => {
+        return `Receita ${item.name}`
     }
 
     const handleSelectItem = (item: WorksheetItem) => {
         setSelectedItem(item)
         setItemComboOpen(false)
         setItemSearch("")
-        const auto = buildAutoName(item, variationId)
+        const auto = buildAutoName(item)
         setName(auto)
         setNameAutoSet(true)
         setTimeout(() => nameRef.current?.focus(), 50)
-    }
-
-    const handleVariationChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        const vid = e.target.value
-        setVariationId(vid)
-        if (nameAutoSet && selectedItem) {
-            setName(buildAutoName(selectedItem, vid))
-        }
     }
 
     const submit = () => {
@@ -1099,7 +1409,6 @@ function CreatingRecipeRow({ items, variations, onDone }: {
                 _action: "recipe-create",
                 recipeName: name.trim(),
                 ...(selectedItem ? { recipeItemId: selectedItem.id } : {}),
-                ...(variationId ? { recipeVariationId: variationId } : {}),
             },
             { method: "post" }
         )
@@ -1109,7 +1418,7 @@ function CreatingRecipeRow({ items, variations, onDone }: {
     const errorMessage = fetcher.data && (fetcher.data as { status?: number }).status !== 200
         ? (fetcher.data as { message?: string }).message : null
 
-    const nomeCalc = selectedItem ? calcNome({ Item: selectedItem, Variation: variations.find(v => v.id === variationId) ?? null }) : null
+    const nomeCalc = selectedItem ? selectedItem.name : null
 
     return (
         <tr className={cn("h-8 bg-green-50/20 border-t-2 border-green-200", isPending && "opacity-60")}>
@@ -1117,6 +1426,7 @@ function CreatingRecipeRow({ items, variations, onDone }: {
             <td className={cn(CELL, "bg-green-50/30 text-center")}>
                 <Plus size={11} className="text-green-500 mx-auto" />
             </td>
+            {flatView && <td className={CELL} />}
 
             {/* Nome — auto-filled, editable */}
             <td className={CELL_EDITABLE}>
@@ -1167,14 +1477,7 @@ function CreatingRecipeRow({ items, variations, onDone }: {
                 </Popover>
             </td>
 
-            {/* Variante */}
-            <td className={CELL_EDITABLE}>
-                <select value={variationId} onChange={handleVariationChange}
-                    className={cn(INPUT_BASE, "cursor-pointer text-xs")}>
-                    <option value="">— variante</option>
-                    {variations.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-                </select>
-            </td>
+            <td className={CELL} />
 
             {/* Nome Calculado preview */}
             <td className={cn(CELL, "px-2")}>
@@ -1191,18 +1494,136 @@ function CreatingRecipeRow({ items, variations, onDone }: {
 
             {/* Confirm / Cancel */}
             <td className={cn(CELL, "text-center")}>
-                <div className="flex items-center justify-center gap-0.5">
-                    <button type="button" onClick={submit} disabled={!name.trim() || isPending}
+                <div className="flex items-center justify-center gap-1">
+                    <Button type="button" variant="outline" size="icon"
+                        onClick={submit} disabled={!name.trim() || isPending}
                         title="Criar (Enter)"
-                        className="p-1 rounded text-green-600 hover:bg-green-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
-                        <Check size={12} />
-                    </button>
-                    <button type="button" onClick={onDone} title="Cancelar (Esc)"
-                        className="p-1 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
-                        <X size={12} />
-                    </button>
+                        className="h-7 w-7 text-green-600 border-green-200 hover:bg-green-50 hover:border-green-300">
+                        <Check size={14} />
+                    </Button>
+                    <Button type="button" variant="outline" size="icon"
+                        onClick={onDone} title="Cancelar (Esc)"
+                        className="h-7 w-7 text-slate-400 border-slate-200 hover:text-slate-600">
+                        <X size={14} />
+                    </Button>
                 </div>
             </td>
         </tr>
+    )
+}
+
+// ─── Flat Table Body ──────────────────────────────────────────────────────────
+
+function FlatTableBody({ recipes, items, unitOptions }: {
+    recipes: WorksheetRecipe[]
+    items: WorksheetItem[]
+    unitOptions: string[]
+}) {
+    const [addingForRecipeId, setAddingForRecipeId] = useState<string | null>(null)
+    const [isCreating, setIsCreating] = useState(false)
+    let globalRowIndex = 0
+
+    return (
+        <tbody>
+            {recipes.length === 0 && !isCreating && (
+                <tr>
+                    <td colSpan={9} className="border border-slate-200 px-4 py-10 text-center text-sm text-slate-400">
+                        Nenhuma receita encontrada.
+                    </td>
+                </tr>
+            )}
+
+            {recipes.map((recipe, recipeIdx) => {
+                const lines = recipe.RecipeLine
+                const isAdding = addingForRecipeId === recipe.id
+
+                return (
+                    <Fragment key={recipe.id}>
+                        {/* No ingredients — placeholder row */}
+                        {lines.length === 0 ? (
+                            <tr className={cn("h-8 bg-slate-50/30", recipeIdx > 0 && "border-t-2 border-slate-200")}>
+                                <td className={cn(CELL, "text-center text-xs text-slate-300 bg-slate-50/30")}>—</td>
+                                <td className={cn(CELL, "px-2")}>
+                                    <Link
+                                        to={`/admin/recipes/${recipe.id}`}
+                                        className="text-xs font-semibold text-slate-700 hover:text-blue-600 hover:underline truncate block"
+                                        title={recipe.name}
+                                    >
+                                        {recipe.name}
+                                    </Link>
+                                </td>
+                                <td colSpan={7} className={cn(CELL, "px-2")}>
+                                    <span className="text-xs text-slate-400 italic">Sem ingredientes</span>
+                                </td>
+                            </tr>
+                        ) : (
+                            lines.map((line, lineIdx) => {
+                                const rowNum = ++globalRowIndex
+                                return (
+                                    <RecipeLineRow
+                                        key={line.id}
+                                        line={line}
+                                        recipeId={recipe.id}
+                                        linkedVariations={recipe.linkedVariations || []}
+                                        unitOptions={unitOptions}
+                                        items={items}
+                                        rowNumber={rowNum}
+                                        flatRecipe={lineIdx === 0 ? { id: recipe.id, name: recipe.name } : null}
+                                    />
+                                )
+                            })
+                        )}
+
+                        {/* Adding row */}
+                        {isAdding && (
+                            <AddingRow
+                                recipeId={recipe.id}
+                                items={items}
+                                unitOptions={unitOptions}
+                                onDone={() => setAddingForRecipeId(null)}
+                                rowNumber={globalRowIndex + 1}
+                                flatView
+                            />
+                        )}
+
+                        {/* Add ingredient trigger */}
+                        {!isAdding && (
+                            <tr className="h-7">
+                                <td className={CELL} />
+                                <td colSpan={8} className={cn(CELL, "px-1")}>
+                                    <Button type="button" variant="ghost" size="sm"
+                                        onClick={() => setAddingForRecipeId(recipe.id)}
+                                        className="h-6 px-2 text-xs font-medium text-slate-500 hover:text-blue-600 hover:bg-blue-50 gap-1.5">
+                                        <Plus size={12} />
+                                        Adicionar ingrediente
+                                    </Button>
+                                </td>
+                            </tr>
+                        )}
+                    </Fragment>
+                )
+            })}
+
+            {/* Create new recipe */}
+            {isCreating ? (
+                <CreatingRecipeRow
+                    items={items}
+                    onDone={() => setIsCreating(false)}
+                    flatView
+                />
+            ) : (
+                <tr className="h-7 bg-slate-50/60">
+                    <td className={CELL} />
+                    <td colSpan={8} className="border border-slate-200 p-3">
+                        <Button
+                            onClick={() => setIsCreating(true)}
+                            className="h-7 px-2 text-sm font-medium gap-1.5">
+                            <Plus size={12} />
+                            Nova Receita
+                        </Button>
+                    </td>
+                </tr>
+            )}
+        </tbody>
     )
 }

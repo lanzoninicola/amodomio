@@ -23,6 +23,7 @@ const ITEM_UNIT_OPTIONS = ["UN", "L", "ML", "KG", "G"];
 
 const itemNavigation = [
   { name: "Principal", href: "main" },
+  { name: "Variantes", href: "variations" },
   { name: "Custos", href: "costs" },
   { name: "Receitas", href: "recipes" },
   { name: "Fichas de Custo", href: "item-cost-sheets" },
@@ -33,7 +34,7 @@ function toBool(value: FormDataEntryValue | null) {
   return value === "on" || value === "true";
 }
 
-function normalizeUnit(value: FormDataEntryValue | null) {
+function normalizeUnit(value: FormDataEntryValue | string | null | undefined) {
   const normalized = String(value || "").trim().toUpperCase();
   return normalized || null;
 }
@@ -369,6 +370,50 @@ export async function action({ request, params }: ActionFunctionArgs) {
       });
 
       return ok("Custo registrado com sucesso");
+    }
+
+    if (_action === "item-variations-update") {
+      const variationIds = Array.from(
+        new Set(
+          formData
+            .getAll("variationIds")
+            .map((value) => String(value || "").trim())
+            .filter(Boolean)
+        )
+      );
+      const referenceVariationId = String(formData.get("referenceVariationId") || "").trim();
+
+      const allowedVariations = await db.variation.findMany({
+        where: {
+          id: { in: variationIds },
+          deletedAt: null,
+          NOT: { kind: "base" },
+        },
+        select: { id: true },
+      });
+
+      const normalizedVariationIds = allowedVariations.map((row: any) => row.id);
+      const linked = await itemVariationPrismaEntity.replaceItemVariations(id, normalizedVariationIds, {
+        keepBase: true,
+      });
+
+      const activeRows = (linked || []).filter((row: any) => !row.deletedAt);
+      const requestedReference = activeRows.find((row: any) => row.variationId === referenceVariationId);
+      const fallbackReference =
+        activeRows.find((row: any) => row.isReference) ||
+        activeRows.find((row: any) => row?.Variation?.kind !== "base") ||
+        activeRows[0];
+
+      const nextReference = requestedReference || fallbackReference;
+
+      if (nextReference?.id) {
+        await itemVariationPrismaEntity.setReferenceVariation({
+          itemId: id,
+          itemVariationId: nextReference.id,
+        });
+      }
+
+      return ok("Variantes do item atualizadas com sucesso");
     }
 
     return badRequest("Ação inválida");
