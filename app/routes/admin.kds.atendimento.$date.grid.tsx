@@ -2,7 +2,7 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json, defer } from "@remix-run/node";
 import { Await, useFetcher, useLoaderData } from "@remix-run/react";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import prisma from "~/lib/prisma/client.server";
 import { Prisma } from "@prisma/client";
 
@@ -71,7 +71,6 @@ import {
   Pizza,
   ChevronUp,
   ChevronDown,
-  GripVertical,
   PencilLine,
   SaveIcon,
   CrossIcon,
@@ -421,9 +420,9 @@ export async function loader({ params }: LoaderFunctionArgs) {
   // Meta do dia (snapshot via FK no header); fallback para meta ativa.
   const goalForDay = header?.financialDailyGoalId
     ? await prisma.financialDailyGoal.findUnique({
-        where: { id: header.financialDailyGoalId },
-        select: goalSelect,
-      })
+      where: { id: header.financialDailyGoalId },
+      select: goalSelect,
+    })
     : null;
   const activeGoal = goalForDay ?? await prisma.financialDailyGoal.findFirst({
     where: { isActive: true },
@@ -1605,6 +1604,8 @@ export default function GridKdsPage() {
     predictionSettings.operatorCount ?? getOperatorCountByDate(dateStr)
   );
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
+  const stockBarRef = useRef<HTMLDivElement | null>(null);
+  const [isStockBarPinned, setIsStockBarPinned] = useState(false);
 
   // ← estado do botão de cartão na Venda Livre rápida
   const [vlIsCreditCard, setVlIsCreditCard] = useState(false);
@@ -1624,30 +1625,44 @@ export default function GridKdsPage() {
     return base;
   }, [availableSizes]);
 
-  const [showStockPanel, setShowStockPanel] = useState(() => true);
-  const [floatingTop, setFloatingTop] = useState(160);
-  const [dragging, setDragging] = useState(false);
-
-  useEffect(() => {
-    function onMove(e: MouseEvent) {
-      if (!dragging) return;
-      const next = Math.min(Math.max(80, e.clientY - 30), window.innerHeight - 140);
-      setFloatingTop(next);
-    }
-    function onUp() { setDragging(false); }
-    if (dragging) {
-      window.addEventListener("mousemove", onMove);
-      window.addEventListener("mouseup", onUp);
-    }
-    return () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    };
-  }, [dragging]);
-
   useEffect(() => {
     setAdjustmentDraft(stockSnapshot?.effective ?? defaultSizeCounts());
   }, [stockSnapshot, dateStr]);
+
+  useEffect(() => {
+    if (!(status === "OPENED" || status === "REOPENED")) {
+      setIsStockBarPinned(false);
+      return;
+    }
+
+    let rafId: number | null = null;
+    const checkPinned = () => {
+      rafId = null;
+      const el = stockBarRef.current;
+      if (!el) {
+        setIsStockBarPinned(false);
+        return;
+      }
+
+      const stickyTop = Number.parseFloat(window.getComputedStyle(el).top || "0");
+      const pinned = el.getBoundingClientRect().top <= stickyTop + 0.5;
+      setIsStockBarPinned((prev) => (prev === pinned ? prev : pinned));
+    };
+
+    const onScrollOrResize = () => {
+      if (rafId !== null) return;
+      rafId = window.requestAnimationFrame(checkPinned);
+    };
+
+    checkPinned();
+    window.addEventListener("scroll", onScrollOrResize, { passive: true });
+    window.addEventListener("resize", onScrollOrResize);
+    return () => {
+      if (rafId !== null) window.cancelAnimationFrame(rafId);
+      window.removeEventListener("scroll", onScrollOrResize);
+      window.removeEventListener("resize", onScrollOrResize);
+    };
+  }, [status]);
 
   function setAdjustmentValue(key: keyof SizeCounts, value: number | string) {
     const numeric = Number(value);
@@ -2102,108 +2117,95 @@ export default function GridKdsPage() {
         </div>
       </div>
 
-      <Separator className="my-12" />
-
-      {/* Venda livre rápida + Filtro de Canal */}
       {(status === "OPENED" || status === "REOPENED") && (
-        <>
+        <Suspense fallback={null}>
+          <Await resolve={doughUsage}>
+            {(used: SizeCounts) => {
+              const effectiveCounts = stockSnapshot?.effective ?? defaultSizeCounts();
+              const baseCounts = baseStock ?? defaultSizeCounts();
+              const remaining = calcRemaining(effectiveCounts, used);
+              const ordered = (availableSizes as DoughSizeOption[]) ?? [];
+              const manual = effectiveCounts;
+              const hasManualInfo = (["F", "M", "P", "I", "FT"] as (keyof SizeCounts)[])
+                .some((k) => manual[k] > 0);
+              const manualText = ordered
+                .map(({ key, abbr }) => ({ key, abbr, value: manual[key] ?? 0 }))
+                .filter((item) => item.value > 0)
+                .map((item) => `${item.abbr || item.key}: ${item.value}`)
+                .join(" · ");
 
-          {/* Barra contador do estoque */}
-          <Suspense fallback={null}>
-            <Await resolve={doughUsage}>
-              {(used: SizeCounts) => {
-                const effectiveCounts = stockSnapshot?.effective ?? defaultSizeCounts();
-                const baseCounts = baseStock ?? defaultSizeCounts();
-                const remaining = calcRemaining(effectiveCounts, used);
-                const ordered = (availableSizes as DoughSizeOption[]) ?? [];
-                const manual = effectiveCounts;
-                const hasManualInfo = (["F", "M", "P", "I", "FT"] as (keyof SizeCounts)[])
-                  .some((k) => manual[k] > 0);
-                const manualText = ordered
-                  .map(({ key, abbr }) => ({ key, abbr, value: manual[key] ?? 0 }))
-                  .filter((item) => item.value > 0)
-                  .map((item) => `${item.abbr || item.key}: ${item.value}`)
-                  .join(" · ");
+              function chipClasses(k: keyof SizeCounts) {
+                const init = effectiveCounts[k];
+                if (init <= 0) return "border border-slate-200 text-slate-500 bg-white";
+                const ratio = remaining[k] / init;
+                if (remaining[k] === 0) return "bg-rose-500 text-white"; // crítico
+                if (remaining[k] <= 2) return "bg-amber-400 text-slate-900"; // alerta
+                if (remaining[k] < 3) return "border border-rose-500 text-rose-600 bg-white";
+                return "bg-emerald-500 text-white"; // ok
+              }
 
-                function chipClasses(k: keyof SizeCounts) {
-                  const init = effectiveCounts[k];
-                  if (init <= 0) return "border border-slate-200 text-slate-500 bg-white";
-                  const ratio = remaining[k] / init;
-                  if (remaining[k] === 0) return "bg-rose-500 text-white"; // crítico
-                  if (remaining[k] <= 2) return "bg-amber-400 text-slate-900"; // alerta
-                  if (remaining[k] < 3) return "border border-rose-500 text-rose-600 bg-white";
-                  return "bg-emerald-500 text-white"; // ok
-                }
-
-                return (
-                  <div
-                    className="fixed right-5 z-40"
-                    style={{ top: `${floatingTop}px` }}
+              return (
+                <div ref={stockBarRef} className="w-full sticky top-3 z-30">
+                  <stockFx.Form
+                    method="post"
+                    className="w-full rounded-2xl border bg-white/95 backdrop-blur shadow-sm px-4 py-3 flex flex-col items-center gap-4"
+                    onSubmit={() => setEditingBar(false)}
                   >
-                    <stockFx.Form
-                      method="post"
-                      className="rounded-full border bg-white shadow-lg px-3 py-2 flex items-center gap-3 backdrop-blur"
-                      onSubmit={() => setEditingBar(false)}
-                    >
-                      <input type="hidden" name="_action" value="saveDoughStock" />
-                      <input type="hidden" name="date" value={dateStr} />
+                    <input type="hidden" name="_action" value="saveDoughStock" />
+                    <input type="hidden" name="date" value={dateStr} />
 
-                      <div
-                        className="flex items-center justify-center w-7 h-7 rounded text-slate-600 hover:bg-slate-200 cursor-grab active:cursor-grabbing"
-                        onMouseDown={(e) => { setDragging(true); e.preventDefault(); }}
-                        role="presentation"
-                      >
-                        <GripVertical className="w-4 h-4" />
-                      </div>
+                    <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-3 w-full">
+                      {ordered.map(({ key, label, abbr }) => (
+                        <div key={key} className="flex flex-col items-center gap-1 min-w-[60px]">
+                          <input type="hidden" name={`stock${key}`} value={baseCounts[key]} />
+                          <input type="hidden" name={`adjust${key}`} value={adjustmentDraft[key]} />
 
-                      <div className="flex items-center gap-2">
-                        {ordered.map(({ key, label, abbr }) => (
-                          <div key={key} className="flex flex-col items-center gap-1 min-w-[60px]">
-                            <input type="hidden" name={`stock${key}`} value={baseCounts[key]} />
-                            <input type="hidden" name={`adjust${key}`} value={adjustmentDraft[key]} />
-
-                            <div
-                              className={`w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-semibold ${chipClasses(key)}`}
-                              title={`${label}: ${Math.max(0, remaining[key])}`}
-                            >
-                              {abbr || key} {Math.max(0, remaining[key])}
-                            </div>
-
-                            {editingBar && (
-                              <div className="flex items-center gap-0 text-[11px] text-slate-600">
-                                <button
-                                  type="button"
-                                  className="h-6 w-6 rounded-full border border-slate-200 hover:bg-slate-50 font-semibold"
-                                  onClick={() => setAdjustmentValue(key, (adjustmentDraft[key] ?? 0) - 1)}
-                                >
-                                  –
-                                </button>
-                                <NumericInput
-                                  min={0}
-                                  step={1}
-                                  className="h-6 w-12 text-center rounded bg-white text-xs font-semibold border-none"
-                                  value={adjustmentDraft[key]}
-                                  onChange={(e) => setAdjustmentValue(key, e.target.value)}
-                                  aria-label={`Ajuste ${label}`}
-                                />
-                                <button
-                                  type="button"
-                                  className="h-6 w-6 rounded-full border border-slate-200 hover:bg-slate-50"
-                                  onClick={() => setAdjustmentValue(key, (adjustmentDraft[key] ?? 0) + 1)}
-                                >
-                                  +
-                                </button>
-                              </div>
+                          <div
+                            className={cn(
+                              "rounded-full flex items-center justify-center font-bold leading-none tabular-nums transition-all duration-300 ease-out",
+                              isStockBarPinned ? "w-16 h-16" : "w-14 h-14",
+                              chipClasses(key)
                             )}
+                            title={`${label}: ${Math.max(0, remaining[key])}`}
+                          >
+                            <span className="flex items-baseline gap-1">
+                              <span className={cn("uppercase tracking-tight", isStockBarPinned ? "text-[22px]" : "text-[18px]")}>
+                                {abbr || key}
+                              </span>
+                              <span className={cn(isStockBarPinned ? "text-2xl" : "text-xl")}>
+                                {Math.max(0, remaining[key])}
+                              </span>
+                            </span>
                           </div>
-                        ))}
-                      </div>
 
-                      {/* {hasManualInfo && !editingBar && (
-                    <div className="text-[11px] text-slate-500 ml-1">
-                      Saldo manual: {manualText}
-                    </div>
-                  )} */}
+                          {editingBar && (
+                            <div className="flex items-center gap-0 text-[11px] text-slate-600">
+                              <button
+                                type="button"
+                                className="h-6 w-6 rounded-full border border-slate-200 hover:bg-slate-50 font-semibold"
+                                onClick={() => setAdjustmentValue(key, (adjustmentDraft[key] ?? 0) - 1)}
+                              >
+                                –
+                              </button>
+                              <NumericInput
+                                min={0}
+                                step={1}
+                                className="h-6 w-12 text-center rounded bg-white text-xs font-semibold border-none"
+                                value={adjustmentDraft[key]}
+                                onChange={(e) => setAdjustmentValue(key, e.target.value)}
+                                aria-label={`Ajuste ${label}`}
+                              />
+                              <button
+                                type="button"
+                                className="h-6 w-6 rounded-full border border-slate-200 hover:bg-slate-50"
+                                onClick={() => setAdjustmentValue(key, (adjustmentDraft[key] ?? 0) + 1)}
+                              >
+                                +
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ))}
 
                       {editingBar ? (
                         <div className="flex items-center gap-2">
@@ -2239,13 +2241,27 @@ export default function GridKdsPage() {
                           <PencilLine className="w-4 h-4 mr-1" />
                         </Button>
                       )}
-                    </stockFx.Form>
-                  </div>
-                );
-              }}
-            </Await>
-          </Suspense>
+                    </div>
 
+                    {/* {hasManualInfo && !editingBar && (
+                      <div className="text-[11px] text-slate-500 ml-1">
+                        Saldo manual: {manualText}
+                      </div>
+                    )} */}
+
+                  </stockFx.Form>
+                </div>
+              );
+            }}
+          </Await>
+        </Suspense>
+      )}
+
+      <Separator className="my-12" />
+
+      {/* Venda livre rápida + Filtro de Canal */}
+      {(status === "OPENED" || status === "REOPENED") && (
+        <>
           <div className="flex flex-wrap items-center justify-between gap-3">
             {/* Venda Livre rápida */}
             <div className="flex items-center gap-3">

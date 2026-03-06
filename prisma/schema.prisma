@@ -33,37 +33,10 @@ model Recipe {
   Variation              Variation?               @relation(fields: [variationId], references: [id])
   ItemVariations         ItemVariation[]
   RecipeIngredient       RecipeIngredient[]
-  RecipeLine             RecipeLine[]
 
   @@index([itemId], map: "recipes_item_id_idx")
   @@index([variationId], map: "recipes_variation_id_idx")
   @@map("recipes")
-}
-
-model RecipeLine {
-  id                 String   @id @default(uuid())
-  recipeId           String   @map("recipe_id")
-  itemId             String   @map("item_id")
-  itemVariationId    String?  @map("item_variation_id")
-  unit               String   @db.VarChar
-  quantity           Float    @default(0)
-  lastUnitCostAmount Float    @default(0) @map("last_unit_cost_amount")
-  avgUnitCostAmount  Float    @default(0) @map("avg_unit_cost_amount")
-  lastTotalCostAmount Float   @default(0) @map("last_total_cost_amount")
-  avgTotalCostAmount Float    @default(0) @map("avg_total_cost_amount")
-  sortOrderIndex     Int      @default(0) @map("sort_order_index")
-  notes              String?  @db.Text
-  createdAt          DateTime @default(now()) @map("created_at")
-  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at")
-
-  Recipe        Recipe        @relation(fields: [recipeId], references: [id], onDelete: Cascade)
-  Item          Item          @relation(fields: [itemId], references: [id])
-  ItemVariation ItemVariation? @relation(fields: [itemVariationId], references: [id])
-
-  @@index([recipeId], map: "recipe_lines_recipe_id_idx")
-  @@index([itemId], map: "recipe_lines_item_id_idx")
-  @@index([itemVariationId], map: "recipe_lines_item_variation_id_idx")
-  @@map("recipe_lines")
 }
 
 model Ingredient {
@@ -209,7 +182,6 @@ model Item {
   MenuItem    MenuItem[]
   Recipe      Recipe[]
   RecipeIngredient RecipeIngredient[]
-  RecipeLine  RecipeLine[]
   ItemCostSheet ItemCostSheet[]
   ItemVariation ItemVariation[]
   StockNfImportBatchLine StockNfImportBatchLine[]
@@ -291,7 +263,6 @@ model ItemVariation {
   Variation            Variation              @relation(fields: [variationId], references: [id], onDelete: Restrict)
   ItemCostSheet        ItemCostSheet[]
   RecipeVariationIngredient RecipeVariationIngredient[]
-  RecipeLine           RecipeLine[]
   ItemCostVariation        ItemCostVariation?
   ItemCostVariationHistory ItemCostVariationHistory[]
   StockNfImportAppliedChange StockNfImportAppliedChange[]

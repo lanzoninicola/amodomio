@@ -1,7 +1,7 @@
 import { Recipe, RecipeType } from "@prisma/client";
 import { redirect, type ActionFunctionArgs, type LoaderFunctionArgs } from "@remix-run/node";
 import { Form, Link, useActionData, useFetcher, useLoaderData } from "@remix-run/react";
-import { AlertCircle, Check, CheckCircle2, ChevronLeft, ChevronsUpDown, RefreshCw, Trash2 } from "lucide-react";
+import { AlertCircle, Check, ChevronLeft, ChevronsUpDown, RefreshCw, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from "~/components/ui/command";
@@ -669,7 +669,6 @@ function InlineVariationCellEditor({
         <fetcher.Form
             method="post"
             ref={formRef}
-            className="space-y-1.5"
             onBlurCapture={() => {
                 window.setTimeout(() => {
                     const activeElement = document.activeElement
@@ -682,50 +681,48 @@ function InlineVariationCellEditor({
             <input type="hidden" name="recipeLineId" value={line.id} />
             <input type="hidden" name="lineUnit" value={String(lineUnit || "UN").toUpperCase()} />
             {!showVariationLoss ? <input type="hidden" name="lineLossPct" value={String(effectiveLossPct)} /> : null}
-            <div className="flex items-center gap-1.5">
+            <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-2">
                 <DecimalInput
                     name="lineQuantity"
                     defaultValue={defaultQty}
                     fractionDigits={3}
                     onValueChange={setLineQuantity}
-                    className="w-24 h-7 border border-slate-200 rounded px-2 py-0 text-[14px] text-right"
+                    className="w-24 h-8 border-b border-slate-200 bg-transparent px-1 py-0 text-sm text-right outline-none focus:border-slate-700 transition-colors"
                 />
                 {showVariationLoss ? (
-                    <>
+                    <div className="flex items-center gap-0.5">
                         <DecimalInput
                             name="lineLossPct"
                             defaultValue={defaultLossPct}
                             fractionDigits={3}
                             onValueChange={setLineLossPct}
-                            className="w-20 h-7 border border-slate-200 rounded px-2 py-0 text-[14px] text-right"
+                            className="w-16 h-8 border-b border-slate-200 bg-transparent px-1 py-0 text-sm text-right outline-none focus:border-slate-700 transition-colors"
                         />
-                        <span className="text-[10px] text-slate-500">%</span>
-                    </>
+                        <span className="text-[11px] text-slate-400">%</span>
+                    </div>
                 ) : null}
                 <span
-                    className={`px-1 text-[10px] font-medium ${hasPendingChanges() ? "text-slate-700" : "text-slate-500"}`}
-                    title={hasPendingChanges() ? "Alterações pendentes (salva ao sair do campo)" : "Já salvo automaticamente"}
-                >
-                    {hasPendingChanges() ? "Alterado" : "Salvo"}
-                </span>
+                    className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${hasPendingChanges() ? "bg-amber-400" : "bg-emerald-400"}`}
+                    title={hasPendingChanges() ? "Alterações pendentes" : "Salvo"}
+                />
             </div>
-            <div className="text-[10px]">
-                <div className="grid grid-cols-[1fr_auto] items-center gap-x-2">
-                    <span className="text-slate-500">Qtd bruta</span>
-                    <span className="font-semibold text-slate-700">
-                        {formatDecimalPlaces(Number(grossQty || 0), 4)}
-                    </span>
+            <div className="space-y-0.5 text-[11px] text-slate-400">
+                <div className="flex items-center justify-between gap-3">
+                    <span>Qtd bruta</span>
+                    <span className="font-medium text-slate-600">{formatDecimalPlaces(Number(grossQty || 0), 4)}</span>
                 </div>
-                <div className="grid grid-cols-[1fr_auto] items-center gap-x-2">
-                    <span className="text-slate-500">Total</span>
-                    <span className={Number(line.lastTotalCostAmount || 0) <= 0 ? "font-semibold text-slate-900" : "font-semibold text-slate-700"}>
+                <div className="flex items-center justify-between gap-3">
+                    <span>Custo total</span>
+                    <span className={cn("font-medium", Number(line.lastTotalCostAmount || 0) <= 0 ? "text-slate-400" : "text-slate-600")}>
                         {formatMoney(Number(line.lastTotalCostAmount || 0), 4)}
                     </span>
                 </div>
-                <div className="grid grid-cols-[1fr_auto] items-center gap-x-2">
-                    <span className="text-slate-500">Médio total</span>
-                    <span className="font-semibold text-slate-700">{formatMoney(Number(line.avgTotalCostAmount || 0), 4)}</span>
+                <div className="flex items-center justify-between gap-3">
+                    <span>Custo médio</span>
+                    <span className="font-medium text-slate-600">{formatMoney(Number(line.avgTotalCostAmount || 0), 4)}</span>
                 </div>
+            </div>
             </div>
         </fetcher.Form>
     )
@@ -760,18 +757,16 @@ function IngredientUnitEditor({
     }
 
     return (
-        <div className="flex w-full max-w-[92px] flex-col items-start gap-1 pt-1">
-            <Select value={unit} onValueChange={handleUnitChange}>
-                <SelectTrigger className="h-8 w-full text-[11px]">
-                    <SelectValue placeholder="UM" />
-                </SelectTrigger>
-                <SelectContent>
-                    {options.map((option) => (
-                        <SelectItem key={option} value={option}>{option}</SelectItem>
-                    ))}
-                </SelectContent>
-            </Select>
-        </div>
+        <Select value={unit} onValueChange={handleUnitChange}>
+            <SelectTrigger className="h-8 w-20 text-sm border-slate-200">
+                <SelectValue placeholder="UM" />
+            </SelectTrigger>
+            <SelectContent>
+                {options.map((option) => (
+                    <SelectItem key={option} value={option}>{option}</SelectItem>
+                ))}
+            </SelectContent>
+        </Select>
     )
 }
 
@@ -791,42 +786,44 @@ function IngredientLossEditor({
     }, [defaultLossPct, recipeIngredientId])
 
     return (
-        <Form method="post" className="flex w-full max-w-[132px] flex-col items-start gap-1 pt-1">
+        <Form method="post">
             <input type="hidden" name="recipeId" value={recipeId} />
             <input type="hidden" name="recipeIngredientId" value={recipeIngredientId || ""} />
             <input type="hidden" name="defaultLossPct" value={String(lossPct)} />
             <input type="hidden" name="_action" value="recipe-ingredient-loss-update" />
-            <div className="flex w-full items-center gap-1">
+            <div className="flex flex-col gap-1.5">
+            <div className="flex items-center gap-0.5">
                 <DecimalInput
                     name="defaultLossPctInput"
                     defaultValue={Number(defaultLossPct || 0)}
                     fractionDigits={3}
                     onValueChange={setLossPct}
-                    className="h-8 w-full border border-slate-200 rounded px-2 py-0 text-[14px] text-right"
+                    className="w-20 h-8 border-b border-slate-200 bg-transparent px-1 py-0 text-sm text-right outline-none focus:border-slate-700 transition-colors"
                 />
-                <span className="text-[10px] text-slate-500">%</span>
+                <span className="text-[11px] text-slate-400">%</span>
             </div>
             <div className="flex items-center gap-1">
                 <button
                     type="submit"
                     name="applyToLines"
                     value="no"
-                    className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 text-slate-700 hover:bg-slate-100"
-                    title="Aplicar perda padrão"
-                    aria-label="Aplicar perda padrão"
+                    className="h-6 w-6 flex items-center justify-center rounded text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition-colors"
+                    title="Salvar perda padrão"
+                    aria-label="Salvar perda padrão"
                 >
-                    <Check size={12} />
+                    <Check size={11} />
                 </button>
                 <button
                     type="submit"
                     name="applyToLines"
                     value="yes"
-                    className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 text-slate-700 hover:bg-slate-100"
-                    title="Aplicar para todas as linhas"
-                    aria-label="Aplicar para todas as linhas"
+                    className="h-6 w-6 flex items-center justify-center rounded text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition-colors"
+                    title="Aplicar para todas as variações"
+                    aria-label="Aplicar para todas as variações"
                 >
-                    <RefreshCw size={12} />
+                    <RefreshCw size={11} />
                 </button>
+            </div>
             </div>
         </Form>
     )
@@ -1071,18 +1068,6 @@ export default function SingleRecipe() {
                     </button>
                 </div>
 
-                <div className="mb-4 rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-700">
-                    <p className="font-medium text-slate-900">Como funciona a perda</p>
-                    <p className="mt-1">
-                        A quantidade que você digita na receita é a quantidade final que quer entregar no prato. A perda (%) representa o que se perde no preparo
-                        (evaporação, redução, gordura que fica na panela, sobra de manipulação etc.).
-                    </p>
-                    <p className="mt-1">
-                        Exemplo simples: você quer <strong>1,000 kg</strong> de molho de costela pronto e definiu <strong>20% de perda</strong>. O sistema calcula uma
-                        quantidade bruta de <strong>1,250 kg</strong> para comprar/consumir, e o custo total usa essa quantidade bruta. Ou seja: quanto maior a perda,
-                        maior o custo real da variação.
-                    </p>
-                </div>
 
                 {activeCompositionTab === "base" ? (
                     <div className="space-y-4">
@@ -1174,165 +1159,122 @@ export default function SingleRecipe() {
                     </div>
                 ) : (
                     <div className="space-y-4">
-                        {(hasVariationPendingCells || hasVariationCostZero) ? (
-                            <div className="flex items-center gap-2 rounded-lg border border-slate-300 bg-slate-50 p-3 text-sm text-slate-700">
-                                <AlertCircle size={15} className="text-slate-600" />
-                                <span>Não pronto para produção: existem células sem UM/QTD ou com custo 0 em alguma variação.</span>
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <span className={`h-1.5 w-1.5 rounded-full ${(hasVariationPendingCells || hasVariationCostZero) ? "bg-amber-400" : "bg-emerald-400"}`} />
+                                <span className="text-sm text-slate-500">
+                                    {(hasVariationPendingCells || hasVariationCostZero)
+                                        ? "Células sem UM/QTD ou com custo 0"
+                                        : "Todas as variações completas"}
+                                </span>
                             </div>
-                        ) : (
-                            <div className="flex items-center gap-2 rounded-lg border border-slate-300 bg-slate-50 p-3 text-sm text-slate-700">
-                                <CheckCircle2 size={15} className="text-slate-600" />
-                                <span>Pronto para produção: todas as variações estão completas e sem custo 0.</span>
-                            </div>
-                        )}
-
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                            <label className="inline-flex items-center gap-2 text-xs text-slate-700">
-                                <input
-                                    type="checkbox"
-                                    className="h-3.5 w-3.5 rounded border-slate-300 text-slate-900"
-                                    checked={showVariationLoss}
-                                    onChange={(event) => setShowVariationLoss(event.target.checked)}
-                                />
-                                Perda por variação
-                            </label>
-                            <Form method="post" preventScrollReset>
-                                <input type="hidden" name="recipeId" value={recipe?.id} />
-                                <Button type="submit" name="_action" value="recipe-lines-recalc" variant="outline" size="sm">
-                                    Recalcular custos
-                                </Button>
-                            </Form>
-                        </div>
-                        <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
-                            <div className="flex flex-wrap items-center gap-3">
-                                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Colunas visíveis</span>
-                                {columnToggleVariations.length === 0 ? (
-                                    <span className="text-xs text-slate-500">Nenhuma variação disponível.</span>
-                                ) : (
-                                    columnToggleVariations.map((variation) => {
-                                        const checked = !hiddenVariationIds.includes(variation.itemVariationId)
-                                        return (
-                                            <label key={`toggle-${variation.itemVariationId}`} className="inline-flex items-center gap-1.5 text-xs text-slate-700">
-                                                <input
-                                                    type="checkbox"
-                                                    className="h-3.5 w-3.5 rounded border-slate-300 text-slate-900"
-                                                    checked={checked}
-                                                    onChange={() => toggleVariationColumn(variation.itemVariationId)}
-                                                />
-                                                <span>{variation.variationName || "Variação"}</span>
-                                                {(variation.variationKind === "base" && variation.variationCode === "base") ? (
-                                                    <span className="rounded border border-slate-300 bg-slate-50 px-1 py-0 text-[10px] text-slate-600">
-                                                        Base
-                                                    </span>
-                                                ) : null}
-                                                {variation.isReference ? (
-                                                    <span className="rounded border border-blue-300 bg-blue-50 px-1.5 py-0 text-[10px] font-semibold text-blue-700">
-                                                        Referência
-                                                    </span>
-                                                ) : null}
-                                            </label>
-                                        )
-                                    })
-                                )}
-                                {baseVariationIds.length > 0 ? (
-                                    <span className="text-[11px] text-slate-500">A variação Base inicia oculta, mas pode ser exibida.</span>
-                                ) : null}
+                            <div className="flex items-center gap-5">
+                                <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer select-none">
+                                    <input
+                                        type="checkbox"
+                                        className="h-3.5 w-3.5 rounded border-slate-300"
+                                        checked={showVariationLoss}
+                                        onChange={(event) => setShowVariationLoss(event.target.checked)}
+                                    />
+                                    Perda por variação
+                                </label>
+                                <Form method="post" preventScrollReset>
+                                    <input type="hidden" name="recipeId" value={recipe?.id} />
+                                    <button type="submit" name="_action" value="recipe-lines-recalc" className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-900 transition-colors">
+                                        <RefreshCw size={13} />
+                                        Recalcular
+                                    </button>
+                                </Form>
                             </div>
                         </div>
+                        <div className="flex flex-wrap items-center gap-x-1 gap-y-1 pb-4 border-b border-slate-100">
+                            <span className="text-[11px] text-slate-400 uppercase tracking-widest mr-2">Colunas</span>
+                            {columnToggleVariations.length === 0 ? (
+                                <span className="text-sm text-slate-400">Nenhuma variação disponível.</span>
+                            ) : (
+                                columnToggleVariations.map((variation, idx) => {
+                                    const visible = !hiddenVariationIds.includes(variation.itemVariationId)
+                                    return (
+                                        <span key={`toggle-${variation.itemVariationId}`} className="flex items-center gap-1">
+                                            {idx > 0 && <span className="text-slate-200 mx-1">·</span>}
+                                            <button
+                                                type="button"
+                                                onClick={() => toggleVariationColumn(variation.itemVariationId)}
+                                                className={cn(
+                                                    "text-sm transition-colors",
+                                                    visible ? "text-slate-900 font-medium" : "text-slate-400 hover:text-slate-600"
+                                                )}
+                                            >
+                                                {variation.variationName || "Variação"}
+                                                {variation.isReference && visible ? <span className="ml-1 text-slate-400">★</span> : null}
+                                            </button>
+                                        </span>
+                                    )
+                                })
+                            )}
+                        </div>
 
-                        <div className="overflow-x-auto rounded-lg border border-slate-200">
+                        <div className="overflow-x-auto">
                             <table className="min-w-full text-sm">
-                                <thead className="bg-slate-50">
-                                    <tr className="border-b border-slate-200">
-                                        <th colSpan={3} className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
-                                            Total da composição
+                                <thead>
+                                    <tr className="border-b-2 border-slate-100">
+                                        <th className="px-3 pb-3 pt-1 text-left text-[11px] font-semibold uppercase tracking-widest text-slate-400">Ingrediente</th>
+                                        <th className="px-3 pb-3 pt-1 text-left text-[11px] font-semibold uppercase tracking-widest text-slate-400 w-24">UM</th>
+                                        <th className="px-3 pb-3 pt-1 text-left w-32">
+                                            <TooltipProvider>
+                                                <Tooltip>
+                                                    <TooltipTrigger className="flex items-center gap-1 cursor-default text-[11px] font-semibold uppercase tracking-widest text-slate-400">
+                                                        Perda
+                                                        <AlertCircle size={11} className="text-slate-300" />
+                                                    </TooltipTrigger>
+                                                    <TooltipContent className="max-w-xs text-[12px]">
+                                                        A perda (%) representa o que se perde no preparo (evaporação, redução etc). Exemplo: 20% de perda em 1 kg resulta em 1,250 kg bruto a comprar.
+                                                    </TooltipContent>
+                                                </Tooltip>
+                                            </TooltipProvider>
                                         </th>
                                         {effectiveVariationColumns.map((variation, index) => {
                                             const metric = variationMetrics[index]
-                                            return (
-                                                <th key={`total-head-${variation.itemVariationId}`} className={`px-3 py-2 text-left align-top text-[11px] ${variation.isReference ? "bg-blue-50/60 ring-1 ring-inset ring-blue-100" : ""}`}>
-                                                    <div className="grid grid-cols-[1fr_auto] items-center gap-x-2">
-                                                        <span className="text-slate-500">Total custo</span>
-                                                        <span className="font-semibold text-slate-700">{formatMoney(metric.totalLast, 2)}</span>
-                                                    </div>
-                                                    <div className="grid grid-cols-[1fr_auto] items-center gap-x-2">
-                                                        <span className="text-slate-500">Custo médio</span>
-                                                        <span className="font-semibold text-slate-700">{formatMoney(metric.totalAvg, 2)}</span>
-                                                    </div>
-                                                </th>
-                                            )
-                                        })}
-                                        <th className="px-3 py-2" />
-                                    </tr>
-                                    <tr>
-                                        <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Ingrediente</th>
-                                        <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 w-[104px]">UM</th>
-                                        <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 w-[108px]">Perda</th>
-                                        {effectiveVariationColumns.map((variation, index) => {
-                                            const metric = variationMetrics[index]
-                                            const complete = metric.filledQtyCells === requiredCellCount && metric.zeroCostCells === 0
                                             const missing = metric.filledQtyCells < requiredCellCount
                                             const hasZero = metric.zeroCostCells > 0
                                             return (
-                                                <th key={variation.itemVariationId} className={`px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 min-w-[230px] ${variation.isReference ? "bg-blue-50/60 ring-1 ring-inset ring-blue-100" : ""}`}>
-                                                    <div className="space-y-1">
-                                                        <div className="flex items-center gap-1.5 font-semibold text-slate-700">
-                                                            <span>{variation.variationName || "Base/auto"}</span>
-                                                            {variation.isReference ? (
-                                                                <span className="rounded border border-blue-300 bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700 normal-case tracking-normal">
-                                                                    Referência
-                                                                </span>
-                                                            ) : null}
-                                                            {missing ? (
-                                                                <TooltipProvider>
-                                                                    <Tooltip>
-                                                                        <TooltipTrigger asChild>
-                                                                            <span className="inline-flex h-4 w-4 cursor-help items-center justify-center text-orange-600" aria-label="Campos pendentes">
-                                                                                <AlertCircle size={14} />
-                                                                            </span>
-                                                                        </TooltipTrigger>
-                                                                        <TooltipContent className="text-[11px]">
-                                                                            Existem campos sem UM/QTD nesta variação.
-                                                                        </TooltipContent>
-                                                                    </Tooltip>
-                                                                </TooltipProvider>
-                                                            ) : null}
-                                                        </div>
-                                                        <div className="flex items-center gap-1.5 normal-case tracking-normal">
-                                                            {complete ? <span className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[10px] text-slate-600">Completo</span> : null}
-                                                            {hasZero ? <span className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[10px] text-slate-600">Custo 0</span> : null}
-                                                        </div>
+                                                <th key={variation.itemVariationId} className={`px-3 pb-3 pt-1 text-left min-w-[200px] ${variation.isReference ? "bg-blue-50/30" : ""}`}>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className="text-[11px] font-semibold uppercase tracking-widest text-slate-700">
+                                                            {variation.variationName || "Base"}
+                                                        </span>
+                                                        {variation.isReference ? <span className="text-[11px] text-slate-400">★</span> : null}
+                                                        {missing ? <span className="h-1.5 w-1.5 rounded-full bg-amber-400" title="Campos pendentes" /> : null}
+                                                        {!missing && hasZero ? <span className="h-1.5 w-1.5 rounded-full bg-orange-400" title="Custo 0" /> : null}
+                                                    </div>
+                                                    <div className="mt-0.5 text-[11px] font-normal text-slate-400 tracking-normal normal-case">
+                                                        {formatMoney(metric.totalLast)} · {formatMoney(metric.totalAvg)}
                                                     </div>
                                                 </th>
                                             )
                                         })}
-                                        <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Ação</th>
+                                        <th className="px-3 pb-3 pt-1 w-8" />
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {compositionRows.length === 0 ? (
                                         <tr>
-                                            <td colSpan={effectiveVariationColumns.length + 4} className="px-3 py-10 text-center text-sm text-slate-500">
+                                            <td colSpan={effectiveVariationColumns.length + 4} className="px-3 py-12 text-center text-sm text-slate-400">
                                                 Nenhum item na composição. Primeiro monte a base na aba Base.
                                             </td>
                                         </tr>
                                     ) : (
                                         compositionRowsWithUnit.map((row) => (
-                                            <tr key={row.key} className="border-t border-slate-100 align-top hover:bg-slate-50/50">
-                                                <td className="px-3 py-3 font-medium text-slate-900 align-top">
-                                                    <span className="block truncate max-w-[240px]" title={row.itemName}>{row.itemName}</span>
-                                                    <div className="mt-1 text-[10px] font-normal">
-                                                        <div className="grid grid-cols-[1fr_auto] items-center gap-x-2">
-                                                            <span className="text-slate-500">Custo unitário</span>
-                                                            <span className="font-semibold text-slate-700">{formatMoney(row.lastUnitCostAmount, 4)}</span>
-                                                        </div>
-                                                        <div className="grid grid-cols-[1fr_auto] items-center gap-x-2">
-                                                            <span className="text-slate-500">Custo médio</span>
-                                                            <span className="font-semibold text-slate-700">{formatMoney(row.avgUnitCostAmount, 4)}</span>
-                                                        </div>
+                                            <tr key={row.key} className="group border-t border-slate-100 align-top hover:bg-slate-50/40">
+                                                <td className="px-3 py-4 align-top">
+                                                    <span className="block text-sm font-medium text-slate-900 truncate max-w-[220px]" title={row.itemName}>{row.itemName}</span>
+                                                    <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-slate-400">
+                                                        <span>{formatMoney(row.lastUnitCostAmount, 4)}</span>
+                                                        <span className="text-slate-200">·</span>
+                                                        <span>{formatMoney(row.avgUnitCostAmount, 4)} médio</span>
                                                     </div>
                                                 </td>
-                                                <td className="px-3 py-3 align-top">
+                                                <td className="px-3 py-4 align-top">
                                                     <IngredientUnitEditor
                                                         recipeId={String(recipe?.id || "")}
                                                         recipeIngredientId={row.recipeIngredientId}
@@ -1346,7 +1288,7 @@ export default function SingleRecipe() {
                                                         })()}
                                                     />
                                                 </td>
-                                                <td className="px-3 py-3 align-top">
+                                                <td className="px-3 py-4 align-top">
                                                     <IngredientLossEditor
                                                         recipeId={String(recipe?.id || "")}
                                                         recipeIngredientId={row.recipeIngredientId}
@@ -1356,10 +1298,10 @@ export default function SingleRecipe() {
                                                 {effectiveVariationColumns.map((variation) => {
                                                     const line = row.linesByVariation.get(String(variation.itemVariationId))
                                                     if (!line) {
-                                                        return <td key={`${row.key}-${variation.itemVariationId}`} className={`px-3 py-3 align-top text-xs text-slate-400 ${variation.isReference ? "bg-blue-50/40" : ""}`}>—</td>
+                                                        return <td key={`${row.key}-${variation.itemVariationId}`} className={`px-3 py-4 align-top text-sm text-slate-300 ${variation.isReference ? "bg-blue-50/30" : ""}`}>—</td>
                                                     }
                                                     return (
-                                                        <td key={`${row.key}-${variation.itemVariationId}`} className={`px-3 py-3 align-top ${variation.isReference ? "bg-blue-50/40" : ""}`}>
+                                                        <td key={`${row.key}-${variation.itemVariationId}`} className={`px-3 py-4 align-top ${variation.isReference ? "bg-blue-50/30" : ""}`}>
                                                             <InlineVariationCellEditor
                                                                 recipeId={String(recipe?.id || "")}
                                                                 line={line}
@@ -1370,7 +1312,7 @@ export default function SingleRecipe() {
                                                         </td>
                                                     )
                                                 })}
-                                                <td className="px-3 py-3 text-right align-top">
+                                                <td className="px-3 py-4 text-right align-top">
                                                     <Form method="post" preventScrollReset className="inline">
                                                         <input type="hidden" name="recipeId" value={recipe?.id} />
                                                         <input type="hidden" name="recipeIngredientId" value={row.recipeIngredientId || ""} />
@@ -1379,7 +1321,7 @@ export default function SingleRecipe() {
                                                             type="submit"
                                                             name="_action"
                                                             value="recipe-ingredient-delete"
-                                                            className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 text-slate-600 hover:bg-slate-100"
+                                                            className="h-7 w-7 flex items-center justify-center rounded text-slate-300 hover:text-red-400 transition-colors"
                                                             title="Remover ingrediente"
                                                             aria-label="Remover ingrediente"
                                                         >

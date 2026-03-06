@@ -10,6 +10,9 @@ import { Pool } from 'pg';
 //   node scripts/create-recipes-from-menu-items.mjs --all --dry-run
 //   node scripts/create-recipes-from-menu-items.mjs --all --env=production
 //   node scripts/create-recipes-from-menu-items.mjs --all --variation-kind=size
+//   node scripts/create-recipes-from-menu-items.mjs --all --variation-kind=size --reset-recipes
+//   node scripts/create-recipes-from-menu-items.mjs --all --variation-kind=size --migrate-and-clean-legacy
+//   node scripts/create-recipes-from-menu-items.mjs --all --variation-kind=size --one-recipe-per-item
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
@@ -192,17 +195,214 @@ function getSizeFactor(variationCode) {
 // ---------------------------------------------------------------------------
 
 function parseArgs(argv) {
-  const args = { name: '', env: 'development', dryRun: false, all: false, variationKind: null };
+  const args = {
+    name: '',
+    env: 'development',
+    dryRun: false,
+    all: false,
+    variationKind: null,
+    resetRecipes: false,
+    migrateAndCleanLegacy: false,
+    oneRecipePerItem: false,
+  };
   for (let i = 2; i < argv.length; i += 1) {
     const token = String(argv[i] || '');
     if (!token) continue;
     if (token === '--all') { args.all = true; continue; }
     if (token === '--dry-run') { args.dryRun = true; continue; }
+    if (token === '--reset-recipes') { args.resetRecipes = true; continue; }
+    if (token === '--migrate-and-clean-legacy') { args.migrateAndCleanLegacy = true; continue; }
+    if (token === '--one-recipe-per-item') { args.oneRecipePerItem = true; continue; }
     if (token.startsWith('--env=')) { args.env = token.slice('--env='.length) || args.env; continue; }
     if (token.startsWith('--variation-kind=')) { args.variationKind = token.slice('--variation-kind='.length) || null; continue; }
     if (!args.name) args.name = token;
   }
   return args;
+}
+
+function supportsNewRecipeCompositionModel(db) {
+  return typeof db?.recipeIngredient?.findMany === 'function'
+    && typeof db?.recipeVariationIngredient?.findMany === 'function'
+    && typeof db?.itemVariation?.findFirst === 'function';
+}
+
+async function ensureOwnerItemVariationForRecipe(db, { itemId, variationId, recipeId, dryRun }) {
+  if (!itemId || !variationId || !recipeId) return null;
+  let owner = await db.itemVariation.findFirst({
+    where: { itemId, variationId, deletedAt: null },
+    select: { id: true, recipeId: true },
+    orderBy: [{ createdAt: 'asc' }],
+  });
+
+  if (!owner) {
+    if (dryRun) return null;
+    owner = await db.itemVariation.create({
+      data: {
+        itemId,
+        variationId,
+        recipeId,
+      },
+      select: { id: true, recipeId: true },
+    });
+    return owner.id;
+  }
+
+  if (!dryRun && !owner.recipeId) {
+    await db.itemVariation.update({
+      where: { id: owner.id },
+      data: { recipeId },
+    });
+  }
+  return owner.id;
+}
+
+async function ensureVariationLinksForRecipe(db, { itemId, recipeId, variations, dryRun }) {
+  const links = new Map();
+  for (const variation of variations || []) {
+    const id = await ensureOwnerItemVariationForRecipe(db, {
+      itemId,
+      variationId: variation.id,
+      recipeId,
+      dryRun,
+    });
+    if (id) links.set(variation.id, id);
+  }
+  return links;
+}
+
+async function upsertNewCompositionLine(db, params) {
+  const {
+    recipeId,
+    itemId,
+    sortOrderIndex,
+    unit,
+    quantity,
+    ownerItemVariationId,
+    snapshot,
+  } = params;
+
+  let recipeIngredient = await db.recipeIngredient.findUnique({
+    where: {
+      recipeId_ingredientItemId: {
+        recipeId,
+        ingredientItemId: itemId,
+      },
+    },
+    select: { id: true },
+  });
+
+  if (!recipeIngredient) {
+    recipeIngredient = await db.recipeIngredient.create({
+      data: {
+        recipeId,
+        ingredientItemId: itemId,
+        sortOrderIndex,
+      },
+      select: { id: true },
+    });
+  }
+
+  await db.recipeVariationIngredient.upsert({
+    where: {
+      recipeIngredientId_itemVariationId: {
+        recipeIngredientId: recipeIngredient.id,
+        itemVariationId: ownerItemVariationId,
+      },
+    },
+    update: {
+      unit,
+      quantity,
+      lossPct: null,
+      lastUnitCostAmount: snapshot.lastUnitCostAmount,
+      avgUnitCostAmount: snapshot.avgUnitCostAmount,
+      lastTotalCostAmount: snapshot.lastTotalCostAmount,
+      avgTotalCostAmount: snapshot.avgTotalCostAmount,
+    },
+    create: {
+      recipeIngredientId: recipeIngredient.id,
+      itemVariationId: ownerItemVariationId,
+      unit,
+      quantity,
+      lossPct: null,
+      lastUnitCostAmount: snapshot.lastUnitCostAmount,
+      avgUnitCostAmount: snapshot.avgUnitCostAmount,
+      lastTotalCostAmount: snapshot.lastTotalCostAmount,
+      avgTotalCostAmount: snapshot.avgTotalCostAmount,
+    },
+  });
+}
+
+async function migrateAndCleanLegacyRecipeLines(db, { recipeId, ownerItemVariationId, dryRun }) {
+  if (!supportsNewRecipeCompositionModel(db)) {
+    return { migratedLines: 0, cleanedLegacyLines: 0, skipped: true };
+  }
+  if (!ownerItemVariationId) {
+    return { migratedLines: 0, cleanedLegacyLines: 0, skipped: true };
+  }
+  if (typeof db?.recipeLine?.findMany !== 'function') {
+    return { migratedLines: 0, cleanedLegacyLines: 0, skipped: true };
+  }
+
+  let legacyLines = [];
+  try {
+    legacyLines = await db.recipeLine.findMany({
+      where: { recipeId },
+      orderBy: [{ sortOrderIndex: 'asc' }, { createdAt: 'asc' }],
+      select: {
+        itemId: true,
+        itemVariationId: true,
+        unit: true,
+        quantity: true,
+        lastUnitCostAmount: true,
+        avgUnitCostAmount: true,
+        lastTotalCostAmount: true,
+        avgTotalCostAmount: true,
+        sortOrderIndex: true,
+      },
+    });
+  } catch (error) {
+    // Prisma P2021 = table does not exist (legacy table already dropped)
+    if (error?.code === 'P2021') {
+      return { migratedLines: 0, cleanedLegacyLines: 0, skipped: true };
+    }
+    throw error;
+  }
+
+  if (dryRun) {
+    return { migratedLines: legacyLines.length, cleanedLegacyLines: legacyLines.length, skipped: false };
+  }
+
+  for (const line of legacyLines) {
+    await upsertNewCompositionLine(db, {
+      recipeId,
+      itemId: line.itemId,
+      sortOrderIndex: Number(line.sortOrderIndex || 0),
+      unit: String(line.unit || 'UN'),
+      quantity: Number(line.quantity || 0),
+      ownerItemVariationId: String(line.itemVariationId || ownerItemVariationId),
+      snapshot: {
+        lastUnitCostAmount: Number(line.lastUnitCostAmount || 0),
+        avgUnitCostAmount: Number(line.avgUnitCostAmount || 0),
+        lastTotalCostAmount: Number(line.lastTotalCostAmount || 0),
+        avgTotalCostAmount: Number(line.avgTotalCostAmount || 0),
+      },
+    });
+  }
+
+  let deleted = { count: 0 };
+  try {
+    deleted = await db.recipeLine.deleteMany({ where: { recipeId } });
+  } catch (error) {
+    if (error?.code === 'P2021') {
+      return { migratedLines: legacyLines.length, cleanedLegacyLines: 0, skipped: true };
+    }
+    throw error;
+  }
+  return {
+    migratedLines: legacyLines.length,
+    cleanedLegacyLines: Number(deleted?.count || 0),
+    skipped: false,
+  };
 }
 
 function uppercaseFirstLetter(value) {
@@ -270,8 +470,8 @@ async function main() {
   if (!args.all && !args.name) {
     throw new Error(
       'Uso:\n' +
-      '  node scripts/create-recipes-from-menu-items.mjs "Nome do Sabor" [--env=development] [--dry-run] [--variation-kind=size]\n' +
-      '  node scripts/create-recipes-from-menu-items.mjs --all [--env=development] [--dry-run] [--variation-kind=size]'
+      '  node scripts/create-recipes-from-menu-items.mjs "Nome do Sabor" [--env=development] [--dry-run] [--variation-kind=size] [--reset-recipes] [--migrate-and-clean-legacy] [--one-recipe-per-item]\n' +
+      '  node scripts/create-recipes-from-menu-items.mjs --all [--env=development] [--dry-run] [--variation-kind=size] [--reset-recipes] [--migrate-and-clean-legacy] [--one-recipe-per-item]'
     );
   }
 
@@ -287,6 +487,21 @@ async function main() {
   const db = new PrismaClient({ adapter });
 
   try {
+    let recipesDeleted = 0;
+    let recipesDeletePreview = 0;
+    let migratedLegacyLines = 0;
+    let cleanedLegacyLines = 0;
+    let duplicateRecipesDeleted = 0;
+
+    if (args.resetRecipes) {
+      if (args.dryRun) {
+        recipesDeletePreview = await db.recipe.count();
+      } else {
+        const result = await db.recipe.deleteMany({});
+        recipesDeleted = Number(result?.count || 0);
+      }
+    }
+
     // 1. Fetch MenuItems
     const menuItems = args.all
       ? await db.menuItem.findMany({
@@ -376,6 +591,218 @@ async function main() {
       let recipesCreated = 0;
       let recipesSkipped = 0;
 
+      if (args.oneRecipePerItem) {
+        const existingRecipesForItem = await db.recipe.findMany({
+          where: {
+            itemId: menuItem.itemId,
+            type: 'pizzaTopping',
+          },
+          select: { id: true, name: true, updatedAt: true, createdAt: true },
+          orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
+          take: 20,
+        });
+
+        const existingRecipe = existingRecipesForItem[0] || null;
+        const recipeName = menuItem.name;
+        const newModelAvailable = supportsNewRecipeCompositionModel(db);
+
+        if (existingRecipe) {
+          const variationLinks = newModelAvailable
+            ? await ensureVariationLinksForRecipe(db, {
+              itemId: menuItem.itemId,
+              recipeId: existingRecipe.id,
+              variations,
+              dryRun: args.dryRun,
+            })
+            : new Map();
+
+          if (args.migrateAndCleanLegacy) {
+            const firstVariation = variations[0] || null;
+            const fallbackItemVariationId = firstVariation
+              ? variationLinks.get(firstVariation.id) || null
+              : null;
+            const migration = await migrateAndCleanLegacyRecipeLines(db, {
+              recipeId: existingRecipe.id,
+              ownerItemVariationId: fallbackItemVariationId,
+              dryRun: args.dryRun,
+            });
+            migratedLegacyLines += Number(migration.migratedLines || 0);
+            cleanedLegacyLines += Number(migration.cleanedLegacyLines || 0);
+
+            for (const duplicate of existingRecipesForItem.slice(1)) {
+              const duplicateMigration = await migrateAndCleanLegacyRecipeLines(db, {
+                recipeId: duplicate.id,
+                ownerItemVariationId: fallbackItemVariationId,
+                dryRun: args.dryRun,
+              });
+              migratedLegacyLines += Number(duplicateMigration.migratedLines || 0);
+              cleanedLegacyLines += Number(duplicateMigration.cleanedLegacyLines || 0);
+
+              if (!args.dryRun) {
+                await db.recipe.delete({ where: { id: duplicate.id } });
+                duplicateRecipesDeleted += 1;
+              } else {
+                duplicateRecipesDeleted += 1;
+              }
+            }
+          }
+
+          recipeResults.push({
+            menuItemName: menuItem.name,
+            variationName: '(all sizes)',
+            status: 'existing',
+            recipeId: existingRecipe.id,
+            recipeName: existingRecipe.name,
+            duplicateRecipesForItem: Math.max(0, existingRecipesForItem.length - 1),
+          });
+          recipesSkipped += 1;
+        } else if (args.dryRun) {
+          recipeResults.push({
+            menuItemName: menuItem.name,
+            variationName: '(all sizes)',
+            status: 'would_create',
+            recipeName,
+            lines: ingredientNames.flatMap((name) => variations.map((variation) => {
+              const medQty = mediumQtyMap[name];
+              const sizeFactor = getSizeFactor(variation.code);
+              return {
+                variationName: variation.name,
+                variationCode: variation.code,
+                ingredientName: name,
+                mediumQty: medQty ?? 0,
+                finalQty: medQty !== null ? parseFloat((medQty * sizeFactor).toFixed(4)) : 0,
+                quantitySource: medQty !== null ? 'estimated' : 'unmapped (qty=0)',
+              };
+            })),
+          });
+          recipesCreated += 1;
+        } else {
+          const recipe = await db.recipe.create({
+            data: {
+              name: recipeName,
+              type: 'pizzaTopping',
+              itemId: menuItem.itemId,
+              variationId: null,
+              hasVariations: true,
+              isVegetarian: false,
+              isGlutenFree: false,
+            },
+            select: { id: true, name: true },
+          });
+
+          const variationLinks = newModelAvailable
+            ? await ensureVariationLinksForRecipe(db, {
+              itemId: menuItem.itemId,
+              recipeId: recipe.id,
+              variations,
+              dryRun: args.dryRun,
+            })
+            : new Map();
+
+          const recipeLinesSummary = [];
+          for (let idx = 0; idx < ingredientNames.length; idx++) {
+            const ingredientName = ingredientNames[idx];
+            const { item, status } = await findOrCreateIngredientItem(
+              db, ingredientName, existingItems, false, menuItem.name
+            );
+
+            for (const variation of variations) {
+              const medQty = mediumQtyMap[ingredientName];
+              const finalQty = medQty !== null
+                ? parseFloat((medQty * getSizeFactor(variation.code)).toFixed(4))
+                : 0;
+
+              ingredientResults.push({
+                menuItemName: menuItem.name,
+                variationName: variation.name,
+                ingredientName,
+                status,
+                itemId: item?.id ?? null,
+                mediumQty: medQty ?? 0,
+                finalQty,
+              });
+
+              const linkedVariationId = variationLinks.get(variation.id);
+              if (newModelAvailable && linkedVariationId) {
+                await upsertNewCompositionLine(db, {
+                  recipeId: recipe.id,
+                  itemId: item.id,
+                  sortOrderIndex: idx,
+                  unit: item.consumptionUm || 'KG',
+                  quantity: finalQty,
+                  ownerItemVariationId: linkedVariationId,
+                  snapshot: {
+                    lastUnitCostAmount: 0,
+                    avgUnitCostAmount: 0,
+                    lastTotalCostAmount: 0,
+                    avgTotalCostAmount: 0,
+                  },
+                });
+              } else if (variation === variations[0]) {
+                await db.recipeLine.create({
+                  data: {
+                    recipeId: recipe.id,
+                    itemId: item.id,
+                    unit: item.consumptionUm || 'KG',
+                    quantity: finalQty,
+                    lastUnitCostAmount: 0,
+                    avgUnitCostAmount: 0,
+                    lastTotalCostAmount: 0,
+                    avgTotalCostAmount: 0,
+                    sortOrderIndex: idx,
+                  },
+                });
+              }
+
+              recipeLinesSummary.push({
+                variationName: variation.name,
+                variationCode: variation.code,
+                ingredientName,
+                status,
+                mediumQty: medQty ?? 0,
+                finalQty,
+                quantitySource: medQty !== null ? 'estimated' : 'unmapped (qty=0)',
+              });
+            }
+          }
+
+          recipeResults.push({
+            menuItemName: menuItem.name,
+            variationName: '(all sizes)',
+            status: 'created',
+            recipeId: recipe.id,
+            recipeName: recipe.name,
+            lines: recipeLinesSummary,
+          });
+          recipesCreated += 1;
+
+          if (args.migrateAndCleanLegacy) {
+            const firstVariation = variations[0] || null;
+            const fallbackItemVariationId = firstVariation
+              ? variationLinks.get(firstVariation.id) || null
+              : null;
+            const migration = await migrateAndCleanLegacyRecipeLines(db, {
+              recipeId: recipe.id,
+              ownerItemVariationId: fallbackItemVariationId,
+              dryRun: args.dryRun,
+            });
+            migratedLegacyLines += Number(migration.migratedLines || 0);
+            cleanedLegacyLines += Number(migration.cleanedLegacyLines || 0);
+          }
+        }
+
+        menuItemSummaries.push({
+          menuItemName: menuItem.name,
+          itemId: menuItem.itemId,
+          totalIngredients: ingredientNames.length,
+          unmappedIngredients: ingredientNames.filter((n) => mediumQtyMap[n] === null),
+          totalVariations: variations.length,
+          recipesCreated,
+          recipesSkipped,
+        });
+        continue;
+      }
+
       for (const variation of variations) {
         // Check if recipe already exists for this itemId + variationId
         const existingRecipe = await db.recipe.findFirst({
@@ -388,6 +815,22 @@ async function main() {
         });
 
         if (existingRecipe) {
+          if (args.migrateAndCleanLegacy) {
+            const ownerItemVariationId = await ensureOwnerItemVariationForRecipe(db, {
+              itemId: menuItem.itemId,
+              variationId: variation.id,
+              recipeId: existingRecipe.id,
+              dryRun: args.dryRun,
+            });
+            const migration = await migrateAndCleanLegacyRecipeLines(db, {
+              recipeId: existingRecipe.id,
+              ownerItemVariationId,
+              dryRun: args.dryRun,
+            });
+            migratedLegacyLines += Number(migration.migratedLines || 0);
+            cleanedLegacyLines += Number(migration.cleanedLegacyLines || 0);
+          }
+
           recipeResults.push({
             menuItemName: menuItem.name,
             variationName: variation.name,
@@ -438,7 +881,17 @@ async function main() {
           select: { id: true, name: true },
         });
 
-        // Create RecipeLines for each ingredient
+        const newModelAvailable = supportsNewRecipeCompositionModel(db);
+        const ownerItemVariationId = newModelAvailable
+          ? await ensureOwnerItemVariationForRecipe(db, {
+            itemId: menuItem.itemId,
+            variationId: variation.id,
+            recipeId: recipe.id,
+            dryRun: args.dryRun,
+          })
+          : null;
+
+        // Create composition lines
         const recipeLinesSummary = [];
         for (let idx = 0; idx < ingredientNames.length; idx++) {
           const ingredientName = ingredientNames[idx];
@@ -459,19 +912,36 @@ async function main() {
             finalQty,
           });
 
-          await db.recipeLine.create({
-            data: {
+          if (newModelAvailable && ownerItemVariationId) {
+            await upsertNewCompositionLine(db, {
               recipeId: recipe.id,
               itemId: item.id,
+              sortOrderIndex: idx,
               unit: item.consumptionUm || 'KG',
               quantity: finalQty,
-              lastUnitCostAmount: 0,
-              avgUnitCostAmount: 0,
-              lastTotalCostAmount: 0,
-              avgTotalCostAmount: 0,
-              sortOrderIndex: idx,
-            },
-          });
+              ownerItemVariationId,
+              snapshot: {
+                lastUnitCostAmount: 0,
+                avgUnitCostAmount: 0,
+                lastTotalCostAmount: 0,
+                avgTotalCostAmount: 0,
+              },
+            });
+          } else {
+            await db.recipeLine.create({
+              data: {
+                recipeId: recipe.id,
+                itemId: item.id,
+                unit: item.consumptionUm || 'KG',
+                quantity: finalQty,
+                lastUnitCostAmount: 0,
+                avgUnitCostAmount: 0,
+                lastTotalCostAmount: 0,
+                avgTotalCostAmount: 0,
+                sortOrderIndex: idx,
+              },
+            });
+          }
 
           recipeLinesSummary.push({
             ingredientName,
@@ -493,6 +963,16 @@ async function main() {
           lines: recipeLinesSummary,
         });
         recipesCreated += 1;
+
+        if (args.migrateAndCleanLegacy) {
+          const migration = await migrateAndCleanLegacyRecipeLines(db, {
+            recipeId: recipe.id,
+            ownerItemVariationId,
+            dryRun: args.dryRun,
+          });
+          migratedLegacyLines += Number(migration.migratedLines || 0);
+          cleanedLegacyLines += Number(migration.cleanedLegacyLines || 0);
+        }
       }
 
       menuItemSummaries.push({
@@ -511,6 +991,14 @@ async function main() {
       env: envName,
       dryRun: args.dryRun,
       mode: args.all ? 'all' : 'single',
+      resetRecipes: args.resetRecipes,
+      migrateAndCleanLegacy: args.migrateAndCleanLegacy,
+      oneRecipePerItem: args.oneRecipePerItem,
+      recipesDeleted: args.dryRun ? undefined : recipesDeleted,
+      recipesDeletePreview: args.dryRun ? recipesDeletePreview : undefined,
+      migratedLegacyLines,
+      cleanedLegacyLines,
+      duplicateRecipesDeleted,
       variationKindFilter: args.variationKind ?? '(sem filtro - todas as variations)',
       totalMenuItems: menuItems.length,
       totalVariations: variations.length,
@@ -538,14 +1026,18 @@ async function main() {
     if (args.dryRun) {
       const { writeFileSync } = await import('fs');
       const reportPath = '/tmp/recipes-dry-run-report.tsv';
-      const rows = ['Sabor\tTagmanho\tFator\tIngrediente\tQty (KG)\tFonte'];
+      const rows = ['Sabor\tTamanho\tFator\tIngrediente\tQty (KG)\tFonte'];
       for (const r of recipeResults) {
         if (!r.lines) continue;
         for (const line of r.lines) {
+          const lineVariationName = line.variationName || r.variationName || '';
+          const lineSizeFactor = line.variationCode
+            ? getSizeFactor(line.variationCode)
+            : (typeof r.sizeFactor === 'number' ? r.sizeFactor : 1);
           rows.push([
             r.menuItemName,
-            r.variationName,
-            r.sizeFactor,
+            lineVariationName,
+            lineSizeFactor,
             line.ingredientName,
             line.finalQty.toFixed(4),
             line.quantitySource,

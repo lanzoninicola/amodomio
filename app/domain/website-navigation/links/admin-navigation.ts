@@ -252,7 +252,7 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
         },
         {
           title: "Receitas",
-          href: "/admin/recipes/worksheet?view=flat",
+          href: "/admin/recipes",
           items: [],
           disabled: false,
         },
