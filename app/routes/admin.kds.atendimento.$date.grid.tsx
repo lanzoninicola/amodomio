@@ -253,8 +253,8 @@ type DashboardMeta = {
   costAverageBaseLabel: string;
   goalMinAmount: number;
   goalTargetAmount: number;
-  pctOfMin: number; // 0..100
-  pctOfTarget: number; // 0..100
+  pctOfMin: number;
+  pctOfTarget: number;
   status: "below-min" | "between" | "hit-target";
 };
 
@@ -444,15 +444,15 @@ export async function loader({ params }: LoaderFunctionArgs) {
     impostoPerc: taxPerc,
   });
 
-  // Status vs metas
+  // Status e alcance vs metas (base: receita bruta)
   let status: DashboardMeta["status"] = "below-min";
-  if (netAmount >= goalTargetAmount && goalTargetAmount > 0) status = "hit-target";
-  else if (netAmount >= goalMinAmount) status = "between";
+  if (grossAmount >= goalTargetAmount && goalTargetAmount > 0) status = "hit-target";
+  else if (grossAmount >= goalMinAmount) status = "between";
 
   const pctOfMin =
-    goalMinAmount > 0 ? Math.min(100, (grossAmount / goalMinAmount) * 100) : 0;
+    goalMinAmount > 0 ? (grossAmount / goalMinAmount) * 100 : 0;
   const pctOfTarget =
-    goalTargetAmount > 0 ? Math.min(100, (grossAmount / goalTargetAmount) * 100) : 0;
+    goalTargetAmount > 0 ? (grossAmount / goalTargetAmount) * 100 : 0;
 
   const monthlyCloseRepo = (prisma as any).financialMonthlyClose;
   let costFixedPerc = 0;
@@ -2079,7 +2079,7 @@ export default function GridKdsPage() {
 
                       <div className="grid grid-cols-1 gap-3">
                         <div className="rounded-lg border border-white/60 bg-white/80 px-3 py-2 space-y-1.5">
-                          <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-500">Meta Mínima (dia)</div>
+                          <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-500">Meta Mínima (bruta)</div>
                           <div className={`text-3xl font-black ${statusTextColor} tabular-nums leading-none mb-2`}>
                             {dashboard.pctOfMin.toFixed(0)}%
                           </div>
@@ -2087,7 +2087,7 @@ export default function GridKdsPage() {
                           <div className="font-mono text-base text-slate-800 tabular-nums">{fmtBRL(dashboard.goalMinAmount)}</div>
                         </div>
                         <div className="rounded-lg border border-white/60 bg-white/80 px-3 py-2 space-y-1.5">
-                          <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-500">Meta Target (dia)</div>
+                          <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-500">Meta Target (bruta)</div>
                           <div className={`text-3xl font-black ${statusTextColor} tabular-nums leading-none mb-2`}>
                             {dashboard.pctOfTarget.toFixed(0)}%
                           </div>
