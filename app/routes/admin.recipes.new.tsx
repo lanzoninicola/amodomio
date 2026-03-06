@@ -10,25 +10,14 @@ import { ok, serverError } from "~/utils/http-response.server";
 export async function loader({}: LoaderFunctionArgs) {
     try {
         const db = prismaClient as any
-        const [items, variations] = await Promise.all([
-            db.item.findMany({
-                where: { active: true },
-                select: { id: true, name: true, classification: true },
-                orderBy: [{ name: "asc" }],
-                take: 500,
-            }),
-            db.variation.findMany({
-                where: { deletedAt: null },
-                select: { id: true, name: true, kind: true },
-                orderBy: [{ kind: "asc" }, { name: "asc" }],
-                take: 200,
-            }),
-        ])
-
-        return ok({
-            items,
-            variations,
+        const items = await db.item.findMany({
+            where: { active: true },
+            select: { id: true, name: true, classification: true },
+            orderBy: [{ name: "asc" }],
+            take: 500,
         })
+
+        return ok({ items })
     } catch (error) {
         return serverError(error)
     }
@@ -78,7 +67,6 @@ export async function action({ request }: ActionFunctionArgs) {
                         canTransform: true,
                         canSell: !isSemiFinished,
                         canStock: true,
-                        canBeInMenu: false,
                     }
                 })
             }
@@ -87,7 +75,7 @@ export async function action({ request }: ActionFunctionArgs) {
                 where: { id: data.id },
                 data: {
                     itemId: item.id,
-                    variationId: String(values.linkedVariationId || "").trim() || null,
+                    variationId: null,
                 }
             })
         } catch (_error) {
@@ -105,7 +93,6 @@ export default function AdminRecipesNew() {
     const actionData = useActionData<typeof action>() as any
     const loaderData = useLoaderData<typeof loader>() as any
     const items = (loaderData?.payload?.items || []) as Array<{ id: string; name: string; classification?: string | null }>
-    const variations = (loaderData?.payload?.variations || []) as Array<{ id: string; name: string; kind?: string | null }>
     const hasError = Number(actionData?.status || 0) >= 400
     const errorMessage = actionData?.message || "Erro ao salvar receita"
     const errorDetails =
@@ -137,7 +124,6 @@ export default function AdminRecipesNew() {
                 title="Nova receita"
                 actionName="recipe-create"
                 items={items}
-                variations={variations}
             />
         </section>
     )

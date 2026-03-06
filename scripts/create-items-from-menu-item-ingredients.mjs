@@ -227,7 +227,6 @@ async function main() {
             canTransform: false,
             canSell: false,
             canStock: true,
-            canBeInMenu: false,
           },
           select: { id: true, name: true, consumptionUm: true },
         });

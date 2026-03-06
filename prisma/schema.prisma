@@ -31,56 +31,12 @@ model Recipe {
   updatedAt              DateTime                 @default(now()) @updatedAt @map("updated_at")
   Item                   Item?                    @relation(fields: [itemId], references: [id])
   Variation              Variation?               @relation(fields: [variationId], references: [id])
-  ingredients            RecipesIngredient[]
-  RecipeLine             RecipeLine[]
-  RecipeVariation        RecipeVariation[]
-  RecipesIngredientsLink RecipesIngredientsLink[]
+  ItemVariations         ItemVariation[]
+  RecipeIngredient       RecipeIngredient[]
 
   @@index([itemId], map: "recipes_item_id_idx")
   @@index([variationId], map: "recipes_variation_id_idx")
   @@map("recipes")
-}
-
-model RecipeLine {
-  id                 String   @id @default(uuid())
-  recipeId           String   @map("recipe_id")
-  itemId             String   @map("item_id")
-  itemVariationId    String?  @map("item_variation_id")
-  unit               String   @db.VarChar
-  quantity           Float    @default(0)
-  lastUnitCostAmount Float    @default(0) @map("last_unit_cost_amount")
-  avgUnitCostAmount  Float    @default(0) @map("avg_unit_cost_amount")
-  lastTotalCostAmount Float   @default(0) @map("last_total_cost_amount")
-  avgTotalCostAmount Float    @default(0) @map("avg_total_cost_amount")
-  sortOrderIndex     Int      @default(0) @map("sort_order_index")
-  notes              String?  @db.Text
-  createdAt          DateTime @default(now()) @map("created_at")
-  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at")
-
-  Recipe        Recipe        @relation(fields: [recipeId], references: [id], onDelete: Cascade)
-  Item          Item          @relation(fields: [itemId], references: [id])
-  ItemVariation ItemVariation? @relation(fields: [itemVariationId], references: [id])
-
-  @@index([recipeId], map: "recipe_lines_recipe_id_idx")
-  @@index([itemId], map: "recipe_lines_item_id_idx")
-  @@index([itemVariationId], map: "recipe_lines_item_variation_id_idx")
-  @@map("recipe_lines")
-}
-
-model RecipesIngredient {
-  id           String   @id @default(uuid())
-  recipeId     String   @map("recipe_id")
-  ingredientId String   @map("ingredient_id")
-  um           String   @db.VarChar
-  quantity     String   @db.VarChar
-  createdAt    DateTime @map("created_at")
-  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at")
-
-  recipe     Recipe                   @relation(fields: [recipeId], references: [id])
-  ingredient Ingredient               @relation(fields: [ingredientId], references: [id])
-  links      RecipesIngredientsLink[]
-
-  @@map("recipes_ingredients")
 }
 
 model Ingredient {
@@ -89,35 +45,8 @@ model Ingredient {
   um        String              @db.VarChar
   createdAt DateTime            @map("created_at")
   updatedAt DateTime            @default(now()) @updatedAt @map("updated_at")
-  recipes   RecipesIngredient[]
 
   @@map("ingredients")
-}
-
-model RecipesIngredientsLink {
-  id                 String  @id @default(uuid())
-  recipeIngredientId String  @map("recipe_ingredient_id")
-  type               String  @db.VarChar
-  recipeId           String?
-
-  recipeIngredient RecipesIngredient @relation(fields: [recipeIngredientId], references: [id])
-  Recipe           Recipe?           @relation(fields: [recipeId], references: [id])
-
-  @@map("recipes_ingredients_links")
-}
-
-model RecipeVariation {
-  id           String   @id @default(uuid())
-  recipeId     String   @map("recipe_id")
-  name         String
-  description  String
-  factorType   String   @map("factor_type")
-  factorNumber Float    @map("factor_number")
-  createdAt    DateTime @map("created_at")
-  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at")
-  Recipe       Recipe   @relation(fields: [recipeId], references: [id])
-
-  @@map("recipes_variations")
 }
 
 model Category {
@@ -246,14 +175,13 @@ model Item {
   canTransform  Boolean    @default(false) @map("can_transform")
   canSell       Boolean    @default(false) @map("can_sell")
   canStock      Boolean    @default(false) @map("can_stock")
-  canBeInMenu   Boolean    @default(false) @map("can_be_in_menu")
   createdAt     DateTime   @default(now()) @map("created_at")
   updatedAt     DateTime   @default(now()) @updatedAt @map("updated_at")
 
   Category    Category?   @relation(fields: [categoryId], references: [id])
   MenuItem    MenuItem[]
   Recipe      Recipe[]
-  RecipeLine  RecipeLine[]
+  RecipeIngredient RecipeIngredient[]
   ItemCostSheet ItemCostSheet[]
   ItemVariation ItemVariation[]
   StockNfImportBatchLine StockNfImportBatchLine[]
@@ -324,23 +252,70 @@ model ItemVariation {
   id          String   @id @default(uuid())
   itemId      String   @map("item_id")
   variationId String   @map("variation_id")
+  isReference Boolean  @default(false) @map("is_reference")
+  recipeId    String?  @map("recipe_id")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
   deletedAt   DateTime? @map("deleted_at")
 
   Item                 Item                   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  Recipe               Recipe?                @relation(fields: [recipeId], references: [id], onDelete: SetNull)
   Variation            Variation              @relation(fields: [variationId], references: [id], onDelete: Restrict)
   ItemCostSheet        ItemCostSheet[]
-  RecipeLine           RecipeLine[]
+  RecipeVariationIngredient RecipeVariationIngredient[]
   ItemCostVariation        ItemCostVariation?
   ItemCostVariationHistory ItemCostVariationHistory[]
   StockNfImportAppliedChange StockNfImportAppliedChange[]
 
   @@unique([itemId, variationId], map: "item_variations_item_variation_unique")
+  @@index([recipeId], map: "item_variations_recipe_id_idx")
   @@index([itemId], map: "item_variations_item_id_idx")
   @@index([variationId], map: "item_variations_variation_id_idx")
   @@index([deletedAt], map: "item_variations_deleted_at_idx")
   @@map("item_variations")
+}
+
+model RecipeIngredient {
+  id                 String   @id @default(uuid())
+  recipeId           String   @map("recipe_id")
+  ingredientItemId   String   @map("ingredient_item_id")
+  defaultLossPct     Float    @default(0) @map("default_loss_pct")
+  sortOrderIndex     Int      @default(0) @map("sort_order_index")
+  notes              String?  @db.Text
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at")
+
+  Recipe                     Recipe                      @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  IngredientItem             Item                        @relation(fields: [ingredientItemId], references: [id])
+  RecipeVariationIngredient  RecipeVariationIngredient[]
+
+  @@unique([recipeId, ingredientItemId], map: "recipe_ingredients_recipe_ingredient_unique")
+  @@index([recipeId], map: "recipe_ingredients_recipe_id_idx")
+  @@index([ingredientItemId], map: "recipe_ingredients_ingredient_item_id_idx")
+  @@map("recipe_ingredients")
+}
+
+model RecipeVariationIngredient {
+  id                 String   @id @default(uuid())
+  recipeIngredientId String   @map("recipe_ingredient_id")
+  itemVariationId    String   @map("item_variation_id")
+  unit               String   @db.VarChar
+  quantity           Float    @default(0)
+  lossPct            Float?   @map("loss_pct")
+  lastUnitCostAmount Float    @default(0) @map("last_unit_cost_amount")
+  avgUnitCostAmount  Float    @default(0) @map("avg_unit_cost_amount")
+  lastTotalCostAmount Float   @default(0) @map("last_total_cost_amount")
+  avgTotalCostAmount Float    @default(0) @map("avg_total_cost_amount")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at")
+
+  RecipeIngredient  RecipeIngredient @relation(fields: [recipeIngredientId], references: [id], onDelete: Cascade)
+  ItemVariation     ItemVariation    @relation(fields: [itemVariationId], references: [id], onDelete: Cascade)
+
+  @@unique([recipeIngredientId, itemVariationId], map: "recipe_var_ingredients_recipe_ing_item_var_unique")
+  @@index([itemVariationId], map: "recipe_var_ingredients_item_variation_id_idx")
+  @@index([recipeIngredientId], map: "recipe_var_ingredients_recipe_ingredient_id_idx")
+  @@map("recipe_variation_ingredients")
 }
 
 model ItemCostVariation {
@@ -657,7 +632,7 @@ model ItemCostSheet {
   version           Int               @default(1)
   status              ItemCostSheetStatus @default(draft)
   isActive          Boolean           @default(false) @map("is_active")
-  baseItemCostSheetId String?         @map("base_recipe_sheet_id")
+  baseItemCostSheetId String?         @map("base_item_cost_sheet_id")
   costAmount        Float             @default(0) @map("cost_amount")
   notes             String?           @db.Text
   activatedAt       DateTime?         @map("activated_at")
@@ -672,17 +647,17 @@ model ItemCostSheet {
   derivedItemCostSheet ItemCostSheet[] @relation("ItemCostSheetBase")
   ItemCostSheetLine    ItemCostSheetLine[]
 
-  @@index([itemId], map: "recipe_sheets_item_id_idx")
-  @@index([itemVariationId], map: "recipe_sheets_item_variation_id_idx")
-  @@index([itemId, itemVariationId], map: "recipe_sheets_item_variation_idx")
-  @@index([itemId, itemVariationId, isActive], map: "recipe_sheets_item_variation_active_idx")
-  @@unique([itemId, itemVariationId, version], map: "recipe_sheets_item_variation_version_unique")
-  @@map("recipe_sheets")
+  @@index([itemId], map: "item_cost_sheets_item_id_idx")
+  @@index([itemVariationId], map: "item_cost_sheets_item_variation_id_idx")
+  @@index([itemId, itemVariationId], map: "item_cost_sheets_item_variation_idx")
+  @@index([itemId, itemVariationId, isActive], map: "item_cost_sheets_item_variation_active_idx")
+  @@unique([itemId, itemVariationId, version], map: "item_cost_sheets_item_variation_version_unique")
+  @@map("item_cost_sheets")
 }
 
 model ItemCostSheetLine {
   id              String              @id @default(uuid())
-  itemCostSheetId String                @map("recipe_sheet_id")
+  itemCostSheetId String                @map("item_cost_sheet_id")
   type            ItemCostSheetLineType @default(manual)
   refId           String?             @map("ref_id")
   name            String
@@ -698,8 +673,8 @@ model ItemCostSheetLine {
 
   ItemCostSheet ItemCostSheet @relation(fields: [itemCostSheetId], references: [id], onDelete: Cascade)
 
-  @@index([itemCostSheetId], map: "recipe_sheet_lines_sheet_idx")
-  @@map("recipe_sheet_lines")
+  @@index([itemCostSheetId], map: "item_cost_sheet_lines_sheet_idx")
+  @@map("item_cost_sheet_lines")
 }
 
 model DnaEmpresaSettings {
@@ -1091,6 +1066,21 @@ model Setting {
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
 
   @@map("settings")
+}
+
+model AiContextProfileVersion {
+  id        String   @id @default(uuid())
+  language  String
+  version   Int
+  content   String
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@unique([language, version], map: "ai_context_profile_versions_language_version_unique")
+  @@index([language, isActive], map: "ai_context_profile_versions_language_is_active_idx")
+  @@index([language, createdAt], map: "ai_context_profile_versions_language_created_at_idx")
+  @@map("ai_context_profile_versions")
 }
 
 // model OrderDeliveryTimeLeftOrdersInbound {

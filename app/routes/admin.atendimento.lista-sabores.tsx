@@ -426,10 +426,10 @@ function CardapioItem({ item, setVisible, visible, active, setActive, showExpand
   return (
     <div
       className={
-      cn(
-        "border rounded-lg p-4",
-        item?.visible === false && "border-red-500/50 bg-red-500/10",
-      )
+        cn(
+          "border rounded-lg p-4",
+          item?.visible === false && "border-red-500/50 bg-red-500/10",
+        )
       }
       key={item.id}
     >
@@ -559,7 +559,7 @@ function QuickSellPriceDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-lg">
         <DialogTitle className="text-base font-semibold">
           Atualizar preco de venda
         </DialogTitle>
@@ -571,14 +571,19 @@ function QuickSellPriceDialog({
           <input type="hidden" name="_action" value="menu-item-selling-price-quick-update" />
           <input type="hidden" name="menuItemId" value={item.id} />
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-4 gap-3">
             {sizeFields.map((size) => (
-              <label key={size.abbreviation} className="flex flex-col gap-1 text-xs font-semibold text-muted-foreground">
-                {size.label} ({size.abbreviation}) | R$ {formatMoneyString(pricesByAbbreviation[size.abbreviation] ?? 0)}
+              <label key={size.abbreviation} className="flex flex-col gap-0 text-xs font-semibold text-muted-foreground">
+                <span>
+                  {size.label} ({size.abbreviation})
+                </span>
+                <span>
+                  R$ {formatMoneyString(pricesByAbbreviation[size.abbreviation] ?? 0)}
+                </span>
                 <MoneyInput
                   name={size.inputName}
                   defaultValue={pricesByAbbreviation[size.abbreviation] ?? 0}
-                  className="w-full text-black font-medium"
+                  className="w-full text-black font-medium mt-2 font-mono text-lg"
                 />
               </label>
             ))}

@@ -2,6 +2,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { Form, Link, useActionData, useLoaderData } from "@remix-run/react";
 import { useEffect, useState } from "react";
 import { ChevronLeft, ChevronsLeft, ChevronsRight, Plus } from "lucide-react";
+import { DeleteItemButton } from "~/components/primitives/table-list";
 import { Badge } from "~/components/ui/badge";
 import {
   Pagination,
@@ -31,6 +32,35 @@ const BRL_FORMATTER = new Intl.NumberFormat("pt-BR", {
   style: "currency",
   currency: "BRL",
 });
+const DUPLICATE_WORDS_TO_IGNORE = new Set([
+  "de",
+  "do",
+  "da",
+  "dos",
+  "das",
+  "e",
+  "italiano",
+  "italiana",
+  "caseiro",
+  "caseira",
+  "tradicional",
+  "especial",
+  "premium",
+  "gourmet",
+  "artesanal",
+]);
+
+function normalizeItemName(name: string) {
+  return name
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean)
+    .filter((word) => !DUPLICATE_WORDS_TO_IGNORE.has(word))
+    .join(" ");
+}
 
 function parsePage(raw: string | null) {
   const parsed = Number(raw || "1");
@@ -243,6 +273,53 @@ export async function action({ request }: ActionFunctionArgs) {
     const _action = String(formData.get("_action") || "");
 
     if (_action !== "items-bulk-update") {
+      if (_action === "item-delete") {
+        const itemId = String(formData.get("id") || "").trim();
+        if (!itemId) {
+          return badRequest("Item inválido");
+        }
+
+        const item = await db.item.findUnique({
+          where: { id: itemId },
+          select: { id: true, name: true },
+        });
+        if (!item) {
+          return badRequest("Item não encontrado");
+        }
+
+        const [
+          stockMovement,
+          recipeLine,
+          recipe,
+          menuItem,
+          itemCostSheet,
+        ] = await Promise.all([
+          db.stockNfImportAppliedChange.findFirst({
+            where: { itemId, rolledBackAt: null },
+            select: { id: true },
+          }),
+          db.recipeLine.findFirst({ where: { itemId }, select: { id: true } }),
+          db.recipe.findFirst({ where: { itemId }, select: { id: true } }),
+          db.menuItem.findFirst({ where: { itemId }, select: { id: true } }),
+          db.itemCostSheet.findFirst({ where: { itemId }, select: { id: true } }),
+        ]);
+
+        const reasons: string[] = [];
+        if (stockMovement) reasons.push("existem movimentações de estoque");
+        if (recipeLine) reasons.push("está usado em receitas");
+        if (recipe) reasons.push("está vinculado a uma receita");
+        if (menuItem) reasons.push("está vinculado ao cardápio");
+        if (itemCostSheet) reasons.push("possui fichas de custo");
+
+        if (reasons.length > 0) {
+          return badRequest(`Não é possível eliminar o item porque ${reasons.join(", ")}.`);
+        }
+
+        await db.item.delete({ where: { id: itemId } });
+
+        return ok({ message: "Item eliminado com sucesso" });
+      }
+
       return badRequest("Ação inválida");
     }
 
@@ -339,6 +416,13 @@ export default function AdminItemsIndex() {
   const [bulkCategoryValue, setBulkCategoryValue] = useState("__NO_CHANGE__");
   const [bulkClassificationValue, setBulkClassificationValue] = useState("__NO_CHANGE__");
   const [bulkActiveValue, setBulkActiveValue] = useState("__NO_CHANGE__");
+
+  const duplicateCounts = items.reduce((acc: Map<string, number>, item: any) => {
+    const key = normalizeItemName(item?.name || "");
+    if (!key) return acc;
+    acc.set(key, (acc.get(key) || 0) + 1);
+    return acc;
+  }, new Map<string, number>());
 
   const pageItemIds = items.map((item: any) => item.id);
   const allPageSelected = pageItemIds.length > 0 && pageItemIds.every((id: string) => selectedItemIds.includes(id));
@@ -643,17 +727,23 @@ export default function AdminItemsIndex() {
               <TableHead className="h-10 px-4 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Custo medio
               </TableHead>
+              <TableHead className="h-10 px-4 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Ações
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {items.length === 0 ? (
               <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={8} className="px-4 py-8 text-sm text-slate-500">
+                <TableCell colSpan={9} className="px-4 py-8 text-sm text-slate-500">
                   Nenhum item encontrado (rode migration e backfill).
                 </TableCell>
               </TableRow>
             ) : (
               items.map((item: any) => {
+                const normalizedName = normalizeItemName(item.name || "");
+                const duplicateCount = normalizedName ? duplicateCounts.get(normalizedName) || 0 : 0;
+                const isDuplicate = duplicateCount > 1;
                 const latestCost = item._costMetrics?.latestCost || null;
                 const costMetrics = item._costMetrics || null;
                 const categoryName =
@@ -679,13 +769,24 @@ export default function AdminItemsIndex() {
                     </TableCell>
                     <TableCell className="px-4 py-3">
                       <div className="flex min-w-0 flex-col gap-0.5">
-                        <Link
-                          to={`/admin/items/${item.id}`}
-                          className="truncate font-semibold text-slate-900 hover:underline"
-                          title={item.name}
-                        >
-                          {item.name}
-                        </Link>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Link
+                            to={`/admin/items/${item.id}`}
+                            className="truncate font-semibold text-slate-900 hover:underline"
+                            title={item.name}
+                          >
+                            {item.name}
+                          </Link>
+                          {isDuplicate ? (
+                            <Badge
+                              variant="outline"
+                              className="border-amber-200 bg-amber-50 text-[10px] font-semibold uppercase tracking-wide text-amber-800"
+                              title={`Possível duplicado (${duplicateCount} itens com nome normalizado igual)`}
+                            >
+                              Duplicado
+                            </Badge>
+                          ) : null}
+                        </div>
                         <span className="text-xs text-slate-500">ID: {item.id}</span>
                       </div>
                     </TableCell>
@@ -721,6 +822,14 @@ export default function AdminItemsIndex() {
                     </TableCell>
                     <TableCell className="px-4 py-3 text-right font-medium text-slate-800">{latestLabel}</TableCell>
                     <TableCell className="px-4 py-3 text-right font-medium text-slate-800">{avgLabel}</TableCell>
+                    <TableCell className="px-4 py-3">
+                      <div className="flex items-center justify-end">
+                        <Form method="post">
+                          <input type="hidden" name="id" value={item.id} />
+                          <DeleteItemButton actionName="item-delete" />
+                        </Form>
+                      </div>
+                    </TableCell>
                   </TableRow>
                 );
               })

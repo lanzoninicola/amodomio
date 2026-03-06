@@ -18,6 +18,16 @@ Prisma configuration, env vars, and migration notes are documented in:
 
 - `prisma/README.md`
 
+## Itens - Exclusão
+
+Regras atuais para eliminar itens na lista de administração:
+
+- Não é permitido eliminar quando há movimentações de estoque (NF aplicada).
+- Não é permitido eliminar quando o item está usado em receitas (linhas de receita).
+- Não é permitido eliminar quando o item está vinculado a uma receita base.
+- Não é permitido eliminar quando o item está vinculado ao cardápio.
+- Não é permitido eliminar quando existem fichas de custo para o item.
+
 ## KDS REST API
 
 Documentação da API REST do KDS (criação de pedidos e delivery zones):
@@ -48,6 +58,11 @@ Referência rápida para evolução futura do fluxo de custos por `Item`.
 - O custo é gerenciado principalmente por `Item`, via histórico em `ItemCostHistory`.
 - O cadastro manual de custo é genérico (não aplica regra diferente por classificação no backend).
 - O sistema calcula `último custo` e `custo médio` por item, com normalização por unidade quando há configuração de compra/consumo.
+
+### Flags de operação (regra simples)
+
+- `canSell` controla se o item pode ir ao cardápio (disponibilidade derivada).
+- O campo `canBeInMenu` foi removido do modelo; use `canSell` como fonte única.
 
 ### Como está sendo usado por classificação (hoje)
 

@@ -38,14 +38,12 @@ async function runBackfillMenuItemsToItems() {
         canTransform: true,
         canSell: true,
         canStock: true,
-        canBeInMenu: true,
       },
       update: {
         name: menuItem.name,
         description: menuItem.description || null,
         active: menuItem.active ?? true,
         canSell: true,
-        canBeInMenu: true,
       },
     });
     createdOrUpdated += 1;
@@ -61,7 +59,7 @@ async function runBackfillMenuItemsToItems() {
 
   try {
     recipeSheetsLinked = await db.$executeRawUnsafe(`
-      UPDATE "recipe_sheets" rs
+      UPDATE "item_cost_sheets" rs
       SET "item_id" = mi."item_id"
       FROM "menu_items" mi
       WHERE rs."menu_item_id" = mi."id"
@@ -69,7 +67,7 @@ async function runBackfillMenuItemsToItems() {
         AND rs."item_id" IS NULL
     `);
   } catch (_error) {
-    // Ignore when recipe_sheets.item_id migration was not applied yet.
+    // Ignore when item_cost_sheets.item_id migration was not applied yet.
   }
 
   try {
@@ -107,7 +105,6 @@ async function runBackfillMenuItemsToItems() {
             canTransform: true,
             canSell: !isSemiFinished,
             canStock: true,
-            canBeInMenu: false,
           },
         });
 

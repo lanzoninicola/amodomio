@@ -306,6 +306,12 @@ function CardapioHeader() {
                 </WhatsappExternalLink>
             </div>
 
+            <div className="bg-black flex items-center justify-center h-[24px] md:h-[32px]">
+                <p className="font-neue text-white text-[11px] md:text-sm uppercase tracking-wider font-semibold">
+                    Hórarios de funcionamento: Qua <span className="lowercase">a</span> Dom, <span className="lowercase">das</span> 18h <span className="lowercase">às</span> 22h
+                </p>
+            </div>
+
             <ScrollingBanner
                 cnContainer="h-[30px] md:h-[40px] bg-white border-b border-t border-solid border-black flex"
             >
@@ -430,7 +436,7 @@ function CardapioFooter() {
     const { fazerPedidoPublicURL } = useLoaderData<typeof loader>();
 
     return (
-        <footer className="fixed bottom-0 w-full h-[70px] bg-white px-4 flex items-center justify-between border-t border-gray-200
+        <footer className="fixed bottom-0 w-full h-[70px] bg-white px-4 flex gap-x-4 items-center justify-between border-t border-gray-200
         z-10 md:max-w-6xl md:-translate-x-1/2 md:left-1/2
         ">
             {/* Botão Tamanhos à esquerda */}
@@ -438,26 +444,17 @@ function CardapioFooter() {
                 <TamanhosLinkButton />
             </div>
 
-            {/* Botão flutuante central */}
-            <div className="absolute left-1/2 -translate-x-1/2 -translate-y-6 z-20">
-                <Suspense fallback={<span>Carregando...</span>}>
-                    <Await resolve={fazerPedidoPublicURL}>
-                        {(url) => (
-                            <div className="flex flex-col gap-1">
-                                <FazerPedidoButton
-                                    // variant="accent"
-                                    cnLabel="text-md tracking-wider font-semibold font-neue"
-                                    externalLinkURL={url}
-                                />
-                                <div className="flex flex-col justify-center items-center gap-0 ">
-                                    <p className="font-neue font-semibold text-[10px]">Hórarios de funcionamento</p>
-                                    <p className="text-muted-foreground font-neue text-xs ">QUA a DOM das 18h às 22h</p>
-                                </div>
-                            </div>
-                        )}
-                    </Await>
-                </Suspense>
-            </div>
+            {/* Botão central */}
+            <Suspense fallback={<span>Carregando...</span>}>
+                <Await resolve={fazerPedidoPublicURL}>
+                    {(url) => (
+                        <FazerPedidoButton
+                            cnLabel="text-md tracking-wider font-semibold font-neue"
+                            externalLinkURL={url}
+                        />
+                    )}
+                </Await>
+            </Suspense>
 
             {/* Botão Tamanhos à direita (se for necessário) */}
             <div className="flex">

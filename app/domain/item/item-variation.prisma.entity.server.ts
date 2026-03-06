@@ -7,6 +7,11 @@ export type LinkItemVariationInput = {
   variationId: string;
 };
 
+type SetReferenceInput = {
+  itemId: string;
+  itemVariationId: string;
+};
+
 class ItemVariationPrismaEntity {
   client;
 
@@ -73,15 +78,19 @@ class ItemVariationPrismaEntity {
       if (existing && !existing.deletedAt) return existing;
 
       if (existing?.deletedAt) {
-        return await (tx as any).itemVariation.update({
+        const restored = await (tx as any).itemVariation.update({
           where: { id: existing.id },
           data: { deletedAt: null, updatedAt: new Date() },
         });
+        await this.ensureReferenceForItemTx(tx, itemId);
+        return restored;
       }
 
-      return await (tx as any).itemVariation.create({
-        data: { itemId, variationId },
+      const created = await (tx as any).itemVariation.create({
+        data: { itemId, variationId, isReference: false },
       });
+      await this.ensureReferenceForItemTx(tx, itemId);
+      return created;
     });
   }
 
@@ -106,10 +115,12 @@ class ItemVariationPrismaEntity {
         throw new Error("Não é permitido remover a variação base do item");
       }
 
-      return await (tx as any).itemVariation.update({
+      const removed = await (tx as any).itemVariation.update({
         where: { id },
-        data: { deletedAt: new Date() },
+        data: { deletedAt: new Date(), isReference: false },
       });
+      await this.ensureReferenceForItemTx(tx, itemVariation.itemId);
+      return removed;
     });
   }
 
@@ -155,7 +166,7 @@ class ItemVariationPrismaEntity {
         const existing = current.find((row: any) => row.variationId === variationId);
         if (!existing) {
           await (tx as any).itemVariation.create({
-            data: { itemId, variationId },
+            data: { itemId, variationId, isReference: false },
           });
           continue;
         }
@@ -163,7 +174,7 @@ class ItemVariationPrismaEntity {
         if (existing.deletedAt) {
           await (tx as any).itemVariation.update({
             where: { id: existing.id },
-            data: { deletedAt: null },
+            data: { deletedAt: null, isReference: false },
           });
         }
       }
@@ -181,9 +192,11 @@ class ItemVariationPrismaEntity {
 
         await (tx as any).itemVariation.update({
           where: { id: row.id },
-          data: { deletedAt: new Date() },
+          data: { deletedAt: new Date(), isReference: false },
         });
       }
+
+      await this.ensureReferenceForItemTx(tx, itemId);
 
       return await (tx as any).itemVariation.findMany({
         where: { itemId, deletedAt: null },
@@ -192,9 +205,65 @@ class ItemVariationPrismaEntity {
       });
     });
   }
+
+  async setReferenceVariation({ itemId, itemVariationId }: SetReferenceInput) {
+    if (!itemId) throw new Error("Item.id é obrigatório");
+    if (!itemVariationId) throw new Error("ItemVariation.id é obrigatório");
+
+    return await this.client.$transaction(async (tx) => {
+      const target = await (tx as any).itemVariation.findFirst({
+        where: { id: itemVariationId, itemId, deletedAt: null },
+      });
+
+      if (!target) {
+        throw new Error("Variação de referência inválida");
+      }
+
+      await (tx as any).itemVariation.updateMany({
+        where: { itemId, deletedAt: null, isReference: true },
+        data: { isReference: false },
+      });
+
+      return await (tx as any).itemVariation.update({
+        where: { id: itemVariationId },
+        data: { isReference: true },
+      });
+    });
+  }
+
+  private async ensureReferenceForItemTx(tx: any, itemId: string) {
+    const activeRows = await (tx as any).itemVariation.findMany({
+      where: { itemId, deletedAt: null },
+      include: { Variation: true },
+      orderBy: [{ createdAt: "asc" }],
+    });
+
+    if (activeRows.length === 0) return;
+
+    const currentReference = activeRows.find((row: any) => row.isReference);
+    if (currentReference) {
+      const extraReferences = activeRows.filter((row: any) => row.isReference && row.id !== currentReference.id);
+      if (extraReferences.length > 0) {
+        await (tx as any).itemVariation.updateMany({
+          where: { id: { in: extraReferences.map((row: any) => row.id) } },
+          data: { isReference: false },
+        });
+      }
+      return;
+    }
+
+    const preferred =
+      activeRows.find((row: any) => row?.Variation?.kind !== "base") ||
+      activeRows.find((row: any) => row?.Variation?.kind === "base" && row?.Variation?.code === "base") ||
+      activeRows[0];
+
+    await (tx as any).itemVariation.update({
+      where: { id: preferred.id },
+      data: { isReference: true },
+    });
+  }
 }
 
 export const itemVariationPrismaEntity = new ItemVariationPrismaEntity({
   client: prismaClient,
 });
-

@@ -1,7 +1,8 @@
-import { Link, Outlet } from "@remix-run/react";
+import { Link, NavLink, Outlet } from "@remix-run/react";
 import Container from "~/components/layout/container/container";
 import { Separator } from "~/components/ui/separator";
-import { ChevronLeft, PlusCircle } from "lucide-react";
+import { ChevronLeft, PlusCircle, LayoutGrid, List } from "lucide-react";
+import { cn } from "~/lib/utils";
 
 export default function RecipesOutlet() {
     return (
@@ -26,7 +27,37 @@ export default function RecipesOutlet() {
                             Nova Receita
                         </Link>
                     </div>
-                    <Separator className="mt-4" />
+
+                    <Separator className="mt-4 mb-3" />
+
+                    {/* Navigation tabs */}
+                    <nav className="flex items-center gap-1">
+                        <NavLink
+                            to="/admin/recipes"
+                            end
+                            className={({ isActive }) => cn(
+                                "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors",
+                                isActive
+                                    ? "bg-slate-900 text-white"
+                                    : "text-slate-500 hover:text-slate-900 hover:bg-slate-100"
+                            )}
+                        >
+                            <List size={13} />
+                            Lista
+                        </NavLink>
+                        <NavLink
+                            to="/admin/recipes/worksheet"
+                            className={({ isActive }) => cn(
+                                "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors",
+                                isActive
+                                    ? "bg-slate-900 text-white"
+                                    : "text-slate-500 hover:text-slate-900 hover:bg-slate-100"
+                            )}
+                        >
+                            <LayoutGrid size={13} />
+                            Worksheet
+                        </NavLink>
+                    </nav>
                 </section>
 
                 <Outlet />
