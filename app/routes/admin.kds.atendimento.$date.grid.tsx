@@ -239,6 +239,7 @@ function calcRemaining(stock: SizeCounts | null, used: SizeCounts): SizeCounts {
 type DashboardMeta = {
   grossAmount: number;
   cardAmount: number;
+  marketplaceAmount: number;
   motoAmount: number;
   netAmount: number;
   taxPerc: number;
@@ -517,6 +518,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
   const dashboard: DashboardMeta = {
     grossAmount,
     cardAmount,
+    marketplaceAmount,
     motoAmount,
     netAmount,
     taxPerc,
@@ -1747,6 +1749,14 @@ export default function GridKdsPage() {
   const prevMonthDiffArrow = prevMonthDiff > 0 ? "▲" : prevMonthDiff < 0 ? "▼" : "•";
   const prevMonthDiffTone = prevMonthDiff > 0 ? "text-emerald-700" : prevMonthDiff < 0 ? "text-red-700" : "text-slate-500";
   const prevMonthDiffPrefix = prevMonthDiff > 0 ? "+" : prevMonthDiff < 0 ? "-" : "";
+  const cardSharePerc = dashboard.grossAmount > 0 ? (dashboard.cardAmount / dashboard.grossAmount) * 100 : 0;
+  const grossCardAmount = dashboard.grossAmount > 0 ? (dashboard.grossAmount * cardSharePerc) / 100 : 0;
+  const cardFeeAmount = grossCardAmount > 0 ? (grossCardAmount * dashboard.cardFeePerc) / 100 : 0;
+  const taxAmount = dashboard.grossAmount > 0 ? (dashboard.grossAmount * dashboard.taxPerc) / 100 : 0;
+  const marketplaceFeeAmount = dashboard.marketplaceAmount > 0
+    ? (dashboard.marketplaceAmount * dashboard.marketplaceTaxPerc) / 100
+    : 0;
+  const netAmountByRule = dashboard.grossAmount - cardFeeAmount - taxAmount - marketplaceFeeAmount;
 
   return (
     <div className="space-y-4 mt-6">
@@ -2020,10 +2030,57 @@ export default function GridKdsPage() {
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-center space-y-1">
-                          <div className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Receita Líquida</div>
-                          <div className="text-3xl font-extrabold text-emerald-700 tabular-nums">{fmtBRL(dashboard.netAmount).slice(3, 99)}</div>
-                        </div>
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <button
+                              type="button"
+                              className="rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-center space-y-1 transition-colors hover:border-emerald-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
+                            >
+                              <div className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Receita Líquida</div>
+                              <div className="text-3xl font-extrabold text-emerald-700 tabular-nums">{fmtBRL(dashboard.netAmount).slice(3, 99)}</div>
+                              <div className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700/80">Ver cálculo</div>
+                            </button>
+                          </DialogTrigger>
+                          <DialogContent className="max-w-xl">
+                            <DialogHeader>
+                              <DialogTitle>Cálculo da receita líquida do dia</DialogTitle>
+                            </DialogHeader>
+                            <div className="space-y-3 text-sm">
+                              <p className="text-slate-600">
+                                Regra aplicada: Receita Líquida = Receita Bruta - Taxa Cartão - Imposto - Taxa Marketplace.
+                              </p>
+                              <div className="rounded-lg border bg-slate-50 p-3 space-y-2">
+                                <div className="flex items-center justify-between gap-3">
+                                  <span className="text-slate-600">1. Receita bruta</span>
+                                  <span className="font-mono font-semibold tabular-nums">{fmtBRL(dashboard.grossAmount)}</span>
+                                </div>
+                                <div className="flex items-center justify-between gap-3">
+                                  <span className="text-slate-600">
+                                    2. Taxa cartão ({dashboard.cardFeePerc.toFixed(2)}% sobre {fmtBRL(grossCardAmount)})
+                                  </span>
+                                  <span className="font-mono font-semibold tabular-nums text-red-700">- {fmtBRL(cardFeeAmount)}</span>
+                                </div>
+                                <div className="pl-4 text-xs text-slate-500">
+                                  Parcela cartão no dia: {fmtBRL(dashboard.cardAmount)} ({cardSharePerc.toFixed(2)}% da bruta).
+                                </div>
+                                <div className="flex items-center justify-between gap-3">
+                                  <span className="text-slate-600">3. Imposto ({dashboard.taxPerc.toFixed(2)}% sobre a bruta)</span>
+                                  <span className="font-mono font-semibold tabular-nums text-red-700">- {fmtBRL(taxAmount)}</span>
+                                </div>
+                                <div className="flex items-center justify-between gap-3">
+                                  <span className="text-slate-600">
+                                    4. Taxa marketplace ({dashboard.marketplaceTaxPerc.toFixed(2)}% sobre {fmtBRL(dashboard.marketplaceAmount)})
+                                  </span>
+                                  <span className="font-mono font-semibold tabular-nums text-red-700">- {fmtBRL(marketplaceFeeAmount)}</span>
+                                </div>
+                              </div>
+                              <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 flex items-center justify-between gap-3">
+                                <span className="font-semibold text-emerald-800">Receita líquida final</span>
+                                <span className="font-mono text-lg font-bold text-emerald-800 tabular-nums">{fmtBRL(netAmountByRule)}</span>
+                              </div>
+                            </div>
+                          </DialogContent>
+                        </Dialog>
                         <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-center space-y-1">
                           <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Receita Bruta</div>
                           <div className="text-3xl font-bold text-slate-800 tabular-nums">{fmtBRL(dashboard.grossAmount).slice(3, 99)}</div>
