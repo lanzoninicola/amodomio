@@ -837,6 +837,8 @@ model FinancialMonthlyClose {
 
   entradasNaoOperacionaisAmount Float @default(0) @map("entrada_nao_operacional_amount")
   saidasNaoOperacionaisAmount   Float @default(0) @map("saida_nao_operacional_amount")
+  entradasInvestimentoAmount    Float @default(0) @map("entrada_investimento_amount")
+  saidasInvestimentoAmount      Float @default(0) @map("saida_investimento_amount")
 
   custoFixoTotalAmount   Float @default(0) @map("custo_fixo_total_amount")
   custoFixoPerc          Float @default(0) @map("custo_fixo_perc")

@@ -531,6 +531,9 @@ function MetricsTable({
             const isMargem = row.key === "margemContrib";
             const isResultado = row.key === "resultadoLiquido";
             const totals = calculateMetricTotals(row, monthlyData);
+            const receitaBrutaTotals = isResultado
+              ? calculateMetricTotals(MAIN_METRICS[0], monthlyData)
+              : null;
             return (
               <TableRow key={row.key}>
                 <TableCell className={`bg-background sticky left-0 z-10 text-sm ${isMargem || isResultado ? "font-semibold" : ""}`}>
@@ -608,12 +611,20 @@ function MetricsTable({
                     </span>
                     <span className="text-[11px] text-muted-foreground">
                       Média: {totals.average != null
-                        ? (row.kind === "percent" ? `${totals.average.toFixed(2)}%` : formatMoneyString(totals.average, 2))
+                        ? formatAverageWithReferencePercent(
+                          totals.average,
+                          row.kind,
+                          receitaBrutaTotals?.average ?? null,
+                        )
                         : "—"}
                     </span>
                     <span className="text-[11px] text-muted-foreground">
                       Média 3m: {totals.lastThreeAverage != null
-                        ? (row.kind === "percent" ? `${totals.lastThreeAverage.toFixed(2)}%` : formatMoneyString(totals.lastThreeAverage, 2))
+                        ? formatAverageWithReferencePercent(
+                          totals.lastThreeAverage,
+                          row.kind,
+                          receitaBrutaTotals?.lastThreeAverage ?? null,
+                        )
                         : "—"}
                     </span>
                   </div>
@@ -679,6 +690,24 @@ type MetricTotals = {
   average: number | null;
   lastThreeAverage: number | null;
 };
+
+function formatAverageWithReferencePercent(
+  value: number | null,
+  kind: MetricRow["kind"],
+  referenceValue: number | null,
+) {
+  if (value == null) return "—";
+
+  const formattedValue = kind === "percent"
+    ? `${value.toFixed(2)}%`
+    : formatMoneyString(value, 2);
+
+  if (kind !== "money" || referenceValue == null || referenceValue === 0) {
+    return formattedValue;
+  }
+
+  return `${formattedValue} (${((value / referenceValue) * 100).toFixed(2)}%)`;
+}
 
 function inlinePercentForRow(
   rowKey: string,
