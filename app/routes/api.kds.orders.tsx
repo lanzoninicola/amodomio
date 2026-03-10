@@ -36,6 +36,8 @@ type KdsOrderPayload = {
   takeAway?: boolean;
   deliveryZoneId?: string | null;
   isCreditCard?: boolean;
+  isCash?: boolean;
+  isOtherPaymentMethod?: boolean;
   isVendaLivre?: boolean;
   customerName?: string;
   customerPhone?: string;
@@ -102,6 +104,13 @@ function normalizeSizes(payload: KdsOrderPayload): SizeCounts {
 }
 
 const stringifySize = (c: SizeCounts) => JSON.stringify(c);
+
+function normalizePaymentFlags(input: Pick<KdsOrderPayload, "isCreditCard" | "isCash" | "isOtherPaymentMethod">) {
+  const isCreditCard = toBool(input?.isCreditCard);
+  const isCash = !isCreditCard && toBool(input?.isCash);
+  const isOtherPaymentMethod = !isCreditCard && !isCash && toBool(input?.isOtherPaymentMethod);
+  return { isCreditCard, isCash, isOtherPaymentMethod };
+}
 
 function checkApiAccess(request: Request) {
   const rateLimit = restApi.rateLimitCheck(request, { bucket: RATE_LIMIT_BUCKET });
@@ -190,6 +199,8 @@ function serializeOrder(row: KdsOrderApiRow) {
     sortOrderIndex: row.sortOrderIndex,
     isVendaLivre: row.isVendaLivre,
     isCreditCard: row.isCreditCard,
+    isCash: row.isCash,
+    isOtherPaymentMethod: row.isOtherPaymentMethod,
     novoPedidoAt: row.novoPedidoAt,
     emProducaoAt: row.emProducaoAt,
     aguardandoFornoAt: row.aguardandoFornoAt,
@@ -347,6 +358,7 @@ async function handleCreateOrder(request: Request) {
   const status = requestedStatus || autoStatus;
 
   const sortOrderIndex = (maxSort ?? 0) + 1000;
+  const paymentFlags = normalizePaymentFlags(body ?? {});
 
   const created = await prisma.kdsDailyOrderDetail.create({
     data: {
@@ -362,7 +374,7 @@ async function handleCreateOrder(request: Request) {
       takeAway: toBool(body?.takeAway),
       size: stringifySize(sizeCounts),
       deliveryZoneId: deliveryZoneIdRaw,
-      isCreditCard: toBool(body?.isCreditCard),
+      ...paymentFlags,
       customerName:
         typeof body?.customerName === "string" && body.customerName.trim()
           ? body.customerName.trim()

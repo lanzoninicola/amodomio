@@ -1,114 +1,303 @@
-// app/routes/admin.kds.atendimento.$date.relatorio-mes.tsx
-import { json, type LoaderFunctionArgs, type MetaFunction } from "@remix-run/node";
-import { useLoaderData } from "@remix-run/react";
+import { json, type LoaderFunctionArgs, type MetaFunction, type SerializeFrom } from "@remix-run/node";
+import { Form, NavLink, Outlet, useLoaderData, useLocation } from "@remix-run/react";
+import { Prisma } from "@prisma/client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
-import { todayLocalYMD, ymdToDateInt } from "@/domain/kds";
+import { CHANNELS, todayLocalYMD, ymdToDateInt } from "@/domain/kds";
 import { calcWeightedCostPerc } from "~/domain/finance/calc-weighted-cost-perc";
 import { computeNetRevenueAmount } from "~/domain/finance/compute-net-revenue-amount";
-import { getDailyAggregates, listMotoboy } from "~/domain/kds/server/repository.server";
 import prisma from "~/lib/prisma/client.server";
+import { cn } from "~/lib/utils";
 
-/* =========================
- * Meta
- * ========================= */
-export const meta: MetaFunction = () => {
-  return [{ title: "KDS | Relatório Mensal" }];
-};
-
-/* =========================
- * Helpers de data (timezone-safe)
- * ========================= */
-function ymdParts(ymd: string) {
-  const [y, m] = ymd.split("-").map(Number);
-  const yNum = Number.isFinite(y) ? y : new Date().getFullYear();
-  const mIdx = Number.isFinite(m) ? m - 1 : 0; // 0-11
-  return { y: yNum, mIdx };
-}
-function ymdFmt(y: number, mIdx: number, d: number) {
-  const yy = String(y).padStart(4, "0");
-  const mm = String(mIdx + 1).padStart(2, "0");
-  const dd = String(d).padStart(2, "0");
-  return `${yy}-${mm}-${dd}`;
-}
-function firstDayOfMonth(ymd: string) {
-  const { y, mIdx } = ymdParts(ymd);
-  return ymdFmt(y, mIdx, 1);
-}
-function lastDayOfMonth(ymd: string) {
-  const { y, mIdx } = ymdParts(ymd);
-  const last = new Date(y, mIdx + 1, 0); // último dia do mês
-  return ymdFmt(last.getFullYear(), last.getMonth(), last.getDate());
-}
-function firstDayOfPrevMonth(ymd: string) {
-  const { y, mIdx } = ymdParts(ymd);
-  const pm = mIdx === 0 ? 11 : mIdx - 1;
-  const py = mIdx === 0 ? y - 1 : y;
-  return ymdFmt(py, pm, 1);
-}
-function lastDayOfPrevMonth(ymd: string) {
-  const firstPrev = firstDayOfPrevMonth(ymd);
-  // seguro contra timezone: usa year/mês numérico
-  const { y, mIdx } = ymdParts(firstPrev);
-  const last = new Date(y, mIdx + 1, 0);
-  return ymdFmt(last.getFullYear(), last.getMonth(), last.getDate());
-}
-function* iterateYMD(fromYMD: string, toYMD: string) {
-  // usa T12:00 para evitar rollback de dia por timezone
-  const start = new Date(`${fromYMD}T12:00:00`);
-  const end = new Date(`${toYMD}T12:00:00`);
-  for (let d = new Date(start); d.getTime() <= end.getTime(); d.setDate(d.getDate() + 1)) {
-    const yy = d.getUTCFullYear();
-    const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
-    const dd = String(d.getUTCDate()).padStart(2, "0");
-    yield `${yy}-${mm}-${dd}`;
-  }
-}
-
-/* =========================
- * Tipos locais
- * ========================= */
 type AggRow = { k: string; count: number; total: number; moto: number };
-type DailyAgg = {
+type TotalsRow = {
   total: number;
   moto: number;
   count: number;
   card: number;
   marketplace: number;
-  byChannel: AggRow[];
-  byStatus: AggRow[];
+  net: number;
+  estimatedResult: number;
+  avgTicket: number;
+  revenuePerDay: number;
+  ordersPerDay: number;
 };
 
-/* =========================
- * Loader
- * ========================= */
-export async function loader({ params }: LoaderFunctionArgs) {
+type ChannelFinanceRow = {
+  channel: string;
+  orders: number;
+  grossRevenue: number;
+  cardRevenue: number;
+  taxAmount: number;
+  cardFeeAmount: number;
+  marketplaceFeeAmount: number;
+  netRevenue: number;
+  isMarketplace: boolean;
+};
+
+export type MonthlyReportData = SerializeFrom<typeof loader>;
+export type MonthlyReportOutletContext = { report: MonthlyReportData };
+
+export const meta: MetaFunction = () => {
+  return [{ title: "KDS | Relatório Mensal" }];
+};
+
+function ymdParts(ymd: string) {
+  const [y, m, d] = ymd.split("-").map(Number);
+  return { y, m, d };
+}
+
+function ymdFmt(y: number, month: number, day: number) {
+  return `${String(y).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function isValidYMD(value: string | null | undefined) {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T12:00:00`);
+  return !Number.isNaN(parsed.getTime());
+}
+
+function firstDayOfMonth(ymd: string) {
+  const { y, m } = ymdParts(ymd);
+  return ymdFmt(y, m, 1);
+}
+
+function lastDayOfMonth(ymd: string) {
+  const { y, m } = ymdParts(ymd);
+  const last = new Date(y, m, 0);
+  return ymdFmt(last.getFullYear(), last.getMonth() + 1, last.getDate());
+}
+
+function shiftMonthClamped(ymd: string, monthsDelta: number) {
+  const { y, m, d } = ymdParts(ymd);
+  const firstOfTarget = new Date(y, m - 1 + monthsDelta, 1);
+  const lastDay = new Date(firstOfTarget.getFullYear(), firstOfTarget.getMonth() + 1, 0).getDate();
+  return ymdFmt(firstOfTarget.getFullYear(), firstOfTarget.getMonth() + 1, Math.min(d, lastDay));
+}
+
+function diffDaysInclusive(fromYMD: string, toYMD: string) {
+  const start = new Date(`${fromYMD}T12:00:00`);
+  const end = new Date(`${toYMD}T12:00:00`);
+  return Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000) + 1);
+}
+
+function formatPeriodLabel(fromYMD: string, toYMD: string) {
+  const from = new Date(`${fromYMD}T12:00:00`);
+  const to = new Date(`${toYMD}T12:00:00`);
+  const sameMonth = from.getFullYear() === to.getFullYear() && from.getMonth() === to.getMonth();
+
+  if (sameMonth) {
+    return `${from.toLocaleDateString("pt-BR", { month: "long", year: "numeric" })} (${fromYMD} -> ${toYMD})`;
+  }
+
+  return `${fromYMD} -> ${toYMD}`;
+}
+
+function sortRows(rows: AggRow[]) {
+  return rows.sort((a, b) => {
+    if (b.total !== a.total) return b.total - a.total;
+    return b.count - a.count;
+  });
+}
+
+function isMarketplaceChannel(channel: string) {
+  return channel === CHANNELS[2] || channel === CHANNELS[3];
+}
+
+function reduceRows<T extends { channel: string | null; status: string | null; orderAmount: Prisma.Decimal | number; motoValue: Prisma.Decimal | number }>(
+  rows: T[],
+  key: "channel" | "status",
+) {
+  const map = new Map<string, AggRow>();
+
+  for (const row of rows) {
+    const label = (key === "channel" ? row.channel : row.status) ?? `(sem ${key === "channel" ? "canal" : "status"})`;
+    const current = map.get(label) ?? { k: label, count: 0, total: 0, moto: 0 };
+    current.count += 1;
+    current.total += Number(row.orderAmount ?? 0);
+    current.moto += Number(row.motoValue ?? 0);
+    map.set(label, current);
+  }
+
+  return sortRows(Array.from(map.values()));
+}
+
+function reduceNeighborhoodRows<
+  T extends {
+    orderAmount: Prisma.Decimal | number;
+    motoValue: Prisma.Decimal | number;
+    DeliveryZone: { name: string } | null;
+  },
+>(rows: T[]) {
+  const map = new Map<string, AggRow>();
+
+  for (const row of rows) {
+    const label = row.DeliveryZone?.name?.trim() || "(sem bairro)";
+    const current = map.get(label) ?? { k: label, count: 0, total: 0, moto: 0 };
+    current.count += 1;
+    current.total += Number(row.orderAmount ?? 0);
+    current.moto += Number(row.motoValue ?? 0);
+    map.set(label, current);
+  }
+
+  return sortRows(Array.from(map.values()));
+}
+
+async function getRangeSnapshot(fromYMD: string, toYMD: string) {
+  const fromInt = ymdToDateInt(fromYMD);
+  const toInt = ymdToDateInt(toYMD);
+  const rangeFilter = { gte: fromInt, lte: toInt };
+  const completedWhere = {
+    dateInt: rangeFilter,
+    status: { not: "pendente" },
+  } satisfies Prisma.KdsDailyOrderDetailWhereInput;
+  const deliveryWhere = {
+    dateInt: rangeFilter,
+    status: { not: "pendente" },
+    OR: [{ hasMoto: true }, { motoValue: { gt: 0 } }],
+  } satisfies Prisma.KdsDailyOrderDetailWhereInput;
+
+  const aiqfomeChannel = CHANNELS[2];
+  const ifoodChannel = CHANNELS[3];
+
+  const [totalsAgg, cardAgg, marketplaceAgg, byChannelRaw, completedRows, deliveryRows] = await Promise.all([
+    prisma.kdsDailyOrderDetail.aggregate({
+      where: completedWhere,
+      _sum: { orderAmount: true, motoValue: true },
+      _count: { _all: true },
+    }),
+    prisma.kdsDailyOrderDetail.aggregate({
+      where: { ...completedWhere, isCreditCard: true },
+      _sum: { orderAmount: true },
+    }),
+    prisma.kdsDailyOrderDetail.aggregate({
+      where: {
+        ...completedWhere,
+        channel: { in: [aiqfomeChannel, ifoodChannel] },
+      },
+      _sum: { orderAmount: true },
+    }),
+    prisma.kdsDailyOrderDetail.groupBy({
+      by: ["channel"],
+      where: completedWhere,
+      _sum: { orderAmount: true, motoValue: true },
+      _count: { _all: true },
+    }),
+    prisma.kdsDailyOrderDetail.findMany({
+      where: completedWhere,
+      select: {
+        channel: true,
+        orderAmount: true,
+        isCreditCard: true,
+      },
+    }),
+    prisma.kdsDailyOrderDetail.findMany({
+      where: deliveryWhere,
+      select: {
+        id: true,
+        channel: true,
+        status: true,
+        orderAmount: true,
+        motoValue: true,
+        DeliveryZone: {
+          select: {
+            name: true,
+          },
+        },
+      },
+    }),
+  ]);
+
+  const periodDays = diffDaysInclusive(fromYMD, toYMD);
+  const grossRevenue = Number(totalsAgg._sum.orderAmount ?? 0);
+  const totalMoto = Number(totalsAgg._sum.motoValue ?? 0);
+  const orderCount = totalsAgg._count._all ?? 0;
+  const deliveryRevenue = deliveryRows.reduce((sum, row) => sum + Number(row.orderAmount ?? 0), 0);
+  const deliveryMotoCost = deliveryRows.reduce((sum, row) => sum + Number(row.motoValue ?? 0), 0);
+  const deliveries = deliveryRows.length;
+  const cardRevenueByChannel = completedRows.reduce((map, row) => {
+    const channel = row.channel ?? "(sem canal)";
+    if (!row.isCreditCard) return map;
+    map.set(channel, (map.get(channel) ?? 0) + Number(row.orderAmount ?? 0));
+    return map;
+  }, new Map<string, number>());
+  const channelFinance = sortRows(
+    byChannelRaw.map((row) => {
+      const grossRevenue = Number(row._sum.orderAmount ?? 0);
+      const channel = row.channel ?? "(sem canal)";
+
+      return {
+        channel,
+        orders: row._count._all,
+        grossRevenue,
+        cardRevenue: cardRevenueByChannel.get(channel) ?? 0,
+        taxAmount: 0,
+        cardFeeAmount: 0,
+        marketplaceFeeAmount: 0,
+        netRevenue: grossRevenue,
+        isMarketplace: isMarketplaceChannel(channel),
+      };
+    }),
+  );
+
+  return {
+    periodDays,
+    totalsBase: {
+      total: grossRevenue,
+      moto: totalMoto,
+      count: orderCount,
+      card: Number(cardAgg._sum.orderAmount ?? 0),
+      marketplace: Number(marketplaceAgg._sum.orderAmount ?? 0),
+    },
+    tables: {
+      byChannel: sortRows(
+        byChannelRaw.map((row) => ({
+          k: row.channel ?? "(sem canal)",
+          count: row._count._all,
+          total: Number(row._sum.orderAmount ?? 0),
+          moto: Number(row._sum.motoValue ?? 0),
+        })),
+      ),
+      channelFinance,
+    },
+    delivery: {
+      deliveries,
+      motoCost: deliveryMotoCost,
+      deliveryRevenue,
+      avgMotoPerDelivery: deliveries > 0 ? deliveryMotoCost / deliveries : 0,
+      avgTicket: deliveries > 0 ? deliveryRevenue / deliveries : 0,
+      shareOrdersPerc: orderCount > 0 ? (deliveries / orderCount) * 100 : 0,
+      shareRevenuePerc: grossRevenue > 0 ? (deliveryRevenue / grossRevenue) * 100 : 0,
+      motoVsRevenuePerc: deliveryRevenue > 0 ? (deliveryMotoCost / deliveryRevenue) * 100 : 0,
+      byChannel: reduceRows(deliveryRows, "channel"),
+      byStatus: reduceRows(deliveryRows, "status"),
+      byNeighborhood: reduceNeighborhoodRows(deliveryRows),
+    },
+  };
+}
+
+export async function loader({ request, params }: LoaderFunctionArgs) {
   const dateStr = params.date ?? todayLocalYMD();
-  const { y: year, mIdx } = ymdParts(dateStr);
-  const month = mIdx + 1;
+  const url = new URL(request.url);
+  const defaultFrom = firstDayOfMonth(dateStr);
+  const defaultTo = lastDayOfMonth(dateStr);
 
-  // mês atual (com base no :date)
-  const monthStart = firstDayOfMonth(dateStr);
-  const monthEnd = lastDayOfMonth(dateStr);
+  const requestedFrom = isValidYMD(url.searchParams.get("from")) ? String(url.searchParams.get("from")) : defaultFrom;
+  const requestedTo = isValidYMD(url.searchParams.get("to")) ? String(url.searchParams.get("to")) : defaultTo;
+  const [rangeFrom, rangeTo] = requestedFrom <= requestedTo ? [requestedFrom, requestedTo] : [requestedTo, requestedFrom];
 
-  // mês anterior ao :date
-  const prevMonthStart = firstDayOfPrevMonth(dateStr);
-  const prevMonthEnd = lastDayOfPrevMonth(dateStr);
+  const prevRangeFrom = shiftMonthClamped(rangeFrom, -1);
+  const prevRangeTo = shiftMonthClamped(rangeTo, -1);
 
-  const ymdsCurr = Array.from(iterateYMD(monthStart, monthEnd));
-  const ymdsPrev = Array.from(iterateYMD(prevMonthStart, prevMonthEnd));
+  const { y: referenceYear, m: referenceMonth } = ymdParts(rangeTo);
 
-  const dateIntsCurr = ymdsCurr.map(ymdToDateInt);
-  const dateIntsPrev = ymdsPrev.map(ymdToDateInt);
-
-  // Carrega agregados diários (financeiro) e listas de motoboy para os dois meses
-  const [aggsCurr, motoCurr, aggsPrev, motoPrev, ratesFromMonthlyClose, closesForAverage] = await Promise.all([
-    Promise.all(dateIntsCurr.map((di) => getDailyAggregates(di))) as Promise<DailyAgg[]>,
-    Promise.all(dateIntsCurr.map((di) => listMotoboy(di))) as Promise<any[][]>,
-    Promise.all(dateIntsPrev.map((di) => getDailyAggregates(di))) as Promise<DailyAgg[]>,
-    Promise.all(dateIntsPrev.map((di) => listMotoboy(di))) as Promise<any[][]>,
+  const [currentSnapshot, previousSnapshot, ratesFromMonthlyClose, closesForAverage] = await Promise.all([
+    getRangeSnapshot(rangeFrom, rangeTo),
+    getRangeSnapshot(prevRangeFrom, prevRangeTo),
     (async () => {
       const hasConfiguredRates = (close: {
         taxaCartaoPerc: number;
@@ -122,12 +311,13 @@ export async function loader({ params }: LoaderFunctionArgs) {
       const monthlyCloseRates = await prisma.financialMonthlyClose.findUnique({
         where: {
           referenceYear_referenceMonth: {
-            referenceYear: year,
-            referenceMonth: month,
+            referenceYear,
+            referenceMonth,
           },
         },
         select: { taxaCartaoPerc: true, impostoPerc: true, taxaMarketplacePerc: true },
       });
+
       if (hasConfiguredRates(monthlyCloseRates)) return monthlyCloseRates;
 
       return prisma.financialMonthlyClose.findFirst({
@@ -135,8 +325,8 @@ export async function loader({ params }: LoaderFunctionArgs) {
           AND: [
             {
               OR: [
-                { referenceYear: { lt: year } },
-                { referenceYear: year, referenceMonth: { lte: month } },
+                { referenceYear: { lt: referenceYear } },
+                { referenceYear, referenceMonth: { lte: referenceMonth } },
               ],
             },
             {
@@ -156,389 +346,704 @@ export async function loader({ params }: LoaderFunctionArgs) {
       ? (prisma as any).financialMonthlyClose.findMany({
         where: {
           OR: [
-            { referenceYear: { lt: year } },
-            { referenceYear: year, referenceMonth: { lte: month } },
+            { referenceYear: { lt: referenceYear } },
+            { referenceYear, referenceMonth: { lte: referenceMonth } },
           ],
         },
-        orderBy: [
-          { referenceYear: "desc" },
-          { referenceMonth: "desc" },
-        ],
+        orderBy: [{ referenceYear: "desc" }, { referenceMonth: "desc" }],
         take: 3,
       })
       : Promise.resolve([]),
   ]);
 
-  // Redução mensal (totais simples)
-  const reduceTotals = (aggs: DailyAgg[]) => ({
-    total: aggs.reduce((s, a) => s + Number(a?.total ?? 0), 0),
-    moto: aggs.reduce((s, a) => s + Number(a?.moto ?? 0), 0),
-    count: aggs.reduce((s, a) => s + Number(a?.count ?? 0), 0),
-    card: aggs.reduce((s, a) => s + Number(a?.card ?? 0), 0),
-    marketplace: aggs.reduce((s, a) => s + Number(a?.marketplace ?? 0), 0),
-  });
-  const totalsCurr = reduceTotals(aggsCurr);
-  const totalsPrev = reduceTotals(aggsPrev);
-
   const taxPerc = Number(ratesFromMonthlyClose?.impostoPerc ?? 0);
   const cardFeePerc = Number(ratesFromMonthlyClose?.taxaCartaoPerc ?? 0);
-  const taxaMarketplacePerc = Number(ratesFromMonthlyClose?.taxaMarketplacePerc ?? 0);
-
-  const netCurr = computeNetRevenueAmount({
-    receitaBrutaAmount: totalsCurr.total,
-    vendaCartaoAmount: totalsCurr.card,
-    taxaCartaoPerc: cardFeePerc,
-    impostoPerc: taxPerc,
-    vendaMarketplaceAmount: totalsCurr.marketplace,
-    taxaMarketplacePerc,
-  });
-  const netPrev = computeNetRevenueAmount({
-    receitaBrutaAmount: totalsPrev.total,
-    vendaCartaoAmount: totalsPrev.card,
-    taxaCartaoPerc: cardFeePerc,
-    impostoPerc: taxPerc,
-    vendaMarketplaceAmount: totalsPrev.marketplace,
-    taxaMarketplacePerc,
-  });
+  const marketplaceFeePerc = Number(ratesFromMonthlyClose?.taxaMarketplacePerc ?? 0);
 
   const weightedCosts = calcWeightedCostPerc(closesForAverage ?? []);
   const totalCostPerc = weightedCosts.custoFixoPerc + weightedCosts.custoVariavelPerc;
-  const estimatedResultCurr = totalsCurr.total * (1 - totalCostPerc / 100);
-  const estimatedResultPrev = totalsPrev.total * (1 - totalCostPerc / 100);
+  const marketplaceRatePerc = marketplaceFeePerc;
 
-  // Redução mensal (por canal / por status)
-  const sumMap = (rows: AggRow[] = [], map = new Map<string, AggRow>()) => {
-    for (const r of rows) {
-      const cur = map.get(r.k) ?? { k: r.k, count: 0, total: 0, moto: 0 };
-      cur.count += Number(r.count ?? 0);
-      cur.total += Number(r.total ?? 0);
-      cur.moto += Number(r.moto ?? 0);
-      map.set(r.k, cur);
-    }
-    return map;
+  const buildTotals = (base: typeof currentSnapshot.totalsBase, periodDays: number): TotalsRow => {
+    const net = computeNetRevenueAmount({
+      receitaBrutaAmount: base.total,
+      vendaCartaoAmount: base.card,
+      taxaCartaoPerc: cardFeePerc,
+      impostoPerc: taxPerc,
+      vendaMarketplaceAmount: base.marketplace,
+      taxaMarketplacePerc: marketplaceFeePerc,
+    });
+
+    return {
+      ...base,
+      net,
+      estimatedResult: base.total * (1 - totalCostPerc / 100),
+      avgTicket: base.count > 0 ? base.total / base.count : 0,
+      revenuePerDay: periodDays > 0 ? base.total / periodDays : 0,
+      ordersPerDay: periodDays > 0 ? base.count / periodDays : 0,
+    };
   };
 
-  const byChannelMapCurr = aggsCurr.reduce((map, a) => sumMap(a?.byChannel ?? [], map), new Map<string, AggRow>());
-  const byStatusMapCurr = aggsCurr.reduce((map, a) => sumMap(a?.byStatus ?? [], map), new Map<string, AggRow>());
-  const byChannelCurr = Array.from(byChannelMapCurr.values()).sort((a, b) => b.total - a.total);
-  const byStatusCurr = Array.from(byStatusMapCurr.values()).sort((a, b) => b.total - a.total);
+  const applyChannelNet = (rows: ChannelFinanceRow[]) =>
+    rows.map((row) => {
+      const taxAmount = row.grossRevenue > 0 ? (row.grossRevenue * taxPerc) / 100 : 0;
+      const cardFeeAmount = row.cardRevenue > 0 ? (row.cardRevenue * cardFeePerc) / 100 : 0;
+      const marketplaceFeeAmount = row.isMarketplace
+        ? (row.grossRevenue * marketplaceRatePerc) / 100
+        : 0;
 
-  const byChannelMapPrev = aggsPrev.reduce((map, a) => sumMap(a?.byChannel ?? [], map), new Map<string, AggRow>());
-  const byStatusMapPrev = aggsPrev.reduce((map, a) => sumMap(a?.byStatus ?? [], map), new Map<string, AggRow>());
-  const byChannelPrev = Array.from(byChannelMapPrev.values()).sort((a, b) => b.total - a.total);
-  const byStatusPrev = Array.from(byStatusMapPrev.values()).sort((a, b) => b.total - a.total);
+      return {
+        ...row,
+        taxAmount,
+        cardFeeAmount,
+        marketplaceFeeAmount,
+        netRevenue: row.grossRevenue - taxAmount - cardFeeAmount - marketplaceFeeAmount,
+      };
+    });
 
-  // Motoboy mensal (contagem + soma do motoValue das listas)
-  const reduceMoto = (lists: any[][]) => ({
-    deliveries: lists.reduce((s, list) => s + list.length, 0),
-    motoFromLists: lists.reduce(
-      (s, list) => s + list.reduce((ss: number, o: any) => ss + Number(o?.motoValue ?? 0), 0),
-      0
-    ),
-  });
-  const motoMonthCurr = reduceMoto(motoCurr);
-  const motoMonthPrev = reduceMoto(motoPrev);
+  const summarizeChannelFinance = (rows: ChannelFinanceRow[]) => {
+    const marketplaceRevenue = rows
+      .filter((row) => row.isMarketplace)
+      .reduce((sum, row) => sum + row.grossRevenue, 0);
+    const ownRevenue = rows
+      .filter((row) => !row.isMarketplace)
+      .reduce((sum, row) => sum + row.grossRevenue, 0);
+    const marketplaceFeeAmount = rows.reduce((sum, row) => sum + row.marketplaceFeeAmount, 0);
+    const marketplaceNetRevenue = rows
+      .filter((row) => row.isMarketplace)
+      .reduce((sum, row) => sum + row.netRevenue, 0);
+    const ownNetRevenue = rows
+      .filter((row) => !row.isMarketplace)
+      .reduce((sum, row) => sum + row.netRevenue, 0);
+    const ownOrders = rows
+      .filter((row) => !row.isMarketplace)
+      .reduce((sum, row) => sum + row.orders, 0);
+    const marketplaceOrders = rows
+      .filter((row) => row.isMarketplace)
+      .reduce((sum, row) => sum + row.orders, 0);
+    const grossRevenue = rows.reduce((sum, row) => sum + row.grossRevenue, 0);
+
+    return {
+      ownRevenue,
+      ownNetRevenue,
+      marketplaceRevenue,
+      marketplaceFeeAmount,
+      marketplaceNetRevenue,
+      ownOrders,
+      marketplaceOrders,
+      marketplaceSharePerc: grossRevenue > 0 ? (marketplaceRevenue / grossRevenue) * 100 : 0,
+      feeOverMarketplacePerc: marketplaceRevenue > 0 ? (marketplaceFeeAmount / marketplaceRevenue) * 100 : 0,
+    };
+  };
+
+  const currentChannelFinance = applyChannelNet(currentSnapshot.tables.channelFinance);
+  const previousChannelFinance = applyChannelNet(previousSnapshot.tables.channelFinance);
 
   return json({
     dateStr,
-    // labels e intervalos
-    monthStart,
-    monthEnd,
-    monthLabel: new Date(`${monthStart}T12:00:00`).toLocaleDateString("pt-BR", { month: "long", year: "numeric" }),
-    prevMonthStart,
-    prevMonthEnd,
-    prevMonthLabel: new Date(`${prevMonthStart}T12:00:00`).toLocaleDateString("pt-BR", {
-      month: "long",
-      year: "numeric",
-    }),
-
-    // totais
+    period: {
+      current: {
+        from: rangeFrom,
+        to: rangeTo,
+        days: currentSnapshot.periodDays,
+        label: formatPeriodLabel(rangeFrom, rangeTo),
+      },
+      previous: {
+        from: prevRangeFrom,
+        to: prevRangeTo,
+        days: previousSnapshot.periodDays,
+        label: formatPeriodLabel(prevRangeFrom, prevRangeTo),
+      },
+    },
     totals: {
-      curr: { ...totalsCurr, net: netCurr, estimatedResult: estimatedResultCurr },
-      prev: { ...totalsPrev, net: netPrev, estimatedResult: estimatedResultPrev },
+      curr: buildTotals(currentSnapshot.totalsBase, currentSnapshot.periodDays),
+      prev: buildTotals(previousSnapshot.totalsBase, previousSnapshot.periodDays),
     },
-
-    // tabelas
     tables: {
-      byChannel: { curr: byChannelCurr, prev: byChannelPrev },
-      byStatus: { curr: byStatusCurr, prev: byStatusPrev },
+      byChannel: currentSnapshot.tables.byChannel,
+      byChannelPrev: previousSnapshot.tables.byChannel,
+      channelFinance: currentChannelFinance,
+      channelFinancePrev: previousChannelFinance,
     },
-
-    // motoboy
     motoboy: {
-      curr: { ...motoMonthCurr, motoFromAgg: totalsCurr.moto },
-      prev: { ...motoMonthPrev, motoFromAgg: totalsPrev.moto },
+      curr: currentSnapshot.delivery,
+      prev: previousSnapshot.delivery,
+    },
+    marketplaceRatePerc,
+    channelDashboard: {
+      curr: summarizeChannelFinance(currentChannelFinance),
+      prev: summarizeChannelFinance(previousChannelFinance),
     },
   });
 }
 
-/* =========================
- * Página
- * ========================= */
-export default function RelatorioMensalKdsPage() {
-  const data = useLoaderData<typeof loader>();
-  const fmt = (n: number) =>
-    Number(n ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+function fmtMoney(value: number) {
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Number(value ?? 0));
+}
 
-  const pctDiff = (curr?: number, ref?: number) => {
-    const c = Number(curr ?? 0);
-    const r = Number(ref ?? 0);
-    if (!isFinite(c) || !isFinite(r) || r === 0) return { text: "--", cls: "text-muted-foreground" };
-    const p = ((c - r) / r) * 100;
-    const sign = p > 0 ? "▲" : p < 0 ? "▼" : "▲";
-    const color = p > 0 ? "text-emerald-600" : p < 0 ? "text-red-600" : "text-slate-500";
-    return { text: `${sign} ${Math.abs(p).toFixed(1)}%`, cls: color };
+function fmtNumber(value: number, digits = 0) {
+  return Number(value ?? 0).toLocaleString("pt-BR", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  });
+}
+
+function diffMeta(curr?: number, prev?: number) {
+  const current = Number(curr ?? 0);
+  const previous = Number(prev ?? 0);
+
+  if (!Number.isFinite(current) || !Number.isFinite(previous) || previous === 0) {
+    return { text: "--", className: "text-muted-foreground" };
+  }
+
+  const diff = ((current - previous) / previous) * 100;
+  if (diff === 0) return { text: "0,0%", className: "text-slate-500" };
+
+  return {
+    text: `${diff > 0 ? "▲" : "▼"} ${fmtNumber(Math.abs(diff), 1)}%`,
+    className: diff > 0 ? "text-emerald-600" : "text-red-600",
   };
+}
 
-  const compBadge = (label: string, curr?: number, ref?: number, money = true) => {
-    const diff = pctDiff(curr, ref);
-    const value = ref == null ? "--" : money ? `R$ ${fmt(ref)}` : `${ref}`;
-    return (
-      <div className="px-3 py-2 rounded border text-xs">
-        <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-          <span className="opacity-70">{label}:</span>
-          <span className="font-mono">{value}</span>
-        </div>
-        <div className={`mt-1 text-right font-medium ${diff.cls}`}>{diff.text}</div>
+function DeltaPill({
+  current,
+  previous,
+  previousLabel = "Período anterior",
+  money = true,
+  digits = 0,
+  suffix = "",
+}: {
+  current?: number;
+  previous?: number;
+  previousLabel?: string;
+  money?: boolean;
+  digits?: number;
+  suffix?: string;
+}) {
+  const diff = diffMeta(current, previous);
+  const previousValue = previous == null ? "--" : money ? fmtMoney(previous) : `${fmtNumber(previous, digits)}${suffix}`;
+
+  return (
+    <div className="rounded-lg border bg-slate-50/80 px-3 py-2 text-xs">
+      <div className="flex items-center justify-between gap-3 text-muted-foreground">
+        <span>{previousLabel}</span>
+        <span className="font-mono">{previousValue}</span>
       </div>
-    );
+      <div className={cn("mt-1 text-right font-medium", diff.className)}>{diff.text}</div>
+    </div>
+  );
+}
+
+function MetricCard({
+  title,
+  current,
+  previous,
+  money = true,
+  digits = 0,
+  suffix = "",
+}: {
+  title: string;
+  current: number;
+  previous: number;
+  money?: boolean;
+  digits?: number;
+  suffix?: string;
+}) {
+  const currentValue = money ? fmtMoney(current) : `${fmtNumber(current, digits)}${suffix}`;
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="text-2xl font-semibold">{currentValue}</div>
+        <DeltaPill current={current} previous={previous} money={money} digits={digits} suffix={suffix} />
+      </CardContent>
+    </Card>
+  );
+}
+
+type ChannelVisualRow = {
+  label: string;
+  orders: number;
+  grossRevenue: number;
+  marketplaceFeeAmount: number;
+  netRevenue: number;
+  previousGrossRevenue: number;
+  previousNetRevenue: number;
+  previousMarketplaceFeeAmount: number;
+  isMarketplace: boolean;
+};
+
+function RichBarRow({
+
+  barWidth,
+  netSegmentWidth,
+  feeSegmentWidth = "0%",
+  barTone = "current",
+  metrics,
+  footer,
+  overlayContent,
+}: {
+
+  barWidth: string;
+  netSegmentWidth: string;
+  feeSegmentWidth?: string;
+  barTone?: "current" | "muted";
+  metrics: React.ReactNode;
+  footer?: React.ReactNode;
+  overlayContent?: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-3">
+      <div className={cn("h-8 overflow-hidden rounded-full", barTone === "current" ? "bg-slate-100" : "bg-slate-200")}>
+        <div className="relative flex h-full" style={{ width: barWidth }}>
+          <div className={cn("h-full", barTone === "current" ? "bg-slate-900" : "bg-slate-500")} style={{ width: netSegmentWidth }} />
+          {feeSegmentWidth !== "0%" ? (
+            <div className={cn("h-full", barTone === "current" ? "bg-red-400" : "bg-rose-300")} style={{ width: feeSegmentWidth }} />
+          ) : null}
+          {overlayContent ? (
+            <div className="absolute inset-0 flex items-center px-2 text-sm font-medium text-white">
+              {overlayContent}
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      {footer ? <div className="text-xs text-slate-500">{footer}</div> : null}
+
+      {metrics}
+    </div>
+  );
+}
+
+function RevenueBarComparison({
+  rows,
+  title,
+}: {
+  rows: ChannelVisualRow[];
+  title: string;
+}) {
+  const totalCurrentGross = Math.max(
+    1,
+    rows.reduce((sum, row) => sum + row.grossRevenue, 0),
+  );
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-lg font-semibold tracking-tight text-slate-900">{title}</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <div className="flex flex-wrap gap-4 text-xs text-slate-500">
+          <div className="flex items-center gap-2">
+            <span className="h-3 w-3 rounded bg-slate-900" />
+            <span>Receita após taxa marketplace</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="h-3 w-3 rounded bg-red-400" />
+            <span>Taxa marketplace consumida</span>
+          </div>
+        </div>
+
+        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr),minmax(520px,1fr)]">
+          <div className="space-y-6">
+          {rows.map((row) => {
+            const grossWidth = `${(row.grossRevenue / totalCurrentGross) * 100}%`;
+            const feeWidth = row.grossRevenue > 0 ? `${(row.marketplaceFeeAmount / row.grossRevenue) * 100}%` : "0%";
+            const netWidth = row.grossRevenue > 0 ? `${(row.netRevenue / row.grossRevenue) * 100}%` : "0%";
+
+            return (
+              <div key={row.label} className="space-y-2.5">
+                <RichBarRow
+                  barWidth={grossWidth}
+                  netSegmentWidth={netWidth}
+                  feeSegmentWidth={row.isMarketplace ? feeWidth : "0%"}
+                  footer={`${((row.grossRevenue / totalCurrentGross) * 100).toFixed(1).replace(".", ",")}% da receita no periodo · ${fmtNumber(row.orders, 0)} pedidos`}
+                  overlayContent={
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="truncate font-semibold">{row.label}</span>
+                    </div>
+                  }
+                  metrics={null}
+                />
+
+                {row !== rows[rows.length - 1] ? (
+                  <div className="border-b border-slate-200 pt-1" />
+                ) : null}
+              </div>
+            );
+          })}
+          </div>
+
+          <div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Canal</TableHead>
+                  <TableHead className="text-right">Bruto</TableHead>
+                  <TableHead className="text-right">Liquida</TableHead>
+                  <TableHead className="text-right">Taxa</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((row) => {
+                  const previousGrossDiff = diffMeta(row.grossRevenue, row.previousGrossRevenue);
+                  const previousNetDiff = diffMeta(row.netRevenue, row.previousNetRevenue);
+                  const previousFeeDiff = diffMeta(row.marketplaceFeeAmount, row.previousMarketplaceFeeAmount);
+
+                  return (
+                    <TableRow key={`${row.label}-table`}>
+                      <TableCell className="font-medium">{row.label}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex flex-col items-end">
+                          <div className="font-mono">{fmtMoney(row.grossRevenue)}</div>
+                          <div className={cn("text-xs font-medium", previousGrossDiff.className)}>{previousGrossDiff.text}</div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex flex-col items-end">
+                          <div className="font-mono">{fmtMoney(row.netRevenue)}</div>
+                          <div className={cn("text-xs font-medium", previousNetDiff.className)}>{previousNetDiff.text}</div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex flex-col items-end">
+                          <div className={cn("font-mono", row.isMarketplace ? "text-red-700" : "text-slate-400")}>
+                            {row.isMarketplace ? fmtMoney(row.marketplaceFeeAmount) : "--"}
+                          </div>
+                          <div className={cn("text-xs font-medium", row.isMarketplace ? previousFeeDiff.className : "text-slate-400")}>
+                            {row.isMarketplace ? previousFeeDiff.text : "--"}
+                          </div>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function DecisionFocusedChannelComparison({ report }: { report: MonthlyReportData }) {
+  const marketplace = {
+    label: "Marketplace",
+    gross: report.channelDashboard.curr.marketplaceRevenue,
+    net: report.channelDashboard.curr.marketplaceNetRevenue,
+    fee: report.channelDashboard.curr.marketplaceFeeAmount,
+    orders: report.channelDashboard.curr.marketplaceOrders,
+    previousGross: report.channelDashboard.prev.marketplaceRevenue,
+    previousNet: report.channelDashboard.prev.marketplaceNetRevenue,
+    previousFee: report.channelDashboard.prev.marketplaceFeeAmount,
+  };
+  const otherChannels = {
+    label: "Outros canais",
+    gross: report.channelDashboard.curr.ownRevenue,
+    net: report.channelDashboard.curr.ownNetRevenue,
+    fee: 0,
+    orders: report.channelDashboard.curr.ownOrders,
+    previousGross: report.channelDashboard.prev.ownRevenue,
+    previousNet: report.channelDashboard.prev.ownNetRevenue,
+    previousFee: 0,
   };
 
-  // index para lookup por chave (canal/status) do mês anterior
-  type Row = { k: string; count: number; total: number; moto: number };
-  const indexRows = (rows: Row[] = []) => Object.fromEntries(rows.map((r) => [r.k, r]));
-  const prevByChannel = indexRows(data.tables.byChannel.prev);
-  const prevByStatus = indexRows(data.tables.byStatus.prev);
+  const totalCombinedGross = Math.max(1, marketplace.gross + otherChannels.gross);
+  const marketplaceGrossWidth = `${(marketplace.gross / totalCombinedGross) * 100}%`;
+  const marketplaceNetWidth = marketplace.gross > 0 ? `${(marketplace.net / marketplace.gross) * 100}%` : "0%";
+  const marketplaceFeeWidth = marketplace.gross > 0 ? `${(marketplace.fee / marketplace.gross) * 100}%` : "0%";
+  const otherGrossWidth = `${(otherChannels.gross / totalCombinedGross) * 100}%`;
+
+  const marketplaceGrossDiff = diffMeta(marketplace.gross, marketplace.previousGross);
+  const marketplaceNetDiff = diffMeta(marketplace.net, marketplace.previousNet);
+  const marketplaceFeeDiff = diffMeta(marketplace.fee, marketplace.previousFee);
+  const otherGrossDiff = diffMeta(otherChannels.gross, otherChannels.previousGross);
+  const otherNetDiff = diffMeta(otherChannels.net, otherChannels.previousNet);
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-lg font-semibold tracking-tight text-slate-900">
+          Marketplace vs outros canais
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        <div className="flex flex-wrap gap-4 text-xs text-slate-500">
+          <div className="flex items-center gap-2">
+            <span className="h-3 w-3 rounded bg-slate-900" />
+            <span>Receita atual</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="h-3 w-3 rounded bg-red-400" />
+            <span>Taxa marketplace consumida</span>
+          </div>
+        </div>
+
+        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr),minmax(460px,1fr)]">
+          <div className="space-y-5">
+            <RichBarRow
+              barWidth={marketplaceGrossWidth}
+              netSegmentWidth={marketplaceNetWidth}
+              feeSegmentWidth={marketplaceFeeWidth}
+              footer={`${((marketplace.gross / totalCombinedGross) * 100).toFixed(1).replace(".", ",")}% da receita no periodo · ${fmtNumber(marketplace.orders, 0)} pedidos`}
+              overlayContent={
+                <div className="flex min-w-0 items-center gap-4">
+                  <span className="truncate font-semibold">{marketplace.label}</span>
+                </div>
+              }
+              metrics={null}
+            />
+
+            <RichBarRow
+              barWidth={otherGrossWidth}
+              netSegmentWidth="100%"
+              feeSegmentWidth="0%"
+              footer={`${((otherChannels.gross / totalCombinedGross) * 100).toFixed(1).replace(".", ",")}% da receita no periodo · ${fmtNumber(otherChannels.orders, 0)} pedidos`}
+              overlayContent={
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="truncate font-semibold">{otherChannels.label}</span>
+                </div>
+              }
+              metrics={null}
+            />
+          </div>
+
+
+          <div>
+          <Table>
+            <TableHeader>
+                <TableRow>
+                  <TableHead>Canal</TableHead>
+                  <TableHead className="text-right">Bruto</TableHead>
+                  <TableHead className="text-right">Liquida</TableHead>
+                  <TableHead className="text-right">Taxa</TableHead>
+                </TableRow>
+              </TableHeader>
+            <TableBody>
+              <TableRow>
+                <TableCell className="font-medium">Marketplace</TableCell>
+                <TableCell className="text-right">
+                  <div className="flex flex-col items-end">
+                    <div className="font-mono">{fmtMoney(marketplace.gross)}</div>
+                    <div className={cn("text-xs font-medium", marketplaceGrossDiff.className)}>{marketplaceGrossDiff.text}</div>
+                  </div>
+                </TableCell>
+                <TableCell className="text-right">
+                  <div className="flex flex-col items-end">
+                    <div className="font-mono">{fmtMoney(marketplace.net)}</div>
+                    <div className={cn("text-xs font-medium", marketplaceNetDiff.className)}>{marketplaceNetDiff.text}</div>
+                  </div>
+                </TableCell>
+                <TableCell className="text-right font-mono text-red-700">
+                  <div className="flex flex-col items-end">
+                    <div>{fmtMoney(marketplace.fee)}</div>
+                    <div className={cn("text-xs font-medium", marketplaceFeeDiff.className)}>{marketplaceFeeDiff.text}</div>
+                  </div>
+                </TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell className="font-medium">Outros canais</TableCell>
+                <TableCell className="text-right">
+                  <div className="flex flex-col items-end">
+                    <div className="font-mono">{fmtMoney(otherChannels.gross)}</div>
+                    <div className={cn("text-xs font-medium", otherGrossDiff.className)}>{otherGrossDiff.text}</div>
+                  </div>
+                </TableCell>
+                <TableCell className="text-right">
+                  <div className="flex flex-col items-end">
+                    <div className="font-mono">{fmtMoney(otherChannels.net)}</div>
+                    <div className={cn("text-xs font-medium", otherNetDiff.className)}>{otherNetDiff.text}</div>
+                  </div>
+                </TableCell>
+                <TableCell className="text-right font-mono text-slate-400">--</TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+          </div>
+        </div>
+
+
+
+      </CardContent>
+    </Card>
+  );
+}
+
+function DetailedChannelChart({
+  rows,
+  previousRows,
+}: {
+  rows: ChannelFinanceRow[];
+  previousRows: ChannelFinanceRow[];
+}) {
+  const previousIndex = Object.fromEntries(previousRows.map((row) => [row.channel, row]));
+  const visualRows: ChannelVisualRow[] = rows.map((row) => {
+    const previous = previousIndex[row.channel];
+
+    return {
+      label: row.channel,
+      orders: row.orders,
+      grossRevenue: row.grossRevenue,
+      marketplaceFeeAmount: row.marketplaceFeeAmount,
+      netRevenue: row.netRevenue,
+      previousGrossRevenue: previous?.grossRevenue ?? 0,
+      previousNetRevenue: previous?.netRevenue ?? 0,
+      previousMarketplaceFeeAmount: previous?.marketplaceFeeAmount ?? 0,
+      isMarketplace: row.isMarketplace,
+    };
+  });
+
+  return <RevenueBarComparison title="Receita detalhada por canal" rows={visualRows} />;
+}
+
+function ChannelMixDashboard({ report }: { report: MonthlyReportData }) {
+  return (
+    <div className="space-y-6">
+      <DecisionFocusedChannelComparison report={report} />
+
+      <DetailedChannelChart rows={report.tables.channelFinance} previousRows={report.tables.channelFinancePrev} />
+    </div>
+  );
+}
+
+function OperativoFinanceiroSection({ report }: { report: MonthlyReportData }) {
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <MetricCard title="Receita bruta" current={report.totals.curr.total} previous={report.totals.prev.total} />
+        <MetricCard title="Receita líquida" current={report.totals.curr.net} previous={report.totals.prev.net} />
+        <MetricCard
+          title="Resultado estimado"
+          current={report.totals.curr.estimatedResult}
+          previous={report.totals.prev.estimatedResult}
+        />
+        <MetricCard
+          title="Pedidos"
+          current={report.totals.curr.count}
+          previous={report.totals.prev.count}
+          money={false}
+        />
+        <MetricCard
+          title="Ticket médio"
+          current={report.totals.curr.avgTicket}
+          previous={report.totals.prev.avgTicket}
+        />
+        <MetricCard
+          title="Receita por dia"
+          current={report.totals.curr.revenuePerDay}
+          previous={report.totals.prev.revenuePerDay}
+        />
+        <MetricCard
+          title="Pedidos por dia"
+          current={report.totals.curr.ordersPerDay}
+          previous={report.totals.prev.ordersPerDay}
+          money={false}
+          digits={1}
+        />
+        <MetricCard
+          title="Receita marketplace"
+          current={report.totals.curr.marketplace}
+          previous={report.totals.prev.marketplace}
+        />
+      </div>
+
+      <ChannelMixDashboard report={report} />
+    </div>
+  );
+}
+
+export default function RelatorioMensalKdsPage() {
+  const report = useLoaderData<typeof loader>();
+  const location = useLocation();
+  const isMotoboyPage = location.pathname.endsWith("/motoboy-entregas");
+  const search = location.search;
 
   return (
     <div className="space-y-6">
-      {/* Header Mês */}
-      <div className="flex flex-wrap items-end justify-between gap-2">
-        <div>
-          <h1 className="text-xl font-semibold">Relatório do mês</h1>
-          <div className="text-sm text-muted-foreground">
-            {data.monthLabel} · {data.monthStart} → {data.monthEnd}
+      <div className="flex flex-col gap-4 rounded-2xl border bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <h1 className="text-xl font-semibold">Relatórios do período</h1>
+            <p className="text-sm text-muted-foreground">
+              Atual: {report.period.current.label}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Comparativo: {report.period.previous.label}
+            </p>
           </div>
-          <div className="text-xs text-muted-foreground">
-            Comparado a {data.prevMonthLabel} · {data.prevMonthStart} → {data.prevMonthEnd}
-          </div>
+
+          <Form method="get" className="grid gap-3 rounded-xl border bg-slate-50/70 p-3 md:grid-cols-[180px,180px,auto,auto] md:items-end">
+            <div className="space-y-1">
+              <label htmlFor="from" className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                De
+              </label>
+              <Input id="from" name="from" type="date" defaultValue={report.period.current.from} />
+            </div>
+            <div className="space-y-1">
+              <label htmlFor="to" className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Até
+              </label>
+              <Input id="to" name="to" type="date" defaultValue={report.period.current.to} />
+            </div>
+            <Button type="submit">Aplicar período</Button>
+            <Button asChild type="button" variant="outline">
+              <NavLink to={location.pathname}>Limpar filtro</NavLink>
+            </Button>
+          </Form>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-3">
+          <MetricCard title="Receita bruta" current={report.totals.curr.total} previous={report.totals.prev.total} />
+          <MetricCard title="Pedidos" current={report.totals.curr.count} previous={report.totals.prev.count} money={false} />
+          <MetricCard
+            title="Entregas com motoboy"
+            current={report.motoboy.curr.deliveries}
+            previous={report.motoboy.prev.deliveries}
+            money={false}
+          />
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <NavLink
+            to={{ pathname: ".", search }}
+            end
+            className={({ isActive }) =>
+              cn(
+                "rounded-lg border px-4 py-2 text-sm font-medium transition",
+                isActive
+                  ? "border-slate-900 bg-slate-900 text-white"
+                  : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
+              )
+            }
+          >
+            Operativo / Financeiro
+          </NavLink>
+          <NavLink
+            to={{ pathname: "motoboy-entregas", search }}
+            className={({ isActive }) =>
+              cn(
+                "rounded-lg border px-4 py-2 text-sm font-medium transition",
+                isActive
+                  ? "border-slate-900 bg-slate-900 text-white"
+                  : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
+              )
+            }
+          >
+            Motoboy / Entregas
+          </NavLink>
         </div>
       </div>
 
-      {/* Cards topo com comparativo mês anterior */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <Card>
-          <CardHeader>
-            <CardTitle>Faturamento do mês</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="">
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">Líquido</div>
-                <div className="text-2xl font-mono text-emerald-600">R$ {fmt(data.totals.curr.net)}</div>
-                {compBadge("Mês anterior", data.totals.curr.net, data.totals.prev.net, true)}
-              </div>
-              <div className="">
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">Bruto</div>
-                <div className="text-2xl font-mono">R$ {fmt(data.totals.curr.total)}</div>
-                {compBadge("Mês anterior", data.totals.curr.total, data.totals.prev.total, true)}
-              </div>
-              <div className="md:col-span-2">
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">Resultado estimado</div>
-                <div
-                  className={`text-2xl font-mono ${
-                    data.totals.curr.estimatedResult > 0
-                      ? "text-emerald-600"
-                      : data.totals.curr.estimatedResult < 0
-                        ? "text-red-600"
-                        : "text-slate-900"
-                  }`}
-                >
-                  R$ {fmt(data.totals.curr.estimatedResult)}
-                </div>
-                {compBadge("Mês anterior", data.totals.curr.estimatedResult, data.totals.prev.estimatedResult, true)}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Total Moto (mês)</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <div className="text-2xl font-mono">R$ {fmt(data.totals.curr.moto)}</div>
-            {compBadge("Mês anterior", data.totals.curr.moto, data.totals.prev.moto, true)}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Nº pedidos (mês)</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <div className="text-2xl font-mono">{data.totals.curr.count}</div>
-            {compBadge("Mês anterior", data.totals.curr.count, data.totals.prev.count, false)}
-          </CardContent>
-        </Card>
-      </div>
-
-      <Tabs defaultValue="financeiro" className="w-full">
-        <TabsList>
-          <TabsTrigger value="financeiro">Financeiro</TabsTrigger>
-          <TabsTrigger value="motoboy">Motoboy</TabsTrigger>
-          <TabsTrigger value="extras">Extras</TabsTrigger>
-        </TabsList>
-
-        {/* ====== Financeiro ====== */}
-        <TabsContent value="financeiro" className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Por canal */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Por canal (mês)</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left border-b">
-                      <th className="py-2">Canal</th>
-                      <th className="py-2 text-right">Pedidos</th>
-                      <th className="py-2 text-right">Faturamento bruto (R$)</th>
-                      <th className="py-2 text-right">Mês anterior (R$)</th>
-                      <th className="py-2 text-right">Δ mês</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.tables.byChannel.curr.map((r) => {
-                      const p = prevByChannel[r.k];
-                      const d = pctDiff(r.total, p?.total);
-                      return (
-                        <tr key={r.k} className="border-b last:border-0">
-                          <td className="py-2">{r.k}</td>
-                          <td className="py-2 text-right text-slate-500">{r.count}</td>
-                          <td className="py-2 text-right font-mono">{fmt(r.total)}</td>
-                          <td className="py-2 text-right font-mono">{p?.total != null ? fmt(p.total) : "--"}</td>
-                          <td className={`py-2 text-right font-medium ${d.cls}`}>{d.text}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </CardContent>
-            </Card>
-
-            {/* Por status */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Por status (mês)</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left border-b">
-                      <th className="py-2">Status</th>
-                      <th className="py-2 text-right">Pedidos</th>
-                      <th className="py-2 text-right">Faturamento bruto (R$)</th>
-                      <th className="py-2 text-right">Mês anterior (R$)</th>
-                      <th className="py-2 text-right">Δ mês</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.tables.byStatus.curr.map((r) => {
-                      const p = prevByStatus[r.k];
-                      const d = pctDiff(r.total, p?.total);
-                      return (
-                        <tr key={r.k} className="border-b last:border-0">
-                          <td className="py-2">{r.k}</td>
-                          <td className="py-2 text-right text-slate-500">{r.count}</td>
-                          <td className="py-2 text-right font-mono">{fmt(r.total)}</td>
-                          <td className="py-2 text-right font-mono">{p?.total != null ? fmt(p.total) : "--"}</td>
-                          <td className={`py-2 text-right font-medium ${d.cls}`}>{d.text}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-
-        {/* ====== Motoboy ====== */}
-        <TabsContent value="motoboy" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Resumo Motoboy (mês)</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-wrap items-center gap-3 text-sm">
-              <div className="px-3 py-2 rounded border">
-                Entregas: <b>{data.motoboy.curr.deliveries}</b>
-              </div>
-              <div className="px-3 py-2 rounded border">
-                Moto (listas): <b className="font-mono">R$ {fmt(data.motoboy.curr.motoFromLists)}</b>
-              </div>
-              <div className="px-3 py-2 rounded border">
-                Moto (agregados): <b className="font-mono">R$ {fmt(data.motoboy.curr.motoFromAgg)}</b>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Comparativo mês anterior (Motoboy)</CardTitle>
-            </CardHeader>
-            <CardContent className="grid grid-cols-1 md-grid-cols-3 md:grid-cols-3 gap-3 text-sm">
-              <div className="px-3 py-2 rounded border">
-                <div className="opacity-70">Entregas (mês anterior)</div>
-                <div className="font-mono">{data.motoboy.prev.deliveries}</div>
-                <div
-                  className={`mt-1 text-xs font-medium ${pctDiff(
-                    data.motoboy.curr.deliveries,
-                    data.motoboy.prev.deliveries
-                  ).cls}`}
-                >
-                  {pctDiff(data.motoboy.curr.deliveries, data.motoboy.prev.deliveries).text}
-                </div>
-              </div>
-              <div className="px-3 py-2 rounded border">
-                <div className="opacity-70">Moto listas (mês anterior)</div>
-                <div className="font-mono">R$ {fmt(data.motoboy.prev.motoFromLists)}</div>
-                <div
-                  className={`mt-1 text-xs font-medium ${pctDiff(
-                    data.motoboy.curr.motoFromLists,
-                    data.motoboy.prev.motoFromLists
-                  ).cls}`}
-                >
-                  {pctDiff(data.motoboy.curr.motoFromLists, data.motoboy.prev.motoFromLists).text}
-                </div>
-              </div>
-              <div className="px-3 py-2 rounded border">
-                <div className="opacity-70">Moto agregados (mês anterior)</div>
-                <div className="font-mono">R$ {fmt(data.motoboy.prev.motoFromAgg)}</div>
-                <div
-                  className={`mt-1 text-xs font-medium ${pctDiff(
-                    data.motoboy.curr.motoFromAgg,
-                    data.motoboy.prev.motoFromAgg
-                  ).cls}`}
-                >
-                  {pctDiff(data.motoboy.curr.motoFromAgg, data.motoboy.prev.motoFromAgg).text}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* ====== Extras ====== */}
-        <TabsContent value="extras">
-          <Card>
-            <CardHeader>
-              <CardTitle>Em breve</CardTitle>
-            </CardHeader>
-            <CardContent>Outros relatórios consolidados do mês.</CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+      {isMotoboyPage ? <Outlet context={{ report }} /> : <OperativoFinanceiroSection report={report} />}
     </div>
   );
 }

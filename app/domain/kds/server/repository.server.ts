@@ -24,6 +24,8 @@ export const kdsOrderApiSelect = {
   sortOrderIndex: true,
   isVendaLivre: true,
   isCreditCard: true,
+  isCash: true,
+  isOtherPaymentMethod: true,
   novoPedidoAt: true,
   emProducaoAt: true,
   aguardandoFornoAt: true,

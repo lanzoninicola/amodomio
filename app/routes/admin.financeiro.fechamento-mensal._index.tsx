@@ -24,13 +24,17 @@ import { calcMonthlyCloseTotals } from "~/domain/finance/calc-monthly-close-tota
 import { getMarginContribStatus } from "~/domain/finance/get-margin-contrib-status";
 
 type LoaderData = {
-  closes: FinancialMonthlyClose[];
+  closes: MonthlyCloseRecord[];
   monthlyCloseRepoMissing?: boolean;
 };
 
 type ActionData = {
   ok: boolean;
   message: string;
+};
+
+type MonthlyCloseRecord = FinancialMonthlyClose & {
+  accountantDreSheetUrl?: string | null;
 };
 
 export const meta: MetaFunction = () => [
@@ -101,6 +105,7 @@ export async function action({ request }: ActionFunctionArgs) {
     const referenceMonth = num("referenceMonth");
     const referenceYear = num("referenceYear");
     const notes = String(form.get("notes") ?? "").trim();
+    const accountantDreSheetUrl = String(form.get("accountantDreSheetUrl") ?? "").trim();
     const faturamentoMensalAmount = num("faturamentoMensalAmount");
 
     if (!referenceMonth || !referenceYear) {
@@ -234,6 +239,7 @@ export async function action({ request }: ActionFunctionArgs) {
       saidasNaoOperacionaisAmount,
       resultadoLiquidoAmount,
       resultadoLiquidoPerc,
+      accountantDreSheetUrl: accountantDreSheetUrl || null,
       notes: notes || null,
     };
 
@@ -659,6 +665,7 @@ export default function AdminFinanceiroFechamentoMensal() {
   const [custoVarTotalEdit, setCustoVarTotalEdit] = React.useState<number>(currentDefaults?.custoVariavelTotalAmount ?? 0);
   const [entradasNaoOperacionais, setEntradasNaoOperacionais] = React.useState<number>((currentDefaults as any)?.entradasNaoOperacionaisAmount ?? 0);
   const [saidasNaoOperacionais, setSaidasNaoOperacionais] = React.useState<number>((currentDefaults as any)?.saidasNaoOperacionaisAmount ?? 0);
+  const [accountantDreSheetUrl, setAccountantDreSheetUrl] = React.useState<string>((currentDefaults as any)?.accountantDreSheetUrl ?? "");
   const [notes, setNotes] = React.useState<string>(currentDefaults?.notes ?? "");
   const [loadStatus, setLoadStatus] = React.useState<"idle" | "loading" | "ok" | "notfound">("idle");
   const [isSwitchingPeriod, setIsSwitchingPeriod] = React.useState(false);
@@ -698,6 +705,7 @@ export default function AdminFinanceiroFechamentoMensal() {
     setCustoVarTotalEdit(0);
     setEntradasNaoOperacionais(0);
     setSaidasNaoOperacionais(0);
+    setAccountantDreSheetUrl("");
     setNotes("");
   }, []);
 
@@ -731,6 +739,7 @@ export default function AdminFinanceiroFechamentoMensal() {
     setCustoVarTotalEdit(close?.custoVariavelTotalAmount ?? 0);
     setEntradasNaoOperacionais((close as any)?.entradasNaoOperacionaisAmount ?? 0);
     setSaidasNaoOperacionais((close as any)?.saidasNaoOperacionaisAmount ?? 0);
+    setAccountantDreSheetUrl((close as any)?.accountantDreSheetUrl ?? "");
     setNotes(close?.notes ?? "");
   }, []);
 
@@ -2090,6 +2099,43 @@ export default function AdminFinanceiroFechamentoMensal() {
             </Card>
             </CurrentMonthBlock>
 
+            <Card className="rounded-lg border border-blue-100 bg-white shadow-sm">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold">Link da planilha DRE</CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  Salve a URL da planilha do Google Drive enviada pela contadora para este fechamento.
+                </p>
+              </CardHeader>
+              <CardContent>
+                <input
+                  type="url"
+                  name="accountantDreSheetUrl"
+                  value={accountantDreSheetUrl}
+                  onChange={(e) => setAccountantDreSheetUrl(e.target.value)}
+                  placeholder="https://docs.google.com/spreadsheets/d/..."
+                  className="w-full rounded-md border bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                />
+              </CardContent>
+            </Card>
+
+            <Card className="rounded-lg border border-blue-100 bg-white shadow-sm">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold">Anotações</CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  Guarde observações importantes sobre o fechamento (fatos não numéricos, eventos pontuais, etc.).
+                </p>
+              </CardHeader>
+              <CardContent>
+                <textarea
+                  name="notes"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Ex.: mês com campanha agressiva, atraso de fornecedor, troca de maquininha..."
+                  className="w-full min-h-[120px] rounded-md border bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                />
+              </CardContent>
+            </Card>
+
             <div className="flex justify-end">
               <Button type="submit" disabled={saving}>
                 {saving ? "Salvando…" : "Salvar fechamento"}
@@ -2438,23 +2484,6 @@ export default function AdminFinanceiroFechamentoMensal() {
           </div>
         </div>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold">Anotações</CardTitle>
-            <p className="text-xs text-muted-foreground">
-              Guarde observações importantes sobre o fechamento (fatos não numéricos, eventos pontuais, etc.).
-            </p>
-          </CardHeader>
-          <CardContent>
-            <textarea
-              name="notes"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Ex.: mês com campanha agressiva, atraso de fornecedor, troca de maquininha..."
-              className="w-full min-h-[120px] rounded-md border bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            />
-          </CardContent>
-        </Card>
       </Form>
 
       <Separator className="my-1" />
@@ -2487,6 +2516,19 @@ export default function AdminFinanceiroFechamentoMensal() {
                   <span>Custo variável: {formatMoneyString(c.custoVariavelTotalAmount, 2)}</span>
                   <span>Cartão: {formatMoneyString(c.taxaCartaoAmount, 2)}</span>
                   <span>Marketplace: {formatMoneyString(c.taxaMarketplaceAmount, 2)}</span>
+                  {(c as any).accountantDreSheetUrl && (
+                    <p className="col-span-2 text-xs text-muted-foreground leading-relaxed">
+                      <span className="font-semibold text-foreground">Planilha DRE:</span>{" "}
+                      <a
+                        href={(c as any).accountantDreSheetUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-blue-600 underline underline-offset-2"
+                      >
+                        abrir link
+                      </a>
+                    </p>
+                  )}
                   {c.notes && (
                     <p className="col-span-2 text-xs text-muted-foreground leading-relaxed">
                       <span className="font-semibold text-foreground">Anotações:</span> {c.notes}

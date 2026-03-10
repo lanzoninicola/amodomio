@@ -80,6 +80,7 @@ import {
   Bike,
   Settings as SettingsIcon,
   CalendarClock,
+  Banknote,
 } from "lucide-react";
 import { Separator } from "~/components/ui/separator";
 import { cn } from "~/lib/utils";
@@ -126,12 +127,127 @@ function toDecimal(value: FormDataEntryValue | null | undefined): Prisma.Decimal
   return new Prisma.Decimal(Number.isFinite(n) ? n.toFixed(2) : "0");
 }
 
+type PaymentMethod = "credit" | "cash" | "other";
+
+function paymentMethodToFlags(method: PaymentMethod) {
+  return {
+    isCreditCard: method === "credit",
+    isCash: method === "cash",
+    isOtherPaymentMethod: method === "other",
+  };
+}
+
+function paymentFlagsFromForm(form: FormData) {
+  const isCreditCard = String(form.get("isCreditCard") ?? "") === "on";
+  const isCash = !isCreditCard && String(form.get("isCash") ?? "") === "on";
+  const isOtherPaymentMethod =
+    !isCreditCard &&
+    !isCash &&
+    String(form.get("isOtherPaymentMethod") ?? "") === "on";
+
+  return { isCreditCard, isCash, isOtherPaymentMethod };
+}
+
 function fmtBRL(n: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2 }).format(n || 0);
 }
 
 function pad2(value: number) {
   return String(value).padStart(2, "0");
+}
+
+function PaymentMethodDialog({
+  open,
+  onOpenChange,
+  onSelect,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSelect: (method: PaymentMethod) => void;
+}) {
+  useEffect(() => {
+    if (!open) return;
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "1" || event.code === "Numpad1") {
+        event.preventDefault();
+        onSelect("credit");
+      } else if (event.key === "2" || event.code === "Numpad2") {
+        event.preventDefault();
+        onSelect("cash");
+      } else if (event.key === "3" || event.code === "Numpad3") {
+        event.preventDefault();
+        onSelect("other");
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open, onSelect]);
+
+  const options: Array<{
+    key: PaymentMethod;
+    label: string;
+    shortcut: string;
+    icon: typeof CreditCard;
+    className: string;
+  }> = [
+      {
+        key: "credit",
+        label: "Crédito",
+        shortcut: "1",
+        icon: CreditCard,
+        className: "border-slate-300 bg-slate-100 text-slate-900 hover:bg-slate-200",
+      },
+      {
+        key: "cash",
+        label: "Dinheiro",
+        shortcut: "2",
+        icon: Banknote,
+        className: "border-slate-300 bg-zinc-100 text-zinc-900 hover:bg-zinc-200",
+      },
+      {
+        key: "other",
+        label: "Outro",
+        shortcut: "3",
+        icon: Ellipsis,
+        className: "border-slate-300 bg-neutral-100 text-neutral-900 hover:bg-neutral-200",
+      },
+    ];
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-3xl">
+        <DialogHeader>
+          <DialogTitle>Selecionar forma de pagamento</DialogTitle>
+        </DialogHeader>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          {options.map((option) => {
+            const Icon = option.icon;
+            return (
+              <button
+                key={option.key}
+                type="button"
+                onClick={() => onSelect(option.key)}
+                className={cn(
+                  "flex min-h-[220px] flex-col items-center justify-center gap-4 rounded-[2rem] border-2 p-6 text-center transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2",
+                  option.className
+                )}
+              >
+                <div className="flex h-24 w-24 items-center justify-center rounded-full bg-white/90 shadow-sm">
+                  <Icon className="h-12 w-12" />
+                </div>
+                <div className="space-y-1">
+                  <div className="text-2xl font-semibold">{option.label}</div>
+                  <div className="text-sm font-medium opacity-80">Tecla {option.shortcut}</div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 function CommandNumberInput({
@@ -598,7 +714,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
           orderId: header.id, dateInt, commandNumber: n, isVendaLivre: false,
           sortOrderIndex: sort, orderAmount: new Prisma.Decimal(0),
           status: "pendente", channel: "", hasMoto: false, motoValue: new Prisma.Decimal(0),
-          takeAway: false, isCreditCard: false,
+          takeAway: false, isCreditCard: false, isCash: false, isOtherPaymentMethod: false,
         } as any);
         sort += 1000;
       }
@@ -723,7 +839,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
           orderId: header.id, dateInt, commandNumber: n, isVendaLivre: false,
           sortOrderIndex: sort, orderAmount: new Prisma.Decimal(0),
           status: "pendente", channel: "", hasMoto: false, motoValue: new Prisma.Decimal(0),
-          takeAway: false, isCreditCard: false,
+          takeAway: false, isCreditCard: false, isCash: false, isOtherPaymentMethod: false,
         } as any);
         sort += 1000;
       }
@@ -739,6 +855,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         return json({ ok: false, error: "Venda livre só é permitida com o dia ABERTO." }, { status: 400 });
       }
       const amount = toDecimal(form.get("orderAmount"));
+      const paymentFlags = paymentFlagsFromForm(form);
       const created = await prisma.kdsDailyOrderDetail.create({
         data: {
           orderId: header.id,
@@ -752,7 +869,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
           hasMoto: false,
           motoValue: new Prisma.Decimal(0),
           takeAway: false,
-          isCreditCard: String(form.get("isCreditCard") ?? "") === "on", // ← agora pega do form
+          ...paymentFlags,
         },
         select: { id: true },
       });
@@ -880,6 +997,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
       const customerNameRaw = String(form.get("customerName") ?? "").trim();
       const customerPhoneRaw = String(form.get("customerPhone") ?? "").trim();
 
+      const paymentFlags = paymentFlagsFromForm(form);
+
       await prisma.kdsDailyOrderDetail.update({
         where: { id },
         data: {
@@ -892,7 +1011,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
           takeAway: String(form.get("takeAway") ?? "") === "on",
           size: stringifySize(sizeCounts as any),
           deliveryZoneId: deliveryZoneId as any,
-          isCreditCard: String(form.get("isCreditCard") ?? "") === "on",
+          ...paymentFlags,
           customerName: customerNameRaw === "" ? null : customerNameRaw,
           customerPhone: customerPhoneRaw === "" ? null : customerPhoneRaw,
           ...(patchNovoPedidoAt !== undefined ? { novoPedidoAt: patchNovoPedidoAt as any } : {}),
@@ -950,6 +1069,8 @@ function RowItem({
   // estados por linha
   const [openConfirmId, setOpenConfirmId] = useState(false);
   const [detailsOpenId, setDetailsOpenId] = useState(false);
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
+  const formRef = useRef<HTMLFormElement | null>(null);
 
   const [cmdLocal, setCmdLocal] = useState<number | null>(o.commandNumber);
   const [isVendaLivre] = useState<boolean>(!!o.isVendaLivre);
@@ -962,6 +1083,8 @@ function RowItem({
   const [motoKey, setMotoKey] = useState(0);
 
   const [isCreditCard, setIsCreditCard] = useState<boolean>(!!(o as any).isCreditCard);
+  const [isCash, setIsCash] = useState<boolean>(!!(o as any).isCash);
+  const [isOtherPaymentMethod, setIsOtherPaymentMethod] = useState<boolean>(!!(o as any).isOtherPaymentMethod);
 
   const [sizes, setSizes] = useState<SizeCounts>(sizeCounts);
   const statusText = (o as any).status ?? "pendente";
@@ -975,6 +1098,28 @@ function RowItem({
     setCustomerName((o as any).customerName ?? "");
     setCustomerPhone((o as any).customerPhone ?? "");
   }, [(o as any).status, (o as any).customerName, (o as any).customerPhone]);
+
+  useEffect(() => {
+    if (readOnly) return;
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.defaultPrevented) return;
+      if (event.key.toLowerCase() !== "s") return;
+      if (!event.ctrlKey || event.metaKey || event.altKey) return;
+
+      const active = document.activeElement as HTMLElement | null;
+      if (!active) return;
+
+      const rowEl = formRef.current?.closest("li");
+      if (!rowEl || !rowEl.contains(active)) return;
+
+      event.preventDefault();
+      setPaymentDialogOpen(true);
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [readOnly]);
 
   const rowError =
     rowFx.data && typeof (rowFx.data as any) === "object" && (rowFx.data as any).rowId === o.id
@@ -1011,20 +1156,40 @@ function RowItem({
     fd.set("channel", String((o.channel ?? "").trim()));
     fd.set("deliveryZoneId", String(deliveryZoneId ?? ""));
     fd.set("isCreditCard", String(isCreditCard ? "on" : ""));
+    fd.set("isCash", String(isCash ? "on" : ""));
+    fd.set("isOtherPaymentMethod", String(isOtherPaymentMethod ? "on" : ""));
     fd.set("customerName", customerName.trim());
     fd.set("customerPhone", customerPhone.trim());
     rowFx.submit(fd, { method: "post" });
   };
 
+  const submitWithPaymentMethod = (method: PaymentMethod) => {
+    if (readOnly || !formRef.current) return;
+
+    const nextFlags = paymentMethodToFlags(method);
+    setIsCreditCard(nextFlags.isCreditCard);
+    setIsCash(nextFlags.isCash);
+    setIsOtherPaymentMethod(nextFlags.isOtherPaymentMethod);
+
+    const fd = new FormData(formRef.current);
+    fd.set("isCreditCard", nextFlags.isCreditCard ? "on" : "");
+    fd.set("isCash", nextFlags.isCash ? "on" : "");
+    fd.set("isOtherPaymentMethod", nextFlags.isOtherPaymentMethod ? "on" : "");
+    rowFx.submit(fd, { method: "post" });
+    setPaymentDialogOpen(false);
+  };
+
   return (
     <li key={o.id} className="flex flex-col">
       <div className={COLS + " bg-white px-1 border-b border-b-gray-50 pb-1"}>
-        <rowFx.Form method="post" className="contents" id={`row-form-${o.id}`}>
+        <rowFx.Form method="post" className="contents" id={`row-form-${o.id}`} ref={formRef}>
           <input type="hidden" name="_action" value="saveRow" />
           <input type="hidden" name="id" value={o.id} />
           <input type="hidden" name="date" value={dateStr} />
           <input type="hidden" name="deliveryZoneId" value={deliveryZoneId ?? ""} />
           <input type="hidden" name="isCreditCard" value={isCreditCard ? "on" : ""} />
+          <input type="hidden" name="isCash" value={isCash ? "on" : ""} />
+          <input type="hidden" name="isOtherPaymentMethod" value={isOtherPaymentMethod ? "on" : ""} />
 
           {/* nº comanda */}
           <div className="flex items-center justify-center">
@@ -1032,29 +1197,14 @@ function RowItem({
             <input type="hidden" name="commandNumber" value={cmdLocal ?? ""} />
           </div>
 
-          {/* Pedido (R$) + ícone Cartão (à direita) */}
+          {/* Pedido (R$) */}
           <div className="flex justify-center">
-            <div className="flex items-center gap-2">
-              <MoneyInput
-                name="orderAmount"
-                defaultValue={o.orderAmount}
-                className="w-28"
-                disabled={readOnly}
-              />
-
-              {/* Ícone de cartão: preto = true, cinza = false */}
-              <button
-                type="button"
-                onClick={() => setIsCreditCard((v) => !v)}
-                className={`h-9 w-9 grid place-items-center rounded-md border transition
-                            ${readOnly ? "pointer-events-none opacity-60" : "hover:bg-slate-50"}
-                            ${isCreditCard ? "border-blue-600" : "border-slate-200"}`}
-                title="Pago no cartão"
-                aria-pressed={isCreditCard}
-              >
-                <CreditCard className={`h-6 w-6 ${isCreditCard ? "text-blue-600" : "text-slate-300"}`} />
-              </button>
-            </div>
+            <MoneyInput
+              name="orderAmount"
+              defaultValue={o.orderAmount}
+              className="w-28"
+              disabled={readOnly}
+            />
           </div>
 
           {/* Tamanhos */}
@@ -1163,7 +1313,13 @@ function RowItem({
 
           {/* Ações */}
           <div className="flex items-center justify-center gap-2">
-            <Button type="submit" variant="outline" title="Salvar" disabled={readOnly}>
+            <Button
+              type="button"
+              variant="outline"
+              title="Salvar"
+              disabled={readOnly}
+              onClick={() => setPaymentDialogOpen(true)}
+            >
               {savingIcon}
             </Button>
             <Button
@@ -1215,6 +1371,12 @@ function RowItem({
             customerPhone={customerPhone}
             onCustomerNameChange={setCustomerName}
             onCustomerPhoneChange={setCustomerPhone}
+          />
+
+          <PaymentMethodDialog
+            open={paymentDialogOpen}
+            onOpenChange={setPaymentDialogOpen}
+            onSelect={submitWithPaymentMethod}
           />
         </rowFx.Form>
       </div>
@@ -1609,8 +1771,8 @@ export default function GridKdsPage() {
   const stockBarRef = useRef<HTMLDivElement | null>(null);
   const [isStockBarPinned, setIsStockBarPinned] = useState(false);
 
-  // ← estado do botão de cartão na Venda Livre rápida
-  const [vlIsCreditCard, setVlIsCreditCard] = useState(false);
+  const [vlPaymentDialogOpen, setVlPaymentDialogOpen] = useState(false);
+  const vlFormRef = useRef<HTMLFormElement | null>(null);
 
   const stockSnapshot: DoughStockSnapshot | null =
     (stockFx.data?.stock as DoughStockSnapshot | undefined) ?? (doughStock as DoughStockSnapshot | null);
@@ -1720,6 +1882,17 @@ export default function GridKdsPage() {
       setSettingsDialogOpen(false);
     }
   }, [settingsFx.state, settingsFx.data, dateStr]);
+
+  const submitVlWithPaymentMethod = (method: PaymentMethod) => {
+    if (!vlFormRef.current) return;
+    const flags = paymentMethodToFlags(method);
+    const fd = new FormData(vlFormRef.current);
+    fd.set("isCreditCard", flags.isCreditCard ? "on" : "");
+    fd.set("isCash", flags.isCash ? "on" : "");
+    fd.set("isOtherPaymentMethod", flags.isOtherPaymentMethod ? "on" : "");
+    listFx.submit(fd, { method: "post" });
+    setVlPaymentDialogOpen(false);
+  };
 
   // Cores do status de meta
   const statusColor =
@@ -2323,29 +2496,21 @@ export default function GridKdsPage() {
             {/* Venda Livre rápida */}
             <div className="flex items-center gap-3">
               <div className="text-sm font-medium">Venda livre (rápida)</div>
-              <listFx.Form method="post" className="flex flex-wrap items-center gap-3">
+              <listFx.Form method="post" className="flex flex-wrap items-center gap-3" ref={vlFormRef}>
                 <input type="hidden" name="_action" value="createVL" />
                 <input type="hidden" name="date" value={dateStr} />
+                <input type="hidden" name="isCreditCard" value="" />
+                <input type="hidden" name="isCash" value="" />
+                <input type="hidden" name="isOtherPaymentMethod" value="" />
 
                 <MoneyInput name="orderAmount" />
 
-                {/* hidden para enviar o cartão no submit */}
-                <input type="hidden" name="isCreditCard" value={vlIsCreditCard ? "on" : ""} />
-
-                {/* Ícone Cartão (preto ativo / cinza inativo) */}
-                <button
+                <Button
                   type="button"
-                  onClick={() => setVlIsCreditCard(v => !v)}
-                  className={`h-9 w-9 grid place-items-center rounded-md border transition
-                              hover:bg-slate-50
-                              ${vlIsCreditCard ? "border-blue-800" : "border-slate-200"}`}
-                  title="Pago no cartão"
-                  aria-pressed={vlIsCreditCard}
+                  variant="secondary"
+                  disabled={listFx.state !== "idle"}
+                  onClick={() => setVlPaymentDialogOpen(true)}
                 >
-                  <CreditCard className={`h-6 w-6 ${vlIsCreditCard ? "text-blue-800" : "text-slate-300"}`} />
-                </button>
-
-                <Button type="submit" variant="secondary" disabled={listFx.state !== "idle"}>
                   {listFx.state !== "idle" ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin mr-1" /> Adicionando…
@@ -2356,6 +2521,12 @@ export default function GridKdsPage() {
                 </Button>
               </listFx.Form>
             </div>
+
+            <PaymentMethodDialog
+              open={vlPaymentDialogOpen}
+              onOpenChange={setVlPaymentDialogOpen}
+              onSelect={submitVlWithPaymentMethod}
+            />
 
             {/* Filtro por Canal */}
             <div className="flex items-center gap-2">

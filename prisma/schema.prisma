@@ -847,7 +847,8 @@ model FinancialMonthlyClose {
   resultadoLiquidoAmount Float @default(0) @map("resultado_liquido_amount")
   resultadoLiquidoPerc   Float @default(0) @map("resultado_liquido_perc")
 
-  notes String? @map("notes") @db.Text
+  accountantDreSheetUrl String? @map("accountant_dre_sheet_url") @db.Text
+  notes                 String? @map("notes") @db.Text
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -1489,6 +1490,8 @@ model KdsDailyOrderDetail {
   isVendaLivre Boolean @default(false) @map("is_venda_livre")
 
   isCreditCard Boolean @default(false) @map("is_credit_card")
+  isCash       Boolean @default(false) @map("is_cash")
+  isOtherPaymentMethod Boolean @default(false) @map("is_other_payment_method")
 
   novoPedidoAt      DateTime?     @map("novo_pedido_at")
   emProducaoAt      DateTime?     @map("em_producao_at")
