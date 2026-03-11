@@ -30,6 +30,9 @@ export type OrderRow = {
   orderAmount?: DecimalLike | null;
   channel?: string | null;
   status?: string | null;
+  isCreditCard?: boolean | null;
+  isCash?: boolean | null;
+  isOtherPaymentMethod?: boolean | null;
   customerName?: string | null;
   customerPhone?: string | null;
 };

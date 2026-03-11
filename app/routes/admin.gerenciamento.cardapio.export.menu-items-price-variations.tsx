@@ -53,6 +53,7 @@ type ExportJsonItem = {
   categoria: string;
   canal: string;
   sortOrderIndex: number | null;
+  ingredientes: string[];
   variacoes: Array<{
     tamanho: string;
     preco: number;
@@ -63,6 +64,12 @@ type ExportJsonItem = {
     custoFichaTecnica: number;
   }>;
 };
+
+const parseIngredientsList = (ingredients?: string) =>
+  String(ingredients ?? "")
+    .split(",")
+    .map((ingredient) => ingredient.trim())
+    .filter(Boolean);
 
 const buildExportRows = (items: MenuItemWithSellPriceVariations[], channelKey: string) => {
   const rows: ExportRow[] = [];
@@ -152,6 +159,7 @@ const buildExportJson = (items: MenuItemWithSellPriceVariations[], channelKey: s
         categoria: item.category?.name ?? "",
         canal: channelName,
         sortOrderIndex: item.sortOrderIndex ?? null,
+        ingredientes: parseIngredientsList(item.ingredients),
         variacoes,
       };
     })
