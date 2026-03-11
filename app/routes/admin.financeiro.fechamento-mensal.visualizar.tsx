@@ -508,22 +508,26 @@ function MetricsTable({
   diffViewMode: DiffViewMode;
 }) {
   return (
-    <div className="overflow-x-auto">
-      <Table className="min-w-[1200px]">
+    <div className="overflow-x-auto rounded-xl border border-slate-200/80">
+      <Table className="min-w-[1200px] border-separate border-spacing-0">
         <TableHeader>
-          <TableRow>
-            <TableHead className="w-56 bg-background sticky left-0 z-20">Indicador</TableHead>
+          <TableRow className="bg-slate-50/95">
+            <TableHead className="sticky left-0 top-0 z-30 w-56 border-b border-slate-200 bg-slate-50/95 shadow-[1px_0_0_0_rgba(226,232,240,0.9)]">
+              Indicador
+            </TableHead>
             {MONTH_OPTIONS.map((month) => (
               <TableHead
                 key={month.value}
-                className="text-center"
+                className="sticky top-0 z-20 border-b border-slate-200 bg-slate-50/95 text-center"
               >
                 <div className="flex flex-col items-center gap-1">
-                  <span className="font-medium">{month.label}</span>
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">{month.label}</span>
                 </div>
               </TableHead>
             ))}
-            <TableHead className="text-center">Total / Média</TableHead>
+            <TableHead className="sticky top-0 z-20 border-b border-slate-200 bg-slate-50/95 text-center shadow-[-1px_0_0_0_rgba(226,232,240,0.9)]">
+              Total / Média
+            </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -534,9 +538,12 @@ function MetricsTable({
             const receitaBrutaTotals = isResultado
               ? calculateMetricTotals(MAIN_METRICS[0], monthlyData)
               : null;
+            const rowTone = isMargem || isResultado
+              ? "bg-slate-50/80"
+              : "odd:bg-white even:bg-slate-50/35";
             return (
-              <TableRow key={row.key}>
-                <TableCell className={`bg-background sticky left-0 z-10 text-sm ${isMargem || isResultado ? "font-semibold" : ""}`}>
+              <TableRow key={row.key} className={`transition-colors hover:bg-slate-100/70 ${rowTone}`}>
+                <TableCell className={`sticky left-0 z-10 border-b border-slate-200/80 text-sm shadow-[1px_0_0_0_rgba(226,232,240,0.7)] ${isMargem || isResultado ? "bg-slate-100 font-semibold text-slate-950" : "bg-inherit text-slate-800"}`}>
                   {row.label}
                 </TableCell>
                 {MONTH_OPTIONS.map((month) => {
@@ -567,31 +574,31 @@ function MetricsTable({
                   return (
                     <TableCell
                       key={`${row.key}-${month.value}`}
-                      className="text-right"
+                      className={`border-b border-slate-200/70 text-right ${isHighlightRow ? "bg-slate-50/60" : ""}`}
                     >
                       <div className="flex flex-col items-end gap-1">
                         <div className="flex items-center gap-2">
-                          <span className={`font-mono ${valueTone} ${isHighlightRow ? "font-semibold" : "font-medium"}`}>
+                          <span className={`font-mono tabular-nums ${valueTone} ${isHighlightRow ? "text-[15px] font-semibold" : "font-medium"}`}>
                             {displayValue}
                           </span>
                           {!showInlinePercentBelow && !isMargemRow && inlinePercent != null && row.kind !== "percent" && (
-                            <span className={`text-[11px] text-muted-foreground ${isHighlightRow ? "font-semibold" : ""}`}>
+                            <span className={`font-mono tabular-nums text-[11px] text-slate-500 ${isHighlightRow ? "font-semibold" : ""}`}>
                               {inlinePercent.toFixed(2)}%
                             </span>
                           )}
                         </div>
                         {showInlinePercentBelow && (
-                          <span className={`text-sm font-semibold font-mono leading-tight ${isMargemRow && marginStatus ? marginStatus.valueTone : valueTone}`}>
+                          <span className={`font-mono tabular-nums text-sm font-semibold leading-tight ${isMargemRow && marginStatus ? marginStatus.valueTone : valueTone}`}>
                             {inlinePercent.toFixed(2)}%
                           </span>
                         )}
                         {isMargemRow && marginStatus?.note && (
-                          <span className={`text-[11px] text-right leading-snug ${marginStatus.noteTone}`}>
+                          <span className={`max-w-[10rem] text-[11px] text-right leading-snug ${marginStatus.noteTone}`}>
                             {marginStatus.note}
                           </span>
                         )}
                         {showDiffs && (
-                          <div className="flex flex-col items-end gap-1 text-[11px]">
+                          <div className="mt-1 flex flex-col items-end gap-1 text-[11px]">
                             {shouldShowPrevMonth && (
                               <DiffPill diff={prevMonth} base={prevMonthBase} kind={row.kind} invert={invertTone} showNumeric={showNumeric} />
                             )}
@@ -604,12 +611,12 @@ function MetricsTable({
                     </TableCell>
                   );
                 })}
-                <TableCell className="text-right" key={`${row.key}-totals`}>
-                  <div className="flex flex-col items-end gap-1">
-                    <span className={`font-mono ${isMargem || isResultado ? "font-semibold" : "font-medium"} ${isResultado && totals.total != null && totals.total < 0 ? "text-red-600" : "text-foreground"}`}>
+                <TableCell className="border-b border-slate-200/80 bg-slate-50/70 text-right shadow-[-1px_0_0_0_rgba(226,232,240,0.7)]" key={`${row.key}-totals`}>
+                  <div className={`ml-auto flex w-full max-w-[13rem] flex-col items-end gap-1 rounded-lg border px-3 py-2 ${isMargem || isResultado ? "border-slate-300 bg-white/90" : "border-slate-200/80 bg-white/70"}`}>
+                    <span className={`font-mono tabular-nums ${isMargem || isResultado ? "text-[15px] font-semibold" : "font-medium"} ${isResultado && totals.total != null && totals.total < 0 ? "text-red-600" : "text-foreground"}`}>
                       {formatCellValue(totals.total, row.kind)}
                     </span>
-                    <span className="text-[11px] text-muted-foreground">
+                    <span className="font-mono tabular-nums text-[11px] text-slate-500">
                       Média: {totals.average != null
                         ? formatAverageWithReferencePercent(
                           totals.average,
@@ -618,7 +625,7 @@ function MetricsTable({
                         )
                         : "—"}
                     </span>
-                    <span className="text-[11px] text-muted-foreground">
+                    <span className="font-mono tabular-nums text-[11px] text-slate-500">
                       Média 3m: {totals.lastThreeAverage != null
                         ? formatAverageWithReferencePercent(
                           totals.lastThreeAverage,
