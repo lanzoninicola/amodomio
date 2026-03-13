@@ -1,6 +1,7 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { Form, useLoaderData } from "@remix-run/react";
 import { useMemo, useState } from "react";
+import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import prismaClient from "~/lib/prisma/client.server";
 import { badRequest, ok, serverError } from "~/utils/http-response.server";
@@ -72,6 +73,7 @@ export default function AdminItemVariationsTab() {
 
   const allVariations = payload.allVariations || [];
   const linkedVariations = payload.linkedVariations || [];
+  const baseLinkedVariation = linkedVariations.find((row) => row?.Variation?.kind === "base");
 
   const linkedNonBaseIds = linkedVariations
     .filter((row) => row?.Variation?.kind !== "base")
@@ -110,12 +112,12 @@ export default function AdminItemVariationsTab() {
 
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="rounded-xl border border-slate-200 bg-white p-4">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Todas as variantes</h2>
-            <p className="mt-1 text-xs text-slate-600">Selecione múltiplas variantes para vincular ao item.</p>
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Todas as variações</h2>
+            <p className="mt-1 text-xs text-slate-600">Selecione múltiplas variações para vincular ao item.</p>
 
             <div className="mt-3 max-h-[420px] space-y-2 overflow-auto pr-1">
               {allVariations.length === 0 ? (
-                <p className="text-sm text-slate-500">Nenhuma variante cadastrada.</p>
+                <p className="text-sm text-slate-500">Nenhuma variação cadastrada.</p>
               ) : (
                 allVariations.map((variation) => {
                   const checked = selectedSet.has(variation.id);
@@ -144,14 +146,44 @@ export default function AdminItemVariationsTab() {
           </div>
 
           <div className="rounded-xl border border-slate-200 bg-white p-4">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Variantes vinculadas</h2>
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Variações vinculadas</h2>
             <p className="mt-1 text-xs text-slate-600">
-              Defina qual variante será a referência para cálculo das demais.
+              Defina qual variação será a referência para cálculo das demais.
             </p>
 
             <div className="mt-3 max-h-[420px] space-y-2 overflow-auto pr-1">
+              {baseLinkedVariation ? (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <div className="truncate text-sm font-medium text-slate-900">
+                          {baseLinkedVariation.Variation?.name || "Variação base"}
+                        </div>
+                        <Badge
+                          variant="outline"
+                          className="border-amber-300 bg-amber-100 text-[11px] font-semibold uppercase tracking-wide text-amber-800"
+                        >
+                          Base
+                        </Badge>
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        {baseLinkedVariation.Variation?.kind} • {baseLinkedVariation.Variation?.code}
+                      </div>
+                    </div>
+                    <Badge
+                      variant="outline"
+                      className="border-slate-300 bg-white text-[11px] font-semibold uppercase tracking-wide text-slate-700"
+                    >
+                      Automatica
+                    </Badge>
+                  </div>
+                  <p className="mt-2 text-xs text-slate-700">Esta variacao e vinculada automaticamente para todo item.</p>
+                </div>
+              ) : null}
+
               {selectedVariations.length === 0 ? (
-                <p className="text-sm text-slate-500">Nenhuma variante vinculada.</p>
+                <p className="text-sm text-slate-500">Nenhuma variação vinculada.</p>
               ) : (
                 selectedVariations.map((variation) => (
                   <label
@@ -182,7 +214,7 @@ export default function AdminItemVariationsTab() {
 
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <Button type="submit" className="bg-slate-900 hover:bg-slate-700">
-            Salvar variantes
+            Salvar variações
           </Button>
         </div>
       </Form>

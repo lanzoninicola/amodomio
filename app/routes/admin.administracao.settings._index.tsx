@@ -22,6 +22,11 @@ import {
   ITEM_COST_SETTINGS_CONTEXT,
 } from "~/domain/item/item-cost-metrics.server";
 import { invalidateCardapioIndexCache } from "~/domain/cardapio/cardapio-cache.server";
+import {
+  DEFAULT_RECIPE_CHATGPT_PROJECT_URL,
+  RECIPE_CHATGPT_PROJECT_URL_SETTING_NAME,
+  RECIPE_CHATGPT_SETTINGS_CONTEXT,
+} from "~/domain/recipe/recipe-chatgpt-settings";
 
 const SETTING_TYPES = ["string", "boolean", "float", "int", "json"] as const;
 const REELS_SETTINGS_CONTEXT = "cardapio";
@@ -64,7 +69,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const where = filters.length ? { AND: filters } : {};
 
-  const [likesSetting, sharesSetting, reelsEnabledSetting, itemCostAverageWindowSetting] = await Promise.all([
+  const [likesSetting, sharesSetting, reelsEnabledSetting, itemCostAverageWindowSetting, recipeChatGptProjectUrlSetting] = await Promise.all([
     prismaClient.setting.findFirst({
       where: { context: ENGAGEMENT_SETTINGS_CONTEXT, name: LIKE_SETTING_NAME },
       orderBy: [{ createdAt: "desc" }],
@@ -81,6 +86,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
       where: {
         context: ITEM_COST_SETTINGS_CONTEXT,
         name: ITEM_COST_AVERAGE_WINDOW_DAYS_SETTING,
+      },
+      orderBy: [{ createdAt: "desc" }],
+    }),
+    prismaClient.setting.findFirst({
+      where: {
+        context: RECIPE_CHATGPT_SETTINGS_CONTEXT,
+        name: RECIPE_CHATGPT_PROJECT_URL_SETTING_NAME,
       },
       orderBy: [{ createdAt: "desc" }],
     }),
@@ -129,6 +141,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
         name: ITEM_COST_AVERAGE_WINDOW_DAYS_SETTING,
         type: "int",
         value: String(DEFAULT_ITEM_COST_AVERAGE_WINDOW_DAYS),
+        createdAt: new Date(),
+      },
+    });
+  }
+
+  if (!recipeChatGptProjectUrlSetting) {
+    await prismaClient.setting.create({
+      data: {
+        context: RECIPE_CHATGPT_SETTINGS_CONTEXT,
+        name: RECIPE_CHATGPT_PROJECT_URL_SETTING_NAME,
+        type: "string",
+        value: DEFAULT_RECIPE_CHATGPT_PROJECT_URL,
         createdAt: new Date(),
       },
     });

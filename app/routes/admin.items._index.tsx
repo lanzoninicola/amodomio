@@ -106,6 +106,18 @@ function getClassificationBadgeClass(value?: string | null) {
   }
 }
 
+function pickPrimaryItemVariation(item: any) {
+  const activeVariations = (item?.ItemVariation || []).filter((row: any) => !row?.deletedAt);
+
+  return (
+    activeVariations.find((row: any) => row.isReference && row?.Variation?.kind !== "base") ||
+    activeVariations.find((row: any) => row?.Variation?.kind !== "base") ||
+    activeVariations.find((row: any) => row?.Variation?.kind === "base" && row?.Variation?.code === "base") ||
+    activeVariations[0] ||
+    null
+  );
+}
+
 export async function loader({ request }: LoaderFunctionArgs) {
   try {
     const db = prismaClient as any;
@@ -165,13 +177,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       where,
       include: {
         ItemVariation: {
-          where: {
-            deletedAt: null,
-            Variation: {
-              is: { kind: "base", code: "base", deletedAt: null },
-            },
-          },
-          take: 1,
+          where: { deletedAt: null },
           include: {
             ItemCostVariation: {
               select: {
@@ -199,6 +205,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
               select: { id: true, kind: true, code: true, name: true },
             },
           },
+          orderBy: [{ createdAt: "asc" }],
         },
         MenuItem: {
           select: {
@@ -215,14 +222,58 @@ export async function loader({ request }: LoaderFunctionArgs) {
     });
 
     for (const item of items) {
-      if (!(item as any).ItemVariation?.length) {
-        await itemVariationPrismaEntity.ensureBaseVariationForItem(item.id);
-      }
+      await itemVariationPrismaEntity.syncBaseVariationForItem(item.id);
     }
 
+    const refreshedItems = await db.item.findMany({
+      where: { id: { in: items.map((item: any) => item.id) } },
+      include: {
+        ItemVariation: {
+          where: { deletedAt: null },
+          include: {
+            ItemCostVariation: {
+              select: {
+                id: true,
+                costAmount: true,
+                unit: true,
+                validFrom: true,
+                createdAt: true,
+                source: true,
+              },
+            },
+            ItemCostVariationHistory: {
+              select: {
+                id: true,
+                costAmount: true,
+                unit: true,
+                validFrom: true,
+                createdAt: true,
+                source: true,
+              },
+              orderBy: [{ validFrom: "desc" }, { createdAt: "desc" }],
+              take: 100,
+            },
+            Variation: {
+              select: { id: true, kind: true, code: true, name: true },
+            },
+          },
+          orderBy: [{ createdAt: "asc" }],
+        },
+        MenuItem: {
+          select: {
+            Category: {
+              select: { id: true, name: true },
+            },
+          },
+          take: 5,
+        },
+      },
+      orderBy: [{ updatedAt: "desc" }],
+    });
+
     return ok({
-      items: items.map((item: any) => {
-        const baseVariation = item.ItemVariation?.[0] || null;
+      items: refreshedItems.map((item: any) => {
+        const baseVariation = pickPrimaryItemVariation(item);
         const baseHistory = baseVariation?.ItemCostVariationHistory || [];
         const currentCost = baseVariation?.ItemCostVariation;
         const historyForMetrics =

@@ -161,7 +161,7 @@ export default function AdminItemCostSheetsIndex() {
                       to={`/admin/items/${sheet.itemId}/item-cost-sheets?itemCostSheetId=${sheet.id}&itemVariationId=${sheet.itemVariationId}`}
                     >
                       <Button type="button" variant="outline" size="sm" className="rounded-md">
-                        Abrir
+                        Editar no item
                       </Button>
                     </Link>
                   </TableCell>

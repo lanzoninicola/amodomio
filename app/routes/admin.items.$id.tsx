@@ -1,5 +1,16 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
-import { Link, Outlet, useActionData, useLoaderData, useLocation } from "@remix-run/react";
+import { Link, Outlet, useActionData, useLoaderData, useLocation, useNavigate } from "@remix-run/react";
+import { useEffect, useState } from "react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "~/components/ui/alert-dialog";
 import { Separator } from "~/components/ui/separator";
 import { toast } from "~/components/ui/use-toast";
 import MenuItemNavLink from "~/domain/cardapio/components/menu-item-nav-link/menu-item-nav-link";
@@ -23,7 +34,7 @@ const ITEM_UNIT_OPTIONS = ["UN", "L", "ML", "KG", "G"];
 
 const itemNavigation = [
   { name: "Principal", href: "main" },
-  { name: "Variantes", href: "variations" },
+  { name: "Variações", href: "variations" },
   { name: "Custos", href: "costs" },
   { name: "Receitas", href: "recipes" },
   { name: "Fichas de Custo", href: "item-cost-sheets" },
@@ -40,6 +51,18 @@ function normalizeUnit(value: FormDataEntryValue | string | null | undefined) {
 }
 
 const RECIPE_VARIATION_POLICY_OPTIONS = ["auto", "hide", "show"] as const;
+
+function pickPrimaryItemVariation(item: any) {
+  const activeVariations = (item?.ItemVariation || []).filter((row: any) => !row?.deletedAt);
+
+  return (
+    activeVariations.find((row: any) => row.isReference && row?.Variation?.kind !== "base") ||
+    activeVariations.find((row: any) => row?.Variation?.kind !== "base") ||
+    activeVariations.find((row: any) => row?.Variation?.kind === "base" && row?.Variation?.code === "base") ||
+    activeVariations[0] ||
+    null
+  );
+}
 
 async function getAvailableItemUnits() {
   const db = prismaClient as any;
@@ -109,11 +132,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
           ItemVariation: {
             where: {
               deletedAt: null,
-              Variation: {
-                is: { kind: "base", code: "base", deletedAt: null },
-              },
             },
-            take: 1,
             include: {
               Variation: true,
               ItemCostVariation: {
@@ -159,70 +178,63 @@ export async function loader({ params }: LoaderFunctionArgs) {
     ]);
 
     if (!loadedItem) return badRequest("Item não encontrado");
-    let item = loadedItem;
-    if (!(item as any).ItemVariation?.length) {
-      await itemVariationPrismaEntity.ensureBaseVariationForItem(item.id);
-      const reloaded = await db.item.findUnique({
-        where: { id },
-        include: {
-          MenuItem: { select: { id: true, name: true }, take: 5 },
-          Recipe: { select: { id: true, name: true }, take: 5 },
-          ItemCostSheet: {
-            select: { id: true, name: true, isActive: true },
-            orderBy: { updatedAt: "desc" },
-            take: 5,
-          },
-          ItemVariation: {
-            where: {
-              deletedAt: null,
-              Variation: { is: { kind: "base", code: "base", deletedAt: null } },
-            },
-            take: 1,
-            include: {
-              Variation: true,
-              ItemCostVariation: {
-                select: {
-                  id: true,
-                  costAmount: true,
-                  unit: true,
-                  validFrom: true,
-                  createdAt: true,
-                  source: true,
-                  referenceType: true,
-                  referenceId: true,
-                  updatedBy: true,
-                },
-              },
-              ItemCostVariationHistory: {
-                select: {
-                  id: true,
-                  costAmount: true,
-                  unit: true,
-                  validFrom: true,
-                  createdAt: true,
-                  source: true,
-                  referenceType: true,
-                  referenceId: true,
-                  createdBy: true,
-                  metadata: true,
-                },
-                orderBy: [{ validFrom: "desc" }, { createdAt: "desc" }],
-                take: 100,
-              },
-            },
-          },
-        },
-      });
-      if (reloaded) {
-        // @ts-ignore simplify mixed generated client compatibility
-        item = reloaded;
-      }
-    }
+    await itemVariationPrismaEntity.syncBaseVariationForItem(loadedItem.id);
 
-    const baseVariation = (item as any).ItemVariation?.[0] || null;
-    const baseHistory = baseVariation?.ItemCostVariationHistory || [];
-    const currentCost = baseVariation?.ItemCostVariation || null;
-    const historyForMetrics = baseHistory.length > 0 ? baseHistory : currentCost ? [currentCost] : [];
+    const item = await db.item.findUnique({
+      where: { id },
+      include: {
+        MenuItem: { select: { id: true, name: true }, take: 5 },
+        Recipe: { select: { id: true, name: true }, take: 5 },
+        ItemCostSheet: {
+          select: { id: true, name: true, isActive: true },
+          orderBy: { updatedAt: "desc" },
+          take: 5,
+        },
+        ItemVariation: {
+          where: { deletedAt: null },
+          include: {
+            Variation: true,
+            ItemCostVariation: {
+              select: {
+                id: true,
+                costAmount: true,
+                unit: true,
+                validFrom: true,
+                createdAt: true,
+                source: true,
+                referenceType: true,
+                referenceId: true,
+                updatedBy: true,
+              },
+            },
+            ItemCostVariationHistory: {
+              select: {
+                id: true,
+                costAmount: true,
+                unit: true,
+                validFrom: true,
+                createdAt: true,
+                source: true,
+                referenceType: true,
+                referenceId: true,
+                createdBy: true,
+                metadata: true,
+              },
+              orderBy: [{ validFrom: "desc" }, { createdAt: "desc" }],
+              take: 100,
+            },
+          },
+          orderBy: [{ createdAt: "asc" }],
+        },
+      },
+    });
+
+    if (!item) return badRequest("Item não encontrado");
+
+    const primaryVariation = pickPrimaryItemVariation(item);
+    const primaryHistory = primaryVariation?.ItemCostVariationHistory || [];
+    const currentCost = primaryVariation?.ItemCostVariation || null;
+    const historyForMetrics = primaryHistory.length > 0 ? primaryHistory : currentCost ? [currentCost] : [];
     const costMetrics = calculateItemCostMetrics({
       item,
       history: historyForMetrics,
@@ -231,8 +243,8 @@ export async function loader({ params }: LoaderFunctionArgs) {
     return ok({
       item: {
         ...item,
-        _baseItemVariation: baseVariation,
-        _itemCostVariationHistory: baseHistory,
+        _baseItemVariation: primaryVariation,
+        _itemCostVariationHistory: primaryHistory,
         _itemCostVariationCurrent: currentCost,
       },
       costMetrics,
@@ -303,7 +315,24 @@ export async function action({ request, params }: ActionFunctionArgs) {
         },
       });
 
-      return ok("Item atualizado com sucesso");
+      const hasConfiguredVariations = !!(await db.itemVariation.findFirst({
+        where: {
+          itemId: id,
+          deletedAt: null,
+          Variation: {
+            is: {
+              deletedAt: null,
+              NOT: { kind: "base" },
+            },
+          },
+        },
+        select: { id: true },
+      }));
+
+      return ok({
+        message: "Item atualizado com sucesso",
+        missingVariations: !hasConfiguredVariations,
+      });
     }
 
     if (_action === "item-purchase-conversion-update") {
@@ -355,7 +384,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
       if (!(costAmount > 0)) return badRequest("Informe um custo maior que zero");
 
-      const baseItemVariation = await itemVariationPrismaEntity.ensureBaseVariationForItem(id);
+      const baseItemVariation = await itemVariationPrismaEntity.findPrimaryVariationForItem(id, {
+        ensureBaseIfMissing: true,
+      });
+      if (!baseItemVariation?.id) return badRequest("Nenhuma variação disponível para registrar custo");
       await itemCostVariationPrismaEntity.setCurrentCost({
         itemVariationId: baseItemVariation.id,
         costAmount,
@@ -394,7 +426,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
       const normalizedVariationIds = allowedVariations.map((row: any) => row.id);
       const linked = await itemVariationPrismaEntity.replaceItemVariations(id, normalizedVariationIds, {
-        keepBase: true,
+        keepBase: normalizedVariationIds.length === 0,
       });
 
       const activeRows = (linked || []).filter((row: any) => !row.deletedAt);
@@ -435,6 +467,8 @@ export default function AdminItemDetailLayout() {
   const loaderData = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const location = useLocation();
+  const navigate = useNavigate();
+  const [showMissingVariationsDialog, setShowMissingVariationsDialog] = useState(false);
 
   const item = (loaderData?.payload as any)?.item;
   const costMetrics = (loaderData?.payload as any)?.costMetrics;
@@ -443,12 +477,23 @@ export default function AdminItemDetailLayout() {
   const categories = ((loaderData?.payload as any)?.categories || []) as Array<{ id: string; name: string }>;
   const activeTab = lastUrlSegment(location.pathname);
 
-  if (actionData?.status === 200) {
-    toast({ title: "Ok", description: actionData.message });
-  }
-  if (actionData?.status && actionData.status >= 400) {
-    toast({ title: "Erro", description: actionData.message, variant: "destructive" });
-  }
+  useEffect(() => {
+    if (actionData?.status === 200) {
+      toast({ title: "Ok", description: actionData.message });
+    }
+
+    if (actionData?.status && actionData.status >= 400) {
+      toast({ title: "Erro", description: actionData.message, variant: "destructive" });
+    }
+
+    const shouldPromptMissingVariations =
+      actionData?.status === 200 &&
+      actionData?.payload?.missingVariations === true;
+
+    if (shouldPromptMissingVariations) {
+      setShowMissingVariationsDialog(true);
+    }
+  }, [actionData]);
 
   if (!item) {
     const message = loaderData?.message || "Nao foi possivel carregar o item.";
@@ -498,6 +543,23 @@ export default function AdminItemDetailLayout() {
           averageWindowDays,
         }}
       />
+
+      <AlertDialog open={showMissingVariationsDialog} onOpenChange={setShowMissingVariationsDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Este item ainda não tem variações configuradas</AlertDialogTitle>
+            <AlertDialogDescription>
+              Você quer configurar as variações agora? Se continuar, o sistema vai abrir a aba de variações deste item.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Depois</AlertDialogCancel>
+            <AlertDialogAction onClick={() => navigate(`/admin/items/${item.id}/variations`)}>
+              Configurar agora
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

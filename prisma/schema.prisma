@@ -645,6 +645,7 @@ model ItemCostSheet {
   ItemVariation      ItemVariation @relation(fields: [itemVariationId], references: [id])
   baseItemCostSheet    ItemCostSheet? @relation("ItemCostSheetBase", fields: [baseItemCostSheetId], references: [id])
   derivedItemCostSheet ItemCostSheet[] @relation("ItemCostSheetBase")
+  ItemCostSheetComponent ItemCostSheetComponent[]
   ItemCostSheetLine    ItemCostSheetLine[]
 
   @@index([itemId], map: "item_cost_sheets_item_id_idx")
@@ -653,6 +654,45 @@ model ItemCostSheet {
   @@index([itemId, itemVariationId, isActive], map: "item_cost_sheets_item_variation_active_idx")
   @@unique([itemId, itemVariationId, version], map: "item_cost_sheets_item_variation_version_unique")
   @@map("item_cost_sheets")
+}
+
+model ItemCostSheetComponent {
+  id              String                @id @default(uuid())
+  itemCostSheetId String                @map("item_cost_sheet_id")
+  type            ItemCostSheetLineType @default(manual)
+  refId           String?               @map("ref_id")
+  name            String
+  notes           String?               @db.Text
+  sortOrderIndex  Int                   @default(0) @map("sort_order_index")
+  createdAt       DateTime              @default(now()) @map("created_at")
+  updatedAt       DateTime              @default(now()) @updatedAt @map("updated_at")
+
+  ItemCostSheet                    ItemCostSheet                     @relation(fields: [itemCostSheetId], references: [id], onDelete: Cascade)
+  ItemCostSheetVariationComponent  ItemCostSheetVariationComponent[]
+
+  @@index([itemCostSheetId], map: "item_cost_sheet_components_sheet_idx")
+  @@map("item_cost_sheet_components")
+}
+
+model ItemCostSheetVariationComponent {
+  id                       String                 @id @default(uuid())
+  itemCostSheetComponentId String                 @map("item_cost_sheet_component_id")
+  itemVariationId          String                 @map("item_variation_id")
+  unit                     String?
+  quantity                 Float                  @default(0)
+  unitCostAmount           Float                  @default(0) @map("unit_cost_amount")
+  wastePerc                Float                  @default(0) @map("waste_perc")
+  totalCostAmount          Float                  @default(0) @map("total_cost_amount")
+  createdAt                DateTime               @default(now()) @map("created_at")
+  updatedAt                DateTime               @default(now()) @updatedAt @map("updated_at")
+
+  ItemCostSheetComponent ItemCostSheetComponent @relation(fields: [itemCostSheetComponentId], references: [id], onDelete: Cascade)
+  ItemVariation         ItemVariation          @relation(fields: [itemVariationId], references: [id])
+
+  @@unique([itemCostSheetComponentId, itemVariationId], map: "item_cost_sheet_variation_components_component_variation_unique")
+  @@index([itemVariationId], map: "item_cost_sheet_variation_components_item_variation_idx")
+  @@index([itemCostSheetComponentId], map: "item_cost_sheet_variation_components_component_idx")
+  @@map("item_cost_sheet_variation_components")
 }
 
 model ItemCostSheetLine {
