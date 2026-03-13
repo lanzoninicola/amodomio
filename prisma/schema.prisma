@@ -265,6 +265,7 @@ model ItemVariation {
   RecipeVariationIngredient RecipeVariationIngredient[]
   ItemCostVariation        ItemCostVariation?
   ItemCostVariationHistory ItemCostVariationHistory[]
+  ItemCostSheetVariationComponent ItemCostSheetVariationComponent[]
   StockNfImportAppliedChange StockNfImportAppliedChange[]
 
   @@unique([itemId, variationId], map: "item_variations_item_variation_unique")
