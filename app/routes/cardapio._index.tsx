@@ -1140,7 +1140,7 @@ function CardapioGridItem({
         <li
             ref={setRefs}
             className={cn(
-                "flex flex-col rounded-md border border-transparent",
+                "flex h-full flex-col rounded-md border border-transparent",
                 "transition-all duration-300 ease-in-out",
                 "scroll-mt-24 lg:scroll-mt-0",
                 isExpanded ? "col-span-2 lg:col-span-1" : "col-span-1"
@@ -1149,7 +1149,7 @@ function CardapioGridItem({
             {isDesktop ? (
                 <Link
                     to={getCardapioItemHref(item)}
-                    className="flex flex-col cursor-pointer"
+                    className="flex h-full flex-col cursor-pointer"
                     aria-label={`Abrir ${item.name}`}
                     onClick={onOpenDetail}
                 >
@@ -1186,7 +1186,7 @@ function CardapioGridItem({
                         </div>
                     </div>
 
-                    <div className="px-1 pb-2 pt-1 flex flex-col bg-white rounded-b-md sm:pt-2">
+                    <div className="flex h-[138px] flex-col rounded-b-md bg-white px-1 pb-2 pt-1 sm:h-[142px] sm:pt-2">
                         <span
                             className={cn(
                                 "font-neue line-clamp-1 font-medium text-xs tracking-wide sm:tracking-widest md:uppercase ",
@@ -1196,22 +1196,23 @@ function CardapioGridItem({
                             {item.name}
                         </span>
 
-                        <span
-                            className={cn(
-                                "font-neue text-xs tracking-wide leading-[110%] sm:text-base md:text-sm line-clamp-2 my-1",
-                                isExpanded && "text-md line-clamp-none mb-2 leading-[120%]"
-                            )}
-                        >
-                            {item.ingredients}
-                        </span>
-                        <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                            <span>{isExpanded ? "VOLTAR" : "Ver ingredientes"}</span>
-                            {!isExpanded && <span aria-hidden="true">...</span>}
+                        <div className={cn("my-1 flex-1", isExpanded && "mb-2")}>
+                            <span
+                                className={cn(
+                                    "block font-neue text-[13px] tracking-wide leading-[115%] sm:text-[15px] md:text-sm",
+                                    isExpanded && "text-base leading-[125%]"
+                                )}
+                            >
+                                {item.ingredients}
+                            </span>
+                        </div>
+                        <span className="mt-auto inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                            <span>{isExpanded ? "VOLTAR" : "EXPANDIR"}</span>
                         </span>
                     </div>
                 </Link>
             ) : (
-                <div className="flex flex-col">
+                <div className="flex h-full flex-col">
                     <div
                         className="group overflow-hidden rounded-t-md relative focus:outline-none focus:ring-2 focus:ring-black/20 cursor-pointer"
                         role="button"
@@ -1251,7 +1252,7 @@ function CardapioGridItem({
                     </div>
 
                     <div
-                        className="px-1 pb-2 pt-1 flex flex-col bg-white rounded-b-md cursor-pointer"
+                        className="flex h-[138px] flex-col rounded-b-md bg-white px-1 pb-2 pt-1 cursor-pointer sm:h-[154px]"
                         onClick={onClick}
                         role="button"
                         aria-label={`Alternar detalhes de ${item.name}`}
@@ -1265,17 +1266,18 @@ function CardapioGridItem({
                             {item.name}
                         </span>
 
-                        <span
-                            className={cn(
-                                "font-neue text-xs tracking-wide leading-[110%] sm:text-base md:text-sm line-clamp-2 my-1",
-                                isExpanded && "text-md line-clamp-none mb-2 leading-[120%]"
-                            )}
-                        >
-                            {item.ingredients}
-                        </span>
-                        <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                            <span>{isExpanded ? "VOLTAR" : "Ver ingredientes"}</span>
-                            {!isExpanded && <span aria-hidden="true">...</span>}
+                        <div className={cn("my-1 flex-1", isExpanded && "mb-2")}>
+                            <span
+                                className={cn(
+                                    "block font-neue text-[13px] tracking-wide leading-[115%] sm:text-[15px] md:text-sm",
+                                    isExpanded && "text-base leading-[125%]"
+                                )}
+                            >
+                                {item.ingredients}
+                            </span>
+                        </div>
+                        <span className="mt-auto inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                            <span>{isExpanded ? "VOLTAR" : "EXPANDIR"}</span>
                         </span>
                     </div>
                 </div>

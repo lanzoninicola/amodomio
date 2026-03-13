@@ -134,6 +134,39 @@ class ItemVariationPrismaEntity {
     });
   }
 
+  async syncBaseVariationForItem(itemId: string) {
+    if (!itemId) throw new Error("Item.id é obrigatório");
+
+    return await this.client.$transaction(async (tx) => {
+      return await this.syncBaseVariationForItemTx(tx, itemId);
+    });
+  }
+
+  async findPrimaryVariationForItem(itemId: string, params?: { ensureBaseIfMissing?: boolean }) {
+    if (!itemId) throw new Error("Item.id é obrigatório");
+
+    if (params?.ensureBaseIfMissing) {
+      await this.syncBaseVariationForItem(itemId);
+    }
+
+    const activeRows = await this.model.findMany({
+      where: { itemId, deletedAt: null },
+      include: {
+        Variation: true,
+        ItemCostVariation: true,
+      },
+      orderBy: [{ createdAt: "asc" }],
+    });
+
+    return (
+      activeRows.find((row: any) => row.isReference && row?.Variation?.kind !== "base") ||
+      activeRows.find((row: any) => row?.Variation?.kind !== "base") ||
+      activeRows.find((row: any) => row?.Variation?.kind === "base" && row?.Variation?.code === "base") ||
+      activeRows[0] ||
+      null
+    );
+  }
+
   async replaceItemVariations(
     itemId: string,
     variationIds: string[],
@@ -194,6 +227,10 @@ class ItemVariationPrismaEntity {
           where: { id: row.id },
           data: { deletedAt: new Date(), isReference: false },
         });
+      }
+
+      if (keepBase) {
+        await this.syncBaseVariationForItemTx(tx, itemId);
       }
 
       await this.ensureReferenceForItemTx(tx, itemId);
@@ -261,6 +298,52 @@ class ItemVariationPrismaEntity {
       where: { id: preferred.id },
       data: { isReference: true },
     });
+  }
+
+  private async syncBaseVariationForItemTx(tx: any, itemId: string) {
+    const baseVariation =
+      (await (tx as any).variation.findFirst({
+        where: { kind: "base", code: "base" },
+      })) ||
+      (await (tx as any).variation.create({
+        data: { kind: "base", code: "base", name: "Base" },
+      }));
+
+    const current = await (tx as any).itemVariation.findMany({
+      where: { itemId },
+      include: { Variation: true },
+      orderBy: [{ createdAt: "asc" }],
+    });
+
+    const activeNonBase = current.filter(
+      (row: any) => !row.deletedAt && row?.Variation?.kind !== "base"
+    );
+    const baseRow = current.find((row: any) => row.variationId === baseVariation.id) || null;
+
+    if (activeNonBase.length > 0) {
+      if (baseRow && !baseRow.deletedAt) {
+        await (tx as any).itemVariation.update({
+          where: { id: baseRow.id },
+          data: { deletedAt: new Date(), isReference: false },
+        });
+      }
+      return null;
+    }
+
+    if (!baseRow) {
+      return await (tx as any).itemVariation.create({
+        data: { itemId, variationId: baseVariation.id, isReference: false },
+      });
+    }
+
+    if (baseRow.deletedAt) {
+      return await (tx as any).itemVariation.update({
+        where: { id: baseRow.id },
+        data: { deletedAt: null, isReference: false, updatedAt: new Date() },
+      });
+    }
+
+    return baseRow;
   }
 }
 

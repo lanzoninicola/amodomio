@@ -17,7 +17,10 @@ import prismaClient from "~/lib/prisma/client.server"
 import { Pagination, PaginationContent, PaginationItem, PaginationLink } from "~/components/ui/pagination"
 import { listRecipeCompositionLines } from "~/domain/recipe/recipe-composition.server"
 
-type RecipeWithMeta = Recipe & { RecipeLine: { lastTotalCostAmount: number }[] }
+type RecipeWithMeta = Recipe & {
+    Item: { name: string } | null
+    RecipeLine: { lastTotalCostAmount: number }[]
+}
 type FilterItem = { id: string; name: string; classification: string | null; consumptionUm: string | null }
 
 const PAGE_SIZE = 20
@@ -72,6 +75,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
         }),
         db.recipe.findMany({
             where,
+            include: {
+                Item: {
+                    select: { name: true },
+                },
+            },
             orderBy: [{ name: "asc" }],
             skip: (page - 1) * PAGE_SIZE,
             take: PAGE_SIZE,
@@ -84,7 +92,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
     const [items, recipesRaw] = result
     const recipes: RecipeWithMeta[] = await Promise.all(
-        (recipesRaw || []).map(async (recipe: Recipe) => {
+        (recipesRaw || []).map(async (recipe: RecipeWithMeta) => {
             const lines = await listRecipeCompositionLines(db, recipe.id)
             return {
                 ...recipe,
@@ -252,6 +260,7 @@ export default function RecipesIndex() {
                     <TableHeader className="bg-slate-50/90">
                         <TableRow className="hover:bg-slate-50/90">
                             <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Receita</TableHead>
+                            <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Item vinculado</TableHead>
                             <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Tipo</TableHead>
                             <TableHead className="h-10 px-4 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Ações</TableHead>
                         </TableRow>
@@ -259,7 +268,7 @@ export default function RecipesIndex() {
                     <TableBody>
                         {recipes.length === 0 ? (
                             <TableRow className="hover:bg-transparent">
-                                <TableCell colSpan={3} className="px-4 py-8 text-sm text-slate-500">
+                                <TableCell colSpan={4} className="px-4 py-8 text-sm text-slate-500">
                                     Nenhuma receita encontrada.
                                 </TableCell>
                             </TableRow>
@@ -383,6 +392,17 @@ function RecipeRow({ item }: RecipeItemProps) {
                         {item.name}
                     </Link>
                     <span className="text-xs text-slate-500">ID: {item.id}</span>
+                </div>
+            </TableCell>
+            <TableCell className="px-4 py-3">
+                <div className="min-w-0">
+                    {item.Item ? (
+                        <span className="truncate text-sm text-slate-700" title={item.Item.name}>
+                            {item.Item.name}
+                        </span>
+                    ) : (
+                        <span className="text-sm text-slate-400">Sem item vinculado</span>
+                    )}
                 </div>
             </TableCell>
             <TableCell className="px-4 py-3">

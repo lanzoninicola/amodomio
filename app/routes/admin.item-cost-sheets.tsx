@@ -15,7 +15,7 @@ export default function ItemCostSheetsOutlet() {
                 Voltar
               </Link>
               <h1 className="text-xl font-black tracking-tight text-slate-900">Fichas de Custo do Item</h1>
-              <p className="text-sm text-slate-500">Consulta, criação e abertura das fichas de custo vinculadas a itens e variações.</p>
+              <p className="text-sm text-slate-500">Índice das fichas vinculadas a itens e variações. A edição da composição acontece dentro do item.</p>
             </div>
 
             <Link

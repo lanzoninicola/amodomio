@@ -1,7 +1,7 @@
 import { Recipe } from "@prisma/client";
 import { useEffect, useMemo, useState, type ChangeEvent } from "react";
 import { Check, ChevronsUpDown } from "lucide-react";
-import { Form } from "@remix-run/react";
+import { Form, Link } from "@remix-run/react";
 import InputItem from "~/components/primitives/form/input-item/input-item";
 import SaveItemButton from "~/components/primitives/table-list/action-buttons/save-item-button/save-item-button";
 import { Button } from "~/components/ui/button";
@@ -21,6 +21,8 @@ interface RecipeFormProps {
     variations?: Array<{ id: string; name: string; kind?: string | null }>;
     title?: string;
     requireItemRemapConfirmation?: boolean;
+    hiddenFields?: Array<{ name: string; value: string }>;
+    formAction?: string;
 }
 
 function buildRecipeName(itemName?: string) {
@@ -28,7 +30,7 @@ function buildRecipeName(itemName?: string) {
     return `Receita ${itemName}`;
 }
 
-export default function RecipeForm({ recipe, actionName, items = [], title, requireItemRemapConfirmation = false }: RecipeFormProps) {
+export default function RecipeForm({ recipe, actionName, items = [], title, requireItemRemapConfirmation = false, hiddenFields = [], formAction }: RecipeFormProps) {
     const isCreate = actionName === "recipe-create";
     const initialLinkedItemId = String(recipe?.itemId || "");
     const [name, setName] = useState(recipe?.name || "");
@@ -82,9 +84,12 @@ export default function RecipeForm({ recipe, actionName, items = [], title, requ
     }, [hasItemChanged]);
 
     return (
-        <Form method="post">
+        <Form method="post" action={formAction}>
             <input type="hidden" name="recipeId" value={recipe?.id} />
             <input type="hidden" name="confirmItemRemap" value={confirmItemRemap ? "yes" : "no"} />
+            {hiddenFields.map((field) => (
+                <input key={field.name} type="hidden" name={field.name} value={field.value} />
+            ))}
             <div className="mb-8">
                 <div className={`mb-4 flex items-center gap-3 ${title ? "justify-between" : "justify-end"}`}>
                     {title ? (
@@ -104,6 +109,13 @@ export default function RecipeForm({ recipe, actionName, items = [], title, requ
                             <Fieldset className="grid-cols-3">
                                 <Label htmlFor="linkedItemId">Item vinculado</Label>
                                 <div className="col-span-2">
+                                    <div className="mb-2 flex justify-end">
+                                        <Button type="button" variant="outline" size="sm" asChild>
+                                            <Link to="/admin/items/new" target="_blank" rel="noreferrer">
+                                                Criar item
+                                            </Link>
+                                        </Button>
+                                    </div>
                                     <input type="hidden" name="linkedItemId" value={linkedItemId} />
                                     <Popover open={itemComboboxOpen} onOpenChange={setItemComboboxOpen}>
                                         <PopoverTrigger asChild>

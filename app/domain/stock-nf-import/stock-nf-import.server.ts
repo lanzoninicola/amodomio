@@ -873,7 +873,17 @@ export async function applyStockNfImportBatch(params: { batchId: string; actor?:
         continue;
       }
 
-      const baseVar = await itemVariationPrismaEntity.ensureBaseVariationForItem(item.id);
+      const baseVar = await itemVariationPrismaEntity.findPrimaryVariationForItem(item.id, {
+        ensureBaseIfMissing: true,
+      });
+      if (!baseVar?.id) {
+        await db.stockNfImportBatchLine.update({
+          where: { id: line.id },
+          data: { status: 'error', errorCode: 'item_variation_missing_apply', errorMessage: 'Nenhuma variação disponível para aplicar o custo' },
+        });
+        errors += 1;
+        continue;
+      }
       const currentCost = await db.itemCostVariation.findUnique({ where: { itemVariationId: baseVar.id } });
       const nextCost = Number(line.convertedCostAmount ?? NaN);
       if (!(nextCost > 0)) {

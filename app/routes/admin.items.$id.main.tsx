@@ -1,7 +1,8 @@
 import { Form, Link, useOutletContext } from "@remix-run/react";
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Button } from "~/components/ui/button";
+import useSaveShortcut from "~/hooks/use-save-shortcut.hook";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
@@ -14,10 +15,17 @@ export default function AdminItemMainTab() {
   const [categoryIdValue, setCategoryIdValue] = useState(item.categoryId || "__EMPTY__");
   const [consumptionUmValue, setConsumptionUmValue] = useState(item.consumptionUm || "__EMPTY__");
   const [recipeVariationPolicyValue, setRecipeVariationPolicyValue] = useState(item.recipeVariationPolicy || "auto");
+  const formRef = useRef<HTMLFormElement | null>(null);
+
+  useSaveShortcut({
+    callback: () => {
+      formRef.current?.requestSubmit();
+    },
+  });
 
   return (
     <div className="space-y-4">
-      <Form method="post" action=".." className="space-y-4">
+      <Form method="post" action=".." className="space-y-4" ref={formRef}>
         <input type="hidden" name="_action" value="item-update" />
 
         <div className="grid gap-4 lg:grid-cols-2">
@@ -168,9 +176,16 @@ export default function AdminItemMainTab() {
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <Button type="submit" className="bg-slate-900 hover:bg-slate-700">
-            Salvar item
-          </Button>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button type="submit" className="bg-slate-900 hover:bg-slate-700">
+              Salvar item
+            </Button>
+            <Button type="button" variant="outline" asChild>
+              <Link to="/admin/items/new" target="_blank" rel="noreferrer">
+                Criar item
+              </Link>
+            </Button>
+          </div>
         </div>
       </Form>
 
