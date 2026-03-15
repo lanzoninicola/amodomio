@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import prisma from "~/lib/prisma/client.server";
+import { CRM_SEGMENTATION_TAGS } from "~/domain/crm/customer-segmentation";
 
 type LoaderData = {
   tags: { id: string; key: string; label: string | null }[];
@@ -59,9 +60,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const key = String(form.get("tag_key") || "").trim();
   const label = String(form.get("tag_label") || "").trim() || null;
   const quickKey = String(form.get("quick_tag") || "").trim();
+  const quickLabel = String(form.get("quick_label") || "").trim() || null;
 
   const chosenKey = quickKey || key;
-  const chosenLabel = label || null;
+  const chosenLabel = quickLabel || label || null;
 
   if (!chosenKey) return json<ActionData>({ error: "Tag obrigatória" }, { status: 400 });
 
@@ -86,6 +88,7 @@ export default function AdminCrmCustomerTags() {
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
   useOutletContext<Context>();
+  const currentTagKeys = new Set(tags.map((tag) => tag.key));
 
   return (
     <Card className="font-neue">
@@ -153,6 +156,44 @@ export default function AdminCrmCustomerTags() {
         </Form>
 
         <div className="border-t pt-3">
+          <p className="mb-2 text-xs font-medium text-muted-foreground">Segmentacao sugerida</p>
+          <div className="grid gap-3 md:grid-cols-2">
+            {CRM_SEGMENTATION_TAGS.map((segment) => {
+              const isActive = currentTagKeys.has(segment.key);
+
+              return (
+                <div key={segment.key} className="rounded-lg border bg-muted/20 p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold">{segment.label}</p>
+                      <p className="text-xs text-muted-foreground">{segment.key}</p>
+                    </div>
+                    <Form method="post">
+                      <input type="hidden" name="_intent" value="add_tag" />
+                      <input type="hidden" name="quick_tag" value={segment.key} />
+                      <input type="hidden" name="quick_label" value={segment.label} />
+                      <Button
+                        type="submit"
+                        variant={isActive ? "secondary" : "outline"}
+                        size="sm"
+                        disabled={isSubmitting || isActive}
+                      >
+                        {isActive ? "Adicionada" : "Adicionar"}
+                      </Button>
+                    </Form>
+                  </div>
+                  <div className="mt-3 grid gap-1 text-sm">
+                    <p><span className="font-medium">Caracteristica:</span> {segment.characteristic}</p>
+                    <p><span className="font-medium">Valoriza:</span> {segment.values}</p>
+                    <p><span className="font-medium">Estrategia:</span> {segment.strategy}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="border-t pt-3">
           <p className="text-xs font-medium text-muted-foreground mb-2">Tags existentes</p>
           <div className="flex flex-wrap gap-2">
             {allTags.length ? (
@@ -160,6 +201,7 @@ export default function AdminCrmCustomerTags() {
                 <Form method="post" key={t.key}>
                   <input type="hidden" name="_intent" value="add_tag" />
                   <input type="hidden" name="quick_tag" value={t.key} />
+                  <input type="hidden" name="quick_label" value={t.label || ""} />
                   <Button
                     type="submit"
                     variant="outline"

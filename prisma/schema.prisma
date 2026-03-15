@@ -1569,6 +1569,7 @@ model DeliveryZone {
   city      String
   state     String
   zipCode   String?  @map("zip_code")
+  audienceClasses String[] @default([]) @map("audience_classes")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
