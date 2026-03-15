@@ -88,9 +88,9 @@ import DeliveryZoneCombobox from "~/domain/kds/components/delivery-zone-combobox
 import { computeNetRevenueAmount } from "~/domain/finance/compute-net-revenue-amount";
 import { calcWeightedCostPerc } from "~/domain/finance/calc-weighted-cost-perc";
 import { setOrderStatus } from "~/domain/kds/server/repository.server";
+import { sendKdsDailyReportWhatsapp } from "~/domain/kds/kds-daily-report-whatsapp.server";
 import { MoneyInput } from "~/components/money-input/MoneyInput";
 import { getAvailableDoughSizes, getDoughStock, normalizeCounts, saveDoughStock, type DoughSizeOption, type DoughStockSnapshot } from "~/domain/kds/dough-stock.server";
-import { Link } from "@remix-run/react";
 import { NumericInput } from "~/components/numeric-input/numeric-input";
 import { ExitIcon } from "@radix-ui/react-icons";
 import { Badge } from "@/components/ui/badge";
@@ -128,6 +128,20 @@ function toDecimal(value: FormDataEntryValue | null | undefined): Prisma.Decimal
 }
 
 type PaymentMethod = "credit" | "cash" | "other";
+type DayReportActionResult = {
+  ok: boolean;
+  status?: "CLOSED" | "REOPENED" | "OPENED";
+  already?: boolean;
+  error?: string;
+  report?: {
+    ok: boolean;
+    attempted: boolean;
+    skipped: boolean;
+    detail: string;
+    sentCount: number;
+    totalRecipients: number;
+  };
+};
 
 function paymentMethodToFlags(method: PaymentMethod) {
   return {
@@ -740,7 +754,15 @@ export async function action({ request, params }: ActionFunctionArgs) {
         where: { id: header.id },
         data: { operationStatus: "CLOSED" },
       });
-      return json({ ok: true, status: "CLOSED" });
+      const report = await sendKdsDailyReportWhatsapp(dateInt, dateStr).catch((error) => ({
+        ok: false,
+        attempted: true,
+        skipped: false,
+        detail: error instanceof Error ? error.message : "Falha ao enviar relatorio do WhatsApp.",
+        sentCount: 0,
+        totalRecipients: 0,
+      }));
+      return json({ ok: true, status: "CLOSED", report });
     }
 
     if (_action === "reopenDay") {
@@ -752,6 +774,26 @@ export async function action({ request, params }: ActionFunctionArgs) {
         data: { operationStatus: "REOPENED" },
       });
       return json({ ok: true, status: "REOPENED" });
+    }
+
+    if (_action === "sendDayReportWhatsapp") {
+      if (headerFlags?.operationStatus !== "CLOSED") {
+        return json(
+          { ok: false, error: "O relatorio WhatsApp manual so pode ser enviado com o dia fechado." },
+          { status: 400 }
+        );
+      }
+
+      const report = await sendKdsDailyReportWhatsapp(dateInt, dateStr).catch((error) => ({
+        ok: false,
+        attempted: true,
+        skipped: false,
+        detail: error instanceof Error ? error.message : "Falha ao enviar relatorio do WhatsApp.",
+        sentCount: 0,
+        totalRecipients: 0,
+      }));
+
+      return json({ ok: report.ok, status: "CLOSED", report });
     }
 
     if (_action === "savePredictionSettings") {
@@ -1745,7 +1787,7 @@ function computePredictionData(
    =========================== */
 export default function GridKdsPage() {
   const { dateStr, items, header, deliveryZones, dzTimes, dashboard, doughStock, doughUsage, availableSizes, predictionSettings } = useLoaderData<typeof loader>();
-  const listFx = useFetcher();
+  const listFx = useFetcher<DayReportActionResult>();
   const rowFx = useFetcher();
   const stockFx = useFetcher<{ ok: boolean; stock: DoughStockSnapshot }>();
   const settingsFx = useFetcher<{ ok: boolean; settings: PredictionSettings }>();
@@ -1913,6 +1955,9 @@ export default function GridKdsPage() {
       status === "REOPENED" ? "bg-amber-50 text-amber-700 border-amber-200" :
         status === "CLOSED" ? "bg-slate-100 text-slate-700 border-slate-200" :
           "bg-slate-100 text-slate-700 border-slate-200";
+  const currentListAction = String(listFx.formData?.get("_action") ?? "");
+  const isClosingDay = listFx.state !== "idle" && currentListAction === "closeDay";
+  const reportFeedback = listFx.data?.report?.detail ?? null;
   const dayStatusLabel =
     status === "OPENED" ? "Dia aberto" :
       status === "REOPENED" ? "Dia reaberto" :
@@ -1932,7 +1977,7 @@ export default function GridKdsPage() {
   const netAmountByRule = dashboard.grossAmount - cardFeeAmount - taxAmount - marketplaceFeeAmount;
 
   return (
-    <div className="space-y-4 mt-6">
+    <div className="space-y-4">
       {/* Toolbar topo + Painel-resumo SEM suspense (feedback imediato) */}
 
 
@@ -1975,10 +2020,24 @@ export default function GridKdsPage() {
                 <listFx.Form method="post" className="flex flex-wrap items-center gap-2">
                   <input type="hidden" name="_action" value="closeDay" />
                   <input type="hidden" name="date" value={dateStr} />
-                  <Button type="submit" variant="secondary" className="w-full">
-                    <Lock className="w-4 h-4 mr-2" /> Fechar dia
+                  <Button type="submit" variant="secondary" className="w-full" disabled={isClosingDay}>
+                    {isClosingDay ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Fechando dia...
+                      </>
+                    ) : (
+                      <>
+                        <Lock className="w-4 h-4 mr-2" /> Fechar dia
+                      </>
+                    )}
                   </Button>
                 </listFx.Form>
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+                  {isClosingDay
+                    ? "Fechando o dia e enviando o relatorio final no WhatsApp..."
+                    : "Ao fechar o dia, o relatorio final e enviado automaticamente no WhatsApp."}
+                </div>
               </div>
             )}
 
@@ -1996,16 +2055,29 @@ export default function GridKdsPage() {
                 <listFx.Form method="post" className="flex items-center gap-2">
                   <input type="hidden" name="_action" value="closeDay" />
                   <input type="hidden" name="date" value={dateStr} />
-                  <Button type="submit" variant="secondary" className="w-full">
-                    <Lock className="w-4 h-4 mr-2" /> Fechar dia
+                  <Button type="submit" variant="secondary" className="w-full" disabled={isClosingDay}>
+                    {isClosingDay ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Fechando dia...
+                      </>
+                    ) : (
+                      <>
+                        <Lock className="w-4 h-4 mr-2" /> Fechar dia
+                      </>
+                    )}
                   </Button>
                 </listFx.Form>
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+                  {isClosingDay
+                    ? "Fechando o dia e enviando o relatorio final no WhatsApp..."
+                    : "Ao fechar o dia, o relatorio final e enviado automaticamente no WhatsApp."}
+                </div>
               </div>
             )}
 
             {status === "CLOSED" && (
               <div className="space-y-3">
-
                 <listFx.Form method="post" className="flex flex-wrap items-center">
                   <input type="hidden" name="_action" value="reopenDay" />
                   <input type="hidden" name="date" value={dateStr} />
@@ -2013,6 +2085,11 @@ export default function GridKdsPage() {
                     <Unlock className="w-4 h-4 mr-2" /> Reabrir dia
                   </Button>
                 </listFx.Form>
+                {reportFeedback ? (
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+                    {reportFeedback}
+                  </div>
+                ) : null}
               </div>
             )}
           </div>
