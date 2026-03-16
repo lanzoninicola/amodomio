@@ -26,6 +26,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { NumericInput } from "~/components/numeric-input/numeric-input";
 import prismaClient from "~/lib/prisma/client.server";
 import {
   Alert,
@@ -48,6 +49,16 @@ const WEEKDAY_MAP: Record<string, number> = {
   sabado: 6,
   sábado: 6,
 };
+
+const WEEKDAY_NAMES = [
+  "domingo",
+  "segunda",
+  "terca",
+  "quarta",
+  "quinta",
+  "sexta",
+  "sabado",
+] as const;
 
 function getLastNDatesForWeekday(
   targetWeekday: number,
@@ -100,13 +111,32 @@ export type LoaderData = {
   }>;
 };
 
+const PROGRAMACAO_SIZES = [
+  "Família",
+  "Médio",
+  "Individual",
+  "Pequena",
+] as const;
+
+type StockBySize = Record<(typeof PROGRAMACAO_SIZES)[number], number>;
+
+function createDefaultStock(): StockBySize {
+  return {
+    Família: 0,
+    Médio: 0,
+    Individual: 0,
+    Pequena: 0,
+  };
+}
+
 // -----------------------------
 // Loader com defer/Await/Suspense
 // -----------------------------
 export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
+  const currentWeekday = WEEKDAY_NAMES[new Date().getDay()];
   const weekdayParam = (
-    url.searchParams.get("weekday") || "domingo"
+    url.searchParams.get("weekday") || currentWeekday
   ).toLowerCase();
   const pctParam = Number(url.searchParams.get("pct") || 10);
   const nParam = Number(url.searchParams.get("n") || 6);
@@ -265,6 +295,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
 export default function KdsProducaoPage() {
   const data = useLoaderData<typeof loader>();
   const [searchParams, setSearchParams] = useSearchParams();
+  const [stockBySize, setStockBySize] =
+    React.useState<StockBySize>(createDefaultStock);
 
   // % controlada com debounce
   const [localPct, setLocalPct] = React.useState<number>(
@@ -298,6 +330,17 @@ export default function KdsProducaoPage() {
     setLocalPct(0);
   }
 
+  function setStock(size: keyof StockBySize, value: string) {
+    const parsed = Number(value);
+    setStockBySize((current) => ({
+      ...current,
+      [size]:
+        Number.isFinite(parsed) && parsed > 0
+          ? Math.floor(parsed)
+          : 0,
+    }));
+  }
+
   const weekdayOptions = [
     { value: "domingo", label: "Domingo" },
     { value: "segunda", label: "Segunda" },
@@ -329,81 +372,151 @@ export default function KdsProducaoPage() {
             Selecione o dia da semana e ajuste a previsão por %.
           </p>
         </div>
-        <div className="flex flex-col md:flex-row md:items-start gap-4">
-          <div className="md:w-48">
-            <Label>Dia da semana</Label>
-            <Select
-              value={weekday}
-              onValueChange={handleWeekdayChange}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Escolha" />
-              </SelectTrigger>
-              <SelectContent>
-                {weekdayOptions.map((opt) => (
-                  <SelectItem
-                    key={opt.value}
-                    value={opt.value}
+        <div className="grid gap-4 lg:grid-cols-2 lg:items-stretch">
+          <div className="rounded-xl border bg-card p-4">
+            <div className="grid gap-4 md:grid-cols-2 md:items-start">
+              <div>
+                <Label>Dia da semana</Label>
+                <Select
+                  value={weekday}
+                  onValueChange={handleWeekdayChange}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Escolha" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {weekdayOptions.map((opt) => (
+                      <SelectItem
+                        key={opt.value}
+                        value={opt.value}
+                      >
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Previsão (±%)</Label>
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  step={1}
+                  min={-50}
+                  max={200}
+                  value={
+                    Number.isFinite(localPct) ? localPct : 0
+                  }
+                  onChange={(e) =>
+                    setLocalPct(Number(e.target.value || 0))
+                  }
+                />
+                <div className="mt-2 grid grid-cols-5 gap-2 text-xs">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => bumpPct(-10)}
                   >
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="md:w-56">
-            <Label>Previsão (±%)</Label>
-            <Input
-              type="number"
-              inputMode="numeric"
-              step={1}
-              min={-50}
-              max={200}
-              value={
-                Number.isFinite(localPct) ? localPct : 0
-              }
-              onChange={(e) =>
-                setLocalPct(Number(e.target.value || 0))
-              }
-            />
-            <div className="flex gap-2 mt-2 text-xs">
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => bumpPct(-10)}
-              >
-                -10%
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => bumpPct(-5)}
-              >
-                -5%
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => bumpPct(5)}
-              >
-                +5%
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => bumpPct(10)}
-              >
-                +10%
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={resetPct}
-              >
-                Reset
-              </Button>
+                    -10%
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => bumpPct(-5)}
+                  >
+                    -5%
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => bumpPct(5)}
+                  >
+                    +5%
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => bumpPct(10)}
+                  >
+                    +10%
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={resetPct}
+                  >
+                    Reset
+                  </Button>
+                </div>
+              </div>
             </div>
           </div>
+          <Suspense
+            fallback={
+              <div className="rounded-xl border bg-card p-4">
+                <div className="mb-4">
+                  <Skeleton className="h-4 w-28" />
+                  <Skeleton className="mt-2 h-8 w-36" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <Skeleton className="h-24 w-full" />
+                  <Skeleton className="h-24 w-full" />
+                  <Skeleton className="h-24 w-full" />
+                  <Skeleton className="h-24 w-full" />
+                </div>
+              </div>
+            }
+          >
+            <Await resolve={data.stats}>
+              {(res: any) => {
+                const items = res.perSize.map((row: any) => {
+                  const currentStock =
+                    stockBySize[
+                    row.size as keyof StockBySize
+                    ] ?? 0;
+                  const toProduce = Math.max(
+                    (row.forecast ?? 0) - currentStock,
+                    0
+                  );
+
+                  return {
+                    size: row.size,
+                    toProduce,
+                  };
+                });
+
+                return (
+                  <div className="flex flex-col">
+                    <div className="flex items-center justify-between mb-4">
+                      <p className="text-sm font-medium text-muted-foreground">
+                        Dia selecionado
+                      </p>
+                      <p className="text-2xl font-bold  text-slate-950 uppercase">
+                        {weekday}
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      {items.map((item: any) => (
+                        <div
+                          key={item.size}
+                          className="rounded-lg border bg-background px-4 py-3"
+                        >
+                          <div className="flex items-baseline justify-between gap-4">
+                            <div className="text-lg font-bold uppercase tracking-wide text-slate-950">
+                              {item.size}
+                            </div>
+                            <div className="font-mono text-6xl font-bold leading-none tracking-tight text-blue-700">
+                              {item.toProduce}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              }}
+            </Await>
+          </Suspense>
         </div>
       </header>
 
@@ -427,7 +540,7 @@ export default function KdsProducaoPage() {
             <Await resolve={data.stats}>
               {(res: any) => (
                 <div className="overflow-x-auto">
-                  <table className="min-w-full text-sm">
+                  <table className="min-w-full table-fixed text-sm">
                     <thead>
                       <tr className="border-b">
                         <th className="text-left p-1 md:p-2 sticky left-0 bg-background">
@@ -552,7 +665,7 @@ export default function KdsProducaoPage() {
                     </Alert>
 
 
-                    <table className="min-w-full text-sm">
+                    <table className="min-w-full table-fixed text-sm">
                       <thead>
                         <tr className="border-b">
                           <th className="text-left p-1 md:p-2">
@@ -571,36 +684,65 @@ export default function KdsProducaoPage() {
                             % Dias c/ venda
                           </th>
                           <th className="text-right p-1 md:p-2">
-                            Previsão ({pct}%)
+                            Estoque atual
+                          </th>
+                          <th className="text-right p-1 md:p-2">
+                            Produzir ({pct}%)
                           </th>
                         </tr>
                       </thead>
                       <tbody>
-                        {res.perSize.map((r: any) => (
-                          <tr
-                            key={r.size}
-                            className="border-b hover:bg-muted/30"
-                          >
-                            <td className="p-2 font-medium">
-                              {r.size}
-                            </td>
-                            <td className="text-right p-1 md:p-2 tabular-nums">
-                              {r.min}
-                            </td>
-                            <td className="text-right p-1 md:p-2 tabular-nums">
-                              {r.max}
-                            </td>
-                            <td className="text-right p-1 md:p-2 tabular-nums">
-                              {r.avg}
-                            </td>
-                            <td className="text-right p-1 md:p-2 tabular-nums">
-                              {r.freqPct}%
-                            </td>
-                            <td className="text-right p-1 md:p-2 tabular-nums font-semibold">
-                              {r.forecast}
-                            </td>
-                          </tr>
-                        ))}
+                        {res.perSize.map((r: any) => {
+                          const currentStock =
+                            stockBySize[
+                            r.size as keyof StockBySize
+                            ] ?? 0;
+                          const productionForecast = Math.max(
+                            (r.forecast ?? 0) - currentStock,
+                            0
+                          );
+
+                          return (
+                            <tr
+                              key={r.size}
+                              className="border-b hover:bg-muted/30"
+                            >
+                              <td className="p-2 font-medium">
+                                {r.size}
+                              </td>
+                              <td className="text-right p-1 md:p-2 tabular-nums">
+                                {r.min}
+                              </td>
+                              <td className="text-right p-1 md:p-2 tabular-nums">
+                                {r.max}
+                              </td>
+                              <td className="text-right p-1 md:p-2 tabular-nums">
+                                {r.avg}
+                              </td>
+                              <td className="text-right p-1 md:p-2 tabular-nums">
+                                {r.freqPct}%
+                              </td>
+                              <td className="p-1 md:p-2">
+                                <NumericInput
+                                  decimalScale={0}
+                                  min={0}
+                                  step={1}
+                                  value={currentStock}
+                                  onChange={(e) =>
+                                    setStock(
+                                      r.size as keyof StockBySize,
+                                      e.target.value
+                                    )
+                                  }
+                                  className="h-9 w-24 ml-auto text-base text-right tabular-nums"
+                                />
+                              </td>
+                              <td className="text-right p-1 md:p-2 tabular-nums font-semibold">
+                                {productionForecast}
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>

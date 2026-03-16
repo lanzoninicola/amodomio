@@ -12,7 +12,7 @@ import { ok, serverError } from "~/utils/http-response.server";
 import tryit from "~/utils/try-it";
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const [err, suppliers] = await tryit(supplierPrismaEntity.findAll());
+  const [err, suppliers] = await tryit(supplierPrismaEntity.findAllWithContacts());
 
   if (err) {
     return serverError(err);
@@ -43,9 +43,17 @@ export async function action({ request }: ActionFunctionArgs) {
 type SupplierListItem = {
   id: string;
   name: string;
+  cnpj: string | null;
   contactName: string | null;
   phoneNumber: string | null;
   email: string | null;
+  contacts: Array<{
+    id: string;
+    name: string;
+    phoneNumber: string | null;
+    email: string | null;
+    isPrimary: boolean;
+  }>;
 };
 
 export default function AdminSuppliersIndex() {
@@ -60,11 +68,18 @@ export default function AdminSuppliersIndex() {
   const [searchTerm, setSearchTerm] = useState("");
   const filteredSuppliers = suppliers.filter((supplier) => {
     const term = searchTerm.toLowerCase();
+    const contactText = supplier.contacts
+      .map((contact) => [contact.name, contact.phoneNumber, contact.email].filter(Boolean).join(" "))
+      .join(" ")
+      .toLowerCase();
+
     return (
       supplier.name.toLowerCase().includes(term) ||
+      (supplier.cnpj || "").toLowerCase().includes(term) ||
       (supplier.contactName || "").toLowerCase().includes(term) ||
       (supplier.phoneNumber || "").toLowerCase().includes(term) ||
-      (supplier.email || "").toLowerCase().includes(term)
+      (supplier.email || "").toLowerCase().includes(term) ||
+      contactText.includes(term)
     );
   });
 
@@ -127,13 +142,21 @@ export default function AdminSuppliersIndex() {
                       <Link to={`/admin/suppliers/${supplier.id}`} className="truncate font-semibold text-slate-900 hover:underline">
                         {supplier.name}
                       </Link>
-                      <span className="text-xs text-slate-500">ID: {supplier.id}</span>
+                      <span className="text-xs text-slate-500">
+                        ID: {supplier.id}
+                        {supplier.cnpj ? ` • CNPJ: ${supplier.cnpj}` : ""}
+                      </span>
                     </div>
                   </TableCell>
                   <TableCell className="px-4 py-3">
-                    <Badge variant="outline" className="border-slate-200 bg-white font-medium text-slate-700">
-                      {supplier.contactName || "Sem contato"}
-                    </Badge>
+                    <div className="flex flex-col gap-1">
+                      <Badge variant="outline" className="w-fit border-slate-200 bg-white font-medium text-slate-700">
+                        {supplier.contactName || "Sem contato"}
+                      </Badge>
+                      {supplier.contacts.length > 1 ? (
+                        <span className="text-xs text-slate-500">+{supplier.contacts.length - 1} contato(s)</span>
+                      ) : null}
+                    </div>
                   </TableCell>
                   <TableCell className="px-4 py-3 text-slate-700">{supplier.phoneNumber || "-"}</TableCell>
                   <TableCell className="px-4 py-3 text-slate-700">{supplier.email || "-"}</TableCell>

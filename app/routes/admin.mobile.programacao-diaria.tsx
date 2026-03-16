@@ -2,12 +2,14 @@ import { type MetaFunction } from "@remix-run/node";
 import { Await, useLoaderData, useSearchParams } from "@remix-run/react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import * as React from "react";
 import { Suspense } from "react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { loader as desktopLoader } from "./admin.producao.progamacao-diaria";
+import { NumericInput } from "~/components/numeric-input/numeric-input";
+import type { loader as desktopLoader } from "./admin.producao.programacao-diaria";
 
-export { loader } from "./admin.producao.progamacao-diaria";
+export { loader } from "./admin.producao.programacao-diaria";
 
 export const meta: MetaFunction = () => [{ title: "Admin Mobile | Programação diária" }];
 
@@ -28,6 +30,24 @@ const SIZE_SHORT_LABEL: Record<string, string> = {
   "Pequena": "P",
 };
 
+const PROGRAMACAO_SIZES = [
+  "Família",
+  "Médio",
+  "Individual",
+  "Pequena",
+] as const;
+
+type StockBySize = Record<(typeof PROGRAMACAO_SIZES)[number], number>;
+
+function createDefaultStock(): StockBySize {
+  return {
+    Família: 0,
+    Médio: 0,
+    Individual: 0,
+    Pequena: 0,
+  };
+}
+
 function toDateShort(dateInt: number) {
   const raw = String(dateInt);
   const date = new Date(
@@ -42,6 +62,8 @@ function toDateShort(dateInt: number) {
 export default function AdminMobileProgramacaoDiaria() {
   const data = useLoaderData<typeof desktopLoader>();
   const [searchParams, setSearchParams] = useSearchParams();
+  const [stockBySize, setStockBySize] =
+    React.useState<StockBySize>(createDefaultStock);
 
   const weekday = (data.weekday as string) || "domingo";
   const pct = Number(data.pct ?? 0);
@@ -55,6 +77,17 @@ export default function AdminMobileProgramacaoDiaria() {
   function bumpPct(delta: number) {
     const next = Math.max(-50, Math.min(200, (Number.isFinite(pct) ? pct : 0) + delta));
     setParam("pct", String(next));
+  }
+
+  function setStock(size: keyof StockBySize, value: string) {
+    const parsed = Number(value);
+    setStockBySize((current) => ({
+      ...current,
+      [size]:
+        Number.isFinite(parsed) && parsed > 0
+          ? Math.floor(parsed)
+          : 0,
+    }));
   }
 
   return (
@@ -103,6 +136,7 @@ export default function AdminMobileProgramacaoDiaria() {
             Reset
           </Button>
         </div>
+
       </section>
 
       <Suspense
@@ -120,23 +154,59 @@ export default function AdminMobileProgramacaoDiaria() {
               <section className="space-y-2">
                 <p className="text-sm font-semibold text-slate-900">Previsão por tamanho ({pct}%)</p>
                 <div className="space-y-2">
-                  {stats.perSize.map((row: any) => (
-                    <article key={row.size} className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-                      <div className="grid grid-cols-[1fr_auto] items-center gap-3">
-                        <div className="min-w-0">
-                          <h2 className="text-xs font-semibold uppercase tracking-wider text-blue-700">{row.size}</h2>
-                          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-600">
-                            <span>Min: {row.min}</span>
-                            <span>Média: {row.avg}</span>
-                            <span>Freq: {row.freqPct}%</span>
+                  {stats.perSize.map((row: any) => {
+                    const stock =
+                      stockBySize[row.size as keyof StockBySize] ?? 0;
+                    const productionForecast = Math.max(
+                      (row.forecast ?? 0) - stock,
+                      0
+                    );
+
+                    return (
+                      <article
+                        key={row.size}
+                        className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm"
+                      >
+                        <div className="grid grid-cols-[1fr_auto] gap-3">
+                          <div className="min-w-0">
+                            <h2 className="text-xs font-semibold uppercase tracking-wider text-blue-700">
+                              {row.size}
+                            </h2>
+                            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-600">
+                              <span>Min: {row.min}</span>
+                              <span>Média: {row.avg}</span>
+                              <span>Freq: {row.freqPct}%</span>
+                            </div>
+                          </div>
+                          <div className="flex min-w-[3rem] items-start justify-end">
+                            <span className="font-mono text-2xl font-bold leading-none text-blue-700">
+                              {productionForecast}
+                            </span>
+                          </div>
+                          <div className="col-span-2 grid grid-cols-[1fr_120px] items-end gap-3">
+                            <div className="text-xs text-slate-600">
+                              <span className="font-medium text-slate-700">
+                                Estoque atual
+                              </span>
+                            </div>
+                            <NumericInput
+                              decimalScale={0}
+                              min={0}
+                              step={1}
+                              value={stock}
+                              onChange={(event) =>
+                                setStock(
+                                  row.size as keyof StockBySize,
+                                  event.target.value
+                                )
+                              }
+                              className="h-10 text-base"
+                            />
                           </div>
                         </div>
-                        <span className="font-mono text-2xl font-bold leading-none text-blue-700">
-                          {row.forecast}
-                        </span>
-                      </div>
-                    </article>
-                  ))}
+                      </article>
+                    );
+                  })}
                 </div>
               </section>
 

@@ -1,8 +1,10 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
 import { badRequest, ok } from "~/utils/http-response.server";
 import prismaClient from "~/lib/prisma/client.server";
+import { logCrmWhatsappSentEventByPhone } from "~/domain/crm/crm-whatsapp-events.server";
 import { normalize_phone_e164_br } from "~/domain/crm/normalize-phone.server";
-import { normalizePhone, sendTextMessage } from "~/domain/z-api/zapi.service";
+import { normalizePhone } from "~/domain/z-api/zapi.service";
+import { sendTextMessage } from "~/domain/z-api/zapi.service.server";
 import { settingPrismaEntity } from "~/domain/setting/setting.prisma.entity.server";
 import { authenticator } from "~/domain/auth/google.server";
 
@@ -72,26 +74,16 @@ export async function action({ request }: ActionFunctionArgs) {
       { phone: normalizedPhone, message },
       { timeoutMs: 10_000 }
     );
-
-    const payload = {
-      action: "whatsapp_sent",
-      channel: "admin-alert-quick-reply",
-      by: user.email || "admin",
+    await logCrmWhatsappSentEventByPhone({
       phone: normalizedPhone,
-      phone_e164: normalize_phone_e164_br(normalizedPhone),
+      source: "admin-alert-panel",
       messageText: message,
-      wppResponse: response,
-      correlationId,
-    };
-
-    await prismaClient.crmCustomerEvent.create({
-      data: {
-        customer_id: customer.id,
-        event_type: "WHATSAPP_SENT",
-        source: "admin-alert-panel",
-        external_id: correlationId,
-        payload,
-        payload_raw: JSON.stringify(payload),
+      externalId: correlationId,
+      payload: {
+        channel: "admin-alert-quick-reply",
+        by: user.email || "admin",
+        fromMe: true,
+        wppResponse: response,
       },
     });
 

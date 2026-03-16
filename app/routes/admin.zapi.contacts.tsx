@@ -6,9 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { QuestionMarkCircledIcon } from "@radix-ui/react-icons";
-import { getContactProfilePicture, listContacts } from "~/domain/z-api/zapi.service";
 import { ValidationError } from "~/domain/z-api/errors";
-import { ZApiError } from "~/domain/z-api/zapi-client.server";
 import prisma from "~/lib/prisma/client.server";
 import { normalize_phone_e164_br } from "~/domain/crm/normalize-phone.server";
 
@@ -48,7 +46,10 @@ function addInvalidPhoneLog(phone: string) {
 }
 
 function getImportErrorMessage(error: unknown) {
-  if (error instanceof ZApiError || error instanceof ValidationError) return error.message;
+  if (error instanceof ValidationError) return error.message;
+  if (error && typeof error === "object" && "status" in error && "path" in error && "message" in error) {
+    return String((error as any).message);
+  }
   if (error && typeof error === "object" && "message" in error) return String((error as any).message);
   return "Erro ao importar contato";
 }
@@ -58,6 +59,7 @@ function getContactKey(contact: any, idx: number) {
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {
+  const { listContacts } = await import("~/domain/z-api/zapi.service.server");
   const url = new URL(request.url);
   const page = Math.max(1, Number(url.searchParams.get("page") || 1));
   const pageSize = Math.max(1, Number(url.searchParams.get("pageSize") || 20));
@@ -70,11 +72,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
     return json<LoaderData>({ contacts, page, pageSize, total, fetchedAt: new Date().toISOString() });
   } catch (error: any) {
     const message =
-      error instanceof ZApiError
+      error instanceof ValidationError
         ? error.message
-        : error instanceof ValidationError
-          ? error.message
-          : error?.message || "Erro ao carregar contatos";
+        : error?.message || "Erro ao carregar contatos";
     return json<LoaderData>(
       { contacts: [], page, pageSize, total: null, error: message, fetchedAt: new Date().toISOString() },
       { status: 500 }
@@ -86,6 +86,7 @@ export async function action({ request }: ActionFunctionArgs) {
   if (request.method !== "POST") {
     return json<ActionData>({ ok: false, error: "method_not_allowed" }, { status: 405 });
   }
+  const { getContactProfilePicture, listContacts } = await import("~/domain/z-api/zapi.service.server");
 
   const formData = await request.formData();
   const intent = String(formData.get("intent") || "");

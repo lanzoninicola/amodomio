@@ -1,13 +1,11 @@
 import { redirect, type ActionFunctionArgs } from "@remix-run/node";
 import { Form, useActionData } from "@remix-run/react";
-import SubmitButton from "~/components/primitives/submit-button/submit-button";
+import { SupplierForm } from "~/components/suppliers/supplier-form";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
-import Fieldset from "~/components/ui/fieldset";
-import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
 import { toast } from "~/components/ui/use-toast";
+import { getSupplierContactSnapshot, parseSupplierContacts } from "~/domain/supplier/supplier-contacts.server";
 import { supplierPrismaEntity } from "~/domain/supplier/supplier.prisma.entity.server";
-import { serverError } from "~/utils/http-response.server";
+import { badRequest, serverError } from "~/utils/http-response.server";
 import tryit from "~/utils/try-it";
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -18,12 +16,23 @@ export async function action({ request }: ActionFunctionArgs) {
     return null;
   }
 
+  let contacts;
+  try {
+    contacts = parseSupplierContacts(formData);
+  } catch (error) {
+    return badRequest({
+      message: error instanceof Error ? error.message : "Nao foi possivel validar os contatos.",
+    });
+  }
+
+  const primaryContact = getSupplierContactSnapshot(contacts);
+
   const [err, created] = await tryit(
     supplierPrismaEntity.create({
       name: String(values.name || "").trim(),
-      contactName: normalizeNullable(values.contactName),
-      phoneNumber: normalizeNullable(values.phoneNumber),
-      email: normalizeNullable(values.email),
+      cnpj: normalizeNullable(values.cnpj),
+      ...primaryContact,
+      contacts: contacts.length > 0 ? { create: contacts } : undefined,
     })
   );
 
@@ -46,47 +55,11 @@ export default function AdminSupplierNew() {
         <CardTitle>Novo fornecedor</CardTitle>
       </CardHeader>
       <CardContent>
-        <SupplierForm actionName="supplier-create" submitLabel="Criar fornecedor" />
+        <Form method="post">
+          <SupplierForm actionName="supplier-create" submitLabel="Criar fornecedor" />
+        </Form>
       </CardContent>
     </Card>
-  );
-}
-
-function SupplierForm({
-  actionName,
-  submitLabel,
-}: {
-  actionName: string;
-  submitLabel: string;
-}) {
-  return (
-    <Form method="post" className="grid gap-4">
-      <div className="grid gap-4 md:grid-cols-2">
-        <Fieldset>
-          <Label htmlFor="supplier-name">Nome</Label>
-          <Input id="supplier-name" name="name" required autoComplete="off" />
-        </Fieldset>
-
-        <Fieldset>
-          <Label htmlFor="supplier-contact-name">Contato</Label>
-          <Input id="supplier-contact-name" name="contactName" autoComplete="off" />
-        </Fieldset>
-
-        <Fieldset>
-          <Label htmlFor="supplier-phone">Telefone</Label>
-          <Input id="supplier-phone" name="phoneNumber" autoComplete="off" />
-        </Fieldset>
-
-        <Fieldset>
-          <Label htmlFor="supplier-email">E-mail</Label>
-          <Input id="supplier-email" name="email" type="email" autoComplete="off" />
-        </Fieldset>
-      </div>
-
-      <div className="flex justify-end">
-        <SubmitButton actionName={actionName} idleText={submitLabel} loadingText="Salvando..." />
-      </div>
-    </Form>
   );
 }
 

@@ -193,7 +193,7 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
         },
         {
           title: "Programação Diaria",
-          href: "/admin/producao/progamacao-diaria",
+          href: "/admin/producao/programacao-diaria",
           items: [],
           disabled: false,
         },

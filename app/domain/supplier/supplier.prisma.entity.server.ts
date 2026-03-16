@@ -22,6 +22,28 @@ class SupplierPrismaEntity {
     });
   }
 
+  async findAllWithContacts() {
+    return await this.client.supplier.findMany({
+      orderBy: { name: "asc" },
+      include: {
+        contacts: {
+          orderBy: [{ isPrimary: "desc" }, { name: "asc" }, { createdAt: "asc" }],
+        },
+      },
+    });
+  }
+
+  async findByIdWithContacts(id: string) {
+    return await this.client.supplier.findUnique({
+      where: { id },
+      include: {
+        contacts: {
+          orderBy: [{ isPrimary: "desc" }, { name: "asc" }, { createdAt: "asc" }],
+        },
+      },
+    });
+  }
+
   async create(data: Prisma.SupplierCreateInput): Promise<Supplier> {
     return await this.client.supplier.create({ data });
   }

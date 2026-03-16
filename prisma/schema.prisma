@@ -374,10 +374,28 @@ model Supplier {
   email       String?
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
+  contacts    SupplierContact[]
 
   @@index([cnpj], map: "suppliers_cnpj_idx")
   @@index([name], map: "suppliers_name_idx")
   @@map("suppliers")
+}
+
+model SupplierContact {
+  id          String   @id @default(uuid())
+  supplierId  String   @map("supplier_id")
+  name        String
+  phoneNumber String?  @map("phone_number")
+  email       String?
+  isPrimary   Boolean  @default(false) @map("is_primary")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
+
+  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@index([supplierId], map: "supplier_contacts_supplier_id_idx")
+  @@index([supplierId, isPrimary], map: "supplier_contacts_supplier_id_primary_idx")
+  @@map("supplier_contacts")
 }
 
 model MenuItemGroup {
