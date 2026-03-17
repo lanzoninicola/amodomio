@@ -13,7 +13,6 @@ import {
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { itemVariationPrismaEntity } from "~/domain/item/item-variation.prisma.entity.server";
 import prismaClient from "~/lib/prisma/client.server";
 import { badRequest, ok, serverError } from "~/utils/http-response.server";
@@ -24,79 +23,68 @@ export async function loader({ request }: LoaderFunctionArgs) {
   try {
     const url = new URL(request.url);
     const itemId = String(url.searchParams.get("itemId") || "").trim();
-    const itemVariationIdFromQuery = String(
-      url.searchParams.get("variationId") || url.searchParams.get("itemVariationId") || ""
-    ).trim();
 
     const db = prismaClient as any;
-    const [items, variations] = await Promise.all([
-      db.item.findMany({
-        where: { active: true },
-        select: {
-          id: true,
-          name: true,
-          ItemVariation: {
-            where: { deletedAt: null },
-            select: {
-              id: true,
-              variationId: true,
-              Variation: {
-                select: {
-                  id: true,
-                  name: true,
-                  code: true,
-                  kind: true,
-                },
+    const items = await db.item.findMany({
+      where: { active: true },
+      select: {
+        id: true,
+        name: true,
+        classification: true,
+        ItemVariation: {
+          where: { deletedAt: null },
+          select: {
+            id: true,
+            variationId: true,
+            isReference: true,
+            Variation: {
+              select: {
+                id: true,
+                name: true,
+                code: true,
+                kind: true,
               },
             },
-            orderBy: [{ createdAt: "asc" }],
-            take: 50,
           },
+          orderBy: [{ createdAt: "asc" }],
+          take: 50,
         },
-        orderBy: [{ name: "asc" }],
-        take: 500,
-      }),
-      db.variation.findMany({
-        where: { deletedAt: null },
-        select: { id: true, name: true, code: true, kind: true },
-        orderBy: [{ kind: "asc" }, { name: "asc" }],
-        take: 1000,
-      }),
-    ]);
+      },
+      orderBy: [{ name: "asc" }],
+      take: 500,
+    });
 
-    const itemCatalog = items.map((item: any) => ({
-      id: item.id,
-      name: item.name,
-      itemVariations: (item.ItemVariation || []).map((v: any) => ({
+    const itemCatalog = items.map((item: any) => {
+      const itemVariations = (item.ItemVariation || []).map((v: any) => ({
         id: v.id,
         variationId: v.variationId,
+        isReference: Boolean(v.isReference),
         variationName: v.Variation?.name || v.Variation?.code || "Variação",
         variationCode: v.Variation?.code || "",
         variationKind: v.Variation?.kind || "",
-      })),
-    }));
+      }));
+      const primaryVariation =
+        itemVariations.find((variation: any) => variation.isReference && variation.variationKind !== "base") ||
+        itemVariations.find((variation: any) => variation.variationKind !== "base") ||
+        itemVariations.find((variation: any) => variation.variationKind === "base" || variation.variationCode === "base") ||
+        itemVariations[0] ||
+        null;
 
-    const selectedItem =
-      itemCatalog.find((item: any) => item.id === itemId) ||
-      itemCatalog[0] ||
-      null;
-    const selectedVariationCatalog =
-      variations.find((v: any) => v.id === itemVariationIdFromQuery) ||
-      variations.find((v: any) => v.kind === "base" || v.code === "base") ||
-      variations[0] ||
-      null;
+      return {
+        id: item.id,
+        name: item.name,
+        classification: item.classification || "",
+        itemVariations,
+        primaryVariation,
+      };
+    });
+
+    const selectedItem = itemId ? itemCatalog.find((item: any) => item.id === itemId) || null : null;
 
     return ok({
       sourceItem: itemId ? (selectedItem ? { id: selectedItem.id, name: selectedItem.name } : null) : null,
       itemCatalog,
-      variationCatalog: variations.map((variation: any) => ({
-        id: variation.id,
-        name: variation.name,
-        code: variation.code,
-        kind: variation.kind,
-      })),
       defaultItemId: selectedItem?.id || "",
-      defaultVariationId: selectedVariationCatalog?.id || "",
     });
   } catch (error) {
     return serverError(error);
@@ -114,36 +102,58 @@ export async function action({ request }: ActionFunctionArgs) {
       return badRequest("Ação inválida");
     }
 
-    const variationId = String(formData.get("variationId") || formData.get("itemVariationId") || "").trim();
     const name = String(formData.get("name") || "").trim();
     const description = String(formData.get("description") || "").trim();
 
-    if (!variationId) return badRequest("Informe a variação do item");
     if (!name) return badRequest("Informe o nome da ficha de custo");
 
     const db = prismaClient as any;
-    const itemVariation = await itemVariationPrismaEntity.linkToItem({ itemId, variationId });
+    const itemVariations = await itemVariationPrismaEntity.findManyByItemId(itemId);
+    const primaryVariation = await itemVariationPrismaEntity.findPrimaryVariationForItem(itemId, { ensureBaseIfMissing: true });
+    const targetVariations = itemVariations.length > 0 ? itemVariations : primaryVariation ? [primaryVariation] : [];
 
-    const latest = await db.itemCostSheet.findFirst({
-      where: { itemId, itemVariationId: itemVariation.id },
-      orderBy: { version: "desc" },
+    if (targetVariations.length === 0) {
+      return badRequest("Nenhuma variação disponível para criar a ficha");
+    }
+
+    const primaryTargetVariation =
+      targetVariations.find((variation: any) => variation.id === primaryVariation?.id) ||
+      targetVariations.find((variation: any) => variation?.Variation?.kind !== "base") ||
+      targetVariations[0];
+
+    const latestVersions = await db.itemCostSheet.findMany({
+      where: { itemId, itemVariationId: { in: targetVariations.map((variation: any) => variation.id) } },
       select: { version: true },
+      orderBy: [{ version: "desc" }],
     });
+    const nextVersion = Number(
+      latestVersions.reduce((max: number, row: any) => Math.max(max, Number(row?.version || 0)), 0) + 1
+    );
 
-    await db.itemCostSheet.create({
-      data: {
-        id: createUUID(),
-        itemId,
-        itemVariationId: itemVariation.id,
-        name,
-        description: description || null,
-        version: Number(latest?.version || 0) + 1,
-        status: "draft",
-        isActive: false,
-      },
-    });
+    const rootSheetId = createUUID();
+    const orderedVariations = [
+      primaryTargetVariation,
+      ...targetVariations.filter((variation: any) => variation.id !== primaryTargetVariation?.id),
+    ].filter(Boolean);
 
-    return redirect(`/admin/items/${itemId}/item-cost-sheets`);
+    for (const itemVariation of orderedVariations) {
+      const isRoot = itemVariation.id === primaryTargetVariation.id;
+      await db.itemCostSheet.create({
+        data: {
+          id: isRoot ? rootSheetId : createUUID(),
+          itemId,
+          itemVariationId: itemVariation.id,
+          name,
+          description: description || null,
+          version: nextVersion,
+          status: "draft",
+          isActive: false,
+          baseItemCostSheetId: isRoot ? null : rootSheetId,
+        },
+      });
+    }
+
+    return redirect(`/admin/item-cost-sheets/${rootSheetId}`);
   } catch (error) {
     return serverError(error);
   }
@@ -157,63 +167,41 @@ export default function AdminItemCostSheetsNew() {
   const itemCatalog = (payload.itemCatalog || []) as Array<{
     id: string;
     name: string;
+    classification: string;
     itemVariations: Array<{
       id: string;
       variationId: string;
+      isReference: boolean;
       variationName: string;
       variationCode: string;
       variationKind: string;
     }>;
-  }>;
-  const variationCatalog = (payload.variationCatalog || []) as Array<{
-    id: string;
-    name: string;
-    code: string;
-    kind: string;
+    primaryVariation: {
+      id: string;
+      variationId: string;
+      isReference: boolean;
+      variationName: string;
+      variationCode: string;
+      variationKind: string;
+    } | null;
   }>;
   const defaultItemId = String(payload.defaultItemId || "");
-  const defaultVariationId = String(payload.defaultVariationId || "");
   const [itemComboboxOpen, setItemComboboxOpen] = useState(false);
-  const [variationComboboxOpen, setVariationComboboxOpen] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState(defaultItemId);
-  const [selectedVariationId, setSelectedVariationId] = useState(defaultVariationId);
 
   const selectedCatalogItem = useMemo(
     () => itemCatalog.find((item) => item.id === selectedItemId) || null,
     [itemCatalog, selectedItemId]
   );
-  const itemVariations = (selectedCatalogItem?.itemVariations || []) as Array<{
-    id: string;
-    variationId: string;
-    variationName: string;
-    variationCode: string;
-    variationKind: string;
-  }>;
-  const selectedVariationCatalog = variationCatalog.find((variation) => variation.id === selectedVariationId) || null;
+  const primaryVariation = selectedCatalogItem?.primaryVariation || null;
+  const selectedItemVariations = selectedCatalogItem?.itemVariations || [];
   const suggestedName = useMemo(() => {
     const itemName = selectedCatalogItem?.name?.trim();
-    const variationName = selectedVariationCatalog?.name?.trim();
     if (!itemName) return "";
-    if (!variationName) return `Ficha tecnica ${itemName}`;
-    return `Ficha tecnica ${itemName} (${variationName})`;
-  }, [selectedCatalogItem, selectedVariationCatalog]);
+    return `Ficha tecnica ${itemName}`;
+  }, [selectedCatalogItem?.name]);
   const [nameValue, setNameValue] = useState(suggestedName);
   const [nameTouched, setNameTouched] = useState(false);
-
-  useEffect(() => {
-    if (!variationCatalog.length) {
-      setSelectedVariationId("");
-      return;
-    }
-    const stillExists = variationCatalog.some((v) => v.id === selectedVariationId);
-    if (stillExists) return;
-
-    const nextDefault =
-      variationCatalog.find((v) => v.kind === "base" || v.code === "base")?.id ||
-      variationCatalog[0]?.id ||
-      "";
-    setSelectedVariationId(nextDefault);
-  }, [variationCatalog, selectedVariationId]);
 
   useEffect(() => {
     if (!nameTouched) {
@@ -222,10 +210,10 @@ export default function AdminItemCostSheetsNew() {
   }, [nameTouched, suggestedName]);
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-      <h2 className="text-lg font-semibold text-slate-900">Nova ficha de custo do item</h2>
+    <div className="bg-white p-4 shadow-sm">
+      <h2 className="text-lg font-semibold text-slate-900">Nova ficha de custo</h2>
       <p className="mt-2 text-sm text-slate-500">
-        Você está na área correta para criar e gerenciar fichas de custo dos itens.
+        Gerencia a fichas de custo dos itens.
       </p>
 
       {sourceItem ? (
@@ -242,139 +230,144 @@ export default function AdminItemCostSheetsNew() {
       ) : null}
 
       {itemCatalog.length > 0 ? (
-        <Form method="post" className="mt-4 space-y-4">
+        <Form method="post" className="mt-4 space-y-12">
           <input type="hidden" name="itemId" value={selectedItemId} />
-          <input type="hidden" name="variationId" value={selectedVariationId} />
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <div>
-              <Label htmlFor="itemId">Item</Label>
-              <Popover open={itemComboboxOpen} onOpenChange={setItemComboboxOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    id="itemId"
-                    type="button"
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={itemComboboxOpen}
-                    className="mt-1 w-full justify-between font-normal"
-                  >
-                    <span className="truncate text-left">
-                      {selectedCatalogItem?.name || "Selecione o item"}
-                    </span>
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-                  <Command>
-                    <CommandInput placeholder="Buscar item..." />
-                    <CommandList>
-                      <CommandEmpty>Nenhum item encontrado.</CommandEmpty>
-                      {itemCatalog.map((item) => (
-                        <CommandItem
-                          key={item.id}
-                          value={`${item.name} ${item.id}`}
-                          onSelect={() => {
-                            setSelectedItemId(item.id);
-                            setItemComboboxOpen(false);
-                          }}
-                        >
-                          <Check
-                            className={cn(
-                              "mr-2 h-4 w-4",
-                              selectedItemId === item.id ? "opacity-100" : "opacity-0"
-                            )}
-                          />
-                          <span className="truncate">{item.name}</span>
-                        </CommandItem>
-                      ))}
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-            </div>
+          <div className="grid grid-cols-2 gap-6">
 
-            <div>
-              <Label htmlFor="itemVariationId">Variação do item</Label>
-              <Popover open={variationComboboxOpen} onOpenChange={setVariationComboboxOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    id="itemVariationId"
-                    type="button"
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={variationComboboxOpen}
-                    className="mt-1 w-full justify-between font-normal"
-                  >
-                    <span className="truncate text-left">
-                      {selectedVariationCatalog
-                        ? `${selectedVariationCatalog.name}${selectedVariationCatalog.kind ? ` (${selectedVariationCatalog.kind})` : ""}`
-                        : "Selecione a variação"}
-                    </span>
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-                  <Command>
-                    <CommandInput placeholder="Buscar variação..." />
-                    <CommandList>
-                      <CommandEmpty>Nenhuma variação encontrada.</CommandEmpty>
-                      {variationCatalog.map((variation) => {
-                        const linked = itemVariations.some((iv) => iv.variationId === variation.id);
-                        return (
+            <div className="flex flex-col space-y-6">
+              <div>
+                <Label htmlFor="itemId">Item</Label>
+                <Popover open={itemComboboxOpen} onOpenChange={setItemComboboxOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      id="itemId"
+                      type="button"
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={itemComboboxOpen}
+                      className="mt-1 w-full justify-between font-normal"
+                    >
+                      <span className="min-w-0 text-left">
+                        {selectedCatalogItem ? (
+                          <span className="block min-w-0">
+                            <span className="block truncate">{selectedCatalogItem.name}</span>
+                            {selectedCatalogItem.classification ? (
+                              <span className="block truncate text-xs text-slate-500">
+                                {selectedCatalogItem.classification}
+                              </span>
+                            ) : null}
+                          </span>
+                        ) : (
+                          "Selecione o item"
+                        )}
+                      </span>
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Buscar item..." />
+                      <CommandList>
+                        <CommandEmpty>Nenhum item encontrado.</CommandEmpty>
+                        {itemCatalog.map((item) => (
                           <CommandItem
-                            key={variation.id}
-                            value={`${variation.kind} ${variation.name} ${variation.code}`}
+                            key={item.id}
+                            value={`${item.name} ${item.id}`}
                             onSelect={() => {
-                              setSelectedVariationId(variation.id);
-                              setVariationComboboxOpen(false);
+                              setSelectedItemId(item.id);
+                              setItemComboboxOpen(false);
                             }}
                           >
                             <Check
                               className={cn(
-                                "mr-2 h-4 w-4",
-                                selectedVariationId === variation.id ? "opacity-100" : "opacity-0"
+                                "mr-2 h-4 w-4 shrink-0",
+                                selectedItemId === item.id ? "opacity-100" : "opacity-0"
                               )}
                             />
-                            <span className="truncate">{variation.name}</span>
-                            <span className="ml-auto flex items-center gap-2 text-xs text-slate-500">
-                              {linked ? "vinculada" : "nova"}
-                              {variation.kind}
-                            </span>
+                            <div className="min-w-0">
+                              <div className="truncate">{item.name}</div>
+                              {item.classification ? (
+                                <div className="truncate text-xs text-slate-500">{item.classification}</div>
+                              ) : null}
+                            </div>
                           </CommandItem>
-                        );
-                      })}
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-              <p className="mt-2 text-xs text-slate-500">
-                Se a variação ainda não estiver vinculada ao item, o vínculo `ItemVariation` será criado automaticamente ao salvar a ficha.
-              </p>
+                        ))}
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              <div>
+                <Label htmlFor="name">Nome</Label>
+                <Input
+                  id="name"
+                  name="name"
+                  value={nameValue}
+                  onChange={(event) => {
+                    setNameTouched(true);
+                    setNameValue(event.target.value);
+                  }}
+                  placeholder="Ex.: Ficha tecnica Mortazza"
+                  required
+                />
+                {!nameTouched && suggestedName ? (
+                  <p className="mt-2 text-xs text-slate-500">
+                    O nome será compartilhado pela ficha do item. Os tamanhos ficam dentro do mesmo grupo.
+                  </p>
+                ) : null}
+              </div>
+
+              <div>
+                <Label htmlFor="description">Descrição</Label>
+                <Input id="description" name="description" placeholder="Opcional" />
+              </div>
+
             </div>
-          </div>
 
-          <div>
-            <Label htmlFor="name">Nome</Label>
-            <Input
-              id="name"
-              name="name"
-              value={nameValue}
-              onChange={(event) => {
-                setNameTouched(true);
-                setNameValue(event.target.value);
-              }}
-              placeholder="Ex.: Ficha Campagnola (Base)"
-              required
-            />
-            {!nameTouched && suggestedName ? (
-              <p className="mt-2 text-xs text-slate-500">Sugestão automática baseada em item e variação.</p>
-            ) : null}
-          </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Tamanhos vinculados</p>
+              {selectedCatalogItem ? (
+                <>
+                  <p className="mt-1 text-sm text-slate-900">
+                    Ao criar a ficha deste item, o sistema gera uma ficha para cada tamanho vinculado a ele.
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {selectedCatalogItem.itemVariations.length
+                      ? `${selectedCatalogItem.itemVariations.length} tamanho(s) vinculado(s) ao item receberão ficha.`
+                      : `Este item será criado com a variação padrão ${primaryVariation?.variationName || "Base"}.`}
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {(selectedItemVariations.length > 0 ? selectedItemVariations : primaryVariation ? [primaryVariation] : []).map((variation) => (
+                      <span
+                        key={variation.id}
+                        className={`rounded-full border px-2.5 py-1 text-xs font-medium ${variation.id === primaryVariation?.id ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-50 text-slate-600"}`}
+                      >
+                        {variation.variationName}
+                        {variation.id === primaryVariation?.id ? " · principal" : ""}
+                      </span>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="mt-1 text-sm text-slate-900">
+                    Selecione um item para visualizar os tamanhos vinculados que receberão ficha.
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Os tamanhos dependem do item escolhido e só são carregados depois da seleção.
+                  </p>
+                </>
+              )}
+            </div>
 
-          <div>
-            <Label htmlFor="description">Descrição</Label>
-            <Input id="description" name="description" placeholder="Opcional" />
+
+
+
+
+
+
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -383,9 +376,9 @@ export default function AdminItemCostSheetsNew() {
               name="_action"
               value="item-cost-sheet-create"
               className="rounded-lg"
-              disabled={!selectedVariationId}
+              disabled={!selectedItemId}
             >
-              Criar ficha
+              Criar fichas dos tamanhos
             </Button>
             {sourceItem ? (
               <Link to={`/admin/items/${sourceItem.id}/item-cost-sheets`}>

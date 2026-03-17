@@ -1,6 +1,7 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { Link, Outlet, useActionData, useLoaderData, useLocation, useNavigate } from "@remix-run/react";
 import { useEffect, useState } from "react";
+import { ChevronLeft } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -11,9 +12,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "~/components/ui/alert-dialog";
-import { Separator } from "~/components/ui/separator";
 import { toast } from "~/components/ui/use-toast";
-import MenuItemNavLink from "~/domain/cardapio/components/menu-item-nav-link/menu-item-nav-link";
 import { calculateItemCostMetrics, getItemAverageCostWindowDays } from "~/domain/item/item-cost-metrics.server";
 import { itemCostVariationPrismaEntity } from "~/domain/item/item-cost-variation.prisma.entity.server";
 import { itemVariationPrismaEntity } from "~/domain/item/item-variation.prisma.entity.server";
@@ -35,6 +34,7 @@ const ITEM_UNIT_OPTIONS = ["UN", "L", "ML", "KG", "G"];
 const itemNavigation = [
   { name: "Principal", href: "main" },
   { name: "Variações", href: "variations" },
+  { name: "Venda", href: "venda" },
   { name: "Custos", href: "costs" },
   { name: "Receitas", href: "recipes" },
   { name: "Fichas de Custo", href: "item-cost-sheets" },
@@ -121,13 +121,27 @@ export async function loader({ params }: LoaderFunctionArgs) {
             take: 5,
           },
           Recipe: {
-            select: { id: true, name: true },
+            select: { id: true, name: true, createdAt: true },
             take: 5,
           },
           ItemCostSheet: {
-            select: { id: true, name: true, isActive: true },
+            select: {
+              id: true,
+              name: true,
+              isActive: true,
+              updatedAt: true,
+              baseItemCostSheetId: true,
+              itemVariationId: true,
+              ItemVariation: {
+                select: {
+                  id: true,
+                  isReference: true,
+                  Variation: { select: { name: true, code: true } },
+                },
+              },
+            },
             orderBy: { updatedAt: "desc" },
-            take: 5,
+            take: 20,
           },
           ItemVariation: {
             where: {
@@ -184,11 +198,25 @@ export async function loader({ params }: LoaderFunctionArgs) {
       where: { id },
       include: {
         MenuItem: { select: { id: true, name: true }, take: 5 },
-        Recipe: { select: { id: true, name: true }, take: 5 },
+        Recipe: { select: { id: true, name: true, createdAt: true }, take: 5 },
         ItemCostSheet: {
-          select: { id: true, name: true, isActive: true },
+          select: {
+            id: true,
+            name: true,
+            isActive: true,
+            updatedAt: true,
+            baseItemCostSheetId: true,
+            itemVariationId: true,
+            ItemVariation: {
+              select: {
+                id: true,
+                isReference: true,
+                Variation: { select: { name: true, code: true } },
+              },
+            },
+          },
           orderBy: { updatedAt: "desc" },
-          take: 5,
+          take: 20,
         },
         ItemVariation: {
           where: { deletedAt: null },
@@ -475,7 +503,7 @@ export default function AdminItemDetailLayout() {
   const averageWindowDays = Number((loaderData?.payload as any)?.averageWindowDays || 30);
   const unitOptions = ((loaderData?.payload as any)?.unitOptions || ITEM_UNIT_OPTIONS) as string[];
   const categories = ((loaderData?.payload as any)?.categories || []) as Array<{ id: string; name: string }>;
-  const activeTab = lastUrlSegment(location.pathname);
+  const activeTab = getItemActiveTab(location.pathname);
 
   useEffect(() => {
     if (actionData?.status === 200) {
@@ -501,48 +529,51 @@ export default function AdminItemDetailLayout() {
   }
 
   return (
-    <div className="flex flex-col gap-4 p-4">
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h1 className="text-lg font-semibold text-slate-900">{item.name}</h1>
-            <p className="text-sm text-slate-600">{item.id}</p>
-          </div>
-          <Link to="/admin/items" className="text-sm underline">
-            Voltar
-          </Link>
-        </div>
-      </div>
+    <div className="flex flex-col gap-6">
+      <section className="space-y-5 border-b border-slate-200/80 pb-5">
 
-      <div className="h-full w-full rounded-[inherit]">
-        <div style={{ minWidth: "100%", display: "table" }}>
-          <div className="flex justify-between">
-            <div className="flex items-center col-span-6">
-              {itemNavigation.map((navItem) => (
-                <MenuItemNavLink
-                  key={navItem.name}
+
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          <div className="space-y-1">
+            <h2 className="text-2xl font-semibold tracking-tight text-slate-950">{item.name}</h2>
+            <p className="text-sm text-slate-500">{item.id}</p>
+          </div>
+        </div>
+      </section>
+
+      <div className="space-y-6">
+        <nav className="overflow-x-auto border-b border-slate-100">
+          <div className="flex min-w-max items-center gap-6 text-sm">
+            {itemNavigation.map((navItem) => {
+              const isActive = activeTab === navItem.href;
+              return (
+                <Link
+                  key={navItem.href}
                   to={navItem.href}
-                  isActive={activeTab === navItem.href}
+                  className={`border-b-2 pb-3 font-medium transition ${
+                    isActive
+                      ? "border-slate-950 text-slate-950"
+                      : "border-transparent text-slate-400 hover:text-slate-700"
+                  }`}
                 >
                   {navItem.name}
-                </MenuItemNavLink>
-              ))}
-            </div>
+                </Link>
+              );
+            })}
           </div>
-        </div>
-        <Separator className="my-4" />
-      </div>
+        </nav>
 
-      <Outlet
-        context={{
-          item,
-          classifications: ITEM_CLASSIFICATIONS,
-          unitOptions,
-          categories,
-          costMetrics,
-          averageWindowDays,
-        }}
-      />
+        <Outlet
+          context={{
+            item,
+            classifications: ITEM_CLASSIFICATIONS,
+            unitOptions,
+            categories,
+            costMetrics,
+            averageWindowDays,
+          }}
+        />
+      </div>
 
       <AlertDialog open={showMissingVariationsDialog} onOpenChange={setShowMissingVariationsDialog}>
         <AlertDialogContent>
@@ -562,4 +593,13 @@ export default function AdminItemDetailLayout() {
       </AlertDialog>
     </div>
   );
+}
+
+function getItemActiveTab(pathname: string) {
+  const segments = pathname.split("/").filter(Boolean);
+  const itemIdIndex = segments.findIndex((segment) => segment === "items");
+
+  if (itemIdIndex < 0) return lastUrlSegment(pathname);
+
+  return segments[itemIdIndex + 2] || lastUrlSegment(pathname);
 }

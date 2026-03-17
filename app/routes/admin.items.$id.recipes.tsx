@@ -1,6 +1,15 @@
 import { Link, useOutletContext } from "@remix-run/react";
 import type { AdminItemOutletContext } from "./admin.items.$id";
 
+function formatRecipeCreatedAt(value: string | Date | null | undefined) {
+  if (!value) return null;
+
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+
+  return date.toLocaleDateString("pt-BR");
+}
+
 export default function AdminItemRecipesTab() {
   const { item } = useOutletContext<AdminItemOutletContext>();
   const recipes = item.Recipe || [];
@@ -21,19 +30,25 @@ export default function AdminItemRecipesTab() {
         {recipes.length === 0 ? (
           <p className="text-sm text-slate-500">Nenhuma receita vinculada a este item.</p>
         ) : (
-          recipes.map((recipe: any) => (
-            <div key={recipe.id} className="rounded-lg border border-slate-100 p-3">
-              <div className="flex items-center justify-between gap-2">
-                <div className="font-medium text-slate-900">{recipe.name}</div>
-                <Link to={`/admin/recipes/${recipe.id}`} className="text-xs underline">
-                  Abrir
-                </Link>
+          recipes.map((recipe: any) => {
+            const createdAtLabel = formatRecipeCreatedAt(recipe.createdAt);
+
+            return (
+              <div key={recipe.id} className="rounded-lg border border-slate-100 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <div className="font-medium text-slate-900">{recipe.name}</div>
+                    {createdAtLabel ? <div className="text-xs text-slate-500">Criada em {createdAtLabel}</div> : null}
+                  </div>
+                  <Link to={`/admin/recipes/${recipe.id}`} className="text-xs underline">
+                    Abrir
+                  </Link>
+                </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>
   );
 }
-

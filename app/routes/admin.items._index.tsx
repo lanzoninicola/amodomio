@@ -1,7 +1,7 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { Form, Link, useActionData, useLoaderData } from "@remix-run/react";
 import { useEffect, useState } from "react";
-import { ChevronLeft, ChevronsLeft, ChevronsRight, Layers3, Package, Plus, ShoppingBag } from "lucide-react";
+import { ChevronLeft, ChevronsLeft, ChevronsRight, Layers3, Package, ShoppingBag } from "lucide-react";
 import { DeleteItemButton } from "~/components/primitives/table-list";
 import { Badge } from "~/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
@@ -568,36 +568,9 @@ export default function AdminItemsIndex() {
   }
 
   return (
-    <div className="flex flex-col gap-4 p-4">
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h1 className="text-lg font-semibold text-slate-900">Itens </h1>
-            <div className="mt-2">
-              <Link
-                to="/admin/items/import-stock-nf"
-                className="inline-flex items-center rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-              >
-                Importar movimentação NF (SAIPOS)
-              </Link>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Link
-              to="/admin/items/new"
-              reloadDocument
-              className="inline-flex items-center gap-1 rounded-md bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-700"
-            >
-              <Plus size={14} />
-              Novo item
-            </Link>
-            <Link to="/admin" className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-800">
-              <ChevronLeft size={14} />
-              Voltar
-            </Link>
-          </div>
-        </div>
-        <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-700">
+    <div className="flex flex-col gap-4">
+      <div className="rounded-2xl border border-slate-200 bg-white p-5">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-700">
           <span>Custo médio: janela {averageWindowDays} dias</span>
           <span>•</span>
           <span>{pagination.totalItems} item(ns) encontrado(s)</span>
@@ -611,7 +584,7 @@ export default function AdminItemsIndex() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5">
           <Form method="get" className="flex flex-wrap items-end gap-3">
             <input type="hidden" name="classification" value={classificationTabValue} />
             <div className="min-w-[260px] flex-1">
@@ -682,7 +655,7 @@ export default function AdminItemsIndex() {
           </Form>
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5">
           <Form method="post" className="space-y-3">
             <input type="hidden" name="_action" value="items-bulk-update" />
             <div className="flex flex-wrap items-end gap-3">
@@ -785,7 +758,7 @@ export default function AdminItemsIndex() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white">
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
         <Tabs value={classificationTabValue} className="w-full">
           <TabsList className="grid h-auto w-full grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_140px] gap-2 rounded-xl bg-gradient-to-r from-slate-50 to-white p-2">
             {ITEM_CLASSIFICATION_TABS.map((tabValue) => {
