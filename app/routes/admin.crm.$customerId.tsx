@@ -52,7 +52,7 @@ export default function AdminCrmCustomerLayout() {
   const location = useLocation();
 
   return (
-    <div className="grid gap-6 font-neue">
+    <div className="grid gap-6 ">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-xs text-muted-foreground">Cliente</p>

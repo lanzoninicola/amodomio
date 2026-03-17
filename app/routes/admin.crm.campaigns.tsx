@@ -38,7 +38,7 @@ export default function AdminCrmCampaigns() {
   const { campaigns } = useLoaderData<typeof loader>();
 
   return (
-    <div className="font-neue space-y-4">
+    <div className=" space-y-4">
       <div>
         <h2 className="text-2xl font-semibold">Campanhas</h2>
         <p className="text-sm text-muted-foreground">Visualização simples das campanhas registradas.</p>

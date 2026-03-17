@@ -180,8 +180,8 @@ export default function AdminCrmCustomerConversation() {
   ].join("\n");
 
   return (
-    <div className="grid gap-6 font-neue">
-      <Card>
+    <div className="grid min-w-0 gap-6">
+      <Card className="min-w-0 overflow-hidden">
         <CardHeader className="gap-3 md:flex-row md:items-start md:justify-between">
           <div className="space-y-1">
             <CardTitle>Conversa WhatsApp</CardTitle>
@@ -209,7 +209,7 @@ export default function AdminCrmCustomerConversation() {
             />
           </div>
         </CardHeader>
-        <CardContent className="grid gap-4">
+        <CardContent className="grid min-w-0 gap-4">
           <div className="grid gap-2 rounded-lg border border-border bg-muted/20 p-4 text-sm">
             <p><span className="font-medium">Contato:</span> {customer.name || "Sem nome"}</p>
             <p><span className="font-medium">Telefone:</span> {customer.phone_e164}</p>
@@ -244,23 +244,33 @@ export default function AdminCrmCustomerConversation() {
             </Button>
           </Form>
 
-          <div className="grid gap-2">
+          <div className="grid min-w-0 gap-2">
             <div className="flex items-center justify-between">
               <p className="text-sm font-medium">Prompt pronto para ChatGPT</p>
               <span className="text-xs text-muted-foreground">Inclui instrucoes + conversa</span>
             </div>
-            <Textarea value={promptWithContext} readOnly rows={12} className="font-mono text-xs" />
+            <Textarea
+              value={promptWithContext}
+              readOnly
+              rows={12}
+              className="min-w-0 whitespace-pre-wrap break-words font-mono text-xs [overflow-wrap:anywhere]"
+            />
           </div>
 
-          <div className="grid gap-2">
+          <div className="grid min-w-0 gap-2">
             <div className="flex items-center justify-between">
               <p className="text-sm font-medium">Transcricao</p>
               <span className="text-xs text-muted-foreground">Somente a conversa</span>
             </div>
-            <Textarea value={transcript} readOnly rows={16} className="font-mono text-xs" />
+            <Textarea
+              value={transcript}
+              readOnly
+              rows={16}
+              className="min-w-0 whitespace-pre-wrap break-words font-mono text-xs [overflow-wrap:anywhere]"
+            />
           </div>
 
-          <div className="grid gap-2">
+          <div className="grid min-w-0 gap-2">
             <p className="text-sm font-medium">Visualizacao rapida</p>
             {isPartialLoad ? (
               <p className="text-xs text-muted-foreground">
@@ -268,28 +278,26 @@ export default function AdminCrmCustomerConversation() {
               </p>
             ) : null}
             {messages.length ? (
-              <div className="rounded-3xl border border-border bg-[linear-gradient(180deg,rgba(120,119,198,0.05),rgba(120,119,198,0)_22%),linear-gradient(135deg,rgba(34,197,94,0.08),rgba(255,255,255,0)_42%)]">
-                <ScrollArea className="h-[520px] p-3 sm:p-4">
-                  <div className="grid gap-3">
+              <div className="min-w-0 overflow-hidden rounded-3xl border border-border bg-[linear-gradient(180deg,rgba(120,119,198,0.05),rgba(120,119,198,0)_22%),linear-gradient(135deg,rgba(34,197,94,0.08),rgba(255,255,255,0)_42%)]">
+                <ScrollArea className="h-[520px] w-full">
+                  <div className="grid min-w-0 gap-3 p-3 sm:p-4">
                     {messages.map((message) => (
                       <div
                         key={message.id}
                         className={`flex ${message.direction === "outbound" ? "justify-end" : "justify-start"}`}
                       >
-                        <div className="max-w-[88%] sm:max-w-[75%]">
+                        <div className="min-w-0 max-w-[88%] sm:max-w-[75%]">
                           <div
-                            className={`rounded-3xl px-4 py-3 shadow-sm ${
-                              message.direction === "outbound"
+                            className={`min-w-0 overflow-hidden rounded-3xl px-4 py-3 shadow-sm ${message.direction === "outbound"
                                 ? "rounded-br-md bg-emerald-500 text-emerald-50"
                                 : "rounded-bl-md border border-border bg-background text-foreground"
-                            }`}
+                              }`}
                           >
                             <div
-                              className={`mb-2 flex flex-wrap items-center gap-2 text-[11px] ${
-                                message.direction === "outbound"
+                              className={`mb-2 flex flex-wrap items-center gap-2 text-[11px] ${message.direction === "outbound"
                                   ? "text-emerald-100/90"
                                   : "text-muted-foreground"
-                              }`}
+                                }`}
                             >
                               <span className="font-medium">
                                 {message.direction === "outbound" ? "Atendente" : "Cliente"}
@@ -297,7 +305,9 @@ export default function AdminCrmCustomerConversation() {
                               <span>{new Date(message.created_at).toLocaleString("pt-BR")}</span>
                               {message.source ? <span>• {message.source}</span> : null}
                             </div>
-                            <p className="whitespace-pre-wrap text-sm leading-6">{message.messageText}</p>
+                            <p className="whitespace-pre-wrap break-words text-sm leading-6 [overflow-wrap:anywhere]">
+                              {message.messageText}
+                            </p>
                           </div>
                         </div>
                       </div>

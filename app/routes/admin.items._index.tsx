@@ -1,9 +1,10 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { Form, Link, useActionData, useLoaderData } from "@remix-run/react";
 import { useEffect, useState } from "react";
-import { ChevronLeft, ChevronsLeft, ChevronsRight, Plus } from "lucide-react";
+import { ChevronLeft, ChevronsLeft, ChevronsRight, Layers3, Package, Plus, ShoppingBag } from "lucide-react";
 import { DeleteItemButton } from "~/components/primitives/table-list";
 import { Badge } from "~/components/ui/badge";
+import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import {
   Pagination,
   PaginationContent,
@@ -25,6 +26,8 @@ const ITEM_CLASSIFICATIONS = [
   "servico",
   "outro",
 ] as const;
+const ITEM_CLASSIFICATION_TABS = ["insumo", "semi_acabado", "produto_final", "outros"] as const;
+const PRIMARY_ITEM_CLASSIFICATIONS = ["insumo", "semi_acabado", "produto_final"] as const;
 const ITEM_STATUS_FILTERS = ["active", "inactive", "all"] as const;
 
 const PAGE_SIZE = 20;
@@ -73,15 +76,57 @@ function buildPageHref(params: {
   categoryId: string;
   classification: string;
   status: string;
-  page: number;
+  page?: number;
 }) {
   const searchParams = new URLSearchParams();
   if (params.q) searchParams.set("q", params.q);
   if (params.categoryId) searchParams.set("categoryId", params.categoryId);
   if (params.classification) searchParams.set("classification", params.classification);
   if (params.status) searchParams.set("status", params.status);
-  searchParams.set("page", String(params.page));
+  if (params.page && params.page > 1) searchParams.set("page", String(params.page));
   return `/admin/items?${searchParams.toString()}`;
+}
+
+function formatClassificationTabLabel(value: (typeof ITEM_CLASSIFICATION_TABS)[number]) {
+  if (value === "outros") return "outros";
+  return value.replaceAll("_", " ");
+}
+
+function getClassificationTabMeta(value: (typeof ITEM_CLASSIFICATION_TABS)[number]) {
+  switch (value) {
+    case "insumo":
+      return {
+        icon: Package,
+        triggerClassName:
+          "rounded-md border border-sky-200/80 bg-white text-sky-700 data-[state=active]:border-sky-300 data-[state=active]:bg-sky-50 data-[state=active]:text-sky-900",
+        iconClassName:
+          "border-sky-200 bg-sky-100 text-sky-700 group-data-[state=active]:border-sky-300 group-data-[state=active]:bg-sky-200",
+      };
+    case "semi_acabado":
+      return {
+        icon: Layers3,
+        triggerClassName:
+          "rounded-md border border-amber-200/80 bg-white text-amber-700 data-[state=active]:border-amber-300 data-[state=active]:bg-amber-50 data-[state=active]:text-amber-900",
+        iconClassName:
+          "border-amber-200 bg-amber-100 text-amber-700 group-data-[state=active]:border-amber-300 group-data-[state=active]:bg-amber-200",
+      };
+    case "produto_final":
+      return {
+        icon: ShoppingBag,
+        triggerClassName:
+          "rounded-md border border-emerald-200/80 bg-white text-emerald-700 data-[state=active]:border-emerald-300 data-[state=active]:bg-emerald-50 data-[state=active]:text-emerald-900",
+        iconClassName:
+          "border-emerald-200 bg-emerald-100 text-emerald-700 group-data-[state=active]:border-emerald-300 group-data-[state=active]:bg-emerald-200",
+      };
+    default:
+      return {
+        icon: Package,
+        triggerClassName:
+          "rounded-md border border-slate-200 bg-white text-slate-600 data-[state=active]:border-slate-300 data-[state=active]:bg-slate-100 data-[state=active]:text-slate-900",
+        iconClassName:
+          "border-slate-200 bg-slate-100 text-slate-500 group-data-[state=active]:border-slate-300 group-data-[state=active]:bg-white",
+      };
+  }
 }
 
 function formatClassificationLabel(value?: string | null) {
@@ -125,9 +170,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const q = String(url.searchParams.get("q") || "").trim();
     const categoryId = String(url.searchParams.get("categoryId") || "").trim();
     const classificationParam = String(url.searchParams.get("classification") || "").trim();
-    const classification = ITEM_CLASSIFICATIONS.includes(classificationParam as (typeof ITEM_CLASSIFICATIONS)[number])
+    const classification = ITEM_CLASSIFICATION_TABS.includes(classificationParam as (typeof ITEM_CLASSIFICATION_TABS)[number])
       ? classificationParam
-      : "";
+      : "insumo";
     const statusParam = String(url.searchParams.get("status") || "").trim().toLowerCase();
     const status = ITEM_STATUS_FILTERS.includes(statusParam as (typeof ITEM_STATUS_FILTERS)[number])
       ? statusParam
@@ -135,23 +180,37 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const requestedPage = parsePage(url.searchParams.get("page"));
     const averageWindowDays = await getItemAverageCostWindowDays();
 
-    const where: any = {};
+    const where: any = { AND: [] as any[] };
     if (status === "active") where.active = true;
     if (status === "inactive") where.active = false;
 
     if (q) {
-      where.OR = [
-        { name: { contains: q, mode: "insensitive" } },
-        { description: { contains: q, mode: "insensitive" } },
-      ];
+      where.AND.push({
+        OR: [
+          { name: { contains: q, mode: "insensitive" } },
+          { description: { contains: q, mode: "insensitive" } },
+        ],
+      });
     }
 
-    if (classification) {
+    if (PRIMARY_ITEM_CLASSIFICATIONS.includes(classification as (typeof PRIMARY_ITEM_CLASSIFICATIONS)[number])) {
       where.classification = classification;
+    } else if (classification === "outros") {
+      where.AND.push({
+        OR: [
+          { classification: null },
+          { classification: "" },
+          { classification: { notIn: [...PRIMARY_ITEM_CLASSIFICATIONS] } },
+        ],
+      });
     }
 
     if (categoryId) {
       where.categoryId = categoryId;
+    }
+
+    if (where.AND.length === 0) {
+      delete where.AND;
     }
 
     const [totalItems, menuItemsLinked, categories] = await Promise.all([
@@ -455,13 +514,17 @@ export default function AdminItemsIndex() {
 
   const items = payload.items || [];
   const stats = payload.stats || { totalItems: 0, menuItemsLinked: 0 };
-  const filters = payload.filters || { q: "", categoryId: "", classification: "", status: "active" };
+  const filters = payload.filters || { q: "", categoryId: "", classification: "insumo", status: "active" };
   const categories = payload.categories || [];
   const categoryNameById = new Map<string, string>(categories.map((category: any) => [category.id, category.name]));
   const pagination = payload.pagination || { page: 1, pageSize: PAGE_SIZE, totalItems: 0, totalPages: 1 };
   const averageWindowDays = payload.averageWindowDays || 30;
+  const classificationTabValue = ITEM_CLASSIFICATION_TABS.includes(
+    filters.classification as (typeof ITEM_CLASSIFICATION_TABS)[number],
+  )
+    ? filters.classification
+    : "insumo";
   const [categoryFilterValue, setCategoryFilterValue] = useState(filters.categoryId || "__all__");
-  const [classificationFilterValue, setClassificationFilterValue] = useState(filters.classification || "__all__");
   const [statusFilterValue, setStatusFilterValue] = useState(filters.status || "active");
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
   const [bulkCategoryValue, setBulkCategoryValue] = useState("__NO_CHANGE__");
@@ -481,9 +544,8 @@ export default function AdminItemsIndex() {
 
   useEffect(() => {
     setCategoryFilterValue(filters.categoryId || "__all__");
-    setClassificationFilterValue(filters.classification || "__all__");
     setStatusFilterValue(filters.status || "active");
-  }, [filters.categoryId, filters.classification, filters.status]);
+  }, [filters.categoryId, filters.status]);
 
   useEffect(() => {
     setSelectedItemIds([]);
@@ -551,6 +613,7 @@ export default function AdminItemsIndex() {
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <Form method="get" className="flex flex-wrap items-end gap-3">
+            <input type="hidden" name="classification" value={classificationTabValue} />
             <div className="min-w-[260px] flex-1">
               <label htmlFor="q" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Busca
@@ -579,30 +642,6 @@ export default function AdminItemsIndex() {
                   {categories.map((category: any) => (
                     <SelectItem key={category.id} value={category.id}>
                       {category.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="min-w-[220px]">
-              <label htmlFor="classification" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Classificacao
-              </label>
-              <input
-                type="hidden"
-                name="classification"
-                value={classificationFilterValue === "__all__" ? "" : classificationFilterValue}
-              />
-              <Select value={classificationFilterValue} onValueChange={setClassificationFilterValue}>
-                <SelectTrigger id="classification" className="mt-1 w-full">
-                  <SelectValue placeholder="Todas" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__all__">Todas</SelectItem>
-                  {ITEM_CLASSIFICATIONS.map((value) => (
-                    <SelectItem key={value} value={value}>
-                      {value}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -734,11 +773,10 @@ export default function AdminItemsIndex() {
 
             {actionData?.message ? (
               <div
-                className={`rounded-md px-3 py-2 text-sm ${
-                  actionData?.status === 200
-                    ? "border border-emerald-200 bg-emerald-50 text-emerald-800"
-                    : "border border-amber-200 bg-amber-50 text-amber-900"
-                }`}
+                className={`rounded-md px-3 py-2 text-sm ${actionData?.status === 200
+                  ? "border border-emerald-200 bg-emerald-50 text-emerald-800"
+                  : "border border-amber-200 bg-amber-50 text-amber-900"
+                  }`}
               >
                 {actionData.message}
               </div>
@@ -748,6 +786,41 @@ export default function AdminItemsIndex() {
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white">
+        <Tabs value={classificationTabValue} className="w-full">
+          <TabsList className="grid h-auto w-full grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_140px] gap-2 rounded-xl bg-gradient-to-r from-slate-50 to-white p-2">
+            {ITEM_CLASSIFICATION_TABS.map((tabValue) => {
+              const tabMeta = getClassificationTabMeta(tabValue);
+              const Icon = tabMeta.icon;
+
+              return (
+                <TabsTrigger
+                  key={tabValue}
+                  value={tabValue}
+                  asChild
+                  className={`group h-auto px-0 py-0 shadow-none transition-all duration-150 ${tabMeta.triggerClassName}`}
+                >
+                  <Link
+                    to={buildPageHref({
+                      q: filters.q,
+                      categoryId: filters.categoryId,
+                      classification: tabValue,
+                      status: filters.status,
+                    })}
+                    className="flex w-full items-center gap-3 px-3 py-3 text-left"
+                  >
+                    <span
+                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border transition-colors ${tabMeta.iconClassName}`}
+                    >
+                      <Icon size={16} />
+                    </span>
+                    <span className="min-w-0 text-sm font-semibold leading-none">{formatClassificationTabLabel(tabValue)}</span>
+                  </Link>
+                </TabsTrigger>
+              );
+            })}
+          </TabsList>
+        </Tabs>
+
         <Table className="min-w-[980px]">
           <TableHeader className="bg-slate-50/90">
             <TableRow className="hover:bg-slate-50/90">
@@ -915,17 +988,16 @@ export default function AdminItemsIndex() {
                     href={
                       pagination.page > 1
                         ? buildPageHref({
-                            q: filters.q,
-                            categoryId: filters.categoryId,
-                            classification: filters.classification,
-                            status: filters.status,
-                            page: 1,
-                          })
+                          q: filters.q,
+                          categoryId: filters.categoryId,
+                          classification: filters.classification,
+                          status: filters.status,
+                          page: 1,
+                        })
                         : "#"
                     }
-                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${
-                      pagination.page <= 1 ? "pointer-events-none opacity-40" : ""
-                    }`}
+                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${pagination.page <= 1 ? "pointer-events-none opacity-40" : ""
+                      }`}
                     aria-label="Primeira pagina"
                   >
                     <ChevronsLeft className="h-4 w-4" />
@@ -936,17 +1008,16 @@ export default function AdminItemsIndex() {
                     href={
                       pagination.page > 1
                         ? buildPageHref({
-                            q: filters.q,
-                            categoryId: filters.categoryId,
-                            classification: filters.classification,
-                            status: filters.status,
-                            page: pagination.page - 1,
-                          })
+                          q: filters.q,
+                          categoryId: filters.categoryId,
+                          classification: filters.classification,
+                          status: filters.status,
+                          page: pagination.page - 1,
+                        })
                         : "#"
                     }
-                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${
-                      pagination.page <= 1 ? "pointer-events-none opacity-40" : ""
-                    }`}
+                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${pagination.page <= 1 ? "pointer-events-none opacity-40" : ""
+                      }`}
                     aria-label="Pagina anterior"
                   >
                     <ChevronLeft className="h-4 w-4" />
@@ -957,17 +1028,16 @@ export default function AdminItemsIndex() {
                     href={
                       pagination.page < pagination.totalPages
                         ? buildPageHref({
-                            q: filters.q,
-                            categoryId: filters.categoryId,
-                            classification: filters.classification,
-                            status: filters.status,
-                            page: pagination.page + 1,
-                          })
+                          q: filters.q,
+                          categoryId: filters.categoryId,
+                          classification: filters.classification,
+                          status: filters.status,
+                          page: pagination.page + 1,
+                        })
                         : "#"
                     }
-                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${
-                      pagination.page >= pagination.totalPages ? "pointer-events-none opacity-40" : ""
-                    }`}
+                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${pagination.page >= pagination.totalPages ? "pointer-events-none opacity-40" : ""
+                      }`}
                     aria-label="Proxima pagina"
                   >
                     <ChevronLeft className="h-4 w-4 rotate-180" />
@@ -978,17 +1048,16 @@ export default function AdminItemsIndex() {
                     href={
                       pagination.page < pagination.totalPages
                         ? buildPageHref({
-                            q: filters.q,
-                            categoryId: filters.categoryId,
-                            classification: filters.classification,
-                            status: filters.status,
-                            page: pagination.totalPages,
-                          })
+                          q: filters.q,
+                          categoryId: filters.categoryId,
+                          classification: filters.classification,
+                          status: filters.status,
+                          page: pagination.totalPages,
+                        })
                         : "#"
                     }
-                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${
-                      pagination.page >= pagination.totalPages ? "pointer-events-none opacity-40" : ""
-                    }`}
+                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${pagination.page >= pagination.totalPages ? "pointer-events-none opacity-40" : ""
+                      }`}
                     aria-label="Ultima pagina"
                   >
                     <ChevronsRight className="h-4 w-4" />

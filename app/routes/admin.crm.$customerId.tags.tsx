@@ -91,7 +91,7 @@ export default function AdminCrmCustomerTags() {
   const currentTagKeys = new Set(tags.map((tag) => tag.key));
 
   return (
-    <Card className="font-neue">
+    <Card className="">
       <CardHeader>
         <CardTitle>Tags</CardTitle>
         <CardDescription>Classifique o cliente para segmentar campanhas.</CardDescription>
