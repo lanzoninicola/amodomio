@@ -14,7 +14,6 @@ type SheetCompositionRow = {
   name: string;
   sortOrderIndex: number;
   notes: string | null;
-  sourceModel: "component" | "legacy";
   variationValues: Array<{
     itemVariationId: string;
     variationComponentId: string | null;
@@ -25,11 +24,6 @@ type SheetCompositionRow = {
     totalCostAmount: number;
   }>;
 };
-
-function supportsComponentModel(db: any) {
-  return typeof db?.itemCostSheetComponent?.findMany === "function" &&
-    typeof db?.itemCostSheetVariationComponent?.findMany === "function";
-}
 
 function roundMoney(value: number) {
   return Number(Number(value || 0).toFixed(6));
@@ -141,76 +135,48 @@ async function listItemCostSheetCompositionRows(
   db: any,
   params: { itemCostSheetId: string; itemVariationIds: string[] }
 ): Promise<SheetCompositionRow[]> {
-  if (supportsComponentModel(db)) {
-    const components = await db.itemCostSheetComponent.findMany({
-      where: { itemCostSheetId: params.itemCostSheetId },
-      include: {
-        ItemCostSheetVariationComponent: {
-          where: {
-            itemVariationId: {
-              in: params.itemVariationIds,
-            },
-          },
-          orderBy: [{ createdAt: "asc" }],
-        },
-      },
-      orderBy: [{ sortOrderIndex: "asc" }, { createdAt: "asc" }],
-    });
-
-    return components.map((component: any) => {
-      const variationValues = Array.isArray(component.ItemCostSheetVariationComponent)
-        ? component.ItemCostSheetVariationComponent
-        : [];
-
-      return {
-        id: component.id,
-        componentId: component.id,
-        type: String(component.type || "manual"),
-        refId: component.refId || null,
-        name: component.name,
-        sortOrderIndex: Number(component.sortOrderIndex || 0),
-        notes: component.notes || null,
-        sourceModel: "component",
-        variationValues: params.itemVariationIds.map((itemVariationId) => {
-          const value = variationValues.find((row: any) => row.itemVariationId === itemVariationId) || null;
-          return {
-            itemVariationId,
-            variationComponentId: value?.id || null,
-            unit: value?.unit || null,
-            quantity: Number(value?.quantity || 0),
-            unitCostAmount: Number(value?.unitCostAmount || 0),
-            wastePerc: Number(value?.wastePerc || 0),
-            totalCostAmount: Number(value?.totalCostAmount || 0),
-          };
-        }),
-      };
-    });
-  }
-
-  const lines = await db.itemCostSheetLine.findMany({
+  const components = await db.itemCostSheetComponent.findMany({
     where: { itemCostSheetId: params.itemCostSheetId },
+    include: {
+      ItemCostSheetVariationComponent: {
+        where: {
+          itemVariationId: {
+            in: params.itemVariationIds,
+          },
+        },
+        orderBy: [{ createdAt: "asc" }],
+      },
+    },
     orderBy: [{ sortOrderIndex: "asc" }, { createdAt: "asc" }],
   });
 
-  return (lines || []).map((line: any) => ({
-    id: line.id,
-    componentId: line.id,
-    type: String(line.type || "manual"),
-    refId: line.refId || null,
-    name: line.name,
-    sortOrderIndex: Number(line.sortOrderIndex || 0),
-    notes: line.notes || null,
-    sourceModel: "legacy",
-    variationValues: params.itemVariationIds.map((itemVariationId) => ({
-      itemVariationId,
-      variationComponentId: null,
-      unit: line.unit || null,
-      quantity: Number(line.quantity || 0),
-      unitCostAmount: Number(line.unitCostAmount || 0),
-      wastePerc: Number(line.wastePerc || 0),
-      totalCostAmount: Number(line.totalCostAmount || 0),
-    })),
-  }));
+  return components.map((component: any) => {
+    const variationValues = Array.isArray(component.ItemCostSheetVariationComponent)
+      ? component.ItemCostSheetVariationComponent
+      : [];
+
+    return {
+      id: component.id,
+      componentId: component.id,
+      type: String(component.type || "manual"),
+      refId: component.refId || null,
+      name: component.name,
+      sortOrderIndex: Number(component.sortOrderIndex || 0),
+      notes: component.notes || null,
+      variationValues: params.itemVariationIds.map((itemVariationId) => {
+        const value = variationValues.find((row: any) => row.itemVariationId === itemVariationId) || null;
+        return {
+          itemVariationId,
+          variationComponentId: value?.id || null,
+          unit: value?.unit || null,
+          quantity: Number(value?.quantity || 0),
+          unitCostAmount: Number(value?.unitCostAmount || 0),
+          wastePerc: Number(value?.wastePerc || 0),
+          totalCostAmount: Number(value?.totalCostAmount || 0),
+        };
+      }),
+    };
+  });
 }
 
 async function createItemCostSheetRow(params: {
@@ -250,56 +216,36 @@ async function createItemCostSheetRow(params: {
     notes,
   } = params;
 
-  if (supportsComponentModel(db)) {
-    const lineCount = await db.itemCostSheetComponent.count({ where: { itemCostSheetId } });
-    const normalizedVariationEntries = Array.isArray(variationEntries) && variationEntries.length > 0
-      ? variationEntries
-      : Array.from(
-        new Set((targetItemVariationIds && targetItemVariationIds.length > 0 ? targetItemVariationIds : [itemVariationId]).filter(Boolean))
-      ).map((targetItemVariationId) => ({
-        itemVariationId: targetItemVariationId,
-        unit: unit || null,
-        quantity,
-        unitCostAmount,
-        wastePerc,
-      }));
-    await db.itemCostSheetComponent.create({
-      data: {
-        itemCostSheetId,
-        type,
-        refId: refId || null,
-        name,
-        notes: notes || null,
-        sortOrderIndex: Number(lineCount || 0),
-        ItemCostSheetVariationComponent: {
-          create: normalizedVariationEntries.map((entry) => ({
-            itemVariationId: entry.itemVariationId,
-            unit: entry.unit || null,
-            quantity: entry.quantity,
-            unitCostAmount: entry.unitCostAmount,
-            wastePerc: entry.wastePerc,
-            totalCostAmount: calcTotalCostAmount(entry.unitCostAmount, entry.quantity, entry.wastePerc),
-          })),
-        },
-      },
-    });
-    return;
-  }
-
-  const lineCount = await db.itemCostSheetLine.count({ where: { itemCostSheetId } });
-  await db.itemCostSheetLine.create({
+  const lineCount = await db.itemCostSheetComponent.count({ where: { itemCostSheetId } });
+  const normalizedVariationEntries = Array.isArray(variationEntries) && variationEntries.length > 0
+    ? variationEntries
+    : Array.from(
+      new Set((targetItemVariationIds && targetItemVariationIds.length > 0 ? targetItemVariationIds : [itemVariationId]).filter(Boolean))
+    ).map((targetItemVariationId) => ({
+      itemVariationId: targetItemVariationId,
+      unit: unit || null,
+      quantity,
+      unitCostAmount,
+      wastePerc,
+    }));
+  await db.itemCostSheetComponent.create({
     data: {
       itemCostSheetId,
       type,
       refId: refId || null,
       name,
-      unit: unit || null,
-      quantity,
-      unitCostAmount,
-      wastePerc,
-      totalCostAmount: calcTotalCostAmount(unitCostAmount, quantity, wastePerc),
-      sortOrderIndex: Number(lineCount || 0),
       notes: notes || null,
+      sortOrderIndex: Number(lineCount || 0),
+      ItemCostSheetVariationComponent: {
+        create: normalizedVariationEntries.map((entry) => ({
+          itemVariationId: entry.itemVariationId,
+          unit: entry.unit || null,
+          quantity: entry.quantity,
+          unitCostAmount: entry.unitCostAmount,
+          wastePerc: entry.wastePerc,
+          totalCostAmount: calcTotalCostAmount(entry.unitCostAmount, entry.quantity, entry.wastePerc),
+        })),
+      },
     },
   });
 }
@@ -322,15 +268,10 @@ async function wouldCreateRecipeSheetCycle(
 
     if (currentId === sourceItemCostSheetId) return true;
 
-    const refs = supportsComponentModel(db)
-      ? await db.itemCostSheetComponent.findMany({
-        where: { itemCostSheetId: currentId, type: "recipeSheet" },
-        select: { refId: true },
-      })
-      : await db.itemCostSheetLine.findMany({
-        where: { itemCostSheetId: currentId, type: "recipeSheet" },
-        select: { refId: true },
-      });
+    const refs = await db.itemCostSheetComponent.findMany({
+      where: { itemCostSheetId: currentId, type: "recipeSheet" },
+      select: { refId: true },
+    });
 
     for (const ref of refs) {
       const nextId = String(ref.refId || "").trim();
@@ -356,147 +297,88 @@ async function recalcItemCostSheetTotals(db: any, itemCostSheetId: string) {
   });
   if (groupSheets.length === 0) return;
 
-  if (supportsComponentModel(db)) {
-    const components = await db.itemCostSheetComponent.findMany({
-      where: { itemCostSheetId: rootSheetId },
-      include: {
-        ItemCostSheetVariationComponent: {
-          where: {
-            itemVariationId: {
-              in: groupSheets.map((groupSheet: any) => String(groupSheet.itemVariationId || "")).filter(Boolean),
-            },
+  const components = await db.itemCostSheetComponent.findMany({
+    where: { itemCostSheetId: rootSheetId },
+    include: {
+      ItemCostSheetVariationComponent: {
+        where: {
+          itemVariationId: {
+            in: groupSheets.map((groupSheet: any) => String(groupSheet.itemVariationId || "")).filter(Boolean),
           },
-          orderBy: [{ createdAt: "asc" }],
         },
+        orderBy: [{ createdAt: "asc" }],
       },
-      orderBy: [{ sortOrderIndex: "asc" }, { createdAt: "asc" }],
-    });
-
-    for (const component of components) {
-      const values = Array.isArray(component.ItemCostSheetVariationComponent)
-        ? component.ItemCostSheetVariationComponent
-        : [];
-      if (!component.refId || values.length === 0) continue;
-
-      for (const value of values) {
-        try {
-          if (component.type === "recipe") {
-            const snapshot = await getRecipeSnapshot(db, component.refId, value.itemVariationId);
-            await db.itemCostSheetVariationComponent.update({
-              where: { id: value.id },
-              data: {
-                unitCostAmount: roundMoney(snapshot.unitCostAmount),
-                totalCostAmount: calcTotalCostAmount(snapshot.unitCostAmount, Number(value.quantity || 0), Number(value.wastePerc || 0)),
-              },
-            });
-            await db.itemCostSheetComponent.update({
-              where: { id: component.id },
-              data: { notes: snapshot.note },
-            });
-            continue;
-          }
-
-          if (component.type === "recipeSheet") {
-            if (component.refId === rootSheetId) continue;
-            const snapshot = await getItemCostSheetSnapshot(db, component.refId, value.itemVariationId);
-            await db.itemCostSheetVariationComponent.update({
-              where: { id: value.id },
-              data: {
-                unitCostAmount: roundMoney(snapshot.unitCostAmount),
-                totalCostAmount: calcTotalCostAmount(snapshot.unitCostAmount, Number(value.quantity || 0), Number(value.wastePerc || 0)),
-              },
-            });
-            await db.itemCostSheetComponent.update({
-              where: { id: component.id },
-              data: { notes: snapshot.note },
-            });
-          }
-        } catch {
-          // preserve manual values when reference is unavailable
-        }
-      }
-    }
-
-    const refreshedComponents = await db.itemCostSheetComponent.findMany({
-      where: { itemCostSheetId: rootSheetId },
-      include: {
-        ItemCostSheetVariationComponent: {
-          orderBy: [{ createdAt: "asc" }],
-        },
-      },
-    });
-
-    for (const groupSheet of groupSheets) {
-      const totalAmount = refreshedComponents.reduce((acc: number, component: any) => {
-        const value = Array.isArray(component.ItemCostSheetVariationComponent)
-          ? component.ItemCostSheetVariationComponent.find((row: any) => row.itemVariationId === groupSheet.itemVariationId) || null
-          : null;
-        return acc + Number(value?.totalCostAmount || 0);
-      }, 0);
-
-      await db.itemCostSheet.update({
-        where: { id: groupSheet.id },
-        data: { costAmount: roundMoney(totalAmount) },
-      });
-    }
-    return;
-  }
-
-  const lines = await db.itemCostSheetLine.findMany({
-    where: { itemCostSheetId },
-    select: {
-      id: true,
-      type: true,
-      refId: true,
-      quantity: true,
-      unitCostAmount: true,
-      wastePerc: true,
     },
     orderBy: [{ sortOrderIndex: "asc" }, { createdAt: "asc" }],
   });
 
-  for (const line of lines) {
-    if (!line.refId) continue;
-    try {
-      if (line.type === "recipe") {
-        const snapshot = await getRecipeSnapshot(db, line.refId);
-        await db.itemCostSheetLine.update({
-          where: { id: line.id },
-          data: {
-            unitCostAmount: roundMoney(snapshot.unitCostAmount),
-            totalCostAmount: calcTotalCostAmount(snapshot.unitCostAmount, Number(line.quantity || 0), Number(line.wastePerc || 0)),
-            notes: snapshot.note,
-          },
-        });
-        continue;
-      }
+  for (const component of components) {
+    const values = Array.isArray(component.ItemCostSheetVariationComponent)
+      ? component.ItemCostSheetVariationComponent
+      : [];
+    if (!component.refId || values.length === 0) continue;
 
-      if (line.type === "recipeSheet") {
-        if (line.refId === itemCostSheetId) continue;
-        const snapshot = await getItemCostSheetSnapshot(db, line.refId);
-        await db.itemCostSheetLine.update({
-          where: { id: line.id },
-          data: {
-            unitCostAmount: roundMoney(snapshot.unitCostAmount),
-            totalCostAmount: calcTotalCostAmount(snapshot.unitCostAmount, Number(line.quantity || 0), Number(line.wastePerc || 0)),
-            notes: snapshot.note,
-          },
-        });
+    for (const value of values) {
+      try {
+        if (component.type === "recipe") {
+          const snapshot = await getRecipeSnapshot(db, component.refId, value.itemVariationId);
+          await db.itemCostSheetVariationComponent.update({
+            where: { id: value.id },
+            data: {
+              unitCostAmount: roundMoney(snapshot.unitCostAmount),
+              totalCostAmount: calcTotalCostAmount(snapshot.unitCostAmount, Number(value.quantity || 0), Number(value.wastePerc || 0)),
+            },
+          });
+          await db.itemCostSheetComponent.update({
+            where: { id: component.id },
+            data: { notes: snapshot.note },
+          });
+          continue;
+        }
+
+        if (component.type === "recipeSheet") {
+          if (component.refId === rootSheetId) continue;
+          const snapshot = await getItemCostSheetSnapshot(db, component.refId, value.itemVariationId);
+          await db.itemCostSheetVariationComponent.update({
+            where: { id: value.id },
+            data: {
+              unitCostAmount: roundMoney(snapshot.unitCostAmount),
+              totalCostAmount: calcTotalCostAmount(snapshot.unitCostAmount, Number(value.quantity || 0), Number(value.wastePerc || 0)),
+            },
+          });
+          await db.itemCostSheetComponent.update({
+            where: { id: component.id },
+            data: { notes: snapshot.note },
+          });
+        }
+      } catch {
+        // preserve manual values when reference is unavailable
       }
-    } catch {
-      // preserve manual values when reference is unavailable
     }
   }
 
-  const totals = await db.itemCostSheetLine.aggregate({
-    where: { itemCostSheetId },
-    _sum: { totalCostAmount: true },
+  const refreshedComponents = await db.itemCostSheetComponent.findMany({
+    where: { itemCostSheetId: rootSheetId },
+    include: {
+      ItemCostSheetVariationComponent: {
+        orderBy: [{ createdAt: "asc" }],
+      },
+    },
   });
 
-  await db.itemCostSheet.update({
-    where: { id: itemCostSheetId },
-    data: { costAmount: roundMoney(Number(totals?._sum?.totalCostAmount || 0)) },
-  });
+  for (const groupSheet of groupSheets) {
+    const totalAmount = refreshedComponents.reduce((acc: number, component: any) => {
+      const value = Array.isArray(component.ItemCostSheetVariationComponent)
+        ? component.ItemCostSheetVariationComponent.find((row: any) => row.itemVariationId === groupSheet.itemVariationId) || null
+        : null;
+      return acc + Number(value?.totalCostAmount || 0);
+    }, 0);
+
+    await db.itemCostSheet.update({
+      where: { id: groupSheet.id },
+      data: { costAmount: roundMoney(totalAmount) },
+    });
+  }
 }
 
 function sheetDetailHref(itemCostSheetId: string) {
@@ -513,13 +395,9 @@ async function getItemCostSheetDeletionGuard(
   params: { itemCostSheetId: string; isActive?: boolean | null }
 ) {
   const [referenceDependencyCount, baseDependencyCount] = await Promise.all([
-    supportsComponentModel(db)
-      ? db.itemCostSheetComponent.count({
-        where: { type: "recipeSheet", refId: params.itemCostSheetId },
-      })
-      : db.itemCostSheetLine.count({
-        where: { type: "recipeSheet", refId: params.itemCostSheetId },
-      }),
+    db.itemCostSheetComponent.count({
+      where: { type: "recipeSheet", refId: params.itemCostSheetId },
+    }),
     db.itemCostSheet.count({
       where: { baseItemCostSheetId: params.itemCostSheetId },
     }),
@@ -594,17 +472,11 @@ export async function loader({ params }: LoaderFunctionArgs) {
         orderBy: [{ updatedAt: "desc" }],
         take: 300,
       }),
-      supportsComponentModel(db)
-        ? db.itemCostSheetComponent.groupBy({
-          by: ["refId"],
-          where: { type: "recipeSheet", refId: { not: null } },
-          _count: { _all: true },
-        })
-        : db.itemCostSheetLine.groupBy({
-          by: ["refId"],
-          where: { type: "recipeSheet", refId: { not: null } },
-          _count: { _all: true },
-        }),
+      db.itemCostSheetComponent.groupBy({
+        by: ["refId"],
+        where: { type: "recipeSheet", refId: { not: null } },
+        _count: { _all: true },
+      }),
       getAvailableItemUnits(),
       listActiveItemVariationIdsForItem(db, currentSheet.itemId),
     ]);
@@ -657,7 +529,6 @@ export async function loader({ params }: LoaderFunctionArgs) {
       referenceSheetOptions: referenceSheets,
       recipeSheetDependencyCountById,
       deletionGuard,
-      supportsComponentModel: supportsComponentModel(db),
       unitOptions,
     });
   } catch (error) {
@@ -888,17 +759,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
       if (!["up", "down"].includes(direction)) return badRequest("Direção inválida");
       if (itemCostSheetId !== currentSheet.id) return badRequest("Ficha de custo divergente");
 
-      const rows = supportsComponentModel(db)
-        ? await db.itemCostSheetComponent.findMany({
-          where: { itemCostSheetId: rootSheetId },
-          select: { id: true, sortOrderIndex: true, createdAt: true },
-          orderBy: [{ sortOrderIndex: "asc" }, { createdAt: "asc" }],
-        })
-        : await db.itemCostSheetLine.findMany({
-          where: { itemCostSheetId },
-          select: { id: true, sortOrderIndex: true, createdAt: true },
-          orderBy: [{ sortOrderIndex: "asc" }, { createdAt: "asc" }],
-        });
+      const rows = await db.itemCostSheetComponent.findMany({
+        where: { itemCostSheetId: rootSheetId },
+        select: { id: true, sortOrderIndex: true, createdAt: true },
+        orderBy: [{ sortOrderIndex: "asc" }, { createdAt: "asc" }],
+      });
 
       const currentIndex = rows.findIndex((row: any) => row.id === lineId);
       if (currentIndex < 0) return badRequest("Linha não encontrada");
@@ -910,14 +775,12 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
       const current = rows[currentIndex];
       const target = rows[targetIndex];
-      const model = supportsComponentModel(db) ? db.itemCostSheetComponent : db.itemCostSheetLine;
-
       await db.$transaction([
-        model.update({
+        db.itemCostSheetComponent.update({
           where: { id: current.id },
           data: { sortOrderIndex: Number(target.sortOrderIndex || 0) },
         }),
-        model.update({
+        db.itemCostSheetComponent.update({
           where: { id: target.id },
           data: { sortOrderIndex: Number(current.sortOrderIndex || 0) },
         }),
@@ -934,108 +797,99 @@ export async function action({ request, params }: ActionFunctionArgs) {
       if (!itemCostSheetId || !lineId) return badRequest("Linha inválida");
       if (itemCostSheetId !== currentSheet.id) return badRequest("Ficha de custo divergente");
 
-      if (supportsComponentModel(db)) {
-        const component = await db.itemCostSheetComponent.findFirst({
-          where: { id: lineId, itemCostSheetId: rootSheetId },
-          include: {
-            ItemCostSheetVariationComponent: {
-              where: { itemVariationId: { in: targetItemVariationIds } },
-              orderBy: [{ createdAt: "asc" }],
-            },
+      const component = await db.itemCostSheetComponent.findFirst({
+        where: { id: lineId, itemCostSheetId: rootSheetId },
+        include: {
+          ItemCostSheetVariationComponent: {
+            where: { itemVariationId: { in: targetItemVariationIds } },
+            orderBy: [{ createdAt: "asc" }],
           },
-        });
-        if (!component) return badRequest("Linha não encontrada");
+        },
+      });
+      if (!component) return badRequest("Linha não encontrada");
 
-        const isRefLine = (component.type === "recipe" || component.type === "recipeSheet") && !!component.refId;
-        const variationValues = Array.isArray(component.ItemCostSheetVariationComponent)
-          ? component.ItemCostSheetVariationComponent
-          : [];
-        const updates = targetItemVariationIds.map((itemVariationId) => {
-          const existingValue = variationValues.find((value: any) => value.itemVariationId === itemVariationId) || null;
-          const quantity = Number(String(formData.get(`quantity__${itemVariationId}`) || "0").replace(",", "."));
-          const unitCostAmount = Number(String(formData.get(`unitCostAmount__${itemVariationId}`) || "0").replace(",", "."));
-          const wastePerc = Number(String(formData.get(`wastePerc__${itemVariationId}`) || "0").replace(",", "."));
-          const unitRaw = normalizeUnit(formData.get(`unit__${itemVariationId}`));
+      const isRefLine = (component.type === "recipe" || component.type === "recipeSheet") && !!component.refId;
+      const variationValues = Array.isArray(component.ItemCostSheetVariationComponent)
+        ? component.ItemCostSheetVariationComponent
+        : [];
+      const updates = targetItemVariationIds.map((itemVariationId) => {
+        const existingValue = variationValues.find((value: any) => value.itemVariationId === itemVariationId) || null;
+        const quantity = Number(String(formData.get(`quantity__${itemVariationId}`) || "0").replace(",", "."));
+        const unitCostAmount = Number(String(formData.get(`unitCostAmount__${itemVariationId}`) || "0").replace(",", "."));
+        const wastePerc = Number(String(formData.get(`wastePerc__${itemVariationId}`) || "0").replace(",", "."));
+        const unitRaw = normalizeUnit(formData.get(`unit__${itemVariationId}`));
 
-          return {
-            existingValue,
-            itemVariationId,
-            unitRaw,
-            quantity,
-            unitCostAmount,
-            wastePerc,
-          };
-        });
-        if (updates.some((update) => !(update.quantity > 0))) {
-          return badRequest("Informe uma quantidade válida para todas as variações");
+        return {
+          existingValue,
+          itemVariationId,
+          unitRaw,
+          quantity,
+          unitCostAmount,
+          wastePerc,
+        };
+      });
+      if (updates.some((update) => !(update.quantity > 0))) {
+        return badRequest("Informe uma quantidade válida para todas as variações");
+      }
+      if (!isRefLine && (component.type === "manual" || component.type === "labor")) {
+        if (updates.some((update) => {
+          const existingUnit = normalizeUnit(update.existingValue?.unit);
+          return !update.unitRaw || (!availableUnits.includes(update.unitRaw) && update.unitRaw !== existingUnit);
+        })) {
+          return badRequest("Informe uma unidade válida para todas as variações");
         }
-        if (!isRefLine && (component.type === "manual" || component.type === "labor")) {
-          if (updates.some((update) => {
-            const existingUnit = normalizeUnit(update.existingValue?.unit);
-            return !update.unitRaw || (!availableUnits.includes(update.unitRaw) && update.unitRaw !== existingUnit);
-          })) {
-            return badRequest("Informe uma unidade válida para todas as variações");
-          }
-        }
-        if (updates.some((update) => !(update.unitCostAmount >= 0))) {
-          return badRequest("Informe um custo unitário válido para todas as variações");
-        }
-
-        await db.itemCostSheetComponent.update({
-          where: { id: component.id },
-          data: {
-            name: isRefLine ? component.name : (name || "Custo"),
-            notes: notes || null,
-          },
-        });
-        for (const update of updates) {
-          const baseUnitCostAmount = isRefLine
-            ? Number(update.existingValue?.unitCostAmount || 0)
-            : update.unitCostAmount;
-
-          if (update.existingValue?.id) {
-            await db.itemCostSheetVariationComponent.update({
-              where: { id: update.existingValue.id },
-              data: {
-                unit: isRefLine ? update.existingValue.unit : (update.unitRaw || null),
-                quantity: update.quantity,
-                unitCostAmount: baseUnitCostAmount,
-                wastePerc: update.wastePerc,
-                totalCostAmount: calcTotalCostAmount(
-                  baseUnitCostAmount,
-                  update.quantity,
-                  update.wastePerc
-                ),
-              },
-            });
-          } else {
-            await db.itemCostSheetVariationComponent.create({
-              data: {
-                itemCostSheetComponentId: component.id,
-                itemVariationId: update.itemVariationId,
-                unit: update.unitRaw || null,
-                quantity: update.quantity,
-                unitCostAmount: baseUnitCostAmount,
-                wastePerc: update.wastePerc,
-                totalCostAmount: calcTotalCostAmount(
-                  baseUnitCostAmount,
-                  update.quantity,
-                  update.wastePerc
-                ),
-              },
-            });
-          }
-        }
-        await recalcItemCostSheetTotals(db, rootSheetId);
-        return redirect(postRedirectTo);
+      }
+      if (updates.some((update) => !(update.unitCostAmount >= 0))) {
+        return badRequest("Informe um custo unitário válido para todas as variações");
       }
 
-      const line = await db.itemCostSheetLine.findFirst({
-        where: { id: lineId, itemCostSheetId },
-        select: { id: true, type: true, refId: true, unitCostAmount: true },
+      await db.itemCostSheetComponent.update({
+        where: { id: component.id },
+        data: {
+          name: isRefLine ? component.name : (name || "Custo"),
+          notes: notes || null,
+        },
       });
-      if (!line) return badRequest("Linha não encontrada");
-      return badRequest("Atualização em colunas indisponível no modelo legado da ficha");
+      for (const update of updates) {
+        const baseUnitCostAmount = isRefLine
+          ? Number(update.existingValue?.unitCostAmount || 0)
+          : update.unitCostAmount;
+
+        if (update.existingValue?.id) {
+          await db.itemCostSheetVariationComponent.update({
+            where: { id: update.existingValue.id },
+            data: {
+              unit: isRefLine ? update.existingValue.unit : (update.unitRaw || null),
+              quantity: update.quantity,
+              unitCostAmount: baseUnitCostAmount,
+              wastePerc: update.wastePerc,
+              totalCostAmount: calcTotalCostAmount(
+                baseUnitCostAmount,
+                update.quantity,
+                update.wastePerc
+              ),
+            },
+          });
+        } else {
+          await db.itemCostSheetVariationComponent.create({
+            data: {
+              itemCostSheetComponentId: component.id,
+              itemVariationId: update.itemVariationId,
+              unit: update.unitRaw || null,
+              quantity: update.quantity,
+              unitCostAmount: baseUnitCostAmount,
+              wastePerc: update.wastePerc,
+              totalCostAmount: calcTotalCostAmount(
+                baseUnitCostAmount,
+                update.quantity,
+                update.wastePerc
+              ),
+            },
+          });
+        }
+      }
+      await recalcItemCostSheetTotals(db, rootSheetId);
+      return redirect(postRedirectTo);
     }
 
     if (_action === "item-cost-sheet-line-delete") {
@@ -1044,21 +898,12 @@ export async function action({ request, params }: ActionFunctionArgs) {
       if (!itemCostSheetId || !lineId) return badRequest("Linha inválida");
       if (itemCostSheetId !== currentSheet.id) return badRequest("Ficha de custo divergente");
 
-      if (supportsComponentModel(db)) {
-        const component = await db.itemCostSheetComponent.findFirst({
-          where: { id: lineId, itemCostSheetId: rootSheetId },
-          select: { id: true },
-        });
-        if (!component) return badRequest("Linha não encontrada");
-        await db.itemCostSheetComponent.delete({ where: { id: lineId } });
-      } else {
-        const line = await db.itemCostSheetLine.findFirst({
-          where: { id: lineId, itemCostSheetId },
-          select: { id: true },
-        });
-        if (!line) return badRequest("Linha não encontrada");
-        await db.itemCostSheetLine.delete({ where: { id: lineId } });
-      }
+      const component = await db.itemCostSheetComponent.findFirst({
+        where: { id: lineId, itemCostSheetId: rootSheetId },
+        select: { id: true },
+      });
+      if (!component) return badRequest("Linha não encontrada");
+      await db.itemCostSheetComponent.delete({ where: { id: lineId } });
 
       await recalcItemCostSheetTotals(db, rootSheetId);
       return redirect(postRedirectTo);

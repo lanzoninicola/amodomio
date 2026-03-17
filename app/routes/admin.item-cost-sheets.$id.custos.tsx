@@ -230,7 +230,7 @@ export default function AdminItemCostSheetCustosTab() {
         </Form>
       </div>
 
-      <div className="overflow-x-auto rounded-[24px] border border-slate-200 bg-white">
+      <div className="overflow-x-auto bg-white">
         <table className="min-w-full text-sm">
           <thead className="bg-slate-50/60">
             <tr>
@@ -244,14 +244,13 @@ export default function AdminItemCostSheetCustosTab() {
                   </div>
                 </th>
               ))}
-              <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Obs.</th>
               <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Acoes</th>
             </tr>
           </thead>
           <tbody>
             {compositionRows.length === 0 ? (
               <tr>
-                <td colSpan={variationSheets.length + 4} className="px-3 py-6 text-center text-slate-500">Nenhum componente na ficha.</td>
+                <td colSpan={variationSheets.length + 3} className="px-3 py-6 text-center text-slate-500">Nenhum componente na ficha.</td>
               </tr>
             ) : (
               compositionRows.map((line) => {
@@ -261,101 +260,118 @@ export default function AdminItemCostSheetCustosTab() {
                 return (
                   <tr key={line.id} className="align-top border-t border-slate-100">
                     <td className="px-3 py-3">
-                      <div className="space-y-1">
-                        <SheetTypeLabel type={line.type} />
-                        <div className="text-[11px] text-slate-400">{line.sourceModel === "component" ? "novo modelo" : "legado"}</div>
-                      </div>
+                      <SheetTypeLabel type={line.type} />
                     </td>
                     <td className="min-w-[280px] px-3 py-3">
                       <Form id={lineFormId} method="post" action={detailPath} className="space-y-2">
                         <input type="hidden" name="itemCostSheetId" value={selectedSheet?.id} />
                         <input type="hidden" name="lineId" value={line.id} />
                         <input type="hidden" name="redirectTo" value={`${detailPath}/custos`} />
-                        <input
-                          name="name"
-                          defaultValue={line.name}
-                          readOnly={refLocked}
-                          className={`h-9 w-full rounded-xl border px-3 text-sm ${refLocked ? "border-slate-100 bg-slate-50 text-slate-500" : "border-slate-200 bg-white"}`}
-                        />
-                        <input
-                          name="notes"
-                          defaultValue={line.notes || ""}
-                          className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs"
-                          placeholder="Observacao"
-                        />
+                        <div className="space-y-1">
+                          <label className="block text-[11px] font-semibold uppercase tracking-wide text-slate-500">Nome</label>
+                          <input
+                            name="name"
+                            defaultValue={line.name}
+                            readOnly={refLocked}
+                            className={`h-9 w-full rounded-xl border px-3 text-sm ${refLocked ? "border-slate-100 bg-slate-50 text-slate-500" : "border-slate-200 bg-white"}`}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="block text-[11px] font-semibold uppercase tracking-wide text-slate-500">Observacao</label>
+                          <input
+                            name="notes"
+                            defaultValue={line.notes || ""}
+                            className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs"
+                            placeholder="Observacao"
+                          />
+                        </div>
                       </Form>
                     </td>
                     {variationSheets.map((sheet: any) => {
                       const value = line.variationValues.find((row) => row.itemVariationId === sheet.itemVariationId) || null;
                       return (
-                        <td key={sheet.id} className="min-w-[220px] px-3 py-3">
+                        <td key={sheet.id} className="min-w-[272px] px-3 py-3">
                           <div className="space-y-2">
-                            {refLocked ? (
-                              <input form={lineFormId} name={`unit__${sheet.itemVariationId}`} defaultValue={value?.unit || ""} readOnly className="h-8 w-full rounded-xl border border-slate-100 bg-slate-50 px-2.5 text-xs text-slate-500" />
-                            ) : (
-                              <Select
-                                name={`unit__${sheet.itemVariationId}`}
-                                form={lineFormId}
-                                required
-                                defaultValue={unitOptions.includes(String(value?.unit || "").toUpperCase()) ? String(value?.unit || "").toUpperCase() : (String(value?.unit || "") || defaultManualUnit)}
-                              >
-                                <SelectTrigger className="h-8 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs">
-                                  <SelectValue placeholder="Unidade" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {unitOptions.map((unit) => (
-                                    <SelectItem key={unit} value={unit}>
-                                      {unit}
-                                    </SelectItem>
-                                  ))}
-                                  {value?.unit && !unitOptions.includes(String(value.unit).toUpperCase()) ? (
-                                    <SelectItem value={String(value.unit)}>
-                                      {String(value.unit)}
-                                    </SelectItem>
-                                  ) : null}
-                                </SelectContent>
-                              </Select>
-                            )}
-                            <div className="grid grid-cols-2 gap-2">
-                              <NumericInput form={lineFormId} name={`quantity__${sheet.itemVariationId}`} min="0.0001" step="0.0001" defaultValue={Number(value?.quantity || 0)} decimalScale={4} className="h-8 rounded-xl border border-slate-200 bg-white px-2.5 text-xs text-right" required />
-                              <NumericInput form={lineFormId} name={`unitCostAmount__${sheet.itemVariationId}`} min="0" step="0.0001" defaultValue={Number(value?.unitCostAmount || 0)} decimalScale={4} readOnly={refLocked} className={`h-8 rounded-xl border px-2.5 text-xs text-right ${refLocked ? "border-slate-100 bg-slate-50 text-slate-500" : "border-slate-200 bg-white"}`} required />
+                            <div className="grid grid-cols-[78px_74px_74px] gap-2">
+                              <div className="space-y-1">
+                                <label className="block text-[11px] font-semibold uppercase tracking-wide text-slate-500">Unid.</label>
+                                {refLocked ? (
+                                  <input form={lineFormId} name={`unit__${sheet.itemVariationId}`} defaultValue={value?.unit || ""} readOnly className="h-8 w-full rounded-xl border border-slate-100 bg-slate-50 px-2.5 text-xs text-slate-500" />
+                                ) : (
+                                  <Select
+                                    name={`unit__${sheet.itemVariationId}`}
+                                    form={lineFormId}
+                                    required
+                                    defaultValue={unitOptions.includes(String(value?.unit || "").toUpperCase()) ? String(value?.unit || "").toUpperCase() : (String(value?.unit || "") || defaultManualUnit)}
+                                  >
+                                    <SelectTrigger className="h-8 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs">
+                                      <SelectValue placeholder="Unidade" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {unitOptions.map((unit) => (
+                                        <SelectItem key={unit} value={unit}>
+                                          {unit}
+                                        </SelectItem>
+                                      ))}
+                                      {value?.unit && !unitOptions.includes(String(value.unit).toUpperCase()) ? (
+                                        <SelectItem value={String(value.unit)}>
+                                          {String(value.unit)}
+                                        </SelectItem>
+                                      ) : null}
+                                    </SelectContent>
+                                  </Select>
+                                )}
+                              </div>
+                              <div className="space-y-1">
+                                <label className="block text-[11px] font-semibold uppercase tracking-wide text-slate-500">Qtd.</label>
+                                <NumericInput form={lineFormId} name={`quantity__${sheet.itemVariationId}`} min="0.0001" step="0.0001" defaultValue={Number(value?.quantity || 0)} decimalScale={4} className="h-8 w-full rounded-xl border border-slate-200 bg-white px-2 text-xs text-right" required />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="block text-[11px] font-semibold uppercase tracking-wide text-slate-500">Custo un.</label>
+                                <NumericInput form={lineFormId} name={`unitCostAmount__${sheet.itemVariationId}`} min="0" step="0.0001" defaultValue={Number(value?.unitCostAmount || 0)} decimalScale={4} readOnly={refLocked} className={`h-8 w-full rounded-xl border px-2 text-xs text-right ${refLocked ? "border-slate-100 bg-slate-50 text-slate-500" : "border-slate-200 bg-white"}`} required />
+                              </div>
                             </div>
-                            <div className="grid grid-cols-2 gap-2">
-                              <NumericInput form={lineFormId} name={`wastePerc__${sheet.itemVariationId}`} min="0" step="0.01" defaultValue={Number(value?.wastePerc || 0)} decimalScale={2} className="h-8 rounded-xl border border-slate-200 bg-white px-2.5 text-xs text-right" />
-                              <div className="flex items-center justify-end rounded-xl border border-slate-200 bg-slate-50 px-2.5 text-xs font-semibold text-slate-700">
-                                {formatMoney(Number(value?.totalCostAmount || 0))}
+                            <div className="grid grid-cols-[74px_96px] gap-2">
+                              <div className="space-y-1">
+                                <label className="block text-[11px] font-semibold uppercase tracking-wide text-slate-500">Perda %</label>
+                                <NumericInput form={lineFormId} name={`wastePerc__${sheet.itemVariationId}`} min="0" step="0.01" defaultValue={Number(value?.wastePerc || 0)} decimalScale={2} className="h-8 w-full rounded-xl border border-slate-200 bg-white px-2 text-xs text-right" />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="block text-[11px] font-semibold uppercase tracking-wide text-slate-500">Total</label>
+                                <div className="flex h-8 items-center justify-end rounded-xl border border-slate-200 bg-slate-50 px-2 text-xs font-semibold text-slate-700">
+                                  {formatMoney(Number(value?.totalCostAmount || 0))}
+                                </div>
                               </div>
                             </div>
                           </div>
                         </td>
                       );
                     })}
-                    <td className="px-3 py-3 text-xs text-slate-500">Edite no campo do componente</td>
-                    <td className="px-3 py-3 text-right">
-                      <div className="inline-flex items-center gap-1">
-                        <Form method="post" action={detailPath} className="inline">
+                    <td className="w-[80px] px-2 py-3 align-middle">
+                      <div className="inline-grid grid-cols-2 gap-3">
+                        <Form method="post" action={detailPath} className="contents">
                           <input type="hidden" name="itemCostSheetId" value={selectedSheet?.id} />
                           <input type="hidden" name="lineId" value={line.id} />
                           <input type="hidden" name="direction" value="up" />
                           <input type="hidden" name="redirectTo" value={`${detailPath}/custos`} />
-                          <button type="submit" name="_action" value="item-cost-sheet-line-move" className="rounded-full border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50" title="Subir">↑</button>
+                          <button type="submit" name="_action" value="item-cost-sheet-line-move" className="flex h-8 w-9 items-center justify-center rounded-full border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50" title="Subir">↑</button>
                         </Form>
-                        <button type="submit" form={lineFormId} name="_action" value="item-cost-sheet-line-update" className="rounded-full border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">
-                          Salvar
+                        <button type="submit" form={lineFormId} name="_action" value="item-cost-sheet-line-update" className="flex h-8 w-9 items-center justify-center rounded-full border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50" title="Salvar">
+                          ✓
                         </button>
-                        <Form method="post" action={detailPath} className="inline">
+                        <Form method="post" action={detailPath} className="contents">
                           <input type="hidden" name="itemCostSheetId" value={selectedSheet?.id} />
                           <input type="hidden" name="lineId" value={line.id} />
                           <input type="hidden" name="direction" value="down" />
                           <input type="hidden" name="redirectTo" value={`${detailPath}/custos`} />
-                          <button type="submit" name="_action" value="item-cost-sheet-line-move" className="rounded-full border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50" title="Descer">↓</button>
+                          <button type="submit" name="_action" value="item-cost-sheet-line-move" className="flex h-8 w-9 items-center justify-center rounded-full border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50" title="Descer">↓</button>
                         </Form>
-                        <Form method="post" action={detailPath} className="inline">
+                        <Form method="post" action={detailPath} className="contents">
                           <input type="hidden" name="itemCostSheetId" value={selectedSheet?.id} />
                           <input type="hidden" name="lineId" value={line.id} />
                           <input type="hidden" name="redirectTo" value={`${detailPath}/custos`} />
-                          <button type="submit" name="_action" value="item-cost-sheet-line-delete" className="rounded-full border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">
-                            Remover
+                          <button type="submit" name="_action" value="item-cost-sheet-line-delete" className="flex h-8 w-9 items-center justify-center rounded-full border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50" title="Remover">
+                            ×
                           </button>
                         </Form>
                       </div>

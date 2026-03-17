@@ -570,7 +570,10 @@ export async function createStockNfImportBatchFromFile(params: {
           costAmount: line.costAmount,
           costTotalAmount: line.costTotalAmount,
           observation: line.observation || null,
-          sourceFingerprint: line.sourceFingerprint,
+          sourceFingerprint:
+            line.errorCode === 'duplicate_in_batch'
+              ? `${line.sourceFingerprint}_dup_${line.rowNumber}`
+              : line.sourceFingerprint,
           duplicateOfLineId: line.duplicateOfLineId || null,
           mappedItemId: line.mappedItemId || null,
           mappedItemName: line.mappedItemName || null,

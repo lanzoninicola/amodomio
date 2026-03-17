@@ -234,7 +234,7 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
         },
         {
           title: "Importação NF (Estoque)",
-          href: "/admin/items/import-stock-nf",
+          href: "/admin/import-stock-nf",
           items: [],
           disabled: false,
         },

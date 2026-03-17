@@ -5,6 +5,9 @@
       "Bash(node -e:*)",
       "Bash(npx tsc:*)",
       "Bash(npx remix vite:build:*)"
+    ],
+    "additionalDirectories": [
+      "/home/lanzo/Documents/Coding/amodomio/app/routes"
     ]
   }
 }

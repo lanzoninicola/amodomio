@@ -1,10 +1,9 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { Form, Link, useActionData, useLoaderData } from "@remix-run/react";
 import { useEffect, useState } from "react";
-import { ChevronLeft, ChevronsLeft, ChevronsRight, Layers3, Package, ShoppingBag } from "lucide-react";
+import { ArrowUpDown, ChevronLeft, ChevronsLeft, ChevronsRight, ListFilter, Search, SlidersHorizontal, XCircle } from "lucide-react";
 import { DeleteItemButton } from "~/components/primitives/table-list";
 import { Badge } from "~/components/ui/badge";
-import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import {
   Pagination,
   PaginationContent,
@@ -92,42 +91,19 @@ function formatClassificationTabLabel(value: (typeof ITEM_CLASSIFICATION_TABS)[n
   return value.replaceAll("_", " ");
 }
 
-function getClassificationTabMeta(value: (typeof ITEM_CLASSIFICATION_TABS)[number]) {
+function getClassificationTabColor(value: string) {
   switch (value) {
     case "insumo":
-      return {
-        icon: Package,
-        triggerClassName:
-          "rounded-md border border-sky-200/80 bg-white text-sky-700 data-[state=active]:border-sky-300 data-[state=active]:bg-sky-50 data-[state=active]:text-sky-900",
-        iconClassName:
-          "border-sky-200 bg-sky-100 text-sky-700 group-data-[state=active]:border-sky-300 group-data-[state=active]:bg-sky-200",
-      };
+      return { dot: "bg-sky-400", activeBorder: "border-sky-600", activeText: "text-sky-900" };
     case "semi_acabado":
-      return {
-        icon: Layers3,
-        triggerClassName:
-          "rounded-md border border-amber-200/80 bg-white text-amber-700 data-[state=active]:border-amber-300 data-[state=active]:bg-amber-50 data-[state=active]:text-amber-900",
-        iconClassName:
-          "border-amber-200 bg-amber-100 text-amber-700 group-data-[state=active]:border-amber-300 group-data-[state=active]:bg-amber-200",
-      };
+      return { dot: "bg-amber-400", activeBorder: "border-amber-500", activeText: "text-amber-900" };
     case "produto_final":
-      return {
-        icon: ShoppingBag,
-        triggerClassName:
-          "rounded-md border border-emerald-200/80 bg-white text-emerald-700 data-[state=active]:border-emerald-300 data-[state=active]:bg-emerald-50 data-[state=active]:text-emerald-900",
-        iconClassName:
-          "border-emerald-200 bg-emerald-100 text-emerald-700 group-data-[state=active]:border-emerald-300 group-data-[state=active]:bg-emerald-200",
-      };
+      return { dot: "bg-emerald-500", activeBorder: "border-emerald-600", activeText: "text-emerald-900" };
     default:
-      return {
-        icon: Package,
-        triggerClassName:
-          "rounded-md border border-slate-200 bg-white text-slate-600 data-[state=active]:border-slate-300 data-[state=active]:bg-slate-100 data-[state=active]:text-slate-900",
-        iconClassName:
-          "border-slate-200 bg-slate-100 text-slate-500 group-data-[state=active]:border-slate-300 group-data-[state=active]:bg-white",
-      };
+      return { dot: "bg-slate-400", activeBorder: "border-slate-500", activeText: "text-slate-900" };
   }
 }
+
 
 function formatClassificationLabel(value?: string | null) {
   if (!value) return "-";
@@ -568,236 +544,186 @@ export default function AdminItemsIndex() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="rounded-2xl border border-slate-200 bg-white p-5">
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-700">
-          <span>Custo médio: janela {averageWindowDays} dias</span>
-          <span>•</span>
-          <span>{pagination.totalItems} item(ns) encontrado(s)</span>
-          <span>•</span>
-          <span>{stats.menuItemsLinked} item(ns) vinculados ao cardapio</span>
-          <span>•</span>
-          <span>
-            Página {pagination.page} de {pagination.totalPages}
-          </span>
-        </div>
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-500">
+        <span>{pagination.totalItems} item(ns)</span>
+        <span>·</span>
+        <span>{stats.menuItemsLinked} no cardápio</span>
+        <span>·</span>
+        <span>Custo médio: {averageWindowDays} dias</span>
+        <span>·</span>
+        <span>Pág. {pagination.page}/{pagination.totalPages}</span>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-2xl border border-slate-200 bg-white p-5">
-          <Form method="get" className="flex flex-wrap items-end gap-3">
-            <input type="hidden" name="classification" value={classificationTabValue} />
-            <div className="min-w-[260px] flex-1">
-              <label htmlFor="q" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Busca
-              </label>
-              <input
-                id="q"
-                name="q"
-                type="search"
-                defaultValue={filters.q}
-                placeholder="Nome ou descricao"
-                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-              />
-            </div>
+      {/* Search + filter controls row */}
+      <Form method="get" className="flex flex-wrap items-center gap-6">
+        <input type="hidden" name="classification" value={classificationTabValue} />
+        <input type="hidden" name="categoryId" value={categoryFilterValue === "__all__" ? "" : categoryFilterValue} />
+        <input type="hidden" name="status" value={statusFilterValue} />
 
-            <div className="min-w-[220px]">
-              <label htmlFor="categoryId" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Categoria
-              </label>
-              <input type="hidden" name="categoryId" value={categoryFilterValue === "__all__" ? "" : categoryFilterValue} />
-              <Select value={categoryFilterValue} onValueChange={setCategoryFilterValue}>
-                <SelectTrigger id="categoryId" className="mt-1 w-full">
-                  <SelectValue placeholder="Todas" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__all__">Todas</SelectItem>
-                  {categories.map((category: any) => (
-                    <SelectItem key={category.id} value={category.id}>
-                      {category.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="min-w-[180px]">
-              <label htmlFor="status" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Status
-              </label>
-              <input type="hidden" name="status" value={statusFilterValue} />
-              <Select value={statusFilterValue} onValueChange={setStatusFilterValue}>
-                <SelectTrigger id="status" className="mt-1 w-full">
-                  <SelectValue placeholder="Ativos" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="active">Ativos</SelectItem>
-                  <SelectItem value="inactive">Inativos</SelectItem>
-                  <SelectItem value="all">Todos</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="flex items-end gap-2">
-              <button
-                type="submit"
-                className="inline-flex items-center rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700"
-              >
-                Filtrar
-              </button>
-              <Link
-                to="/admin/items"
-                className="inline-flex items-center rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-              >
-                Limpar
-              </Link>
-            </div>
-          </Form>
+        <div className="relative flex min-w-[260px] flex-1 items-center ">
+          <Search className="pointer-events-none absolute left-3 h-4 w-4 text-slate-400" />
+          <input
+            id="q"
+            name="q"
+            type="search"
+            defaultValue={filters.q}
+            placeholder="Pesquise por nome ou descrição"
+            className="h-9 w-full rounded-md border border-slate-300 bg-white py-2 pl-9 pr-10 text-sm focus:border-slate-400 focus:outline-none"
+          />
+          <button type="submit" className="absolute right-2 rounded p-0.5 text-slate-400 hover:text-slate-600" title="Filtrar">
+            <SlidersHorizontal className="h-4 w-4" />
+          </button>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-5">
-          <Form method="post" className="space-y-3">
-            <input type="hidden" name="_action" value="items-bulk-update" />
-            <div className="flex flex-wrap items-end gap-3">
-              <div className="min-w-[220px]">
-                <label htmlFor="bulkCategoryId" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Categoria (lote)
-                </label>
-                <input type="hidden" name="bulkCategoryId" value={bulkCategoryValue} />
-                <Select value={bulkCategoryValue} onValueChange={setBulkCategoryValue}>
-                  <SelectTrigger id="bulkCategoryId" className="mt-1 w-full">
-                    <SelectValue placeholder="Sem alteração" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__NO_CHANGE__">Sem alteração</SelectItem>
-                    <SelectItem value="__EMPTY__">Remover categoria</SelectItem>
-                    {categories.map((category: any) => (
-                      <SelectItem key={category.id} value={category.id}>
-                        {category.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+        <button type="submit" className="inline-flex items-center gap-1 text-sm text-slate-600 hover:text-slate-900">
+          <ArrowUpDown className="h-3.5 w-3.5" />
+          <span>nome</span>
+        </button>
 
-              <div className="min-w-[220px]">
-                <label htmlFor="bulkClassification" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Classificação (lote)
-                </label>
-                <input type="hidden" name="bulkClassification" value={bulkClassificationValue} />
-                <Select value={bulkClassificationValue} onValueChange={setBulkClassificationValue}>
-                  <SelectTrigger id="bulkClassification" className="mt-1 w-full">
-                    <SelectValue placeholder="Sem alteração" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__NO_CHANGE__">Sem alteração</SelectItem>
-                    {ITEM_CLASSIFICATIONS.map((value) => (
-                      <SelectItem key={value} value={value}>
-                        {value}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+        <Select value={statusFilterValue} onValueChange={setStatusFilterValue}>
+          <SelectTrigger className="h-auto w-auto gap-1 border-0 p-0 text-sm font-medium text-blue-600 shadow-none focus:ring-0 [&>svg]:h-3 [&>svg]:w-3 [&>svg]:text-blue-400">
+            <SelectValue>
+              {statusFilterValue === "active" ? "produtos ativos" : statusFilterValue === "inactive" ? "produtos inativos" : "todos os produtos"}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="active">produtos ativos</SelectItem>
+            <SelectItem value="inactive">produtos inativos</SelectItem>
+            <SelectItem value="all">todos os produtos</SelectItem>
+          </SelectContent>
+        </Select>
 
-              <div className="min-w-[220px]">
-                <label htmlFor="bulkActive" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Status (lote)
-                </label>
-                <input type="hidden" name="bulkActive" value={bulkActiveValue} />
-                <Select value={bulkActiveValue} onValueChange={setBulkActiveValue}>
-                  <SelectTrigger id="bulkActive" className="mt-1 w-full">
-                    <SelectValue placeholder="Sem alteração" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__NO_CHANGE__">Sem alteração</SelectItem>
-                    <SelectItem value="active">Ativar</SelectItem>
-                    <SelectItem value="inactive">Desativar</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+        <Select value={categoryFilterValue} onValueChange={setCategoryFilterValue}>
+          <SelectTrigger className="h-auto w-auto gap-1 border-0 p-0 text-sm font-medium text-slate-600 shadow-none focus:ring-0 [&>svg]:h-3 [&>svg]:w-3 [&>svg]:text-slate-400">
+            <SelectValue>
+              {categoryFilterValue === "__all__" ? "todas as categorias" : (categoryNameById.get(categoryFilterValue) ?? "categoria")}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all__">todas as categorias</SelectItem>
+            {categories.map((category: any) => (
+              <SelectItem key={category.id} value={category.id}>{category.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
-              <div className="flex items-center gap-2">
-                {selectedItemIds.map((id) => (
-                  <input key={id} type="hidden" name="itemIds" value={id} />
-                ))}
-                <button
-                  type="submit"
-                  className="inline-flex items-center rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
-                  disabled={selectedCount === 0}
-                >
-                  Atualizar selecionados
-                </button>
-              </div>
-            </div>
+        <button type="submit" className="inline-flex items-center gap-1 text-sm text-slate-600 hover:text-slate-900">
+          <ListFilter className="h-3.5 w-3.5" />
+          <span>filtros</span>
+        </button>
 
-            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
-              <span>{selectedCount} item(ns) selecionado(s) nesta página</span>
-              {selectedCount > 0 ? (
-                <button
-                  type="button"
-                  className="underline"
-                  onClick={() => setSelectedItemIds([])}
-                >
-                  Limpar seleção
-                </button>
-              ) : null}
-            </div>
+        <Link to="/admin/items" className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-slate-600">
+          <XCircle className="h-3.5 w-3.5" />
+          <span>limpar filtros</span>
+        </Link>
+      </Form>
 
-            {actionData?.message ? (
-              <div
-                className={`rounded-md px-3 py-2 text-sm ${actionData?.status === 200
-                  ? "border border-emerald-200 bg-emerald-50 text-emerald-800"
-                  : "border border-amber-200 bg-amber-50 text-amber-900"
-                  }`}
-              >
-                {actionData.message}
-              </div>
-            ) : null}
-          </Form>
+      {/* Bulk update form - compact bar, only visible when items are selected */}
+      <Form method="post" className={`flex flex-wrap items-center gap-2 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 transition-all ${selectedCount > 0 ? "opacity-100" : "pointer-events-none opacity-0 h-0 py-0 overflow-hidden border-0"}`}>
+        <input type="hidden" name="_action" value="items-bulk-update" />
+        <span className="text-xs font-medium text-slate-500">Lote ({selectedCount} selecionado(s)):</span>
+
+        <input type="hidden" name="bulkCategoryId" value={bulkCategoryValue} />
+        <Select value={bulkCategoryValue} onValueChange={setBulkCategoryValue}>
+          <SelectTrigger className="h-7 w-auto min-w-[130px] border-slate-200 bg-white text-xs">
+            <SelectValue placeholder="Categoria" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__NO_CHANGE__">Categoria</SelectItem>
+            <SelectItem value="__EMPTY__">Remover categoria</SelectItem>
+            {categories.map((category: any) => (
+              <SelectItem key={category.id} value={category.id}>{category.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <input type="hidden" name="bulkClassification" value={bulkClassificationValue} />
+        <Select value={bulkClassificationValue} onValueChange={setBulkClassificationValue}>
+          <SelectTrigger className="h-7 w-auto min-w-[130px] border-slate-200 bg-white text-xs">
+            <SelectValue placeholder="Classificação" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__NO_CHANGE__">Classificação</SelectItem>
+            {ITEM_CLASSIFICATIONS.map((value) => (
+              <SelectItem key={value} value={value}>{value}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <input type="hidden" name="bulkActive" value={bulkActiveValue} />
+        <Select value={bulkActiveValue} onValueChange={setBulkActiveValue}>
+          <SelectTrigger className="h-7 w-auto min-w-[90px] border-slate-200 bg-white text-xs">
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__NO_CHANGE__">Status</SelectItem>
+            <SelectItem value="active">Ativar</SelectItem>
+            <SelectItem value="inactive">Desativar</SelectItem>
+          </SelectContent>
+        </Select>
+
+        {selectedItemIds.map((id) => (
+          <input key={id} type="hidden" name="itemIds" value={id} />
+        ))}
+        <button
+          type="submit"
+          className="inline-flex h-7 items-center rounded-md bg-slate-900 px-2.5 text-xs font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+          disabled={selectedCount === 0}
+        >
+          Atualizar
+        </button>
+        {selectedCount > 0 && (
+          <button type="button" className="text-xs text-slate-400 underline hover:text-slate-600" onClick={() => setSelectedItemIds([])}>
+            Limpar seleção
+          </button>
+        )}
+      </Form>
+
+      {actionData?.message ? (
+        <div
+          className={`rounded-md px-3 py-2 text-sm ${actionData?.status === 200
+            ? "border border-emerald-200 bg-emerald-50 text-emerald-800"
+            : "border border-amber-200 bg-amber-50 text-amber-900"
+            }`}
+        >
+          {actionData.message}
         </div>
-      </div>
+      ) : null}
 
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-        <Tabs value={classificationTabValue} className="w-full">
-          <TabsList className="grid h-auto w-full grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_140px] gap-2 rounded-xl bg-gradient-to-r from-slate-50 to-white p-2">
+      <div className="overflow-hidden  bg-white">
+        <div className="flex items-end justify-between border-b border-slate-200 px-4">
+          <div className="flex">
             {ITEM_CLASSIFICATION_TABS.map((tabValue) => {
-              const tabMeta = getClassificationTabMeta(tabValue);
-              const Icon = tabMeta.icon;
-
+              const isActive = classificationTabValue === tabValue;
+              const color = getClassificationTabColor(tabValue);
               return (
-                <TabsTrigger
+                <Link
                   key={tabValue}
-                  value={tabValue}
-                  asChild
-                  className={`group h-auto px-0 py-0 shadow-none transition-all duration-150 ${tabMeta.triggerClassName}`}
+                  to={buildPageHref({ q: filters.q, categoryId: filters.categoryId, classification: tabValue, status: filters.status })}
+                  className={`relative flex flex-col items-start px-4 py-3 text-sm transition-colors ${isActive
+                    ? `border-b-2 ${color.activeBorder} ${color.activeText}`
+                    : "text-slate-400 hover:text-slate-600"
+                    }`}
                 >
-                  <Link
-                    to={buildPageHref({
-                      q: filters.q,
-                      categoryId: filters.categoryId,
-                      classification: tabValue,
-                      status: filters.status,
-                    })}
-                    className="flex w-full items-center gap-3 px-3 py-3 text-left"
-                  >
-                    <span
-                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border transition-colors ${tabMeta.iconClassName}`}
-                    >
-                      <Icon size={16} />
-                    </span>
-                    <span className="min-w-0 text-sm font-semibold leading-none">{formatClassificationTabLabel(tabValue)}</span>
-                  </Link>
-                </TabsTrigger>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className={`h-2 w-2 rounded-full ${color.dot} ${isActive ? "" : "opacity-50"}`} />
+                    <span className={isActive ? "font-semibold" : "font-medium"}>{formatClassificationTabLabel(tabValue)}</span>
+                  </span>
+                  {isActive && <span className="pl-3.5 text-xs font-normal text-slate-500">{pagination.totalItems}</span>}
+                </Link>
               );
             })}
-          </TabsList>
-        </Tabs>
+          </div>
+          <button type="button" className="mb-2 rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600" title="Colunas">
+            <SlidersHorizontal className="h-4 w-4" />
+          </button>
+        </div>
 
         <Table className="min-w-[980px]">
           <TableHeader className="bg-slate-50/90">
             <TableRow className="hover:bg-slate-50/90">
-              <TableHead className="h-10 w-12 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <TableHead className="h-10 w-12 px-4 text-slate-500">
                 <input
                   type="checkbox"
                   aria-label="Selecionar itens da página"
@@ -805,26 +731,28 @@ export default function AdminItemsIndex() {
                   onChange={(e) => toggleSelectAllPage(e.currentTarget.checked)}
                 />
               </TableHead>
-              <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Nome</TableHead>
-              <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Unidade
+              <TableHead className="h-10 px-4 text-xs font-medium text-slate-500">
+                <span className="inline-flex items-center gap-1">Nome <ArrowUpDown className="h-3 w-3 text-slate-400" /></span>
               </TableHead>
-              <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Classificacao
+              <TableHead className="h-10 px-4 text-xs font-medium text-slate-500">
+                <span className="inline-flex items-center gap-1">Unidade <ArrowUpDown className="h-3 w-3 text-slate-400" /></span>
               </TableHead>
-              <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Categoria
+              <TableHead className="h-10 px-4 text-xs font-medium text-slate-500">
+                <span className="inline-flex items-center gap-1">Classificação <ArrowUpDown className="h-3 w-3 text-slate-400" /></span>
               </TableHead>
-              <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Status
+              <TableHead className="h-10 px-4 text-xs font-medium text-slate-500">
+                <span className="inline-flex items-center gap-1">Categoria <ArrowUpDown className="h-3 w-3 text-slate-400" /></span>
               </TableHead>
-              <TableHead className="h-10 px-4 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Ultimo custo
+              <TableHead className="h-10 px-4 text-xs font-medium text-slate-500">
+                <span className="inline-flex items-center gap-1">Status <ArrowUpDown className="h-3 w-3 text-slate-400" /></span>
               </TableHead>
-              <TableHead className="h-10 px-4 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Custo medio
+              <TableHead className="h-10 px-4 text-right text-xs font-medium text-slate-500">
+                <span className="inline-flex items-center justify-end gap-1">Último custo <ArrowUpDown className="h-3 w-3 text-slate-400" /></span>
               </TableHead>
-              <TableHead className="h-10 px-4 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <TableHead className="h-10 px-4 text-right text-xs font-medium text-slate-500">
+                <span className="inline-flex items-center justify-end gap-1">Custo médio <ArrowUpDown className="h-3 w-3 text-slate-400" /></span>
+              </TableHead>
+              <TableHead className="h-10 px-4 text-right text-xs font-medium text-slate-500">
                 Ações
               </TableHead>
             </TableRow>

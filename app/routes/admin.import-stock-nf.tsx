@@ -255,7 +255,7 @@ export async function action({ request }: ActionFunctionArgs) {
         uploadedBy: actor,
       });
 
-      return redirect(`/admin/items/import-stock-nf?batchId=${result.batchId}`);
+      return redirect(`/admin/import-stock-nf?batchId=${result.batchId}`);
     }
 
     if (_action === 'batch-map-item') {
@@ -277,7 +277,7 @@ export async function action({ request }: ActionFunctionArgs) {
         actor,
       });
 
-      return redirect(`/admin/items/import-stock-nf?batchId=${batchId}`);
+      return redirect(`/admin/import-stock-nf?batchId=${batchId}`);
     }
 
     if (_action === 'batch-set-manual-conversion') {
@@ -286,7 +286,7 @@ export async function action({ request }: ActionFunctionArgs) {
       if (!batchId || !lineId) return badRequest('Linha inválida');
       if (!(factor > 0)) return badRequest('Informe um fator maior que zero');
       await setBatchLineManualConversion({ batchId, lineId, factor });
-      return redirect(`/admin/items/import-stock-nf?batchId=${batchId}`);
+      return redirect(`/admin/import-stock-nf?batchId=${batchId}`);
     }
 
     if (_action === 'batch-create-and-map-item') {
@@ -321,25 +321,25 @@ export async function action({ request }: ActionFunctionArgs) {
         actor,
       });
 
-      return redirect(`/admin/items/import-stock-nf?batchId=${batchId}`);
+      return redirect(`/admin/import-stock-nf?batchId=${batchId}`);
     }
 
     if (_action === 'batch-apply') {
       if (!batchId) return badRequest('Lote inválido');
       await applyStockNfImportBatch({ batchId, actor });
-      return redirect(`/admin/items/import-stock-nf?batchId=${batchId}`);
+      return redirect(`/admin/import-stock-nf?batchId=${batchId}`);
     }
 
     if (_action === 'batch-rollback') {
       if (!batchId) return badRequest('Lote inválido');
       await rollbackStockNfImportBatch({ batchId, actor });
-      return redirect(`/admin/items/import-stock-nf?batchId=${batchId}`);
+      return redirect(`/admin/import-stock-nf?batchId=${batchId}`);
     }
 
     if (_action === 'batch-archive') {
       if (!batchId) return badRequest('Lote inválido');
       await archiveStockNfImportBatch(batchId);
-      return redirect('/admin/items/import-stock-nf');
+      return redirect('/admin/import-stock-nf');
     }
 
     return badRequest('Ação inválida');
@@ -369,18 +369,17 @@ export default function AdminItemsImportStockNfRoute() {
         </div>
       ) : null}
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-lg font-semibold text-slate-900">Importação de Movimentação NF (SAIPOS)</h1>
-            <p className="text-sm text-slate-600">
-              Faz upload do Excel, valida linhas, permite mapear itens/conversões e aplica custo com rastreabilidade e rollback.
-            </p>
-          </div>
-          <Link to="/admin/items" className="text-sm underline text-slate-700">
-            Voltar para Itens
-          </Link>
+
+      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h1 className="text-lg font-semibold text-slate-900">Importação de Movimentação NF (SAIPOS)</h1>
+          <p className="text-sm text-slate-600">
+            Faz upload do Excel, valida linhas, permite mapear itens/conversões e aplica custo com rastreabilidade e rollback.
+          </p>
         </div>
+        <Link to="/admin/items" className="text-sm underline text-slate-700">
+          Voltar para Itens
+        </Link>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -436,133 +435,170 @@ export default function AdminItemsImportStockNfRoute() {
           </div>
         ) : (
           <>
-              <div className="rounded-xl border border-slate-200 bg-white p-4">
-                <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h2 className="text-lg font-semibold text-slate-900">{selectedBatch.name}</h2>
-                      <Badge variant="outline" className={statusBadgeClass(String(selectedBatch.status))}>{selectedBatch.status}</Badge>
-                    </div>
-                    <div className="mt-1 text-sm text-slate-600">ID: {selectedBatch.id}</div>
-                    <div className="mt-1 text-sm text-slate-600">
-                      Arquivo: {selectedBatch.originalFileName || '-'} • Aba: {selectedBatch.worksheetName || '-'}
-                    </div>
-                    <div className="mt-1 text-sm text-slate-600">
-                      Período: {formatDate(selectedBatch.periodStart)} até {formatDate(selectedBatch.periodEnd)}
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Form method="post">
-                      <input type="hidden" name="_action" value="batch-apply" />
-                      <input type="hidden" name="batchId" value={selectedBatch.id} />
-                      <Button type="submit" className="bg-emerald-600 hover:bg-emerald-700" disabled={summary.ready <= 0}>
-                        Aplicar prontas ({summary.ready})
-                      </Button>
-                    </Form>
-                    <Form method="post">
-                      <input type="hidden" name="_action" value="batch-rollback" />
-                      <input type="hidden" name="batchId" value={selectedBatch.id} />
-                      <Button type="submit" variant="outline" disabled={appliedChanges.length <= 0}>
-                        Rollback
-                      </Button>
-                    </Form>
-                    <Form method="post">
-                      <input type="hidden" name="_action" value="batch-archive" />
-                      <input type="hidden" name="batchId" value={selectedBatch.id} />
-                      <Button type="submit" variant="outline">Arquivar</Button>
-                    </Form>
-                  </div>
-                </div>
 
-                <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
-                  {[
-                    ['Total', summary.total],
-                    ['Prontas', summary.ready],
-                    ['Aplicadas', summary.applied],
-                    ['Pend. vínculo', summary.pendingMapping],
-                    ['Pend. conversão', summary.pendingConversion],
-                    ['Duplicadas', summary.skippedDuplicate],
-                    ['Inválidas', summary.invalid],
-                    ['Erros', summary.error],
-                  ].map(([label, value]) => (
-                    <div key={String(label)} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                      <div className="text-[11px] uppercase tracking-wide text-slate-500">{label}</div>
-                      <div className="text-lg font-semibold text-slate-900">{value as any}</div>
-                    </div>
-                  ))}
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-lg font-semibold text-slate-900">{selectedBatch.name}</h2>
+                  <Badge variant="outline" className={statusBadgeClass(String(selectedBatch.status))}>{selectedBatch.status}</Badge>
+                </div>
+                <div className="mt-1 text-sm text-slate-600">ID: {selectedBatch.id}</div>
+                <div className="mt-1 text-sm text-slate-600">
+                  Arquivo: {selectedBatch.originalFileName || '-'} • Aba: {selectedBatch.worksheetName || '-'}
+                </div>
+                <div className="mt-1 text-sm text-slate-600">
+                  Período: {formatDate(selectedBatch.periodStart)} até {formatDate(selectedBatch.periodEnd)}
                 </div>
               </div>
+              <div className="flex flex-wrap gap-2">
+                <Form method="post">
+                  <input type="hidden" name="_action" value="batch-apply" />
+                  <input type="hidden" name="batchId" value={selectedBatch.id} />
+                  <Button type="submit" className="bg-emerald-600 hover:bg-emerald-700" disabled={summary.ready <= 0}>
+                    Aplicar prontas ({summary.ready})
+                  </Button>
+                </Form>
+                <Form method="post">
+                  <input type="hidden" name="_action" value="batch-rollback" />
+                  <input type="hidden" name="batchId" value={selectedBatch.id} />
+                  <Button type="submit" variant="outline" disabled={appliedChanges.length <= 0}>
+                    Rollback
+                  </Button>
+                </Form>
+                <Form method="post">
+                  <input type="hidden" name="_action" value="batch-archive" />
+                  <input type="hidden" name="batchId" value={selectedBatch.id} />
+                  <Button type="submit" variant="outline">Arquivar</Button>
+                </Form>
+              </div>
+            </div>
 
-              <div className="rounded-xl border border-slate-200 bg-white p-4">
-                <div className="flex items-center justify-between gap-2">
-                  <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Linhas do lote</h3>
-                  <div className="text-xs text-slate-500">{lines.length} linha(s)</div>
+            <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
+              {[
+                ['Total', summary.total],
+                ['Prontas', summary.ready],
+                ['Aplicadas', summary.applied],
+                ['Pend. vínculo', summary.pendingMapping],
+                ['Pend. conversão', summary.pendingConversion],
+                ['Duplicadas', summary.skippedDuplicate],
+                ['Inválidas', summary.invalid],
+                ['Erros', summary.error],
+              ].map(([label, value]) => (
+                <div key={String(label)} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                  <div className="text-[11px] uppercase tracking-wide text-slate-500">{label}</div>
+                  <div className="text-lg font-semibold text-slate-900">{value as any}</div>
                 </div>
+              ))}
+            </div>
+
+
+
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Linhas do lote</h3>
+              <div className="text-xs text-slate-500">{lines.length} linha(s)</div>
+            </div>
+            <div className="mt-3 overflow-auto rounded-lg">
+              <Table>
+                <TableHeader className="bg-slate-50/90">
+                  <TableRow className="hover:bg-slate-50/90">
+                    <TableHead className="px-3 py-2 text-xs">Linha</TableHead>
+                    <TableHead className="px-3 py-2 text-xs">Data/NF</TableHead>
+                    <TableHead className="px-3 py-2 text-xs">Ingrediente</TableHead>
+                    <TableHead className="px-3 py-2 text-xs">Mov.</TableHead>
+                    <TableHead className="px-3 py-2 text-xs">Custo</TableHead>
+                    <TableHead className="px-3 py-2 text-xs">Item do sistema</TableHead>
+                    <TableHead className="px-3 py-2 text-xs">Conversão</TableHead>
+                    <TableHead className="px-3 py-2 text-xs">Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {lines.map((line) => (
+                    <TableRow key={line.id} className="border-slate-100 align-top">
+                      <TableCell className="px-3 py-2 text-xs text-slate-600">{line.rowNumber}</TableCell>
+                      <TableCell className="px-3 py-2 text-xs text-slate-700">
+                        <div>{formatDate(line.movementAt)}</div>
+                        <div className="text-slate-500">NF {line.invoiceNumber || '-'}</div>
+                      </TableCell>
+                      <TableCell className="px-3 py-2 text-xs">
+                        <div className="font-medium text-slate-900">{line.ingredientName}</div>
+                        <div className="text-slate-500">{line.motivo || '-'}</div>
+                      </TableCell>
+                      <TableCell className="px-3 py-2 text-xs text-slate-700">
+                        <div>{line.qtyEntry ?? '-'} {line.unitEntry || ''}</div>
+                        <div className="text-slate-500">cons: {line.qtyConsumption ?? '-'} {line.unitConsumption || ''}</div>
+                      </TableCell>
+                      <TableCell className="px-3 py-2 text-xs text-slate-700">
+                        <div>{formatMoney(line.costAmount)} / {line.movementUnit || '-'}</div>
+                        <div className="text-slate-500">total: {formatMoney(line.costTotalAmount)}</div>
+                      </TableCell>
+                      <TableCell className="px-3 py-2 text-xs text-slate-700">
+                        <ItemSystemMapperCell line={line} items={items} batchId={selectedBatch.id} />
+                      </TableCell>
+                      <TableCell className="px-3 py-2 text-xs text-slate-700">
+                        {line.status === 'pending_conversion' ? (
+                          <Form method="post" className="space-y-1">
+                            <input type="hidden" name="_action" value="batch-set-manual-conversion" />
+                            <input type="hidden" name="batchId" value={selectedBatch.id} />
+                            <input type="hidden" name="lineId" value={line.id} />
+                            <div className="flex items-center gap-2">
+                              <Input name="factor" type="number" min="0" step="0.000001" placeholder="fator" className="h-8 w-24" />
+                              <Button type="submit" variant="outline" className="h-8 px-2 text-[11px]">
+                                Salvar
+                              </Button>
+                            </div>
+                            <div className="text-[11px] text-slate-500">destino por 1 origem</div>
+                          </Form>
+                        ) : (
+                          <>
+                            <div>
+                              {line.convertedCostAmount != null ? `${formatMoney(line.convertedCostAmount)} / ${line.targetUnit || '-'}` : '-'}
+                            </div>
+                            <div className="text-slate-500">
+                              {line.conversionSource || '-'}{line.conversionFactorUsed ? ` • fator ${Number(line.conversionFactorUsed).toFixed(6)}` : ''}
+                            </div>
+                          </>
+                        )}
+                      </TableCell>
+                      <TableCell className="px-3 py-2 text-xs">
+                        <Badge variant="outline" className={statusBadgeClass(String(line.status))}>{line.status}</Badge>
+                        {line.errorMessage ? <div className="mt-1 text-[11px] text-red-700 max-w-[220px]">{line.errorMessage}</div> : null}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            {appliedChanges.length > 0 ? (
+              <div className="rounded-xl border border-slate-200 bg-white p-4">
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Alterações aplicadas (snapshot para rollback)</h3>
                 <div className="mt-3 overflow-auto rounded-lg border border-slate-200">
                   <Table>
                     <TableHeader className="bg-slate-50/90">
                       <TableRow className="hover:bg-slate-50/90">
-                        <TableHead className="px-3 py-2 text-xs">Linha</TableHead>
-                        <TableHead className="px-3 py-2 text-xs">Data/NF</TableHead>
-                        <TableHead className="px-3 py-2 text-xs">Ingrediente</TableHead>
-                        <TableHead className="px-3 py-2 text-xs">Mov.</TableHead>
-                        <TableHead className="px-3 py-2 text-xs">Custo</TableHead>
-                        <TableHead className="px-3 py-2 text-xs">Item do sistema</TableHead>
-                        <TableHead className="px-3 py-2 text-xs">Conversão</TableHead>
-                        <TableHead className="px-3 py-2 text-xs">Status</TableHead>
+                        <TableHead className="px-3 py-2 text-xs">Aplicado em</TableHead>
+                        <TableHead className="px-3 py-2 text-xs">Item</TableHead>
+                        <TableHead className="px-3 py-2 text-xs">Antes</TableHead>
+                        <TableHead className="px-3 py-2 text-xs">Depois</TableHead>
+                        <TableHead className="px-3 py-2 text-xs">Rollback</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {lines.map((line) => (
-                        <TableRow key={line.id} className="border-slate-100 align-top">
-                          <TableCell className="px-3 py-2 text-xs text-slate-600">{line.rowNumber}</TableCell>
-                          <TableCell className="px-3 py-2 text-xs text-slate-700">
-                            <div>{formatDate(line.movementAt)}</div>
-                            <div className="text-slate-500">NF {line.invoiceNumber || '-'}</div>
-                          </TableCell>
+                      {appliedChanges.map((c) => (
+                        <TableRow key={c.id} className="border-slate-100">
+                          <TableCell className="px-3 py-2 text-xs">{formatDate(c.appliedAt)}</TableCell>
+                          <TableCell className="px-3 py-2 text-xs">{c.itemId}</TableCell>
+                          <TableCell className="px-3 py-2 text-xs">{formatMoney(c.previousCostAmount)} / {c.previousCostUnit || '-'}</TableCell>
+                          <TableCell className="px-3 py-2 text-xs">{formatMoney(c.newCostAmount)} / {c.newCostUnit || '-'}</TableCell>
                           <TableCell className="px-3 py-2 text-xs">
-                            <div className="font-medium text-slate-900">{line.ingredientName}</div>
-                            <div className="text-slate-500">{line.motivo || '-'}</div>
-                          </TableCell>
-                          <TableCell className="px-3 py-2 text-xs text-slate-700">
-                            <div>{line.qtyEntry ?? '-'} {line.unitEntry || ''}</div>
-                            <div className="text-slate-500">cons: {line.qtyConsumption ?? '-'} {line.unitConsumption || ''}</div>
-                          </TableCell>
-                          <TableCell className="px-3 py-2 text-xs text-slate-700">
-                            <div>{formatMoney(line.costAmount)} / {line.movementUnit || '-'}</div>
-                            <div className="text-slate-500">total: {formatMoney(line.costTotalAmount)}</div>
-                          </TableCell>
-                          <TableCell className="px-3 py-2 text-xs text-slate-700">
-                            <ItemSystemMapperCell line={line} items={items} batchId={selectedBatch.id} />
-                          </TableCell>
-                          <TableCell className="px-3 py-2 text-xs text-slate-700">
-                            {line.status === 'pending_conversion' ? (
-                              <Form method="post" className="space-y-1">
-                                <input type="hidden" name="_action" value="batch-set-manual-conversion" />
-                                <input type="hidden" name="batchId" value={selectedBatch.id} />
-                                <input type="hidden" name="lineId" value={line.id} />
-                                <div className="flex items-center gap-2">
-                                  <Input name="factor" type="number" min="0" step="0.000001" placeholder="fator" className="h-8 w-24" />
-                                  <Button type="submit" variant="outline" className="h-8 px-2 text-[11px]">
-                                    Salvar
-                                  </Button>
-                                </div>
-                                <div className="text-[11px] text-slate-500">destino por 1 origem</div>
-                              </Form>
+                            {c.rolledBackAt ? (
+                              <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">revertido</Badge>
+                            ) : c.rollbackStatus ? (
+                              <Badge variant="outline" className={statusBadgeClass(c.rollbackStatus)}>{c.rollbackStatus}</Badge>
                             ) : (
-                              <>
-                                <div>
-                                  {line.convertedCostAmount != null ? `${formatMoney(line.convertedCostAmount)} / ${line.targetUnit || '-'}` : '-'}
-                                </div>
-                                <div className="text-slate-500">
-                                  {line.conversionSource || '-'}{line.conversionFactorUsed ? ` • fator ${Number(line.conversionFactorUsed).toFixed(6)}` : ''}
-                                </div>
-                              </>
+                              <span className="text-slate-500">pendente</span>
                             )}
-                          </TableCell>
-                          <TableCell className="px-3 py-2 text-xs">
-                            <Badge variant="outline" className={statusBadgeClass(String(line.status))}>{line.status}</Badge>
-                            {line.errorMessage ? <div className="mt-1 text-[11px] text-red-700 max-w-[220px]">{line.errorMessage}</div> : null}
+                            {c.rollbackMessage ? <div className="mt-1 text-[11px] text-red-700">{c.rollbackMessage}</div> : null}
                           </TableCell>
                         </TableRow>
                       ))}
@@ -570,45 +606,7 @@ export default function AdminItemsImportStockNfRoute() {
                   </Table>
                 </div>
               </div>
-
-              {appliedChanges.length > 0 ? (
-                <div className="rounded-xl border border-slate-200 bg-white p-4">
-                  <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Alterações aplicadas (snapshot para rollback)</h3>
-                  <div className="mt-3 overflow-auto rounded-lg border border-slate-200">
-                    <Table>
-                      <TableHeader className="bg-slate-50/90">
-                        <TableRow className="hover:bg-slate-50/90">
-                          <TableHead className="px-3 py-2 text-xs">Aplicado em</TableHead>
-                          <TableHead className="px-3 py-2 text-xs">Item</TableHead>
-                          <TableHead className="px-3 py-2 text-xs">Antes</TableHead>
-                          <TableHead className="px-3 py-2 text-xs">Depois</TableHead>
-                          <TableHead className="px-3 py-2 text-xs">Rollback</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {appliedChanges.map((c) => (
-                          <TableRow key={c.id} className="border-slate-100">
-                            <TableCell className="px-3 py-2 text-xs">{formatDate(c.appliedAt)}</TableCell>
-                            <TableCell className="px-3 py-2 text-xs">{c.itemId}</TableCell>
-                            <TableCell className="px-3 py-2 text-xs">{formatMoney(c.previousCostAmount)} / {c.previousCostUnit || '-'}</TableCell>
-                            <TableCell className="px-3 py-2 text-xs">{formatMoney(c.newCostAmount)} / {c.newCostUnit || '-'}</TableCell>
-                            <TableCell className="px-3 py-2 text-xs">
-                              {c.rolledBackAt ? (
-                                <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">revertido</Badge>
-                              ) : c.rollbackStatus ? (
-                                <Badge variant="outline" className={statusBadgeClass(c.rollbackStatus)}>{c.rollbackStatus}</Badge>
-                              ) : (
-                                <span className="text-slate-500">pendente</span>
-                              )}
-                              {c.rollbackMessage ? <div className="mt-1 text-[11px] text-red-700">{c.rollbackMessage}</div> : null}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </div>
-              ) : null}
+            ) : null}
           </>
         )}
       </div>
