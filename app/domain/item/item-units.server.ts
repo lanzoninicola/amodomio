@@ -1,11 +1,5 @@
 import prismaClient from "~/lib/prisma/client.server";
-
-export const ITEM_UNIT_OPTIONS = ["UN", "L", "ML", "KG", "G"];
-
-export function normalizeItemUnit(value: unknown) {
-  const normalized = String(value || "").trim().toUpperCase();
-  return normalized || null;
-}
+import { ITEM_UNIT_OPTIONS, normalizeItemUnit } from "~/domain/item/item-units";
 
 export async function getAvailableItemUnits() {
   const db = prismaClient as any;
