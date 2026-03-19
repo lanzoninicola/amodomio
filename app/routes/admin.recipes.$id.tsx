@@ -24,13 +24,17 @@ import {
 } from "~/components/ui/select";
 import { toast } from "~/components/ui/use-toast";
 import { DecimalInput } from "~/components/inputs/inputs";
-import { itemVariationPrismaEntity } from "~/domain/item/item-variation.prisma.entity.server";
 import { recipeEntity } from "~/domain/recipe/recipe.entity.server";
 import {
   DEFAULT_RECIPE_CHATGPT_PROJECT_URL,
   RECIPE_CHATGPT_PROJECT_URL_SETTING_NAME,
   RECIPE_CHATGPT_SETTINGS_CONTEXT,
 } from "~/domain/recipe/recipe-chatgpt-settings";
+import {
+  buildRecipeLineCostSnapshot,
+  recalcRecipeCosts,
+  resolveRecipeLineCosts,
+} from "~/domain/costs/recipe-cost-recalc.server";
 import {
   applyRecipeCompositionLineToVariations,
   createRecipeCompositionIngredientSkeleton,
@@ -47,98 +51,6 @@ import formatDecimalPlaces from "~/utils/format-decimal-places";
 import type { HttpResponse } from "~/utils/http-response.server";
 import { badRequest, ok } from "~/utils/http-response.server";
 import { lastUrlSegment } from "~/utils/url";
-
-async function resolveRecipeLineCosts(
-  db: any,
-  itemId: string,
-  variationId?: string | null
-) {
-  if (!itemId) {
-    return {
-      itemVariationId: null,
-      lastUnitCostAmount: 0,
-      avgUnitCostAmount: 0,
-    };
-  }
-
-  let itemVariation: any = null;
-
-  if (variationId) {
-    itemVariation = await itemVariationPrismaEntity.linkToItem({
-      itemId,
-      variationId,
-    });
-  } else {
-    itemVariation = await db.itemVariation.findFirst({
-      where: {
-        itemId,
-        deletedAt: null,
-        Variation: { kind: "base", code: "base" },
-      },
-      include: { ItemCostVariation: true },
-      orderBy: [{ createdAt: "asc" }],
-    });
-
-    if (!itemVariation) {
-      itemVariation = await db.itemVariation.findFirst({
-        where: { itemId, deletedAt: null },
-        include: { ItemCostVariation: true },
-        orderBy: [{ createdAt: "asc" }],
-      });
-    }
-  }
-
-  const itemVariationId = itemVariation?.id || null;
-  const lastUnitCostAmount = Number(
-    itemVariation?.ItemCostVariation?.costAmount || 0
-  );
-
-  let avgUnitCostAmount = lastUnitCostAmount;
-  if (itemVariationId) {
-    const historyRows = await db.itemCostVariationHistory.findMany({
-      where: { itemVariationId },
-      select: { costAmount: true },
-      orderBy: [{ createdAt: "desc" }],
-      take: 20,
-    });
-    if (historyRows.length > 0) {
-      const sum = historyRows.reduce(
-        (acc: number, row: any) => acc + Number(row.costAmount || 0),
-        0
-      );
-      avgUnitCostAmount = sum / historyRows.length;
-    }
-  }
-
-  return { itemVariationId, lastUnitCostAmount, avgUnitCostAmount };
-}
-
-function buildRecipeLineCostSnapshot(
-  costInfo: {
-    itemVariationId: string | null;
-    lastUnitCostAmount: number;
-    avgUnitCostAmount: number;
-  },
-  quantity: number,
-  lossPct: number = 0
-) {
-  const safeLossPct = Math.min(99.9999, Math.max(0, Number(lossPct || 0)));
-  const grossQuantity =
-    safeLossPct > 0
-      ? Number((quantity / (1 - safeLossPct / 100)).toFixed(6))
-      : Number(quantity || 0);
-  return {
-    itemVariationId: costInfo.itemVariationId,
-    lastUnitCostAmount: Number(costInfo.lastUnitCostAmount || 0),
-    avgUnitCostAmount: Number(costInfo.avgUnitCostAmount || 0),
-    lastTotalCostAmount: Number(
-      ((costInfo.lastUnitCostAmount || 0) * grossQuantity).toFixed(6)
-    ),
-    avgTotalCostAmount: Number(
-      ((costInfo.avgUnitCostAmount || 0) * grossQuantity).toFixed(6)
-    ),
-  };
-}
 
 function parseLossPctInput(value: unknown): number | null {
   const normalized = String(value ?? "").trim();
@@ -840,35 +752,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
     try {
       const db = prismaClient as any;
-      const lines = await listRecipeCompositionLines(db, recipeId);
-
-      for (const line of lines) {
-        const variationId = line.ItemVariation?.variationId || null;
-        const effectiveLossPct = Number(
-          line.lossPct ?? line.defaultLossPct ?? 0
-        );
-        const costInfo = await resolveRecipeLineCosts(
-          db,
-          line.itemId,
-          variationId
-        );
-        const snapshot = buildRecipeLineCostSnapshot(
-          costInfo,
-          Number(line.quantity || 0),
-          effectiveLossPct
-        );
-
-        await updateRecipeCompositionLine({
-          db,
-          lineId: line.id,
-          recipeId,
-          unit: line.unit,
-          quantity: Number(line.quantity || 0),
-          lossPct: effectiveLossPct,
-          snapshot,
-        });
-      }
-
+      await recalcRecipeCosts(db, recipeId);
       return buildRecipeSectionRedirect(recipeId, currentSection);
     } catch (error) {
       return badRequest(
@@ -1311,7 +1195,11 @@ export function InlineVariationCellEditor({
     if (!hasPendingChanges()) return;
     const formData = new FormData(formRef.current);
     formData.set("_action", "recipe-line-update");
-    fetcher.submit(formData, { method: "post", action: ".." });
+    fetcher.submit(formData, {
+      method: "post",
+      action: "..",
+      preventScrollReset: true,
+    });
   }
 
   const effectiveLossPct = showVariationLoss
@@ -1328,6 +1216,7 @@ export function InlineVariationCellEditor({
       action=".."
       method="post"
       ref={formRef}
+      preventScrollReset
       onBlurCapture={() => {
         window.setTimeout(() => {
           const activeElement = document.activeElement;

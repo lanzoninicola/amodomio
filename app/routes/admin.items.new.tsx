@@ -1,4 +1,5 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
+import { redirect } from "@remix-run/node";
 import { Form, Link, useActionData, useLoaderData } from "@remix-run/react";
 import { useState } from "react";
 import { ChevronLeft } from "lucide-react";
@@ -6,6 +7,7 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
+import { getAvailableItemUnits, ITEM_UNIT_OPTIONS, normalizeItemUnit } from "~/domain/item/item-units.server";
 import prismaClient from "~/lib/prisma/client.server";
 import { badRequest, ok, serverError } from "~/utils/http-response.server";
 
@@ -18,44 +20,12 @@ const ITEM_CLASSIFICATIONS = [
   "outro",
 ] as const;
 
-const ITEM_UNIT_OPTIONS = ["UN", "L", "ML", "KG", "G"];
-
 function toBool(value: FormDataEntryValue | null) {
   return value === "on" || value === "true";
 }
 
 function normalizeUnit(value: FormDataEntryValue | null) {
-  const normalized = String(value || "").trim().toUpperCase();
-  return normalized || null;
-}
-
-async function getAvailableItemUnits() {
-  const db = prismaClient as any;
-  const staticUnits = ITEM_UNIT_OPTIONS;
-  let dbUnits: Array<{ code?: string | null }> | undefined;
-  const measurementUnitModel = db.measurementUnit;
-
-  if (typeof measurementUnitModel?.findMany !== "function") {
-    return [...staticUnits].sort((a, b) => a.localeCompare(b, "pt-BR"));
-  }
-
-  try {
-    dbUnits = await measurementUnitModel.findMany({
-      where: { active: true },
-      select: { code: true },
-      orderBy: [{ code: "asc" }],
-    });
-  } catch (_error) {
-    // fallback para ambientes sem tabela measurement_units
-  }
-
-  const merged = new Set<string>(staticUnits);
-  for (const row of dbUnits || []) {
-    const code = normalizeUnit(row?.code);
-    if (code) merged.add(code);
-  }
-
-  return Array.from(merged).sort((a, b) => a.localeCompare(b, "pt-BR"));
+  return normalizeItemUnit(value);
 }
 
 export async function loader({}: LoaderFunctionArgs) {

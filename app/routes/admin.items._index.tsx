@@ -130,13 +130,7 @@ function getClassificationBadgeClass(value?: string | null) {
 function pickPrimaryItemVariation(item: any) {
   const activeVariations = (item?.ItemVariation || []).filter((row: any) => !row?.deletedAt);
 
-  return (
-    activeVariations.find((row: any) => row.isReference && row?.Variation?.kind !== "base") ||
-    activeVariations.find((row: any) => row?.Variation?.kind !== "base") ||
-    activeVariations.find((row: any) => row?.Variation?.kind === "base" && row?.Variation?.code === "base") ||
-    activeVariations[0] ||
-    null
-  );
+  return activeVariations.find((row: any) => row.isReference) || activeVariations[0] || null;
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -256,10 +250,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
       take: PAGE_SIZE,
     });
 
-    for (const item of items) {
-      await itemVariationPrismaEntity.syncBaseVariationForItem(item.id);
-    }
-
     const refreshedItems = await db.item.findMany({
       where: { id: { in: items.map((item: any) => item.id) } },
       include: {
@@ -373,6 +363,31 @@ export async function action({ request }: ActionFunctionArgs) {
           return badRequest("Item não encontrado");
         }
 
+        const stockMovementLookup =
+          typeof db.stockNfImportAppliedChange?.findFirst === "function"
+            ? db.stockNfImportAppliedChange.findFirst({
+              where: { itemId, rolledBackAt: null },
+              select: { id: true },
+            })
+            : typeof db.stockNfImportBatchLine?.findFirst === "function"
+              ? db.stockNfImportBatchLine.findFirst({
+                where: { mappedItemId: itemId, appliedAt: { not: null }, rolledBackAt: null },
+                select: { id: true },
+              })
+              : Promise.resolve(null);
+        const recipeUsageLookup =
+          typeof db.recipeIngredient?.findFirst === "function"
+            ? db.recipeIngredient.findFirst({
+              where: { ingredientItemId: itemId },
+              select: { id: true },
+            })
+            : typeof db.recipeLine?.findFirst === "function"
+              ? db.recipeLine.findFirst({
+                where: { itemId },
+                select: { id: true },
+              })
+              : Promise.resolve(null);
+
         const [
           stockMovement,
           recipeLine,
@@ -380,11 +395,8 @@ export async function action({ request }: ActionFunctionArgs) {
           menuItem,
           itemCostSheet,
         ] = await Promise.all([
-          db.stockNfImportAppliedChange.findFirst({
-            where: { itemId, rolledBackAt: null },
-            select: { id: true },
-          }),
-          db.recipeLine.findFirst({ where: { itemId }, select: { id: true } }),
+          stockMovementLookup,
+          recipeUsageLookup,
           db.recipe.findFirst({ where: { itemId }, select: { id: true } }),
           db.menuItem.findFirst({ where: { itemId }, select: { id: true } }),
           db.itemCostSheet.findFirst({ where: { itemId }, select: { id: true } }),
@@ -392,7 +404,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
         const reasons: string[] = [];
         if (stockMovement) reasons.push("existem movimentações de estoque");
-        if (recipeLine) reasons.push("está usado em receitas");
+        if (recipeLine) reasons.push("está sendo usado como ingrediente em receitas");
         if (recipe) reasons.push("está vinculado a uma receita");
         if (menuItem) reasons.push("está vinculado ao cardápio");
         if (itemCostSheet) reasons.push("possui fichas de custo");

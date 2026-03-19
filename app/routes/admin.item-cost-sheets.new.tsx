@@ -118,7 +118,6 @@ export async function action({ request }: ActionFunctionArgs) {
 
     const primaryTargetVariation =
       targetVariations.find((variation: any) => variation.id === primaryVariation?.id) ||
-      targetVariations.find((variation: any) => variation?.Variation?.kind !== "base") ||
       targetVariations[0];
 
     const latestVersions = await db.itemCostSheet.findMany({

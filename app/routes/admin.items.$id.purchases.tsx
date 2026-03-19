@@ -1,7 +1,7 @@
 import { Form, useOutletContext } from "@remix-run/react";
 import { useState } from "react";
+import { DecimalInput } from "~/components/inputs/inputs";
 import { Button } from "~/components/ui/button";
-import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import type { AdminItemOutletContext } from "./admin.items.$id";
@@ -63,22 +63,22 @@ export default function AdminItemPurchasesTab() {
                 <Label htmlFor="purchaseToConsumptionFactor">
                   Fator (1 compra = ? {item.consumptionUm || "consumo"})
                 </Label>
-                <Input
-                  id="purchaseToConsumptionFactor"
-                  name="purchaseToConsumptionFactor"
-                  type="number"
-                  min="0"
-                  step="0.000001"
-                  defaultValue={item.purchaseToConsumptionFactor ?? ""}
-                  placeholder="ex: 1000"
-                  disabled={!canConfigureConversion}
-                />
+                <div id="purchaseToConsumptionFactor" className="mt-1">
+                  <DecimalInput
+                    name="purchaseToConsumptionFactor"
+                    defaultValue={item.purchaseToConsumptionFactor ?? undefined}
+                    fractionDigits={3}
+                    placeholder="0,000"
+                    className="w-full"
+                    disabled={!canConfigureConversion}
+                  />
+                </div>
               </div>
             </div>
 
             {item.purchaseUm && item.consumptionUm && item.purchaseToConsumptionFactor ? (
               <div className="text-xs text-slate-700">
-                Configuração atual: 1 {item.purchaseUm} = {Number(item.purchaseToConsumptionFactor).toFixed(6)}{" "}
+                Configuração atual: 1 {item.purchaseUm} = {Number(item.purchaseToConsumptionFactor).toFixed(3)}{" "}
                 {item.consumptionUm}
               </div>
             ) : null}

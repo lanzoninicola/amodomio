@@ -1,7 +1,7 @@
 import { Await, Form, Link, defer, useActionData, useLoaderData } from "@remix-run/react";
 import Container from "~/components/layout/container/container";
 import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { Input } from "~/components/ui/input";
 import { mapPriceVariationsLabel } from "~/domain/cardapio/fn.utils";
 import CopyButton from "~/components/primitives/copy-button/copy-button";
@@ -17,7 +17,7 @@ import { toast } from "~/components/ui/use-toast";
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from "~/components/ui/dialog";
 import { Button } from "~/components/ui/button";
 import { DialogTitle } from "@radix-ui/react-dialog";
-import { Car, CopyIcon, ExpandIcon } from "lucide-react";
+import { CopyIcon, Download, ExpandIcon, ExternalLink, Images, PlayCircle, Star } from "lucide-react";
 import OptionTab from "~/components/layout/option-tab/option-tab";
 import MenuItemSwitchActivationSubmit from "~/domain/cardapio/components/menu-item-switch-activation.tsx/menu-item-switch-activation-submit";
 import { MenuItemSellingPriceVariation } from "@prisma/client";
@@ -30,6 +30,7 @@ import { Checkbox } from "~/components/ui/checkbox";
 import { MoneyInput } from "~/components/money-input/MoneyInput";
 import toFixedNumber from "~/utils/to-fixed-number";
 import prismaClient from "~/lib/prisma/client.server";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "~/components/ui/tooltip";
 
 export const meta: MetaFunction = () => [
   { title: "Lista de sabores | Admin" },
@@ -218,8 +219,14 @@ export default function AdminAtendimentoListaSabores() {
 
 
             const [items] = useState<MenuItemWithAssociations[]>(cardapioItems) // original completo
+            const [includeUpcoming, setIncludeUpcoming] = useState(false)
             const activeItems = items.filter(item => item.active === true)
-            const [filteredItems, setFilteredItems] = useState<MenuItemWithAssociations[]>(activeItems.filter(i => i.visible === true) || [])
+            const activeItemsForDisplay = activeItems.filter((item) =>
+              includeUpcoming ? true : item.upcoming !== true
+            )
+            const [filteredItems, setFilteredItems] = useState<MenuItemWithAssociations[]>(
+              activeItemsForDisplay.filter((item) => item.visible === true)
+            )
             const [profitRanges, setProfitRanges] = useState({
               critical: false,
               low: false,
@@ -250,9 +257,9 @@ export default function AdminAtendimentoListaSabores() {
               })
             }
 
-            const allActiveItemsWithProfitFilter = applyProfitFilter(activeItems)
+            const allActiveItemsWithProfitFilter = applyProfitFilter(activeItemsForDisplay)
             const displayedItemsBase = applyProfitFilter(
-              selectedLetter && !isSearching ? activeItems : filteredItems
+              selectedLetter && !isSearching ? activeItemsForDisplay : filteredItems
             )
             const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("")
             const availableLetters = new Set(
@@ -267,63 +274,84 @@ export default function AdminAtendimentoListaSabores() {
 
             // @ts-ignore
             return (
-              <div className="flex flex-col gap-4">
-                <div className="grid grid-cols-1 md:grid-cols-8 gap-4 items-center bg-slate-50 px-4 py-2">
-                  <h1 className="text-lg font-bold tracking-tighter md:text-lg col-span-2">
-                    Lista de sabores
-                  </h1>
-                  <CardapioItemSearch items={items} setFilteredItems={setFilteredItems} setIsSearching={setIsSearching} />
+              <div className="flex flex-col gap-5">
+                <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-slate-100/80 p-4 shadow-sm md:p-5">
+                  <div className="flex flex-col gap-5">
+                    <div className="flex flex-col gap-1">
+                      <h1 className="text-xl font-bold tracking-tight text-slate-900">
+                        Lista de sabores
+                      </h1>
+                      <p className="text-sm text-muted-foreground">
+                        Busque sabores, visualize pausados quando precisar e controle se lancamentos futuros entram na lista.
+                      </p>
+                    </div>
 
-                  <div className="col-span-full flex flex-wrap items-center justify-center gap-4 text-center">
-                    <span className="text-xs text-muted-foreground">Faixa de lucro</span>
-                    <div className="flex flex-wrap items-center justify-center gap-3">
-                      <div className="flex items-center gap-2">
-                        <Checkbox
-                          id="profit-critical"
-                          checked={profitRanges.critical}
-                          onCheckedChange={(value) =>
-                            setProfitRanges((prev) => ({ ...prev, critical: Boolean(value) }))
-                          }
-                        />
-                        <Label htmlFor="profit-critical" className="text-xs">
-                          Crítico (&lt; 0)
-                        </Label>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Checkbox
-                          id="profit-low"
-                          checked={profitRanges.low}
-                          onCheckedChange={(value) =>
-                            setProfitRanges((prev) => ({ ...prev, low: Boolean(value) }))
-                          }
-                        />
-                        <Label htmlFor="profit-low" className="text-xs">
-                          Baixo (0 a 10)
-                        </Label>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Checkbox
-                          id="profit-medium"
-                          checked={profitRanges.medium}
-                          onCheckedChange={(value) =>
-                            setProfitRanges((prev) => ({ ...prev, medium: Boolean(value) }))
-                          }
-                        />
-                        <Label htmlFor="profit-medium" className="text-xs">
-                          Médio (10 a 15)
-                        </Label>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Checkbox
-                          id="profit-priority"
-                          checked={profitRanges.priority}
-                          onCheckedChange={(value) =>
-                            setProfitRanges((prev) => ({ ...prev, priority: Boolean(value) }))
-                          }
-                        />
-                        <Label htmlFor="profit-priority" className="text-xs">
-                          Prioridade (&gt; 15)
-                        </Label>
+                    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.9fr)] xl:items-start">
+                      <CardapioItemSearch
+                        items={items}
+                        includeUpcoming={includeUpcoming}
+                        setIncludeUpcoming={setIncludeUpcoming}
+                        setFilteredItems={setFilteredItems}
+                        setIsSearching={setIsSearching}
+                      />
+
+                      <div className="rounded-xl border border-slate-200 bg-white/90 p-4">
+                        <div className="mb-3 flex items-center justify-between gap-2">
+                          <span className="text-sm font-semibold text-slate-800">Faixa de lucro</span>
+                          <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                            Filtro rapido
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-3">
+                          <div className="flex items-center gap-2 rounded-full border border-red-200 bg-red-50 px-3 py-1.5">
+                            <Checkbox
+                              id="profit-critical"
+                              checked={profitRanges.critical}
+                              onCheckedChange={(value) =>
+                                setProfitRanges((prev) => ({ ...prev, critical: Boolean(value) }))
+                              }
+                            />
+                            <Label htmlFor="profit-critical" className="text-xs font-medium text-slate-700">
+                              Crítico (&lt; 0)
+                            </Label>
+                          </div>
+                          <div className="flex items-center gap-2 rounded-full border border-orange-200 bg-orange-50 px-3 py-1.5">
+                            <Checkbox
+                              id="profit-low"
+                              checked={profitRanges.low}
+                              onCheckedChange={(value) =>
+                                setProfitRanges((prev) => ({ ...prev, low: Boolean(value) }))
+                              }
+                            />
+                            <Label htmlFor="profit-low" className="text-xs font-medium text-slate-700">
+                              Baixo (0 a 10)
+                            </Label>
+                          </div>
+                          <div className="flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5">
+                            <Checkbox
+                              id="profit-medium"
+                              checked={profitRanges.medium}
+                              onCheckedChange={(value) =>
+                                setProfitRanges((prev) => ({ ...prev, medium: Boolean(value) }))
+                              }
+                            />
+                            <Label htmlFor="profit-medium" className="text-xs font-medium text-slate-700">
+                              Médio (10 a 15)
+                            </Label>
+                          </div>
+                          <div className="flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5">
+                            <Checkbox
+                              id="profit-priority"
+                              checked={profitRanges.priority}
+                              onCheckedChange={(value) =>
+                                setProfitRanges((prev) => ({ ...prev, priority: Boolean(value) }))
+                              }
+                            />
+                            <Label htmlFor="profit-priority" className="text-xs font-medium text-slate-700">
+                              Prioridade (&gt; 15)
+                            </Label>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -473,6 +501,9 @@ function CardapioItem({ item, setVisible, visible, active, setActive, showExpand
               </Badge>
             )}
             {
+              <CardapioItemGalleryDialog item={item} />
+            }
+            {
               showExpandButton === true && (
                 <CardapioItemDialog key={item.id} triggerComponent={
                   <ExpandIcon size={16} />
@@ -532,6 +563,227 @@ function CardapioItem({ item, setVisible, visible, active, setActive, showExpand
       </div>
     </div>
   )
+}
+
+type GalleryAsset = {
+  id: string;
+  url: string;
+  thumbnailUrl: string;
+  kind: "image" | "video";
+  label: string;
+  isPrimary: boolean;
+};
+
+function CardapioItemGalleryDialog({ item }: { item: MenuItemWithAssociations }) {
+  const assets = getGalleryAssets(item);
+  const [showVideos, setShowVideos] = useState(false);
+  const visibleAssets = assets.filter((asset) => showVideos || asset.kind !== "video");
+  const [selectedAssetId, setSelectedAssetId] = useState<string>(visibleAssets[0]?.id ?? "");
+
+  useEffect(() => {
+    setShowVideos(false);
+  }, [item.id]);
+
+  useEffect(() => {
+    setSelectedAssetId((current) => {
+      if (visibleAssets.some((asset) => asset.id === current)) return current;
+      return visibleAssets[0]?.id ?? "";
+    });
+  }, [visibleAssets]);
+
+  if (assets.length === 0) {
+    return (
+      <TooltipProvider delayDuration={120}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="inline-flex">
+              <Button
+                type="button"
+                variant="outline"
+                disabled
+                className="border-none text-sm md:text-xs p-1 mr-0 h-max opacity-40"
+              >
+                <Images size={16} />
+              </Button>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>
+            Nenhuma imagem disponivel
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
+
+  const selectedAsset =
+    visibleAssets.find((asset) => asset.id === selectedAssetId) ?? visibleAssets[0] ?? null;
+
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          className="border-none text-sm md:text-xs p-1 mr-0 h-max hover:bg-black/20 hover:text-white"
+        >
+          <Images size={16} />
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-3xl border-0 bg-white p-0 overflow-hidden shadow-xl">
+        <div className="rounded-[28px] bg-white p-8">
+          <div className="flex flex-col gap-6">
+            <div className="min-w-0">
+              <DialogTitle className="truncate text-2xl font-semibold tracking-tight text-slate-900">
+                {item.name}
+              </DialogTitle>
+              <p className="mt-1 text-sm text-slate-500">
+                Visualize as imagens e videos do item e baixe qualquer arquivo direto pela galeria.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <Switch
+                id={`gallery-show-videos-${item.id}`}
+                checked={showVideos}
+                onCheckedChange={(value) => setShowVideos(Boolean(value))}
+              />
+              <Label
+                htmlFor={`gallery-show-videos-${item.id}`}
+                className="text-sm text-slate-600"
+              >
+                Mostrar videos
+              </Label>
+            </div>
+
+            <div className="w-full max-w-full overflow-x-auto overflow-y-hidden pb-4">
+              {visibleAssets.length === 0 ? (
+                <div className="rounded-3xl bg-slate-50 px-6 py-10 text-sm text-slate-500">
+                  Nenhuma imagem disponivel com os videos ocultos. Ative "Mostrar videos" para exibir os arquivos de video.
+                </div>
+              ) : (
+                <div className="flex w-max min-w-0 gap-8 pl-1 pr-8">
+                  {visibleAssets.map((asset) => {
+                    const isSelected = asset.id === selectedAsset?.id;
+
+                    return (
+                      <div
+                        key={asset.id}
+                        className={cn(
+                          "group relative block h-[230px] w-[230px] shrink-0 overflow-hidden rounded-[28px] bg-slate-50 text-left transition",
+                          isSelected
+                            ? "shadow-lg shadow-slate-300/70"
+                            : "hover:shadow-md hover:shadow-slate-200/80"
+                        )}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setSelectedAssetId(asset.id)}
+                          className="absolute inset-0"
+                          aria-label={`Selecionar ${asset.label}`}
+                        >
+                          {asset.kind === "video" ? (
+                            <>
+                              <img
+                                src={asset.thumbnailUrl}
+                                alt={asset.label}
+                                className="h-full w-full object-cover"
+                              />
+                              <div className="absolute inset-0 flex items-center justify-center bg-black/15">
+                                <PlayCircle size={42} className="text-white drop-shadow-sm" />
+                              </div>
+                            </>
+                          ) : (
+                            <img
+                              src={asset.thumbnailUrl}
+                              alt={asset.label}
+                              className="h-full w-full object-cover"
+                            />
+                          )}
+                        </button>
+                        <div className="absolute bottom-4 right-4 flex items-center gap-2">
+                          <ExpandAssetButton asset={asset} />
+                          <DownloadAssetButton asset={asset} itemName={item.name} floating iconOnly />
+                        </div>
+                        {asset.isPrimary && (
+                          <div className="absolute bottom-4 left-4 rounded-full bg-amber-400 p-2 text-slate-950 shadow-sm">
+                            <Star size={16} className="fill-current" />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  <div aria-hidden="true" className="w-2 shrink-0" />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ExpandAssetButton({ asset }: { asset: GalleryAsset }) {
+  const handleOpen = () => {
+    if (typeof window === "undefined") return;
+    window.open(asset.url, "_blank", "noopener,noreferrer");
+  };
+
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      className="h-9 w-9 rounded-full border border-white/10 bg-black/95 p-0 text-white shadow-lg shadow-black/40 backdrop-blur hover:bg-black hover:text-white"
+      onClick={(event) => {
+        event.stopPropagation();
+        handleOpen();
+      }}
+      aria-label={`Expandir ${asset.label}`}
+    >
+      <ExternalLink size={16} />
+    </Button>
+  );
+}
+
+function DownloadAssetButton({
+  asset,
+  itemName,
+  floating = false,
+  iconOnly = false,
+}: {
+  asset: GalleryAsset;
+  itemName: string;
+  floating?: boolean;
+  iconOnly?: boolean;
+}) {
+  const downloadUrl = `/admin/media/download?src=${encodeURIComponent(asset.url)}&filename=${encodeURIComponent(
+    buildAssetFilename(itemName, asset)
+  )}`;
+
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      className={cn(
+        "shrink-0 gap-2",
+        floating && "border border-white/10 bg-black/95 text-white shadow-lg shadow-black/40 backdrop-blur hover:bg-black hover:text-white",
+        iconOnly && "h-9 w-9 rounded-full p-0"
+      )}
+      onClick={(event) => {
+        event.stopPropagation();
+        if (typeof document === "undefined") return;
+        const link = document.createElement("a");
+        link.href = downloadUrl;
+        link.download = buildAssetFilename(itemName, asset);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      }}
+    >
+      <Download size={16} />
+      {!iconOnly && "Baixar"}
+    </Button>
+  );
 }
 
 function QuickSellPriceDialog({
@@ -633,6 +885,52 @@ function getProfitBadgeConfig(profitPerc: number | null) {
   };
 }
 
+function getGalleryAssets(item: MenuItemWithAssociations): GalleryAsset[] {
+  const visibleAssets = (item.MenuItemGalleryImage ?? [])
+    .filter((asset) => asset.visible !== false && Boolean(asset.secureUrl))
+    .sort((a, b) => {
+      if (a.isPrimary !== b.isPrimary) return a.isPrimary ? -1 : 1;
+      if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+      return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    });
+
+  return visibleAssets.map((asset, index) => {
+    const isVideo =
+      String(asset.kind || "").toLowerCase() === "video" ||
+      /\.(mp4|mov|webm|m4v|ogg|ogv)(\?|$)/i.test(String(asset.secureUrl || ""));
+
+    return {
+      id: asset.id,
+      url: String(asset.secureUrl || ""),
+      thumbnailUrl: String(asset.thumbnailUrl || asset.secureUrl || ""),
+      kind: isVideo ? "video" : "image",
+      isPrimary: Boolean(asset.isPrimary),
+      label:
+        asset.displayName ||
+        asset.originalFileName ||
+        `${isVideo ? "Video" : "Imagem"} ${index + 1}`,
+    };
+  });
+}
+
+function buildAssetFilename(itemName: string, asset: GalleryAsset) {
+  const safeItemName = itemName
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLowerCase();
+
+  const urlWithoutQuery = asset.url.split("?")[0] || "";
+  const extFromUrl = urlWithoutQuery.includes(".")
+    ? urlWithoutQuery.split(".").pop()
+    : asset.kind === "video"
+      ? "mp4"
+      : "jpg";
+
+  return `${safeItemName || "item"}-${asset.id.slice(0, 8)}.${extFromUrl}`;
+}
+
 function getProfitPercForItem(item: MenuItemWithAssociations) {
   const profitVariation = item.MenuItemSellingPriceVariation?.find(
     (variation) => variation.MenuItemSize?.key === "pizza-medium"
@@ -728,30 +1026,40 @@ function CardapioItemDialog({ children, triggerComponent }: CardapioItemDialogPr
 
 function CardapioItemSearch({
   items,
+  includeUpcoming,
+  setIncludeUpcoming,
   setFilteredItems,
   setIsSearching,
 }: {
   items: MenuItemWithAssociations[],
+  includeUpcoming: boolean,
+  setIncludeUpcoming: React.Dispatch<React.SetStateAction<boolean>>,
   setFilteredItems: React.Dispatch<React.SetStateAction<MenuItemWithAssociations[]>>,
   setIsSearching: React.Dispatch<React.SetStateAction<boolean>>
 }) {
   const [search, setSearch] = useState("")
   const [includeHidden, setIncludeHidden] = useState(false)
 
-  const applySearch = (value: string, shouldIncludeHidden: boolean) => {
+  const applySearch = (
+    value: string,
+    shouldIncludeHidden: boolean,
+    shouldIncludeUpcoming: boolean,
+  ) => {
+    const baseItems = items
+      .filter((item) => item.active === true)
+      .filter((item) => (shouldIncludeUpcoming ? true : item.upcoming !== true))
+
     if (!value) {
       setIsSearching(false)
       return setFilteredItems(
-        items
-          .filter(item => item.active === true)
-          .filter(item => (shouldIncludeHidden ? true : item.visible === true))
+        baseItems.filter((item) => (shouldIncludeHidden ? true : item.visible === true))
       )
     }
 
     setIsSearching(true)
 
-    const searchedItems = items
-      .filter(item => item.active === true)
+    const searchedItems = baseItems
+      .filter((item) => (shouldIncludeHidden ? true : item.visible === true))
       .filter(item => {
         const tags = item?.tags?.public || []
 
@@ -766,34 +1074,62 @@ function CardapioItemSearch({
     setFilteredItems(searchedItems)
   }
 
-  const handleSearch = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const value = event.target.value
-    setSearch(value)
-    applySearch(value, includeHidden)
-  }
+  useEffect(() => {
+    applySearch(search, includeHidden, includeUpcoming)
+  }, [search, includeHidden, includeUpcoming, items])
 
   return (
-    <div className="flex flex-col md:flex-row gap-2 md:gap-4 items-center w-full col-span-4">
-      <Input
-        name="search"
-        className="w-full md:w-[60%] py-4 text-lg bg-white"
-        placeholder="Pesquisar no cardápio..."
-        onChange={handleSearch}
-        value={search}
-      />
-      <div className="flex items-center gap-2 self-start md:self-auto">
-        <Switch
-          id="search-hidden-flavors"
-          checked={includeHidden}
-          onCheckedChange={(value) => {
-            const nextValue = !!value
-            setIncludeHidden(nextValue)
-            applySearch(search, nextValue)
-          }}
-        />
-        <Label htmlFor="search-hidden-flavors" className="text-xs text-muted-foreground">
-          Incluir sabores ocultos na busca
-        </Label>
+    <div className="rounded-xl border border-slate-200 bg-white/90 p-4">
+      <div className="flex flex-col gap-4">
+        <div className="space-y-1">
+          <Label htmlFor="search-flavors" className="text-sm font-semibold text-slate-800">
+            Buscar no cardapio
+          </Label>
+          <Input
+            id="search-flavors"
+            name="search"
+            className="h-12 w-full rounded-xl border-slate-200 bg-white text-base shadow-sm"
+            placeholder="Pesquisar por nome, ingredientes ou tags..."
+            onChange={(event) => setSearch(event.target.value)}
+            value={search}
+          />
+        </div>
+
+        <div className="flex flex-wrap gap-3">
+          <label
+            htmlFor="search-hidden-flavors"
+            className="flex min-h-14 flex-1 min-w-[240px] cursor-pointer items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3"
+          >
+            <div className="space-y-0.5">
+              <span className="block text-sm font-medium text-slate-800">Sabores ocultos</span>
+              <span className="block text-xs text-muted-foreground">
+                Inclui itens pausados no resultado da busca
+              </span>
+            </div>
+            <Switch
+              id="search-hidden-flavors"
+              checked={includeHidden}
+              onCheckedChange={(value) => setIncludeHidden(!!value)}
+            />
+          </label>
+
+          <label
+            htmlFor="search-upcoming-flavors"
+            className="flex min-h-14 flex-1 min-w-[240px] cursor-pointer items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3"
+          >
+            <div className="space-y-0.5">
+              <span className="block text-sm font-medium text-slate-800">Lancamentos futuros</span>
+              <span className="block text-xs text-muted-foreground">
+                Mostra itens marcados como futuros lancamentos
+              </span>
+            </div>
+            <Switch
+              id="search-upcoming-flavors"
+              checked={includeUpcoming}
+              onCheckedChange={(value) => setIncludeUpcoming(!!value)}
+            />
+          </label>
+        </div>
       </div>
     </div>
   )

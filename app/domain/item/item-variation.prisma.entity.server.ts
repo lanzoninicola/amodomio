@@ -107,14 +107,6 @@ class ItemVariationPrismaEntity {
 
       if (itemVariation.deletedAt) return itemVariation;
 
-      const isBase =
-        itemVariation?.Variation?.kind === "base" &&
-        itemVariation?.Variation?.code === "base";
-
-      if (isBase) {
-        throw new Error("Não é permitido remover a variação base do item");
-      }
-
       const removed = await (tx as any).itemVariation.update({
         where: { id },
         data: { deletedAt: new Date(), isReference: false },
@@ -146,7 +138,15 @@ class ItemVariationPrismaEntity {
     if (!itemId) throw new Error("Item.id é obrigatório");
 
     if (params?.ensureBaseIfMissing) {
-      await this.syncBaseVariationForItem(itemId);
+      const activeRows = await this.model.findMany({
+        where: { itemId, deletedAt: null },
+        select: { id: true },
+        take: 1,
+      });
+
+      if (activeRows.length === 0) {
+        await this.ensureBaseVariationForItem(itemId);
+      }
     }
 
     const activeRows = await this.model.findMany({
@@ -158,38 +158,14 @@ class ItemVariationPrismaEntity {
       orderBy: [{ createdAt: "asc" }],
     });
 
-    return (
-      activeRows.find((row: any) => row.isReference && row?.Variation?.kind !== "base") ||
-      activeRows.find((row: any) => row?.Variation?.kind !== "base") ||
-      activeRows.find((row: any) => row?.Variation?.kind === "base" && row?.Variation?.code === "base") ||
-      activeRows[0] ||
-      null
-    );
+    return activeRows.find((row: any) => row.isReference) || activeRows[0] || null;
   }
 
-  async replaceItemVariations(
-    itemId: string,
-    variationIds: string[],
-    params?: { keepBase?: boolean }
-  ) {
+  async replaceItemVariations(itemId: string, variationIds: string[]) {
     if (!itemId) throw new Error("Item.id é obrigatório");
 
     return await this.client.$transaction(async (tx) => {
-      const keepBase = params?.keepBase !== false;
       const normalizedIds = Array.from(new Set(variationIds.filter(Boolean)));
-
-      if (keepBase) {
-        const baseVariation =
-          (await (tx as any).variation.findFirst({
-            where: { kind: "base", code: "base" },
-          })) ||
-          (await (tx as any).variation.create({
-            data: { kind: "base", code: "base", name: "Base" },
-          }));
-
-        normalizedIds.push(baseVariation.id);
-      }
-
       const uniqueIds = Array.from(new Set(normalizedIds));
       const current = await (tx as any).itemVariation.findMany({
         where: { itemId },
@@ -217,20 +193,10 @@ class ItemVariationPrismaEntity {
       );
 
       for (const row of toDisable) {
-        const variation = await (tx as any).variation.findUnique({
-          where: { id: row.variationId },
-        });
-        const isBase = variation?.kind === "base" && variation?.code === "base";
-        if (isBase && keepBase) continue;
-
         await (tx as any).itemVariation.update({
           where: { id: row.id },
           data: { deletedAt: new Date(), isReference: false },
         });
-      }
-
-      if (keepBase) {
-        await this.syncBaseVariationForItemTx(tx, itemId);
       }
 
       await this.ensureReferenceForItemTx(tx, itemId);
@@ -289,10 +255,7 @@ class ItemVariationPrismaEntity {
       return;
     }
 
-    const preferred =
-      activeRows.find((row: any) => row?.Variation?.kind !== "base") ||
-      activeRows.find((row: any) => row?.Variation?.kind === "base" && row?.Variation?.code === "base") ||
-      activeRows[0];
+    const preferred = activeRows[0];
 
     await (tx as any).itemVariation.update({
       where: { id: preferred.id },
@@ -315,20 +278,7 @@ class ItemVariationPrismaEntity {
       orderBy: [{ createdAt: "asc" }],
     });
 
-    const activeNonBase = current.filter(
-      (row: any) => !row.deletedAt && row?.Variation?.kind !== "base"
-    );
     const baseRow = current.find((row: any) => row.variationId === baseVariation.id) || null;
-
-    if (activeNonBase.length > 0) {
-      if (baseRow && !baseRow.deletedAt) {
-        await (tx as any).itemVariation.update({
-          where: { id: baseRow.id },
-          data: { deletedAt: new Date(), isReference: false },
-        });
-      }
-      return null;
-    }
 
     if (!baseRow) {
       return await (tx as any).itemVariation.create({

@@ -187,6 +187,7 @@ model Item {
   StockNfImportBatchLine StockNfImportBatchLine[]
   StockNfImportAppliedChange StockNfImportAppliedChange[]
   ItemImportAlias ItemImportAlias[]
+  CostImpactRunSource CostImpactRun[]
 
   @@index([categoryId], map: "items_category_id_idx")
   @@index([classification], map: "items_classification_idx")
@@ -375,6 +376,8 @@ model Supplier {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
   contacts    SupplierContact[]
+  StockNfImportBatchLine     StockNfImportBatchLine[]
+  StockNfImportAppliedChange StockNfImportAppliedChange[]
 
   @@index([cnpj], map: "suppliers_cnpj_idx")
   @@index([name], map: "suppliers_name_idx")
@@ -454,6 +457,7 @@ model MenuItem {
   menuItemGroupId                    String?                              @map("menu_item_group_id")
   MenuItemSellingPriceVariationAudit MenuItemSellingPriceVariationAudit[]
   MenuItemGalleryImage               MenuItemGalleryImage[]
+  CostImpactMenuItem                 CostImpactMenuItem[]
 
   @@index([itemId], map: "menu_items_item_id_idx")
   @@map("menu_items")
@@ -605,6 +609,7 @@ model MenuItemSellingChannel {
   sortOrderIndex                     Int                                  @default(0) @map("sort_order_index")
   MenuItemSellingPriceVariation      MenuItemSellingPriceVariation[]
   MenuItemSellingPriceVariationAudit MenuItemSellingPriceVariationAudit[]
+  CostImpactMenuItem                 CostImpactMenuItem[]
 
   @@map("menu_item_selling_channels")
 }
@@ -944,6 +949,7 @@ model MenuItemSize {
   MenuItemSellingPriceVariation      MenuItemSellingPriceVariation[]
   MenuItemCostVariation              MenuItemCostVariation[]
   MenuItemSellingPriceVariationAudit MenuItemSellingPriceVariationAudit[]
+  CostImpactMenuItem                 CostImpactMenuItem[]
 
   @@map("menu_item_sizes")
 }
@@ -2083,6 +2089,11 @@ model StockNfImportBatchLine {
   motivo                    String?
   identification            String?
   invoiceNumber             String?  @map("invoice_number")
+  supplierId                String?  @map("supplier_id")
+  supplierName              String?  @map("supplier_name")
+  supplierNameNormalized    String?  @map("supplier_name_normalized")
+  supplierCnpj              String?  @map("supplier_cnpj")
+  supplierMatchSource       String?  @map("supplier_match_source")
   qtyEntry                  Float?   @map("qty_entry")
   unitEntry                 String?  @map("unit_entry")
   qtyConsumption            Float?   @map("qty_consumption")
@@ -2109,6 +2120,7 @@ model StockNfImportBatchLine {
 
   Batch           StockNfImportBatch            @relation(fields: [batchId], references: [id], onDelete: Cascade)
   MappedItem      Item?                         @relation(fields: [mappedItemId], references: [id], onDelete: SetNull)
+  Supplier        Supplier?                     @relation(fields: [supplierId], references: [id], onDelete: SetNull)
   AppliedChanges  StockNfImportAppliedChange[]
 
   @@unique([batchId, rowNumber], map: "stock_nf_import_batch_lines_batch_row_unique")
@@ -2117,6 +2129,7 @@ model StockNfImportBatchLine {
   @@index([ingredientNameNormalized], map: "stock_nf_import_batch_lines_ingredient_norm_idx")
   @@index([sourceFingerprint], map: "stock_nf_import_batch_lines_fingerprint_idx")
   @@index([mappedItemId], map: "stock_nf_import_batch_lines_mapped_item_idx")
+  @@index([supplierId], map: "stock_nf_import_batch_lines_supplier_idx")
   @@map("stock_nf_import_batch_lines")
 }
 
@@ -2135,6 +2148,9 @@ model StockNfImportAppliedChange {
   conversionSource       String?  @map("conversion_source")
   conversionFactorUsed   Float?   @map("conversion_factor_used")
   invoiceNumber          String?  @map("invoice_number")
+  supplierId             String?  @map("supplier_id")
+  supplierName           String?  @map("supplier_name")
+  supplierCnpj           String?  @map("supplier_cnpj")
   movementAt             DateTime? @map("movement_at")
   appliedBy              String?  @map("applied_by")
   appliedAt              DateTime @default(now()) @map("applied_at")
@@ -2149,12 +2165,65 @@ model StockNfImportAppliedChange {
   Line   StockNfImportBatchLine @relation(fields: [lineId], references: [id], onDelete: Cascade)
   Item   Item                   @relation(fields: [itemId], references: [id], onDelete: Cascade)
   ItemVariation ItemVariation   @relation(fields: [itemVariationId], references: [id], onDelete: Cascade)
+  Supplier      Supplier?       @relation(fields: [supplierId], references: [id], onDelete: SetNull)
 
   @@unique([lineId], map: "stock_nf_import_applied_changes_line_unique")
   @@index([batchId], map: "stock_nf_import_applied_changes_batch_idx")
   @@index([itemId], map: "stock_nf_import_applied_changes_item_idx")
+  @@index([supplierId], map: "stock_nf_import_applied_changes_supplier_idx")
   @@index([rolledBackAt], map: "stock_nf_import_applied_changes_rolled_back_at_idx")
   @@map("stock_nf_import_applied_changes")
+}
+
+model CostImpactRun {
+  id              String   @id @default(uuid())
+  sourceType      String   @map("source_type")
+  sourceRefId     String?  @map("source_ref_id")
+  sourceItemId    String   @map("source_item_id")
+  status          String   @default("completed")
+  affectedRecipes Int      @default(0) @map("affected_recipes")
+  affectedSheets  Int      @default(0) @map("affected_sheets")
+  affectedMenuItems Int    @default(0) @map("affected_menu_items")
+  summary         Json?
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at")
+
+  sourceItem Item             @relation(fields: [sourceItemId], references: [id], onDelete: Cascade)
+  MenuItems  CostImpactMenuItem[]
+
+  @@index([sourceType, createdAt], map: "cost_impact_runs_source_type_created_at_idx")
+  @@index([sourceItemId, createdAt], map: "cost_impact_runs_source_item_created_at_idx")
+  @@map("cost_impact_runs")
+}
+
+model CostImpactMenuItem {
+  id                    String   @id @default(uuid())
+  runId                 String   @map("run_id")
+  menuItemId            String   @map("menu_item_id")
+  menuItemSizeId        String?  @map("menu_item_size_id")
+  menuItemChannelId     String?  @map("menu_item_channel_id")
+  currentCostAmount     Float    @default(0) @map("current_cost_amount")
+  previousCostAmount    Float    @default(0) @map("previous_cost_amount")
+  sellingPriceAmount    Float    @default(0) @map("selling_price_amount")
+  profitActualPerc      Float    @default(0) @map("profit_actual_perc")
+  profitExpectedPerc    Float    @default(0) @map("profit_expected_perc")
+  recommendedPriceAmount Float   @default(0) @map("recommended_price_amount")
+  priceGapAmount        Float    @default(0) @map("price_gap_amount")
+  marginGapPerc         Float    @default(0) @map("margin_gap_perc")
+  priority              String   @default("low")
+  metadata              Json?
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @default(now()) @updatedAt @map("updated_at")
+
+  Run        CostImpactRun            @relation(fields: [runId], references: [id], onDelete: Cascade)
+  MenuItem   MenuItem                 @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  MenuItemSize MenuItemSize?          @relation(fields: [menuItemSizeId], references: [id], onDelete: SetNull)
+  Channel    MenuItemSellingChannel?  @relation(fields: [menuItemChannelId], references: [id], onDelete: SetNull)
+
+  @@index([runId], map: "cost_impact_menu_items_run_idx")
+  @@index([menuItemId, createdAt], map: "cost_impact_menu_items_item_created_at_idx")
+  @@index([priority, createdAt], map: "cost_impact_menu_items_priority_created_at_idx")
+  @@map("cost_impact_menu_items")
 }
 
 model ItemImportAlias {

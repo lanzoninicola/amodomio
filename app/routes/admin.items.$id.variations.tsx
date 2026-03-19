@@ -1,7 +1,6 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { Form, useLoaderData } from "@remix-run/react";
 import { useMemo, useState } from "react";
-import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import prismaClient from "~/lib/prisma/client.server";
 import { badRequest, ok, serverError } from "~/utils/http-response.server";
@@ -34,7 +33,6 @@ export async function loader({ params }: LoaderFunctionArgs) {
       db.variation.findMany({
         where: {
           deletedAt: null,
-          NOT: { kind: "base" },
         },
         select: { id: true, kind: true, code: true, name: true },
         orderBy: [{ kind: "asc" }, { name: "asc" }],
@@ -73,17 +71,12 @@ export default function AdminItemVariationsTab() {
 
   const allVariations = payload.allVariations || [];
   const linkedVariations = payload.linkedVariations || [];
-  const baseLinkedVariation = linkedVariations.find((row) => row?.Variation?.kind === "base");
+  const linkedVariationIds = linkedVariations.map((row) => row.variationId);
+  const linkedReference = linkedVariations.find((row) => row.isReference);
 
-  const linkedNonBaseIds = linkedVariations
-    .filter((row) => row?.Variation?.kind !== "base")
-    .map((row) => row.variationId);
-
-  const linkedReference = linkedVariations.find((row) => row.isReference && row?.Variation?.kind !== "base");
-
-  const [selectedVariationIds, setSelectedVariationIds] = useState<string[]>(linkedNonBaseIds);
+  const [selectedVariationIds, setSelectedVariationIds] = useState<string[]>(linkedVariationIds);
   const [referenceVariationId, setReferenceVariationId] = useState<string>(
-    linkedReference?.variationId || linkedNonBaseIds[0] || ""
+    linkedReference?.variationId || linkedVariationIds[0] || ""
   );
 
   const selectedSet = useMemo(() => new Set(selectedVariationIds), [selectedVariationIds]);
@@ -152,36 +145,6 @@ export default function AdminItemVariationsTab() {
             </p>
 
             <div className="mt-3 max-h-[420px] space-y-2 overflow-auto pr-1">
-              {baseLinkedVariation ? (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <div className="truncate text-sm font-medium text-slate-900">
-                          {baseLinkedVariation.Variation?.name || "Variação base"}
-                        </div>
-                        <Badge
-                          variant="outline"
-                          className="border-amber-300 bg-amber-100 text-[11px] font-semibold uppercase tracking-wide text-amber-800"
-                        >
-                          Base
-                        </Badge>
-                      </div>
-                      <div className="text-xs text-slate-500">
-                        {baseLinkedVariation.Variation?.kind} • {baseLinkedVariation.Variation?.code}
-                      </div>
-                    </div>
-                    <Badge
-                      variant="outline"
-                      className="border-slate-300 bg-white text-[11px] font-semibold uppercase tracking-wide text-slate-700"
-                    >
-                      Automatica
-                    </Badge>
-                  </div>
-                  <p className="mt-2 text-xs text-slate-700">Esta variacao e vinculada automaticamente para todo item.</p>
-                </div>
-              ) : null}
-
               {selectedVariations.length === 0 ? (
                 <p className="text-sm text-slate-500">Nenhuma variação vinculada.</p>
               ) : (

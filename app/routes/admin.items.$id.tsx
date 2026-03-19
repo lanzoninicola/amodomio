@@ -36,6 +36,7 @@ const itemNavigation = [
   { name: "Variações", href: "variations" },
   { name: "Venda", href: "venda" },
   { name: "Custos", href: "costs" },
+  { name: "Movimentação estoque", href: "stock-movements" },
   { name: "Receitas", href: "recipes" },
   { name: "Fichas de Custo", href: "item-cost-sheets" },
   { name: "Compras", href: "purchases" },
@@ -55,13 +56,7 @@ const RECIPE_VARIATION_POLICY_OPTIONS = ["auto", "hide", "show"] as const;
 function pickPrimaryItemVariation(item: any) {
   const activeVariations = (item?.ItemVariation || []).filter((row: any) => !row?.deletedAt);
 
-  return (
-    activeVariations.find((row: any) => row.isReference && row?.Variation?.kind !== "base") ||
-    activeVariations.find((row: any) => row?.Variation?.kind !== "base") ||
-    activeVariations.find((row: any) => row?.Variation?.kind === "base" && row?.Variation?.code === "base") ||
-    activeVariations[0] ||
-    null
-  );
+  return activeVariations.find((row: any) => row.isReference) || activeVariations[0] || null;
 }
 
 async function getAvailableItemUnits() {
@@ -109,7 +104,23 @@ export async function loader({ params }: LoaderFunctionArgs) {
     if (!id) return badRequest("Item inválido");
 
     const db = prismaClient as any;
-    const [loadedItem, averageWindowDays, unitOptions, categories] = await Promise.all([
+    const ingredientRecipeUsageLookup =
+      typeof db.recipeIngredient?.findMany === "function"
+        ? db.recipeIngredient.findMany({
+          where: { ingredientItemId: id },
+          select: {
+            id: true,
+            recipeId: true,
+            Recipe: {
+              select: { id: true, name: true, createdAt: true },
+            },
+          },
+          orderBy: [{ updatedAt: "desc" }],
+          take: 20,
+        })
+        : Promise.resolve([]);
+
+    const [loadedItem, averageWindowDays, unitOptions, categories, ingredientRecipeUsage] = await Promise.all([
       db.item.findUnique({
         where: { id },
         include: {
@@ -189,11 +200,10 @@ export async function loader({ params }: LoaderFunctionArgs) {
         select: { id: true, name: true },
         orderBy: [{ name: "asc" }],
       }),
+      ingredientRecipeUsageLookup,
     ]);
 
     if (!loadedItem) return badRequest("Item não encontrado");
-    await itemVariationPrismaEntity.syncBaseVariationForItem(loadedItem.id);
-
     const item = await db.item.findUnique({
       where: { id },
       include: {
@@ -274,6 +284,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
         _baseItemVariation: primaryVariation,
         _itemCostVariationHistory: primaryHistory,
         _itemCostVariationCurrent: currentCost,
+        _ingredientRecipeUsage: ingredientRecipeUsage,
       },
       costMetrics,
       averageWindowDays,
@@ -350,7 +361,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
           Variation: {
             is: {
               deletedAt: null,
-              NOT: { kind: "base" },
             },
           },
         },
@@ -377,13 +387,14 @@ export async function action({ request, params }: ActionFunctionArgs) {
       const purchaseUm = normalizeUnit(formData.get("purchaseUm"));
       const factorRaw = String(formData.get("purchaseToConsumptionFactor") || "").trim();
       const purchaseToConsumptionFactor = factorRaw ? Number(factorRaw) : null;
-      const filledConversionFields = [purchaseUm, factorRaw].filter(Boolean).length;
+      const hasFactor = Number.isFinite(purchaseToConsumptionFactor) && purchaseToConsumptionFactor > 0;
+      const filledConversionFields = [Boolean(purchaseUm), hasFactor].filter(Boolean).length;
 
       if (filledConversionFields > 0 && filledConversionFields < 2) {
         return badRequest("Preencha unidade de compra e fator de conversão para salvar");
       }
 
-      if (filledConversionFields === 2 && !(purchaseToConsumptionFactor && purchaseToConsumptionFactor > 0)) {
+      if (filledConversionFields === 2 && !hasFactor) {
         return badRequest("Informe um fator de conversão maior que zero");
       }
 
@@ -447,21 +458,17 @@ export async function action({ request, params }: ActionFunctionArgs) {
         where: {
           id: { in: variationIds },
           deletedAt: null,
-          NOT: { kind: "base" },
         },
         select: { id: true },
       });
 
       const normalizedVariationIds = allowedVariations.map((row: any) => row.id);
-      const linked = await itemVariationPrismaEntity.replaceItemVariations(id, normalizedVariationIds, {
-        keepBase: normalizedVariationIds.length === 0,
-      });
+      const linked = await itemVariationPrismaEntity.replaceItemVariations(id, normalizedVariationIds);
 
       const activeRows = (linked || []).filter((row: any) => !row.deletedAt);
       const requestedReference = activeRows.find((row: any) => row.variationId === referenceVariationId);
       const fallbackReference =
         activeRows.find((row: any) => row.isReference) ||
-        activeRows.find((row: any) => row?.Variation?.kind !== "base") ||
         activeRows[0];
 
       const nextReference = requestedReference || fallbackReference;

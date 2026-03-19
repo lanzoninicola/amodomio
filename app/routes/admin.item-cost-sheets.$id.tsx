@@ -1,6 +1,12 @@
 import { ActionFunctionArgs, LoaderFunctionArgs, redirect } from "@remix-run/node";
 import { Link, Outlet, useActionData, useLoaderData, useLocation } from "@remix-run/react";
-import { listRecipeCompositionLines } from "~/domain/recipe/recipe-composition.server";
+import {
+  calcItemCostSheetTotalCostAmount,
+  getItemCostSheetSnapshot,
+  getRecipeCostSheetSnapshot,
+  recalcItemCostSheetTotals,
+  roundItemCostSheetMoney,
+} from "~/domain/costs/item-cost-sheet-recalc.server";
 import prismaClient from "~/lib/prisma/client.server";
 import { badRequest, ok, serverError } from "~/utils/http-response.server";
 
@@ -24,16 +30,6 @@ type SheetCompositionRow = {
     totalCostAmount: number;
   }>;
 };
-
-function roundMoney(value: number) {
-  return Number(Number(value || 0).toFixed(6));
-}
-
-function calcTotalCostAmount(unitCostAmount: number, quantity: number, wastePerc: number) {
-  const baseAmount = Number(unitCostAmount || 0) * Number(quantity || 0);
-  const wasteFactor = 1 + (Number(wastePerc || 0) / 100);
-  return roundMoney(baseAmount * wasteFactor);
-}
 
 function normalizeUnit(value: FormDataEntryValue | string | null | undefined) {
   const normalized = String(value || "").trim().toUpperCase();
@@ -80,55 +76,6 @@ async function listActiveItemVariationIdsForItem(db: any, itemId?: string | null
   });
 
   return (rows || []).map((row: any) => String(row.id || "")).filter(Boolean);
-}
-
-async function getRecipeSnapshot(db: any, recipeId: string, itemVariationId?: string | null) {
-  const recipe = await db.recipe.findUnique({
-    where: { id: recipeId },
-    select: { id: true, name: true },
-  });
-  if (!recipe) throw new Error("Receita não encontrada");
-
-  const lines = (await listRecipeCompositionLines(db, recipeId))
-    .filter((line) => !itemVariationId || String(line.ItemVariation?.id || "") === String(itemVariationId));
-  const lastTotal = lines.reduce((acc, line) => acc + Number(line.lastTotalCostAmount || 0), 0);
-  const avgTotal = lines.reduce((acc, line) => acc + Number(line.avgTotalCostAmount || 0), 0);
-
-  return {
-    recipe,
-    lastTotal,
-    avgTotal,
-    unitCostAmount: avgTotal,
-    note: `snapshot receita: ultimo=${lastTotal.toFixed(4)} medio=${avgTotal.toFixed(4)}`,
-  };
-}
-
-async function getItemCostSheetSnapshot(db: any, itemCostSheetId: string, itemVariationId?: string | null) {
-  const requestedSheet = await db.itemCostSheet.findUnique({
-    where: { id: itemCostSheetId },
-    select: { id: true, name: true, costAmount: true, itemVariationId: true, baseItemCostSheetId: true },
-  });
-  if (!requestedSheet) throw new Error("Ficha de custo não encontrada");
-
-  const rootSheetId = requestedSheet.baseItemCostSheetId || requestedSheet.id;
-  let sheet = requestedSheet;
-
-  if (itemVariationId) {
-    const variationMatch = await db.itemCostSheet.findFirst({
-      where: {
-        itemVariationId,
-        OR: [{ id: rootSheetId }, { baseItemCostSheetId: rootSheetId }],
-      },
-      select: { id: true, name: true, costAmount: true, itemVariationId: true, baseItemCostSheetId: true },
-    });
-    if (variationMatch) sheet = variationMatch;
-  }
-
-  return {
-    sheet,
-    unitCostAmount: Number(sheet.costAmount || 0),
-    note: `snapshot ficha: total=${Number(sheet.costAmount || 0).toFixed(4)}`,
-  };
 }
 
 async function listItemCostSheetCompositionRows(
@@ -243,7 +190,7 @@ async function createItemCostSheetRow(params: {
           quantity: entry.quantity,
           unitCostAmount: entry.unitCostAmount,
           wastePerc: entry.wastePerc,
-          totalCostAmount: calcTotalCostAmount(entry.unitCostAmount, entry.quantity, entry.wastePerc),
+          totalCostAmount: calcItemCostSheetTotalCostAmount(entry.unitCostAmount, entry.quantity, entry.wastePerc),
         })),
       },
     },
@@ -280,105 +227,6 @@ async function wouldCreateRecipeSheetCycle(
   }
 
   return false;
-}
-
-async function recalcItemCostSheetTotals(db: any, itemCostSheetId: string) {
-  const sheet = await db.itemCostSheet.findUnique({
-    where: { id: itemCostSheetId },
-    select: { id: true, itemVariationId: true, baseItemCostSheetId: true },
-  });
-  if (!sheet) return;
-
-  const rootSheetId = sheet.baseItemCostSheetId || sheet.id;
-  const groupSheets = await db.itemCostSheet.findMany({
-    where: { OR: [{ id: rootSheetId }, { baseItemCostSheetId: rootSheetId }] },
-    select: { id: true, itemVariationId: true },
-    orderBy: [{ createdAt: "asc" }],
-  });
-  if (groupSheets.length === 0) return;
-
-  const components = await db.itemCostSheetComponent.findMany({
-    where: { itemCostSheetId: rootSheetId },
-    include: {
-      ItemCostSheetVariationComponent: {
-        where: {
-          itemVariationId: {
-            in: groupSheets.map((groupSheet: any) => String(groupSheet.itemVariationId || "")).filter(Boolean),
-          },
-        },
-        orderBy: [{ createdAt: "asc" }],
-      },
-    },
-    orderBy: [{ sortOrderIndex: "asc" }, { createdAt: "asc" }],
-  });
-
-  for (const component of components) {
-    const values = Array.isArray(component.ItemCostSheetVariationComponent)
-      ? component.ItemCostSheetVariationComponent
-      : [];
-    if (!component.refId || values.length === 0) continue;
-
-    for (const value of values) {
-      try {
-        if (component.type === "recipe") {
-          const snapshot = await getRecipeSnapshot(db, component.refId, value.itemVariationId);
-          await db.itemCostSheetVariationComponent.update({
-            where: { id: value.id },
-            data: {
-              unitCostAmount: roundMoney(snapshot.unitCostAmount),
-              totalCostAmount: calcTotalCostAmount(snapshot.unitCostAmount, Number(value.quantity || 0), Number(value.wastePerc || 0)),
-            },
-          });
-          await db.itemCostSheetComponent.update({
-            where: { id: component.id },
-            data: { notes: snapshot.note },
-          });
-          continue;
-        }
-
-        if (component.type === "recipeSheet") {
-          if (component.refId === rootSheetId) continue;
-          const snapshot = await getItemCostSheetSnapshot(db, component.refId, value.itemVariationId);
-          await db.itemCostSheetVariationComponent.update({
-            where: { id: value.id },
-            data: {
-              unitCostAmount: roundMoney(snapshot.unitCostAmount),
-              totalCostAmount: calcTotalCostAmount(snapshot.unitCostAmount, Number(value.quantity || 0), Number(value.wastePerc || 0)),
-            },
-          });
-          await db.itemCostSheetComponent.update({
-            where: { id: component.id },
-            data: { notes: snapshot.note },
-          });
-        }
-      } catch {
-        // preserve manual values when reference is unavailable
-      }
-    }
-  }
-
-  const refreshedComponents = await db.itemCostSheetComponent.findMany({
-    where: { itemCostSheetId: rootSheetId },
-    include: {
-      ItemCostSheetVariationComponent: {
-        orderBy: [{ createdAt: "asc" }],
-      },
-    },
-  });
-
-  for (const groupSheet of groupSheets) {
-    const totalAmount = refreshedComponents.reduce((acc: number, component: any) => {
-      const value = Array.isArray(component.ItemCostSheetVariationComponent)
-        ? component.ItemCostSheetVariationComponent.find((row: any) => row.itemVariationId === groupSheet.itemVariationId) || null
-        : null;
-      return acc + Number(value?.totalCostAmount || 0);
-    }, 0);
-
-    await db.itemCostSheet.update({
-      where: { id: groupSheet.id },
-      data: { costAmount: roundMoney(totalAmount) },
-    });
-  }
 }
 
 function sheetDetailHref(itemCostSheetId: string) {
@@ -603,15 +451,15 @@ export async function action({ request, params }: ActionFunctionArgs) {
       if (!(quantity > 0)) return badRequest("Informe uma quantidade válida");
       if (itemCostSheetId !== currentSheet.id) return badRequest("Ficha de custo divergente");
 
-      const snapshot = await getRecipeSnapshot(db, recipeId);
+      const snapshot = await getRecipeCostSheetSnapshot(db, recipeId);
       const variationEntries = await Promise.all(
         targetItemVariationIds.map(async (targetItemVariationId) => {
-          const perVariationSnapshot = await getRecipeSnapshot(db, recipeId, targetItemVariationId);
+          const perVariationSnapshot = await getRecipeCostSheetSnapshot(db, recipeId, targetItemVariationId);
           return {
             itemVariationId: targetItemVariationId,
             unit: "receita",
             quantity,
-            unitCostAmount: roundMoney(perVariationSnapshot.unitCostAmount),
+            unitCostAmount: roundItemCostSheetMoney(perVariationSnapshot.unitCostAmount),
             wastePerc,
           };
         })
@@ -627,7 +475,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         name: snapshot.recipe.name,
         unit: "receita",
         quantity,
-        unitCostAmount: roundMoney(snapshot.unitCostAmount),
+        unitCostAmount: roundItemCostSheetMoney(snapshot.unitCostAmount),
         wastePerc,
         notes: snapshot.note,
       });
@@ -725,7 +573,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
             itemVariationId: targetItemVariationId,
             unit: "ficha",
             quantity,
-            unitCostAmount: roundMoney(perVariationSnapshot.unitCostAmount),
+            unitCostAmount: roundItemCostSheetMoney(perVariationSnapshot.unitCostAmount),
             wastePerc,
           };
         })
@@ -742,7 +590,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         name: refSnapshot.sheet.name,
         unit: "ficha",
         quantity,
-        unitCostAmount: roundMoney(refSnapshot.unitCostAmount),
+        unitCostAmount: roundItemCostSheetMoney(refSnapshot.unitCostAmount),
         wastePerc,
         notes: refSnapshot.note,
       });
@@ -863,7 +711,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
               quantity: update.quantity,
               unitCostAmount: baseUnitCostAmount,
               wastePerc: update.wastePerc,
-              totalCostAmount: calcTotalCostAmount(
+              totalCostAmount: calcItemCostSheetTotalCostAmount(
                 baseUnitCostAmount,
                 update.quantity,
                 update.wastePerc
@@ -879,7 +727,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
               quantity: update.quantity,
               unitCostAmount: baseUnitCostAmount,
               wastePerc: update.wastePerc,
-              totalCostAmount: calcTotalCostAmount(
+              totalCostAmount: calcItemCostSheetTotalCostAmount(
                 baseUnitCostAmount,
                 update.quantity,
                 update.wastePerc
