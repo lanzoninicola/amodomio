@@ -1,6 +1,7 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { Link, Outlet, useActionData, useLoaderData, useLocation, useNavigate } from "@remix-run/react";
 import { useEffect, useState } from "react";
+import { ChevronLeft } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -11,9 +12,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "~/components/ui/alert-dialog";
-import { Separator } from "~/components/ui/separator";
 import { toast } from "~/components/ui/use-toast";
-import MenuItemNavLink from "~/domain/cardapio/components/menu-item-nav-link/menu-item-nav-link";
 import { calculateItemCostMetrics, getItemAverageCostWindowDays } from "~/domain/item/item-cost-metrics.server";
 import { itemCostVariationPrismaEntity } from "~/domain/item/item-cost-variation.prisma.entity.server";
 import { itemVariationPrismaEntity } from "~/domain/item/item-variation.prisma.entity.server";
@@ -35,7 +34,9 @@ const ITEM_UNIT_OPTIONS = ["UN", "L", "ML", "KG", "G"];
 const itemNavigation = [
   { name: "Principal", href: "main" },
   { name: "Variações", href: "variations" },
+  { name: "Venda", href: "venda" },
   { name: "Custos", href: "costs" },
+  { name: "Movimentação estoque", href: "stock-movements" },
   { name: "Receitas", href: "recipes" },
   { name: "Fichas de Custo", href: "item-cost-sheets" },
   { name: "Compras", href: "purchases" },
@@ -55,13 +56,7 @@ const RECIPE_VARIATION_POLICY_OPTIONS = ["auto", "hide", "show"] as const;
 function pickPrimaryItemVariation(item: any) {
   const activeVariations = (item?.ItemVariation || []).filter((row: any) => !row?.deletedAt);
 
-  return (
-    activeVariations.find((row: any) => row.isReference && row?.Variation?.kind !== "base") ||
-    activeVariations.find((row: any) => row?.Variation?.kind !== "base") ||
-    activeVariations.find((row: any) => row?.Variation?.kind === "base" && row?.Variation?.code === "base") ||
-    activeVariations[0] ||
-    null
-  );
+  return activeVariations.find((row: any) => row.isReference) || activeVariations[0] || null;
 }
 
 async function getAvailableItemUnits() {
@@ -109,7 +104,23 @@ export async function loader({ params }: LoaderFunctionArgs) {
     if (!id) return badRequest("Item inválido");
 
     const db = prismaClient as any;
-    const [loadedItem, averageWindowDays, unitOptions, categories] = await Promise.all([
+    const ingredientRecipeUsageLookup =
+      typeof db.recipeIngredient?.findMany === "function"
+        ? db.recipeIngredient.findMany({
+          where: { ingredientItemId: id },
+          select: {
+            id: true,
+            recipeId: true,
+            Recipe: {
+              select: { id: true, name: true, createdAt: true },
+            },
+          },
+          orderBy: [{ updatedAt: "desc" }],
+          take: 20,
+        })
+        : Promise.resolve([]);
+
+    const [loadedItem, averageWindowDays, unitOptions, categories, ingredientRecipeUsage] = await Promise.all([
       db.item.findUnique({
         where: { id },
         include: {
@@ -121,13 +132,27 @@ export async function loader({ params }: LoaderFunctionArgs) {
             take: 5,
           },
           Recipe: {
-            select: { id: true, name: true },
+            select: { id: true, name: true, createdAt: true },
             take: 5,
           },
           ItemCostSheet: {
-            select: { id: true, name: true, isActive: true },
+            select: {
+              id: true,
+              name: true,
+              isActive: true,
+              updatedAt: true,
+              baseItemCostSheetId: true,
+              itemVariationId: true,
+              ItemVariation: {
+                select: {
+                  id: true,
+                  isReference: true,
+                  Variation: { select: { name: true, code: true } },
+                },
+              },
+            },
             orderBy: { updatedAt: "desc" },
-            take: 5,
+            take: 20,
           },
           ItemVariation: {
             where: {
@@ -175,20 +200,33 @@ export async function loader({ params }: LoaderFunctionArgs) {
         select: { id: true, name: true },
         orderBy: [{ name: "asc" }],
       }),
+      ingredientRecipeUsageLookup,
     ]);
 
     if (!loadedItem) return badRequest("Item não encontrado");
-    await itemVariationPrismaEntity.syncBaseVariationForItem(loadedItem.id);
-
     const item = await db.item.findUnique({
       where: { id },
       include: {
         MenuItem: { select: { id: true, name: true }, take: 5 },
-        Recipe: { select: { id: true, name: true }, take: 5 },
+        Recipe: { select: { id: true, name: true, createdAt: true }, take: 5 },
         ItemCostSheet: {
-          select: { id: true, name: true, isActive: true },
+          select: {
+            id: true,
+            name: true,
+            isActive: true,
+            updatedAt: true,
+            baseItemCostSheetId: true,
+            itemVariationId: true,
+            ItemVariation: {
+              select: {
+                id: true,
+                isReference: true,
+                Variation: { select: { name: true, code: true } },
+              },
+            },
+          },
           orderBy: { updatedAt: "desc" },
-          take: 5,
+          take: 20,
         },
         ItemVariation: {
           where: { deletedAt: null },
@@ -246,6 +284,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
         _baseItemVariation: primaryVariation,
         _itemCostVariationHistory: primaryHistory,
         _itemCostVariationCurrent: currentCost,
+        _ingredientRecipeUsage: ingredientRecipeUsage,
       },
       costMetrics,
       averageWindowDays,
@@ -322,7 +361,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
           Variation: {
             is: {
               deletedAt: null,
-              NOT: { kind: "base" },
             },
           },
         },
@@ -349,13 +387,14 @@ export async function action({ request, params }: ActionFunctionArgs) {
       const purchaseUm = normalizeUnit(formData.get("purchaseUm"));
       const factorRaw = String(formData.get("purchaseToConsumptionFactor") || "").trim();
       const purchaseToConsumptionFactor = factorRaw ? Number(factorRaw) : null;
-      const filledConversionFields = [purchaseUm, factorRaw].filter(Boolean).length;
+      const hasFactor = Number.isFinite(purchaseToConsumptionFactor) && purchaseToConsumptionFactor > 0;
+      const filledConversionFields = [Boolean(purchaseUm), hasFactor].filter(Boolean).length;
 
       if (filledConversionFields > 0 && filledConversionFields < 2) {
         return badRequest("Preencha unidade de compra e fator de conversão para salvar");
       }
 
-      if (filledConversionFields === 2 && !(purchaseToConsumptionFactor && purchaseToConsumptionFactor > 0)) {
+      if (filledConversionFields === 2 && !hasFactor) {
         return badRequest("Informe um fator de conversão maior que zero");
       }
 
@@ -419,21 +458,17 @@ export async function action({ request, params }: ActionFunctionArgs) {
         where: {
           id: { in: variationIds },
           deletedAt: null,
-          NOT: { kind: "base" },
         },
         select: { id: true },
       });
 
       const normalizedVariationIds = allowedVariations.map((row: any) => row.id);
-      const linked = await itemVariationPrismaEntity.replaceItemVariations(id, normalizedVariationIds, {
-        keepBase: normalizedVariationIds.length === 0,
-      });
+      const linked = await itemVariationPrismaEntity.replaceItemVariations(id, normalizedVariationIds);
 
       const activeRows = (linked || []).filter((row: any) => !row.deletedAt);
       const requestedReference = activeRows.find((row: any) => row.variationId === referenceVariationId);
       const fallbackReference =
         activeRows.find((row: any) => row.isReference) ||
-        activeRows.find((row: any) => row?.Variation?.kind !== "base") ||
         activeRows[0];
 
       const nextReference = requestedReference || fallbackReference;
@@ -475,7 +510,7 @@ export default function AdminItemDetailLayout() {
   const averageWindowDays = Number((loaderData?.payload as any)?.averageWindowDays || 30);
   const unitOptions = ((loaderData?.payload as any)?.unitOptions || ITEM_UNIT_OPTIONS) as string[];
   const categories = ((loaderData?.payload as any)?.categories || []) as Array<{ id: string; name: string }>;
-  const activeTab = lastUrlSegment(location.pathname);
+  const activeTab = getItemActiveTab(location.pathname);
 
   useEffect(() => {
     if (actionData?.status === 200) {
@@ -501,48 +536,51 @@ export default function AdminItemDetailLayout() {
   }
 
   return (
-    <div className="flex flex-col gap-4 p-4">
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h1 className="text-lg font-semibold text-slate-900">{item.name}</h1>
-            <p className="text-sm text-slate-600">{item.id}</p>
-          </div>
-          <Link to="/admin/items" className="text-sm underline">
-            Voltar
-          </Link>
-        </div>
-      </div>
+    <div className="flex flex-col gap-6">
+      <section className="space-y-5 border-b border-slate-200/80 pb-5">
 
-      <div className="h-full w-full rounded-[inherit]">
-        <div style={{ minWidth: "100%", display: "table" }}>
-          <div className="flex justify-between">
-            <div className="flex items-center col-span-6">
-              {itemNavigation.map((navItem) => (
-                <MenuItemNavLink
-                  key={navItem.name}
+
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          <div className="space-y-1">
+            <h2 className="text-2xl font-semibold tracking-tight text-slate-950">{item.name}</h2>
+            <p className="text-sm text-slate-500">{item.id}</p>
+          </div>
+        </div>
+      </section>
+
+      <div className="space-y-6">
+        <nav className="overflow-x-auto border-b border-slate-100">
+          <div className="flex min-w-max items-center gap-6 text-sm">
+            {itemNavigation.map((navItem) => {
+              const isActive = activeTab === navItem.href;
+              return (
+                <Link
+                  key={navItem.href}
                   to={navItem.href}
-                  isActive={activeTab === navItem.href}
+                  className={`border-b-2 pb-3 font-medium transition ${
+                    isActive
+                      ? "border-slate-950 text-slate-950"
+                      : "border-transparent text-slate-400 hover:text-slate-700"
+                  }`}
                 >
                   {navItem.name}
-                </MenuItemNavLink>
-              ))}
-            </div>
+                </Link>
+              );
+            })}
           </div>
-        </div>
-        <Separator className="my-4" />
-      </div>
+        </nav>
 
-      <Outlet
-        context={{
-          item,
-          classifications: ITEM_CLASSIFICATIONS,
-          unitOptions,
-          categories,
-          costMetrics,
-          averageWindowDays,
-        }}
-      />
+        <Outlet
+          context={{
+            item,
+            classifications: ITEM_CLASSIFICATIONS,
+            unitOptions,
+            categories,
+            costMetrics,
+            averageWindowDays,
+          }}
+        />
+      </div>
 
       <AlertDialog open={showMissingVariationsDialog} onOpenChange={setShowMissingVariationsDialog}>
         <AlertDialogContent>
@@ -562,4 +600,13 @@ export default function AdminItemDetailLayout() {
       </AlertDialog>
     </div>
   );
+}
+
+function getItemActiveTab(pathname: string) {
+  const segments = pathname.split("/").filter(Boolean);
+  const itemIdIndex = segments.findIndex((segment) => segment === "items");
+
+  if (itemIdIndex < 0) return lastUrlSegment(pathname);
+
+  return segments[itemIdIndex + 2] || lastUrlSegment(pathname);
 }

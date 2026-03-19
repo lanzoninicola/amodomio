@@ -75,7 +75,7 @@ export default function AdminCrmCustomerTimeline() {
   useOutletContext<Context>(); // ensure context exists
 
   return (
-    <Card className="font-neue">
+    <Card className="">
       <CardHeader>
         <CardTitle>Timeline</CardTitle>
         <CardDescription>Últimos eventos (50 mais recentes).</CardDescription>

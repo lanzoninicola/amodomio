@@ -1,7 +1,8 @@
 import { settingPrismaEntity } from "~/domain/setting/setting.prisma.entity.server";
 import prismaClient from "~/lib/prisma/client.server";
+import { logCrmWhatsappSentEventByPhone } from "~/domain/crm/crm-whatsapp-events.server";
 import { stringifyPayloadForLog } from "./webhook.parser";
-import { sendTrafficAutoReplyTemplate } from "./zapi.service";
+import { sendTrafficAutoReplyTemplate } from "./zapi.service.server";
 import { NormalizedWebhookEvent } from "./webhook.types";
 
 const CONTEXT = "zapi-traffic-autoresponder";
@@ -164,6 +165,22 @@ export async function maybeSendTrafficAutoReply(
     sizesButtonText: config.sizesButtonText,
     forceText: !useButtons,
   });
+  if (response && normalized.phone) {
+    await logCrmWhatsappSentEventByPhone({
+      phone: normalized.phone,
+      source: "zapi-auto-reply",
+      messageText: useButtons ? config.buttonMessage : config.textMessage,
+      externalId: `${correlationId}:traffic`,
+      payload: {
+        channel: "traffic",
+        responseType: useButtons ? "buttons" : "text",
+        correlationId,
+        trigger: config.trigger,
+        fromMe: true,
+        wppResponse: response,
+      },
+    });
+  }
 
   await saveMetaAdsLog({
     correlationId,

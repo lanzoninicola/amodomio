@@ -1,20 +1,33 @@
-import { Form, Link, useFetcher, useOutletContext } from "@remix-run/react";
-import { ExternalLink, Sparkles } from "lucide-react";
+import { useFetcher, useOutletContext } from "@remix-run/react";
 import { useEffect, useState } from "react";
-import CopyButton from "~/components/primitives/copy-button/copy-button";
-import { Button } from "~/components/ui/button";
+import GptAssistantPanel from "~/components/gpt-assistant-panel";
 import type { AdminRecipeOutletContext } from "~/routes/admin.recipes.$id";
 
-function buildRecipeChatGptPrompt(params: {
+export type RecipeChatGptAssistantContext = {
     recipe: AdminRecipeOutletContext["recipe"]
     items: AdminRecipeOutletContext["items"]
+    recipeLines: AdminRecipeOutletContext["recipeLines"]
+    linkedVariations: AdminRecipeOutletContext["linkedVariations"]
+    chatGptProjectUrl: string
+}
+
+type RecipeChatGptAssistantPanelProps = {
+    context?: RecipeChatGptAssistantContext
+    formAction?: string
+    backTo?: string
+    backLabel?: string
+}
+
+function buildRecipeChatGptPrompt(params: {
+    recipe: RecipeChatGptAssistantContext["recipe"]
+    items: RecipeChatGptAssistantContext["items"]
     baseIngredients: Array<{
         recipeIngredientId: string | null
         itemId: string
         itemName: string
     }>
-    recipeLines: AdminRecipeOutletContext["recipeLines"]
-    linkedVariations: AdminRecipeOutletContext["linkedVariations"]
+    recipeLines: RecipeChatGptAssistantContext["recipeLines"]
+    linkedVariations: RecipeChatGptAssistantContext["linkedVariations"]
 }) {
     const { recipe, items, baseIngredients, recipeLines, linkedVariations } = params
 
@@ -168,8 +181,24 @@ function extractMissingIngredientsPreview(value: string): Array<{
     }
 }
 
-export default function RecipeChatGptAssistantPanel() {
-    const { recipe, items, recipeLines, linkedVariations, chatGptProjectUrl } = useOutletContext<AdminRecipeOutletContext>()
+export default function RecipeChatGptAssistantPanel(props: RecipeChatGptAssistantPanelProps) {
+    const outletContext = useOutletContext<AdminRecipeOutletContext | undefined>()
+    const resolvedContext = props.context || outletContext
+
+    if (!resolvedContext) {
+        throw new Error("RecipeChatGptAssistantPanel requires context via props or outlet context")
+    }
+
+    const {
+        recipe,
+        items,
+        recipeLines,
+        linkedVariations,
+        chatGptProjectUrl,
+    } = resolvedContext
+    const formAction = props.formAction || ".."
+    const backTo = props.backTo || `/admin/recipes/${recipe.id}/composicao`
+    const backLabel = props.backLabel || "Voltar para composição"
     const previewFetcher = useFetcher<any>()
     const [promptDraft, setPromptDraft] = useState("")
     const [chatGptResponse, setChatGptResponse] = useState("")
@@ -232,194 +261,112 @@ export default function RecipeChatGptAssistantPanel() {
         formData.set("tab", "composicao")
         formData.set("chatGptResponse", chatGptResponse)
         formData.set("_action", "recipe-chatgpt-preview")
-        previewFetcher.submit(formData, { method: "post", action: ".." })
+        previewFetcher.submit(formData, { method: "post", action: formAction })
     }
 
     return (
-        <div className="mx-auto max-w-5xl space-y-6">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                    <div className="flex items-center gap-2 text-slate-900">
-                        <Sparkles size={15} />
-                        <h2 className="text-base font-semibold">Assistente ChatGPT</h2>
-                    </div>
-                    <p className="mt-1 text-sm text-slate-500">
-                        Gere um prompt com a receita atual, envie para o projeto de receitas do ChatGPT e valide o JSON antes de importar.
+        <GptAssistantPanel
+            title="Assistente ChatGPT"
+            description="Gere um prompt com a receita atual, envie para o projeto de receitas do ChatGPT e valide o JSON antes de importar."
+            prompt={promptDraft}
+            defaultPrompt={chatGptPrompt}
+            onPromptChange={setPromptDraft}
+            response={chatGptResponse}
+            onResponseChange={setChatGptResponse}
+            onPreview={handlePreviewImport}
+            previewButtonLabel="Pré-visualizar importação"
+            previewLoadingLabel="Validando..."
+            previewDisabled={!chatGptResponse.trim() || previewFetcher.state !== "idle"}
+            previewLoading={previewFetcher.state !== "idle"}
+            submitActionName="recipe-chatgpt-import"
+            submitButtonLabel="Importar resposta"
+            submitDisabled={!hasUpToDatePreview}
+            formAction={formAction}
+            hiddenFields={[
+                { name: "recipeId", value: recipe.id },
+                { name: "tab", value: "composicao" },
+            ]}
+            backTo={backTo}
+            backLabel={backLabel}
+            externalUrl={chatGptProjectUrl}
+            externalLabel="Abrir projeto"
+            flowDescription="1. Revise e copie o prompt. 2. Abra o projeto do ChatGPT. 3. Cole a resposta JSON. 4. Gere a pré-visualização. 5. Confirme a importação."
+            responsePlaceholder={"Cole aqui a resposta do ChatGPT em JSON ou em bloco ```json```."}
+            responseHelperText={(
+                <>
+                    O import faz upsert dos ingredientes cadastrados e ignora <code>missingIngredients</code>, que servem para apontar itens ainda não cadastrados.
+                </>
+            )}
+            copyToastTitle="Prompt copiado"
+            copyToastContent="Cole o prompt no projeto Receitas Builder."
+            responseMetaContent={pastedMissingIngredients.length > 0 ? (
+                <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">
+                        Ingredientes ainda não cadastrados detectados na resposta
                     </p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                    <Button type="button" variant="outline" size="sm" asChild>
-                        <Link to={`/admin/recipes/${recipe.id}/composicao`}>Voltar para composição</Link>
-                    </Button>
-                    <Button type="button" variant="outline" size="sm" asChild>
-                        <a href={chatGptProjectUrl} target="_blank" rel="noreferrer">
-                            Abrir projeto
-                            <ExternalLink size={13} />
-                        </a>
-                    </Button>
-                    <CopyButton
-                        textToCopy={promptDraft}
-                        label="Copiar prompt"
-                        variant="outline"
-                        classNameButton="h-9 px-3 hover:bg-white"
-                        classNameLabel="text-sm"
-                        classNameIcon="text-slate-700"
-                        toastTitle="Prompt copiado"
-                        toastContent="Cole o prompt no projeto Receitas Builder."
-                    />
-                </div>
-            </div>
-
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Fluxo</p>
-                <p className="mt-1">
-                    1. Revise e copie o prompt. 2. Abra o projeto do ChatGPT. 3. Cole a resposta JSON. 4. Gere a pré-visualização. 5. Confirme a importação.
-                </p>
-            </div>
-
-            <Form method="post" action=".." preventScrollReset className="space-y-4">
-                <input type="hidden" name="recipeId" value={recipe.id} />
-                <input type="hidden" name="tab" value="composicao" />
-
-                <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-                    <section className="rounded-lg border border-slate-200">
-                        <div className="border-b border-slate-200 px-4 py-3">
-                            <p className="text-sm font-semibold text-slate-900">Prompt</p>
-                            <p className="text-xs text-slate-500">Revise, ajuste e copie o prompt antes de abrir o ChatGPT.</p>
-                        </div>
-                        <div className="space-y-3 px-4 py-4">
-                            <div className="flex flex-wrap items-center justify-between gap-2">
-                                <p className="text-xs text-slate-500">O prompt pode ser editado manualmente antes da cópia.</p>
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-8 px-2 text-xs text-slate-600"
-                                    onClick={() => setPromptDraft(chatGptPrompt)}
-                                >
-                                    Restaurar padrão
-                                </Button>
-                            </div>
-                            <textarea
-                                value={promptDraft}
-                                onChange={(event) => setPromptDraft(event.target.value)}
-                                className="min-h-[560px] w-full rounded-md border border-slate-300 bg-slate-100 px-3 py-3 font-mono text-[12px] leading-5 text-slate-800 outline-none transition-colors focus:border-slate-500"
-                            />
-                        </div>
-                    </section>
-
-                    <section className="space-y-4">
-                        <div className="rounded-lg border border-slate-200">
-                            <div className="border-b border-slate-200 px-4 py-3">
-                                <div className="flex flex-wrap items-start justify-between gap-3">
-                                    <div>
-                                        <p className="text-sm font-semibold text-slate-900">Resposta do ChatGPT</p>
-                                        <p className="text-xs text-slate-500">Cole aqui o JSON retornado pelo assistente.</p>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={handlePreviewImport}
-                                            disabled={!chatGptResponse.trim() || previewFetcher.state !== "idle"}
-                                        >
-                                            {previewFetcher.state !== "idle" ? "Validando..." : "Pré-visualizar importação"}
-                                        </Button>
-                                        <Button
-                                            type="submit"
-                                            name="_action"
-                                            value="recipe-chatgpt-import"
-                                            size="sm"
-                                            disabled={!hasUpToDatePreview}
-                                        >
-                                            Importar resposta
-                                        </Button>
-                                    </div>
+                    <div className="space-y-2">
+                        {pastedMissingIngredients.map((ingredient, index) => (
+                            <div key={`${ingredient.name}-${index}`} className="rounded-md border border-amber-200 bg-white/70 px-3 py-2 text-sm text-amber-950">
+                                <div className="font-medium">{ingredient.name}</div>
+                                <div className="text-xs text-amber-800">
+                                    {ingredient.unit || "UM não informada"}{ingredient.notes ? ` · ${ingredient.notes}` : ""}
                                 </div>
                             </div>
-                            <div className="space-y-3 px-4 py-4">
-                                <textarea
-                                    name="chatGptResponse"
-                                    value={chatGptResponse}
-                                    onChange={(event) => setChatGptResponse(event.target.value)}
-                                    placeholder={'Cole aqui a resposta do ChatGPT em JSON ou em bloco ```json```.'}
-                                    className="min-h-[360px] w-full rounded-md border border-slate-200 bg-white px-3 py-3 text-sm text-slate-700 outline-none transition-colors focus:border-slate-400"
-                                />
-                                <p className="text-xs text-slate-500">
-                                    O import faz upsert dos ingredientes cadastrados e ignora `missingIngredients`, que servem para apontar itens ainda não cadastrados.
-                                </p>
-                            </div>
+                        ))}
+                    </div>
+                </div>
+            ) : null}
+            afterResponseContent={
+                <>
+                    {previewFetcher.data?.status && previewFetcher.data.status >= 400 ? (
+                        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                            {previewFetcher.data.message}
                         </div>
+                    ) : null}
 
-                        {pastedMissingIngredients.length > 0 ? (
-                            <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-4">
-                                <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">
-                                    Ingredientes ainda não cadastrados detectados na resposta
-                                </p>
+                    {hasUpToDatePreview && previewPayload ? (
+                        <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                            <div className="flex flex-wrap items-center gap-3 text-sm text-slate-700">
+                                <span className="font-medium">{previewPayload.totals.importableIngredients} ingrediente(s) importável(eis)</span>
+                                <span>{previewPayload.totals.variationCells} célula(s) de variação</span>
+                                <span>{previewPayload.totals.missingIngredients} ingrediente(s) faltante(s)</span>
+                            </div>
+
+                            <div className="space-y-2">
+                                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Importáveis</p>
                                 <div className="space-y-2">
-                                    {pastedMissingIngredients.map((ingredient, index) => (
-                                        <div key={`${ingredient.name}-${index}`} className="rounded-md border border-amber-200 bg-white/70 px-3 py-2 text-sm text-amber-950">
-                                            <div className="font-medium">{ingredient.name}</div>
-                                            <div className="text-xs text-amber-800">
-                                                {ingredient.unit || "UM não informada"}{ingredient.notes ? ` · ${ingredient.notes}` : ""}
+                                    {previewPayload.importableIngredients.map((ingredient: any) => (
+                                        <div key={ingredient.itemId} className="rounded-md border border-slate-200 bg-white px-3 py-2">
+                                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                                <div className="text-sm font-medium text-slate-900">{ingredient.itemName}</div>
+                                                <div className="text-xs text-slate-500">
+                                                    {ingredient.unit} · perda {ingredient.defaultLossPct}% · {ingredient.variationCount} variação(ões)
+                                                </div>
                                             </div>
                                         </div>
                                     ))}
                                 </div>
                             </div>
-                        ) : null}
 
-                        {previewFetcher.data?.status && previewFetcher.data.status >= 400 ? (
-                            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                                {previewFetcher.data.message}
-                            </div>
-                        ) : null}
-
-                        {hasUpToDatePreview && previewPayload ? (
-                            <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
-                                <div className="flex flex-wrap items-center gap-3 text-sm text-slate-700">
-                                    <span className="font-medium">{previewPayload.totals.importableIngredients} ingrediente(s) importável(eis)</span>
-                                    <span>{previewPayload.totals.variationCells} célula(s) de variação</span>
-                                    <span>{previewPayload.totals.missingIngredients} ingrediente(s) faltante(s)</span>
-                                </div>
-
+                            {previewPayload.missingIngredients.length > 0 ? (
                                 <div className="space-y-2">
-                                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Importáveis</p>
+                                    <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Não cadastrados</p>
                                     <div className="space-y-2">
-                                        {previewPayload.importableIngredients.map((ingredient: any) => (
-                                            <div key={ingredient.itemId} className="rounded-md border border-slate-200 bg-white px-3 py-2">
-                                                <div className="flex flex-wrap items-center justify-between gap-2">
-                                                    <div className="text-sm font-medium text-slate-900">{ingredient.itemName}</div>
-                                                    <div className="text-xs text-slate-500">
-                                                        {ingredient.unit} · perda {ingredient.defaultLossPct}% · {ingredient.variationCount} variação(ões)
-                                                    </div>
+                                        {previewPayload.missingIngredients.map((ingredient: any, index: number) => (
+                                            <div key={`${ingredient.name}-${index}`} className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                                                <div className="font-medium">{ingredient.name}</div>
+                                                <div className="text-xs text-amber-800">
+                                                    {ingredient.unit || "UM não informada"}{ingredient.notes ? ` · ${ingredient.notes}` : ""}
                                                 </div>
                                             </div>
                                         ))}
                                     </div>
                                 </div>
-
-                                {previewPayload.missingIngredients.length > 0 ? (
-                                    <div className="space-y-2">
-                                        <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Não cadastrados</p>
-                                        <div className="space-y-2">
-                                            {previewPayload.missingIngredients.map((ingredient: any, index: number) => (
-                                                <div key={`${ingredient.name}-${index}`} className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                                                    <div className="font-medium">{ingredient.name}</div>
-                                                    <div className="text-xs text-amber-800">
-                                                        {ingredient.unit || "UM não informada"}{ingredient.notes ? ` · ${ingredient.notes}` : ""}
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                ) : null}
-                            </div>
-                        ) : null}
-                    </section>
-                </div>
-            </Form>
-        </div>
+                            ) : null}
+                        </div>
+                    ) : null}
+                </>
+            }
+        />
     )
 }

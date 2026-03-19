@@ -1,6 +1,8 @@
 import prismaClient from "~/lib/prisma/client.server";
+import { logCrmWhatsappSentEventByPhone } from "~/domain/crm/crm-whatsapp-events.server";
 import { parseBooleanSetting } from "~/utils/parse-boolean-setting";
-import { normalizePhone, sendTextMessage } from "~/domain/z-api/zapi.service";
+import { normalizePhone } from "~/domain/z-api/zapi.service";
+import { sendTextMessage } from "~/domain/z-api/zapi.service.server";
 import { redisGetString, redisSetStringEx } from "~/lib/cache/redis.server";
 
 const CONTEXT = "cardapio";
@@ -90,7 +92,23 @@ export async function notifyCardapioContingencyByWhatsapp(input: {
       });
 
     const sendResults = await Promise.allSettled(
-      phones.map((phone) => sendTextMessage({ phone, message }, { timeoutMs: 10_000 }))
+      phones.map(async (phone) => {
+        const response = await sendTextMessage(
+          { phone, message },
+          { timeoutMs: 10_000 }
+        );
+        await logCrmWhatsappSentEventByPhone({
+          phone,
+          source: "cardapio-contingency-alert",
+          messageText: message,
+          payload: {
+            channel: "cardapio-contingency-alert",
+            fromMe: true,
+            wppResponse: response,
+          },
+        });
+        return response;
+      })
     );
 
     const successCount = sendResults.filter((result) => result.status === "fulfilled").length;

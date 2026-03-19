@@ -16,7 +16,7 @@ export default function AdminCrmLayout() {
   const isLoading = navigation.state === "loading";
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8 font-neue">
+    <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8 ">
       <header className="flex flex-col gap-2">
         <h1 className="text-3xl font-semibold tracking-tight">CRM</h1>
 

@@ -2,10 +2,12 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { redirect } from "@remix-run/node";
 import { Form, Link, useActionData, useLoaderData } from "@remix-run/react";
 import { useState } from "react";
+import { ChevronLeft } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
+import { getAvailableItemUnits, ITEM_UNIT_OPTIONS, normalizeItemUnit } from "~/domain/item/item-units.server";
 import prismaClient from "~/lib/prisma/client.server";
 import { badRequest, ok, serverError } from "~/utils/http-response.server";
 
@@ -18,44 +20,12 @@ const ITEM_CLASSIFICATIONS = [
   "outro",
 ] as const;
 
-const ITEM_UNIT_OPTIONS = ["UN", "L", "ML", "KG", "G"];
-
 function toBool(value: FormDataEntryValue | null) {
   return value === "on" || value === "true";
 }
 
 function normalizeUnit(value: FormDataEntryValue | null) {
-  const normalized = String(value || "").trim().toUpperCase();
-  return normalized || null;
-}
-
-async function getAvailableItemUnits() {
-  const db = prismaClient as any;
-  const staticUnits = ITEM_UNIT_OPTIONS;
-  let dbUnits: Array<{ code?: string | null }> | undefined;
-  const measurementUnitModel = db.measurementUnit;
-
-  if (typeof measurementUnitModel?.findMany !== "function") {
-    return [...staticUnits].sort((a, b) => a.localeCompare(b, "pt-BR"));
-  }
-
-  try {
-    dbUnits = await measurementUnitModel.findMany({
-      where: { active: true },
-      select: { code: true },
-      orderBy: [{ code: "asc" }],
-    });
-  } catch (_error) {
-    // fallback para ambientes sem tabela measurement_units
-  }
-
-  const merged = new Set<string>(staticUnits);
-  for (const row of dbUnits || []) {
-    const code = normalizeUnit(row?.code);
-    if (code) merged.add(code);
-  }
-
-  return Array.from(merged).sort((a, b) => a.localeCompare(b, "pt-BR"));
+  return normalizeItemUnit(value);
 }
 
 export async function loader({}: LoaderFunctionArgs) {
@@ -151,23 +121,32 @@ export default function AdminItemsNewPage() {
   const [consumptionUmValue, setConsumptionUmValue] = useState("__EMPTY__");
 
   return (
-    <div className="flex flex-col gap-4 p-4">
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h1 className="text-lg font-semibold text-slate-900">Novo item</h1>
-            <p className="text-sm text-slate-600">Preencha os dados para criar um novo item.</p>
-          </div>
-          <Link to="/admin/items" className="text-sm underline">
-            Voltar
+    <div className="flex flex-col gap-6">
+      <section className="space-y-5 border-b border-slate-200/80 pb-5">
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <Link
+            to="/admin/items"
+            className="inline-flex items-center gap-1.5 font-semibold text-slate-700 transition hover:text-slate-950"
+          >
+            <span className="flex size-5 items-center justify-center rounded-full border border-slate-200 text-slate-500">
+              <ChevronLeft size={12} />
+            </span>
+            itens
           </Link>
+          <span className="text-slate-300">/</span>
+          <span className="font-medium text-slate-900">novo item</span>
         </div>
-      </div>
+
+        <div className="space-y-1">
+          <h2 className="text-2xl font-semibold tracking-tight text-slate-950">Novo item</h2>
+          <p className="max-w-3xl text-sm text-slate-500">Preencha os dados principais e a configuração operacional do item.</p>
+        </div>
+      </section>
 
       <Form method="post" className="space-y-4">
         <input type="hidden" name="_action" value="item-create" />
 
-        <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-4">
+        <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5">
           <div className="grid gap-4 md:grid-cols-2">
             <div>
               <Label htmlFor="name">Nome</Label>
@@ -234,7 +213,7 @@ export default function AdminItemsNewPage() {
           </div>
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5">
           <h3 className="text-sm font-semibold text-slate-900">Configurações do item</h3>
           <p className="mt-1 text-xs text-slate-500">
             Disponível no cardápio é derivado de <span className="font-semibold">Pode vender</span>.
@@ -269,7 +248,7 @@ export default function AdminItemsNewPage() {
           </div>
         ) : null}
 
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5">
           <Button type="submit" className="bg-slate-900 hover:bg-slate-700">
             Criar item
           </Button>

@@ -11,6 +11,7 @@ import type { AdminItemOutletContext } from "./admin.items.$id";
 
 export default function AdminItemMainTab() {
   const { item, classifications, unitOptions, categories } = useOutletContext<AdminItemOutletContext>();
+  const ingredientRecipeUsage = item._ingredientRecipeUsage || [];
   const [classificationValue, setClassificationValue] = useState(item.classification || classifications[0] || "");
   const [categoryIdValue, setCategoryIdValue] = useState(item.categoryId || "__EMPTY__");
   const [consumptionUmValue, setConsumptionUmValue] = useState(item.consumptionUm || "__EMPTY__");
@@ -211,6 +212,18 @@ export default function AdminItemMainTab() {
                 {item.Recipe.map((r: any) => (
                   <Link key={r.id} to={`/admin/recipes/${r.id}`} className="text-xs underline">
                     {r.name}
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+          <div>
+            Uso como ingrediente em receitas: {ingredientRecipeUsage.length || 0}
+            {!!ingredientRecipeUsage.length && (
+              <div className="mt-1 flex flex-wrap gap-2">
+                {ingredientRecipeUsage.map((usage: any) => (
+                  <Link key={usage.id} to={`/admin/recipes/${usage.recipeId}`} className="text-xs underline">
+                    {usage.Recipe?.name || usage.recipeId}
                   </Link>
                 ))}
               </div>

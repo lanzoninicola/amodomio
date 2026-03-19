@@ -2,7 +2,7 @@ import { json } from "@remix-run/node";
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { env } from "@config/env";
 import { enforceApiKey, enforceRateLimit, handleRouteError } from "~/domain/z-api/route-helpers.server";
-import { listContacts } from "~/domain/z-api/zapi.service";
+import { listContacts } from "~/domain/z-api/zapi.service.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   if (request.method !== "GET") {

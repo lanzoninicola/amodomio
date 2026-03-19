@@ -1,7 +1,9 @@
 import { computeNetRevenueAmount } from "~/domain/finance/compute-net-revenue-amount";
 import { getDailyAggregates, listMotoboy } from "~/domain/kds/server/repository.server";
 import { CHANNELS } from "~/domain/kds/constants";
-import { normalizePhone, sendTextMessage } from "~/domain/z-api/zapi.service";
+import { logCrmWhatsappSentEventByPhone } from "~/domain/crm/crm-whatsapp-events.server";
+import { normalizePhone } from "~/domain/z-api/zapi.service";
+import { sendTextMessage } from "~/domain/z-api/zapi.service.server";
 import prisma from "~/lib/prisma/client.server";
 
 export const KDS_DAILY_REPORT_WHATSAPP_CONTEXT = "kds-daily-report-whatsapp";
@@ -470,9 +472,24 @@ export async function sendKdsDailyReportWhatsapp(dateInt: number, dateStr: strin
   }
 
   const results = await Promise.allSettled(
-    payload.phones.map((phone) =>
-      sendTextMessage({ phone, message: payload.message }, { timeoutMs: 10_000 })
-    )
+    payload.phones.map(async (phone) => {
+      const response = await sendTextMessage(
+        { phone, message: payload.message },
+        { timeoutMs: 10_000 }
+      );
+      await logCrmWhatsappSentEventByPhone({
+        phone,
+        source: "kds-daily-report-whatsapp",
+        messageText: payload.message,
+        payload: {
+          channel: "kds-daily-report",
+          date: dateStr,
+          fromMe: true,
+          wppResponse: response,
+        },
+      });
+      return response;
+    })
   );
 
   const sentCount = results.filter((result) => result.status === "fulfilled").length;

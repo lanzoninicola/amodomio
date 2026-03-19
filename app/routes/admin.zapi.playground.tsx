@@ -2,8 +2,6 @@ import { json, type ActionFunctionArgs } from "@remix-run/node";
 import { Form, useActionData, useNavigation } from "@remix-run/react";
 import { useMemo } from "react";
 import { ValidationError } from "~/domain/z-api/errors";
-import { ZApiError } from "~/domain/z-api/zapi-client.server";
-import { sendTextMessage, sendVideoMessage } from "~/domain/z-api/zapi.service";
 
 type ActionData = {
   intent: "send-text" | "send-video";
@@ -16,7 +14,7 @@ function toJsonError(error: any): ActionData["error"] {
   if (error instanceof ValidationError) {
     return { message: error.message };
   }
-  if (error instanceof ZApiError) {
+  if (error && typeof error === "object" && "status" in error && "path" in error) {
     return {
       message: error.message,
       details: error.body ?? null,
@@ -28,6 +26,7 @@ function toJsonError(error: any): ActionData["error"] {
 export async function action({ request }: ActionFunctionArgs) {
   const form = await request.formData();
   const intent = String(form.get("_intent") || "");
+  const { sendTextMessage, sendVideoMessage } = await import("~/domain/z-api/zapi.service.server");
 
   try {
     if (intent === "send-text") {
