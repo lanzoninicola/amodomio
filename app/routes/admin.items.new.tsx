@@ -7,7 +7,8 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
-import { getAvailableItemUnits, ITEM_UNIT_OPTIONS, normalizeItemUnit } from "~/domain/item/item-units.server";
+import { ITEM_UNIT_OPTIONS, normalizeItemUnit } from "~/domain/item/item-units";
+import { getAvailableItemUnits } from "~/domain/item/item-units.server";
 import prismaClient from "~/lib/prisma/client.server";
 import { badRequest, ok, serverError } from "~/utils/http-response.server";
 
