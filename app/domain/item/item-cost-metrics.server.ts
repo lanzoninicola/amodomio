@@ -4,13 +4,13 @@ export const ITEM_COST_SETTINGS_CONTEXT = "items.cost";
 export const ITEM_COST_AVERAGE_WINDOW_DAYS_SETTING = "averageWindowDays";
 export const DEFAULT_ITEM_COST_AVERAGE_WINDOW_DAYS = 30;
 
-type ItemMeasurementLike = {
+export type ItemMeasurementLike = {
   purchaseUm?: string | null;
   consumptionUm?: string | null;
   purchaseToConsumptionFactor?: number | null;
 };
 
-type ItemCostHistoryLike = {
+export type ItemCostHistoryLike = {
   costAmount?: number | null;
   unit?: string | null;
   validFrom?: Date | string | null;
@@ -30,7 +30,7 @@ function normalizeUm(value: string | null | undefined) {
   return String(value || "").trim().toUpperCase() || null;
 }
 
-function normalizeCostToConsumptionUnit(
+export function normalizeItemCostToConsumptionUnit(
   cost: ItemCostHistoryLike,
   measurement: ItemMeasurementLike
 ): number | null {
@@ -105,7 +105,7 @@ export function calculateItemCostMetrics(params: {
 
   const latestCost = history[0] ?? null;
   const latestCostPerConsumptionUnit = latestCost
-    ? normalizeCostToConsumptionUnit(latestCost, params.item)
+    ? normalizeItemCostToConsumptionUnit(latestCost, params.item)
     : null;
 
   const normalizedInWindow = history
@@ -113,7 +113,7 @@ export function calculateItemCostMetrics(params: {
       const d = toDate(row.validFrom) ?? toDate(row.createdAt);
       return d ? d >= threshold : false;
     })
-    .map((row) => normalizeCostToConsumptionUnit(row, params.item))
+    .map((row) => normalizeItemCostToConsumptionUnit(row, params.item))
     .filter((value): value is number => Number.isFinite(value as number));
 
   const averageCostPerConsumptionUnit =

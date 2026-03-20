@@ -167,6 +167,12 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
           href: "",
           items: [
             {
+              title: "Consulta de custo",
+              href: "/admin/cost-monitoring",
+              items: [],
+              disabled: false,
+            },
+            {
               title: "Impacto de custos",
               href: "/admin/cost-impact",
               items: [],

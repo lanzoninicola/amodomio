@@ -274,88 +274,81 @@ export default function AdminAtendimentoListaSabores() {
 
             // @ts-ignore
             return (
-              <div className="flex flex-col gap-5">
-                <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-slate-100/80 p-4 shadow-sm md:p-5">
-                  <div className="flex flex-col gap-5">
-                    <div className="flex flex-col gap-1">
-                      <h1 className="text-xl font-bold tracking-tight text-slate-900">
-                        Lista de sabores
-                      </h1>
-                      <p className="text-sm text-muted-foreground">
-                        Busque sabores, visualize pausados quando precisar e controle se lancamentos futuros entram na lista.
-                      </p>
-                    </div>
+              <div className="flex flex-col gap-4">
+                <div className="rounded-2xl bg-gradient-to-br from-slate-50 via-white to-slate-100/70 p-4">
+                  <div>
+                    <h1 className="text-lg font-bold tracking-tight text-slate-900">
+                      Lista de sabores
+                    </h1>
+                  </div>
 
-                    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.9fr)] xl:items-start">
-                      <CardapioItemSearch
-                        items={items}
-                        includeUpcoming={includeUpcoming}
-                        setIncludeUpcoming={setIncludeUpcoming}
-                        setFilteredItems={setFilteredItems}
-                        setIsSearching={setIsSearching}
-                      />
-
-                      <div className="rounded-xl border border-slate-200 bg-white/90 p-4">
-                        <div className="mb-3 flex items-center justify-between gap-2">
-                          <span className="text-sm font-semibold text-slate-800">Faixa de lucro</span>
-                          <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                            Filtro rapido
-                          </span>
+                  <div className="rounded-xl bg-white/60">
+                    <CardapioItemSearch
+                      items={items}
+                      includeUpcoming={includeUpcoming}
+                      setIncludeUpcoming={setIncludeUpcoming}
+                      setFilteredItems={setFilteredItems}
+                      setIsSearching={setIsSearching}
+                    />
+                    <Separator className="my-3 bg-slate-200/80" />
+                    <div className="flex flex-wrap items-center justify-center gap-2">
+                      <div className="flex items-center pr-2">
+                        <span className="text-sm font-semibold text-slate-800">Faixa de lucro</span>
+                      </div>
+                      <div className="flex flex-wrap items-center justify-center gap-2">
+                        <div className="flex items-center gap-2 rounded-full border border-red-200 bg-red-50/80 px-3 py-1">
+                          <Checkbox
+                            id="profit-critical"
+                            checked={profitRanges.critical}
+                            onCheckedChange={(value) =>
+                              setProfitRanges((prev) => ({ ...prev, critical: Boolean(value) }))
+                            }
+                          />
+                          <Label htmlFor="profit-critical" className="text-xs font-medium text-slate-700">
+                            Crítico (&lt; 0)
+                          </Label>
                         </div>
-                        <div className="flex flex-wrap items-center gap-3">
-                          <div className="flex items-center gap-2 rounded-full border border-red-200 bg-red-50 px-3 py-1.5">
-                            <Checkbox
-                              id="profit-critical"
-                              checked={profitRanges.critical}
-                              onCheckedChange={(value) =>
-                                setProfitRanges((prev) => ({ ...prev, critical: Boolean(value) }))
-                              }
-                            />
-                            <Label htmlFor="profit-critical" className="text-xs font-medium text-slate-700">
-                              Crítico (&lt; 0)
-                            </Label>
-                          </div>
-                          <div className="flex items-center gap-2 rounded-full border border-orange-200 bg-orange-50 px-3 py-1.5">
-                            <Checkbox
-                              id="profit-low"
-                              checked={profitRanges.low}
-                              onCheckedChange={(value) =>
-                                setProfitRanges((prev) => ({ ...prev, low: Boolean(value) }))
-                              }
-                            />
-                            <Label htmlFor="profit-low" className="text-xs font-medium text-slate-700">
-                              Baixo (0 a 10)
-                            </Label>
-                          </div>
-                          <div className="flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5">
-                            <Checkbox
-                              id="profit-medium"
-                              checked={profitRanges.medium}
-                              onCheckedChange={(value) =>
-                                setProfitRanges((prev) => ({ ...prev, medium: Boolean(value) }))
-                              }
-                            />
-                            <Label htmlFor="profit-medium" className="text-xs font-medium text-slate-700">
-                              Médio (10 a 15)
-                            </Label>
-                          </div>
-                          <div className="flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5">
-                            <Checkbox
-                              id="profit-priority"
-                              checked={profitRanges.priority}
-                              onCheckedChange={(value) =>
-                                setProfitRanges((prev) => ({ ...prev, priority: Boolean(value) }))
-                              }
-                            />
-                            <Label htmlFor="profit-priority" className="text-xs font-medium text-slate-700">
-                              Prioridade (&gt; 15)
-                            </Label>
-                          </div>
+                        <div className="flex items-center gap-2 rounded-full border border-orange-200 bg-orange-50/80 px-3 py-1">
+                          <Checkbox
+                            id="profit-low"
+                            checked={profitRanges.low}
+                            onCheckedChange={(value) =>
+                              setProfitRanges((prev) => ({ ...prev, low: Boolean(value) }))
+                            }
+                          />
+                          <Label htmlFor="profit-low" className="text-xs font-medium text-slate-700">
+                            Baixo (0 a 10)
+                          </Label>
+                        </div>
+                        <div className="flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50/80 px-3 py-1">
+                          <Checkbox
+                            id="profit-medium"
+                            checked={profitRanges.medium}
+                            onCheckedChange={(value) =>
+                              setProfitRanges((prev) => ({ ...prev, medium: Boolean(value) }))
+                            }
+                          />
+                          <Label htmlFor="profit-medium" className="text-xs font-medium text-slate-700">
+                            Médio (10 a 15)
+                          </Label>
+                        </div>
+                        <div className="flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50/80 px-3 py-1">
+                          <Checkbox
+                            id="profit-priority"
+                            checked={profitRanges.priority}
+                            onCheckedChange={(value) =>
+                              setProfitRanges((prev) => ({ ...prev, priority: Boolean(value) }))
+                            }
+                          />
+                          <Label htmlFor="profit-priority" className="text-xs font-medium text-slate-700">
+                            Prioridade (&gt; 15)
+                          </Label>
                         </div>
                       </div>
                     </div>
                   </div>
                 </div>
+
 
                 <div className="flex flex-col items-center">
                   <div className="mb-4 flex flex-wrap items-center justify-center gap-2 rounded-md border bg-white px-3 py-2">
@@ -1079,26 +1072,29 @@ function CardapioItemSearch({
   }, [search, includeHidden, includeUpcoming, items])
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white/90 p-4">
-      <div className="flex flex-col gap-4">
-        <div className="space-y-1">
+
+    <div className="flex flex-col gap-3">
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,0.95fr)_minmax(460px,1.05fr)] xl:items-end">
+        <div className="max-w-3xl">
           <Label htmlFor="search-flavors" className="text-sm font-semibold text-slate-800">
-            Buscar no cardapio
+            <div className="flex flex-col gap-2 md:flex-row md:items-center">
+              <span className="shrink-0 md:min-w-[140px]">Buscar no cardapio</span>
+              <Input
+                id="search-flavors"
+                name="search"
+                className="h-10 w-full rounded-lg border-slate-200 bg-white text-sm shadow-sm"
+                placeholder="Pesquisar por nome, ingredientes ou tags..."
+                onChange={(event) => setSearch(event.target.value)}
+                value={search}
+              />
+            </div>
           </Label>
-          <Input
-            id="search-flavors"
-            name="search"
-            className="h-12 w-full rounded-xl border-slate-200 bg-white text-base shadow-sm"
-            placeholder="Pesquisar por nome, ingredientes ou tags..."
-            onChange={(event) => setSearch(event.target.value)}
-            value={search}
-          />
         </div>
 
-        <div className="flex flex-wrap gap-3">
+        <div className="grid gap-2 md:grid-cols-2">
           <label
             htmlFor="search-hidden-flavors"
-            className="flex min-h-14 flex-1 min-w-[240px] cursor-pointer items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3"
+            className="flex min-h-12 cursor-pointer items-center justify-between gap-3 rounded-lg bg-slate-50/70 px-3 py-2"
           >
             <div className="space-y-0.5">
               <span className="block text-sm font-medium text-slate-800">Sabores ocultos</span>
@@ -1115,7 +1111,7 @@ function CardapioItemSearch({
 
           <label
             htmlFor="search-upcoming-flavors"
-            className="flex min-h-14 flex-1 min-w-[240px] cursor-pointer items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3"
+            className="flex min-h-12 cursor-pointer items-center justify-between gap-3 rounded-lg bg-slate-50/70 px-3 py-2"
           >
             <div className="space-y-0.5">
               <span className="block text-sm font-medium text-slate-800">Lancamentos futuros</span>
@@ -1132,5 +1128,6 @@ function CardapioItemSearch({
         </div>
       </div>
     </div>
+
   )
 }

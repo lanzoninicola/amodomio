@@ -1,5 +1,5 @@
 import { Link, Outlet, useLocation } from "@remix-run/react";
-import { CalendarDays, Images, Pizza } from "lucide-react";
+import { CalendarDays, Images, Pizza, Search } from "lucide-react";
 
 export default function AdminMobileLayout() {
   const { pathname } = useLocation();
@@ -7,12 +7,15 @@ export default function AdminMobileLayout() {
   const isEstoque = pathname.startsWith("/admin/mobile/estoque-massa");
   const isProgramacao = pathname.startsWith("/admin/mobile/programacao-diaria");
   const isAssetsBatch = pathname.startsWith("/admin/mobile/cardapio-assets-batch");
+  const isCosts = pathname.startsWith("/admin/mobile/custos");
   const pageTitle = isEstoque
     ? "Estoque de massa"
     : isProgramacao
       ? "Programação diária"
       : isAssetsBatch
         ? "Assets do cardápio"
+        : isCosts
+          ? "Consulta de custos"
         : "Atalhos";
 
   return (
@@ -75,6 +78,19 @@ export default function AdminMobileLayout() {
               <span>
                 <span className="block text-sm font-semibold text-slate-900">Assets do cardápio</span>
                 <span className="block text-xs text-slate-600">Upload e organização de capa/galeria</span>
+              </span>
+            </Link>
+
+            <Link
+              to="/admin/mobile/custos"
+              className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+            >
+              <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 text-slate-700">
+                <Search className="h-5 w-5" />
+              </span>
+              <span>
+                <span className="block text-sm font-semibold text-slate-900">Consulta de custos</span>
+                <span className="block text-xs text-slate-600">Buscar produto e ver custos por fornecedor</span>
               </span>
             </Link>
           </main>
