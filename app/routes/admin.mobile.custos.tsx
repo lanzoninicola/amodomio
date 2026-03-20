@@ -1,8 +1,8 @@
 import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { Form, Link, useLoaderData, useNavigation } from "@remix-run/react";
 import { Search } from "lucide-react";
-import { calculateItemCostMetrics, getItemAverageCostWindowDays } from "~/domain/item/item-cost-metrics.server";
-import prismaClient from "~/lib/prisma/client.server";
+import { CostTrendChart } from "~/components/item-cost-monitoring/cost-trend-chart";
+import { loadItemCostMonitoringPayload } from "~/domain/item/item-cost-monitoring.server";
 import { ok } from "~/utils/http-response.server";
 
 export const meta: MetaFunction = () => [{ title: "Admin Mobile | Consulta de custos" }];
@@ -19,13 +19,6 @@ function fmtMoney(value: number | null | undefined) {
   return BRL_FORMATTER.format(Number(value));
 }
 
-function fmtDateTime(value: Date | string | null | undefined) {
-  if (!value) return null;
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  return date.toLocaleString("pt-BR");
-}
-
 function fmtDateShort(value: Date | string | null | undefined) {
   if (!value) return null;
   const date = value instanceof Date ? value : new Date(value);
@@ -33,139 +26,8 @@ function fmtDateShort(value: Date | string | null | undefined) {
   return date.toLocaleDateString("pt-BR");
 }
 
-function getSupplierNameFromMetadata(metadata: unknown): string | null {
-  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null;
-  const supplierName = (metadata as Record<string, unknown>).supplierName;
-  const normalized = String(supplierName || "").trim();
-  return normalized || null;
-}
-
-function pickPrimaryItemVariation(item: any) {
-  const activeVariations = (item?.ItemVariation || []).filter((row: any) => !row?.deletedAt);
-
-  return activeVariations.find((row: any) => row.isReference) || activeVariations[0] || null;
-}
-
 export async function loader({ request }: LoaderFunctionArgs) {
-  const db = prismaClient as any;
-  const url = new URL(request.url);
-  const q = String(url.searchParams.get("q") || "").trim();
-  const averageWindowDays = await getItemAverageCostWindowDays();
-
-  if (!q) {
-    return ok({
-      filters: { q: "" },
-      averageWindowDays,
-      items: [],
-    });
-  }
-
-  const items = await db.item.findMany({
-    where: {
-      active: true,
-      OR: [
-        { name: { contains: q, mode: "insensitive" } },
-        { description: { contains: q, mode: "insensitive" } },
-      ],
-    },
-    include: {
-      ItemVariation: {
-        where: { deletedAt: null },
-        include: {
-          ItemCostVariation: {
-            select: {
-              id: true,
-              costAmount: true,
-              unit: true,
-              validFrom: true,
-              createdAt: true,
-              source: true,
-            },
-          },
-          ItemCostVariationHistory: {
-            select: {
-              id: true,
-              costAmount: true,
-              unit: true,
-              validFrom: true,
-              createdAt: true,
-              source: true,
-              metadata: true,
-            },
-            orderBy: [{ validFrom: "desc" }, { createdAt: "desc" }],
-            take: 30,
-          },
-        },
-        orderBy: [{ createdAt: "asc" }],
-      },
-    },
-    orderBy: [{ name: "asc" }],
-    take: 20,
-  });
-
-  const payload = items.map((item: any) => {
-    const baseVariation = pickPrimaryItemVariation(item);
-    const history = baseVariation?.ItemCostVariationHistory || [];
-    const currentCost = baseVariation?.ItemCostVariation || null;
-    const historyForMetrics = history.length > 0 ? history : currentCost ? [currentCost] : [];
-    const metrics = calculateItemCostMetrics({
-      item,
-      history: historyForMetrics,
-      averageWindowDays,
-    });
-
-    const suppliersMap = new Map<string, any>();
-    for (const row of history) {
-      const supplierName = getSupplierNameFromMetadata(row?.metadata);
-      if (!supplierName) continue;
-      const existing = suppliersMap.get(supplierName);
-      const rowDate = new Date(row?.validFrom || row?.createdAt || 0).getTime();
-      const existingDate = existing
-        ? new Date(existing.validFrom || existing.createdAt || 0).getTime()
-        : Number.NEGATIVE_INFINITY;
-      if (!existing || rowDate > existingDate) {
-        suppliersMap.set(supplierName, row);
-      }
-    }
-
-    const suppliers = Array.from(suppliersMap.entries())
-      .map(([supplierName, row]) => ({
-        supplierName,
-        costAmount: Number(row?.costAmount || 0),
-        unit: row?.unit || item.purchaseUm || item.consumptionUm || null,
-        source: row?.source || null,
-        validFrom: row?.validFrom || row?.createdAt || null,
-      }))
-      .sort((a, b) => {
-        const aDate = new Date(a.validFrom || 0).getTime();
-        const bDate = new Date(b.validFrom || 0).getTime();
-        return bDate - aDate;
-      });
-
-    return {
-      id: item.id,
-      name: item.name,
-      consumptionUm: item.consumptionUm,
-      purchaseUm: item.purchaseUm,
-      latestCost: metrics.latestCost
-        ? {
-          costAmount: Number(metrics.latestCost.costAmount || 0),
-          unit: metrics.latestCost.unit || item.purchaseUm || item.consumptionUm || null,
-          validFrom: metrics.latestCost.validFrom || metrics.latestCost.createdAt || null,
-          source: metrics.latestCost.source || null,
-        }
-        : null,
-      averageCostPerConsumptionUnit: metrics.averageCostPerConsumptionUnit,
-      averageSamplesCount: metrics.averageSamplesCount,
-      suppliers,
-    };
-  });
-
-  return ok({
-    filters: { q },
-    averageWindowDays,
-    items: payload,
-  });
+  return ok(await loadItemCostMonitoringPayload(request));
 }
 
 export default function AdminMobileCustosPage() {
@@ -175,6 +37,7 @@ export default function AdminMobileCustosPage() {
   const items = payload.items || [];
   const filters = payload.filters || { q: "" };
   const averageWindowDays = Number(payload.averageWindowDays || 30);
+  const chartWindowDays = Number(payload.chartWindowDays || 60);
   const isLoading = navigation.state !== "idle";
 
   return (
@@ -182,17 +45,17 @@ export default function AdminMobileCustosPage() {
       <Form method="get" className="">
         <label className="block">
           <span className="text-sm font-semibold text-slate-900">Buscar produto ou insumo</span>
-          <div className="mt-2 flex items-center gap-2">
+          <div className="mt-2 flex items-center gap-2 border-b border-slate-200 pb-3">
             <input
               type="search"
               name="q"
               defaultValue={filters.q}
               placeholder="Ex.: muçarela, calabresa"
-              className="h-11 min-w-0 flex-1 rounded-md border border-slate-300 px-3 text-sm"
+              className="h-11 min-w-0 flex-1 rounded-xl border border-slate-300 bg-white px-4 text-sm outline-none transition focus:border-slate-900 placeholder:text-slate-400"
             />
             <button
               type="submit"
-              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-slate-900 text-white"
+              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-900 text-white"
               aria-label={isLoading ? "Buscando" : "Buscar"}
             >
               <Search className="h-4 w-4" />
@@ -202,33 +65,33 @@ export default function AdminMobileCustosPage() {
       </Form>
 
       {!filters.q ? (
-        <section className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-600">
-          Digite um nome para consultar último custo, custo médio e custos recentes por fornecedor.
+        <section className="py-6 text-sm text-slate-600">
+          Digite um nome para consultar último custo, custo médio, fornecedores e andamento do custo.
         </section>
       ) : null}
 
       {filters.q && items.length === 0 ? (
-        <section className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-sm">
+        <section className="py-6 text-sm text-slate-600">
           Nenhum item ativo encontrado para <span className="font-semibold text-slate-900">{filters.q}</span>.
         </section>
       ) : null}
 
       {items.map((item: any) => (
-        <article key={item.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <article key={item.id} className="border-t border-slate-200 pt-4 first:border-t-0 first:pt-0">
           <div className="flex items-start justify-between gap-3">
             <h2 className="min-w-0 flex-1 text-base font-semibold leading-tight text-slate-950">
               {item.name}
             </h2>
             <Link
               to={`/admin/items/${item.id}/costs`}
-              className="shrink-0 rounded-full border border-slate-300 px-3 py-1 text-[11px] font-medium text-slate-700"
+              className="shrink-0 text-[11px] font-medium text-slate-500"
             >
               Abrir
             </Link>
           </div>
 
-          <div className="mt-4 grid grid-cols-2 gap-2">
-            <div className="rounded-xl bg-slate-50 px-3 py-3">
+          <div className="mt-4 grid grid-cols-2 gap-4 border-t border-slate-100 pt-3">
+            <div>
               <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Último custo</div>
               <div className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">
                 {item.latestCost ? fmtMoney(item.latestCost.costAmount) : "-"}
@@ -241,7 +104,7 @@ export default function AdminMobileCustosPage() {
               </div>
             </div>
 
-            <div className="rounded-xl bg-slate-50 px-3 py-3">
+            <div>
               <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Custo médio</div>
               <div className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">
                 {item.averageCostPerConsumptionUnit != null ? fmtMoney(item.averageCostPerConsumptionUnit) : "-"}
@@ -283,6 +146,21 @@ export default function AdminMobileCustosPage() {
               </div>
             )}
           </div>
+
+          <div className="mt-4 border-t border-slate-100 pt-3">
+            <div className="flex items-baseline justify-between gap-3">
+              <div>
+                <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Andamento do custo</div>
+                <div className="mt-1 text-xs text-slate-500">Média diária dos últimos {chartWindowDays} dias</div>
+              </div>
+              <div className="text-[11px] text-slate-500">{item.trendUnit || item.purchaseUm || item.consumptionUm || "sem unidade"}</div>
+            </div>
+            <div className="mt-3">
+              <CostTrendChart data={item.trend} emptyLabel="Sem histórico recente para esse item." />
+            </div>
+          </div>
+
+
         </article>
       ))}
     </div>
