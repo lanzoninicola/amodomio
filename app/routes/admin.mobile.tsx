@@ -1,5 +1,5 @@
 import { Link, Outlet, useLocation } from "@remix-run/react";
-import { CalendarDays, Images, Pizza, ReceiptText, Search } from "lucide-react";
+import { CalendarDays, Camera, Images, Pizza, ReceiptText, Search } from "lucide-react";
 
 export default function AdminMobileLayout() {
   const { pathname } = useLocation();
@@ -9,12 +9,15 @@ export default function AdminMobileLayout() {
   const isAssetsBatch = pathname.startsWith("/admin/mobile/cardapio-assets-batch");
   const isCosts = pathname.startsWith("/admin/mobile/custos");
   const isItemCostSurvey = pathname.startsWith("/admin/mobile/levantamento-custo-item");
+  const isStockPhotoEntry = pathname.startsWith("/admin/mobile/entrada-estoque-foto");
   const pageTitle = isEstoque
     ? "Estoque de massa"
     : isProgramacao
       ? "Programação diária"
       : isAssetsBatch
         ? "Assets do cardápio"
+        : isStockPhotoEntry
+          ? "Entrada por foto"
         : isItemCostSurvey
           ? "Levantamento de custo"
         : isCosts
@@ -107,6 +110,19 @@ export default function AdminMobileLayout() {
               <span>
                 <span className="block text-sm font-semibold text-slate-900">Levantamento de custo</span>
                 <span className="block text-xs text-slate-600">Registrar custo observado de um item</span>
+              </span>
+            </Link>
+
+            <Link
+              to="/admin/mobile/entrada-estoque-foto"
+              className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+            >
+              <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+                <Camera className="h-5 w-5" />
+              </span>
+              <span>
+                <span className="block text-sm font-semibold text-slate-900">Entrada por foto</span>
+                <span className="block text-xs text-slate-600">Estruturar cupom/NF com ChatGPT e criar lote</span>
               </span>
             </Link>
           </main>

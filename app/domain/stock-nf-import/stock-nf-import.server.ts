@@ -868,6 +868,304 @@ export async function createStockNfImportBatchFromFile(params: {
   return { batchId: batch.id, summary };
 }
 
+async function resolveDirectSupplierFromLookup(
+  supplier: {
+    supplierName?: string | null;
+    supplierCnpj?: string | null;
+  },
+  lookup: Awaited<ReturnType<typeof loadItemsAndAliases>>,
+) {
+  const supplierName = str(supplier.supplierName) || null;
+  const supplierNameNormalized = supplierName ? normalizeName(supplierName) : null;
+  const supplierCnpj = str(supplier.supplierCnpj) || null;
+  const supplierCnpjDigits = digitsOnly(supplierCnpj);
+
+  if (supplierCnpjDigits) {
+    const suppliers = lookup.suppliersByCnpjDigits.get(supplierCnpjDigits) || [];
+    if (suppliers.length === 1) {
+      return {
+        supplierId: suppliers[0].id,
+        supplierName,
+        supplierNameNormalized,
+        supplierCnpj,
+        supplierMatchSource: 'chatgpt_cnpj',
+      };
+    }
+  }
+
+  if (supplierNameNormalized) {
+    const suppliers = lookup.suppliersByNameNormalized.get(supplierNameNormalized) || [];
+    if (suppliers.length === 1) {
+      return {
+        supplierId: suppliers[0].id,
+        supplierName,
+        supplierNameNormalized,
+        supplierCnpj,
+        supplierMatchSource: 'chatgpt_name',
+      };
+    }
+  }
+
+  if (supplierName) {
+    const db = prismaClient as any;
+    const createdSupplier = await db.supplier.create({
+      data: {
+        name: supplierName,
+        cnpj: supplierCnpj,
+      },
+      select: {
+        id: true,
+        name: true,
+        cnpj: true,
+      },
+    });
+
+    const createdNameNormalized = normalizeName(createdSupplier.name);
+    const createdCnpjDigits = digitsOnly(createdSupplier.cnpj);
+
+    if (createdCnpjDigits) {
+      const list = lookup.suppliersByCnpjDigits.get(createdCnpjDigits) || [];
+      lookup.suppliersByCnpjDigits.set(createdCnpjDigits, [...list, createdSupplier]);
+    }
+
+    if (createdNameNormalized) {
+      const list = lookup.suppliersByNameNormalized.get(createdNameNormalized) || [];
+      lookup.suppliersByNameNormalized.set(createdNameNormalized, [...list, createdSupplier]);
+    }
+
+    return {
+      supplierId: createdSupplier.id,
+      supplierName,
+      supplierNameNormalized,
+      supplierCnpj,
+      supplierMatchSource: 'chatgpt_auto_created',
+    };
+  }
+
+  return {
+    supplierId: null,
+    supplierName,
+    supplierNameNormalized,
+    supplierCnpj,
+    supplierMatchSource: supplierName || supplierCnpj ? 'chatgpt_unmatched' : null,
+  };
+}
+
+export async function createStockNfImportBatchFromVisionPayload(params: {
+  batchName: string;
+  uploadedBy?: string | null;
+  originalFileName?: string | null;
+  worksheetName?: string | null;
+  notes?: string | null;
+  movementAt?: Date | null;
+  invoiceNumber?: string | null;
+  supplierName?: string | null;
+  supplierCnpj?: string | null;
+  lines: Array<{
+    rowNumber?: number | null;
+    movementAt?: Date | null;
+    ingredientName: string;
+    motivo?: string | null;
+    identification?: string | null;
+    invoiceNumber?: string | null;
+    supplierName?: string | null;
+    supplierCnpj?: string | null;
+    qtyEntry?: number | null;
+    unitEntry?: string | null;
+    qtyConsumption?: number | null;
+    unitConsumption?: string | null;
+    movementUnit?: string | null;
+    costAmount?: number | null;
+    costTotalAmount?: number | null;
+    observation?: string | null;
+    rawData?: Record<string, unknown> | null;
+  }>;
+}) {
+  const lookup = await loadItemsAndAliases();
+  const parsedLines: any[] = [];
+  const seenInBatch = new Map<string, string>();
+
+  for (let index = 0; index < params.lines.length; index += 1) {
+    const rawLine = params.lines[index];
+    const movementAt = rawLine.movementAt || params.movementAt || null;
+    const ingredientName = str(rawLine.ingredientName);
+    const invoiceNumber = str(rawLine.invoiceNumber || params.invoiceNumber) || null;
+    const supplier = await resolveDirectSupplierFromLookup(
+      {
+        supplierName: rawLine.supplierName || params.supplierName,
+        supplierCnpj: rawLine.supplierCnpj || params.supplierCnpj,
+      },
+      lookup,
+    );
+    const qtyEntry = Number(rawLine.qtyEntry ?? NaN);
+    const qtyConsumption = Number(rawLine.qtyConsumption ?? NaN);
+    const costAmount = Number(rawLine.costAmount ?? NaN);
+    const costTotalAmount = Number(rawLine.costTotalAmount ?? NaN);
+    const rowNumber = Number(rawLine.rowNumber || index + 1);
+    const movementUnit =
+      str(rawLine.movementUnit || rawLine.unitEntry || rawLine.unitConsumption).toUpperCase() || null;
+
+    const sourceFingerprint = hashFingerprint({
+      sourceSystem: SOURCE_SYSTEM,
+      sourceType: SOURCE_TYPE,
+      movementAt: movementAt?.toISOString() || '',
+      ingredientName: normalizeName(ingredientName),
+      invoiceNumber,
+      qtyEntry: Number.isFinite(qtyEntry) ? qtyEntry : null,
+      unitEntry: str(rawLine.unitEntry).toUpperCase() || null,
+      qtyConsumption: Number.isFinite(qtyConsumption) ? qtyConsumption : null,
+      unitConsumption: str(rawLine.unitConsumption).toUpperCase() || null,
+      costAmount: Number.isFinite(costAmount) ? costAmount : null,
+      costTotalAmount: Number.isFinite(costTotalAmount) ? costTotalAmount : null,
+    });
+
+    let line = await classifyLine(
+      {
+        rowNumber,
+        movementAt,
+        ingredientName,
+        ingredientNameNormalized: normalizeName(ingredientName),
+        motivo: str(rawLine.motivo) || 'Entrada por NF',
+        identification: str(rawLine.identification) || (invoiceNumber ? `NF: ${invoiceNumber}` : null),
+        invoiceNumber,
+        supplierId: supplier.supplierId,
+        supplierName: supplier.supplierName,
+        supplierNameNormalized: supplier.supplierNameNormalized,
+        supplierCnpj: supplier.supplierCnpj,
+        supplierMatchSource: supplier.supplierMatchSource,
+        qtyEntry: Number.isFinite(qtyEntry) ? qtyEntry : null,
+        unitEntry: str(rawLine.unitEntry).toUpperCase() || null,
+        qtyConsumption: Number.isFinite(qtyConsumption) ? qtyConsumption : null,
+        unitConsumption: str(rawLine.unitConsumption).toUpperCase() || null,
+        movementUnit,
+        costAmount: Number.isFinite(costAmount) ? costAmount : null,
+        costTotalAmount: Number.isFinite(costTotalAmount) ? costTotalAmount : null,
+        observation: str(rawLine.observation) || null,
+        sourceFingerprint,
+        rawData: rawLine.rawData || {
+          source: 'chatgpt-vision',
+          batchDefaults: {
+            movementAt: params.movementAt?.toISOString() || null,
+            invoiceNumber: params.invoiceNumber || null,
+            supplierName: params.supplierName || null,
+            supplierCnpj: params.supplierCnpj || null,
+          },
+        },
+        metadata: {
+          source: 'chatgpt-vision',
+        },
+      },
+      lookup,
+    );
+
+    const duplicateInBatchLineId = seenInBatch.get(sourceFingerprint);
+    if (duplicateInBatchLineId) {
+      line = {
+        ...line,
+        status: 'skipped_duplicate',
+        errorCode: 'duplicate_in_batch',
+        errorMessage: 'Linha duplicada na mesma resposta',
+        duplicateOfLineId: duplicateInBatchLineId,
+      };
+    }
+
+    const syntheticLineId = randomUUID();
+    if (!seenInBatch.has(sourceFingerprint)) {
+      seenInBatch.set(sourceFingerprint, syntheticLineId);
+    }
+
+    parsedLines.push({
+      id: syntheticLineId,
+      ...line,
+      duplicateOfLineId: (line as any).duplicateOfLineId || null,
+    });
+  }
+
+  const existingAppliedFingerprints = await markExistingAppliedDuplicates(parsedLines);
+  const finalLines = parsedLines.map((line) => {
+    if (existingAppliedFingerprints.has(line.sourceFingerprint)) {
+      return {
+        ...line,
+        status: 'skipped_duplicate',
+        errorCode: 'duplicate_already_applied',
+        errorMessage: 'Linha já importada em lote anterior',
+      };
+    }
+    return line;
+  });
+
+  const summary = summarizeLines(finalLines);
+  const db = prismaClient as any;
+  const periodDates = finalLines
+    .map((line) => line.movementAt)
+    .filter((value) => value instanceof Date && !Number.isNaN(value.getTime()))
+    .sort((a, b) => a.getTime() - b.getTime());
+  const periodStart = periodDates[0] || params.movementAt || null;
+  const periodEnd = periodDates[periodDates.length - 1] || params.movementAt || null;
+
+  const batch = await db.stockNfImportBatch.create({
+    data: {
+      name: str(params.batchName) || `Importação NF por foto ${new Date().toLocaleString('pt-BR')}`,
+      sourceSystem: SOURCE_SYSTEM,
+      sourceType: SOURCE_TYPE,
+      status: derivePreApplyBatchStatus(summary),
+      originalFileName: str(params.originalFileName) || 'chatgpt-photo-import.json',
+      worksheetName: str(params.worksheetName) || 'chatgpt-vision',
+      periodStart,
+      periodEnd,
+      uploadedBy: params.uploadedBy || null,
+      notes: str(params.notes) || 'Lote criado a partir de resposta estruturada do ChatGPT com foto de cupom/NF.',
+      summary,
+      Lines: {
+        create: finalLines.map((line) => ({
+          id: line.id,
+          rowNumber: line.rowNumber,
+          status: line.status,
+          errorCode: line.errorCode || null,
+          errorMessage: line.errorMessage || null,
+          rawData: line.rawData,
+          movementAt: line.movementAt || null,
+          ingredientName: line.ingredientName || '',
+          ingredientNameNormalized: line.ingredientNameNormalized || normalizeName(line.ingredientName),
+          motivo: line.motivo || null,
+          identification: line.identification || null,
+          invoiceNumber: line.invoiceNumber || null,
+          supplierId: line.supplierId || null,
+          supplierName: line.supplierName || null,
+          supplierNameNormalized: line.supplierNameNormalized || null,
+          supplierCnpj: line.supplierCnpj || null,
+          supplierMatchSource: line.supplierMatchSource || null,
+          qtyEntry: line.qtyEntry,
+          unitEntry: line.unitEntry || null,
+          qtyConsumption: line.qtyConsumption,
+          unitConsumption: line.unitConsumption || null,
+          movementUnit: line.movementUnit || null,
+          costAmount: line.costAmount,
+          costTotalAmount: line.costTotalAmount,
+          observation: line.observation || null,
+          sourceFingerprint:
+            line.errorCode === 'duplicate_in_batch'
+              ? `${line.sourceFingerprint}_dup_${line.rowNumber}`
+              : line.sourceFingerprint,
+          duplicateOfLineId: line.duplicateOfLineId || null,
+          mappedItemId: line.mappedItemId || null,
+          mappedItemName: line.mappedItemName || null,
+          mappingSource: line.mappingSource || null,
+          manualConversionFactor: line.manualConversionFactor || null,
+          conversionSource: line.conversionSource || null,
+          conversionFactorUsed: line.conversionFactorUsed || null,
+          targetUnit: line.targetUnit || null,
+          convertedCostAmount: line.convertedCostAmount ?? null,
+          metadata: line.metadata || null,
+        })),
+      },
+    },
+    select: { id: true },
+  });
+
+  return { batchId: batch.id, summary };
+}
+
 async function recomputeBatchLines(batchId: string) {
   const db = prismaClient as any;
   const [lines, lookup] = await Promise.all([
