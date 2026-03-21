@@ -21,6 +21,13 @@ export type MenuItemMarginImpactRow = {
   marginGapPerc: number;
 };
 
+function hasMeaningfulCostChange(currentCostAmount: number, previousCostAmount: number) {
+  return (
+    Number(currentCostAmount || 0).toFixed(4) !==
+    Number(previousCostAmount || 0).toFixed(4)
+  );
+}
+
 export async function listMenuItemMarginImpactRows(menuItemIds: string[]) {
   const uniqueIds = Array.from(
     new Set(menuItemIds.map((id) => String(id || "").trim()).filter(Boolean))
@@ -43,6 +50,11 @@ export async function listMenuItemMarginImpactRows(menuItemIds: string[]) {
 
     for (const variation of item.sellPriceVariations || []) {
       const currentCost = costBySizeId.get(variation.sizeId);
+      const currentCostAmount = Number(currentCost?.costAmount ?? 0);
+      const previousCostAmount = Number(currentCost?.previousCostAmount ?? 0);
+      if (!hasMeaningfulCostChange(currentCostAmount, previousCostAmount)) {
+        continue;
+      }
       const recommendedPriceAmount = Number(
         variation.computedSellingPriceBreakdown?.minimumPrice?.priceAmount
           ?.withProfit ?? 0
@@ -56,8 +68,8 @@ export async function listMenuItemMarginImpactRows(menuItemIds: string[]) {
         channelId: variation.channelId,
         channelKey: variation.channelKey,
         channelName: variation.channelName,
-        currentCostAmount: Number(currentCost?.costAmount ?? 0),
-        previousCostAmount: Number(currentCost?.previousCostAmount ?? 0),
+        currentCostAmount,
+        previousCostAmount,
         sellingPriceAmount: Number(variation.priceAmount ?? 0),
         profitActualPerc: Number(variation.profitActualPerc ?? 0),
         profitExpectedPerc: Number(variation.profitExpectedPerc ?? 0),

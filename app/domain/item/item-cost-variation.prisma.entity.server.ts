@@ -1,13 +1,8 @@
 import prismaClient from "~/lib/prisma/client.server";
 import { PrismaEntityProps } from "~/lib/prisma/types.server";
+import type { ItemCostSource } from "~/domain/costs/item-cost-sources";
 
-export type ItemCostVariationSource =
-  | "manual"
-  | "purchase"
-  | "item-cost-sheet"
-  | "import"
-  | "adjustment"
-  | string;
+export type ItemCostVariationSource = ItemCostSource | string;
 
 export type SetItemVariationCostInput = {
   itemVariationId: string;
@@ -162,6 +157,54 @@ class ItemCostVariationPrismaEntity {
       });
 
       return saved;
+    });
+  }
+
+  async addHistoryEntry(input: SetItemVariationCostInput) {
+    if (!input.itemVariationId) {
+      throw new Error("itemVariationId é obrigatório");
+    }
+
+    const nextCost = Number(input.costAmount);
+    if (!Number.isFinite(nextCost)) {
+      throw new Error("costAmount inválido");
+    }
+
+    const validFrom = input.validFrom || new Date();
+
+    return await this.client.$transaction(async (tx) => {
+      const itemVariation = await (tx as any).itemVariation.findUnique({
+        where: { id: input.itemVariationId },
+        include: { Variation: true, Item: true },
+      });
+
+      if (!itemVariation || itemVariation.deletedAt) {
+        throw new Error("ItemVariation inválida ou removida");
+      }
+
+      const current = await (tx as any).itemCostVariation.findUnique({
+        where: { itemVariationId: input.itemVariationId },
+      });
+
+      const previousCostAmount = Number(current?.costAmount || 0);
+      const now = new Date();
+
+      return await (tx as any).itemCostVariationHistory.create({
+        data: {
+          itemVariationId: input.itemVariationId,
+          costAmount: nextCost,
+          previousCostAmount,
+          unit: input.unit ?? current?.unit ?? null,
+          source: input.source ?? current?.source ?? null,
+          referenceType: input.referenceType ?? null,
+          referenceId: input.referenceId ?? null,
+          validFrom,
+          createdBy: input.updatedBy ?? null,
+          metadata: (input.metadata as any) ?? null,
+          createdAt: now,
+          updatedAt: now,
+        },
+      });
     });
   }
 

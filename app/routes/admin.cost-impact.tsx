@@ -1,7 +1,7 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { Form, Link, useLoaderData, useNavigation } from "@remix-run/react";
 import { useState } from "react";
-import { BookOpenText, ChevronDown } from "lucide-react";
+import { BookOpenText } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -24,6 +24,13 @@ import prismaClient from "~/lib/prisma/client.server";
 import { ok } from "~/utils/http-response.server";
 
 const ALL_OPTION = "__all__";
+
+function hasMeaningfulCostChange(currentCostAmount: number, previousCostAmount: number) {
+  return (
+    Number(currentCostAmount || 0).toFixed(4) !==
+    Number(previousCostAmount || 0).toFixed(4)
+  );
+}
 
 function fmtMoney(value: number) {
   return new Intl.NumberFormat("pt-BR", {
@@ -52,11 +59,17 @@ function buildRowContextText(row: any) {
   const currentMargin = fmtPct(row.profitActualPerc);
   const targetMargin = fmtPct(row.profitExpectedPerc);
   const marginGap = fmtPct(row.marginGapPerc);
+  const costChanged =
+    Number(row.currentCostAmount || 0).toFixed(4) !==
+    Number(row.previousCostAmount || 0).toFixed(4);
+  const costSentence = costChanged
+    ? `O custo mudou de ${previousCost} para ${currentCost}.`
+    : `O custo considerado para esta análise é ${currentCost}.`;
 
   return [
     `O insumo ${sourceName} gerou impacto no produto ${productName}.`,
     `Esta linha corresponde à variação ${sizeName} no canal ${channelName}.`,
-    `O custo mudou de ${previousCost} para ${currentCost}.`,
+    costSentence,
     `O preço atual é ${currentPrice}, e o preço sugerido para recuperar a meta é ${suggestedPrice}.`,
     `O gap de preço é ${priceGap} e a margem está em ${currentMargin} contra meta de ${targetMargin}.`,
     `A prioridade desta revisão é ${priority} com gap de margem de ${marginGap}.`,
@@ -87,8 +100,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const db = prismaClient as any;
   const url = new URL(request.url);
   const priority = String(url.searchParams.get("priority") || "").trim();
-  const channelId = String(url.searchParams.get("channelId") || "").trim();
-  const sizeId = String(url.searchParams.get("sizeId") || "").trim();
+  const channelIdParam = String(url.searchParams.get("channelId") || "").trim();
+  const sizeIdParam = String(url.searchParams.get("sizeId") || "").trim();
   const q = String(url.searchParams.get("q") || "").trim();
   const dateFrom = String(url.searchParams.get("dateFrom") || "").trim();
   const dateTo = String(url.searchParams.get("dateTo") || "").trim();
@@ -101,8 +114,20 @@ export async function loader({ request }: LoaderFunctionArgs) {
   ]);
   const defaultChannelId = channels.find((channel: any) => channel.key === "cardapio")?.id || "";
   const defaultSizeId = sizes.find((size: any) => size.key === "pizza-medium")?.id || "";
-  const selectedChannelId = channelId || defaultChannelId;
-  const selectedSizeId = sizeId || defaultSizeId;
+  const hasChannelParam = url.searchParams.has("channelId");
+  const hasSizeParam = url.searchParams.has("sizeId");
+  const selectedChannelId =
+    channelIdParam === ALL_OPTION
+      ? ""
+      : hasChannelParam
+        ? channelIdParam
+        : defaultChannelId;
+  const selectedSizeId =
+    sizeIdParam === ALL_OPTION
+      ? ""
+      : hasSizeParam
+        ? sizeIdParam
+        : defaultSizeId;
 
   if (typeof db.costImpactMenuItem?.findMany !== "function") {
     return ok({
@@ -110,8 +135,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
       summary: null,
       filters: {
         priority,
-        channelId: selectedChannelId,
-        sizeId: selectedSizeId,
+        channelId: selectedChannelId || (hasChannelParam ? ALL_OPTION : defaultChannelId),
+        sizeId: selectedSizeId || (hasSizeParam ? ALL_OPTION : defaultSizeId),
         q,
         dateFrom,
         dateTo,
@@ -146,7 +171,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     ];
   }
 
-  const rows = await db.costImpactMenuItem.findMany({
+  const rawRows = await db.costImpactMenuItem.findMany({
     where,
     orderBy: [{ createdAt: "desc" }],
     take: 200,
@@ -184,6 +209,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
       },
     },
   });
+  const rows = rawRows.filter((row: any) =>
+    hasMeaningfulCostChange(row.currentCostAmount, row.previousCostAmount)
+  );
 
   const summary = {
     totalRows: rows.length,
@@ -200,8 +228,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
     summary,
     filters: {
       priority,
-      channelId: selectedChannelId,
-      sizeId: selectedSizeId,
+      channelId: selectedChannelId || (hasChannelParam ? ALL_OPTION : defaultChannelId),
+      sizeId: selectedSizeId || (hasSizeParam ? ALL_OPTION : defaultSizeId),
       q,
       dateFrom,
       dateTo,
@@ -235,97 +263,79 @@ export default function AdminCostImpactRoute() {
   const [priorityValue, setPriorityValue] = useState(filters.priority || ALL_OPTION);
   const [channelValue, setChannelValue] = useState(filters.channelId || ALL_OPTION);
   const [sizeValue, setSizeValue] = useState(filters.sizeId || ALL_OPTION);
+  const selectedChannelName =
+    channelValue === ALL_OPTION
+      ? "Todos os canais"
+      : channels.find((channel: any) => channel.id === channelValue)?.name || "Cardapio";
+  const selectedSizeName =
+    sizeValue === ALL_OPTION
+      ? "Todas as variações"
+      : sizes.find((size: any) => size.id === sizeValue)?.name || "Tamanho Medio";
+  const isUsingDefaults =
+    channelValue !== ALL_OPTION &&
+    sizeValue !== ALL_OPTION &&
+    channels.find((channel: any) => channel.id === channelValue)?.key === "cardapio" &&
+    sizes.find((size: any) => size.id === sizeValue)?.key === "pizza-medium";
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-8">
-      <div className="flex flex-col gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-950">
-          Impacto de custos
-        </h1>
-        <p className="max-w-3xl text-sm text-slate-500">
-          Monitoramento das alterações de custo propagadas para receitas, fichas
-          e produtos do cardápio, com foco na diferença entre margem atual e
-          margem alvo.
-        </p>
-        <details className="group max-w-4xl rounded-2xl bg-slate-50/90 p-4 text-sm text-slate-700">
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 font-medium text-slate-900">
-            <span>Como ler esta página</span>
-            <ChevronDown className="h-4 w-4 shrink-0 text-slate-500 transition-transform group-open:rotate-180" />
-          </summary>
-          <div className="pt-3">
-            <p>
-              Cada linha representa um produto do cardápio em uma combinação específica
-              de variação e canal de venda. Quando o custo de um insumo muda, o sistema
-              recalcula o custo final do produto e compara a margem atual com a margem alvo.
-            </p>
-            <p className="mt-2">
-              O foco aqui é identificar onde o preço de venda ficou defasado: se o custo
-              subiu e a margem caiu, a tela mostra o preço atual, o preço sugerido para
-              recuperar a meta e o tamanho do gap em dinheiro e em porcentagem.
-            </p>
-            <p className="mt-2 text-slate-600">
-              Origem = insumo que puxou o recálculo. Produto = item afetado. Variação = tamanho
-              do item. Canal = cardápio, iFood, Aiqfome etc. Prioridade = urgência para revisar
-              o preço.
-            </p>
-            <p className="mt-3">
-              Em linguagem simples, a lógica é esta: quando o custo de um insumo muda,
-              o sistema tenta seguir esse efeito até o cardápio final. Ele verifica em
-              quais receitas esse insumo entra, quais fichas e produtos dependem dessas
-              receitas, recalcula os custos e depois compara esse novo custo com o preço
-              de venda já cadastrado.
-            </p>
-            <p className="mt-2">
-              Por isso, nem todo insumo alterado aparece aqui. Um insumo só entra nesta
-              página quando a mudança dele consegue chegar até pelo menos um item do
-              cardápio com impacto de margem registrado. Se o insumo mudou, mas não está
-              ligado a um produto final do cardápio, ou não gerou nenhuma linha de impacto
-              em preço/margem, ele pode até ter sido processado internamente e mesmo assim
-              não aparecer nesta lista.
-            </p>
-            <p className="mt-2 text-slate-600">
-              Resumindo: aparecer aqui significa “este insumo afetou um produto vendável do
-              cardápio”. Não aparecer significa “a mudança não chegou a um item final do
-              cardápio com impacto salvo nesta tabela”.
-            </p>
+    <div className="flex w-full flex-col gap-6 px-4 py-8">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_760px] xl:items-start">
+        <div className="flex min-w-0 flex-col gap-3">
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-950">
+            Impacto de custos
+          </h1>
+          <p className="max-w-3xl text-sm text-slate-500">
+            Quando uma importação de NF altera o custo de um insumo, o pipeline
+            recalcula receitas, fichas, custo do item vendido e grava o impacto
+            visualizado nesta página. Se o insumo não estiver ligado, direta ou
+            indiretamente, a uma receita, ficha ou item final vendido no cardápio,
+            a mudança pode ser processada sem gerar registros visíveis aqui.
+          </p>
+        </div>
+        <div className="rounded-2xl bg-slate-50/80 px-4 py-4 text-xs text-slate-600 xl:self-start">
+          <div className="font-semibold text-slate-500">Links</div>
+          <div className="mt-3 grid gap-3 xl:grid-cols-5">
+            <Link
+              to="/admin/cost-monitoring"
+              className="font-semibold leading-5 whitespace-nowrap transition hover:text-slate-950"
+            >
+              Consulta de custo
+            </Link>
+            <Link
+              to="/admin/stock-movements"
+              className="font-semibold leading-5 whitespace-nowrap transition hover:text-slate-950"
+            >
+              Movimentações
+            </Link>
+            <Link
+              to="/admin/import-stock-nf"
+              className="font-semibold leading-5 whitespace-nowrap transition hover:text-slate-950"
+            >
+              Importação NF
+            </Link>
+            <Link
+              to="/admin/gerenciamento/cardapio/cost-management"
+              className="font-semibold leading-5 whitespace-nowrap transition hover:text-slate-950"
+            >
+              Custos do cardápio
+            </Link>
+            <Link
+              to="/admin/gerenciamento/cardapio/sell-price-management"
+              className="font-semibold leading-5 whitespace-nowrap transition hover:text-slate-950"
+            >
+              Preços de venda
+            </Link>
           </div>
-        </details>
-        <div className="flex flex-wrap items-center gap-3 pt-1 text-sm text-slate-600">
-          <span className="font-medium text-slate-500">Links:</span>
-          <Link
-            to="/admin/cost-monitoring"
-            className="hover:text-slate-950"
-          >
-            Consulta de custo
-          </Link>
-          <Link
-            to="/admin/stock-movements"
-            className="hover:text-slate-950"
-          >
-            Movimentações
-          </Link>
-          <Link
-            to="/admin/import-stock-nf"
-            className="hover:text-slate-950"
-          >
-            Importação NF
-          </Link>
-          <Link
-            to="/admin/gerenciamento/cardapio/cost-management"
-            className="hover:text-slate-950"
-          >
-            Custos do cardápio
-          </Link>
-          <Link
-            to="/admin/gerenciamento/cardapio/sell-price-management"
-            className="hover:text-slate-950"
-          >
-            Preços de venda
-          </Link>
         </div>
       </div>
 
       <Separator />
+
+      <div className="text-xs text-slate-500">
+        {isUsingDefaults
+          ? "Visualização padrão: Cardápio + Tamanho Medio."
+          : `Visualização atual: ${selectedChannelName} + ${selectedSizeName}.`}
+      </div>
 
       <Form method="get" className="grid gap-4 md:grid-cols-2 xl:grid-cols-12">
         <label className="flex min-w-0 flex-col gap-1 text-sm xl:col-span-4">
@@ -356,7 +366,7 @@ export default function AdminCostImpactRoute() {
         </label>
         <label className="flex min-w-0 flex-col gap-1 text-sm xl:col-span-2">
           <span className="text-slate-600">Canal de venda</span>
-          <input type="hidden" name="channelId" value={channelValue === ALL_OPTION ? "" : channelValue} />
+          <input type="hidden" name="channelId" value={channelValue} />
           <Select value={channelValue} onValueChange={setChannelValue}>
             <SelectTrigger className="h-10 rounded-xl border-slate-200 bg-white">
               <SelectValue placeholder="Selecione um canal" />
@@ -373,7 +383,7 @@ export default function AdminCostImpactRoute() {
         </label>
         <label className="flex min-w-0 flex-col gap-1 text-sm xl:col-span-2">
           <span className="text-slate-600">Variação</span>
-          <input type="hidden" name="sizeId" value={sizeValue === ALL_OPTION ? "" : sizeValue} />
+          <input type="hidden" name="sizeId" value={sizeValue} />
           <Select value={sizeValue} onValueChange={setSizeValue}>
             <SelectTrigger className="h-10 rounded-xl border-slate-200 bg-white">
               <SelectValue placeholder="Selecione uma variação" />

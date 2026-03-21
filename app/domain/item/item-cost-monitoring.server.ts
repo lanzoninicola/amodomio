@@ -2,8 +2,18 @@ import prismaClient from "~/lib/prisma/client.server";
 import {
   calculateItemCostMetrics,
   getItemAverageCostWindowDays,
+  isItemCostExcludedFromMetrics,
   normalizeItemCostToConsumptionUnit,
 } from "~/domain/item/item-cost-metrics.server";
+
+const ITEM_CLASSIFICATIONS = [
+  "insumo",
+  "semi_acabado",
+  "produto_final",
+  "embalagem",
+  "servico",
+  "outro",
+] as const;
 
 type CostRowLike = {
   id?: string | null;
@@ -45,6 +55,8 @@ function buildTrendData(params: {
   const buckets = new Map<string, { date: string; label: string; total: number; count: number }>();
 
   for (const row of params.history) {
+    if (isItemCostExcludedFromMetrics(row)) continue;
+
     const date = toDate(row.validFrom) || toDate(row.createdAt);
     if (!date || date < threshold) continue;
 
@@ -77,12 +89,16 @@ export async function loadItemCostMonitoringPayload(request: Request) {
   const db = prismaClient as any;
   const url = new URL(request.url);
   const q = String(url.searchParams.get("q") || "").trim();
+  const classificationParam = String(url.searchParams.get("classification") || "").trim();
+  const classification = ITEM_CLASSIFICATIONS.includes(classificationParam as (typeof ITEM_CLASSIFICATIONS)[number])
+    ? classificationParam
+    : "insumo";
   const averageWindowDays = await getItemAverageCostWindowDays();
   const chartWindowDays = Math.max(averageWindowDays, 60);
 
   if (!q) {
     return {
-      filters: { q: "" },
+      filters: { q: "", classification },
       averageWindowDays,
       chartWindowDays,
       items: [],
@@ -92,6 +108,7 @@ export async function loadItemCostMonitoringPayload(request: Request) {
   const items = await db.item.findMany({
     where: {
       active: true,
+      classification,
       OR: [
         { name: { contains: q, mode: "insensitive" } },
         { description: { contains: q, mode: "insensitive" } },
@@ -133,7 +150,7 @@ export async function loadItemCostMonitoringPayload(request: Request) {
   });
 
   return {
-    filters: { q },
+    filters: { q, classification },
     averageWindowDays,
     chartWindowDays,
     items: items.map((item: any) => {

@@ -1,5 +1,5 @@
 import { Link, Outlet, useLocation } from "@remix-run/react";
-import { CalendarDays, Images, Pizza, Search } from "lucide-react";
+import { CalendarDays, Images, Pizza, ReceiptText, Search } from "lucide-react";
 
 export default function AdminMobileLayout() {
   const { pathname } = useLocation();
@@ -8,12 +8,15 @@ export default function AdminMobileLayout() {
   const isProgramacao = pathname.startsWith("/admin/mobile/programacao-diaria");
   const isAssetsBatch = pathname.startsWith("/admin/mobile/cardapio-assets-batch");
   const isCosts = pathname.startsWith("/admin/mobile/custos");
+  const isItemCostSurvey = pathname.startsWith("/admin/mobile/levantamento-custo-item");
   const pageTitle = isEstoque
     ? "Estoque de massa"
     : isProgramacao
       ? "Programação diária"
       : isAssetsBatch
         ? "Assets do cardápio"
+        : isItemCostSurvey
+          ? "Levantamento de custo"
         : isCosts
           ? "Consulta de custos"
         : "Atalhos";
@@ -91,6 +94,19 @@ export default function AdminMobileLayout() {
               <span>
                 <span className="block text-sm font-semibold text-slate-900">Consulta de custos</span>
                 <span className="block text-xs text-slate-600">Buscar produto e ver custos por fornecedor</span>
+              </span>
+            </Link>
+
+            <Link
+              to="/admin/mobile/levantamento-custo-item"
+              className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+            >
+              <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-orange-100 text-orange-700">
+                <ReceiptText className="h-5 w-5" />
+              </span>
+              <span>
+                <span className="block text-sm font-semibold text-slate-900">Levantamento de custo</span>
+                <span className="block text-xs text-slate-600">Registrar custo observado de um item</span>
               </span>
             </Link>
           </main>

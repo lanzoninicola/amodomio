@@ -226,6 +226,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
                 validFrom: true,
                 createdAt: true,
                 source: true,
+                metadata: true,
               },
               orderBy: [{ validFrom: "desc" }, { createdAt: "desc" }],
               take: 100,
@@ -274,6 +275,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
                 validFrom: true,
                 createdAt: true,
                 source: true,
+                metadata: true,
               },
               orderBy: [{ validFrom: "desc" }, { createdAt: "desc" }],
               take: 100,
@@ -787,7 +789,7 @@ export default function AdminItemsIndex() {
                   (item.categoryId ? categoryNameById.get(item.categoryId) : null) ||
                   "Não definido";
                 const latestLabel = latestCost
-                  ? `${BRL_FORMATTER.format(Number(latestCost.costAmount || 0))} ${latestCost.unit || ""}`.trim()
+                  ? `${BRL_FORMATTER.format(Number(costMetrics?.latestCostPerConsumptionUnit || 0))} ${item.consumptionUm || latestCost.unit || ""}`.trim()
                   : "-";
                 const avgLabel =
                   costMetrics?.averageCostPerConsumptionUnit != null
