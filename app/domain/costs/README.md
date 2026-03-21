@@ -36,6 +36,24 @@ Por isso, o sistema trabalha com duas leituras de custo:
    - margem alvo;
    - preco recomendado.
 
+### Origens de custo
+
+As leituras de custo do item carregam uma origem operacional padronizada.
+
+Valores atuais:
+
+- `manual`: levantamento avulso ou conferencia manual;
+- `purchase`: custo confirmado em compra;
+- `import`: custo vindo de importacao de NF;
+- `adjustment`: correcao operacional interna;
+- `item-cost-sheet`: snapshot calculado por ficha de custo.
+
+Convencao atual:
+
+- a lista canonica deve viver em `app/domain/costs/item-cost-sources.ts`;
+- UI deve consumir labels e hints desse modulo, sem redefinir valores localmente;
+- novas origens devem ser documentadas aqui ao serem introduzidas.
+
 ### Fonte de verdade atual
 
 No momento, a fonte de verdade do produto vendido no cardapio e o `MenuItem`.

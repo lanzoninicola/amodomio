@@ -9,6 +9,7 @@ import type { AdminItemOutletContext } from "./admin.items.$id";
 export default function AdminItemPurchasesTab() {
   const { item, costMetrics, averageWindowDays, unitOptions } = useOutletContext<AdminItemOutletContext>();
   const latestCost = costMetrics?.latestCost || item._itemCostVariationCurrent || item._itemCostVariationHistory?.[0] || null;
+  const referenceUnit = item.consumptionUm || latestCost?.unit || item.purchaseUm || "";
   const canConfigureConversion = !!item.consumptionUm;
   const [purchaseUmValue, setPurchaseUmValue] = useState(item.purchaseUm || "__EMPTY__");
 
@@ -96,7 +97,9 @@ export default function AdminItemPurchasesTab() {
             <div>Tem estoque: {item.canStock ? "Sim" : "Não"}</div>
             <div>
               Último custo:{" "}
-              {latestCost ? `R$ ${Number(latestCost.costAmount || 0).toFixed(2)} ${latestCost.unit || ""}` : "não informado"}
+              {costMetrics?.latestCostPerConsumptionUnit != null
+                ? `R$ ${Number(costMetrics.latestCostPerConsumptionUnit).toFixed(4)} ${referenceUnit}`.trim()
+                : "não informado"}
             </div>
             <div>
               Custo médio ({averageWindowDays} dias):{" "}

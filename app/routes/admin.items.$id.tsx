@@ -16,6 +16,7 @@ import { toast } from "~/components/ui/use-toast";
 import { calculateItemCostMetrics, getItemAverageCostWindowDays } from "~/domain/item/item-cost-metrics.server";
 import { itemCostVariationPrismaEntity } from "~/domain/item/item-cost-variation.prisma.entity.server";
 import { itemVariationPrismaEntity } from "~/domain/item/item-variation.prisma.entity.server";
+import { supplierPrismaEntity } from "~/domain/supplier/supplier.prisma.entity.server";
 import prismaClient from "~/lib/prisma/client.server";
 import { badRequest, ok, serverError } from "~/utils/http-response.server";
 import { lastUrlSegment } from "~/utils/url";
@@ -57,6 +58,29 @@ function pickPrimaryItemVariation(item: any) {
   const activeVariations = (item?.ItemVariation || []).filter((row: any) => !row?.deletedAt);
 
   return activeVariations.find((row: any) => row.isReference) || activeVariations[0] || null;
+}
+
+function getSupplierNameFromMetadata(metadata: unknown): string | null {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null;
+  const supplierName = (metadata as Record<string, unknown>).supplierName;
+  const normalized = String(supplierName || "").trim();
+  return normalized || null;
+}
+
+function findLatestPurchaseSupplierName(history: any[]): string {
+  for (const row of history || []) {
+    const source = String(row?.source || "").trim().toLowerCase();
+    if (source !== "purchase" && source !== "import") continue;
+    const supplierName = getSupplierNameFromMetadata(row?.metadata);
+    if (supplierName) return supplierName;
+  }
+
+  for (const row of history || []) {
+    const supplierName = getSupplierNameFromMetadata(row?.metadata);
+    if (supplierName) return supplierName;
+  }
+
+  return "";
 }
 
 async function getAvailableItemUnits() {
@@ -120,7 +144,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
         })
         : Promise.resolve([]);
 
-    const [loadedItem, averageWindowDays, unitOptions, categories, ingredientRecipeUsage] = await Promise.all([
+    const [loadedItem, averageWindowDays, unitOptions, categories, ingredientRecipeUsage, suppliers] = await Promise.all([
       db.item.findUnique({
         where: { id },
         include: {
@@ -201,6 +225,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
         orderBy: [{ name: "asc" }],
       }),
       ingredientRecipeUsageLookup,
+      supplierPrismaEntity.findAll(),
     ]);
 
     if (!loadedItem) return badRequest("Item não encontrado");
@@ -278,6 +303,8 @@ export async function loader({ params }: LoaderFunctionArgs) {
       history: historyForMetrics,
       averageWindowDays,
     });
+    const latestPurchaseSupplierName = findLatestPurchaseSupplierName(primaryHistory);
+
     return ok({
       item: {
         ...item,
@@ -285,11 +312,13 @@ export async function loader({ params }: LoaderFunctionArgs) {
         _itemCostVariationHistory: primaryHistory,
         _itemCostVariationCurrent: currentCost,
         _ingredientRecipeUsage: ingredientRecipeUsage,
+        _latestPurchaseSupplierName: latestPurchaseSupplierName,
       },
       costMetrics,
       averageWindowDays,
       unitOptions,
       categories,
+      suppliers,
     });
   } catch (error) {
     return serverError(error);
@@ -420,6 +449,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       const source = String(formData.get("source") || "manual").trim();
       const supplierName = String(formData.get("supplierName") || "").trim();
       const notes = String(formData.get("notes") || "").trim();
+      const comparisonOnly = formData.get("comparisonOnly") === "on";
 
       if (!(costAmount > 0)) return badRequest("Informe um custo maior que zero");
 
@@ -427,20 +457,54 @@ export async function action({ request, params }: ActionFunctionArgs) {
         ensureBaseIfMissing: true,
       });
       if (!baseItemVariation?.id) return badRequest("Nenhuma variação disponível para registrar custo");
-      await itemCostVariationPrismaEntity.setCurrentCost({
-        itemVariationId: baseItemVariation.id,
-        costAmount,
-        unit: unit || null,
-        source: source || "manual",
-        validFrom: new Date(),
-        metadata: {
-          supplierName: supplierName || null,
-          notes: notes || null,
-          legacyAction: "item-cost-add",
-        },
-      });
+      const metadata = {
+        supplierName: supplierName || null,
+        notes: notes || null,
+        comparisonOnly,
+        excludeFromMetrics: comparisonOnly,
+        legacyAction: "item-cost-add",
+      };
+
+      if (comparisonOnly) {
+        await itemCostVariationPrismaEntity.addHistoryEntry({
+          itemVariationId: baseItemVariation.id,
+          costAmount,
+          unit: unit || null,
+          source: source || "manual",
+          validFrom: new Date(),
+          metadata,
+        });
+      } else {
+        await itemCostVariationPrismaEntity.setCurrentCost({
+          itemVariationId: baseItemVariation.id,
+          costAmount,
+          unit: unit || null,
+          source: source || "manual",
+          validFrom: new Date(),
+          metadata,
+        });
+      }
 
       return ok("Custo registrado com sucesso");
+    }
+
+    if (_action === "supplier-quick-create") {
+      const name = String(formData.get("name") || "").trim();
+
+      if (!name) return badRequest("Informe o nome do fornecedor");
+
+      const created = await supplierPrismaEntity.create({
+        name,
+      });
+
+      return ok({
+        message: "Fornecedor criado com sucesso",
+        supplier: {
+          id: created.id,
+          name: created.name,
+          cnpj: created.cnpj,
+        },
+      });
     }
 
     if (_action === "item-variations-update") {
@@ -494,6 +558,7 @@ export type AdminItemOutletContext = {
   classifications: readonly string[];
   unitOptions: string[];
   categories: Array<{ id: string; name: string }>;
+  suppliers: Array<{ id: string; name: string; cnpj?: string | null }>;
   costMetrics: any;
   averageWindowDays: number;
 };
@@ -510,6 +575,7 @@ export default function AdminItemDetailLayout() {
   const averageWindowDays = Number((loaderData?.payload as any)?.averageWindowDays || 30);
   const unitOptions = ((loaderData?.payload as any)?.unitOptions || ITEM_UNIT_OPTIONS) as string[];
   const categories = ((loaderData?.payload as any)?.categories || []) as Array<{ id: string; name: string }>;
+  const suppliers = (((loaderData?.payload as any)?.suppliers || []) as Array<{ id: string; name: string; cnpj?: string | null }>);
   const activeTab = getItemActiveTab(location.pathname);
 
   useEffect(() => {
@@ -576,6 +642,7 @@ export default function AdminItemDetailLayout() {
             classifications: ITEM_CLASSIFICATIONS,
             unitOptions,
             categories,
+            suppliers,
             costMetrics,
             averageWindowDays,
           }}

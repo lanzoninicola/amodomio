@@ -16,6 +16,7 @@ export type ItemCostHistoryLike = {
   validFrom?: Date | string | null;
   createdAt?: Date | string | null;
   source?: string | null;
+  metadata?: unknown;
 };
 
 export type ItemCostMetrics = {
@@ -69,6 +70,14 @@ function toDate(value: Date | string | null | undefined): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+export function isItemCostExcludedFromMetrics(cost: ItemCostHistoryLike): boolean {
+  const metadata = cost?.metadata;
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return false;
+
+  const record = metadata as Record<string, unknown>;
+  return record.excludeFromMetrics === true || record.comparisonOnly === true;
+}
+
 export async function getItemAverageCostWindowDays() {
   const setting = await prismaClient.setting.findFirst({
     where: {
@@ -102,13 +111,14 @@ export function calculateItemCostMetrics(params: {
     const bDate = toDate(b.validFrom) ?? toDate(b.createdAt) ?? new Date(0);
     return bDate.getTime() - aDate.getTime();
   });
+  const metricsHistory = history.filter((row) => !isItemCostExcludedFromMetrics(row));
 
-  const latestCost = history[0] ?? null;
+  const latestCost = metricsHistory[0] ?? null;
   const latestCostPerConsumptionUnit = latestCost
     ? normalizeItemCostToConsumptionUnit(latestCost, params.item)
     : null;
 
-  const normalizedInWindow = history
+  const normalizedInWindow = metricsHistory
     .filter((row) => {
       const d = toDate(row.validFrom) ?? toDate(row.createdAt);
       return d ? d >= threshold : false;

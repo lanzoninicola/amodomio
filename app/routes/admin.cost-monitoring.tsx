@@ -142,8 +142,8 @@ export default function AdminCostMonitoringRoute() {
             <div className="mt-5 grid gap-4 border-t border-slate-100 pt-4 md:grid-cols-3">
               <MetricCard
                 label="Último custo"
-                value={fmtMoney(item.latestCost?.costAmount)}
-                hint={`${item.latestCost?.unit || item.purchaseUm || item.consumptionUm || "sem unidade"}${item.latestCost?.validFrom ? ` • ${fmtDateShort(item.latestCost.validFrom)}` : ""}`}
+                value={fmtMoney(item.latestCost?.normalizedCostAmount)}
+                hint={`${item.consumptionUm || item.latestCost?.unit || item.purchaseUm || "sem unidade"}${item.latestCost?.validFrom ? ` • ${fmtDateShort(item.latestCost.validFrom)}` : ""}`}
               />
               <MetricCard
                 label="Custo médio"
