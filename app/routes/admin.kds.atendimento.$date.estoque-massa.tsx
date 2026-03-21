@@ -1,9 +1,8 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { useFetcher, useLoaderData, useLocation, useNavigate } from "@remix-run/react";
+import type { FocusEvent, MouseEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
-import { RotateCw, SaveIcon } from "lucide-react";
-
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { normalizeCounts, getAvailableDoughSizes, getDoughStock, saveDoughStock, type DoughStockSnapshot } from "~/domain/kds/dough-stock.server";
@@ -64,8 +63,6 @@ export default function EstoqueMassaPage() {
   const isTodaySelected = dateStr === today;
 
   const [draftManual, setDraftManual] = useState<SizeCounts>(stock?.effective ?? stock?.base ?? defaultSizeCounts());
-  const [saveKey, setSaveKey] = useState<keyof SizeCounts | "">("");
-
   useEffect(() => {
     setDraftManual(stock?.effective ?? stock?.base ?? defaultSizeCounts());
   }, [stock, dateStr]);
@@ -73,16 +70,33 @@ export default function EstoqueMassaPage() {
   useEffect(() => {
     if (fx.data?.ok && fx.data.stock) {
       setDraftManual(fx.data.stock.effective);
-      setSaveKey("");
     }
   }, [fx.data]);
 
-  const inputs = useMemo(() => sizes.map((s) => s.key), [sizes]);
+  const inputs = useMemo(
+    () => sizes.map((s) => s.key).filter((key) => !(isMobileRoute && key === "FT")),
+    [isMobileRoute, sizes],
+  );
+  const hiddenInputs = useMemo(
+    () => sizes.map((s) => s.key).filter((key) => !inputs.includes(key)),
+    [inputs, sizes],
+  );
 
   function onChangeManual(key: keyof SizeCounts, value: string) {
     const n = Number(value);
     const safe = Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
     setDraftManual((prev) => ({ ...prev, [key]: safe }));
+  }
+
+  function moveCursorToStart(event: FocusEvent<HTMLInputElement> | MouseEvent<HTMLInputElement>) {
+    const input = event.currentTarget;
+    requestAnimationFrame(() => {
+      try {
+        input.setSelectionRange(0, 0);
+      } catch {
+        // ignore selection errors on unsupported input types/browsers
+      }
+    });
   }
 
   const effective = useMemo<SizeCounts>(() => ({ ...draftManual }), [draftManual]);
@@ -140,7 +154,9 @@ export default function EstoqueMassaPage() {
 
       <fx.Form method="post" className="space-y-4">
         <input type="hidden" name="date" value={dateStr} />
-        <input type="hidden" name="saveKey" value={saveKey} />
+        {hiddenInputs.map((key) => (
+          <input key={key} type="hidden" name={`adjust${key}`} value={draftManual[key]} />
+        ))}
 
         <div className="flex flex-col gap-4">
           <section className="space-y-2">
@@ -154,38 +170,28 @@ export default function EstoqueMassaPage() {
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-3">
               {inputs.map((k) => {
                 const size = sizes.find((s) => s.key === k)!;
-                const isSavingCurrentSize =
-                  fx.state !== "idle" &&
-                  formData?.get("_action") === "save" &&
-                  formData?.get("saveKey") === k;
 
                 if (isMobileRoute) {
                   return (
-                    <div key={k} className="flex items-center gap-4 border-b border-slate-100 pb-4">
+                    <div key={k} className="border-b border-slate-100 pb-5">
+                      <div className="flex items-start gap-4">
                       <div className="min-w-0 w-16 shrink-0">
                         <div className="text-sm font-semibold leading-none">{size.label}</div>
                         <div className="mt-1 text-[11px] text-slate-500">{size.abbr || size.key}</div>
                       </div>
 
-                      <NumericInput
-                        name={`adjust${k}`}
-                        value={draftManual[k]}
-                        onChange={(e) => onChangeManual(k, e.target.value)}
-                        inputMode="numeric"
-                        className="h-12 flex-1 text-right font-mono text-2xl"
-                      />
-
-                      <Button
-                        type="submit"
-                        name="_action"
-                        value="save"
-                        className="h-12 w-12 shrink-0 rounded-md bg-slate-950 p-0 text-white hover:bg-slate-800"
-                        disabled={fx.state !== "idle"}
-                        aria-label={`Salvar ${size.label}`}
-                        onClick={() => setSaveKey(k)}
-                      >
-                        {isSavingCurrentSize ? <RotateCw className="h-4 w-4 animate-spin" /> : <SaveIcon className="h-4 w-4" />}
-                      </Button>
+                        <div className="min-w-0 flex-1">
+                          <NumericInput
+                            name={`adjust${k}`}
+                            value={draftManual[k]}
+                            onChange={(e) => onChangeManual(k, e.target.value)}
+                            onFocus={moveCursorToStart}
+                            onClick={moveCursorToStart}
+                            inputMode="numeric"
+                            className="h-16 w-full text-right font-mono text-3xl"
+                          />
+                        </div>
+                      </div>
                     </div>
                   );
                 }
@@ -228,7 +234,7 @@ export default function EstoqueMassaPage() {
 
         {isMobileRoute ? (
           <div className="fixed inset-x-0 bottom-0 z-20 border-t border-slate-200 bg-white/95 p-3 backdrop-blur">
-            <div className="mx-auto grid w-full max-w-md grid-cols-1 gap-3">
+            <div className="mx-auto grid w-full max-w-md grid-cols-2 gap-3">
               <Button
                 type="submit"
                 name="_action"
@@ -238,6 +244,16 @@ export default function EstoqueMassaPage() {
                 className="h-12 w-full text-base"
               >
                 {fx.state !== "idle" && formData?.get("_action") === "reset" ? "Zerando…" : "Zerar"}
+              </Button>
+
+              <Button
+                type="submit"
+                name="_action"
+                value="save"
+                disabled={fx.state !== "idle"}
+                className="h-12 w-full bg-slate-950 text-base text-white hover:bg-slate-800"
+              >
+                {fx.state !== "idle" && formData?.get("_action") === "save" ? "Salvando…" : "Salvar"}
               </Button>
             </div>
           </div>
