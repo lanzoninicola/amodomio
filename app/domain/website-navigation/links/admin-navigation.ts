@@ -185,8 +185,8 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
               disabled: false,
             },
             {
-              title: "Importação NF",
-              href: "/admin/import-stock-nf",
+              title: "Importação de movimentações",
+              href: "/admin/import-stock-movements",
               items: [],
               disabled: false,
             },

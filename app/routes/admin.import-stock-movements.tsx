@@ -2,7 +2,7 @@ import { Link, Outlet } from '@remix-run/react';
 import { ChevronLeft, PlusCircle } from 'lucide-react';
 import Container from '~/components/layout/container/container';
 
-export default function AdminImportStockNfOutlet() {
+export default function AdminImportStockMovementsOutlet() {
   return (
     <Container fullWidth className="mt-12 px-4">
       <div className="flex flex-col gap-6">
@@ -10,7 +10,7 @@ export default function AdminImportStockNfOutlet() {
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex flex-wrap items-center gap-2 text-sm">
               <Link
-                to="/admin/import-stock-nf"
+                to="/admin/import-stock-movements"
                 className="inline-flex items-center gap-1.5 font-semibold text-slate-700 transition hover:text-slate-950"
               >
                 <span className="flex size-5 items-center justify-center rounded-full border border-slate-200 text-slate-500">
@@ -19,7 +19,7 @@ export default function AdminImportStockNfOutlet() {
                 voltar
               </Link>
               <span className="text-slate-300">/</span>
-              <span className="font-medium text-slate-900">importação NF</span>
+              <span className="font-medium text-slate-900">importação de movimentações</span>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
@@ -40,9 +40,9 @@ export default function AdminImportStockNfOutlet() {
           </div>
 
           <div className="space-y-1">
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-950">Importação de Movimentação NF</h1>
+            <h1 className="text-2xl font-semibold tracking-tight text-slate-950">Importação de movimentações de estoque</h1>
             <p className="max-w-3xl text-sm text-slate-500">
-              Gerencie lotes de importação, acompanhe o que já foi aplicado e abra um lote específico para revisar as linhas antes da importação.
+              Gerencie lotes de importação de entradas de estoque, acompanhe o que já foi aplicado e abra um lote específico para revisar as linhas antes da importação.
             </p>
           </div>
         </section>

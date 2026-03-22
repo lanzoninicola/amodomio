@@ -24,10 +24,10 @@ export default function AdminItemsOutlet() {
 
             <div className="flex flex-wrap items-center gap-2">
               <Link
-                to="/admin/import-stock-nf"
+                to="/admin/import-stock-movements"
                 className="inline-flex h-9 items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
               >
-                Importar movimentação NF
+                Importar movimentações
               </Link>
               <Link
                 to="new"

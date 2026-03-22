@@ -21,7 +21,7 @@ export const DEFAULT_STOCK_PHOTO_CHATGPT_PROMPT_TEMPLATE = [
   "Nao estime quantidades ilegiveis e nao mapeie nomes para o sistema interno.",
   "Copie o nome do ingrediente/produto o mais proximo possivel do documento.",
   "Use ponto para decimais no JSON.",
-  "movementAt deve ser a data da entrada ou emissao da NF em formato YYYY-MM-DD quando visivel.",
+  "movementAt deve ser a data da entrada ou emissao do documento fiscal em formato YYYY-MM-DD quando visivel.",
   "invoiceNumber deve conter somente o numero identificado da NF/cupom quando visivel.",
   "supplierName e supplierCnpj devem ficar no objeto document e podem ser repetidos por linha apenas se necessario.",
   "metadata.returnUrl deve repetir exatamente a URL informada abaixo para facilitar voltar para esta ferramenta.",

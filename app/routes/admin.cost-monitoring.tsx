@@ -79,10 +79,10 @@ export default function AdminCostMonitoringRoute() {
             Movimentações
           </Link>
           <Link
-            to="/admin/import-stock-nf"
+            to="/admin/import-stock-movements"
             className="hover:text-slate-950"
           >
-            Importação NF
+            Importação de movimentações
           </Link>
         </div>
       </div>

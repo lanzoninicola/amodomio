@@ -144,13 +144,13 @@ export default function AdminStockMovementsRoute() {
 
             <div className="flex flex-wrap items-center gap-2">
               <Link
-                to="/admin/import-stock-nf"
+                to="/admin/import-stock-movements"
                 className="inline-flex h-9 items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
               >
-                Importação NF
+                Importação de movimentações
               </Link>
               <Link
-                to="/admin/import-stock-nf/new"
+                to="/admin/import-stock-movements/new"
                 className="inline-flex h-9 items-center justify-center gap-2 rounded-full bg-black px-4 text-sm font-semibold text-white transition hover:bg-slate-800"
               >
                 <PlusCircle size={15} />
@@ -162,7 +162,7 @@ export default function AdminStockMovementsRoute() {
           <div className="space-y-1">
             <h1 className="text-2xl font-semibold tracking-tight text-slate-950">Movimentações de estoque</h1>
             <p className="max-w-3xl text-sm text-slate-500">
-              Analise as entradas de estoque geradas pela importação de NF com filtro por período, fornecedor e produto.
+              Analise as entradas de estoque geradas pela importação de movimentações com filtro por período, fornecedor e produto.
             </p>
           </div>
         </section>
@@ -186,7 +186,7 @@ export default function AdminStockMovementsRoute() {
           <Form method="get" className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
             <div className="xl:col-span-2">
               <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Busca geral</label>
-              <Input name="q" defaultValue={filters.q} placeholder="NF, lote, fornecedor ou ingrediente" className="h-10" />
+              <Input name="q" defaultValue={filters.q} placeholder="documento, lote, fornecedor ou ingrediente" className="h-10" />
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Fornecedor</label>
@@ -261,7 +261,7 @@ export default function AdminStockMovementsRoute() {
                       </TableCell>
                       <TableCell className="px-3 py-3 text-xs text-slate-700">
                         <div className="font-medium text-slate-900">{row.supplierName || 'Sem fornecedor'}</div>
-                        <div className="text-slate-500">NF {row.invoiceNumber || '-'}</div>
+                        <div className="text-slate-500">Doc. {row.invoiceNumber || '-'}</div>
                         <div className="text-slate-400">{row.supplierCnpj || 'sem CNPJ'}</div>
                       </TableCell>
                       <TableCell className="px-3 py-3 text-xs text-slate-700">
@@ -289,7 +289,7 @@ export default function AdminStockMovementsRoute() {
                         </div>
                       </TableCell>
                       <TableCell className="px-3 py-3 text-xs text-slate-700">
-                        <Link to={`/admin/import-stock-nf/${row.batchId}`} className="font-medium text-slate-900 hover:underline">
+                        <Link to={`/admin/import-stock-movements/${row.batchId}`} className="font-medium text-slate-900 hover:underline">
                           {row.Batch?.name || row.batchId}
                         </Link>
                         <div className="text-slate-500">item ID: {row.itemId}</div>

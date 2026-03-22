@@ -10,12 +10,15 @@ export default function AdminMobileLayout() {
   const isCosts = pathname.startsWith("/admin/mobile/custos");
   const isItemCostSurvey = pathname.startsWith("/admin/mobile/levantamento-custo-item");
   const isStockPhotoEntry = pathname.startsWith("/admin/mobile/entrada-estoque-foto");
+  const isImportStockMovementsBatch = pathname.startsWith("/admin/mobile/import-stock-movements");
   const pageTitle = isEstoque
     ? "Estoque de massa"
     : isProgramacao
       ? "Programação diária"
       : isAssetsBatch
         ? "Assets do cardápio"
+        : isImportStockMovementsBatch
+          ? "Lote de estoque"
         : isStockPhotoEntry
           ? "Entrada por foto"
         : isItemCostSurvey
@@ -122,7 +125,7 @@ export default function AdminMobileLayout() {
               </span>
               <span>
                 <span className="block text-sm font-semibold text-slate-900">Entrada por foto</span>
-                <span className="block text-xs text-slate-600">Estruturar cupom/NF com ChatGPT e criar lote</span>
+                <span className="block text-xs text-slate-600">Estruturar cupom ou documento fiscal com ChatGPT e criar lote</span>
               </span>
             </Link>
           </main>
