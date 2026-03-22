@@ -18,6 +18,7 @@ export type BatchSummary = {
   pendingSupplier: number;
   pendingConversion: number;
   applied: number;
+  ignored: number;
   skippedDuplicate: number;
   error: number;
 };
@@ -55,6 +56,12 @@ function normalizeInvoiceNumber(value: unknown) {
   const raw = str(value).toUpperCase();
   if (!raw) return null;
   return raw.replace(/\s+/g, '').replace(/^0+(?=\d)/, '') || '0';
+}
+
+function isSupportedStockEntryReason(value: unknown) {
+  const normalized = normalizeName(value);
+  if (!normalized) return true;
+  return normalized.startsWith('ENTRADA');
 }
 
 function parsePtBrDateTime(value: unknown): Date | null {
@@ -98,12 +105,46 @@ function parseQtyUnitCell(value: unknown): { quantity: number | null; unit: stri
 
 function extractInvoiceNumber(value: unknown) {
   const raw = str(value);
-  const match = raw.match(/NF\s*:\s*([A-Za-z0-9\-./]+)/i);
-  return match?.[1] || null;
+  if (!raw) return null;
+
+  const explicitMatch = raw.match(/(?:NF(?:-E)?|NOTA\s+FISCAL|CUPOM(?:\s+FISCAL)?)\s*[:#-]?\s*([A-Za-z0-9\-./]+)/i);
+  if (explicitMatch?.[1]) return explicitMatch[1];
+
+  return null;
 }
 
 function hashFingerprint(input: Record<string, unknown>) {
   return createHash('sha256').update(JSON.stringify(input)).digest('hex');
+}
+
+function buildSyntheticVisionInvoiceNumber(params: {
+  movementAt?: Date | null;
+  supplierName?: string | null;
+  supplierCnpj?: string | null;
+  lines: Array<{
+    ingredientName?: string | null;
+    qtyEntry?: number | null;
+    costAmount?: number | null;
+  }>;
+}) {
+  const datePart = params.movementAt
+    ? [
+        params.movementAt.getFullYear(),
+        String(params.movementAt.getMonth() + 1).padStart(2, '0'),
+        String(params.movementAt.getDate()).padStart(2, '0'),
+      ].join('')
+    : 'sem-data';
+  const supplierPart = digitsOnly(params.supplierCnpj) || normalizeName(params.supplierName || '').slice(0, 12) || 'sem-fornecedor';
+  const linesSignature = params.lines
+    .map((line) => `${normalizeName(line.ingredientName || '')}|${Number(line.qtyEntry ?? 0)}|${Number(line.costAmount ?? 0)}`)
+    .join('::');
+  const fingerprint = createHash('sha1')
+    .update(`${datePart}|${supplierPart}|${linesSignature}`)
+    .digest('hex')
+    .slice(0, 8)
+    .toUpperCase();
+
+  return `CUPOM-${datePart}-${fingerprint}`;
 }
 
 function isEmptyRow(row: unknown[]) {
@@ -485,13 +526,12 @@ async function resolveConversionForLine(line: any, item: any) {
 }
 
 async function classifyLine(line: any, lookup: Awaited<ReturnType<typeof loadItemsAndAliases>>) {
-  const motivoNorm = normalizeName(line.motivo);
-  if (motivoNorm !== 'ENTRADA POR NF') {
+  if (!isSupportedStockEntryReason(line.motivo)) {
     return {
       ...line,
       status: 'invalid',
       errorCode: 'motivo_not_supported',
-      errorMessage: 'Motivo diferente de Entrada por NF',
+      errorMessage: 'Motivo diferente de entrada de estoque',
     };
   }
 
@@ -499,7 +539,7 @@ async function classifyLine(line: any, lookup: Awaited<ReturnType<typeof loadIte
     return { ...line, status: 'invalid', errorCode: 'invalid_date', errorMessage: 'Data inválida' };
   }
   if (!line.invoiceNumber) {
-    return { ...line, status: 'invalid', errorCode: 'missing_invoice', errorMessage: 'NF não identificada' };
+    return { ...line, status: 'invalid', errorCode: 'missing_invoice', errorMessage: 'Documento fiscal não identificado' };
   }
   if (!(Number(line.costAmount) > 0)) {
     return { ...line, status: 'invalid', errorCode: 'invalid_cost', errorMessage: 'Custo inválido' };
@@ -509,7 +549,7 @@ async function classifyLine(line: any, lookup: Awaited<ReturnType<typeof loadIte
       ...line,
       status: 'pending_supplier',
       errorCode: 'supplier_not_reconciled',
-      errorMessage: 'Fornecedor da NF não conciliado',
+      errorMessage: 'Fornecedor do documento não conciliado',
     };
   }
 
@@ -551,6 +591,7 @@ function summarizeLines(lines: any[]): BatchSummary {
     pendingSupplier: 0,
     pendingConversion: 0,
     applied: 0,
+    ignored: 0,
     skippedDuplicate: 0,
     error: 0,
   };
@@ -562,6 +603,7 @@ function summarizeLines(lines: any[]): BatchSummary {
       case 'pending_supplier': summary.pendingSupplier += 1; break;
       case 'pending_conversion': summary.pendingConversion += 1; break;
       case 'applied': summary.applied += 1; break;
+      case 'ignored': summary.ignored += 1; break;
       case 'skipped_duplicate': summary.skippedDuplicate += 1; break;
       case 'error': summary.error += 1; break;
       default: break;
@@ -584,7 +626,7 @@ function finalizeReadyStatusForSupplier(line: any, next: any) {
     ...next,
     status: 'pending_supplier',
     errorCode: 'supplier_not_reconciled',
-    errorMessage: 'Fornecedor da NF não conciliado',
+    errorMessage: 'Fornecedor do documento não conciliado',
   };
 }
 
@@ -804,7 +846,7 @@ export async function createStockNfImportBatchFromFile(params: {
   const db = prismaClient as any;
   const batch = await db.stockNfImportBatch.create({
     data: {
-      name: str(params.batchName) || `Importação NF ${new Date().toLocaleString('pt-BR')}`,
+      name: str(params.batchName) || `Importação de movimentações ${new Date().toLocaleString('pt-BR')}`,
       sourceSystem: SOURCE_SYSTEM,
       sourceType: SOURCE_TYPE,
       status: derivePreApplyBatchStatus(summary),
@@ -984,12 +1026,20 @@ export async function createStockNfImportBatchFromVisionPayload(params: {
   const lookup = await loadItemsAndAliases();
   const parsedLines: any[] = [];
   const seenInBatch = new Map<string, string>();
+  const syntheticInvoiceNumber = params.invoiceNumber
+    ? null
+    : buildSyntheticVisionInvoiceNumber({
+        movementAt: params.movementAt || null,
+        supplierName: params.supplierName || null,
+        supplierCnpj: params.supplierCnpj || null,
+        lines: params.lines,
+      });
 
   for (let index = 0; index < params.lines.length; index += 1) {
     const rawLine = params.lines[index];
     const movementAt = rawLine.movementAt || params.movementAt || null;
     const ingredientName = str(rawLine.ingredientName);
-    const invoiceNumber = str(rawLine.invoiceNumber || params.invoiceNumber) || null;
+    const invoiceNumber = str(rawLine.invoiceNumber || params.invoiceNumber || syntheticInvoiceNumber) || null;
     const supplier = await resolveDirectSupplierFromLookup(
       {
         supplierName: rawLine.supplierName || params.supplierName,
@@ -1025,8 +1075,8 @@ export async function createStockNfImportBatchFromVisionPayload(params: {
         movementAt,
         ingredientName,
         ingredientNameNormalized: normalizeName(ingredientName),
-        motivo: str(rawLine.motivo) || 'Entrada por NF',
-        identification: str(rawLine.identification) || (invoiceNumber ? `NF: ${invoiceNumber}` : null),
+        motivo: str(rawLine.motivo) || 'Entrada por documento',
+        identification: str(rawLine.identification) || (invoiceNumber ? `DOC: ${invoiceNumber}` : null),
         invoiceNumber,
         supplierId: supplier.supplierId,
         supplierName: supplier.supplierName,
@@ -1047,12 +1097,15 @@ export async function createStockNfImportBatchFromVisionPayload(params: {
           batchDefaults: {
             movementAt: params.movementAt?.toISOString() || null,
             invoiceNumber: params.invoiceNumber || null,
+            syntheticInvoiceNumber: syntheticInvoiceNumber || null,
             supplierName: params.supplierName || null,
             supplierCnpj: params.supplierCnpj || null,
           },
         },
         metadata: {
           source: 'chatgpt-vision',
+          invoiceNumberProvidedByModel: Boolean(rawLine.invoiceNumber || params.invoiceNumber),
+          syntheticInvoiceNumber: syntheticInvoiceNumber || null,
         },
       },
       lookup,
@@ -1105,7 +1158,7 @@ export async function createStockNfImportBatchFromVisionPayload(params: {
 
   const batch = await db.stockNfImportBatch.create({
     data: {
-      name: str(params.batchName) || `Importação NF por foto ${new Date().toLocaleString('pt-BR')}`,
+      name: str(params.batchName) || `Importação de movimentações por foto ${new Date().toLocaleString('pt-BR')}`,
       sourceSystem: SOURCE_SYSTEM,
       sourceType: SOURCE_TYPE,
       status: derivePreApplyBatchStatus(summary),
@@ -1114,7 +1167,7 @@ export async function createStockNfImportBatchFromVisionPayload(params: {
       periodStart,
       periodEnd,
       uploadedBy: params.uploadedBy || null,
-      notes: str(params.notes) || 'Lote criado a partir de resposta estruturada do ChatGPT com foto de cupom/NF.',
+      notes: str(params.notes) || 'Lote criado a partir de resposta estruturada do ChatGPT com foto de cupom ou documento fiscal.',
       summary,
       Lines: {
         create: finalLines.map((line) => ({
@@ -1168,6 +1221,7 @@ export async function createStockNfImportBatchFromVisionPayload(params: {
 
 async function recomputeBatchLines(batchId: string) {
   const db = prismaClient as any;
+  await ensureSyntheticInvoiceNumbersForVisionBatch(batchId);
   const [lines, lookup] = await Promise.all([
     db.stockNfImportBatchLine.findMany({ where: { batchId }, orderBy: [{ rowNumber: 'asc' }] }),
     loadItemsAndAliases(),
@@ -1191,7 +1245,14 @@ async function recomputeBatchLines(batchId: string) {
       conversionFactorUsed: line.conversionFactorUsed,
     };
 
-    if (String(line.status) === 'skipped_duplicate' && String(line.errorCode) === 'duplicate_in_batch') {
+    if (String(line.status) === 'ignored' && String(line.errorCode) === 'ignored_by_user') {
+      next = {
+        ...next,
+        status: 'ignored',
+        errorCode: 'ignored_by_user',
+        errorMessage: 'Linha ignorada manualmente',
+      };
+    } else if (String(line.status) === 'skipped_duplicate' && String(line.errorCode) === 'duplicate_in_batch') {
       // Keep file-internal duplicates skipped.
     } else if (appliedFingerprints.has(String(line.sourceFingerprint))) {
       next = {
@@ -1273,6 +1334,67 @@ async function recomputeBatchLines(batchId: string) {
   }
 
   return await refreshBatchSummary(batchId);
+}
+
+async function ensureSyntheticInvoiceNumbersForVisionBatch(batchId: string) {
+  const db = prismaClient as any;
+  const batch = await db.stockNfImportBatch.findUnique({
+    where: { id: batchId },
+    select: {
+      id: true,
+      worksheetName: true,
+      originalFileName: true,
+      periodStart: true,
+      Lines: {
+        orderBy: [{ rowNumber: 'asc' }],
+        select: {
+          id: true,
+          rowNumber: true,
+          invoiceNumber: true,
+          movementAt: true,
+          supplierName: true,
+          supplierCnpj: true,
+          ingredientName: true,
+          qtyEntry: true,
+          costAmount: true,
+          identification: true,
+          metadata: true,
+        },
+      },
+    },
+  });
+
+  if (!batch) return;
+  const isVisionBatch =
+    String(batch.worksheetName || '') === 'chatgpt-vision' ||
+    String(batch.originalFileName || '') === 'chatgpt-photo-import.json';
+  if (!isVisionBatch) return;
+
+  const linesMissingInvoice = (batch.Lines || []).filter((line: any) => !str(line.invoiceNumber));
+  if (linesMissingInvoice.length === 0) return;
+
+  const syntheticInvoiceNumber = buildSyntheticVisionInvoiceNumber({
+    movementAt: batch.periodStart || batch.Lines.find((line: any) => line.movementAt)?.movementAt || null,
+    supplierName: batch.Lines.find((line: any) => line.supplierName)?.supplierName || null,
+    supplierCnpj: batch.Lines.find((line: any) => line.supplierCnpj)?.supplierCnpj || null,
+    lines: batch.Lines,
+  });
+
+  for (const line of linesMissingInvoice) {
+    const metadata = typeof line.metadata === 'object' && line.metadata && !Array.isArray(line.metadata)
+      ? { ...(line.metadata as Record<string, unknown>) }
+      : {};
+    metadata.syntheticInvoiceNumber = syntheticInvoiceNumber;
+
+    await db.stockNfImportBatchLine.update({
+      where: { id: line.id },
+      data: {
+        invoiceNumber: syntheticInvoiceNumber,
+        identification: str(line.identification) || `CUPOM: ${syntheticInvoiceNumber}`,
+        metadata,
+      },
+    });
+  }
 }
 
 export async function refreshBatchSummary(batchId: string) {
@@ -1388,6 +1510,41 @@ export async function setBatchLineManualConversion(params: {
   await db.stockNfImportBatchLine.update({
     where: { id: params.lineId },
     data: { manualConversionFactor: params.factor },
+  });
+
+  await recomputeBatchLines(params.batchId);
+}
+
+export async function setBatchLineIgnored(params: {
+  batchId: string;
+  lineId: string;
+  ignored: boolean;
+}) {
+  const db = prismaClient as any;
+  const line = await db.stockNfImportBatchLine.findUnique({ where: { id: params.lineId } });
+  if (!line || line.batchId !== params.batchId) throw new Error('Linha inválida');
+  if (line.appliedAt) throw new Error('Linha já aplicada não pode ser ignorada');
+
+  if (params.ignored) {
+    await db.stockNfImportBatchLine.update({
+      where: { id: params.lineId },
+      data: {
+        status: 'ignored',
+        errorCode: 'ignored_by_user',
+        errorMessage: 'Linha ignorada manualmente',
+      },
+    });
+    await refreshBatchSummary(params.batchId);
+    return;
+  }
+
+  await db.stockNfImportBatchLine.update({
+    where: { id: params.lineId },
+    data: {
+      status: 'draft',
+      errorCode: null,
+      errorMessage: null,
+    },
   });
 
   await recomputeBatchLines(params.batchId);
@@ -1729,6 +1886,8 @@ export async function listStockNfImportBatches(limit = 30) {
 export async function getStockNfImportBatchView(batchId: string) {
   const db = prismaClient as any;
   if (!batchId || typeof db.stockNfImportBatch?.findUnique !== 'function') return null;
+  await ensureSyntheticInvoiceNumbersForVisionBatch(batchId);
+  await refreshBatchSummary(batchId);
 
   const [batch, lines, items, changes] = await Promise.all([
     db.stockNfImportBatch.findUnique({ where: { id: batchId } }),

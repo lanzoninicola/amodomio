@@ -6,6 +6,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
   return redirect(`/admin/stock-movements${search ? `?${search}` : ''}`);
 }
 
-export default function AdminImportStockNfMovementsRedirectRoute() {
+export default function AdminImportStockMovementsRedirectRoute() {
   return null;
 }

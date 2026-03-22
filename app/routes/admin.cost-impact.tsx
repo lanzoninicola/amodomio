@@ -285,7 +285,7 @@ export default function AdminCostImpactRoute() {
             Impacto de custos
           </h1>
           <p className="max-w-3xl text-sm text-slate-500">
-            Quando uma importação de NF altera o custo de um insumo, o pipeline
+            Quando uma importação de movimentação altera o custo de um insumo, o pipeline
             recalcula receitas, fichas, custo do item vendido e grava o impacto
             visualizado nesta página. Se o insumo não estiver ligado, direta ou
             indiretamente, a uma receita, ficha ou item final vendido no cardápio,
@@ -308,10 +308,10 @@ export default function AdminCostImpactRoute() {
               Movimentações
             </Link>
             <Link
-              to="/admin/import-stock-nf"
+              to="/admin/import-stock-movements"
               className="font-semibold leading-5 whitespace-nowrap transition hover:text-slate-950"
             >
-              Importação NF
+              Importação de movimentações
             </Link>
             <Link
               to="/admin/gerenciamento/cardapio/cost-management"

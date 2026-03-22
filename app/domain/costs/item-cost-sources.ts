@@ -27,8 +27,8 @@ export const ITEM_COST_SOURCE_OPTIONS: ItemCostSourceOption[] = [
   },
   {
     value: "import",
-    label: "Importação NF",
-    hint: "Custo vindo de importação/NF.",
+    label: "Importação de movimentações",
+    hint: "Custo vindo de importação de estoque por documento.",
   },
   {
     value: "adjustment",

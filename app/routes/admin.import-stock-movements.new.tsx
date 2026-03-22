@@ -52,7 +52,7 @@ export async function action({ request }: ActionFunctionArgs) {
       supplierNotesFileBuffer: Buffer.from(await supplierNotesFile.arrayBuffer()),
     });
 
-    return redirect(`/admin/import-stock-nf/${result.batchId}`);
+    return redirect(`/admin/import-stock-movements/${result.batchId}`);
   } catch (error) {
     return serverError(error);
   }
@@ -186,7 +186,7 @@ function UploadCard({
   );
 }
 
-export default function AdminImportStockNfNewRoute() {
+export default function AdminImportStockMovementsNewRoute() {
   const actionData = useActionData<typeof action>();
   const [xlsxFileName, setXlsxFileName] = useState('');
   const [jsonFileName, setJsonFileName] = useState('');
@@ -205,13 +205,13 @@ export default function AdminImportStockNfNewRoute() {
             id="file"
             name="file"
             title="Importar XLS"
-            description="Arquivo de movimentação exportado do Saipos com filtro de entrada por NF."
+            description="Arquivo de movimentação exportado do Saipos para entrada de estoque por documento."
             guideTitle="Guia XLS"
             guideDescription="Fluxo para exportar o XLS correto no Saipos."
             guideSteps={[
               'Abrir Saipos em Movimentação do estoque no link https://conta.saipos.com/#/app/store/stock-management.',
               'Selecionar as datas no filtro de até.',
-              'No filtro Movimentação selecionar "Entrada por NF".',
+              'No filtro Movimentação selecionar a entrada de estoque desejada.',
               'Clicar no botão "Buscar".',
               'Clicar no botão "Exportar".',
             ]}
@@ -227,7 +227,7 @@ export default function AdminImportStockNfNewRoute() {
             id="supplierNotesFile"
             name="supplierNotesFile"
             title="Importar JSON"
-            description="JSON das notas do período para conciliar fornecedor e CNPJ por NF."
+            description="JSON dos documentos do período para conciliar fornecedor e CNPJ por documento fiscal."
             guideTitle="Guia JSON"
             guideDescription="Fluxo para extrair o JSON das notas de entrada no Saipos."
             guideSteps={[
@@ -252,7 +252,7 @@ export default function AdminImportStockNfNewRoute() {
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px] lg:items-end">
           <div>
             <Label htmlFor="batchName">Nome do lote</Label>
-            <Input id="batchName" name="batchName" placeholder="ex: NF SAIPOS Fev/2026 - Semana 1" />
+            <Input id="batchName" name="batchName" placeholder="ex: Entradas SAIPOS Fev/2026 - Semana 1" />
           </div>
           <Button type="submit" className="w-full bg-slate-900 hover:bg-slate-700">
             Criar lote

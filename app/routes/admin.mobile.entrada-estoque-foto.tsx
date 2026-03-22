@@ -271,9 +271,13 @@ export async function action({ request }: ActionFunctionArgs) {
       const movementAt = parseFlexibleDate(parsed.document.movementAt);
       const batchLabelDate =
         movementAt?.toLocaleDateString("pt-BR") || new Date().toLocaleDateString("pt-BR");
+      const batchSupplierName =
+        selectedSupplierName ||
+        parsed.document.supplierName ||
+        "sem fornecedor";
 
       const result = await createStockNfImportBatchFromVisionPayload({
-        batchName: `Entrada por foto ${parsed.document.invoiceNumber || batchLabelDate}`,
+        batchName: `Cupom fiscal ${batchSupplierName} ${batchLabelDate}`,
         uploadedBy: actor,
         originalFileName: "chatgpt-photo-import.json",
         worksheetName: "chatgpt-vision",
@@ -305,7 +309,7 @@ export async function action({ request }: ActionFunctionArgs) {
         })),
       });
 
-      return redirect(`/admin/import-stock-nf/${result.batchId}`);
+      return redirect(`/admin/import-stock-movements/${result.batchId}`);
     }
 
     return badRequest("Ação inválida.");
@@ -586,7 +590,7 @@ export default function AdminMobileEntradaEstoqueFotoPage() {
               <span>{previewPayload.summary?.missingCostCount || 0} sem custo</span>
             </div>
             <div className="text-sm text-slate-500">
-              {previewPayload.document?.supplierName || "-"} • NF {previewPayload.document?.invoiceNumber || "-"} • {previewPayload.document?.movementAt || "-"}
+              {previewPayload.document?.supplierName || "-"} • Doc. {previewPayload.document?.invoiceNumber || "-"} • {previewPayload.document?.movementAt || "-"}
             </div>
             {previewPayload.previewLines?.length > 0 ? (
               <div className="space-y-2 pt-1">

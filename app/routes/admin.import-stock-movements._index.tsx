@@ -127,7 +127,7 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 }
 
-export default function AdminImportStockNfIndexRoute() {
+export default function AdminImportStockMovementsIndexRoute() {
   const loaderData = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const batches = ((loaderData as any)?.payload?.batches || []) as any[];
@@ -202,7 +202,7 @@ export default function AdminImportStockNfIndexRoute() {
                   <TableRow key={batch.id} className="border-slate-100 hover:bg-slate-50/40">
                     <TableCell className="px-4 py-3">
                       <div className="flex min-w-0 flex-col gap-0.5">
-                        <Link to={`/admin/import-stock-nf/${batch.id}`} className="truncate font-medium text-slate-900 hover:underline">
+                        <Link to={`/admin/import-stock-movements/${batch.id}`} className="truncate font-medium text-slate-900 hover:underline">
                           {batch.name}
                         </Link>
                         <span className="text-xs text-slate-500">ID: {batch.id}</span>
@@ -224,7 +224,7 @@ export default function AdminImportStockNfIndexRoute() {
                     <TableCell className="px-4 py-3">
                       <div className="flex items-center justify-end gap-2">
                         <Link
-                          to={`/admin/import-stock-nf/${batch.id}`}
+                          to={`/admin/import-stock-movements/${batch.id}`}
                           className="inline-flex h-9 items-center justify-center rounded-full border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
                         >
                           Ver lote

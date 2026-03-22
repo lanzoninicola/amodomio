@@ -33,6 +33,7 @@ import {
   getStockNfImportBatchView,
   mapBatchLinesToItem,
   rollbackStockNfImportBatch,
+  setBatchLineIgnored,
   setBatchLineManualConversion,
 } from '~/domain/stock-nf-import/stock-nf-import.server';
 import { cn } from '~/lib/utils';
@@ -74,10 +75,23 @@ function formatMoney(value: any) {
   return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
+function formatDocumentLabel(value: any) {
+  const documentNumber = String(value || '').trim();
+  if (!documentNumber) return '-';
+  if (documentNumber.startsWith('CUPOM-')) return 'Cupom fiscal';
+  return documentNumber;
+}
+
 function capitalizeWords(value: string) {
   return String(value || '')
     .toLowerCase()
     .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function redirectToCurrentPath(request: Request, fallbackPath: string) {
+  const formUrl = new URL(request.url);
+  const pathname = String(formUrl.pathname || '').trim();
+  return pathname || fallbackPath;
 }
 
 function summaryFromAny(summary: any) {
@@ -89,6 +103,7 @@ function summaryFromAny(summary: any) {
     pendingSupplier: Number(summary?.pendingSupplier || 0),
     pendingConversion: Number(summary?.pendingConversion || 0),
     applied: Number(summary?.applied || 0),
+    ignored: Number(summary?.ignored || 0),
     skippedDuplicate: Number(summary?.skippedDuplicate || 0),
     error: Number(summary?.error || 0),
   };
@@ -109,6 +124,8 @@ function statusBadgeClass(status: string) {
       return 'border-red-200 bg-red-50 text-red-700';
     case 'skipped_duplicate':
       return 'border-slate-200 bg-slate-50 text-slate-700';
+    case 'ignored':
+      return 'border-slate-200 bg-slate-100 text-slate-600';
     default:
       return 'border-slate-200 bg-white text-slate-700';
   }
@@ -395,13 +412,19 @@ export async function loader({ params }: LoaderFunctionArgs) {
     const batchId = String(params.batchId || '').trim();
     if (!batchId) return badRequest('Lote inválido');
 
-    const [selected, unitOptions] = await Promise.all([
+    const db = itemPrismaEntity.client as any;
+    const [selected, unitOptions, categories] = await Promise.all([
       getStockNfImportBatchView(batchId),
       getAvailableItemUnits(),
+      db.category.findMany({
+        where: { type: 'item' },
+        select: { id: true, name: true },
+        orderBy: [{ name: 'asc' }],
+      }),
     ]);
     if (!selected) return badRequest('Lote não encontrado');
 
-    return ok({ selected, batchId, unitOptions });
+    return ok({ selected, batchId, unitOptions, categories });
   } catch (error) {
     return serverError(error);
   }
@@ -439,7 +462,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         actor,
       });
 
-      return redirect(`/admin/import-stock-nf/${batchId}`);
+      return redirect(redirectToCurrentPath(request, `/admin/import-stock-movements/${batchId}`));
     }
 
     if (_action === 'batch-set-manual-conversion') {
@@ -448,14 +471,28 @@ export async function action({ request, params }: ActionFunctionArgs) {
       if (!lineId) return badRequest('Linha inválida');
       if (!(factor > 0)) return badRequest('Informe um fator maior que zero');
       await setBatchLineManualConversion({ batchId, lineId, factor });
-      return redirect(`/admin/import-stock-nf/${batchId}`);
+      return redirect(redirectToCurrentPath(request, `/admin/import-stock-movements/${batchId}`));
+    }
+
+    if (_action === 'batch-ignore-line' || _action === 'batch-unignore-line') {
+      const lineId = str(formData.get('lineId'));
+      if (!lineId) return badRequest('Linha inválida');
+      await setBatchLineIgnored({
+        batchId,
+        lineId,
+        ignored: _action === 'batch-ignore-line',
+      });
+      return redirect(redirectToCurrentPath(request, `/admin/import-stock-movements/${batchId}`));
     }
 
     if (_action === 'batch-create-and-map-item') {
+      const db = itemPrismaEntity.client as any;
       const lineId = str(formData.get('lineId'));
       const ingredientNameNormalized = str(formData.get('ingredientNameNormalized')) || null;
       const itemName = str(formData.get('itemName'));
       const classificationRaw = str(formData.get('classification')).toLowerCase();
+      const categoryIdRaw = str(formData.get('categoryId'));
+      const categoryId = categoryIdRaw || null;
       const consumptionUm = normalizeItemUnit(formData.get('consumptionUm'));
 
       if (!lineId) return badRequest('Linha inválida');
@@ -467,10 +504,20 @@ export async function action({ request, params }: ActionFunctionArgs) {
       if (consumptionUm && !availableUnits.includes(consumptionUm)) {
         return badRequest('Unidade de consumo inválida');
       }
+      if (categoryId) {
+        const categoryExists = await db.category.findUnique({
+          where: { id: categoryId },
+          select: { id: true, type: true },
+        });
+        if (!categoryExists || categoryExists.type !== 'item') {
+          return badRequest('Categoria inválida');
+        }
+      }
 
       const created = await itemPrismaEntity.create({
         name: capitalizeWords(itemName),
         classification: classificationRaw,
+        categoryId,
         consumptionUm,
         active: true,
         canPurchase: true,
@@ -492,22 +539,22 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
     if (_action === 'batch-apply') {
       await applyStockNfImportBatch({ batchId, actor });
-      return redirect(`/admin/import-stock-nf/${batchId}`);
+      return redirect(redirectToCurrentPath(request, `/admin/import-stock-movements/${batchId}`));
     }
 
     if (_action === 'batch-rollback') {
       await rollbackStockNfImportBatch({ batchId, actor });
-      return redirect(`/admin/import-stock-nf/${batchId}`);
+      return redirect(redirectToCurrentPath(request, `/admin/import-stock-movements/${batchId}`));
     }
 
     if (_action === 'batch-archive') {
       await archiveStockNfImportBatch(batchId);
-      return redirect('/admin/import-stock-nf');
+      return redirect('/admin/import-stock-movements');
     }
 
     if (_action === 'batch-delete') {
       await deleteStockNfImportBatch(batchId);
-      return redirect('/admin/import-stock-nf');
+      return redirect('/admin/import-stock-movements');
     }
 
     return badRequest('Ação inválida');
@@ -516,7 +563,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
   }
 }
 
-export default function AdminImportStockNfBatchDetailRoute() {
+export default function AdminImportStockMovementsBatchDetailRoute() {
   const loaderData = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const payload = (loaderData as any)?.payload || {};
@@ -548,7 +595,7 @@ export default function AdminImportStockNfBatchDetailRoute() {
       ) : null}
 
       <div className="flex items-center justify-between">
-        <Link to="/admin/import-stock-nf" className="text-sm font-medium text-slate-600 underline">
+        <Link to="/admin/import-stock-movements" className="text-sm font-medium text-slate-600 underline">
           Voltar para lotes
         </Link>
       </div>
@@ -569,6 +616,14 @@ export default function AdminImportStockNfBatchDetailRoute() {
           {selectedBatch.notes ? <div className="mt-1 text-sm text-slate-600">{selectedBatch.notes}</div> : null}
         </div>
         <div className="flex flex-wrap gap-2">
+          <Link
+            to={`/admin/mobile/import-stock-movements/${selectedBatch.id}`}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex h-10 items-center justify-center rounded-md border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+          >
+            Abrir mobile
+          </Link>
           <Form method="post">
             <input type="hidden" name="_action" value="batch-apply" />
             <input type="hidden" name="batchId" value={selectedBatch.id} />
@@ -604,6 +659,7 @@ export default function AdminImportStockNfBatchDetailRoute() {
           ['Pend. vínculo', summary.pendingMapping],
           ['Pend. fornecedor', summary.pendingSupplier],
           ['Pend. conversão', summary.pendingConversion],
+          ['Ignoradas', summary.ignored],
           ['Duplicadas', summary.skippedDuplicate],
           ['Inválidas', summary.invalid],
           ['Erros', summary.error],
@@ -657,7 +713,7 @@ export default function AdminImportStockNfBatchDetailRoute() {
             <TableHeader className="bg-slate-50/90">
               <TableRow className="hover:bg-slate-50/90">
                 <TableHead className="px-3 py-2 text-xs">Linha</TableHead>
-                <TableHead className="px-3 py-2 text-xs">Data/NF</TableHead>
+                <TableHead className="px-3 py-2 text-xs">Data/Doc.</TableHead>
                 <TableHead className="px-3 py-2 text-xs">Fornecedor</TableHead>
                 <TableHead className="px-3 py-2 text-xs">Ingrediente</TableHead>
                 <TableHead className="px-3 py-2 text-xs">Mov.</TableHead>
@@ -680,7 +736,7 @@ export default function AdminImportStockNfBatchDetailRoute() {
                     <TableCell className="px-3 py-2 text-xs text-slate-600">{line.rowNumber}</TableCell>
                     <TableCell className="px-3 py-2 text-xs text-slate-700">
                       <div>{formatDate(line.movementAt)}</div>
-                      <div className="text-slate-500">NF {line.invoiceNumber || '-'}</div>
+                      <div className="text-slate-500">Doc. {formatDocumentLabel(line.invoiceNumber)}</div>
                     </TableCell>
                     <TableCell className="px-3 py-2 text-xs text-slate-700">
                       <div className="font-medium text-slate-900">{line.supplierName || '-'}</div>
@@ -702,10 +758,16 @@ export default function AdminImportStockNfBatchDetailRoute() {
                       <div className="text-slate-500">total: {formatMoney(line.costTotalAmount)}</div>
                     </TableCell>
                     <TableCell className="px-3 py-2 text-xs text-slate-700">
-                      <ItemSystemMapperCell line={line} items={items} batchId={selectedBatch.id} unitOptions={unitOptions} />
+                      {line.status === 'ignored' ? (
+                        <span className="text-slate-400">ignorada</span>
+                      ) : (
+                        <ItemSystemMapperCell line={line} items={items} batchId={selectedBatch.id} unitOptions={unitOptions} />
+                      )}
                     </TableCell>
                     <TableCell className="px-3 py-2 text-xs text-slate-700">
-                      {line.status === 'pending_conversion' ? (
+                      {line.status === 'ignored' ? (
+                        <span className="text-slate-400">ignorada</span>
+                      ) : line.status === 'pending_conversion' ? (
                         <Form method="post" className="space-y-1">
                           <input type="hidden" name="_action" value="batch-set-manual-conversion" />
                           <input type="hidden" name="batchId" value={selectedBatch.id} />
@@ -731,6 +793,14 @@ export default function AdminImportStockNfBatchDetailRoute() {
                     </TableCell>
                     <TableCell className="px-3 py-2 text-xs">
                       <Badge variant="outline" className={statusBadgeClass(String(line.status))}>{line.status}</Badge>
+                      <Form method="post" className="mt-2">
+                        <input type="hidden" name="_action" value={line.status === 'ignored' ? 'batch-unignore-line' : 'batch-ignore-line'} />
+                        <input type="hidden" name="batchId" value={selectedBatch.id} />
+                        <input type="hidden" name="lineId" value={line.id} />
+                        <Button type="submit" variant="outline" className="h-7 px-2 text-[11px]">
+                          {line.status === 'ignored' ? 'Reativar' : 'Ignorar'}
+                        </Button>
+                      </Form>
                       {line.errorMessage ? <div className="mt-1 max-w-[220px] text-[11px] text-red-700">{line.errorMessage}</div> : null}
                     </TableCell>
                   </TableRow>

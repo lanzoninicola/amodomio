@@ -122,7 +122,7 @@ export default function AdminItemStockMovementsTab() {
             <TableHeader className="bg-slate-50/80">
               <TableRow className="hover:bg-slate-50/80">
                 <TableHead className="px-3 py-2 text-xs">Movimentação</TableHead>
-                <TableHead className="px-3 py-2 text-xs">Fornecedor / NF</TableHead>
+                <TableHead className="px-3 py-2 text-xs">Fornecedor / Doc.</TableHead>
                 <TableHead className="px-3 py-2 text-xs">Origem</TableHead>
                 <TableHead className="px-3 py-2 text-xs">Quantidade</TableHead>
                 <TableHead className="px-3 py-2 text-xs">Custo</TableHead>
@@ -147,7 +147,7 @@ export default function AdminItemStockMovementsTab() {
                     </TableCell>
                     <TableCell className="px-3 py-3 text-xs text-slate-700">
                       <div className="font-medium text-slate-900">{row.supplierName || "Sem fornecedor"}</div>
-                      <div className="text-slate-500">NF {row.invoiceNumber || "-"}</div>
+                      <div className="text-slate-500">Doc. {row.invoiceNumber || "-"}</div>
                       <div className="text-slate-400">{row.supplierCnpj || "sem CNPJ"}</div>
                     </TableCell>
                     <TableCell className="px-3 py-3 text-xs text-slate-700">
@@ -166,13 +166,13 @@ export default function AdminItemStockMovementsTab() {
                       <div className="font-medium text-slate-900">
                         {formatMoney(row.newCostAmount)} / {row.newCostUnit || row.movementUnit || "-"}
                       </div>
-                      <div className="text-slate-500">total NF: {formatMoney(row.Line?.costTotalAmount)}</div>
+                      <div className="text-slate-500">total doc.: {formatMoney(row.Line?.costTotalAmount)}</div>
                       <div className="text-slate-400">
                         antes: {formatMoney(row.previousCostAmount)} / {row.previousCostUnit || "-"}
                       </div>
                     </TableCell>
                     <TableCell className="px-3 py-3 text-xs text-slate-700">
-                      <Link to={`/admin/import-stock-nf/${row.batchId}`} className="font-medium text-slate-900 hover:underline">
+                      <Link to={`/admin/import-stock-movements/${row.batchId}`} className="font-medium text-slate-900 hover:underline">
                         {row.Batch?.name || row.batchId}
                       </Link>
                     </TableCell>
