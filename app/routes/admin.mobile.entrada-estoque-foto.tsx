@@ -1,11 +1,16 @@
-import type { ActionFunctionArgs, MetaFunction } from "@remix-run/node";
+import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { redirect } from "@remix-run/node";
-import { Form, useActionData, useFetcher } from "@remix-run/react";
+import { Form, useActionData, useFetcher, useLoaderData } from "@remix-run/react";
 import { useEffect, useMemo, useState } from "react";
+import { AlertCircle, CheckCircle2, ChevronRight, Loader2 } from "lucide-react";
 import { authenticator } from "~/domain/auth/google.server";
 import CopyButton from "~/components/primitives/copy-button/copy-button";
 import { Button } from "~/components/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "~/components/ui/collapsible";
+import { Input } from "~/components/ui/input";
+import { SearchableSelect, type SearchableSelectOption } from "~/components/ui/searchable-select";
 import { createStockNfImportBatchFromVisionPayload } from "~/domain/stock-nf-import/stock-nf-import.server";
+import { supplierPrismaEntity } from "~/domain/supplier/supplier.prisma.entity.server";
 import { badRequest, ok, serverError } from "~/utils/http-response.server";
 
 export const meta: MetaFunction = () => [{ title: "Admin Mobile | Entrada de estoque por foto" }];
@@ -13,6 +18,9 @@ export const meta: MetaFunction = () => [{ title: "Admin Mobile | Entrada de est
 const CHATGPT_URL = "https://chatgpt.com/";
 
 type ParsedVisionPayload = {
+  metadata?: {
+    returnUrl: string | null;
+  };
   document: {
     supplierName: string | null;
     supplierCnpj: string | null;
@@ -127,6 +135,9 @@ function parseVisionResponse(value: string): ParsedVisionPayload {
   }
 
   return {
+    metadata: {
+      returnUrl: str(parsed?.metadata?.returnUrl) || null,
+    },
     document: {
       supplierName: str(document?.supplierName) || null,
       supplierCnpj: str(document?.supplierCnpj) || null,
@@ -138,11 +149,18 @@ function parseVisionResponse(value: string): ParsedVisionPayload {
   };
 }
 
-function buildStockPhotoPrompt() {
+function buildStockPhotoPrompt(params?: {
+  supplierName?: string | null;
+  supplierCnpj?: string | null;
+  returnUrl?: string | null;
+}) {
   const responseTemplate = {
+    metadata: {
+      returnUrl: params?.returnUrl || "https://amodomio.com.br/admin/mobile/entrada-estoque-foto",
+    },
     document: {
-      supplierName: "nome do fornecedor",
-      supplierCnpj: "00.000.000/0000-00",
+      supplierName: params?.supplierName || "nome do fornecedor",
+      supplierCnpj: params?.supplierCnpj || "00.000.000/0000-00",
       invoiceNumber: "12345",
       movementAt: "2026-03-21",
       notes: "observacoes curtas opcionais",
@@ -171,15 +189,47 @@ function buildStockPhotoPrompt() {
     "movementAt deve ser a data da entrada ou emissao da NF em formato YYYY-MM-DD quando visivel.",
     "invoiceNumber deve conter somente o numero identificado da NF/cupom quando visivel.",
     "supplierName e supplierCnpj devem ficar no objeto document e podem ser repetidos por linha apenas se necessario.",
+    "metadata.returnUrl deve repetir exatamente a URL informada abaixo para facilitar voltar para esta ferramenta.",
     "qtyEntry e costAmount devem ser numericos.",
     "costAmount significa custo unitario por unitEntry.",
     "costTotalAmount significa total da linha quando visivel; se nao estiver claro, use null.",
     "Se uma informacao nao estiver legivel, use null.",
     "Nao inclua chaves extras.",
+    params?.supplierName
+      ? `FORNECEDOR_REFERENCIA: priorize ${params.supplierName}${params?.supplierCnpj ? ` (CNPJ ${params.supplierCnpj})` : ""} ao preencher document.supplierName e document.supplierCnpj.`
+      : "FORNECEDOR_REFERENCIA: se o fornecedor estiver legivel, preencha document.supplierName e document.supplierCnpj.",
+    params?.returnUrl ? `RETURN_URL_REFERENCIA: ${params.returnUrl}` : "",
     "",
     "FORMATO_OBRIGATORIO_DA_RESPOSTA",
     JSON.stringify(responseTemplate, null, 2),
   ].join("\n");
+}
+
+function ChatGptLogoIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className="h-5 w-5"
+      fill="currentColor"
+    >
+      <path
+        fillRule="evenodd"
+        d="M9.205 8.658v-2.26c0-.19.072-.333.238-.428l4.543-2.616c.619-.357 1.356-.523 2.117-.523 2.854 0 4.662 2.212 4.662 4.566 0 .167 0 .357-.024.547l-4.71-2.759a.797.797 0 00-.856 0l-5.97 3.473zm10.609 8.8V12.06c0-.333-.143-.57-.429-.737l-5.97-3.473 1.95-1.118a.433.433 0 01.476 0l4.543 2.617c1.309.76 2.189 2.378 2.189 3.948 0 1.808-1.07 3.473-2.76 4.163zM7.802 12.703l-1.95-1.142c-.167-.095-.239-.238-.239-.428V5.899c0-2.545 1.95-4.472 4.591-4.472 1 0 1.927.333 2.712.928L8.23 5.067c-.285.166-.428.404-.428.737v6.898zM12 15.128l-2.795-1.57v-3.33L12 8.658l2.795 1.57v3.33L12 15.128zm1.796 7.23c-1 0-1.927-.332-2.712-.927l4.686-2.712c.285-.166.428-.404.428-.737v-6.898l1.974 1.142c.167.095.238.238.238.428v5.233c0 2.545-1.974 4.472-4.614 4.472zm-5.637-5.303l-4.544-2.617c-1.308-.761-2.188-2.378-2.188-3.948A4.482 4.482 0 014.21 6.327v5.423c0 .333.143.571.428.738l5.947 3.449-1.95 1.118a.432.432 0 01-.476 0zm-.262 3.9c-2.688 0-4.662-2.021-4.662-4.519 0-.19.024-.38.047-.57l4.686 2.71c.286.167.571.167.856 0l5.97-3.448v2.26c0 .19-.07.333-.237.428l-4.543 2.616c-.619.357-1.356.523-2.117.523zm5.899 2.83a5.947 5.947 0 005.827-4.756C22.287 18.339 24 15.84 24 13.296c0-1.665-.713-3.282-1.998-4.448.119-.5.19-.999.19-1.498 0-3.401-2.759-5.947-5.946-5.947-.642 0-1.26.095-1.88.31A5.962 5.962 0 0010.205 0a5.947 5.947 0 00-5.827 4.757C1.713 5.447 0 7.945 0 10.49c0 1.666.713 3.283 1.998 4.448-.119.5-.19 1-.19 1.499 0 3.401 2.759 5.946 5.946 5.946.642 0 1.26-.095 1.88-.309a5.96 5.96 0 004.162 1.713z"
+      />
+    </svg>
+  );
+}
+
+export async function loader({ request }: LoaderFunctionArgs) {
+  try {
+    const suppliers = await supplierPrismaEntity.findAll();
+    const url = new URL(request.url);
+    const returnUrl = `${url.origin}${url.pathname}`;
+    return ok({ suppliers, returnUrl });
+  } catch (error) {
+    return serverError(error);
+  }
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -187,6 +237,18 @@ export async function action({ request }: ActionFunctionArgs) {
     const formData = await request.formData();
     const actionName = str(formData.get("_action"));
     const chatGptResponse = str(formData.get("chatGptResponse"));
+    const selectedSupplierName = str(formData.get("supplierName")) || null;
+
+    if (actionName === "supplier-quick-create") {
+      const name = str(formData.get("name"));
+      if (!name) return badRequest("Informe o nome do fornecedor.");
+
+      const created = await supplierPrismaEntity.create({ name });
+      return ok({
+        message: "Fornecedor criado com sucesso.",
+        supplier: { id: created.id, name: created.name, cnpj: created.cnpj },
+      });
+    }
 
     if (!chatGptResponse) return badRequest("Cole a resposta do ChatGPT.");
 
@@ -224,13 +286,13 @@ export async function action({ request }: ActionFunctionArgs) {
         notes: parsed.document.notes || "Lote criado no mobile a partir de foto analisada pelo ChatGPT.",
         movementAt,
         invoiceNumber: parsed.document.invoiceNumber,
-        supplierName: parsed.document.supplierName,
+        supplierName: selectedSupplierName || parsed.document.supplierName,
         supplierCnpj: parsed.document.supplierCnpj,
         lines: parsed.lines.map((line) => ({
           rowNumber: line.rowNumber,
           movementAt: parseFlexibleDate(line.movementAt),
           invoiceNumber: line.invoiceNumber,
-          supplierName: line.supplierName,
+          supplierName: selectedSupplierName || line.supplierName,
           supplierCnpj: line.supplierCnpj,
           ingredientName: line.ingredientName,
           qtyEntry: line.qtyEntry,
@@ -259,12 +321,42 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function AdminMobileEntradaEstoqueFotoPage() {
+  const data = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const previewFetcher = useFetcher<any>();
+  const supplierFetcher = useFetcher<any>();
+  const payload = data.payload as any;
+  const suppliers = payload.suppliers || [];
+  const returnUrl = String(payload.returnUrl || "").trim() || null;
   const [promptDraft, setPromptDraft] = useState("");
   const [chatGptResponse, setChatGptResponse] = useState("");
   const [lastPreviewedResponse, setLastPreviewedResponse] = useState("");
-  const defaultPrompt = useMemo(() => buildStockPhotoPrompt(), []);
+  const [supplierName, setSupplierName] = useState("");
+  const [quickSupplierOpen, setQuickSupplierOpen] = useState(false);
+  const [quickSupplierName, setQuickSupplierName] = useState("");
+  const createdSupplier = supplierFetcher.data?.payload?.supplier;
+  const supplierOptions: SearchableSelectOption[] = [
+    ...suppliers.map((supplier: any) => ({
+      value: supplier.name,
+      label: supplier.name,
+      searchText: [supplier.name, supplier.cnpj || ""].filter(Boolean).join(" "),
+    })),
+    ...(createdSupplier && !suppliers.some((supplier: any) => supplier.name === createdSupplier.name)
+      ? [{ value: createdSupplier.name, label: createdSupplier.name, searchText: createdSupplier.name }]
+      : []),
+  ];
+  const selectedSupplier = [
+    ...suppliers,
+    ...(createdSupplier ? [createdSupplier] : []),
+  ].find((supplier: any) => supplier.name === supplierName) || null;
+  const defaultPrompt = useMemo(
+    () => buildStockPhotoPrompt({
+      supplierName: supplierName || null,
+      supplierCnpj: selectedSupplier?.cnpj || null,
+      returnUrl,
+    }),
+    [supplierName, selectedSupplier?.cnpj, returnUrl],
+  );
 
   useEffect(() => {
     setPromptDraft(defaultPrompt);
@@ -276,11 +368,27 @@ export default function AdminMobileEntradaEstoqueFotoPage() {
     }
   }, [previewFetcher.state, previewFetcher.data, chatGptResponse]);
 
+  useEffect(() => {
+    if (createdSupplier?.name) {
+      setSupplierName(createdSupplier.name);
+      setQuickSupplierName("");
+      setQuickSupplierOpen(false);
+    }
+  }, [createdSupplier]);
+
   const previewPayload = previewFetcher.data?.payload;
   const hasUpToDatePreview =
     Boolean(chatGptResponse.trim()) &&
     lastPreviewedResponse === chatGptResponse.trim() &&
     previewFetcher.data?.status === 200;
+  const validationStatus =
+    previewFetcher.state !== "idle"
+      ? "loading"
+      : previewFetcher.data?.status === 200
+        ? "success"
+        : previewFetcher.data?.status >= 400
+          ? "error"
+          : "idle";
 
   const handlePreviewImport = () => {
     const formData = new FormData();
@@ -289,24 +397,62 @@ export default function AdminMobileEntradaEstoqueFotoPage() {
     previewFetcher.submit(formData, { method: "post" });
   };
 
+  const handlePasteResponse = async () => {
+    if (typeof navigator === "undefined" || !navigator.clipboard?.readText) return;
+    const text = await navigator.clipboard.readText();
+    if (text) {
+      setChatGptResponse(text);
+    }
+  };
+
   return (
     <div className="space-y-4 pb-8">
       <div className="border-t border-slate-200 pt-4">
         <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-          Imagem
+          Fornecedor
         </div>
       </div>
 
       <section className="space-y-3">
-        <label className="block">
-          <input
-            type="file"
-            accept="image/*"
-            capture="environment"
-            multiple
-            className="mt-2 block w-full text-base text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-slate-700"
-          />
-        </label>
+        <SearchableSelect
+          value={supplierName}
+          onValueChange={setSupplierName}
+          options={supplierOptions}
+          placeholder="Selecionar fornecedor"
+          searchPlaceholder="Buscar fornecedor..."
+          emptyText="Nenhum fornecedor encontrado."
+          triggerClassName="h-12 w-full max-w-none justify-between rounded-lg border-slate-300 px-4 text-base"
+          contentClassName="w-[var(--radix-popover-trigger-width)] p-0"
+        />
+
+        <Collapsible open={quickSupplierOpen} onOpenChange={setQuickSupplierOpen}>
+          <CollapsibleTrigger asChild>
+            <button
+              type="button"
+              className="flex w-full items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-left"
+            >
+              <div className="text-base font-medium text-slate-900">Adicionar fornecedor rapido</div>
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-slate-500 transition data-[state=open]:rotate-90">
+                <ChevronRight className="h-4 w-4" />
+              </div>
+            </button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="pt-3">
+            <supplierFetcher.Form method="post" className="space-y-3">
+              <input type="hidden" name="_action" value="supplier-quick-create" />
+              <Input
+                name="name"
+                value={quickSupplierName}
+                onChange={(event) => setQuickSupplierName(event.target.value)}
+                placeholder="Nome do fornecedor"
+                className="h-12 text-base"
+              />
+              <Button type="submit" variant="outline" className="h-12 w-full text-base" disabled={supplierFetcher.state !== "idle"}>
+                {supplierFetcher.state !== "idle" ? "Salvando..." : "Cadastrar fornecedor"}
+              </Button>
+            </supplierFetcher.Form>
+          </CollapsibleContent>
+        </Collapsible>
       </section>
 
       <div className="border-t border-slate-200 pt-4">
@@ -316,12 +462,12 @@ export default function AdminMobileEntradaEstoqueFotoPage() {
       </div>
 
       <section className="space-y-2">
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-4 gap-2">
           <CopyButton
             textToCopy={promptDraft}
             label="Copiar prompt"
             variant="default"
-            classNameButton="h-12 w-full rounded-lg bg-slate-950 px-4 hover:bg-slate-800"
+            classNameButton="col-span-3 h-12 w-full rounded-lg bg-slate-950 px-4 hover:bg-slate-800"
             classNameLabel="text-base font-medium text-white"
             classNameIcon="text-white"
             toastTitle="Prompt copiado"
@@ -331,15 +477,20 @@ export default function AdminMobileEntradaEstoqueFotoPage() {
             href={CHATGPT_URL}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex h-12 w-full items-center justify-center rounded-lg border border-slate-300 bg-white px-4 text-base font-medium text-slate-700"
+            className="inline-flex h-12 w-full items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-700"
+            aria-label="Abrir ChatGPT"
+            title="Abrir ChatGPT"
           >
-            Abrir ChatGPT
+            <ChatGptLogoIcon />
           </a>
         </div>
 
-        <details className="rounded-md bg-slate-50 px-3 py-2">
-          <summary className="cursor-pointer text-base font-medium text-slate-800">
-            Prompt curto
+        <details className="group rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 [&::-webkit-details-marker]:hidden">
+            <div className="text-base font-medium text-slate-900">Prompt curto</div>
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-slate-500 transition group-open:rotate-90">
+              <ChevronRight className="h-4 w-4" />
+            </div>
           </summary>
           <p className="mt-2 text-sm leading-6 text-slate-600">
             Leia as imagens anexadas e retorne apenas um bloco ```json``` com
@@ -370,8 +521,18 @@ export default function AdminMobileEntradaEstoqueFotoPage() {
         </details>
       </section>
 
+      <div className="flex items-center justify-between border-t border-slate-200 pt-4">
+        <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+          Colar
+        </div>
+        <Button type="button" variant="outline" onClick={handlePasteResponse} className="h-12 px-5 text-base">
+          Colar
+        </Button>
+      </div>
+
       <Form method="post" className="space-y-3">
         <input type="hidden" name="_action" value="stock-photo-import" />
+        <input type="hidden" name="supplierName" value={supplierName} />
         <textarea
           name="chatGptResponse"
           value={chatGptResponse}
@@ -379,6 +540,8 @@ export default function AdminMobileEntradaEstoqueFotoPage() {
           placeholder="Cole aqui o JSON do ChatGPT."
           className="min-h-[220px] w-full rounded-lg border border-slate-300 bg-white px-3 py-3 text-base text-slate-700 outline-none"
         />
+
+        <div className="border-t border-slate-200 pt-3" />
 
         <div className="flex gap-2">
           <Button
@@ -388,7 +551,12 @@ export default function AdminMobileEntradaEstoqueFotoPage() {
             disabled={!chatGptResponse.trim() || previewFetcher.state !== "idle"}
             className="h-10 flex-1"
           >
-            {previewFetcher.state !== "idle" ? "Validando..." : "Validar"}
+            <span className="flex items-center gap-2">
+              {validationStatus === "loading" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {validationStatus === "success" ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : null}
+              {validationStatus === "error" ? <AlertCircle className="h-4 w-4 text-red-600" /> : null}
+              <span>{previewFetcher.state !== "idle" ? "Validando..." : "Validar"}</span>
+            </span>
           </Button>
           <Button type="submit" disabled={!hasUpToDatePreview} className="h-10 flex-1">
             Criar lote
@@ -397,29 +565,47 @@ export default function AdminMobileEntradaEstoqueFotoPage() {
       </Form>
 
       {previewPayload ? (
-        <section className="space-y-2 text-base text-slate-700">
-          <div className="flex flex-wrap gap-x-4 gap-y-1">
-            <span>{previewPayload.summary?.lines || 0} linha(s)</span>
-            <span>{previewPayload.summary?.missingInvoiceCount || 0} sem NF</span>
-            <span>{previewPayload.summary?.missingDateCount || 0} sem data</span>
-            <span>{previewPayload.summary?.missingCostCount || 0} sem custo</span>
-          </div>
-          <div className="text-sm text-slate-500">
-            {previewPayload.document?.supplierName || "-"} • NF {previewPayload.document?.invoiceNumber || "-"} • {previewPayload.document?.movementAt || "-"}
-          </div>
-          {hasUpToDatePreview && previewPayload.previewLines?.length > 0 ? (
-            <div className="space-y-2 pt-1">
-              {previewPayload.previewLines.map((line: any) => (
-                <div key={`${line.rowNumber}-${line.ingredientName}`} className="text-base">
-                  <div className="font-medium text-slate-900">{line.ingredientName}</div>
-                  <div className="text-sm text-slate-500">
-                    {line.qtyEntry ?? "-"} {line.unitEntry || line.movementUnit || ""} • {line.costAmount ?? "-"} por unidade
-                  </div>
+        <Collapsible className="rounded-md bg-slate-50 px-3 py-2">
+          <CollapsibleTrigger asChild>
+            <button
+              type="button"
+              className="flex w-full items-center justify-between gap-3 text-left"
+            >
+              <div>
+                <div className="text-base font-medium text-slate-900">Preview</div>
+                <div className="text-sm text-slate-500">
+                  {previewPayload.summary?.lines || 0} linha(s)
                 </div>
-              ))}
+              </div>
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-slate-500 transition data-[state=open]:rotate-90">
+                <ChevronRight className="h-4 w-4" />
+              </div>
+            </button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="space-y-2 pt-3 text-base text-slate-700">
+            <div className="flex flex-wrap gap-x-4 gap-y-1">
+              <span>{previewPayload.summary?.lines || 0} linha(s)</span>
+              <span>{previewPayload.summary?.missingInvoiceCount || 0} sem NF</span>
+              <span>{previewPayload.summary?.missingDateCount || 0} sem data</span>
+              <span>{previewPayload.summary?.missingCostCount || 0} sem custo</span>
             </div>
-          ) : null}
-        </section>
+            <div className="text-sm text-slate-500">
+              {previewPayload.document?.supplierName || "-"} • NF {previewPayload.document?.invoiceNumber || "-"} • {previewPayload.document?.movementAt || "-"}
+            </div>
+            {previewPayload.previewLines?.length > 0 ? (
+              <div className="space-y-2 pt-1">
+                {previewPayload.previewLines.map((line: any) => (
+                  <div key={`${line.rowNumber}-${line.ingredientName}`} className="text-base">
+                    <div className="font-medium text-slate-900">{line.ingredientName}</div>
+                    <div className="text-sm text-slate-500">
+                      {line.qtyEntry ?? "-"} {line.unitEntry || line.movementUnit || ""} • {line.costAmount ?? "-"} por unidade
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </CollapsibleContent>
+        </Collapsible>
       ) : null}
 
       {previewFetcher.data?.status && previewFetcher.data.status >= 400 ? (
