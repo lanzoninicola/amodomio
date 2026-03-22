@@ -373,7 +373,7 @@ export default function AdminMobileImportStockMovementsBatchRoute() {
 
   return (
     <div className="space-y-5 pb-6">
-      <section className="space-y-3 border-b border-slate-200 pb-5">
+      <section className="space-y-3 rounded-2xl  bg-white/90 px-4 py-4">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <h2 className="truncate text-base font-semibold text-slate-950">{selectedBatch.name}</h2>
@@ -433,7 +433,7 @@ export default function AdminMobileImportStockMovementsBatchRoute() {
         </div>
       </section>
 
-      <section className="space-y-3">
+      <section className="space-y-3 py-4">
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-sm font-semibold text-slate-950">Linhas do lote</h3>
@@ -445,11 +445,10 @@ export default function AdminMobileImportStockMovementsBatchRoute() {
           <button
             type="button"
             onClick={() => setStatusFilter("all")}
-            className={`inline-flex h-9 shrink-0 items-center rounded-full border px-3 text-xs font-semibold ${
-              statusFilter === "all"
-                ? "border-slate-950 bg-slate-950 text-white"
-                : "border-slate-200 bg-white text-slate-700"
-            }`}
+            className={`inline-flex h-9 shrink-0 items-center rounded-full border px-3 text-xs font-semibold ${statusFilter === "all"
+              ? "border-slate-950 bg-slate-950 text-white"
+              : "border-slate-200 bg-white text-slate-700"
+              }`}
           >
             Todos
           </button>
@@ -458,11 +457,10 @@ export default function AdminMobileImportStockMovementsBatchRoute() {
               key={status}
               type="button"
               onClick={() => setStatusFilter(status)}
-              className={`inline-flex h-9 shrink-0 items-center rounded-full border px-3 text-xs font-semibold ${
-                statusFilter === status
-                  ? "border-slate-950 bg-slate-950 text-white"
-                  : "border-slate-200 bg-white text-slate-700"
-              }`}
+              className={`inline-flex h-9 shrink-0 items-center rounded-full border px-3 text-xs font-semibold ${statusFilter === status
+                ? "border-slate-950 bg-slate-950 text-white"
+                : "border-slate-200 bg-white text-slate-700"
+                }`}
             >
               {getStatusLabel(status)}
             </button>
@@ -476,7 +474,7 @@ export default function AdminMobileImportStockMovementsBatchRoute() {
             </div>
           ) : (
             filteredLines.map((line) => (
-              <article key={line.id} className="space-y-3 border-b border-slate-200 pb-5">
+              <article key={line.id} className="space-y-3  p-3 rounded-lg bg-white/90 pb-5 last:border-b-0 last:pb-0">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <Dialog>
