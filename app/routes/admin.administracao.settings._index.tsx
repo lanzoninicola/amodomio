@@ -27,6 +27,13 @@ import {
   RECIPE_CHATGPT_PROJECT_URL_SETTING_NAME,
   RECIPE_CHATGPT_SETTINGS_CONTEXT,
 } from "~/domain/recipe/recipe-chatgpt-settings";
+import {
+  DEFAULT_STOCK_PHOTO_CHATGPT_PROMPT_TEMPLATE,
+  DEFAULT_STOCK_PHOTO_CHATGPT_RETURN_URL,
+  STOCK_PHOTO_CHATGPT_PROMPT_SETTING_NAME,
+  STOCK_PHOTO_CHATGPT_RETURN_URL_SETTING_NAME,
+  STOCK_PHOTO_CHATGPT_SETTINGS_CONTEXT,
+} from "~/domain/stock-nf-import/stock-photo-chatgpt-settings";
 
 const SETTING_TYPES = ["string", "boolean", "float", "int", "json"] as const;
 const REELS_SETTINGS_CONTEXT = "cardapio";
@@ -69,7 +76,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const where = filters.length ? { AND: filters } : {};
 
-  const [likesSetting, sharesSetting, reelsEnabledSetting, itemCostAverageWindowSetting, recipeChatGptProjectUrlSetting] = await Promise.all([
+  const [
+    likesSetting,
+    sharesSetting,
+    reelsEnabledSetting,
+    itemCostAverageWindowSetting,
+    recipeChatGptProjectUrlSetting,
+    stockPhotoChatGptPromptSetting,
+    stockPhotoChatGptReturnUrlSetting,
+  ] = await Promise.all([
     prismaClient.setting.findFirst({
       where: { context: ENGAGEMENT_SETTINGS_CONTEXT, name: LIKE_SETTING_NAME },
       orderBy: [{ createdAt: "desc" }],
@@ -93,6 +108,20 @@ export async function loader({ request }: LoaderFunctionArgs) {
       where: {
         context: RECIPE_CHATGPT_SETTINGS_CONTEXT,
         name: RECIPE_CHATGPT_PROJECT_URL_SETTING_NAME,
+      },
+      orderBy: [{ createdAt: "desc" }],
+    }),
+    prismaClient.setting.findFirst({
+      where: {
+        context: STOCK_PHOTO_CHATGPT_SETTINGS_CONTEXT,
+        name: STOCK_PHOTO_CHATGPT_PROMPT_SETTING_NAME,
+      },
+      orderBy: [{ createdAt: "desc" }],
+    }),
+    prismaClient.setting.findFirst({
+      where: {
+        context: STOCK_PHOTO_CHATGPT_SETTINGS_CONTEXT,
+        name: STOCK_PHOTO_CHATGPT_RETURN_URL_SETTING_NAME,
       },
       orderBy: [{ createdAt: "desc" }],
     }),
@@ -153,6 +182,30 @@ export async function loader({ request }: LoaderFunctionArgs) {
         name: RECIPE_CHATGPT_PROJECT_URL_SETTING_NAME,
         type: "string",
         value: DEFAULT_RECIPE_CHATGPT_PROJECT_URL,
+        createdAt: new Date(),
+      },
+    });
+  }
+
+  if (!stockPhotoChatGptPromptSetting) {
+    await prismaClient.setting.create({
+      data: {
+        context: STOCK_PHOTO_CHATGPT_SETTINGS_CONTEXT,
+        name: STOCK_PHOTO_CHATGPT_PROMPT_SETTING_NAME,
+        type: "string",
+        value: DEFAULT_STOCK_PHOTO_CHATGPT_PROMPT_TEMPLATE,
+        createdAt: new Date(),
+      },
+    });
+  }
+
+  if (!stockPhotoChatGptReturnUrlSetting) {
+    await prismaClient.setting.create({
+      data: {
+        context: STOCK_PHOTO_CHATGPT_SETTINGS_CONTEXT,
+        name: STOCK_PHOTO_CHATGPT_RETURN_URL_SETTING_NAME,
+        type: "string",
+        value: DEFAULT_STOCK_PHOTO_CHATGPT_RETURN_URL,
         createdAt: new Date(),
       },
     });
