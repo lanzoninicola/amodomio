@@ -10,7 +10,15 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "~/component
 import { Input } from "~/components/ui/input";
 import { SearchableSelect, type SearchableSelectOption } from "~/components/ui/searchable-select";
 import { createStockNfImportBatchFromVisionPayload } from "~/domain/stock-nf-import/stock-nf-import.server";
+import {
+  DEFAULT_STOCK_PHOTO_CHATGPT_PROMPT_TEMPLATE,
+  DEFAULT_STOCK_PHOTO_CHATGPT_RETURN_URL,
+  STOCK_PHOTO_CHATGPT_PROMPT_SETTING_NAME,
+  STOCK_PHOTO_CHATGPT_RETURN_URL_SETTING_NAME,
+  STOCK_PHOTO_CHATGPT_SETTINGS_CONTEXT,
+} from "~/domain/stock-nf-import/stock-photo-chatgpt-settings";
 import { supplierPrismaEntity } from "~/domain/supplier/supplier.prisma.entity.server";
+import prismaClient from "~/lib/prisma/client.server";
 import { badRequest, ok, serverError } from "~/utils/http-response.server";
 
 export const meta: MetaFunction = () => [{ title: "Admin Mobile | Entrada de estoque por foto" }];
@@ -153,56 +161,19 @@ function buildStockPhotoPrompt(params?: {
   supplierName?: string | null;
   supplierCnpj?: string | null;
   returnUrl?: string | null;
+  promptTemplate?: string | null;
 }) {
-  const responseTemplate = {
-    metadata: {
-      returnUrl: params?.returnUrl || "https://amodomio.com.br/admin/mobile/entrada-estoque-foto",
-    },
-    document: {
-      supplierName: params?.supplierName || "nome do fornecedor",
-      supplierCnpj: params?.supplierCnpj || "00.000.000/0000-00",
-      invoiceNumber: "12345",
-      movementAt: "2026-03-21",
-      notes: "observacoes curtas opcionais",
-    },
-    lines: [
-      {
-        rowNumber: 1,
-        ingredientName: "MUSSARELA",
-        qtyEntry: 4,
-        unitEntry: "KG",
-        costAmount: 42.5,
-        costTotalAmount: 170,
-        observation: "campo opcional",
-      },
-    ],
-  };
+  const template = params?.promptTemplate || DEFAULT_STOCK_PHOTO_CHATGPT_PROMPT_TEMPLATE;
+  const supplierName = params?.supplierName || "nome do fornecedor";
+  const supplierCnpj = params?.supplierCnpj || "00.000.000/0000-00";
+  const supplierCnpjLabel = params?.supplierCnpj ? ` (CNPJ ${params.supplierCnpj})` : "";
+  const returnUrl = params?.returnUrl || DEFAULT_STOCK_PHOTO_CHATGPT_RETURN_URL;
 
-  return [
-    "Voce esta lendo foto de cupom fiscal ou nota fiscal de entrada de estoque para o sistema Amodomio.",
-    "Analise as imagens que vou anexar nesta conversa.",
-    "Responda somente com um bloco ```json``` valido, sem texto antes ou depois.",
-    "Extraia apenas itens de entrada de estoque comprados do fornecedor.",
-    "Nao invente linhas, nao estime quantidades ilegiveis e nao mapeie nomes para o sistema interno.",
-    "Copie o nome do ingrediente/produto o mais proximo possivel do documento.",
-    "Use ponto para decimais no JSON.",
-    "movementAt deve ser a data da entrada ou emissao da NF em formato YYYY-MM-DD quando visivel.",
-    "invoiceNumber deve conter somente o numero identificado da NF/cupom quando visivel.",
-    "supplierName e supplierCnpj devem ficar no objeto document e podem ser repetidos por linha apenas se necessario.",
-    "metadata.returnUrl deve repetir exatamente a URL informada abaixo para facilitar voltar para esta ferramenta.",
-    "qtyEntry e costAmount devem ser numericos.",
-    "costAmount significa custo unitario por unitEntry.",
-    "costTotalAmount significa total da linha quando visivel; se nao estiver claro, use null.",
-    "Se uma informacao nao estiver legivel, use null.",
-    "Nao inclua chaves extras.",
-    params?.supplierName
-      ? `FORNECEDOR_REFERENCIA: priorize ${params.supplierName}${params?.supplierCnpj ? ` (CNPJ ${params.supplierCnpj})` : ""} ao preencher document.supplierName e document.supplierCnpj.`
-      : "FORNECEDOR_REFERENCIA: se o fornecedor estiver legivel, preencha document.supplierName e document.supplierCnpj.",
-    params?.returnUrl ? `RETURN_URL_REFERENCIA: ${params.returnUrl}` : "",
-    "",
-    "FORMATO_OBRIGATORIO_DA_RESPOSTA",
-    JSON.stringify(responseTemplate, null, 2),
-  ].join("\n");
+  return template
+    .replaceAll("{{supplierName}}", supplierName)
+    .replaceAll("{{supplierCnpj}}", supplierCnpj)
+    .replaceAll("{{supplierCnpjLabel}}", supplierCnpjLabel)
+    .replaceAll("{{returnUrl}}", returnUrl);
 }
 
 function ChatGptLogoIcon() {
@@ -223,10 +194,33 @@ function ChatGptLogoIcon() {
 
 export async function loader({ request }: LoaderFunctionArgs) {
   try {
-    const suppliers = await supplierPrismaEntity.findAll();
     const url = new URL(request.url);
-    const returnUrl = `${url.origin}${url.pathname}`;
-    return ok({ suppliers, returnUrl });
+    const [suppliers, promptSetting, returnUrlSetting] = await Promise.all([
+      supplierPrismaEntity.findAll(),
+      prismaClient.setting.findFirst({
+        where: {
+          context: STOCK_PHOTO_CHATGPT_SETTINGS_CONTEXT,
+          name: STOCK_PHOTO_CHATGPT_PROMPT_SETTING_NAME,
+        },
+        orderBy: [{ createdAt: "desc" }],
+      }),
+      prismaClient.setting.findFirst({
+        where: {
+          context: STOCK_PHOTO_CHATGPT_SETTINGS_CONTEXT,
+          name: STOCK_PHOTO_CHATGPT_RETURN_URL_SETTING_NAME,
+        },
+        orderBy: [{ createdAt: "desc" }],
+      }),
+    ]);
+
+    return ok({
+      suppliers,
+      promptTemplate: String(promptSetting?.value || DEFAULT_STOCK_PHOTO_CHATGPT_PROMPT_TEMPLATE),
+      returnUrl:
+        String(returnUrlSetting?.value || "").trim() ||
+        `${url.origin}${url.pathname}` ||
+        DEFAULT_STOCK_PHOTO_CHATGPT_RETURN_URL,
+    });
   } catch (error) {
     return serverError(error);
   }
@@ -327,7 +321,8 @@ export default function AdminMobileEntradaEstoqueFotoPage() {
   const supplierFetcher = useFetcher<any>();
   const payload = data.payload as any;
   const suppliers = payload.suppliers || [];
-  const returnUrl = String(payload.returnUrl || "").trim() || null;
+  const returnUrl = String(payload.returnUrl || "").trim() || DEFAULT_STOCK_PHOTO_CHATGPT_RETURN_URL;
+  const promptTemplate = String(payload.promptTemplate || "").trim() || DEFAULT_STOCK_PHOTO_CHATGPT_PROMPT_TEMPLATE;
   const [promptDraft, setPromptDraft] = useState("");
   const [chatGptResponse, setChatGptResponse] = useState("");
   const [lastPreviewedResponse, setLastPreviewedResponse] = useState("");
@@ -354,8 +349,9 @@ export default function AdminMobileEntradaEstoqueFotoPage() {
       supplierName: supplierName || null,
       supplierCnpj: selectedSupplier?.cnpj || null,
       returnUrl,
+      promptTemplate,
     }),
-    [supplierName, selectedSupplier?.cnpj, returnUrl],
+    [supplierName, selectedSupplier?.cnpj, returnUrl, promptTemplate],
   );
 
   useEffect(() => {
