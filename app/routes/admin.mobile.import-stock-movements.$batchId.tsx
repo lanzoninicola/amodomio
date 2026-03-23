@@ -1,7 +1,8 @@
 import type { MetaFunction } from "@remix-run/node";
-import { Form, Link, useFetcher, useLoaderData } from "@remix-run/react";
+import { Form, Link, Outlet, useFetcher, useLoaderData, useOutlet } from "@remix-run/react";
 import { CheckCircle2, ExternalLink, EyeOff, Plus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { PendingConversionForm } from "~/components/admin/import-stock-conversion-form";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "~/components/ui/dialog";
@@ -59,6 +60,7 @@ function summaryFromAny(summary: any) {
   return {
     total: Number(summary?.total || 0),
     ready: Number(summary?.ready || 0),
+    readyToApply: Number(summary?.readyToApply || 0),
     invalid: Number(summary?.invalid || 0),
     pendingMapping: Number(summary?.pendingMapping || 0),
     pendingSupplier: Number(summary?.pendingSupplier || 0),
@@ -68,6 +70,13 @@ function summaryFromAny(summary: any) {
     skippedDuplicate: Number(summary?.skippedDuplicate || 0),
     error: Number(summary?.error || 0),
   };
+}
+
+function supplierReconciliationLabel(line: any) {
+  if (line?.supplierReconciliationStatus === "manual") return "conciliado manualmente";
+  if (line?.supplierReconciliationStatus === "matched" || line?.supplierId) return "conciliado com cadastro";
+  if (line?.supplierReconciliationStatus === "unmatched") return "pendente de conciliação";
+  return "sem conciliação iniciada";
 }
 
 function statusBadgeClass(status: string) {
@@ -337,6 +346,7 @@ function MobileItemMapperCard({
 
 export default function AdminMobileImportStockMovementsBatchRoute() {
   const loaderData = useLoaderData<any>();
+  const outlet = useOutlet();
   const payload = loaderData?.payload || {};
   const selected = payload.selected as any;
   const selectedBatch = selected?.batch || null;
@@ -370,6 +380,7 @@ export default function AdminMobileImportStockMovementsBatchRoute() {
   }, [lines, statusFilter]);
 
   if (!selectedBatch) return null;
+  if (outlet) return <Outlet />;
 
   return (
     <div className="space-y-5 pb-6">
@@ -383,13 +394,14 @@ export default function AdminMobileImportStockMovementsBatchRoute() {
           </div>
           <p className="mt-1 text-sm text-slate-600">{selectedBatch.originalFileName || "sem arquivo"}</p>
           <p className="text-xs text-slate-500">Aba: {selectedBatch.worksheetName || "-"}</p>
+          <p className="text-xs text-slate-500">JSON fornecedor: {selectedBatch.supplierNotesFileName || "não anexado"}</p>
         </div>
 
         <div className="grid grid-cols-4 gap-x-3 gap-y-3">
           {[
             ["Total", summary.total],
             ["Pend.", summary.pendingMapping + summary.pendingConversion + summary.pendingSupplier],
-            ["Prontas", summary.ready],
+            ["Prontas", summary.readyToApply],
             ["Ign.", summary.ignored],
           ].map(([label, value]) => (
             <div key={String(label)}>
@@ -402,6 +414,7 @@ export default function AdminMobileImportStockMovementsBatchRoute() {
         <div className="grid grid-cols-3 gap-x-3 gap-y-3">
           {[
             ["Vínculo", summary.pendingMapping],
+            ["Fornecedor", summary.pendingSupplier],
             ["Conversão", summary.pendingConversion],
             ["Erros", summary.error + summary.invalid],
           ].map(([label, value]) => (
@@ -413,11 +426,23 @@ export default function AdminMobileImportStockMovementsBatchRoute() {
         </div>
 
         <div className="space-y-2">
+          {summary.pendingSupplier > 0 ? (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              Faltam {summary.pendingSupplier} registro(s) para conciliar com o fornecedor.
+            </div>
+          ) : null}
+
+          <Button asChild variant="outline" className="h-11 w-full rounded-xl border-amber-200 bg-amber-50 text-amber-900 hover:bg-amber-100">
+            <Link to={`/admin/mobile/import-stock-movements/${selectedBatch.id}/supplier-reconciliation`}>
+              Abrir conciliação de fornecedor
+            </Link>
+          </Button>
+
           <Form method="post">
             <input type="hidden" name="_action" value="batch-apply" />
             <input type="hidden" name="batchId" value={selectedBatch.id} />
-            <Button type="submit" className="h-11 w-full rounded-xl bg-emerald-600 hover:bg-emerald-700" disabled={summary.ready <= 0}>
-              Importar linhas prontas ({summary.ready})
+            <Button type="submit" className="h-11 w-full rounded-xl bg-emerald-600 hover:bg-emerald-700" disabled={summary.readyToApply <= 0}>
+              Importar linhas conciliadas ({summary.readyToApply})
             </Button>
           </Form>
 
@@ -500,11 +525,12 @@ export default function AdminMobileImportStockMovementsBatchRoute() {
                             <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Fornecedor</div>
                             <div className="mt-1 text-slate-900">{line.supplierName || "-"}</div>
                             <div className="text-xs text-slate-500">{line.supplierCnpj || "sem CNPJ"}</div>
+                            <div className="text-xs text-slate-500">{supplierReconciliationLabel(line)}</div>
                           </div>
-                          {line.supplierMatchSource ? (
+                          {line.supplierReconciliationSource || line.supplierMatchSource ? (
                             <div>
                               <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Conciliação</div>
-                              <div className="mt-1 text-slate-900">{line.supplierMatchSource}</div>
+                              <div className="mt-1 text-slate-900">{line.supplierReconciliationSource || line.supplierMatchSource}</div>
                             </div>
                           ) : null}
                         </div>
@@ -586,22 +612,7 @@ export default function AdminMobileImportStockMovementsBatchRoute() {
                   {line.status === "ignored" ? (
                     <div className="mt-1 text-sm text-slate-400">Linha ignorada</div>
                   ) : line.status === "pending_conversion" ? (
-                    <Form method="post" className="mt-2 space-y-2">
-                      <input type="hidden" name="_action" value="batch-set-manual-conversion" />
-                      <input type="hidden" name="batchId" value={selectedBatch.id} />
-                      <input type="hidden" name="lineId" value={line.id} />
-                      <Input
-                        name="factor"
-                        type="number"
-                        min="0"
-                        step="0.000001"
-                        placeholder="Fator destino por 1 origem"
-                        className="h-11 rounded-xl"
-                      />
-                      <Button type="submit" variant="outline" className="h-11 w-full rounded-xl">
-                        Salvar conversão
-                      </Button>
-                    </Form>
+                    <PendingConversionForm batchId={selectedBatch.id} line={line} mobile />
                   ) : (
                     <>
                       <div className="mt-1 text-sm text-slate-800">

@@ -258,11 +258,11 @@ export function AdminSidebar({ navigationLinks, pinnedHrefs }: AdminSidebarProps
   return (
     <Sidebar
       variant="sidebar"
-      className="!top-[calc(var(--header-height,3.5rem)+0.6rem)] !h-[calc(100svh-5rem)] bg-transparent [&_[data-sidebar=sidebar]]:bg-transparent"
+      className="!top-[calc(var(--header-height,3.5rem)+0.6rem)] !h-[calc(100svh-5rem)] bg-white [&_[data-sidebar=sidebar]]:bg-white"
       style={{ "--sidebar-width": "16rem" } as CSSProperties}
     >
       <div className="relative flex h-full min-h-0 w-full flex-col">
-        <SidebarHeader className="mx-auto w-[12.75rem] px-3 pt-4">
+        <SidebarHeader className="mx-auto w-[14.5rem] px-2 pt-4">
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -289,10 +289,10 @@ export function AdminSidebar({ navigationLinks, pinnedHrefs }: AdminSidebarProps
             </button>
           </div>
         </SidebarHeader>
-        <SidebarContent className="mx-auto h-full min-h-0 w-[12.75rem] overflow-y-auto overflow-x-hidden px-3 pt-4 pb-10 font-sans [scrollbar-width:thin] [scrollbar-color:rgba(100,116,139,0.35)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-400/35 hover:[&::-webkit-scrollbar-thumb]:bg-slate-400/55">
+        <SidebarContent className="mx-auto h-full min-h-0 w-[14.5rem] overflow-y-auto overflow-x-hidden px-2 pt-4 pb-10 font-sans [scrollbar-width:thin] [scrollbar-color:rgba(100,116,139,0.35)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-400/35 hover:[&::-webkit-scrollbar-thumb]:bg-slate-400/55">
           {navigationLinks?.sidebarNav?.map((group: SidebarNavigationSection) => (
-            <SidebarGroup key={group.title} className="w-full px-1 py-4">
-              <SidebarGroupLabel className="px-2.5 text-[0.78rem] font-medium text-muted-foreground">{group.title}</SidebarGroupLabel>
+            <SidebarGroup key={group.title} className="w-full px-0.5 py-4">
+              <SidebarGroupLabel className="px-2 text-[0.78rem] font-medium text-muted-foreground">{group.title}</SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu className="gap-1">
                   {renderSidebarItems(group.items, group.title)}

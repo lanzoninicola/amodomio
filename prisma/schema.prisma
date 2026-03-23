@@ -2055,8 +2055,17 @@ model StockNfImportBatch {
   sourceSystem    String   @default("saipos") @map("source_system")
   sourceType      String   @default("entrada_nf") @map("source_type")
   status          String   @default("draft") // draft | validated | applied | rolled_back | partial | archived
+  applyStatus     String   @default("idle") @map("apply_status") // idle | applying | completed | failed
+  applyStartedAt  DateTime? @map("apply_started_at")
+  applyFinishedAt DateTime? @map("apply_finished_at")
+  applyProcessedCount Int @default(0) @map("apply_processed_count")
+  applyErrorCount Int @default(0) @map("apply_error_count")
+  applyTotalCount Int @default(0) @map("apply_total_count")
+  applyMessage    String?  @map("apply_message") @db.Text
   originalFileName String? @map("original_file_name")
   worksheetName   String?  @map("worksheet_name")
+  supplierNotesFileName String? @map("supplier_notes_file_name")
+  supplierNotesAttachedAt DateTime? @map("supplier_notes_attached_at")
   periodStart     DateTime? @map("period_start")
   periodEnd       DateTime? @map("period_end")
   uploadedBy      String?  @map("uploaded_by")
@@ -2094,6 +2103,9 @@ model StockNfImportBatchLine {
   supplierNameNormalized    String?  @map("supplier_name_normalized")
   supplierCnpj              String?  @map("supplier_cnpj")
   supplierMatchSource       String?  @map("supplier_match_source")
+  supplierReconciliationStatus String @default("not_started") @map("supplier_reconciliation_status") // not_started | matched | unmatched | manual
+  supplierReconciliationSource String? @map("supplier_reconciliation_source")
+  supplierReconciliationAt   DateTime? @map("supplier_reconciliation_at")
   qtyEntry                  Float?   @map("qty_entry")
   unitEntry                 String?  @map("unit_entry")
   qtyConsumption            Float?   @map("qty_consumption")
@@ -2131,6 +2143,30 @@ model StockNfImportBatchLine {
   @@index([mappedItemId], map: "stock_nf_import_batch_lines_mapped_item_idx")
   @@index([supplierId], map: "stock_nf_import_batch_lines_supplier_idx")
   @@map("stock_nf_import_batch_lines")
+}
+
+model AsyncJob {
+  id           String   @id @default(uuid())
+  type         String
+  status       String   @default("pending") // pending | running | completed | failed | cancelled
+  priority     Int      @default(100)
+  dedupeKey    String?  @unique @map("dedupe_key")
+  payload      Json
+  result       Json?
+  attempts     Int      @default(0)
+  maxAttempts  Int      @default(3) @map("max_attempts")
+  runAfter     DateTime? @map("run_after")
+  lockedAt     DateTime? @map("locked_at")
+  lockedBy     String?  @map("locked_by")
+  errorMessage String?  @map("error_message") @db.Text
+  createdAt    DateTime @default(now()) @map("created_at")
+  startedAt    DateTime? @map("started_at")
+  finishedAt   DateTime? @map("finished_at")
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@index([status, runAfter, priority, createdAt], map: "async_jobs_status_run_after_priority_created_at_idx")
+  @@index([type, status, createdAt], map: "async_jobs_type_status_created_at_idx")
+  @@map("async_jobs")
 }
 
 model StockNfImportAppliedChange {

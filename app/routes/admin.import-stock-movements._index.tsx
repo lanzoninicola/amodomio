@@ -1,7 +1,7 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from '@remix-run/node';
 import { Form, Link, useActionData, useLoaderData } from '@remix-run/react';
 import { useMemo, useState } from 'react';
-import { Search } from 'lucide-react';
+import { CheckCircle2, Eye, Search, Trash2 } from 'lucide-react';
 import NoRecordsFound from '~/components/primitives/no-records-found/no-records-found';
 import {
   AlertDialog,
@@ -36,7 +36,9 @@ function summaryFromAny(summary: any) {
   return {
     total: Number(summary?.total || 0),
     ready: Number(summary?.ready || 0),
+    readyToApply: Number(summary?.readyToApply || 0),
     applied: Number(summary?.applied || 0),
+    pendingSupplier: Number(summary?.pendingSupplier || 0),
   };
 }
 
@@ -64,8 +66,9 @@ function DeleteBatchButton({ batchId, batchName, status }: { batchId: string; ba
       <Form method="post">
         <input type="hidden" name="_action" value="batch-delete" />
         <input type="hidden" name="batchId" value={batchId} />
-        <Button type="submit" variant="outline" className="rounded-full border-red-200 bg-white text-red-700 hover:bg-red-50">
-          Eliminar
+        <Button type="submit" variant="outline" size="icon" className="h-9 w-9 rounded-md border-red-200 bg-white text-red-700 hover:bg-red-50">
+          <Trash2 className="h-4 w-4" />
+          <span className="sr-only">Eliminar lote</span>
         </Button>
       </Form>
     );
@@ -74,8 +77,9 @@ function DeleteBatchButton({ batchId, batchName, status }: { batchId: string; ba
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
-        <Button type="button" variant="outline" className="rounded-full border-red-200 bg-white text-red-700 hover:bg-red-50">
-          Eliminar
+        <Button type="button" variant="outline" size="icon" className="h-9 w-9 rounded-md border-red-200 bg-white text-red-700 hover:bg-red-50">
+          <Trash2 className="h-4 w-4" />
+          <span className="sr-only">Eliminar lote</span>
         </Button>
       </AlertDialogTrigger>
       <AlertDialogContent>
@@ -190,6 +194,7 @@ export default function AdminImportStockMovementsIndexRoute() {
                 <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Total</TableHead>
                 <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Importadas</TableHead>
                 <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Importar</TableHead>
+                <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Fornecedor</TableHead>
                 <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Status</TableHead>
                 <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Criado em</TableHead>
                 <TableHead className="h-10 px-4 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Ações</TableHead>
@@ -199,36 +204,90 @@ export default function AdminImportStockMovementsIndexRoute() {
               {filtered.map((batch) => {
                 const summary = summaryFromAny(batch.summary);
                 return (
-                  <TableRow key={batch.id} className="border-slate-100 hover:bg-slate-50/40">
-                    <TableCell className="px-4 py-3">
-                      <div className="flex min-w-0 flex-col gap-0.5">
-                        <Link to={`/admin/import-stock-movements/${batch.id}`} className="truncate font-medium text-slate-900 hover:underline">
+                  <TableRow key={batch.id} className="border-slate-100 align-top hover:bg-slate-50/40">
+                    <TableCell className="px-4 py-4">
+                      <div className="flex min-w-0 flex-col gap-1.5">
+                        <Link
+                          to={`/admin/import-stock-movements/${batch.id}`}
+                          className="truncate text-[15px] font-semibold leading-5 text-slate-900 hover:underline"
+                        >
                           {batch.name}
                         </Link>
-                        <span className="text-xs text-slate-500">ID: {batch.id}</span>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="rounded-full bg-slate-100 px-2.5 py-1 font-mono text-[11px] text-slate-600">
+                            {batch.id}
+                          </span>
+                          {summary.pendingSupplier > 0 ? (
+                            <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-800">
+                              {summary.pendingSupplier} pend. fornecedor
+                            </span>
+                          ) : null}
+                        </div>
                       </div>
                     </TableCell>
-                    <TableCell className="px-4 py-3">
-                      <div className="text-sm text-slate-800">{batch.originalFileName || '-'}</div>
-                      <div className="text-xs text-slate-500">Aba: {batch.worksheetName || '-'}</div>
+                    <TableCell className="px-4 py-4">
+                      <div className="min-w-[210px] space-y-1">
+                        <div className="line-clamp-2 text-sm font-medium leading-5 text-slate-800">
+                          {batch.originalFileName || '-'}
+                        </div>
+                        <div className="text-xs text-slate-500">Aba: {batch.worksheetName || '-'}</div>
+                      </div>
                     </TableCell>
-                    <TableCell className="px-4 py-3 text-sm text-slate-800">{summary.total}</TableCell>
-                    <TableCell className="px-4 py-3 text-sm text-slate-800">{summary.applied}</TableCell>
-                    <TableCell className="px-4 py-3 text-sm text-slate-800">{summary.ready}</TableCell>
-                    <TableCell className="px-4 py-3">
+                    <TableCell className="px-4 py-4">
+                      <div className="min-w-[68px] rounded-xl bg-slate-50 px-3 py-2 text-center">
+                        <div className="text-lg font-semibold leading-none text-slate-950">{summary.total}</div>
+                        <div className="mt-1 text-[11px] uppercase tracking-wide text-slate-500">linhas</div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="px-4 py-4">
+                      <div className="min-w-[68px] rounded-xl bg-slate-50 px-3 py-2 text-center">
+                        <div className="text-lg font-semibold leading-none text-slate-950">{summary.applied}</div>
+                        <div className="mt-1 text-[11px] uppercase tracking-wide text-slate-500">aplicadas</div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="px-4 py-4">
+                      <div className="min-w-[88px] rounded-xl bg-emerald-50 px-3 py-2 text-center">
+                        <div className="text-lg font-semibold leading-none text-emerald-800">{summary.readyToApply}</div>
+                        <div className="mt-1 text-[11px] uppercase tracking-wide text-emerald-700">prontas</div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="px-4 py-4">
+                      <div className="min-w-[172px]">
+                        {summary.pendingSupplier > 0 ? (
+                          <div className="space-y-1.5">
+                            <div className="text-xs font-semibold text-amber-800">
+                              {summary.pendingSupplier} pendência(s)
+                            </div>
+                            <Button asChild variant="outline" className="h-8 rounded-md border-amber-200 bg-amber-50 px-2.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 hover:text-amber-900">
+                              <Link to={`/admin/supplier-reconciliation?batchId=${batch.id}`}>
+                                Conciliar fornecedor
+                              </Link>
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="inline-flex h-8 items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 text-[11px] font-semibold text-emerald-700">
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            Conciliado
+                          </div>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="px-4 py-4">
                       <Badge variant="outline" className={statusBadgeClass(String(batch.status))}>
                         {batch.status}
                       </Badge>
                     </TableCell>
-                    <TableCell className="px-4 py-3 text-sm text-slate-600">{formatDate(batch.createdAt)}</TableCell>
-                    <TableCell className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-2">
-                        <Link
-                          to={`/admin/import-stock-movements/${batch.id}`}
-                          className="inline-flex h-9 items-center justify-center rounded-full border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-                        >
-                          Ver lote
-                        </Link>
+                    <TableCell className="px-4 py-4 text-sm text-slate-600">
+                      <div className="min-w-[120px] leading-5">{formatDate(batch.createdAt)}</div>
+                    </TableCell>
+                    <TableCell className="px-4 py-4">
+                      <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
+                        <Button asChild variant="outline" size="icon" className="h-8 w-8 rounded-md border-slate-200 bg-white text-slate-700 hover:bg-slate-50">
+                          <Link to={`/admin/import-stock-movements/${batch.id}`}>
+                            <Eye className="h-4 w-4" />
+                            <span className="sr-only">Ver lote</span>
+                          </Link>
+                        </Button>
                         <DeleteBatchButton
                           batchId={String(batch.id)}
                           batchName={String(batch.name || 'sem nome')}

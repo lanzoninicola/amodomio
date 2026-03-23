@@ -11,14 +11,17 @@ export default function AdminMobileLayout() {
   const isItemCostSurvey = pathname.startsWith("/admin/mobile/levantamento-custo-item");
   const isStockPhotoEntry = pathname.startsWith("/admin/mobile/entrada-estoque-foto");
   const isImportStockMovementsBatch = pathname.startsWith("/admin/mobile/import-stock-movements");
+  const isImportStockSupplierReconciliation = pathname.includes("/supplier-reconciliation");
   const pageTitle = isEstoque
     ? "Estoque de massa"
     : isProgramacao
       ? "Programação diária"
       : isAssetsBatch
-        ? "Assets do cardápio"
-        : isImportStockMovementsBatch
-          ? "Lote de estoque"
+      ? "Assets do cardápio"
+      : isImportStockMovementsBatch
+          ? isImportStockSupplierReconciliation
+            ? "Conciliar fornecedor"
+            : "Lote de estoque"
         : isStockPhotoEntry
           ? "Entrada por foto"
         : isItemCostSurvey
