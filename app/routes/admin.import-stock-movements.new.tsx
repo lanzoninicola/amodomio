@@ -36,10 +36,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
     if (!(file instanceof File)) return badRequest('Selecione um arquivo .xlsx');
     if (!file.name.toLowerCase().endsWith('.xlsx')) return badRequest('Arquivo inválido. Envie .xlsx');
-    if (!(supplierNotesFile instanceof File) || supplierNotesFile.size <= 0) {
-      return badRequest('Selecione o JSON das notas do período');
-    }
-    if (!supplierNotesFile.name.toLowerCase().endsWith('.json')) {
+    if (supplierNotesFile instanceof File && supplierNotesFile.size > 0 && !supplierNotesFile.name.toLowerCase().endsWith('.json')) {
       return badRequest('Arquivo auxiliar inválido. Envie um .json com as notas do período');
     }
 
@@ -48,8 +45,11 @@ export async function action({ request }: ActionFunctionArgs) {
       fileBuffer: Buffer.from(await file.arrayBuffer()),
       batchName,
       uploadedBy: actor,
-      supplierNotesFileName: supplierNotesFile.name,
-      supplierNotesFileBuffer: Buffer.from(await supplierNotesFile.arrayBuffer()),
+      supplierNotesFileName: supplierNotesFile instanceof File && supplierNotesFile.size > 0 ? supplierNotesFile.name : null,
+      supplierNotesFileBuffer:
+        supplierNotesFile instanceof File && supplierNotesFile.size > 0
+          ? Buffer.from(await supplierNotesFile.arrayBuffer())
+          : null,
     });
 
     return redirect(`/admin/import-stock-movements/${result.batchId}`);
@@ -129,7 +129,8 @@ function UploadCard({
   quickLinkLabel,
   quickLinkHref,
 }: UploadCardProps) {
-  const isReady = selectedFileName.length > 0;
+  const hasSelection = selectedFileName.length > 0;
+  const isReady = required ? hasSelection : true;
   const Icon = icon === 'xls' ? FileSpreadsheet : FileJson;
 
   return (
@@ -179,7 +180,11 @@ function UploadCard({
           />
         </div>
         <div className={cn('text-sm font-medium', isReady ? 'text-emerald-700' : 'text-red-700')}>
-          {isReady ? `Arquivo selecionado: ${selectedFileName}` : 'Aguardando seleção do arquivo'}
+          {hasSelection
+            ? `Arquivo selecionado: ${selectedFileName}`
+            : required
+              ? 'Aguardando seleção do arquivo'
+              : 'Opcional: anexe o JSON agora ou concilie depois no lote'}
         </div>
       </CardContent>
     </Card>
@@ -227,7 +232,7 @@ export default function AdminImportStockMovementsNewRoute() {
             id="supplierNotesFile"
             name="supplierNotesFile"
             title="Importar JSON"
-            description="JSON dos documentos do período para conciliar fornecedor e CNPJ por documento fiscal."
+            description="JSON opcional dos documentos do período para conciliar fornecedor e CNPJ por documento fiscal."
             guideTitle="Guia JSON"
             guideDescription="Fluxo para extrair o JSON das notas de entrada no Saipos."
             guideSteps={[
@@ -241,7 +246,6 @@ export default function AdminImportStockMovementsNewRoute() {
               'Clicar no botão "Baixar JSON".',
             ]}
             accept=".json,application/json"
-            required
             selectedFileName={jsonFileName}
             onFileChange={setJsonFileName}
             icon="json"

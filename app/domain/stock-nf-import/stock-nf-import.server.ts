@@ -4,7 +4,7 @@ import { Prisma } from '@prisma/client';
 import prismaClient from '~/lib/prisma/client.server';
 import { itemVariationPrismaEntity } from '~/domain/item/item-variation.prisma.entity.server';
 import { itemCostVariationPrismaEntity } from '~/domain/item/item-cost-variation.prisma.entity.server';
-import { runCostImpactPipelineForItemChange } from '~/domain/costs/cost-impact-pipeline.server';
+import { ASYNC_JOB_TYPE, enqueueAsyncJob } from '~/domain/async-jobs/async-jobs.server';
 
 const SOURCE_SYSTEM = 'saipos';
 const SOURCE_TYPE = 'entrada_nf';
@@ -13,6 +13,7 @@ const COST_REFERENCE_TYPE_LINE = 'stock-nf-import-line';
 export type BatchSummary = {
   total: number;
   ready: number;
+  readyToApply: number;
   invalid: number;
   pendingMapping: number;
   pendingSupplier: number;
@@ -21,6 +22,17 @@ export type BatchSummary = {
   ignored: number;
   skippedDuplicate: number;
   error: number;
+};
+
+export type BatchApplyProgress = {
+  status: 'idle' | 'applying' | 'completed' | 'failed';
+  processedCount: number;
+  errorCount: number;
+  totalCount: number;
+  remainingCount: number;
+  message: string | null;
+  startedAt: Date | null;
+  finishedAt: Date | null;
 };
 
 type SupplierNoteEntry = {
@@ -386,6 +398,54 @@ function resolveSupplierFromLookup(
   };
 }
 
+function buildSupplierReconciliationState(input: {
+  supplierId?: string | null;
+  supplierName?: string | null;
+  supplierCnpj?: string | null;
+  supplierMatchSource?: string | null;
+  manual?: boolean;
+}) {
+  const supplierId = str(input.supplierId) || null;
+  const supplierName = str(input.supplierName) || null;
+  const supplierCnpj = str(input.supplierCnpj) || null;
+  const supplierMatchSource = str(input.supplierMatchSource) || null;
+
+  if (supplierId) {
+    return {
+      supplierReconciliationStatus: input.manual ? 'manual' : 'matched',
+      supplierReconciliationSource: supplierMatchSource || (input.manual ? 'manual' : 'matched'),
+      supplierReconciliationAt: new Date(),
+    };
+  }
+
+  if (supplierName || supplierCnpj) {
+    return {
+      supplierReconciliationStatus: 'unmatched',
+      supplierReconciliationSource: supplierMatchSource || null,
+      supplierReconciliationAt: new Date(),
+    };
+  }
+
+  return {
+    supplierReconciliationStatus: 'not_started',
+    supplierReconciliationSource: null,
+    supplierReconciliationAt: null,
+  };
+}
+
+function lineHasSupplierReconciled(line: any) {
+  const status = str(line?.supplierReconciliationStatus).toLowerCase();
+  if (status === 'matched' || status === 'manual') return true;
+  return Boolean(str(line?.supplierId));
+}
+
+function lineNeedsSupplierReconciliation(line: any) {
+  const status = str(line?.status).toLowerCase();
+  if (['invalid', 'ignored', 'skipped_duplicate'].includes(status)) return false;
+  if (!str(line?.invoiceNumber)) return false;
+  return !lineHasSupplierReconciled(line);
+}
+
 async function getMeasurementConversion(fromUnit: string, toUnit: string) {
   const db = prismaClient as any;
   const from = str(fromUnit).toUpperCase();
@@ -544,14 +604,6 @@ async function classifyLine(line: any, lookup: Awaited<ReturnType<typeof loadIte
   if (!(Number(line.costAmount) > 0)) {
     return { ...line, status: 'invalid', errorCode: 'invalid_cost', errorMessage: 'Custo inválido' };
   }
-  if (!line.supplierId) {
-    return {
-      ...line,
-      status: 'pending_supplier',
-      errorCode: 'supplier_not_reconciled',
-      errorMessage: 'Fornecedor do documento não conciliado',
-    };
-  }
 
   const mapping = chooseAutoMapping(line.ingredientName, lookup);
   if (!mapping.item) {
@@ -586,6 +638,7 @@ function summarizeLines(lines: any[]): BatchSummary {
   const summary: BatchSummary = {
     total: lines.length,
     ready: 0,
+    readyToApply: 0,
     invalid: 0,
     pendingMapping: 0,
     pendingSupplier: 0,
@@ -596,11 +649,16 @@ function summarizeLines(lines: any[]): BatchSummary {
     error: 0,
   };
   for (const line of lines) {
+    if (lineNeedsSupplierReconciliation(line)) {
+      summary.pendingSupplier += 1;
+    }
     switch (String(line.status)) {
-      case 'ready': summary.ready += 1; break;
+      case 'ready':
+        summary.ready += 1;
+        if (lineHasSupplierReconciled(line)) summary.readyToApply += 1;
+        break;
       case 'invalid': summary.invalid += 1; break;
       case 'pending_mapping': summary.pendingMapping += 1; break;
-      case 'pending_supplier': summary.pendingSupplier += 1; break;
       case 'pending_conversion': summary.pendingConversion += 1; break;
       case 'applied': summary.applied += 1; break;
       case 'ignored': summary.ignored += 1; break;
@@ -614,20 +672,8 @@ function summarizeLines(lines: any[]): BatchSummary {
 
 function derivePreApplyBatchStatus(summary: BatchSummary) {
   if (summary.total === 0) return 'draft';
-  if (summary.invalid || summary.pendingMapping || summary.pendingSupplier || summary.pendingConversion) return 'draft';
+  if (summary.invalid || summary.pendingMapping || summary.pendingConversion || summary.pendingSupplier) return 'draft';
   return 'validated';
-}
-
-function finalizeReadyStatusForSupplier(line: any, next: any) {
-  if (next.status !== 'ready') return next;
-  if (line.supplierId) return next;
-
-  return {
-    ...next,
-    status: 'pending_supplier',
-    errorCode: 'supplier_not_reconciled',
-    errorMessage: 'Fornecedor do documento não conciliado',
-  };
 }
 
 async function markExistingAppliedDuplicates(lines: any[]) {
@@ -749,6 +795,7 @@ export async function createStockNfImportBatchFromFile(params: {
     const invoiceNumber = extractInvoiceNumber(identification);
     const matchedSupplierNote = matchSupplierNoteForLine({ invoiceNumber, movementAt }, supplierNotesLookup);
     const matchedSupplier = resolveSupplierFromLookup(matchedSupplierNote, lookup);
+    const supplierReconciliation = buildSupplierReconciliationState(matchedSupplier);
 
     const sourceFingerprint = hashFingerprint({
       sourceSystem: SOURCE_SYSTEM,
@@ -778,6 +825,7 @@ export async function createStockNfImportBatchFromFile(params: {
         supplierNameNormalized: matchedSupplier.supplierNameNormalized,
         supplierCnpj: matchedSupplier.supplierCnpj,
         supplierMatchSource: matchedSupplier.supplierMatchSource,
+        ...supplierReconciliation,
         qtyEntry: entry.quantity,
         unitEntry: entry.unit,
         qtyConsumption: consumption.quantity,
@@ -852,6 +900,8 @@ export async function createStockNfImportBatchFromFile(params: {
       status: derivePreApplyBatchStatus(summary),
       originalFileName: params.fileName,
       worksheetName: sheetName,
+      supplierNotesFileName: params.supplierNotesFileName || null,
+      supplierNotesAttachedAt: params.supplierNotesFileName || supplierNotes.length > 0 ? new Date() : null,
       periodStart,
       periodEnd,
       uploadedBy: params.uploadedBy || null,
@@ -879,6 +929,9 @@ export async function createStockNfImportBatchFromFile(params: {
           supplierNameNormalized: line.supplierNameNormalized || null,
           supplierCnpj: line.supplierCnpj || null,
           supplierMatchSource: line.supplierMatchSource || null,
+          supplierReconciliationStatus: line.supplierReconciliationStatus || 'not_started',
+          supplierReconciliationSource: line.supplierReconciliationSource || null,
+          supplierReconciliationAt: line.supplierReconciliationAt || null,
           qtyEntry: line.qtyEntry,
           unitEntry: line.unitEntry || null,
           qtyConsumption: line.qtyConsumption,
@@ -1047,6 +1100,7 @@ export async function createStockNfImportBatchFromVisionPayload(params: {
       },
       lookup,
     );
+    const supplierReconciliation = buildSupplierReconciliationState(supplier);
     const qtyEntry = Number(rawLine.qtyEntry ?? NaN);
     const qtyConsumption = Number(rawLine.qtyConsumption ?? NaN);
     const costAmount = Number(rawLine.costAmount ?? NaN);
@@ -1083,6 +1137,7 @@ export async function createStockNfImportBatchFromVisionPayload(params: {
         supplierNameNormalized: supplier.supplierNameNormalized,
         supplierCnpj: supplier.supplierCnpj,
         supplierMatchSource: supplier.supplierMatchSource,
+        ...supplierReconciliation,
         qtyEntry: Number.isFinite(qtyEntry) ? qtyEntry : null,
         unitEntry: str(rawLine.unitEntry).toUpperCase() || null,
         qtyConsumption: Number.isFinite(qtyConsumption) ? qtyConsumption : null,
@@ -1164,6 +1219,8 @@ export async function createStockNfImportBatchFromVisionPayload(params: {
       status: derivePreApplyBatchStatus(summary),
       originalFileName: str(params.originalFileName) || 'chatgpt-photo-import.json',
       worksheetName: str(params.worksheetName) || 'chatgpt-vision',
+      supplierNotesFileName: null,
+      supplierNotesAttachedAt: null,
       periodStart,
       periodEnd,
       uploadedBy: params.uploadedBy || null,
@@ -1188,6 +1245,9 @@ export async function createStockNfImportBatchFromVisionPayload(params: {
           supplierNameNormalized: line.supplierNameNormalized || null,
           supplierCnpj: line.supplierCnpj || null,
           supplierMatchSource: line.supplierMatchSource || null,
+          supplierReconciliationStatus: line.supplierReconciliationStatus || 'not_started',
+          supplierReconciliationSource: line.supplierReconciliationSource || null,
+          supplierReconciliationAt: line.supplierReconciliationAt || null,
           qtyEntry: line.qtyEntry,
           unitEntry: line.unitEntry || null,
           qtyConsumption: line.qtyConsumption,
@@ -1217,6 +1277,100 @@ export async function createStockNfImportBatchFromVisionPayload(params: {
   });
 
   return { batchId: batch.id, summary };
+}
+
+export async function reconcileStockNfImportBatchSuppliersFromFile(params: {
+  batchId: string;
+  fileName?: string | null;
+  fileBuffer: Buffer;
+}) {
+  const db = prismaClient as any;
+  const batch = await db.stockNfImportBatch.findUnique({ where: { id: params.batchId }, select: { id: true, notes: true } });
+  if (!batch) throw new Error('Lote não encontrado');
+
+  const supplierNotes = parseSupplierNotesJson(params.fileBuffer || null);
+  if (supplierNotes.length <= 0) {
+    throw new Error('JSON sem notas válidas para conciliar');
+  }
+
+  const supplierNotesLookup = buildSupplierNotesLookup(supplierNotes);
+  const [lines, lookup] = await Promise.all([
+    db.stockNfImportBatchLine.findMany({ where: { batchId: params.batchId }, orderBy: [{ rowNumber: 'asc' }] }),
+    loadItemsAndAliases(),
+  ]);
+
+  let matched = 0;
+  let unmatched = 0;
+  let untouched = 0;
+
+  for (const line of lines) {
+    if (str(line.supplierReconciliationStatus).toLowerCase() === 'manual') {
+      untouched += 1;
+      continue;
+    }
+
+    const matchedSupplierNote = matchSupplierNoteForLine(
+      { invoiceNumber: line.invoiceNumber, movementAt: line.movementAt },
+      supplierNotesLookup,
+    );
+
+    if (!matchedSupplierNote) {
+      if (!lineHasSupplierReconciled(line) && !str(line.supplierName) && !str(line.supplierCnpj)) {
+        await db.stockNfImportBatchLine.update({
+          where: { id: line.id },
+          data: {
+            supplierReconciliationStatus: 'not_started',
+            supplierReconciliationSource: null,
+            supplierReconciliationAt: null,
+          },
+        });
+      }
+      untouched += 1;
+      continue;
+    }
+
+    const supplier = resolveSupplierFromLookup(matchedSupplierNote, lookup);
+    const supplierReconciliation = buildSupplierReconciliationState(supplier);
+    await db.stockNfImportBatchLine.update({
+      where: { id: line.id },
+      data: {
+        supplierId: supplier.supplierId || null,
+        supplierName: supplier.supplierName || null,
+        supplierNameNormalized: supplier.supplierNameNormalized || null,
+        supplierCnpj: supplier.supplierCnpj || null,
+        supplierMatchSource: supplier.supplierMatchSource || null,
+        supplierReconciliationStatus: supplierReconciliation.supplierReconciliationStatus,
+        supplierReconciliationSource: supplierReconciliation.supplierReconciliationSource,
+        supplierReconciliationAt: supplierReconciliation.supplierReconciliationAt,
+        rawData:
+          typeof line.rawData === 'object' && line.rawData && !Array.isArray(line.rawData)
+            ? {
+                ...(line.rawData as Record<string, unknown>),
+                supplierNote: matchedSupplierNote.raw || null,
+              }
+            : line.rawData,
+      },
+    });
+
+    if (lineHasSupplierReconciled({ ...line, ...supplierReconciliation, supplierId: supplier.supplierId })) {
+      matched += 1;
+    } else {
+      unmatched += 1;
+    }
+  }
+
+  const notesLabel = str(params.fileName) || 'arquivo informado';
+  await db.stockNfImportBatch.update({
+    where: { id: params.batchId },
+    data: {
+      supplierNotesFileName: notesLabel,
+      supplierNotesAttachedAt: new Date(),
+      notes: `JSON de notas vinculado: ${notesLabel}`,
+    },
+  });
+
+  const summary = await recomputeBatchLines(params.batchId);
+  return { summary, matched, unmatched, untouched };
 }
 
 async function recomputeBatchLines(batchId: string) {
@@ -1275,7 +1429,7 @@ async function recomputeBatchLines(batchId: string) {
           };
         } else {
           const conv = await resolveConversionForLine(line, item);
-          next = finalizeReadyStatusForSupplier(line, {
+          next = {
             ...next,
             mappedItemName: item.name,
             status: conv.status,
@@ -1285,7 +1439,7 @@ async function recomputeBatchLines(batchId: string) {
             convertedCostAmount: (conv as any).convertedCostAmount ?? null,
             conversionSource: (conv as any).conversionSource ?? null,
             conversionFactorUsed: (conv as any).conversionFactorUsed ?? null,
-          });
+          };
         }
       } else {
         const auto = chooseAutoMapping(line.ingredientName, lookup);
@@ -1310,7 +1464,7 @@ async function recomputeBatchLines(batchId: string) {
             mappingSource: 'exact',
           };
           const conv = await resolveConversionForLine(working, auto.item);
-          next = finalizeReadyStatusForSupplier(line, {
+          next = {
             ...next,
             mappedItemId: auto.item.id,
             mappedItemName: auto.item.name,
@@ -1322,7 +1476,7 @@ async function recomputeBatchLines(batchId: string) {
             convertedCostAmount: (conv as any).convertedCostAmount ?? null,
             conversionSource: (conv as any).conversionSource ?? null,
             conversionFactorUsed: (conv as any).conversionFactorUsed ?? null,
-          });
+          };
         }
       }
     }
@@ -1399,13 +1553,28 @@ async function ensureSyntheticInvoiceNumbersForVisionBatch(batchId: string) {
 
 export async function refreshBatchSummary(batchId: string) {
   const db = prismaClient as any;
-  const lines = await db.stockNfImportBatchLine.findMany({ where: { batchId }, select: { status: true } });
+  const lines = await db.stockNfImportBatchLine.findMany({
+    where: { batchId },
+    select: {
+      status: true,
+      invoiceNumber: true,
+      supplierId: true,
+      supplierReconciliationStatus: true,
+    },
+  });
   const summary = summarizeLines(lines);
 
   const batch = await db.stockNfImportBatch.findUnique({ where: { id: batchId }, select: { appliedAt: true, rolledBackAt: true } });
   let status = derivePreApplyBatchStatus(summary);
   if (batch?.appliedAt && !batch?.rolledBackAt) {
-    status = summary.ready > 0 || summary.pendingMapping > 0 || summary.pendingSupplier > 0 || summary.pendingConversion > 0 || summary.error > 0 ? 'partial' : 'applied';
+    status =
+      summary.readyToApply > 0 ||
+      summary.pendingMapping > 0 ||
+      summary.pendingSupplier > 0 ||
+      summary.pendingConversion > 0 ||
+      summary.error > 0
+        ? 'partial'
+        : 'applied';
   }
   if (batch?.rolledBackAt) {
     status = 'rolled_back';
@@ -1450,7 +1619,7 @@ export async function mapBatchLinesToItem(params: {
     const conv = await resolveConversionForLine({ ...line, mappedItemId: item.id }, item);
     await db.stockNfImportBatchLine.update({
       where: { id: line.id },
-      data: finalizeReadyStatusForSupplier(line, {
+      data: {
         mappedItemId: item.id,
         mappedItemName: item.name,
         mappingSource: 'manual',
@@ -1461,7 +1630,7 @@ export async function mapBatchLinesToItem(params: {
         convertedCostAmount: (conv as any).convertedCostAmount ?? null,
         conversionSource: (conv as any).conversionSource ?? null,
         conversionFactorUsed: (conv as any).conversionFactorUsed ?? null,
-      }),
+      },
     });
   }
 
@@ -1558,144 +1727,259 @@ async function getBatchReadyLines(batchId: string) {
   });
 }
 
-export async function applyStockNfImportBatch(params: { batchId: string; actor?: string | null }) {
+async function applySingleStockNfImportBatchLine(params: { batchId: string; actor?: string | null; line: any }) {
+  const db = prismaClient as any;
+  const line = params.line;
+
+  if (await hasActiveAppliedFingerprint(line.sourceFingerprint)) {
+    await db.stockNfImportBatchLine.update({
+      where: { id: line.id },
+      data: {
+        status: 'skipped_duplicate',
+        errorCode: 'duplicate_already_applied',
+        errorMessage: 'Linha já aplicada em outro lote',
+      },
+    });
+    return { applied: 0, errors: 0, processed: 1 };
+  }
+
+  if (!lineHasSupplierReconciled(line)) {
+    await db.stockNfImportBatchLine.update({
+      where: { id: line.id },
+      data: {
+        status: 'error',
+        errorCode: 'supplier_not_reconciled_apply',
+        errorMessage: 'Fornecedor do documento ainda não foi conciliado para aplicação',
+      },
+    });
+    return { applied: 0, errors: 1, processed: 1 };
+  }
+
+  const item = await db.item.findUnique({
+    where: { id: line.mappedItemId },
+    select: { id: true, name: true },
+  });
+  if (!item) {
+    await db.stockNfImportBatchLine.update({
+      where: { id: line.id },
+      data: { status: 'error', errorCode: 'item_missing_apply', errorMessage: 'Item não encontrado na aplicação' },
+    });
+    return { applied: 0, errors: 1, processed: 1 };
+  }
+
+  const baseVar = await itemVariationPrismaEntity.findPrimaryVariationForItem(item.id, {
+    ensureBaseIfMissing: true,
+  });
+  if (!baseVar?.id) {
+    await db.stockNfImportBatchLine.update({
+      where: { id: line.id },
+      data: { status: 'error', errorCode: 'item_variation_missing_apply', errorMessage: 'Nenhuma variação disponível para aplicar o custo' },
+    });
+    return { applied: 0, errors: 1, processed: 1 };
+  }
+
+  const currentCost = await db.itemCostVariation.findUnique({ where: { itemVariationId: baseVar.id } });
+  const nextCost = Number(line.convertedCostAmount ?? NaN);
+  if (!(nextCost > 0)) {
+    await db.stockNfImportBatchLine.update({
+      where: { id: line.id },
+      data: { status: 'error', errorCode: 'invalid_converted_cost', errorMessage: 'Custo convertido inválido' },
+    });
+    return { applied: 0, errors: 1, processed: 1 };
+  }
+
+  await itemCostVariationPrismaEntity.setCurrentCost({
+    itemVariationId: baseVar.id,
+    costAmount: nextCost,
+    unit: line.targetUnit || line.movementUnit || null,
+    source: 'import',
+    referenceType: COST_REFERENCE_TYPE_LINE,
+    referenceId: line.id,
+    validFrom: line.movementAt || new Date(),
+    updatedBy: params.actor || null,
+    metadata: {
+      importBatchId: params.batchId,
+      importLineId: line.id,
+      sourceSystem: SOURCE_SYSTEM,
+      sourceType: SOURCE_TYPE,
+      ingredientName: line.ingredientName,
+      invoiceNumber: line.invoiceNumber,
+      supplierId: line.supplierId,
+      supplierName: line.supplierName,
+      supplierCnpj: line.supplierCnpj,
+      supplierMatchSource: line.supplierMatchSource,
+      movementUnit: line.movementUnit,
+      targetUnit: line.targetUnit,
+      conversionSource: line.conversionSource,
+      conversionFactorUsed: line.conversionFactorUsed,
+      qtyEntry: line.qtyEntry,
+      qtyConsumption: line.qtyConsumption,
+      rawCostAmount: line.costAmount,
+      rawCostTotalAmount: line.costTotalAmount,
+      sourceFingerprint: line.sourceFingerprint,
+    },
+  });
+
+  const appliedChange = await db.stockNfImportAppliedChange.create({
+    data: {
+      batchId: params.batchId,
+      lineId: line.id,
+      itemId: item.id,
+      itemVariationId: baseVar.id,
+      previousCostVariationId: currentCost?.id || null,
+      previousCostAmount: currentCost?.costAmount ?? null,
+      previousCostUnit: currentCost?.unit ?? null,
+      newCostAmount: nextCost,
+      newCostUnit: line.targetUnit || line.movementUnit || null,
+      movementUnit: line.movementUnit || null,
+      conversionSource: line.conversionSource || null,
+      conversionFactorUsed: line.conversionFactorUsed ?? null,
+      invoiceNumber: line.invoiceNumber || null,
+      supplierId: line.supplierId || null,
+      supplierName: line.supplierName || null,
+      supplierCnpj: line.supplierCnpj || null,
+      movementAt: line.movementAt || null,
+      appliedBy: params.actor || null,
+      metadata: {
+        ingredientName: line.ingredientName,
+        sourceFingerprint: line.sourceFingerprint,
+        rowNumber: line.rowNumber,
+      },
+    },
+  });
+
+  await enqueueAsyncJob({
+    type: ASYNC_JOB_TYPE.costImpactRecalc,
+    dedupeKey: `cost_impact_recalc:item:${item.id}`,
+    payload: {
+      itemId: item.id,
+      sourceType: 'stock-nf-import',
+      sourceRefId: appliedChange.id,
+      updatedBy: params.actor || 'system:stock-nf-import',
+      batchId: params.batchId,
+      lineId: line.id,
+    },
+    priority: 50,
+  });
+
+  await db.stockNfImportBatchLine.update({
+    where: { id: line.id },
+    data: {
+      status: 'applied',
+      appliedAt: new Date(),
+      errorCode: null,
+      errorMessage: null,
+    },
+  });
+  return { applied: 1, errors: 0, processed: 1 };
+}
+
+function batchApplyProgressFromBatch(batch: any, summary?: BatchSummary | null): BatchApplyProgress {
+  return {
+    status: (String(batch?.applyStatus || 'idle') as BatchApplyProgress['status']),
+    processedCount: Number(batch?.applyProcessedCount || 0),
+    errorCount: Number(batch?.applyErrorCount || 0),
+    totalCount: Number(batch?.applyTotalCount || 0),
+    remainingCount: Math.max(0, Number(summary?.readyToApply ?? 0)),
+    message: batch?.applyMessage ? String(batch.applyMessage) : null,
+    startedAt: batch?.applyStartedAt || null,
+    finishedAt: batch?.applyFinishedAt || null,
+  };
+}
+
+export async function startStockNfImportBatchApply(params: { batchId: string; actor?: string | null }) {
+  const db = prismaClient as any;
+  const batch = await db.stockNfImportBatch.findUnique({ where: { id: params.batchId } });
+  if (!batch) throw new Error('Lote não encontrado');
+  if (batch.rolledBackAt) throw new Error('Lote já foi revertido');
+  if (String(batch.applyStatus || 'idle') === 'applying') {
+    const summary = await refreshBatchSummary(params.batchId);
+    return batchApplyProgressFromBatch(batch, summary);
+  }
+
+  await recomputeBatchLines(params.batchId);
+  const readyLines = await getBatchReadyLines(params.batchId);
+  const startedAt = new Date();
+
+  if (readyLines.length <= 0) {
+    await db.stockNfImportBatch.update({
+      where: { id: params.batchId },
+      data: {
+        applyStatus: 'completed',
+        applyStartedAt: startedAt,
+        applyFinishedAt: startedAt,
+        applyProcessedCount: 0,
+        applyErrorCount: 0,
+        applyTotalCount: 0,
+        applyMessage: 'Nenhuma linha pronta para aplicar.',
+      },
+    });
+    const refreshedBatch = await db.stockNfImportBatch.findUnique({ where: { id: params.batchId } });
+    const summary = await refreshBatchSummary(params.batchId);
+    return batchApplyProgressFromBatch(refreshedBatch, summary);
+  }
+
+  await db.stockNfImportBatch.update({
+    where: { id: params.batchId },
+    data: {
+      applyStatus: 'applying',
+      applyStartedAt: startedAt,
+      applyFinishedAt: null,
+      applyProcessedCount: 0,
+      applyErrorCount: 0,
+      applyTotalCount: readyLines.length,
+      applyMessage: `Aplicando ${readyLines.length} linha(s) conciliada(s)...`,
+    },
+  });
+
+  const refreshedBatch = await db.stockNfImportBatch.findUnique({ where: { id: params.batchId } });
+  const summary = await refreshBatchSummary(params.batchId);
+  return batchApplyProgressFromBatch(refreshedBatch, summary);
+}
+
+export async function applyStockNfImportBatchStep(params: { batchId: string; actor?: string | null; limit?: number }) {
   const db = prismaClient as any;
   const batch = await db.stockNfImportBatch.findUnique({ where: { id: params.batchId } });
   if (!batch) throw new Error('Lote não encontrado');
   if (batch.rolledBackAt) throw new Error('Lote já foi revertido');
 
-  await recomputeBatchLines(params.batchId);
-  const readyLines = await getBatchReadyLines(params.batchId);
+  if (String(batch.applyStatus || 'idle') !== 'applying') {
+    const summary = await refreshBatchSummary(params.batchId);
+    return {
+      done: String(batch.applyStatus || 'idle') !== 'applying',
+      progress: batchApplyProgressFromBatch(batch, summary),
+      summary,
+    };
+  }
+
+  const limit = Math.max(1, Math.min(25, Math.floor(Number(params.limit || 5))));
+  const readyLines = (await getBatchReadyLines(params.batchId)).slice(0, limit);
+
+  if (readyLines.length <= 0) {
+    await db.stockNfImportBatch.update({
+      where: { id: params.batchId },
+      data: {
+        applyStatus: 'completed',
+        applyFinishedAt: new Date(),
+        applyMessage: 'Aplicação concluída.',
+        appliedAt: new Date(),
+      },
+    });
+    const refreshedBatch = await db.stockNfImportBatch.findUnique({ where: { id: params.batchId } });
+    const summary = await refreshBatchSummary(params.batchId);
+    return { done: true, progress: batchApplyProgressFromBatch(refreshedBatch, summary), summary };
+  }
+
   let applied = 0;
   let errors = 0;
+  let processed = 0;
 
   for (const line of readyLines) {
     try {
-      if (await hasActiveAppliedFingerprint(line.sourceFingerprint)) {
-        await db.stockNfImportBatchLine.update({
-          where: { id: line.id },
-          data: {
-            status: 'skipped_duplicate',
-            errorCode: 'duplicate_already_applied',
-            errorMessage: 'Linha já aplicada em outro lote',
-          },
-        });
-        continue;
-      }
-
-      const item = await db.item.findUnique({
-        where: { id: line.mappedItemId },
-        select: { id: true, name: true },
-      });
-      if (!item) {
-        await db.stockNfImportBatchLine.update({
-          where: { id: line.id },
-          data: { status: 'error', errorCode: 'item_missing_apply', errorMessage: 'Item não encontrado na aplicação' },
-        });
-        errors += 1;
-        continue;
-      }
-
-      const baseVar = await itemVariationPrismaEntity.findPrimaryVariationForItem(item.id, {
-        ensureBaseIfMissing: true,
-      });
-      if (!baseVar?.id) {
-        await db.stockNfImportBatchLine.update({
-          where: { id: line.id },
-          data: { status: 'error', errorCode: 'item_variation_missing_apply', errorMessage: 'Nenhuma variação disponível para aplicar o custo' },
-        });
-        errors += 1;
-        continue;
-      }
-      const currentCost = await db.itemCostVariation.findUnique({ where: { itemVariationId: baseVar.id } });
-      const nextCost = Number(line.convertedCostAmount ?? NaN);
-      if (!(nextCost > 0)) {
-        await db.stockNfImportBatchLine.update({
-          where: { id: line.id },
-          data: { status: 'error', errorCode: 'invalid_converted_cost', errorMessage: 'Custo convertido inválido' },
-        });
-        errors += 1;
-        continue;
-      }
-
-      await itemCostVariationPrismaEntity.setCurrentCost({
-        itemVariationId: baseVar.id,
-        costAmount: nextCost,
-        unit: line.targetUnit || line.movementUnit || null,
-        source: 'import',
-        referenceType: COST_REFERENCE_TYPE_LINE,
-        referenceId: line.id,
-        validFrom: line.movementAt || new Date(),
-        updatedBy: params.actor || null,
-        metadata: {
-          importBatchId: params.batchId,
-          importLineId: line.id,
-          sourceSystem: SOURCE_SYSTEM,
-          sourceType: SOURCE_TYPE,
-          ingredientName: line.ingredientName,
-          invoiceNumber: line.invoiceNumber,
-          supplierId: line.supplierId,
-          supplierName: line.supplierName,
-          supplierCnpj: line.supplierCnpj,
-          supplierMatchSource: line.supplierMatchSource,
-          movementUnit: line.movementUnit,
-          targetUnit: line.targetUnit,
-          conversionSource: line.conversionSource,
-          conversionFactorUsed: line.conversionFactorUsed,
-          qtyEntry: line.qtyEntry,
-          qtyConsumption: line.qtyConsumption,
-          rawCostAmount: line.costAmount,
-          rawCostTotalAmount: line.costTotalAmount,
-          sourceFingerprint: line.sourceFingerprint,
-        },
-      });
-
-      const appliedChange = await db.stockNfImportAppliedChange.create({
-        data: {
-          batchId: params.batchId,
-          lineId: line.id,
-          itemId: item.id,
-          itemVariationId: baseVar.id,
-          previousCostVariationId: currentCost?.id || null,
-          previousCostAmount: currentCost?.costAmount ?? null,
-          previousCostUnit: currentCost?.unit ?? null,
-          newCostAmount: nextCost,
-          newCostUnit: line.targetUnit || line.movementUnit || null,
-          movementUnit: line.movementUnit || null,
-          conversionSource: line.conversionSource || null,
-          conversionFactorUsed: line.conversionFactorUsed ?? null,
-          invoiceNumber: line.invoiceNumber || null,
-          supplierId: line.supplierId || null,
-          supplierName: line.supplierName || null,
-          supplierCnpj: line.supplierCnpj || null,
-          movementAt: line.movementAt || null,
-          appliedBy: params.actor || null,
-          metadata: {
-            ingredientName: line.ingredientName,
-            sourceFingerprint: line.sourceFingerprint,
-            rowNumber: line.rowNumber,
-          },
-        },
-      });
-
-      await runCostImpactPipelineForItemChange({
-        db,
-        itemId: item.id,
-        sourceType: 'stock-nf-import',
-        sourceRefId: appliedChange.id,
-        updatedBy: params.actor || 'system:stock-nf-import',
-      });
-
-      await db.stockNfImportBatchLine.update({
-        where: { id: line.id },
-        data: {
-          status: 'applied',
-          appliedAt: new Date(),
-          errorCode: null,
-          errorMessage: null,
-        },
-      });
-      applied += 1;
+      const result = await applySingleStockNfImportBatchLine({ batchId: params.batchId, actor: params.actor, line });
+      applied += result.applied;
+      errors += result.errors;
+      processed += result.processed;
     } catch (error) {
       await db.stockNfImportBatchLine.update({
         where: { id: line.id },
@@ -1705,17 +1989,65 @@ export async function applyStockNfImportBatch(params: { batchId: string; actor?:
           errorMessage: error instanceof Error ? error.message : 'Erro ao aplicar linha',
         },
       });
+      processed += 1;
       errors += 1;
     }
   }
 
   await db.stockNfImportBatch.update({
     where: { id: params.batchId },
-    data: { appliedAt: new Date() },
+    data: {
+      applyProcessedCount: { increment: processed },
+      applyErrorCount: { increment: errors },
+      applyMessage: applied > 0 || errors > 0
+        ? `Processadas ${processed} linha(s) nesta etapa.`
+        : 'Etapa concluída sem alterações.',
+    },
   });
+
+  const summary = await refreshBatchSummary(params.batchId);
+  const remainingReadyLines = await getBatchReadyLines(params.batchId);
+  const done = remainingReadyLines.length <= 0;
+
+  if (done) {
+    await db.stockNfImportBatch.update({
+      where: { id: params.batchId },
+      data: {
+        applyStatus: 'completed',
+        applyFinishedAt: new Date(),
+        applyMessage: errors > 0
+          ? 'Aplicação concluída com algumas linhas em erro.'
+          : 'Aplicação concluída.',
+        appliedAt: new Date(),
+      },
+    });
+  }
+
+  const refreshedBatch = await db.stockNfImportBatch.findUnique({ where: { id: params.batchId } });
+
+  return {
+    done,
+    applied,
+    errors,
+    processed,
+    progress: batchApplyProgressFromBatch(refreshedBatch, summary),
+    summary,
+  };
+}
+
+export async function applyStockNfImportBatch(params: { batchId: string; actor?: string | null }) {
+  await startStockNfImportBatchApply(params);
+  let lastStep = await applyStockNfImportBatchStep({ ...params, limit: 5 });
+  while (!lastStep.done) {
+    lastStep = await applyStockNfImportBatchStep({ ...params, limit: 5 });
+  }
   const summary = await refreshBatchSummary(params.batchId);
 
-  return { applied, errors, summary };
+  return {
+    applied: Number(lastStep.progress.processedCount || 0) - Number(lastStep.progress.errorCount || 0),
+    errors: Number(lastStep.progress.errorCount || 0),
+    summary,
+  };
 }
 
 export async function rollbackStockNfImportBatch(params: { batchId: string; actor?: string | null }) {
@@ -1872,6 +2204,8 @@ export async function listStockNfImportBatches(limit = 30) {
       status: true,
       originalFileName: true,
       worksheetName: true,
+      supplierNotesFileName: true,
+      supplierNotesAttachedAt: true,
       periodStart: true,
       periodEnd: true,
       createdAt: true,

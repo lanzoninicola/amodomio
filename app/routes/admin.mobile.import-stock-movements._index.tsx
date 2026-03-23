@@ -23,8 +23,9 @@ function formatDate(value: any) {
 function summaryFromAny(summary: any) {
   return {
     total: Number(summary?.total || 0),
-    ready: Number(summary?.ready || 0),
+    ready: Number(summary?.readyToApply || summary?.ready || 0),
     pendingMapping: Number(summary?.pendingMapping || 0),
+    pendingSupplier: Number(summary?.pendingSupplier || 0),
     pendingConversion: Number(summary?.pendingConversion || 0),
     error: Number(summary?.error || 0),
   };
@@ -158,7 +159,7 @@ export default function AdminMobileImportStockMovementsIndexRoute() {
                 {[
                   ["Total", summary.total],
                   ["Prontas", summary.ready],
-                  ["Pend.", summary.pendingMapping + summary.pendingConversion],
+                  ["Pend.", summary.pendingMapping + summary.pendingConversion + summary.pendingSupplier],
                   ["Erros", summary.error],
                 ].map(([label, value]) => (
                   <div key={String(label)}>
@@ -174,12 +175,19 @@ export default function AdminMobileImportStockMovementsIndexRoute() {
                   batchName={String(batch.name || "sem nome")}
                   status={String(batch.status || "")}
                 />
-                <Button asChild variant="outline" size="sm" className="h-9 rounded-xl bg-slate-100 hover:bg-slate-200">
-                  <Link to={`/admin/mobile/import-stock-movements/${batch.id}`}>
-                    <ExternalLink className="mr-2 h-4 w-4" />
-                    Abrir lote
-                  </Link>
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button asChild variant="outline" size="sm" className="h-9 rounded-xl border-amber-200 bg-amber-50 text-amber-900 hover:bg-amber-100">
+                    <Link to={`/admin/mobile/import-stock-movements/${batch.id}/supplier-reconciliation`}>
+                      Conciliar
+                    </Link>
+                  </Button>
+                  <Button asChild variant="outline" size="sm" className="h-9 rounded-xl bg-slate-100 hover:bg-slate-200">
+                    <Link to={`/admin/mobile/import-stock-movements/${batch.id}`}>
+                      <ExternalLink className="mr-2 h-4 w-4" />
+                      Abrir lote
+                    </Link>
+                  </Button>
+                </div>
               </div>
             </article>
           );
