@@ -16,7 +16,7 @@ import {
 import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
 import { authenticator } from '~/domain/auth/google.server';
-import { createStockNfImportBatchFromFile } from '~/domain/stock-nf-import/stock-nf-import.server';
+import { createStockMovementImportBatchFromFile } from '~/domain/stock-movement/stock-movement-import.server';
 import { badRequest, serverError } from '~/utils/http-response.server';
 import { cn } from '~/lib/utils';
 
@@ -40,7 +40,7 @@ export async function action({ request }: ActionFunctionArgs) {
       return badRequest('Arquivo auxiliar inválido. Envie um .json com as notas do período');
     }
 
-    const result = await createStockNfImportBatchFromFile({
+    const result = await createStockMovementImportBatchFromFile({
       fileName: file.name,
       fileBuffer: Buffer.from(await file.arrayBuffer()),
       batchName,

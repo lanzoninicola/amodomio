@@ -102,7 +102,7 @@ describe("runCostImpactPipelineForItemChange", () => {
     const result = await runCostImpactPipelineForItemChange({
       db,
       itemId: "item-1",
-      sourceType: "stock-nf-import",
+      sourceType: "stock-movement-import",
       sourceRefId: "applied-change-1",
       updatedBy: "user:test",
     });

@@ -1,12 +1,6 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { ok, serverError, unauthorized } from "~/utils/http-response.server";
-import { runPendingAsyncJobsBatch } from "~/domain/async-jobs/async-jobs.server";
-
-function getCronLimit() {
-  const raw = Number(process.env.ASYNC_JOBS_CRON_LIMIT || 25);
-  if (!Number.isFinite(raw)) return 25;
-  return Math.max(1, Math.min(100, Math.floor(raw)));
-}
+import { getCronBatchLimit, runPendingAsyncJobsBatch } from "~/domain/async-jobs/async-jobs.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   try {
@@ -18,14 +12,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
     }
 
     const result = await runPendingAsyncJobsBatch({
-      limit: getCronLimit(),
+      limit: getCronBatchLimit(),
       lockedBy: "vercel-cron",
+      maxLimit: getCronBatchLimit(),
     });
 
     return ok({
       message: "Cron executado com sucesso",
       ...result,
-      limit: getCronLimit(),
+      limit: getCronBatchLimit(),
       triggeredAt: new Date().toISOString(),
     });
   } catch (error) {

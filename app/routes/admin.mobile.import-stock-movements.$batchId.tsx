@@ -60,12 +60,12 @@ function summaryFromAny(summary: any) {
   return {
     total: Number(summary?.total || 0),
     ready: Number(summary?.ready || 0),
-    readyToApply: Number(summary?.readyToApply || 0),
+    readyToImport: Number(summary?.readyToImport || 0),
     invalid: Number(summary?.invalid || 0),
     pendingMapping: Number(summary?.pendingMapping || 0),
     pendingSupplier: Number(summary?.pendingSupplier || 0),
     pendingConversion: Number(summary?.pendingConversion || 0),
-    applied: Number(summary?.applied || 0),
+    imported: Number(summary?.imported || 0),
     ignored: Number(summary?.ignored || 0),
     skippedDuplicate: Number(summary?.skippedDuplicate || 0),
     error: Number(summary?.error || 0),
@@ -83,7 +83,7 @@ function statusBadgeClass(status: string) {
   switch (status) {
     case "ready":
       return "border-emerald-200 bg-emerald-50 text-emerald-700";
-    case "applied":
+    case "imported":
       return "border-blue-200 bg-blue-50 text-blue-700";
     case "pending_mapping":
     case "pending_supplier":
@@ -117,8 +117,8 @@ function getStatusLabel(status: string) {
       return "Inválida";
     case "ready":
       return "Pronta";
-    case "applied":
-      return "Aplicada";
+    case "imported":
+      return "Importada";
     default:
       return status || "-";
   }
@@ -401,7 +401,7 @@ export default function AdminMobileImportStockMovementsBatchRoute() {
           {[
             ["Total", summary.total],
             ["Pend.", summary.pendingMapping + summary.pendingConversion + summary.pendingSupplier],
-            ["Prontas", summary.readyToApply],
+            ["Prontas", summary.readyToImport],
             ["Ign.", summary.ignored],
           ].map(([label, value]) => (
             <div key={String(label)}>
@@ -439,10 +439,10 @@ export default function AdminMobileImportStockMovementsBatchRoute() {
           </Button>
 
           <Form method="post">
-            <input type="hidden" name="_action" value="batch-apply" />
+            <input type="hidden" name="_action" value="batch-import" />
             <input type="hidden" name="batchId" value={selectedBatch.id} />
-            <Button type="submit" className="h-11 w-full rounded-xl bg-emerald-600 hover:bg-emerald-700" disabled={summary.readyToApply <= 0}>
-              Importar linhas conciliadas ({summary.readyToApply})
+            <Button type="submit" className="h-11 w-full rounded-xl bg-emerald-600 hover:bg-emerald-700" disabled={summary.readyToImport <= 0}>
+              Importar linhas conciliadas ({summary.readyToImport})
             </Button>
           </Form>
 

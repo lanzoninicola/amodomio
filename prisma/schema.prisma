@@ -184,8 +184,8 @@ model Item {
   RecipeIngredient RecipeIngredient[]
   ItemCostSheet ItemCostSheet[]
   ItemVariation ItemVariation[]
-  StockNfImportBatchLine StockNfImportBatchLine[]
-  StockNfImportAppliedChange StockNfImportAppliedChange[]
+  StockMovementImportBatchLine StockMovementImportBatchLine[]
+  StockMovement StockMovement[]
   ItemImportAlias ItemImportAlias[]
   CostImpactRunSource CostImpactRun[]
 
@@ -267,7 +267,7 @@ model ItemVariation {
   ItemCostVariation        ItemCostVariation?
   ItemCostVariationHistory ItemCostVariationHistory[]
   ItemCostSheetVariationComponent ItemCostSheetVariationComponent[]
-  StockNfImportAppliedChange StockNfImportAppliedChange[]
+  StockMovement               StockMovement[]
 
   @@unique([itemId, variationId], map: "item_variations_item_variation_unique")
   @@index([recipeId], map: "item_variations_recipe_id_idx")
@@ -376,8 +376,8 @@ model Supplier {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
   contacts    SupplierContact[]
-  StockNfImportBatchLine     StockNfImportBatchLine[]
-  StockNfImportAppliedChange StockNfImportAppliedChange[]
+  StockMovementImportBatchLine StockMovementImportBatchLine[]
+  StockMovement             StockMovement[]
 
   @@index([cnpj], map: "suppliers_cnpj_idx")
   @@index([name], map: "suppliers_name_idx")
@@ -2049,19 +2049,19 @@ model CrmCampaignSend {
   @@map("crm_campaign_send")
 }
 
-model StockNfImportBatch {
+model StockMovementImportBatch {
   id              String   @id @default(uuid())
   name            String
   sourceSystem    String   @default("saipos") @map("source_system")
   sourceType      String   @default("entrada_nf") @map("source_type")
-  status          String   @default("draft") // draft | validated | applied | rolled_back | partial | archived
-  applyStatus     String   @default("idle") @map("apply_status") // idle | applying | completed | failed
-  applyStartedAt  DateTime? @map("apply_started_at")
-  applyFinishedAt DateTime? @map("apply_finished_at")
-  applyProcessedCount Int @default(0) @map("apply_processed_count")
-  applyErrorCount Int @default(0) @map("apply_error_count")
-  applyTotalCount Int @default(0) @map("apply_total_count")
-  applyMessage    String?  @map("apply_message") @db.Text
+  status          String   @default("draft") // draft | validated | imported | rolled_back | partial | archived
+  importStatus     String   @default("idle") @map("import_status") // idle | importing | imported | failed
+  importStartedAt  DateTime? @map("import_started_at")
+  importFinishedAt DateTime? @map("import_finished_at")
+  importProcessedCount Int @default(0) @map("import_processed_count")
+  importErrorCount Int @default(0) @map("import_error_count")
+  importTotalCount Int @default(0) @map("import_total_count")
+  importMessage    String?  @map("import_message") @db.Text
   originalFileName String? @map("original_file_name")
   worksheetName   String?  @map("worksheet_name")
   supplierNotesFileName String? @map("supplier_notes_file_name")
@@ -2077,18 +2077,18 @@ model StockNfImportBatch {
   updatedAt       DateTime @default(now()) @updatedAt @map("updated_at")
   archivedAt      DateTime? @map("archived_at")
 
-  Lines          StockNfImportBatchLine[]
-  AppliedChanges StockNfImportAppliedChange[]
+  Lines          StockMovementImportBatchLine[]
+  StockMovements StockMovement[]
 
-  @@index([status, createdAt], map: "stock_nf_import_batches_status_created_at_idx")
-  @@map("stock_nf_import_batches")
+  @@index([status, createdAt], map: "stock_movement_import_batches_status_created_at_idx")
+  @@map("stock_movement_import_batches")
 }
 
-model StockNfImportBatchLine {
+model StockMovementImportBatchLine {
   id                        String   @id @default(uuid())
   batchId                   String   @map("batch_id")
   rowNumber                 Int      @map("row_number")
-  status                    String   @default("parsed") // parsed | invalid | pending_mapping | pending_conversion | ready | applied | skipped_duplicate | error
+  status                    String   @default("parsed") // parsed | invalid | pending_mapping | pending_conversion | ready | imported | skipped_duplicate | error
   errorCode                 String?  @map("error_code")
   errorMessage              String?  @map("error_message") @db.Text
   rawData                   Json?    @map("raw_data")
@@ -2130,19 +2130,19 @@ model StockNfImportBatchLine {
   createdAt                 DateTime @default(now()) @map("created_at")
   updatedAt                 DateTime @default(now()) @updatedAt @map("updated_at")
 
-  Batch           StockNfImportBatch            @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  Batch           StockMovementImportBatch      @relation(fields: [batchId], references: [id], onDelete: Cascade)
   MappedItem      Item?                         @relation(fields: [mappedItemId], references: [id], onDelete: SetNull)
   Supplier        Supplier?                     @relation(fields: [supplierId], references: [id], onDelete: SetNull)
-  AppliedChanges  StockNfImportAppliedChange[]
+  StockMovements  StockMovement[]
 
-  @@unique([batchId, rowNumber], map: "stock_nf_import_batch_lines_batch_row_unique")
-  @@unique([batchId, sourceFingerprint], map: "stock_nf_import_batch_lines_batch_fingerprint_unique")
-  @@index([batchId, status], map: "stock_nf_import_batch_lines_batch_status_idx")
-  @@index([ingredientNameNormalized], map: "stock_nf_import_batch_lines_ingredient_norm_idx")
-  @@index([sourceFingerprint], map: "stock_nf_import_batch_lines_fingerprint_idx")
-  @@index([mappedItemId], map: "stock_nf_import_batch_lines_mapped_item_idx")
-  @@index([supplierId], map: "stock_nf_import_batch_lines_supplier_idx")
-  @@map("stock_nf_import_batch_lines")
+  @@unique([batchId, rowNumber], map: "stock_movement_import_batch_lines_batch_row_unique")
+  @@unique([batchId, sourceFingerprint], map: "stock_movement_import_batch_lines_batch_fingerprint_unique")
+  @@index([batchId, status], map: "stock_movement_import_batch_lines_batch_status_idx")
+  @@index([ingredientNameNormalized], map: "stock_movement_import_batch_lines_ingredient_norm_idx")
+  @@index([sourceFingerprint], map: "stock_movement_import_batch_lines_fingerprint_idx")
+  @@index([mappedItemId], map: "stock_movement_import_batch_lines_mapped_item_idx")
+  @@index([supplierId], map: "stock_movement_import_batch_lines_supplier_idx")
+  @@map("stock_movement_import_batch_lines")
 }
 
 model AsyncJob {
@@ -2169,46 +2169,55 @@ model AsyncJob {
   @@map("async_jobs")
 }
 
-model StockNfImportAppliedChange {
-  id                     String   @id @default(uuid())
-  batchId                String   @map("batch_id")
-  lineId                 String   @map("line_id")
-  itemId                 String   @map("item_id")
-  itemVariationId        String   @map("item_variation_id")
-  previousCostVariationId String? @map("previous_cost_variation_id")
-  previousCostAmount     Float?   @map("previous_cost_amount")
-  previousCostUnit       String?  @map("previous_cost_unit")
-  newCostAmount          Float    @map("new_cost_amount")
-  newCostUnit            String?  @map("new_cost_unit")
-  movementUnit           String?  @map("movement_unit")
-  conversionSource       String?  @map("conversion_source")
-  conversionFactorUsed   Float?   @map("conversion_factor_used")
-  invoiceNumber          String?  @map("invoice_number")
-  supplierId             String?  @map("supplier_id")
-  supplierName           String?  @map("supplier_name")
-  supplierCnpj           String?  @map("supplier_cnpj")
-  movementAt             DateTime? @map("movement_at")
-  appliedBy              String?  @map("applied_by")
-  appliedAt              DateTime @default(now()) @map("applied_at")
-  rolledBackAt           DateTime? @map("rolled_back_at")
-  rollbackStatus         String?  @map("rollback_status") // success | conflict | error
-  rollbackMessage        String?  @map("rollback_message") @db.Text
-  metadata               Json?
-  createdAt              DateTime @default(now()) @map("created_at")
-  updatedAt              DateTime @default(now()) @updatedAt @map("updated_at")
+model StockMovement {
+  id                      String   @id @default(uuid())
+  direction               String   @default("entry")
+  movementType            String   @default("import") @map("movement_type")
+  originType              String?  @map("origin_type")
+  originRefId             String?  @map("origin_ref_id")
+  importBatchId           String?  @map("import_batch_id")
+  importLineId            String?  @map("import_line_id")
+  itemId                  String   @map("item_id")
+  itemVariationId         String   @map("item_variation_id")
+  supplierId              String?  @map("supplier_id")
+  quantityAmount          Float?   @map("quantity_amount")
+  quantityUnit            String?  @map("quantity_unit")
+  previousCostVariationId String?  @map("previous_cost_variation_id")
+  previousCostAmount      Float?   @map("previous_cost_amount")
+  previousCostUnit        String?  @map("previous_cost_unit")
+  newCostAmount           Float    @map("new_cost_amount")
+  newCostUnit             String?  @map("new_cost_unit")
+  movementUnit            String?  @map("movement_unit")
+  conversionSource        String?  @map("conversion_source")
+  conversionFactorUsed    Float?   @map("conversion_factor_used")
+  invoiceNumber           String?  @map("invoice_number")
+  supplierName            String?  @map("supplier_name")
+  supplierCnpj            String?  @map("supplier_cnpj")
+  movementAt              DateTime? @map("movement_at")
+  appliedBy               String?  @map("applied_by")
+  appliedAt               DateTime @default(now()) @map("applied_at")
+  deletedAt               DateTime? @map("deleted_at")
+  metadata                Json?
+  createdAt               DateTime @default(now()) @map("created_at")
+  updatedAt               DateTime @default(now()) @updatedAt @map("updated_at")
 
-  Batch  StockNfImportBatch     @relation(fields: [batchId], references: [id], onDelete: Cascade)
-  Line   StockNfImportBatchLine @relation(fields: [lineId], references: [id], onDelete: Cascade)
-  Item   Item                   @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  ItemVariation ItemVariation   @relation(fields: [itemVariationId], references: [id], onDelete: Cascade)
-  Supplier      Supplier?       @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  ImportBatch   StockMovementImportBatch?     @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
+  ImportLine    StockMovementImportBatchLine? @relation(fields: [importLineId], references: [id], onDelete: SetNull)
+  Item          Item                      @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  ItemVariation ItemVariation             @relation(fields: [itemVariationId], references: [id], onDelete: Cascade)
+  Supplier      Supplier?                 @relation(fields: [supplierId], references: [id], onDelete: SetNull)
 
-  @@unique([lineId], map: "stock_nf_import_applied_changes_line_unique")
-  @@index([batchId], map: "stock_nf_import_applied_changes_batch_idx")
-  @@index([itemId], map: "stock_nf_import_applied_changes_item_idx")
-  @@index([supplierId], map: "stock_nf_import_applied_changes_supplier_idx")
-  @@index([rolledBackAt], map: "stock_nf_import_applied_changes_rolled_back_at_idx")
-  @@map("stock_nf_import_applied_changes")
+  @@index([originType, originRefId], map: "stock_movements_origin_type_ref_idx")
+  @@index([importBatchId], map: "stock_movements_import_batch_idx")
+  @@index([importLineId], map: "stock_movements_import_line_idx")
+  @@index([direction], map: "stock_movements_direction_idx")
+  @@index([movementType], map: "stock_movements_type_idx")
+  @@index([itemId], map: "stock_movements_item_idx")
+  @@index([itemVariationId], map: "stock_movements_item_variation_idx")
+  @@index([supplierId], map: "stock_movements_supplier_idx")
+  @@index([deletedAt], map: "stock_movements_deleted_at_idx")
+  @@index([movementAt, appliedAt], map: "stock_movements_movement_applied_at_idx")
+  @@map("stock_movements")
 }
 
 model CostImpactRun {

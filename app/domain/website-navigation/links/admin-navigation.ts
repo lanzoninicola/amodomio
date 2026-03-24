@@ -1,13 +1,13 @@
 import WEBSITE_LINKS from "./website-links";
 import { WebsiteNavigationConfig } from "../types/navigation-types";
-import { Shield } from "lucide-react";
+import { House, Shield } from "lucide-react";
 import { todayLocalYMD } from "~/domain/kds";
 
 const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
   mainNav: [WEBSITE_LINKS.admin, WEBSITE_LINKS.website],
   sidebarNav: [
     {
-      title: "Iniçio",
+      title: "Fixados",
       items: [
         {
           title: "Pagina Inicial",
@@ -15,7 +15,7 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
           items: [],
           disabled: false,
           highlight: true,
-          icon: Shield,
+          icon: House,
         },
         {
           title: "Website",
@@ -181,6 +181,12 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
             {
               title: "Movimentações de estoque",
               href: "/admin/stock-movements",
+              items: [],
+              disabled: false,
+            },
+            {
+              title: "Histórico global de custos",
+              href: "/admin/stock-import-applied-changes",
               items: [],
               disabled: false,
             },

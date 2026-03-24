@@ -1,5 +1,13 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "app/routes/admin.async-jobs.tsx": {
+      "maxDuration": 10
+    },
+    "app/routes/api.async-jobs-cron.tsx": {
+      "maxDuration": 10
+    }
+  },
   "crons": [
     {
       "path": "/api/async-jobs-cron",

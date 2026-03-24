@@ -86,12 +86,12 @@ export const loader: LoaderFunction = async ({ request }: LoaderFunctionArgs) =>
 
     const slug = lastUrlSegment(request.url)
 
-    const [pinnedNav, pendingReplyAlerts] = isMobileRoute
-        ? [[], []]
+    const [pinnedNav, pendingReplyAlerts, topNavItems] = isMobileRoute
+        ? [[], [], []]
         : await Promise.all([
             prismaClient.adminNavigationClick.findMany({
                 where: { pinned: true },
-                select: { href: true },
+                select: { href: true, title: true, groupTitle: true },
                 orderBy: [{ lastClickedAt: "desc" }],
                 take: 50,
             }),
@@ -125,6 +125,13 @@ export const loader: LoaderFunction = async ({ request }: LoaderFunctionArgs) =>
                 ORDER BY le.created_at ASC
                 LIMIT 15
             `,
+            prismaClient.adminNavigationClick.findMany({
+                orderBy: [{ count: "desc" }, { lastClickedAt: "desc" }],
+                take: 8,
+            }).catch((error) => {
+                console.error("[admin.loader] erro ao buscar topNav", error);
+                return [];
+            }),
         ]);
 
     return ok({
@@ -134,6 +141,15 @@ export const loader: LoaderFunction = async ({ request }: LoaderFunctionArgs) =>
         prismaDbName,
         urlSegment: request.url,
         pinnedNavHrefs: pinnedNav.map((item) => item.href),
+        pinnedNavItems: pinnedNav.map((item) => ({ href: item.href, title: item.title, groupTitle: item.groupTitle })),
+        topNavItems: topNavItems.map((item) => ({
+            id: item.id,
+            href: item.href,
+            title: item.title,
+            count: item.count,
+            groupTitle: item.groupTitle ?? null,
+            pinned: item.pinned ?? false,
+        })),
         pendingReplyAlerts: pendingReplyAlerts.map((row) => ({
             customerId: row.customer_id,
             phoneE164: row.phone_e164,
@@ -158,6 +174,8 @@ export default function AdminOutlet() {
     const urlSegment = loaderData?.payload?.urlSegment
     const env = loaderData?.payload?.environment
     const pinnedNavHrefs = loaderData?.payload?.pinnedNavHrefs ?? [];
+    const pinnedNavItems = loaderData?.payload?.pinnedNavItems ?? [];
+    const topNavItems = loaderData?.payload?.topNavItems ?? [];
     const pendingReplyAlerts = (loaderData?.payload?.pendingReplyAlerts ?? []) as PendingReplyAlert[];
     const [isAlertsPanelOpen, setIsAlertsPanelOpen] = useState(false);
     const [panelPosition, setPanelPosition] = useState<{ x: number; y: number } | null>(null);
@@ -306,8 +324,8 @@ export default function AdminOutlet() {
     return (
         <SidebarProvider data-element="sidebar-provider">
             <RouteProgressBar />
-            <AdminSidebar navigationLinks={ADMIN_NAVIGATION_LINKS} pinnedHrefs={pinnedNavHrefs} />
-            <SidebarTrigger />
+            <AdminSidebar navigationLinks={ADMIN_NAVIGATION_LINKS} pinnedHrefs={pinnedNavHrefs} pinnedItems={pinnedNavItems} />
+            <SidebarTrigger className="hidden md:flex" />
             {pendingReplyAlerts.length > 0 && isAlertsPanelOpen ? (
                 <aside
                     ref={panelRef}
@@ -524,9 +542,9 @@ export default function AdminOutlet() {
                         <div className="h-6 md:h-7" aria-hidden />
                     </>
                 ) : null}
-                <AdminHeader slug={slug} urlSegment={urlSegment} />
+                <AdminHeader slug={slug} urlSegment={urlSegment} topNavItems={topNavItems} />
                 {/* {env === "development" && <EnvironmentAlert />} */}
-                <div className="mt-6 mr-4 md:mr-12" data-element="outer-div-admin-outlet">
+                <div className="mt-6 mx-4 md:mr-12" data-element="outer-div-admin-outlet">
                     <Outlet context={{
                         loggedUser,
                     }} />

@@ -9,14 +9,14 @@ import { Button } from "~/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "~/components/ui/collapsible";
 import { Input } from "~/components/ui/input";
 import { SearchableSelect, type SearchableSelectOption } from "~/components/ui/searchable-select";
-import { createStockNfImportBatchFromVisionPayload } from "~/domain/stock-nf-import/stock-nf-import.server";
+import { createStockMovementImportBatchFromVisionPayload } from "~/domain/stock-movement/stock-movement-import.server";
 import {
   DEFAULT_STOCK_PHOTO_CHATGPT_PROMPT_TEMPLATE,
   DEFAULT_STOCK_PHOTO_CHATGPT_RETURN_URL,
   STOCK_PHOTO_CHATGPT_PROMPT_SETTING_NAME,
   STOCK_PHOTO_CHATGPT_RETURN_URL_SETTING_NAME,
   STOCK_PHOTO_CHATGPT_SETTINGS_CONTEXT,
-} from "~/domain/stock-nf-import/stock-photo-chatgpt-settings";
+} from "~/domain/stock-movement/stock-photo-chatgpt-settings";
 import { supplierPrismaEntity } from "~/domain/supplier/supplier.prisma.entity.server";
 import prismaClient from "~/lib/prisma/client.server";
 import { badRequest, ok, serverError } from "~/utils/http-response.server";
@@ -100,6 +100,13 @@ function parseFlexibleDate(value: unknown) {
   const raw = str(value);
   if (!raw) return null;
 
+  const isoDateOnlyMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoDateOnlyMatch) {
+    const [, yyyy, mm, dd] = isoDateOnlyMatch;
+    const parsed = new Date(Number(yyyy), Number(mm) - 1, Number(dd), 12, 0, 0);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
   const iso = new Date(raw);
   if (!Number.isNaN(iso.getTime())) return iso;
 
@@ -109,6 +116,14 @@ function parseFlexibleDate(value: unknown) {
   const [, dd, mm, yyyy, hh = "00", mi = "00", ss = "00"] = match;
   const parsed = new Date(Number(yyyy), Number(mm) - 1, Number(dd), Number(hh), Number(mi), Number(ss));
   return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function formatDateInputValue(value: Date | null) {
+  if (!value) return "";
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function parseVisionResponse(value: string): ParsedVisionPayload {
@@ -232,6 +247,7 @@ export async function action({ request }: ActionFunctionArgs) {
     const actionName = str(formData.get("_action"));
     const chatGptResponse = str(formData.get("chatGptResponse"));
     const selectedSupplierName = str(formData.get("supplierName")) || null;
+    const manualMovementAt = parseFlexibleDate(formData.get("manualMovementAt"));
 
     if (actionName === "supplier-quick-create") {
       const name = str(formData.get("name"));
@@ -247,28 +263,38 @@ export async function action({ request }: ActionFunctionArgs) {
     if (!chatGptResponse) return badRequest("Cole a resposta do ChatGPT.");
 
     const parsed = parseVisionResponse(chatGptResponse);
+    const resolvedDocumentMovementAt = manualMovementAt || parseFlexibleDate(parsed.document.movementAt);
+    const resolvedLines = parsed.lines.map((line) => ({
+      ...line,
+      movementAt: manualMovementAt
+        ? manualMovementAt.toISOString()
+        : line.movementAt || parsed.document.movementAt || null,
+    }));
 
     if (actionName === "stock-photo-preview") {
-      const missingInvoiceCount = parsed.lines.filter((line) => !line.invoiceNumber).length;
-      const missingDateCount = parsed.lines.filter((line) => !line.movementAt).length;
-      const missingCostCount = parsed.lines.filter((line) => !(Number(line.costAmount) > 0)).length;
+      const missingInvoiceCount = resolvedLines.filter((line) => !line.invoiceNumber).length;
+      const missingDateCount = resolvedLines.filter((line) => !line.movementAt).length;
+      const missingCostCount = resolvedLines.filter((line) => !(Number(line.costAmount) > 0)).length;
 
       return ok({
-        document: parsed.document,
+        document: {
+          ...parsed.document,
+          movementAt: resolvedDocumentMovementAt ? formatDateInputValue(resolvedDocumentMovementAt) : null,
+        },
         summary: {
-          lines: parsed.lines.length,
+          lines: resolvedLines.length,
           missingInvoiceCount,
           missingDateCount,
           missingCostCount,
         },
-        previewLines: parsed.lines.slice(0, 8),
+        previewLines: resolvedLines.slice(0, 8),
       });
     }
 
     if (actionName === "stock-photo-import") {
       const user = await authenticator.isAuthenticated(request);
       const actor = (user as any)?.email || (user as any)?.displayName || (user as any)?.name || null;
-      const movementAt = parseFlexibleDate(parsed.document.movementAt);
+      const movementAt = resolvedDocumentMovementAt;
       const batchLabelDate =
         movementAt?.toLocaleDateString("pt-BR") || new Date().toLocaleDateString("pt-BR");
       const batchSupplierName =
@@ -276,7 +302,7 @@ export async function action({ request }: ActionFunctionArgs) {
         parsed.document.supplierName ||
         "sem fornecedor";
 
-      const result = await createStockNfImportBatchFromVisionPayload({
+      const result = await createStockMovementImportBatchFromVisionPayload({
         batchName: `Cupom fiscal ${batchSupplierName} ${batchLabelDate}`,
         uploadedBy: actor,
         originalFileName: "chatgpt-photo-import.json",
@@ -286,7 +312,7 @@ export async function action({ request }: ActionFunctionArgs) {
         invoiceNumber: parsed.document.invoiceNumber,
         supplierName: selectedSupplierName || parsed.document.supplierName,
         supplierCnpj: parsed.document.supplierCnpj,
-        lines: parsed.lines.map((line) => ({
+        lines: resolvedLines.map((line) => ({
           rowNumber: line.rowNumber,
           movementAt: parseFlexibleDate(line.movementAt),
           invoiceNumber: line.invoiceNumber,
@@ -329,8 +355,9 @@ export default function AdminMobileEntradaEstoqueFotoPage() {
   const promptTemplate = String(payload.promptTemplate || "").trim() || DEFAULT_STOCK_PHOTO_CHATGPT_PROMPT_TEMPLATE;
   const [promptDraft, setPromptDraft] = useState("");
   const [chatGptResponse, setChatGptResponse] = useState("");
-  const [lastPreviewedResponse, setLastPreviewedResponse] = useState("");
+  const [lastPreviewedSignature, setLastPreviewedSignature] = useState("");
   const [supplierName, setSupplierName] = useState("");
+  const [manualMovementAt, setManualMovementAt] = useState("");
   const [quickSupplierOpen, setQuickSupplierOpen] = useState(false);
   const [quickSupplierName, setQuickSupplierName] = useState("");
   const createdSupplier = supplierFetcher.data?.payload?.supplier;
@@ -362,11 +389,13 @@ export default function AdminMobileEntradaEstoqueFotoPage() {
     setPromptDraft(defaultPrompt);
   }, [defaultPrompt]);
 
+  const currentPreviewSignature = `${chatGptResponse.trim()}::${manualMovementAt}`;
+
   useEffect(() => {
     if (previewFetcher.state === "idle" && previewFetcher.data?.status === 200) {
-      setLastPreviewedResponse(chatGptResponse.trim());
+      setLastPreviewedSignature(currentPreviewSignature);
     }
-  }, [previewFetcher.state, previewFetcher.data, chatGptResponse]);
+  }, [currentPreviewSignature, previewFetcher.state, previewFetcher.data]);
 
   useEffect(() => {
     if (createdSupplier?.name) {
@@ -379,7 +408,7 @@ export default function AdminMobileEntradaEstoqueFotoPage() {
   const previewPayload = previewFetcher.data?.payload;
   const hasUpToDatePreview =
     Boolean(chatGptResponse.trim()) &&
-    lastPreviewedResponse === chatGptResponse.trim() &&
+    lastPreviewedSignature === currentPreviewSignature &&
     previewFetcher.data?.status === 200;
   const validationStatus =
     previewFetcher.state !== "idle"
@@ -394,6 +423,7 @@ export default function AdminMobileEntradaEstoqueFotoPage() {
     const formData = new FormData();
     formData.set("_action", "stock-photo-preview");
     formData.set("chatGptResponse", chatGptResponse);
+    formData.set("manualMovementAt", manualMovementAt);
     previewFetcher.submit(formData, { method: "post" });
   };
 
@@ -498,7 +528,8 @@ export default function AdminMobileEntradaEstoqueFotoPage() {
             `supplierName`, `supplierCnpj`, `invoiceNumber`, `movementAt` (YYYY-MM-DD)
             e `notes`. Em `lines`, liste os itens comprados com
             `rowNumber`, `ingredientName`, `qtyEntry`, `unitEntry`, `costAmount`,
-            `costTotalAmount` e `observation`. Use `null` para o que estiver ilegível.
+            `costTotalAmount` e `observation`. Se o cupom for antigo, confira a data real
+            do documento. Use `null` para o que estiver ilegível.
           </p>
 
           <div className="mt-3 border-t border-slate-200 pt-3">
@@ -533,6 +564,22 @@ export default function AdminMobileEntradaEstoqueFotoPage() {
       <Form method="post" className="space-y-3">
         <input type="hidden" name="_action" value="stock-photo-import" />
         <input type="hidden" name="supplierName" value={supplierName} />
+        <div className="space-y-2">
+          <label htmlFor="manualMovementAt" className="block text-sm font-medium text-slate-700">
+            Data efetiva do movimento
+          </label>
+          <Input
+            id="manualMovementAt"
+            name="manualMovementAt"
+            type="date"
+            value={manualMovementAt}
+            onChange={(event) => setManualMovementAt(event.currentTarget.value)}
+          />
+          <p className="text-xs leading-5 text-slate-500">
+            Use este campo quando o cupom for de dias ou semanas anteriores. Se preenchido,
+            esta data prevalece sobre a data lida pelo ChatGPT.
+          </p>
+        </div>
         <textarea
           name="chatGptResponse"
           value={chatGptResponse}
@@ -598,7 +645,7 @@ export default function AdminMobileEntradaEstoqueFotoPage() {
                   <div key={`${line.rowNumber}-${line.ingredientName}`} className="text-base">
                     <div className="font-medium text-slate-900">{line.ingredientName}</div>
                     <div className="text-sm text-slate-500">
-                      {line.qtyEntry ?? "-"} {line.unitEntry || line.movementUnit || ""} • {line.costAmount ?? "-"} por unidade
+                      {line.qtyEntry ?? "-"} {line.unitEntry || line.movementUnit || ""} • {line.costAmount ?? "-"} por unidade • {line.movementAt || "sem data"}
                     </div>
                   </div>
                 ))}

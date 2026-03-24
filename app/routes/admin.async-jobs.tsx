@@ -1,11 +1,16 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
-import { Form, useLoaderData } from "@remix-run/react";
-import { Badge } from "~/components/ui/badge";
-import { Button } from "~/components/ui/button";
+import { Link, Outlet, useLoaderData, useLocation } from "@remix-run/react";
 import { Separator } from "~/components/ui/separator";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~/components/ui/table";
+import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { authenticator } from "~/domain/auth/google.server";
-import { getAsyncJobsDashboard, runAsyncJobById, runPendingAsyncJobsBatch } from "~/domain/async-jobs/async-jobs.server";
+import {
+  clampAsyncJobBatchLimit,
+  getAsyncJobsDashboard,
+  getManualBatchLimit,
+  runAsyncJobById,
+  runPendingAsyncJobsBatch,
+} from "~/domain/async-jobs/async-jobs.server";
+import { StatCard } from "~/domain/async-jobs/admin-async-jobs-ui";
 import { badRequest, ok, serverError } from "~/utils/http-response.server";
 
 export const meta: MetaFunction = () => [{ title: "Admin | Jobs assíncronos" }];
@@ -14,35 +19,19 @@ function str(value: FormDataEntryValue | null) {
   return String(value || "").trim();
 }
 
-function formatDateTime(value: unknown) {
-  if (!value) return "-";
-  const date = value instanceof Date ? value : new Date(String(value));
-  if (Number.isNaN(date.getTime())) return "-";
-  return date.toLocaleString("pt-BR");
-}
-
-function statusBadgeClass(status: string) {
-  switch (String(status || "")) {
-    case "pending":
-      return "border-amber-200 bg-amber-50 text-amber-900";
-    case "running":
-      return "border-blue-200 bg-blue-50 text-blue-900";
-    case "completed":
-      return "border-emerald-200 bg-emerald-50 text-emerald-900";
-    case "failed":
-      return "border-red-200 bg-red-50 text-red-900";
+function tabTriggerClass(color: "amber" | "red" | "emerald" | "slate") {
+  switch (color) {
+    case "amber":
+      return "data-[state=active]:bg-amber-50 data-[state=active]:text-amber-900 data-[state=active]:border data-[state=active]:border-amber-200";
+    case "red":
+      return "data-[state=active]:bg-red-50 data-[state=active]:text-red-900 data-[state=active]:border data-[state=active]:border-red-200";
+    case "emerald":
+      return "data-[state=active]:bg-emerald-50 data-[state=active]:text-emerald-900 data-[state=active]:border data-[state=active]:border-emerald-200";
+    case "slate":
+      return "data-[state=active]:bg-slate-100 data-[state=active]:text-slate-900 data-[state=active]:border data-[state=active]:border-slate-300";
     default:
-      return "border-slate-200 bg-white text-slate-700";
+      return "";
   }
-}
-
-function StatCard(props: { label: string; value: number }) {
-  return (
-    <div className="rounded-xl bg-slate-50 px-4 py-3">
-      <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">{props.label}</div>
-      <div className="mt-1 text-2xl font-semibold text-slate-950">{props.value}</div>
-    </div>
-  );
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -67,14 +56,14 @@ export async function action({ request }: ActionFunctionArgs) {
     const _action = str(formData.get("_action"));
     const type = str(formData.get("type")) || null;
     const jobId = str(formData.get("jobId"));
-    const limit = Number(str(formData.get("limit")) || "10");
+    const limit = clampAsyncJobBatchLimit(str(formData.get("limit")) || "1", getManualBatchLimit());
 
     if (_action === "run-next") {
-      return ok(await runPendingAsyncJobsBatch({ limit: 1, type, lockedBy }));
+      return ok(await runPendingAsyncJobsBatch({ limit: 1, type, lockedBy, maxLimit: getManualBatchLimit() }));
     }
 
     if (_action === "run-batch") {
-      return ok(await runPendingAsyncJobsBatch({ limit, type, lockedBy }));
+      return ok(await runPendingAsyncJobsBatch({ limit, type, lockedBy, maxLimit: getManualBatchLimit() }));
     }
 
     if (_action === "run-job") {
@@ -92,11 +81,26 @@ export default function AdminAsyncJobsRoute() {
   const loaderData = useLoaderData<typeof loader>();
   const payload = (loaderData as any)?.payload || {};
   const counts = payload.counts || {};
-  const groups = (payload.groups || []) as any[];
   const pendingJobs = (payload.pendingJobs || []) as any[];
   const failedJobs = (payload.failedJobs || []) as any[];
   const runningJobs = (payload.runningJobs || []) as any[];
   const recentJobs = (payload.recentJobs || []) as any[];
+  const groups = (payload.groups || []) as any[];
+  const batchControls = (payload.batchControls || {}) as
+    | { manualLimit?: number; presets?: number[]; hardLimit?: number }
+    | undefined;
+  const cron = payload.cron as
+    | { path?: string; schedule?: string; limit?: number; timezone?: string }
+    | null
+    | undefined;
+  const { pathname } = useLocation();
+  const tabValue = pathname.includes("/settings")
+    ? "settings"
+    : pathname.includes("/recent")
+    ? "recent"
+    : pathname.includes("/failed")
+      ? "failed"
+      : "pending";
 
   return (
     <div className="space-y-6">
@@ -119,222 +123,73 @@ export default function AdminAsyncJobsRoute() {
 
       <Separator />
 
-      <section className="space-y-3">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-sm font-semibold text-slate-900">Agrupado por tipo</h2>
-            <p className="text-sm text-slate-500">Use para executar pendências de um tipo específico.</p>
-          </div>
-          <Form method="post" className="flex items-center gap-2">
-            <input type="hidden" name="_action" value="run-batch" />
-            <input type="hidden" name="limit" value="20" />
-            <Button type="submit" variant="outline" className="h-9 bg-white">Executar 20 pendentes</Button>
-          </Form>
+      <section className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="space-y-1">
+          <h2 className="text-sm font-semibold text-slate-900">Agendamento</h2>
+          <p className="text-sm text-slate-500">Configuração do disparo automático e janela prevista dos jobs pendentes.</p>
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white">
-          <Table>
-            <TableHeader className="bg-slate-50/90">
-              <TableRow className="hover:bg-slate-50/90">
-                <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Tipo</TableHead>
-                <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Pendentes</TableHead>
-                <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Executando</TableHead>
-                <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Falhados</TableHead>
-                <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Concluídos</TableHead>
-                <TableHead className="h-10 px-4 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {groups.length <= 0 ? (
-                <TableRow className="hover:bg-transparent">
-                  <TableCell colSpan={6} className="px-4 py-8 text-sm text-slate-500">
-                    Nenhum job registrado.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                groups.map((group) => (
-                  <TableRow key={group.type} className="border-slate-100 hover:bg-slate-50/50">
-                    <TableCell className="px-4 py-3 font-medium text-slate-900">{group.type}</TableCell>
-                    <TableCell className="px-4 py-3 text-slate-700">{group.pending || 0}</TableCell>
-                    <TableCell className="px-4 py-3 text-slate-700">{group.running || 0}</TableCell>
-                    <TableCell className="px-4 py-3 text-slate-700">{group.failed || 0}</TableCell>
-                    <TableCell className="px-4 py-3 text-slate-700">{group.completed || 0}</TableCell>
-                    <TableCell className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-2">
-                        <Form method="post">
-                          <input type="hidden" name="_action" value="run-next" />
-                          <input type="hidden" name="type" value={group.type} />
-                          <Button type="submit" variant="outline" className="h-8 bg-white px-3 text-xs">
-                            Executar 1
-                          </Button>
-                        </Form>
-                        <Form method="post">
-                          <input type="hidden" name="_action" value="run-batch" />
-                          <input type="hidden" name="type" value={group.type} />
-                          <input type="hidden" name="limit" value="10" />
-                          <Button type="submit" className="h-8 px-3 text-xs">
-                            Executar 10
-                          </Button>
-                        </Form>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      </section>
-
-      <Separator />
-
-      <section className="grid gap-6 xl:grid-cols-2">
-        <div className="space-y-3">
-          <div>
-            <h2 className="text-sm font-semibold text-slate-900">Pendentes</h2>
-            <p className="text-sm text-slate-500">Fila pronta para ser processada manualmente.</p>
+        {cron ? (
+          <div className="mt-4 grid gap-3 md:grid-cols-4">
+            <div className="rounded-lg bg-slate-50 px-4 py-3">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Cron</div>
+              <div className="mt-1 font-mono text-sm text-slate-950">{cron.schedule || "-"}</div>
+            </div>
+            <div className="rounded-lg bg-slate-50 px-4 py-3">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Rota</div>
+              <div className="mt-1 font-mono text-sm text-slate-950">{cron.path || "-"}</div>
+            </div>
+            <div className="rounded-lg bg-slate-50 px-4 py-3">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Limite por execução</div>
+              <div className="mt-1 text-sm font-semibold text-slate-950">{cron.limit || 0} jobs</div>
+            </div>
+            <div className="rounded-lg bg-slate-50 px-4 py-3">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Timezone</div>
+              <div className="mt-1 text-sm font-semibold text-slate-950">{cron.timezone || "-"}</div>
+            </div>
           </div>
-          <div className="rounded-xl border border-slate-200 bg-white">
-            <Table>
-              <TableHeader className="bg-slate-50/90">
-                <TableRow className="hover:bg-slate-50/90">
-                  <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Tipo</TableHead>
-                  <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Criado</TableHead>
-                  <TableHead className="h-10 px-4 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Ação</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {pendingJobs.length <= 0 ? (
-                  <TableRow className="hover:bg-transparent">
-                    <TableCell colSpan={3} className="px-4 py-8 text-sm text-slate-500">
-                      Nenhum job pendente.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  pendingJobs.map((job) => (
-                    <TableRow key={job.id} className="border-slate-100 hover:bg-slate-50/50">
-                      <TableCell className="px-4 py-3">
-                        <div className="space-y-1">
-                          <div className="font-medium text-slate-900">{job.type}</div>
-                          <div className="text-xs text-slate-500">{job.dedupeKey || job.id}</div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="px-4 py-3 text-slate-700">{formatDateTime(job.createdAt)}</TableCell>
-                      <TableCell className="px-4 py-3">
-                        <Form method="post" className="flex justify-end">
-                          <input type="hidden" name="_action" value="run-job" />
-                          <input type="hidden" name="jobId" value={job.id} />
-                          <Button type="submit" variant="outline" className="h-8 bg-white px-3 text-xs">
-                            Executar
-                          </Button>
-                        </Form>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
+        ) : (
+          <div className="mt-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            Nenhum cron de `/api/async-jobs-cron` foi encontrado em `vercel.json`.
           </div>
-        </div>
-
-        <div className="space-y-3">
-          <div>
-            <h2 className="text-sm font-semibold text-slate-900">Falhados</h2>
-            <p className="text-sm text-slate-500">Jobs que podem ser reexecutados manualmente.</p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-white">
-            <Table>
-              <TableHeader className="bg-slate-50/90">
-                <TableRow className="hover:bg-slate-50/90">
-                  <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Tipo</TableHead>
-                  <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Erro</TableHead>
-                  <TableHead className="h-10 px-4 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Ação</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {failedJobs.length <= 0 ? (
-                  <TableRow className="hover:bg-transparent">
-                    <TableCell colSpan={3} className="px-4 py-8 text-sm text-slate-500">
-                      Nenhum job falhado.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  failedJobs.map((job) => (
-                    <TableRow key={job.id} className="border-slate-100 hover:bg-slate-50/50">
-                      <TableCell className="px-4 py-3">
-                        <div className="space-y-1">
-                          <div className="font-medium text-slate-900">{job.type}</div>
-                          <div className="text-xs text-slate-500">{formatDateTime(job.updatedAt)}</div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="px-4 py-3 text-sm text-red-700">{job.errorMessage || "-"}</TableCell>
-                      <TableCell className="px-4 py-3">
-                        <Form method="post" className="flex justify-end">
-                          <input type="hidden" name="_action" value="run-job" />
-                          <input type="hidden" name="jobId" value={job.id} />
-                          <Button type="submit" variant="outline" className="h-8 bg-white px-3 text-xs">
-                            Reexecutar
-                          </Button>
-                        </Form>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </div>
+        )}
       </section>
 
       <Separator />
 
       <section className="space-y-3">
         <div>
-          <h2 className="text-sm font-semibold text-slate-900">Execução recente</h2>
-          <p className="text-sm text-slate-500">Histórico curto para acompanhar o processamento manual.</p>
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-white">
-          <Table>
-            <TableHeader className="bg-slate-50/90">
-              <TableRow className="hover:bg-slate-50/90">
-                <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Status</TableHead>
-                <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Tipo</TableHead>
-                <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Atualizado</TableHead>
-                <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Detalhe</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {recentJobs.length <= 0 ? (
-                <TableRow className="hover:bg-transparent">
-                  <TableCell colSpan={4} className="px-4 py-8 text-sm text-slate-500">
-                    Nenhum job recente.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                recentJobs.map((job) => (
-                  <TableRow key={job.id} className="border-slate-100 hover:bg-slate-50/50">
-                    <TableCell className="px-4 py-3">
-                      <Badge variant="outline" className={statusBadgeClass(String(job.status))}>
-                        {job.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="px-4 py-3 font-medium text-slate-900">{job.type}</TableCell>
-                    <TableCell className="px-4 py-3 text-slate-700">{formatDateTime(job.updatedAt)}</TableCell>
-                    <TableCell className="px-4 py-3 text-sm text-slate-500">
-                      {job.errorMessage || job.dedupeKey || "-"}
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+          <h2 className="text-sm font-semibold text-slate-900">Visões</h2>
+          <p className="text-sm text-slate-500">Abra a fila desejada para acompanhar e agir sobre os jobs.</p>
         </div>
 
-        {runningJobs.length > 0 ? (
-          <div className="rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-900">
-            {runningJobs.length} job(s) em execução no momento. Evite disparar duplicados do mesmo tipo enquanto houver processamento ativo.
-          </div>
-        ) : null}
+        <Tabs value={tabValue} className="w-full">
+          <TabsList className="grid h-auto w-full grid-cols-1 gap-2 rounded-xl border border-slate-200 bg-slate-50 p-2 md:grid-cols-4">
+            <TabsTrigger value="pending" asChild className={tabTriggerClass("amber")}>
+              <Link to="/admin/async-jobs">Pendentes</Link>
+            </TabsTrigger>
+            <TabsTrigger value="failed" asChild className={tabTriggerClass("red")}>
+              <Link to="/admin/async-jobs/failed">Falhados</Link>
+            </TabsTrigger>
+            <TabsTrigger value="recent" asChild className={tabTriggerClass("emerald")}>
+              <Link to="/admin/async-jobs/recent">Execução recente</Link>
+            </TabsTrigger>
+            <TabsTrigger value="settings" asChild className={tabTriggerClass("slate")}>
+              <Link to="/admin/async-jobs/settings">Settings</Link>
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+
+        <Outlet
+          context={{
+            pendingJobs,
+            failedJobs,
+            recentJobs,
+            runningJobs,
+            groups,
+            batchControls,
+          }}
+        />
       </section>
     </div>
   );

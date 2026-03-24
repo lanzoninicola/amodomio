@@ -4,7 +4,7 @@ import { ExternalLink, Trash2 } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "~/components/ui/alert-dialog";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import { deleteStockNfImportBatch, listStockNfImportBatches } from "~/domain/stock-nf-import/stock-nf-import.server";
+import { deleteStockMovementImportBatch, listStockMovementImportBatches } from "~/domain/stock-movement/stock-movement-import.server";
 import { badRequest, ok, serverError } from "~/utils/http-response.server";
 
 export const meta: MetaFunction = () => [{ title: "Admin Mobile | Importação de estoque" }];
@@ -23,7 +23,7 @@ function formatDate(value: any) {
 function summaryFromAny(summary: any) {
   return {
     total: Number(summary?.total || 0),
-    ready: Number(summary?.readyToApply || summary?.ready || 0),
+    ready: Number(summary?.readyToImport || summary?.ready || 0),
     pendingMapping: Number(summary?.pendingMapping || 0),
     pendingSupplier: Number(summary?.pendingSupplier || 0),
     pendingConversion: Number(summary?.pendingConversion || 0),
@@ -36,7 +36,7 @@ function statusBadgeClass(status: string) {
     case "validated":
     case "ready":
       return "border-emerald-200 bg-emerald-50 text-emerald-700";
-    case "applied":
+    case "imported":
       return "border-blue-200 bg-blue-50 text-blue-700";
     case "partial":
       return "border-amber-200 bg-amber-50 text-amber-700";
@@ -97,7 +97,7 @@ function DeleteBatchButton({ batchId, batchName, status }: { batchId: string; ba
 
 export async function loader(_: LoaderFunctionArgs) {
   try {
-    const batches = await listStockNfImportBatches(100);
+    const batches = await listStockMovementImportBatches(100);
     return ok({ batches });
   } catch (error) {
     return serverError(error);
@@ -113,7 +113,7 @@ export async function action({ request }: ActionFunctionArgs) {
     const batchId = str(formData.get("batchId"));
     if (!batchId) return badRequest("Lote inválido");
 
-    await deleteStockNfImportBatch(batchId);
+    await deleteStockMovementImportBatch(batchId);
     return ok({ message: "Lote eliminado com sucesso" });
   } catch (error) {
     return serverError(error);

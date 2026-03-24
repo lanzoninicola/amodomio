@@ -1,8 +1,8 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from '@remix-run/node';
 import { redirect } from '@remix-run/node';
-import { Form, Link, useActionData, useFetcher, useLoaderData, useNavigation, useRevalidator } from '@remix-run/react';
+import { Form, Link, NavLink, Outlet, useActionData, useFetcher, useLoaderData, useNavigation, useRevalidator } from '@remix-run/react';
 import { Check, ChevronsUpDown, Loader2 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,28 +17,27 @@ import {
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '~/components/ui/command';
-import { PendingConversionForm } from '~/components/admin/import-stock-conversion-form';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '~/components/ui/dialog';
 import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '~/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~/components/ui/select';
 import { Separator } from '~/components/ui/separator';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '~/components/ui/table';
 import { authenticator } from '~/domain/auth/google.server';
 import { itemPrismaEntity } from '~/domain/item/item.prisma.entity.server';
 import { getAvailableItemUnits } from '~/domain/item/item-units.server';
 import {
-  archiveStockNfImportBatch,
-  deleteStockNfImportBatch,
-  getStockNfImportBatchView,
+  archiveStockMovementImportBatch,
+  deleteStockMovementImportBatch,
+  getStockMovementImportBatchView,
   mapBatchLinesToItem,
-  reconcileStockNfImportBatchSuppliersFromFile,
-  rollbackStockNfImportBatch,
+  reconcileStockMovementImportBatchSuppliersFromFile,
+  rollbackStockMovementImportBatch,
+  retryStockMovementImportBatchErrors,
   setBatchLineIgnored,
   setBatchLineManualConversion,
-  startStockNfImportBatchApply,
-} from '~/domain/stock-nf-import/stock-nf-import.server';
+  startStockMovementImportBatch,
+} from '~/domain/stock-movement/stock-movement-import.server';
 import { cn } from '~/lib/utils';
 import { badRequest, ok, serverError } from '~/utils/http-response.server';
 
@@ -51,7 +50,7 @@ const ITEM_CLASSIFICATIONS = [
   'outro',
 ] as const;
 
-const LINE_STATUS_GUIDE = [
+export const LINE_STATUS_GUIDE = [
   {
     status: 'ready',
     meaning: 'Linha pronta, com item mapeado e conversão resolvida.',
@@ -74,7 +73,7 @@ const LINE_STATUS_GUIDE = [
   },
   {
     status: 'skipped_duplicate',
-    meaning: 'Linha detectada como duplicada no lote atual ou já aplicada antes.',
+    meaning: 'Linha detectada como duplicada no lote atual ou já importada antes.',
     impact: 'Não será importada para evitar duplicidade.',
   },
   {
@@ -93,9 +92,9 @@ const LINE_STATUS_GUIDE = [
     impact: 'Não é importada até corrigir a causa e reprocessar.',
   },
   {
-    status: 'applied',
-    meaning: 'Linha já foi aplicada como movimentação de estoque.',
-    impact: 'Já entrou na importação; não deve ser aplicada novamente.',
+    status: 'imported',
+    meaning: 'Linha já foi importada como movimentação de estoque.',
+    impact: 'Já entrou no estoque; não deve ser importada novamente.',
   },
 ] as const;
 
@@ -113,20 +112,20 @@ function num(value: FormDataEntryValue | null) {
   return Number.isFinite(n) ? n : NaN;
 }
 
-function formatDate(value: any) {
+export function formatDate(value: any) {
   if (!value) return '-';
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return '-';
   return d.toLocaleString('pt-BR');
 }
 
-function formatMoney(value: any) {
+export function formatMoney(value: any) {
   const n = Number(value);
   if (!Number.isFinite(n)) return '-';
   return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
-function formatDocumentLabel(value: any) {
+export function formatDocumentLabel(value: any) {
   const documentNumber = String(value || '').trim();
   if (!documentNumber) return '-';
   if (documentNumber.startsWith('CUPOM-')) return 'Cupom fiscal';
@@ -149,30 +148,30 @@ function summaryFromAny(summary: any) {
   return {
     total: Number(summary?.total || 0),
     ready: Number(summary?.ready || 0),
-    readyToApply: Number(summary?.readyToApply || 0),
+    readyToImport: Number(summary?.readyToImport || 0),
     invalid: Number(summary?.invalid || 0),
     pendingMapping: Number(summary?.pendingMapping || 0),
     pendingSupplier: Number(summary?.pendingSupplier || 0),
     pendingConversion: Number(summary?.pendingConversion || 0),
-    applied: Number(summary?.applied || 0),
+    imported: Number(summary?.imported || 0),
     ignored: Number(summary?.ignored || 0),
     skippedDuplicate: Number(summary?.skippedDuplicate || 0),
     error: Number(summary?.error || 0),
   };
 }
 
-function supplierReconciliationLabel(line: any) {
+export function supplierReconciliationLabel(line: any) {
   if (line?.supplierReconciliationStatus === 'manual') return 'conciliado manualmente';
   if (line?.supplierReconciliationStatus === 'matched' || line?.supplierId) return 'conciliado com cadastro';
   if (line?.supplierReconciliationStatus === 'unmatched') return 'pendente de conciliação';
   return 'sem conciliação iniciada';
 }
 
-function statusBadgeClass(status: string) {
+export function statusBadgeClass(status: string) {
   switch (status) {
     case 'ready':
       return 'border-emerald-200 bg-emerald-50 text-emerald-700';
-    case 'applied':
+    case 'imported':
       return 'border-blue-200 bg-blue-50 text-blue-700';
     case 'pending_mapping':
     case 'pending_supplier':
@@ -190,7 +189,7 @@ function statusBadgeClass(status: string) {
   }
 }
 
-function DeleteBatchButton({ batchId, batchName, status }: { batchId: string; batchName: string; status: string }) {
+export function DeleteBatchButton({ batchId, batchName, status }: { batchId: string; batchName: string; status: string }) {
   const isValidated = status === 'validated';
 
   if (!isValidated) {
@@ -236,7 +235,7 @@ function DeleteBatchButton({ batchId, batchName, status }: { batchId: string; ba
   );
 }
 
-function ItemSystemMapperCell({
+export function ItemSystemMapperCell({
   line,
   items,
   batchId,
@@ -477,7 +476,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
     const db = itemPrismaEntity.client as any;
     const [selected, unitOptions, categories] = await Promise.all([
-      getStockNfImportBatchView(batchId),
+      getStockMovementImportBatchView(batchId),
       getAvailableItemUnits(),
       db.category.findMany({
         where: { type: 'item' },
@@ -508,14 +507,14 @@ export async function action({ request, params }: ActionFunctionArgs) {
     if (batchId !== routeBatchId) return badRequest('Lote divergente');
 
     const db = itemPrismaEntity.client as any;
-    const currentBatch = await db.stockNfImportBatch.findUnique({
+    const currentBatch = await db.stockMovementImportBatch.findUnique({
       where: { id: batchId },
-      select: { id: true, applyStatus: true },
+      select: { id: true, importStatus: true },
     });
     if (!currentBatch) return badRequest('Lote não encontrado');
-    const isBatchApplying = String(currentBatch.applyStatus || 'idle') === 'applying';
-    if (isBatchApplying && _action !== 'batch-apply') {
-      return badRequest('Aguarde o término da aplicação em andamento antes de executar outra ação no lote.');
+    const isBatchImporting = String(currentBatch.importStatus || 'idle') === 'importing';
+    if (isBatchImporting && _action !== 'batch-import') {
+      return badRequest('Aguarde o término da importação em andamento antes de executar outra ação no lote.');
     }
 
     if (_action === 'batch-map-item') {
@@ -556,6 +555,18 @@ export async function action({ request, params }: ActionFunctionArgs) {
         lineId,
         ignored: _action === 'batch-ignore-line',
       });
+      return redirect(redirectToCurrentPath(request, `/admin/import-stock-movements/${batchId}`));
+    }
+
+    if (_action === 'batch-retry-line-error') {
+      const lineId = str(formData.get('lineId'));
+      if (!lineId) return badRequest('Linha inválida');
+      await retryStockMovementImportBatchErrors({ batchId, lineId });
+      return redirect(redirectToCurrentPath(request, `/admin/import-stock-movements/${batchId}`));
+    }
+
+    if (_action === 'batch-retry-errors') {
+      await retryStockMovementImportBatchErrors({ batchId });
       return redirect(redirectToCurrentPath(request, `/admin/import-stock-movements/${batchId}`));
     }
 
@@ -610,8 +621,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
       return ok({ createdItemId: created.id });
     }
 
-    if (_action === 'batch-apply') {
-      await startStockNfImportBatchApply({ batchId, actor });
+    if (_action === 'batch-import') {
+      await startStockMovementImportBatch({ batchId, actor });
       return redirect(redirectToCurrentPath(request, `/admin/import-stock-movements/${batchId}`));
     }
 
@@ -623,7 +634,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       if (!supplierNotesFile.name.toLowerCase().endsWith('.json')) {
         return badRequest('Arquivo inválido. Envie um .json');
       }
-      await reconcileStockNfImportBatchSuppliersFromFile({
+      await reconcileStockMovementImportBatchSuppliersFromFile({
         batchId,
         fileName: supplierNotesFile.name,
         fileBuffer: Buffer.from(await supplierNotesFile.arrayBuffer()),
@@ -632,17 +643,17 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }
 
     if (_action === 'batch-rollback') {
-      await rollbackStockNfImportBatch({ batchId, actor });
+      await rollbackStockMovementImportBatch({ batchId, actor });
       return redirect(redirectToCurrentPath(request, `/admin/import-stock-movements/${batchId}`));
     }
 
     if (_action === 'batch-archive') {
-      await archiveStockNfImportBatch(batchId);
+      await archiveStockMovementImportBatch(batchId);
       return redirect('/admin/import-stock-movements');
     }
 
     if (_action === 'batch-delete') {
-      await deleteStockNfImportBatch(batchId);
+      await deleteStockMovementImportBatch(batchId);
       return redirect('/admin/import-stock-movements');
     }
 
@@ -652,12 +663,23 @@ export async function action({ request, params }: ActionFunctionArgs) {
   }
 }
 
+export type AdminImportStockMovementsBatchOutletContext = {
+  selected: any;
+  selectedBatch: any;
+  lines: any[];
+  items: any[];
+  appliedChanges: any[];
+  unitOptions: string[];
+  summary: ReturnType<typeof summaryFromAny>;
+  isImportingBatch: boolean;
+};
+
 export default function AdminImportStockMovementsBatchDetailRoute() {
   const loaderData = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const revalidator = useRevalidator();
-  const applyStepFetcher = useFetcher<any>();
+  const importStepFetcher = useFetcher<any>();
   const payload = (loaderData as any)?.payload || {};
   const selected = payload.selected as any;
   const selectedBatch = selected?.batch || null;
@@ -666,58 +688,65 @@ export default function AdminImportStockMovementsBatchDetailRoute() {
   const appliedChanges = (selected?.appliedChanges || []) as any[];
   const unitOptions = (((loaderData as any)?.payload?.unitOptions || []) as string[]);
   const summary = summaryFromAny(selected?.summary || selectedBatch?.summary);
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [statusGuideOpen, setStatusGuideOpen] = useState(false);
-  const availableStatuses = useMemo(
-    () => Array.from(new Set(lines.map((line) => String(line.status || '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'pt-BR')),
-    [lines],
-  );
-  const filteredLines = useMemo(() => {
-    if (statusFilter === 'all') return lines;
-    return lines.filter((line) => String(line.status || '') === statusFilter);
-  }, [lines, statusFilter]);
-  const batchApplyStatus = String(selectedBatch?.applyStatus || 'idle');
-  const batchApplyProcessedCount = Number(selectedBatch?.applyProcessedCount || 0);
-  const batchApplyErrorCount = Number(selectedBatch?.applyErrorCount || 0);
-  const batchApplyTotalCount = Number(selectedBatch?.applyTotalCount || 0);
-  const batchApplyMessage = String(selectedBatch?.applyMessage || '').trim();
-  const isApplyingBatch =
-    batchApplyStatus === 'applying' ||
+  const batchImportStatus = String(selectedBatch?.importStatus || 'idle');
+  const batchImportProcessedCount = Number(selectedBatch?.importProcessedCount || 0);
+  const batchImportErrorCount = Number(selectedBatch?.importErrorCount || 0);
+  const batchImportTotalCount = Number(selectedBatch?.importTotalCount || 0);
+  const batchImportMessage = String(selectedBatch?.importMessage || '').trim();
+  const isImportingBatch =
+    batchImportStatus === 'importing' ||
     (navigation.state === 'submitting' &&
-      String(navigation.formData?.get('_action') || '') === 'batch-apply' &&
+      String(navigation.formData?.get('_action') || '') === 'batch-import' &&
       String(navigation.formData?.get('batchId') || '') === String(selectedBatch?.id || ''));
-  const applyStepInFlight = applyStepFetcher.state !== 'idle';
-  const displayedProcessedCount = Number(applyStepFetcher.data?.payload?.progress?.processedCount ?? batchApplyProcessedCount);
-  const displayedErrorCount = Number(applyStepFetcher.data?.payload?.progress?.errorCount ?? batchApplyErrorCount);
-  const displayedTotalCount = Number(applyStepFetcher.data?.payload?.progress?.totalCount ?? batchApplyTotalCount);
-  const displayedApplyMessage = String(applyStepFetcher.data?.payload?.progress?.message || batchApplyMessage || '').trim();
+  const importStepInFlight = importStepFetcher.state !== 'idle';
+  const displayedProcessedCount = Number(importStepFetcher.data?.payload?.progress?.processedCount ?? batchImportProcessedCount);
+  const displayedErrorCount = Number(importStepFetcher.data?.payload?.progress?.errorCount ?? batchImportErrorCount);
+  const displayedTotalCount = Number(importStepFetcher.data?.payload?.progress?.totalCount ?? batchImportTotalCount);
+  const displayedImportMessage = String(importStepFetcher.data?.payload?.progress?.message || batchImportMessage || '').trim();
 
   useEffect(() => {
     if (!selectedBatch?.id) return;
-    if (batchApplyStatus !== 'applying') return;
-    if (applyStepInFlight) return;
+    if (batchImportStatus !== 'importing') return;
+    if (importStepInFlight) return;
 
     const timeoutId = window.setTimeout(() => {
-      applyStepFetcher.submit(
+      importStepFetcher.submit(
         { batchId: String(selectedBatch.id) },
-        { method: 'post', action: '/api/admin-stock-import-batch-apply-step' },
+        { method: 'post', action: '/api/admin-stock-import-batch-import-step' },
       );
     }, 500);
 
     return () => window.clearTimeout(timeoutId);
-  }, [selectedBatch?.id, batchApplyStatus, applyStepInFlight, applyStepFetcher]);
+  }, [selectedBatch?.id, batchImportStatus, importStepInFlight, importStepFetcher]);
 
   useEffect(() => {
-    if (applyStepFetcher.state !== 'idle') return;
-    if (!applyStepFetcher.data) return;
+    if (importStepFetcher.state !== 'idle') return;
+    if (!importStepFetcher.data) return;
     revalidator.revalidate();
-  }, [applyStepFetcher.state, applyStepFetcher.data, revalidator]);
+  }, [importStepFetcher.state, importStepFetcher.data, revalidator]);
 
-  if (!selectedBatch) return null;
+  if (!selectedBatch) {
+    return (
+      <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-4 text-sm text-red-700">
+        {String((loaderData as any)?.message || 'Não foi possível carregar o lote.')}
+      </div>
+    );
+  }
+
+  const outletContext: AdminImportStockMovementsBatchOutletContext = {
+    selected,
+    selectedBatch,
+    lines,
+    items,
+    appliedChanges,
+    unitOptions,
+    summary,
+    isImportingBatch,
+  };
 
   return (
     <div className="flex flex-col gap-4">
-      <Dialog open={isApplyingBatch}>
+      <Dialog open={isImportingBatch}>
         <DialogContent
           showCloseButton={false}
           onEscapeKeyDown={(event) => event.preventDefault()}
@@ -739,7 +768,7 @@ export default function AdminImportStockMovementsBatchDetailRoute() {
                 ) : null}
               </div>
             </div>
-            {displayedApplyMessage ? <p className="text-sm text-slate-600">{displayedApplyMessage}</p> : null}
+            {displayedImportMessage ? <p className="text-sm text-slate-600">{displayedImportMessage}</p> : null}
             <p className="text-sm leading-6 text-slate-500">
               Não feche, atualize ou saia desta página enquanto a aplicação estiver em execução. Isso evita interromper a percepção do processo antes da conclusão.
             </p>
@@ -818,25 +847,35 @@ export default function AdminImportStockMovementsBatchDetailRoute() {
             </div>
 
             <Form method="post">
-              <input type="hidden" name="_action" value="batch-apply" />
+              <input type="hidden" name="_action" value="batch-import" />
               <input type="hidden" name="batchId" value={selectedBatch.id} />
-              <Button type="submit" className="h-11 w-full rounded-xl bg-emerald-600 hover:bg-emerald-700" disabled={summary.readyToApply <= 0 || isApplyingBatch}>
-                {isApplyingBatch ? 'Aplicação em andamento...' : `Aplicar conciliadas (${summary.readyToApply})`}
+              <Button type="submit" className="h-11 w-full rounded-xl bg-emerald-600 hover:bg-emerald-700" disabled={summary.readyToImport <= 0 || isImportingBatch}>
+                {isImportingBatch ? 'Importação em andamento...' : `Importar conciliadas (${summary.readyToImport})`}
               </Button>
             </Form>
+
+            {summary.error > 0 ? (
+              <Form method="post">
+                <input type="hidden" name="_action" value="batch-retry-errors" />
+                <input type="hidden" name="batchId" value={selectedBatch.id} />
+                <Button type="submit" variant="outline" className="h-11 w-full rounded-xl" disabled={isImportingBatch}>
+                  Retentar erros ({summary.error})
+                </Button>
+              </Form>
+            ) : null}
 
             <div className="grid gap-2 sm:grid-cols-3">
               <Form method="post">
                 <input type="hidden" name="_action" value="batch-rollback" />
                 <input type="hidden" name="batchId" value={selectedBatch.id} />
-                <Button type="submit" variant="outline" className="h-11 w-full rounded-xl" disabled={appliedChanges.length <= 0 || isApplyingBatch}>
-                  Rollback
+                <Button type="submit" variant="outline" className="h-11 w-full rounded-xl" disabled={appliedChanges.length <= 0 || isImportingBatch}>
+                  Desfazer importação
                 </Button>
               </Form>
               <Form method="post">
                 <input type="hidden" name="_action" value="batch-archive" />
                 <input type="hidden" name="batchId" value={selectedBatch.id} />
-                <Button type="submit" variant="outline" className="h-11 w-full rounded-xl" disabled={isApplyingBatch}>Arquivar</Button>
+                <Button type="submit" variant="outline" className="h-11 w-full rounded-xl" disabled={isImportingBatch}>Arquivar</Button>
               </Form>
               <DeleteBatchButton
                 batchId={String(selectedBatch.id)}
@@ -856,244 +895,62 @@ export default function AdminImportStockMovementsBatchDetailRoute() {
         ) : null}
 
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-11">
-        {[
-          ['Total', summary.total],
-          ['Prontas', summary.ready],
-          ['Prontas p/ aplicar', summary.readyToApply],
-          ['Aplicadas', summary.applied],
-          ['Pend. vínculo', summary.pendingMapping],
-          ['Pend. fornecedor', summary.pendingSupplier],
-          ['Pend. conversão', summary.pendingConversion],
-          ['Ignoradas', summary.ignored],
-          ['Duplicadas', summary.skippedDuplicate],
-          ['Inválidas', summary.invalid],
-          ['Erros', summary.error],
-        ].map(([label, value]) => (
-          <div key={String(label)} className="rounded-2xl bg-slate-50 px-3 py-2.5">
-            <div className="truncate text-[10px] uppercase tracking-[0.08em] text-slate-500">{label}</div>
-            <div className="mt-0.5 text-[18px] font-semibold leading-none tracking-tight text-slate-950">{value as any}</div>
-          </div>
-        ))}
+          {[
+            ['Total', summary.total],
+            ['Prontas', summary.ready],
+            ['Prontas p/ importar', summary.readyToImport],
+            ['Importadas', summary.imported],
+            ['Pend. vínculo', summary.pendingMapping],
+            ['Pend. fornecedor', summary.pendingSupplier],
+            ['Pend. conversão', summary.pendingConversion],
+            ['Ignoradas', summary.ignored],
+            ['Duplicadas', summary.skippedDuplicate],
+            ['Inválidas', summary.invalid],
+            ['Erros', summary.error],
+          ].map(([label, value]) => (
+            <div key={String(label)} className="rounded-2xl bg-slate-50 px-3 py-2.5">
+              <div className="truncate text-[10px] uppercase tracking-[0.08em] text-slate-500">{label}</div>
+              <div className="mt-0.5 text-[18px] font-semibold leading-none tracking-tight text-slate-950">{value as any}</div>
+            </div>
+          ))}
         </div>
       </section>
 
-      <div className="bg-white">
-        <Dialog open={statusGuideOpen} onOpenChange={setStatusGuideOpen}>
-          <DialogContent className="max-w-4xl rounded-2xl">
-            <DialogHeader>
-              <DialogTitle>Status de linha e impacto na importação</DialogTitle>
-            </DialogHeader>
-            <div className="overflow-auto rounded-xl border border-slate-200">
-              <Table>
-                <TableHeader className="bg-slate-50/90">
-                  <TableRow className="hover:bg-slate-50/90">
-                    <TableHead className="px-3 py-2 text-xs">Status</TableHead>
-                    <TableHead className="px-3 py-2 text-xs">O que significa</TableHead>
-                    <TableHead className="px-3 py-2 text-xs">Impacto na importação</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {LINE_STATUS_GUIDE.map((row) => (
-                    <TableRow key={row.status} className="border-slate-100 align-top">
-                      <TableCell className="px-3 py-3 text-xs">
-                        <Badge variant="outline" className={statusBadgeClass(row.status)}>
-                          {row.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="px-3 py-3 text-xs text-slate-700">{row.meaning}</TableCell>
-                      <TableCell className="px-3 py-3 text-xs text-slate-700">{row.impact}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </DialogContent>
-        </Dialog>
-
-        <div className="relative z-10 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div className="flex items-center justify-between gap-2">
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Linhas do lote</h3>
-            <div className="text-xs text-slate-500">{filteredLines.length} de {lines.length} linha(s)</div>
-          </div>
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => setStatusGuideOpen(true)}
-              className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-slate-600 transition hover:bg-slate-200 hover:text-slate-900"
-              aria-label="Explicar status de linha"
-              title="Explicar status de linha"
+      <section className="space-y-4">
+        <nav className="overflow-x-auto border-b border-slate-100">
+          <div className="flex min-w-max items-center gap-6 text-sm">
+            <NavLink
+              to="."
+              end
+              className={({ isActive }) =>
+                isActive
+                  ? 'border-b-2 border-slate-950 pb-3 font-medium text-slate-950'
+                  : 'border-b-2 border-transparent pb-3 font-medium text-slate-400 transition hover:text-slate-700'
+              }
             >
-              ?
-            </button>
-            <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Status</span>
-            <button
-              type="button"
-              onClick={() => setStatusFilter('all')}
-              className={cn(
-                'inline-flex h-8 items-center rounded-full border px-3 text-xs font-medium transition',
-                statusFilter === 'all'
-                  ? 'border-slate-900 bg-slate-900 text-white'
-                  : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50',
-              )}
+              Linhas do lote ({lines.length})
+            </NavLink>
+            <NavLink
+              to="applied-changes"
+              className={({ isActive }) =>
+                isActive
+                  ? 'border-b-2 border-slate-950 pb-3 font-medium text-slate-950'
+                  : 'border-b-2 border-transparent pb-3 font-medium text-slate-400 transition hover:text-slate-700'
+              }
             >
-              Todos
-            </button>
-            {availableStatuses.map((status) => (
-              <button
-                key={status}
-                type="button"
-                onClick={() => setStatusFilter(status)}
-                className={cn(
-                  'inline-flex h-8 items-center rounded-full border px-3 text-xs font-medium transition',
-                  statusFilter === status
-                    ? 'border-slate-900 bg-slate-900 text-white'
-                    : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50',
-                )}
-              >
-                {status}
-              </button>
-            ))}
+              Alterações importadas ({appliedChanges.length})
+            </NavLink>
+            <Link
+              to="/admin/stock-import-applied-changes"
+              className="border-b-2 border-transparent pb-3 font-medium text-slate-400 transition hover:text-slate-700"
+            >
+              Histórico global de custos
+            </Link>
           </div>
-        </div>
-        <div className="mt-3 overflow-auto rounded-lg">
-          <Table>
-            <TableHeader className="bg-slate-50/90">
-              <TableRow className="hover:bg-slate-50/90">
-                <TableHead className="px-3 py-2 text-xs">Linha</TableHead>
-                <TableHead className="px-3 py-2 text-xs">Data/Doc.</TableHead>
-                <TableHead className="px-3 py-2 text-xs">Fornecedor</TableHead>
-                <TableHead className="px-3 py-2 text-xs">Ingrediente</TableHead>
-                <TableHead className="px-3 py-2 text-xs">Mov.</TableHead>
-                <TableHead className="px-3 py-2 text-xs">Custo</TableHead>
-                <TableHead className="px-3 py-2 text-xs">Item do sistema</TableHead>
-                <TableHead className="px-3 py-2 text-xs">Conversão</TableHead>
-                <TableHead className="px-3 py-2 text-xs">Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredLines.length === 0 ? (
-                <TableRow className="border-slate-100">
-                  <TableCell colSpan={9} className="px-3 py-8 text-center text-sm text-slate-500">
-                    Nenhuma linha encontrada para o status selecionado.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredLines.map((line) => (
-                  <TableRow key={line.id} className="border-slate-100 align-top">
-                    <TableCell className="px-3 py-2 text-xs text-slate-600">{line.rowNumber}</TableCell>
-                    <TableCell className="px-3 py-2 text-xs text-slate-700">
-                      <div>{formatDate(line.movementAt)}</div>
-                      <div className="text-slate-500">Doc. {formatDocumentLabel(line.invoiceNumber)}</div>
-                    </TableCell>
-                    <TableCell className="px-3 py-2 text-xs text-slate-700">
-                      <div className="font-medium text-slate-900">{line.supplierName || '-'}</div>
-                      <div className="text-slate-500">
-                        {line.supplierCnpj || 'sem CNPJ'} • {supplierReconciliationLabel(line)}
-                      </div>
-                      {line.supplierReconciliationSource || line.supplierMatchSource ? (
-                        <div className="text-slate-400">{line.supplierReconciliationSource || line.supplierMatchSource}</div>
-                      ) : null}
-                    </TableCell>
-                    <TableCell className="px-3 py-2 text-xs">
-                      <a
-                        href={`https://www.google.com/search?q=${encodeURIComponent(String(line.ingredientName || '').trim())}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="font-medium text-slate-900 hover:text-slate-700 hover:underline hover:underline-offset-2"
-                      >
-                        {line.ingredientName}
-                      </a>
-                      <div className="text-slate-500">{line.motivo || '-'}</div>
-                    </TableCell>
-                    <TableCell className="px-3 py-2 text-xs text-slate-700">
-                      <div>{line.qtyEntry ?? '-'} {line.unitEntry || ''}</div>
-                      <div className="text-slate-500">cons: {line.qtyConsumption ?? '-'} {line.unitConsumption || ''}</div>
-                    </TableCell>
-                    <TableCell className="px-3 py-2 text-xs text-slate-700">
-                      <div>{formatMoney(line.costAmount)} / {line.movementUnit || '-'}</div>
-                      <div className="text-slate-500">total: {formatMoney(line.costTotalAmount)}</div>
-                    </TableCell>
-                    <TableCell className="px-3 py-2 text-xs text-slate-700">
-                      {line.status === 'ignored' ? (
-                        <span className="text-slate-400">ignorada</span>
-                      ) : (
-                        <ItemSystemMapperCell line={line} items={items} batchId={selectedBatch.id} unitOptions={unitOptions} />
-                      )}
-                    </TableCell>
-                    <TableCell className="px-3 py-2 text-xs text-slate-700">
-                      {line.status === 'ignored' ? (
-                        <span className="text-slate-400">ignorada</span>
-                      ) : line.status === 'pending_conversion' ? (
-                        <PendingConversionForm batchId={selectedBatch.id} line={line} />
-                      ) : (
-                        <>
-                          <div>
-                            {line.convertedCostAmount != null ? `${formatMoney(line.convertedCostAmount)} / ${line.targetUnit || '-'}` : '-'}
-                          </div>
-                          <div className="text-slate-500">
-                            {line.conversionSource || '-'}{line.conversionFactorUsed ? ` • fator ${Number(line.conversionFactorUsed).toFixed(6)}` : ''}
-                          </div>
-                        </>
-                      )}
-                    </TableCell>
-                    <TableCell className="px-3 py-2 text-xs">
-                      <Badge variant="outline" className={statusBadgeClass(String(line.status))}>{line.status}</Badge>
-                      <Form method="post" className="mt-2">
-                        <input type="hidden" name="_action" value={line.status === 'ignored' ? 'batch-unignore-line' : 'batch-ignore-line'} />
-                        <input type="hidden" name="batchId" value={selectedBatch.id} />
-                        <input type="hidden" name="lineId" value={line.id} />
-                        <Button type="submit" variant="outline" className="h-7 px-2 text-[11px]">
-                          {line.status === 'ignored' ? 'Reativar' : 'Ignorar'}
-                        </Button>
-                      </Form>
-                      {line.errorMessage ? <div className="mt-1 max-w-[220px] text-[11px] text-red-700">{line.errorMessage}</div> : null}
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      </div>
+        </nav>
 
-      {appliedChanges.length > 0 ? (
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Alterações aplicadas (snapshot para rollback)</h3>
-          <div className="mt-3 overflow-auto rounded-lg border border-slate-200">
-            <Table>
-              <TableHeader className="bg-slate-50/90">
-                <TableRow className="hover:bg-slate-50/90">
-                  <TableHead className="px-3 py-2 text-xs">Aplicado em</TableHead>
-                  <TableHead className="px-3 py-2 text-xs">Item</TableHead>
-                  <TableHead className="px-3 py-2 text-xs">Antes</TableHead>
-                  <TableHead className="px-3 py-2 text-xs">Depois</TableHead>
-                  <TableHead className="px-3 py-2 text-xs">Rollback</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {appliedChanges.map((c) => (
-                  <TableRow key={c.id} className="border-slate-100">
-                    <TableCell className="px-3 py-2 text-xs">{formatDate(c.appliedAt)}</TableCell>
-                    <TableCell className="px-3 py-2 text-xs">{c.itemId}</TableCell>
-                    <TableCell className="px-3 py-2 text-xs">{formatMoney(c.previousCostAmount)} / {c.previousCostUnit || '-'}</TableCell>
-                    <TableCell className="px-3 py-2 text-xs">{formatMoney(c.newCostAmount)} / {c.newCostUnit || '-'}</TableCell>
-                    <TableCell className="px-3 py-2 text-xs">
-                      {c.rolledBackAt ? (
-                        <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">revertido</Badge>
-                      ) : c.rollbackStatus ? (
-                        <Badge variant="outline" className={statusBadgeClass(c.rollbackStatus)}>{c.rollbackStatus}</Badge>
-                      ) : (
-                        <span className="text-slate-500">pendente</span>
-                      )}
-                      {c.rollbackMessage ? <div className="mt-1 text-[11px] text-red-700">{c.rollbackMessage}</div> : null}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </div>
-      ) : null}
+        <Outlet context={outletContext} />
+      </section>
     </div>
   );
 }

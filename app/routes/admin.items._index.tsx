@@ -366,13 +366,13 @@ export async function action({ request }: ActionFunctionArgs) {
         }
 
         const stockMovementLookup =
-          typeof db.stockNfImportAppliedChange?.findFirst === "function"
-            ? db.stockNfImportAppliedChange.findFirst({
-              where: { itemId, rolledBackAt: null },
+          typeof db.stockMovement?.findFirst === "function"
+            ? db.stockMovement.findFirst({
+              where: { itemId, deletedAt: null },
               select: { id: true },
             })
-            : typeof db.stockNfImportBatchLine?.findFirst === "function"
-              ? db.stockNfImportBatchLine.findFirst({
+            : typeof db.stockMovementImportBatchLine?.findFirst === "function"
+              ? db.stockMovementImportBatchLine.findFirst({
                 where: { mappedItemId: itemId, appliedAt: { not: null }, rolledBackAt: null },
                 select: { id: true },
               })

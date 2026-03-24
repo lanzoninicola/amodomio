@@ -1,4 +1,6 @@
 import prismaClient from "~/lib/prisma/client.server";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { runCostImpactPipelineForItemChange } from "~/domain/costs/cost-impact-pipeline.server";
 import { notifyAsyncJobWhatsappEvent } from "~/domain/async-jobs/async-jobs-whatsapp.server";
 
@@ -8,10 +10,54 @@ export const ASYNC_JOB_TYPE = {
 
 export type AsyncJobType = (typeof ASYNC_JOB_TYPE)[keyof typeof ASYNC_JOB_TYPE];
 
+const DEFAULT_MANUAL_BATCH_LIMIT = 5;
+const DEFAULT_CRON_BATCH_LIMIT = 5;
+const MAX_VERCEL_FREE_SAFE_BATCH_LIMIT = 10;
+
 function asDate(value: unknown) {
   if (!value) return null;
   const date = value instanceof Date ? value : new Date(String(value));
   return Number.isNaN(date.getTime()) ? null : date;
+}
+
+async function loadAsyncJobsCronSchedule() {
+  try {
+    const vercelConfigPath = path.resolve(process.cwd(), "vercel.json");
+    const raw = await readFile(vercelConfigPath, "utf-8");
+    const config = JSON.parse(raw) as {
+      crons?: Array<{ path?: string; schedule?: string }>;
+    };
+    const cron = (config.crons || []).find((item) => String(item?.path || "").trim() === "/api/async-jobs-cron");
+    if (!cron?.schedule) return null;
+
+    return {
+      path: "/api/async-jobs-cron",
+      schedule: String(cron.schedule),
+      limit: getCronBatchLimit(),
+      timezone: "UTC",
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function clampAsyncJobBatchLimit(value: unknown, max = MAX_VERCEL_FREE_SAFE_BATCH_LIMIT) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 1;
+  return Math.max(1, Math.min(max, Math.floor(numeric)));
+}
+
+export function getManualBatchLimit() {
+  return clampAsyncJobBatchLimit(process.env.ASYNC_JOBS_MANUAL_BATCH_LIMIT || DEFAULT_MANUAL_BATCH_LIMIT);
+}
+
+export function getCronBatchLimit() {
+  return clampAsyncJobBatchLimit(process.env.ASYNC_JOBS_CRON_LIMIT || DEFAULT_CRON_BATCH_LIMIT);
+}
+
+export function getManualBatchPresets() {
+  const max = getManualBatchLimit();
+  return [1, 3, 5].filter((value, index, array) => value <= max && array.indexOf(value) === index);
 }
 
 export async function enqueueAsyncJob(params: {
@@ -69,7 +115,7 @@ export async function getAsyncJobsDashboard(params?: { recentLimit?: number }) {
   const db = prismaClient as any;
   const recentLimit = Math.max(10, Math.min(200, Number(params?.recentLimit || 60)));
 
-  const [counts, grouped, pendingJobs, failedJobs, runningJobs, recentJobs] = await Promise.all([
+  const [counts, grouped, pendingJobs, failedJobs, runningJobs, recentJobs, cron] = await Promise.all([
     db.asyncJob.groupBy({
       by: ["status"],
       _count: { _all: true },
@@ -97,6 +143,7 @@ export async function getAsyncJobsDashboard(params?: { recentLimit?: number }) {
       orderBy: [{ updatedAt: "desc" }],
       take: recentLimit,
     }),
+    loadAsyncJobsCronSchedule(),
   ]);
 
   const countMap = Object.fromEntries(
@@ -140,6 +187,12 @@ export async function getAsyncJobsDashboard(params?: { recentLimit?: number }) {
     failedJobs,
     runningJobs,
     recentJobs,
+    cron,
+    batchControls: {
+      manualLimit: getManualBatchLimit(),
+      presets: getManualBatchPresets(),
+      hardLimit: MAX_VERCEL_FREE_SAFE_BATCH_LIMIT,
+    },
   };
 }
 
@@ -244,8 +297,9 @@ export async function runPendingAsyncJobsBatch(params?: {
   limit?: number;
   type?: string | null;
   lockedBy?: string | null;
+  maxLimit?: number;
 }) {
-  const limit = Math.max(1, Math.min(100, Number(params?.limit || 10)));
+  const limit = clampAsyncJobBatchLimit(params?.limit || 1, params?.maxLimit || MAX_VERCEL_FREE_SAFE_BATCH_LIMIT);
   const results = [];
 
   for (let i = 0; i < limit; i += 1) {

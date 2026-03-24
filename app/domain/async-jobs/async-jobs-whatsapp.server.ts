@@ -1,10 +1,17 @@
-import prismaClient from "~/lib/prisma/client.server";
+import { settingPrismaEntity } from "~/domain/setting/setting.prisma.entity.server";
 import { normalizePhone } from "~/domain/z-api/zapi.service";
 import { sendTextMessage } from "~/domain/z-api/zapi.service.server";
 import { logCrmWhatsappSentEventByPhone } from "~/domain/crm/crm-whatsapp-events.server";
-
-export const ASYNC_JOBS_SETTINGS_CONTEXT = "async-jobs";
-export const ASYNC_JOBS_WHATSAPP_PHONE_SETTING = "whatsappNotificationPhone";
+import {
+  ASYNC_JOBS_SETTINGS_CONTEXT,
+  ASYNC_JOBS_WHATSAPP_ENABLED_SETTING,
+  ASYNC_JOBS_WHATSAPP_ON_COMPLETED_SETTING,
+  ASYNC_JOBS_WHATSAPP_ON_FAILED_SETTING,
+  ASYNC_JOBS_WHATSAPP_ON_STARTED_SETTING,
+  ASYNC_JOBS_WHATSAPP_PHONE_SETTING,
+  DEFAULT_ASYNC_JOBS_WHATSAPP_SETTINGS,
+  type AsyncJobsWhatsappSettings,
+} from "~/domain/async-jobs/async-jobs-whatsapp-settings";
 
 function formatDateTime(value: Date) {
   return value.toLocaleString("pt-BR", {
@@ -12,17 +19,35 @@ function formatDateTime(value: Date) {
   });
 }
 
-async function getNotificationPhone() {
-  const setting = await prismaClient.setting.findFirst({
-    where: {
-      context: ASYNC_JOBS_SETTINGS_CONTEXT,
-      name: ASYNC_JOBS_WHATSAPP_PHONE_SETTING,
-    },
-    orderBy: [{ createdAt: "desc" }],
-    select: { value: true },
-  });
+export async function getAsyncJobsWhatsappSettings(): Promise<AsyncJobsWhatsappSettings> {
+  const settings = await settingPrismaEntity.findAllByContext(ASYNC_JOBS_SETTINGS_CONTEXT);
+  const byName = new Map(settings.map((setting) => [setting.name, setting.value]));
 
-  return normalizePhone(setting?.value || "");
+  return {
+    enabled:
+      (byName.get(ASYNC_JOBS_WHATSAPP_ENABLED_SETTING) ?? String(DEFAULT_ASYNC_JOBS_WHATSAPP_SETTINGS.enabled)) ===
+      "true",
+    phone: byName.get(ASYNC_JOBS_WHATSAPP_PHONE_SETTING) || DEFAULT_ASYNC_JOBS_WHATSAPP_SETTINGS.phone,
+    notifyOnStarted:
+      (byName.get(ASYNC_JOBS_WHATSAPP_ON_STARTED_SETTING) ??
+        String(DEFAULT_ASYNC_JOBS_WHATSAPP_SETTINGS.notifyOnStarted)) === "true",
+    notifyOnCompleted:
+      (byName.get(ASYNC_JOBS_WHATSAPP_ON_COMPLETED_SETTING) ??
+        String(DEFAULT_ASYNC_JOBS_WHATSAPP_SETTINGS.notifyOnCompleted)) === "true",
+    notifyOnFailed:
+      (byName.get(ASYNC_JOBS_WHATSAPP_ON_FAILED_SETTING) ??
+        String(DEFAULT_ASYNC_JOBS_WHATSAPP_SETTINGS.notifyOnFailed)) === "true",
+  };
+}
+
+function shouldSendWhatsappNotification(
+  settings: AsyncJobsWhatsappSettings,
+  event: "started" | "completed" | "failed",
+) {
+  if (!settings.enabled) return false;
+  if (event === "started") return settings.notifyOnStarted;
+  if (event === "completed") return settings.notifyOnCompleted;
+  return settings.notifyOnFailed;
 }
 
 function buildMessage(params: {
@@ -74,7 +99,10 @@ export async function notifyAsyncJobWhatsappEvent(params: {
   error?: unknown;
 }) {
   try {
-    const phone = await getNotificationPhone();
+    const settings = await getAsyncJobsWhatsappSettings();
+    if (!shouldSendWhatsappNotification(settings, params.event)) return;
+
+    const phone = normalizePhone(settings.phone);
     if (!phone) return;
 
     const message = buildMessage(params);
