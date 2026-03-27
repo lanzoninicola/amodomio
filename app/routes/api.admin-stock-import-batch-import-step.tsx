@@ -1,6 +1,6 @@
 import type { ActionFunctionArgs } from '@remix-run/node';
 import { authenticator } from '~/domain/auth/google.server';
-import { applyStockNfImportBatchStep } from '~/domain/stock-nf-import/stock-nf-import.server';
+import { importStockMovementImportBatchStep } from '~/domain/stock-movement/stock-movement-import.server';
 import { badRequest, ok, serverError } from '~/utils/http-response.server';
 
 function str(value: FormDataEntryValue | null) {
@@ -17,7 +17,7 @@ export async function action({ request }: ActionFunctionArgs) {
     const batchId = str(formData.get('batchId'));
     if (!batchId) return badRequest('Lote inválido');
 
-    const result = await applyStockNfImportBatchStep({
+    const result = await importStockMovementImportBatchStep({
       batchId,
       actor,
       limit: 1,

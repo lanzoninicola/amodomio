@@ -33,7 +33,7 @@ import {
   STOCK_PHOTO_CHATGPT_PROMPT_SETTING_NAME,
   STOCK_PHOTO_CHATGPT_RETURN_URL_SETTING_NAME,
   STOCK_PHOTO_CHATGPT_SETTINGS_CONTEXT,
-} from "~/domain/stock-nf-import/stock-photo-chatgpt-settings";
+} from "~/domain/stock-movement/stock-photo-chatgpt-settings";
 
 const SETTING_TYPES = ["string", "boolean", "float", "int", "json"] as const;
 const REELS_SETTINGS_CONTEXT = "cardapio";

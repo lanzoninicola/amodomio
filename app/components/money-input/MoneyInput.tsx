@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { DecimalLike } from "../../domain/kds/types";
 import { cn } from "~/lib/utils";
 type Props = {
+  id?: string;
   name: string;
   defaultValue?: DecimalLike | null;
   placeholder?: string;

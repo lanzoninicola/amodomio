@@ -18,21 +18,21 @@ enum RecipeType {
 }
 
 model Recipe {
-  id                     String                   @id @default(uuid())
-  name                   String
-  itemId                 String?                  @map("item_id")
-  variationId            String?                  @map("variation_id")
-  type                   RecipeType               @default(semiFinished)
-  description            String?
-  hasVariations          Boolean                  @default(false) @map("has_variations")
-  isVegetarian           Boolean                  @default(false) @map("is_vegetarian")
-  isGlutenFree           Boolean                  @default(false) @map("is_gluten_free")
-  createdAt              DateTime                 @default(now()) @map("created_at")
-  updatedAt              DateTime                 @default(now()) @updatedAt @map("updated_at")
-  Item                   Item?                    @relation(fields: [itemId], references: [id])
-  Variation              Variation?               @relation(fields: [variationId], references: [id])
-  ItemVariations         ItemVariation[]
-  RecipeIngredient       RecipeIngredient[]
+  id               String             @id @default(uuid())
+  name             String
+  itemId           String?            @map("item_id")
+  variationId      String?            @map("variation_id")
+  type             RecipeType         @default(semiFinished)
+  description      String?
+  hasVariations    Boolean            @default(false) @map("has_variations")
+  isVegetarian     Boolean            @default(false) @map("is_vegetarian")
+  isGlutenFree     Boolean            @default(false) @map("is_gluten_free")
+  createdAt        DateTime           @default(now()) @map("created_at")
+  updatedAt        DateTime           @default(now()) @updatedAt @map("updated_at")
+  Item             Item?              @relation(fields: [itemId], references: [id])
+  Variation        Variation?         @relation(fields: [variationId], references: [id])
+  ItemVariations   ItemVariation[]
+  RecipeIngredient RecipeIngredient[]
 
   @@index([itemId], map: "recipes_item_id_idx")
   @@index([variationId], map: "recipes_variation_id_idx")
@@ -40,11 +40,11 @@ model Recipe {
 }
 
 model Ingredient {
-  id        String              @id @default(uuid())
-  name      String              @db.VarChar
-  um        String              @db.VarChar
-  createdAt DateTime            @map("created_at")
-  updatedAt DateTime            @default(now()) @updatedAt @map("updated_at")
+  id        String   @id @default(uuid())
+  name      String   @db.VarChar
+  um        String   @db.VarChar
+  createdAt DateTime @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
 
   @@map("ingredients")
 }
@@ -69,6 +69,7 @@ model SubCategory {
   createdAt  DateTime   @map("created_at")
   updatedAt  DateTime   @default(now()) @updatedAt @map("updated_at")
   Categories Category[] @relation("CategorySubCategories")
+
   @@map("sub_categories")
 }
 
@@ -161,33 +162,35 @@ model GroceryListItem {
 }
 
 model Item {
-  id            String     @id @default(uuid())
-  name          String
-  description   String?
-  classification String
-  recipeVariationPolicy String @default("auto") @map("recipe_variation_policy") // auto | hide | show
-  categoryId    String?    @map("category_id")
-  purchaseUm    String?    @map("purchase_um")
-  consumptionUm String?    @map("consumption_um")
-  purchaseToConsumptionFactor Float? @map("purchase_to_consumption_factor")
-  active        Boolean    @default(true)
-  canPurchase   Boolean    @default(false) @map("can_purchase")
-  canTransform  Boolean    @default(false) @map("can_transform")
-  canSell       Boolean    @default(false) @map("can_sell")
-  canStock      Boolean    @default(false) @map("can_stock")
-  createdAt     DateTime   @default(now()) @map("created_at")
-  updatedAt     DateTime   @default(now()) @updatedAt @map("updated_at")
+  id                          String   @id @default(uuid())
+  name                        String
+  description                 String?
+  classification              String
+  recipeVariationPolicy       String   @default("auto") @map("recipe_variation_policy") // auto | hide | show
+  categoryId                  String?  @map("category_id")
+  purchaseUm                  String?  @map("purchase_um")
+  consumptionUm               String?  @map("consumption_um")
+  purchaseToConsumptionFactor Float?   @map("purchase_to_consumption_factor")
+  active                      Boolean  @default(true)
+  canPurchase                 Boolean  @default(false) @map("can_purchase")
+  canTransform                Boolean  @default(false) @map("can_transform")
+  canSell                     Boolean  @default(false) @map("can_sell")
+  canStock                    Boolean  @default(false) @map("can_stock")
+  createdAt                   DateTime @default(now()) @map("created_at")
+  updatedAt                   DateTime @default(now()) @updatedAt @map("updated_at")
 
-  Category    Category?   @relation(fields: [categoryId], references: [id])
-  MenuItem    MenuItem[]
-  Recipe      Recipe[]
-  RecipeIngredient RecipeIngredient[]
-  ItemCostSheet ItemCostSheet[]
-  ItemVariation ItemVariation[]
-  StockNfImportBatchLine StockNfImportBatchLine[]
-  StockNfImportAppliedChange StockNfImportAppliedChange[]
-  ItemImportAlias ItemImportAlias[]
-  CostImpactRunSource CostImpactRun[]
+  Category                     Category?                      @relation(fields: [categoryId], references: [id])
+  MenuItem                     MenuItem[]
+  Recipe                       Recipe[]
+  RecipeIngredient             RecipeIngredient[]
+  ItemCostSheet                ItemCostSheet[]
+  ItemVariation                ItemVariation[]
+  StockMovementImportBatchLine StockMovementImportBatchLine[]
+  StockMovement                StockMovement[]
+  ItemImportAlias              ItemImportAlias[]
+  CostImpactRunSource          CostImpactRun[]
+  ItemPurchaseConversion       ItemPurchaseConversion[]
+  ItemUnit                     ItemUnit[]
 
   @@index([categoryId], map: "items_category_id_idx")
   @@index([classification], map: "items_classification_idx")
@@ -195,32 +198,63 @@ model Item {
   @@map("items")
 }
 
+model ItemPurchaseConversion {
+  id         String   @id @default(uuid())
+  itemId     String   @map("item_id")
+  purchaseUm String   @map("purchase_um")
+  factor     Float
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at")
+
+  item Item @relation(fields: [itemId], references: [id])
+
+  @@unique([itemId, purchaseUm])
+  @@index([itemId], map: "item_purchase_conversions_item_id_idx")
+  @@map("item_purchase_conversions")
+}
+
 model MeasurementUnit {
   id        String   @id @default(uuid())
   code      String
   name      String
   kind      String? // weight | volume | count | custom
+  scope     String   @default("global") // global | restricted
   active    Boolean  @default(true)
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
 
   ConversionsFrom MeasurementUnitConversion[] @relation("MeasurementUnitConversionFrom")
   ConversionsTo   MeasurementUnitConversion[] @relation("MeasurementUnitConversionTo")
+  ItemUnit        ItemUnit[]
 
   @@unique([code], map: "measurement_units_code_unique")
   @@index([active, code], map: "measurement_units_active_code_idx")
   @@map("measurement_units")
 }
 
+model ItemUnit {
+  id        String   @id @default(uuid())
+  itemId    String   @map("item_id")
+  unitCode  String   @map("unit_code")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  item            Item            @relation(fields: [itemId], references: [id])
+  MeasurementUnit MeasurementUnit @relation(fields: [unitCode], references: [code])
+
+  @@unique([itemId, unitCode])
+  @@index([itemId], map: "item_units_item_id_idx")
+  @@map("item_units")
+}
+
 model MeasurementUnitConversion {
-  id           String   @id @default(uuid())
-  fromUnitId    String   @map("from_unit_id")
-  toUnitId      String   @map("to_unit_id")
-  factor        Float
-  notes         String?  @db.Text
-  active        Boolean  @default(true)
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at")
+  id         String   @id @default(uuid())
+  fromUnitId String   @map("from_unit_id")
+  toUnitId   String   @map("to_unit_id")
+  factor     Float
+  notes      String?  @db.Text
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at")
 
   FromUnit MeasurementUnit @relation("MeasurementUnitConversionFrom", fields: [fromUnitId], references: [id], onDelete: Cascade)
   ToUnit   MeasurementUnit @relation("MeasurementUnitConversionTo", fields: [toUnitId], references: [id], onDelete: Cascade)
@@ -232,12 +266,12 @@ model MeasurementUnitConversion {
 }
 
 model Variation {
-  id        String   @id @default(uuid())
+  id        String    @id @default(uuid())
   kind      String
   code      String
   name      String
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
 
   ItemVariation ItemVariation[]
@@ -250,24 +284,24 @@ model Variation {
 }
 
 model ItemVariation {
-  id          String   @id @default(uuid())
-  itemId      String   @map("item_id")
-  variationId String   @map("variation_id")
-  isReference Boolean  @default(false) @map("is_reference")
-  recipeId    String?  @map("recipe_id")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
+  id          String    @id @default(uuid())
+  itemId      String    @map("item_id")
+  variationId String    @map("variation_id")
+  isReference Boolean   @default(false) @map("is_reference")
+  recipeId    String?   @map("recipe_id")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at")
   deletedAt   DateTime? @map("deleted_at")
 
-  Item                 Item                   @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  Recipe               Recipe?                @relation(fields: [recipeId], references: [id], onDelete: SetNull)
-  Variation            Variation              @relation(fields: [variationId], references: [id], onDelete: Restrict)
-  ItemCostSheet        ItemCostSheet[]
-  RecipeVariationIngredient RecipeVariationIngredient[]
-  ItemCostVariation        ItemCostVariation?
-  ItemCostVariationHistory ItemCostVariationHistory[]
+  Item                            Item                              @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  Recipe                          Recipe?                           @relation(fields: [recipeId], references: [id], onDelete: SetNull)
+  Variation                       Variation                         @relation(fields: [variationId], references: [id], onDelete: Restrict)
+  ItemCostSheet                   ItemCostSheet[]
+  RecipeVariationIngredient       RecipeVariationIngredient[]
+  ItemCostVariation               ItemCostVariation?
+  ItemCostVariationHistory        ItemCostVariationHistory[]
   ItemCostSheetVariationComponent ItemCostSheetVariationComponent[]
-  StockNfImportAppliedChange StockNfImportAppliedChange[]
+  StockMovement                   StockMovement[]
 
   @@unique([itemId, variationId], map: "item_variations_item_variation_unique")
   @@index([recipeId], map: "item_variations_recipe_id_idx")
@@ -278,18 +312,18 @@ model ItemVariation {
 }
 
 model RecipeIngredient {
-  id                 String   @id @default(uuid())
-  recipeId           String   @map("recipe_id")
-  ingredientItemId   String   @map("ingredient_item_id")
-  defaultLossPct     Float    @default(0) @map("default_loss_pct")
-  sortOrderIndex     Int      @default(0) @map("sort_order_index")
-  notes              String?  @db.Text
-  createdAt          DateTime @default(now()) @map("created_at")
-  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at")
+  id               String   @id @default(uuid())
+  recipeId         String   @map("recipe_id")
+  ingredientItemId String   @map("ingredient_item_id")
+  defaultLossPct   Float    @default(0) @map("default_loss_pct")
+  sortOrderIndex   Int      @default(0) @map("sort_order_index")
+  notes            String?  @db.Text
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at")
 
-  Recipe                     Recipe                      @relation(fields: [recipeId], references: [id], onDelete: Cascade)
-  IngredientItem             Item                        @relation(fields: [ingredientItemId], references: [id])
-  RecipeVariationIngredient  RecipeVariationIngredient[]
+  Recipe                    Recipe                      @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  IngredientItem            Item                        @relation(fields: [ingredientItemId], references: [id])
+  RecipeVariationIngredient RecipeVariationIngredient[]
 
   @@unique([recipeId, ingredientItemId], map: "recipe_ingredients_recipe_ingredient_unique")
   @@index([recipeId], map: "recipe_ingredients_recipe_id_idx")
@@ -298,21 +332,21 @@ model RecipeIngredient {
 }
 
 model RecipeVariationIngredient {
-  id                 String   @id @default(uuid())
-  recipeIngredientId String   @map("recipe_ingredient_id")
-  itemVariationId    String   @map("item_variation_id")
-  unit               String   @db.VarChar
-  quantity           Float    @default(0)
-  lossPct            Float?   @map("loss_pct")
-  lastUnitCostAmount Float    @default(0) @map("last_unit_cost_amount")
-  avgUnitCostAmount  Float    @default(0) @map("avg_unit_cost_amount")
-  lastTotalCostAmount Float   @default(0) @map("last_total_cost_amount")
-  avgTotalCostAmount Float    @default(0) @map("avg_total_cost_amount")
-  createdAt          DateTime @default(now()) @map("created_at")
-  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at")
+  id                  String   @id @default(uuid())
+  recipeIngredientId  String   @map("recipe_ingredient_id")
+  itemVariationId     String   @map("item_variation_id")
+  unit                String   @db.VarChar
+  quantity            Float    @default(0)
+  lossPct             Float?   @map("loss_pct")
+  lastUnitCostAmount  Float    @default(0) @map("last_unit_cost_amount")
+  avgUnitCostAmount   Float    @default(0) @map("avg_unit_cost_amount")
+  lastTotalCostAmount Float    @default(0) @map("last_total_cost_amount")
+  avgTotalCostAmount  Float    @default(0) @map("avg_total_cost_amount")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @default(now()) @updatedAt @map("updated_at")
 
-  RecipeIngredient  RecipeIngredient @relation(fields: [recipeIngredientId], references: [id], onDelete: Cascade)
-  ItemVariation     ItemVariation    @relation(fields: [itemVariationId], references: [id], onDelete: Cascade)
+  RecipeIngredient RecipeIngredient @relation(fields: [recipeIngredientId], references: [id], onDelete: Cascade)
+  ItemVariation    ItemVariation    @relation(fields: [itemVariationId], references: [id], onDelete: Cascade)
 
   @@unique([recipeIngredientId, itemVariationId], map: "recipe_var_ingredients_recipe_ing_item_var_unique")
   @@index([itemVariationId], map: "recipe_var_ingredients_item_variation_id_idx")
@@ -321,18 +355,18 @@ model RecipeVariationIngredient {
 }
 
 model ItemCostVariation {
-  id                 String   @id @default(uuid())
-  itemVariationId    String   @unique(map: "item_cost_variations_item_variation_id_unique") @map("item_variation_id")
-  costAmount         Float    @default(0) @map("cost_amount")
-  previousCostAmount Float    @default(0) @map("previous_cost_amount")
+  id                 String    @id @default(uuid())
+  itemVariationId    String    @unique(map: "item_cost_variations_item_variation_id_unique") @map("item_variation_id")
+  costAmount         Float     @default(0) @map("cost_amount")
+  previousCostAmount Float     @default(0) @map("previous_cost_amount")
   unit               String?
-  source             String?  // manual | purchase | recipe-sheet | import | adjustment
-  referenceType      String?  @map("reference_type")
-  referenceId        String?  @map("reference_id")
-  validFrom          DateTime @default(now()) @map("valid_from")
-  updatedBy          String?  @map("updated_by")
-  createdAt          DateTime @default(now()) @map("created_at")
-  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at")
+  source             String? // manual | purchase | recipe-sheet | import | adjustment
+  referenceType      String?   @map("reference_type")
+  referenceId        String?   @map("reference_id")
+  validFrom          DateTime  @default(now()) @map("valid_from")
+  updatedBy          String?   @map("updated_by")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @default(now()) @updatedAt @map("updated_at")
   deletedAt          DateTime? @map("deleted_at")
 
   ItemVariation ItemVariation @relation(fields: [itemVariationId], references: [id], onDelete: Cascade)
@@ -349,7 +383,7 @@ model ItemCostVariationHistory {
   costAmount         Float    @map("cost_amount")
   previousCostAmount Float    @default(0) @map("previous_cost_amount")
   unit               String?
-  source             String?  // manual | purchase | recipe-sheet | import | adjustment
+  source             String? // manual | purchase | recipe-sheet | import | adjustment
   referenceType      String?  @map("reference_type")
   referenceId        String?  @map("reference_id")
   validFrom          DateTime @default(now()) @map("valid_from")
@@ -367,17 +401,17 @@ model ItemCostVariationHistory {
 }
 
 model Supplier {
-  id          String   @id @default(uuid())
-  name        String
-  cnpj        String?
-  contactName String?  @map("contact_name")
-  phoneNumber String?  @map("phone_number")
-  email       String?
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
-  contacts    SupplierContact[]
-  StockNfImportBatchLine     StockNfImportBatchLine[]
-  StockNfImportAppliedChange StockNfImportAppliedChange[]
+  id                           String                         @id @default(uuid())
+  name                         String
+  cnpj                         String?
+  contactName                  String?                        @map("contact_name")
+  phoneNumber                  String?                        @map("phone_number")
+  email                        String?
+  createdAt                    DateTime                       @default(now()) @map("created_at")
+  updatedAt                    DateTime                       @default(now()) @updatedAt @map("updated_at")
+  contacts                     SupplierContact[]
+  StockMovementImportBatchLine StockMovementImportBatchLine[]
+  StockMovement                StockMovement[]
 
   @@index([cnpj], map: "suppliers_cnpj_idx")
   @@index([name], map: "suppliers_name_idx")
@@ -484,28 +518,28 @@ model MenuItemImage {
 }
 
 model MenuItemGalleryImage {
-  id               String   @id @default(uuid())
-  menuItemId       String   @map("menu_item_id")
-  menuItem         MenuItem @relation(fields: [menuItemId], references: [id])
-  kind             String   @default("image") @map("kind")
-  secureUrl        String?  @map("secure_url")
-  slot             String?  @map("slot")
-  assetId          String?  @map("asset_id")
-  mediaAssetId     String?  @map("media_asset_id")
+  id               String      @id @default(uuid())
+  menuItemId       String      @map("menu_item_id")
+  menuItem         MenuItem    @relation(fields: [menuItemId], references: [id])
+  kind             String      @default("image") @map("kind")
+  secureUrl        String?     @map("secure_url")
+  slot             String?     @map("slot")
+  assetId          String?     @map("asset_id")
+  mediaAssetId     String?     @map("media_asset_id")
   mediaAsset       MediaAsset? @relation(fields: [mediaAssetId], references: [id])
-  assetFolder      String?  @map("asset_folder")
-  originalFileName String?  @map("original_file_name")
-  displayName      String?  @map("display_name")
-  height           Float?   @map("height")
-  width            Float?   @map("width")
-  thumbnailUrl     String?  @map("thumbnail_url")
-  format           String?  @map("format")
-  publicId         String?  @map("public_id")
-  isPrimary        Boolean  @default(false) /// Para destacar uma imagem principal
-  visible          Boolean  @default(true) @map("visible")
-  sortOrder        Int      @default(0) @map("sort_order")
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at")
+  assetFolder      String?     @map("asset_folder")
+  originalFileName String?     @map("original_file_name")
+  displayName      String?     @map("display_name")
+  height           Float?      @map("height")
+  width            Float?      @map("width")
+  thumbnailUrl     String?     @map("thumbnail_url")
+  format           String?     @map("format")
+  publicId         String?     @map("public_id")
+  isPrimary        Boolean     @default(false) /// Para destacar uma imagem principal
+  visible          Boolean     @default(true) @map("visible")
+  sortOrder        Int         @default(0) @map("sort_order")
+  createdAt        DateTime    @default(now()) @map("created_at")
+  updatedAt        DateTime    @default(now()) @updatedAt @map("updated_at")
 
   @@map("menu_item_gallery_images")
 }
@@ -648,35 +682,35 @@ enum ItemCostSheetLineType {
 }
 
 model ItemCostSheet {
-  id                String            @id @default(uuid())
-  name              String
-  description       String?
-  itemId            String            @map("item_id")
-  itemVariationId   String            @map("item_variation_id")
-  version           Int               @default(1)
+  id                  String              @id @default(uuid())
+  name                String
+  description         String?
+  itemId              String              @map("item_id")
+  itemVariationId     String              @map("item_variation_id")
+  version             Int                 @default(1)
   status              ItemCostSheetStatus @default(draft)
-  isActive          Boolean           @default(false) @map("is_active")
-  baseItemCostSheetId String?         @map("base_item_cost_sheet_id")
-  costAmount        Float             @default(0) @map("cost_amount")
-  notes             String?           @db.Text
-  activatedAt       DateTime?         @map("activated_at")
-  createdBy         String?           @map("created_by")
-  updatedBy         String?           @map("updated_by")
-  createdAt         DateTime          @default(now()) @map("created_at")
-  updatedAt         DateTime          @default(now()) @updatedAt @map("updated_at")
+  isActive            Boolean             @default(false) @map("is_active")
+  baseItemCostSheetId String?             @map("base_item_cost_sheet_id")
+  costAmount          Float               @default(0) @map("cost_amount")
+  notes               String?             @db.Text
+  activatedAt         DateTime?           @map("activated_at")
+  createdBy           String?             @map("created_by")
+  updatedBy           String?             @map("updated_by")
+  createdAt           DateTime            @default(now()) @map("created_at")
+  updatedAt           DateTime            @default(now()) @updatedAt @map("updated_at")
 
-  Item               Item         @relation(fields: [itemId], references: [id])
-  ItemVariation      ItemVariation @relation(fields: [itemVariationId], references: [id])
-  baseItemCostSheet    ItemCostSheet? @relation("ItemCostSheetBase", fields: [baseItemCostSheetId], references: [id])
-  derivedItemCostSheet ItemCostSheet[] @relation("ItemCostSheetBase")
+  Item                   Item                     @relation(fields: [itemId], references: [id])
+  ItemVariation          ItemVariation            @relation(fields: [itemVariationId], references: [id])
+  baseItemCostSheet      ItemCostSheet?           @relation("ItemCostSheetBase", fields: [baseItemCostSheetId], references: [id])
+  derivedItemCostSheet   ItemCostSheet[]          @relation("ItemCostSheetBase")
   ItemCostSheetComponent ItemCostSheetComponent[]
-  ItemCostSheetLine    ItemCostSheetLine[]
+  ItemCostSheetLine      ItemCostSheetLine[]
 
+  @@unique([itemId, itemVariationId, version], map: "item_cost_sheets_item_variation_version_unique")
   @@index([itemId], map: "item_cost_sheets_item_id_idx")
   @@index([itemVariationId], map: "item_cost_sheets_item_variation_id_idx")
   @@index([itemId, itemVariationId], map: "item_cost_sheets_item_variation_idx")
   @@index([itemId, itemVariationId, isActive], map: "item_cost_sheets_item_variation_active_idx")
-  @@unique([itemId, itemVariationId, version], map: "item_cost_sheets_item_variation_version_unique")
   @@map("item_cost_sheets")
 }
 
@@ -691,27 +725,27 @@ model ItemCostSheetComponent {
   createdAt       DateTime              @default(now()) @map("created_at")
   updatedAt       DateTime              @default(now()) @updatedAt @map("updated_at")
 
-  ItemCostSheet                    ItemCostSheet                     @relation(fields: [itemCostSheetId], references: [id], onDelete: Cascade)
-  ItemCostSheetVariationComponent  ItemCostSheetVariationComponent[]
+  ItemCostSheet                   ItemCostSheet                     @relation(fields: [itemCostSheetId], references: [id], onDelete: Cascade)
+  ItemCostSheetVariationComponent ItemCostSheetVariationComponent[]
 
   @@index([itemCostSheetId], map: "item_cost_sheet_components_sheet_idx")
   @@map("item_cost_sheet_components")
 }
 
 model ItemCostSheetVariationComponent {
-  id                       String                 @id @default(uuid())
-  itemCostSheetComponentId String                 @map("item_cost_sheet_component_id")
-  itemVariationId          String                 @map("item_variation_id")
+  id                       String   @id @default(uuid())
+  itemCostSheetComponentId String   @map("item_cost_sheet_component_id")
+  itemVariationId          String   @map("item_variation_id")
   unit                     String?
-  quantity                 Float                  @default(0)
-  unitCostAmount           Float                  @default(0) @map("unit_cost_amount")
-  wastePerc                Float                  @default(0) @map("waste_perc")
-  totalCostAmount          Float                  @default(0) @map("total_cost_amount")
-  createdAt                DateTime               @default(now()) @map("created_at")
-  updatedAt                DateTime               @default(now()) @updatedAt @map("updated_at")
+  quantity                 Float    @default(0)
+  unitCostAmount           Float    @default(0) @map("unit_cost_amount")
+  wastePerc                Float    @default(0) @map("waste_perc")
+  totalCostAmount          Float    @default(0) @map("total_cost_amount")
+  createdAt                DateTime @default(now()) @map("created_at")
+  updatedAt                DateTime @default(now()) @updatedAt @map("updated_at")
 
   ItemCostSheetComponent ItemCostSheetComponent @relation(fields: [itemCostSheetComponentId], references: [id], onDelete: Cascade)
-  ItemVariation         ItemVariation          @relation(fields: [itemVariationId], references: [id])
+  ItemVariation          ItemVariation          @relation(fields: [itemVariationId], references: [id])
 
   @@unique([itemCostSheetComponentId, itemVariationId], map: "item_cost_sheet_variation_components_component_variation_unique")
   @@index([itemVariationId], map: "item_cost_sheet_variation_components_item_variation_idx")
@@ -720,20 +754,20 @@ model ItemCostSheetVariationComponent {
 }
 
 model ItemCostSheetLine {
-  id              String              @id @default(uuid())
+  id              String                @id @default(uuid())
   itemCostSheetId String                @map("item_cost_sheet_id")
   type            ItemCostSheetLineType @default(manual)
-  refId           String?             @map("ref_id")
+  refId           String?               @map("ref_id")
   name            String
   unit            String?
-  quantity        Float               @default(0)
-  unitCostAmount  Float               @default(0) @map("unit_cost_amount")
-  wastePerc       Float               @default(0) @map("waste_perc")
-  totalCostAmount Float               @default(0) @map("total_cost_amount")
-  sortOrderIndex  Int                 @default(0) @map("sort_order_index")
-  notes           String?             @db.Text
-  createdAt       DateTime            @default(now()) @map("created_at")
-  updatedAt       DateTime            @default(now()) @updatedAt @map("updated_at")
+  quantity        Float                 @default(0)
+  unitCostAmount  Float                 @default(0) @map("unit_cost_amount")
+  wastePerc       Float                 @default(0) @map("waste_perc")
+  totalCostAmount Float                 @default(0) @map("total_cost_amount")
+  sortOrderIndex  Int                   @default(0) @map("sort_order_index")
+  notes           String?               @db.Text
+  createdAt       DateTime              @default(now()) @map("created_at")
+  updatedAt       DateTime              @default(now()) @updatedAt @map("updated_at")
 
   ItemCostSheet ItemCostSheet @relation(fields: [itemCostSheetId], references: [id], onDelete: Cascade)
 
@@ -1022,7 +1056,7 @@ model MenuItemTag {
 
 model AdminNavigationClick {
   id            String   @id @default(uuid())
-  href          String   @unique
+  href          String
   title         String
   groupTitle    String?  @map("group_title")
   pinned        Boolean  @default(false)
@@ -1556,8 +1590,8 @@ model KdsDailyOrderDetail {
 
   isVendaLivre Boolean @default(false) @map("is_venda_livre")
 
-  isCreditCard Boolean @default(false) @map("is_credit_card")
-  isCash       Boolean @default(false) @map("is_cash")
+  isCreditCard         Boolean @default(false) @map("is_credit_card")
+  isCash               Boolean @default(false) @map("is_cash")
   isOtherPaymentMethod Boolean @default(false) @map("is_other_payment_method")
 
   novoPedidoAt      DateTime?     @map("novo_pedido_at")
@@ -1588,14 +1622,14 @@ model DoughDailyStock {
 }
 
 model DeliveryZone {
-  id        String   @id @default(uuid())
-  name      String
-  city      String
-  state     String
-  zipCode   String?  @map("zip_code")
+  id              String   @id @default(uuid())
+  name            String
+  city            String
+  state           String
+  zipCode         String?  @map("zip_code")
   audienceClasses String[] @default([]) @map("audience_classes")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
 
   distances           DeliveryZoneDistance[]
   deliveryFees        DeliveryFee[]
@@ -2049,182 +2083,167 @@ model CrmCampaignSend {
   @@map("crm_campaign_send")
 }
 
-model StockNfImportBatch {
-  id              String   @id @default(uuid())
-  name            String
-  sourceSystem    String   @default("saipos") @map("source_system")
-  sourceType      String   @default("entrada_nf") @map("source_type")
-  status          String   @default("draft") // draft | validated | applied | rolled_back | partial | archived
-  applyStatus     String   @default("idle") @map("apply_status") // idle | applying | completed | failed
-  applyStartedAt  DateTime? @map("apply_started_at")
-  applyFinishedAt DateTime? @map("apply_finished_at")
-  applyProcessedCount Int @default(0) @map("apply_processed_count")
-  applyErrorCount Int @default(0) @map("apply_error_count")
-  applyTotalCount Int @default(0) @map("apply_total_count")
-  applyMessage    String?  @map("apply_message") @db.Text
-  originalFileName String? @map("original_file_name")
-  worksheetName   String?  @map("worksheet_name")
-  supplierNotesFileName String? @map("supplier_notes_file_name")
+model StockMovementImportBatch {
+  id                      String    @id @default(uuid())
+  name                    String
+  sourceSystem            String    @default("saipos") @map("source_system")
+  sourceType              String    @default("entrada_nf") @map("source_type")
+  status                  String    @default("draft") // draft | validated | imported | rolled_back | partial | archived
+  importStatus            String    @default("idle") @map("import_status") // idle | importing | imported | failed
+  importStartedAt         DateTime? @map("import_started_at")
+  importFinishedAt        DateTime? @map("import_finished_at")
+  importProcessedCount    Int       @default(0) @map("import_processed_count")
+  importErrorCount        Int       @default(0) @map("import_error_count")
+  importTotalCount        Int       @default(0) @map("import_total_count")
+  importMessage           String?   @map("import_message") @db.Text
+  originalFileName        String?   @map("original_file_name")
+  worksheetName           String?   @map("worksheet_name")
+  supplierNotesFileName   String?   @map("supplier_notes_file_name")
   supplierNotesAttachedAt DateTime? @map("supplier_notes_attached_at")
-  periodStart     DateTime? @map("period_start")
-  periodEnd       DateTime? @map("period_end")
-  uploadedBy      String?  @map("uploaded_by")
-  appliedAt       DateTime? @map("applied_at")
-  rolledBackAt    DateTime? @map("rolled_back_at")
-  summary         Json?
-  notes           String?  @db.Text
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at")
-  archivedAt      DateTime? @map("archived_at")
+  periodStart             DateTime? @map("period_start")
+  periodEnd               DateTime? @map("period_end")
+  uploadedBy              String?   @map("uploaded_by")
+  appliedAt               DateTime? @map("applied_at")
+  rolledBackAt            DateTime? @map("rolled_back_at")
+  summary                 Json?
+  notes                   String?   @db.Text
+  createdAt               DateTime  @default(now()) @map("created_at")
+  updatedAt               DateTime  @default(now()) @updatedAt @map("updated_at")
+  archivedAt              DateTime? @map("archived_at")
 
-  Lines          StockNfImportBatchLine[]
-  AppliedChanges StockNfImportAppliedChange[]
+  Lines          StockMovementImportBatchLine[]
+  StockMovements StockMovement[]
 
-  @@index([status, createdAt], map: "stock_nf_import_batches_status_created_at_idx")
-  @@map("stock_nf_import_batches")
+  @@index([status, createdAt], map: "stock_movement_import_batches_status_created_at_idx")
+  @@map("stock_movement_import_batches")
 }
 
-model StockNfImportBatchLine {
-  id                        String   @id @default(uuid())
-  batchId                   String   @map("batch_id")
-  rowNumber                 Int      @map("row_number")
-  status                    String   @default("parsed") // parsed | invalid | pending_mapping | pending_conversion | ready | applied | skipped_duplicate | error
-  errorCode                 String?  @map("error_code")
-  errorMessage              String?  @map("error_message") @db.Text
-  rawData                   Json?    @map("raw_data")
-  movementAt                DateTime? @map("movement_at")
-  ingredientName            String   @map("ingredient_name")
-  ingredientNameNormalized  String   @map("ingredient_name_normalized")
-  motivo                    String?
-  identification            String?
-  invoiceNumber             String?  @map("invoice_number")
-  supplierId                String?  @map("supplier_id")
-  supplierName              String?  @map("supplier_name")
-  supplierNameNormalized    String?  @map("supplier_name_normalized")
-  supplierCnpj              String?  @map("supplier_cnpj")
-  supplierMatchSource       String?  @map("supplier_match_source")
-  supplierReconciliationStatus String @default("not_started") @map("supplier_reconciliation_status") // not_started | matched | unmatched | manual
-  supplierReconciliationSource String? @map("supplier_reconciliation_source")
-  supplierReconciliationAt   DateTime? @map("supplier_reconciliation_at")
-  qtyEntry                  Float?   @map("qty_entry")
-  unitEntry                 String?  @map("unit_entry")
-  qtyConsumption            Float?   @map("qty_consumption")
-  unitConsumption           String?  @map("unit_consumption")
-  movementUnit              String?  @map("movement_unit")
-  costAmount                Float?   @map("cost_amount")
-  costTotalAmount           Float?   @map("cost_total_amount")
-  observation               String?
-  sourceFingerprint         String   @map("source_fingerprint")
-  duplicateOfLineId         String?  @map("duplicate_of_line_id")
-  mappedItemId              String?  @map("mapped_item_id")
-  mappedItemName            String?  @map("mapped_item_name")
-  mappingSource             String?  @map("mapping_source") // exact | alias | manual | suggestion
-  manualConversionFactor    Float?   @map("manual_conversion_factor") // destination units per 1 source unit
-  conversionSource          String?  @map("conversion_source") // direct | reverse | item_purchase_factor | manual
-  conversionFactorUsed      Float?   @map("conversion_factor_used")
-  targetUnit                String?  @map("target_unit")
-  convertedCostAmount       Float?   @map("converted_cost_amount")
-  appliedAt                 DateTime? @map("applied_at")
-  rolledBackAt              DateTime? @map("rolled_back_at")
-  metadata                  Json?
-  createdAt                 DateTime @default(now()) @map("created_at")
-  updatedAt                 DateTime @default(now()) @updatedAt @map("updated_at")
+model StockMovementImportBatchLine {
+  id                           String    @id @default(uuid())
+  batchId                      String    @map("batch_id")
+  rowNumber                    Int       @map("row_number")
+  status                       String    @default("parsed") // parsed | invalid | pending_mapping | pending_conversion | ready | imported | skipped_duplicate | error
+  errorCode                    String?   @map("error_code")
+  errorMessage                 String?   @map("error_message") @db.Text
+  rawData                      Json?     @map("raw_data")
+  movementAt                   DateTime? @map("movement_at")
+  ingredientName               String    @map("ingredient_name")
+  ingredientNameNormalized     String    @map("ingredient_name_normalized")
+  motivo                       String?
+  identification               String?
+  invoiceNumber                String?   @map("invoice_number")
+  supplierId                   String?   @map("supplier_id")
+  supplierName                 String?   @map("supplier_name")
+  supplierNameNormalized       String?   @map("supplier_name_normalized")
+  supplierCnpj                 String?   @map("supplier_cnpj")
+  supplierMatchSource          String?   @map("supplier_match_source")
+  supplierReconciliationStatus String    @default("not_started") @map("supplier_reconciliation_status") // not_started | matched | unmatched | manual
+  supplierReconciliationSource String?   @map("supplier_reconciliation_source")
+  supplierReconciliationAt     DateTime? @map("supplier_reconciliation_at")
+  qtyEntry                     Float?    @map("qty_entry")
+  unitEntry                    String?   @map("unit_entry")
+  qtyConsumption               Float?    @map("qty_consumption")
+  unitConsumption              String?   @map("unit_consumption")
+  movementUnit                 String?   @map("movement_unit")
+  costAmount                   Float?    @map("cost_amount")
+  costTotalAmount              Float?    @map("cost_total_amount")
+  observation                  String?
+  sourceFingerprint            String    @map("source_fingerprint")
+  duplicateOfLineId            String?   @map("duplicate_of_line_id")
+  mappedItemId                 String?   @map("mapped_item_id")
+  mappedItemName               String?   @map("mapped_item_name")
+  mappingSource                String?   @map("mapping_source") // exact | alias | manual | suggestion
+  manualConversionFactor       Float?    @map("manual_conversion_factor") // destination units per 1 source unit
+  conversionSource             String?   @map("conversion_source") // direct | reverse | item_purchase_factor | manual
+  conversionFactorUsed         Float?    @map("conversion_factor_used")
+  targetUnit                   String?   @map("target_unit")
+  convertedCostAmount          Float?    @map("converted_cost_amount")
+  appliedAt                    DateTime? @map("applied_at")
+  rolledBackAt                 DateTime? @map("rolled_back_at")
+  metadata                     Json?
+  createdAt                    DateTime  @default(now()) @map("created_at")
+  updatedAt                    DateTime  @default(now()) @updatedAt @map("updated_at")
 
-  Batch           StockNfImportBatch            @relation(fields: [batchId], references: [id], onDelete: Cascade)
-  MappedItem      Item?                         @relation(fields: [mappedItemId], references: [id], onDelete: SetNull)
-  Supplier        Supplier?                     @relation(fields: [supplierId], references: [id], onDelete: SetNull)
-  AppliedChanges  StockNfImportAppliedChange[]
+  Batch          StockMovementImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  MappedItem     Item?                    @relation(fields: [mappedItemId], references: [id], onDelete: SetNull)
+  Supplier       Supplier?                @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  StockMovements StockMovement[]
 
-  @@unique([batchId, rowNumber], map: "stock_nf_import_batch_lines_batch_row_unique")
-  @@unique([batchId, sourceFingerprint], map: "stock_nf_import_batch_lines_batch_fingerprint_unique")
-  @@index([batchId, status], map: "stock_nf_import_batch_lines_batch_status_idx")
-  @@index([ingredientNameNormalized], map: "stock_nf_import_batch_lines_ingredient_norm_idx")
-  @@index([sourceFingerprint], map: "stock_nf_import_batch_lines_fingerprint_idx")
-  @@index([mappedItemId], map: "stock_nf_import_batch_lines_mapped_item_idx")
-  @@index([supplierId], map: "stock_nf_import_batch_lines_supplier_idx")
-  @@map("stock_nf_import_batch_lines")
+  @@unique([batchId, rowNumber], map: "stock_movement_import_batch_lines_batch_row_unique")
+  @@unique([batchId, sourceFingerprint], map: "stock_movement_import_batch_lines_batch_fingerprint_unique")
+  @@index([batchId, status], map: "stock_movement_import_batch_lines_batch_status_idx")
+  @@index([ingredientNameNormalized], map: "stock_movement_import_batch_lines_ingredient_norm_idx")
+  @@index([sourceFingerprint], map: "stock_movement_import_batch_lines_fingerprint_idx")
+  @@index([mappedItemId], map: "stock_movement_import_batch_lines_mapped_item_idx")
+  @@index([supplierId], map: "stock_movement_import_batch_lines_supplier_idx")
+  @@map("stock_movement_import_batch_lines")
 }
 
-model AsyncJob {
-  id           String   @id @default(uuid())
-  type         String
-  status       String   @default("pending") // pending | running | completed | failed | cancelled
-  priority     Int      @default(100)
-  dedupeKey    String?  @unique @map("dedupe_key")
-  payload      Json
-  result       Json?
-  attempts     Int      @default(0)
-  maxAttempts  Int      @default(3) @map("max_attempts")
-  runAfter     DateTime? @map("run_after")
-  lockedAt     DateTime? @map("locked_at")
-  lockedBy     String?  @map("locked_by")
-  errorMessage String?  @map("error_message") @db.Text
-  createdAt    DateTime @default(now()) @map("created_at")
-  startedAt    DateTime? @map("started_at")
-  finishedAt   DateTime? @map("finished_at")
-  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at")
+model StockMovement {
+  id                      String    @id @default(uuid())
+  direction               String    @default("entry")
+  movementType            String    @default("import") @map("movement_type")
+  originType              String?   @map("origin_type")
+  originRefId             String?   @map("origin_ref_id")
+  importBatchId           String?   @map("import_batch_id")
+  importLineId            String?   @map("import_line_id")
+  itemId                  String    @map("item_id")
+  itemVariationId         String    @map("item_variation_id")
+  supplierId              String?   @map("supplier_id")
+  quantityAmount          Float?    @map("quantity_amount")
+  quantityUnit            String?   @map("quantity_unit")
+  previousCostVariationId String?   @map("previous_cost_variation_id")
+  previousCostAmount      Float?    @map("previous_cost_amount")
+  previousCostUnit        String?   @map("previous_cost_unit")
+  newCostAmount           Float     @map("new_cost_amount")
+  newCostUnit             String?   @map("new_cost_unit")
+  movementUnit            String?   @map("movement_unit")
+  conversionSource        String?   @map("conversion_source")
+  conversionFactorUsed    Float?    @map("conversion_factor_used")
+  invoiceNumber           String?   @map("invoice_number")
+  supplierName            String?   @map("supplier_name")
+  supplierCnpj            String?   @map("supplier_cnpj")
+  movementAt              DateTime? @map("movement_at")
+  appliedBy               String?   @map("applied_by")
+  appliedAt               DateTime  @default(now()) @map("applied_at")
+  deletedAt               DateTime? @map("deleted_at")
+  metadata                Json?
+  createdAt               DateTime  @default(now()) @map("created_at")
+  updatedAt               DateTime  @default(now()) @updatedAt @map("updated_at")
 
-  @@index([status, runAfter, priority, createdAt], map: "async_jobs_status_run_after_priority_created_at_idx")
-  @@index([type, status, createdAt], map: "async_jobs_type_status_created_at_idx")
-  @@map("async_jobs")
-}
+  ImportBatch   StockMovementImportBatch?     @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
+  ImportLine    StockMovementImportBatchLine? @relation(fields: [importLineId], references: [id], onDelete: SetNull)
+  Item          Item                          @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  ItemVariation ItemVariation                 @relation(fields: [itemVariationId], references: [id], onDelete: Cascade)
+  Supplier      Supplier?                     @relation(fields: [supplierId], references: [id], onDelete: SetNull)
 
-model StockNfImportAppliedChange {
-  id                     String   @id @default(uuid())
-  batchId                String   @map("batch_id")
-  lineId                 String   @map("line_id")
-  itemId                 String   @map("item_id")
-  itemVariationId        String   @map("item_variation_id")
-  previousCostVariationId String? @map("previous_cost_variation_id")
-  previousCostAmount     Float?   @map("previous_cost_amount")
-  previousCostUnit       String?  @map("previous_cost_unit")
-  newCostAmount          Float    @map("new_cost_amount")
-  newCostUnit            String?  @map("new_cost_unit")
-  movementUnit           String?  @map("movement_unit")
-  conversionSource       String?  @map("conversion_source")
-  conversionFactorUsed   Float?   @map("conversion_factor_used")
-  invoiceNumber          String?  @map("invoice_number")
-  supplierId             String?  @map("supplier_id")
-  supplierName           String?  @map("supplier_name")
-  supplierCnpj           String?  @map("supplier_cnpj")
-  movementAt             DateTime? @map("movement_at")
-  appliedBy              String?  @map("applied_by")
-  appliedAt              DateTime @default(now()) @map("applied_at")
-  rolledBackAt           DateTime? @map("rolled_back_at")
-  rollbackStatus         String?  @map("rollback_status") // success | conflict | error
-  rollbackMessage        String?  @map("rollback_message") @db.Text
-  metadata               Json?
-  createdAt              DateTime @default(now()) @map("created_at")
-  updatedAt              DateTime @default(now()) @updatedAt @map("updated_at")
-
-  Batch  StockNfImportBatch     @relation(fields: [batchId], references: [id], onDelete: Cascade)
-  Line   StockNfImportBatchLine @relation(fields: [lineId], references: [id], onDelete: Cascade)
-  Item   Item                   @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  ItemVariation ItemVariation   @relation(fields: [itemVariationId], references: [id], onDelete: Cascade)
-  Supplier      Supplier?       @relation(fields: [supplierId], references: [id], onDelete: SetNull)
-
-  @@unique([lineId], map: "stock_nf_import_applied_changes_line_unique")
-  @@index([batchId], map: "stock_nf_import_applied_changes_batch_idx")
-  @@index([itemId], map: "stock_nf_import_applied_changes_item_idx")
-  @@index([supplierId], map: "stock_nf_import_applied_changes_supplier_idx")
-  @@index([rolledBackAt], map: "stock_nf_import_applied_changes_rolled_back_at_idx")
-  @@map("stock_nf_import_applied_changes")
+  @@index([originType, originRefId], map: "stock_movements_origin_type_ref_idx")
+  @@index([importBatchId], map: "stock_movements_import_batch_idx")
+  @@index([importLineId], map: "stock_movements_import_line_idx")
+  @@index([direction], map: "stock_movements_direction_idx")
+  @@index([movementType], map: "stock_movements_type_idx")
+  @@index([itemId], map: "stock_movements_item_idx")
+  @@index([itemVariationId], map: "stock_movements_item_variation_idx")
+  @@index([supplierId], map: "stock_movements_supplier_idx")
+  @@index([deletedAt], map: "stock_movements_deleted_at_idx")
+  @@index([movementAt, appliedAt], map: "stock_movements_movement_applied_at_idx")
+  @@map("stock_movements")
 }
 
 model CostImpactRun {
-  id              String   @id @default(uuid())
-  sourceType      String   @map("source_type")
-  sourceRefId     String?  @map("source_ref_id")
-  sourceItemId    String   @map("source_item_id")
-  status          String   @default("completed")
-  affectedRecipes Int      @default(0) @map("affected_recipes")
-  affectedSheets  Int      @default(0) @map("affected_sheets")
-  affectedMenuItems Int    @default(0) @map("affected_menu_items")
-  summary         Json?
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at")
+  id                String   @id @default(uuid())
+  sourceType        String   @map("source_type")
+  sourceRefId       String?  @map("source_ref_id")
+  sourceItemId      String   @map("source_item_id")
+  status            String   @default("completed")
+  affectedRecipes   Int      @default(0) @map("affected_recipes")
+  affectedSheets    Int      @default(0) @map("affected_sheets")
+  affectedMenuItems Int      @default(0) @map("affected_menu_items")
+  summary           Json?
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @default(now()) @updatedAt @map("updated_at")
 
-  sourceItem Item             @relation(fields: [sourceItemId], references: [id], onDelete: Cascade)
+  sourceItem Item                 @relation(fields: [sourceItemId], references: [id], onDelete: Cascade)
   MenuItems  CostImpactMenuItem[]
 
   @@index([sourceType, createdAt], map: "cost_impact_runs_source_type_created_at_idx")
@@ -2233,28 +2252,28 @@ model CostImpactRun {
 }
 
 model CostImpactMenuItem {
-  id                    String   @id @default(uuid())
-  runId                 String   @map("run_id")
-  menuItemId            String   @map("menu_item_id")
-  menuItemSizeId        String?  @map("menu_item_size_id")
-  menuItemChannelId     String?  @map("menu_item_channel_id")
-  currentCostAmount     Float    @default(0) @map("current_cost_amount")
-  previousCostAmount    Float    @default(0) @map("previous_cost_amount")
-  sellingPriceAmount    Float    @default(0) @map("selling_price_amount")
-  profitActualPerc      Float    @default(0) @map("profit_actual_perc")
-  profitExpectedPerc    Float    @default(0) @map("profit_expected_perc")
-  recommendedPriceAmount Float   @default(0) @map("recommended_price_amount")
-  priceGapAmount        Float    @default(0) @map("price_gap_amount")
-  marginGapPerc         Float    @default(0) @map("margin_gap_perc")
-  priority              String   @default("low")
-  metadata              Json?
-  createdAt             DateTime @default(now()) @map("created_at")
-  updatedAt             DateTime @default(now()) @updatedAt @map("updated_at")
+  id                     String   @id @default(uuid())
+  runId                  String   @map("run_id")
+  menuItemId             String   @map("menu_item_id")
+  menuItemSizeId         String?  @map("menu_item_size_id")
+  menuItemChannelId      String?  @map("menu_item_channel_id")
+  currentCostAmount      Float    @default(0) @map("current_cost_amount")
+  previousCostAmount     Float    @default(0) @map("previous_cost_amount")
+  sellingPriceAmount     Float    @default(0) @map("selling_price_amount")
+  profitActualPerc       Float    @default(0) @map("profit_actual_perc")
+  profitExpectedPerc     Float    @default(0) @map("profit_expected_perc")
+  recommendedPriceAmount Float    @default(0) @map("recommended_price_amount")
+  priceGapAmount         Float    @default(0) @map("price_gap_amount")
+  marginGapPerc          Float    @default(0) @map("margin_gap_perc")
+  priority               String   @default("low")
+  metadata               Json?
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @default(now()) @updatedAt @map("updated_at")
 
-  Run        CostImpactRun            @relation(fields: [runId], references: [id], onDelete: Cascade)
-  MenuItem   MenuItem                 @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
-  MenuItemSize MenuItemSize?          @relation(fields: [menuItemSizeId], references: [id], onDelete: SetNull)
-  Channel    MenuItemSellingChannel?  @relation(fields: [menuItemChannelId], references: [id], onDelete: SetNull)
+  Run          CostImpactRun           @relation(fields: [runId], references: [id], onDelete: Cascade)
+  MenuItem     MenuItem                @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  MenuItemSize MenuItemSize?           @relation(fields: [menuItemSizeId], references: [id], onDelete: SetNull)
+  Channel      MenuItemSellingChannel? @relation(fields: [menuItemChannelId], references: [id], onDelete: SetNull)
 
   @@index([runId], map: "cost_impact_menu_items_run_idx")
   @@index([menuItemId, createdAt], map: "cost_impact_menu_items_item_created_at_idx")
@@ -2263,7 +2282,7 @@ model CostImpactMenuItem {
 }
 
 model ItemImportAlias {
-  id             String   @id @default(uuid())
+  id              String   @id @default(uuid())
   sourceSystem    String   @default("saipos") @map("source_system")
   sourceType      String   @default("entrada_nf") @map("source_type")
   aliasName       String   @map("alias_name")
@@ -2296,15 +2315,15 @@ model MediaFolder {
 }
 
 model MediaAsset {
-  id         String   @id @default(uuid())
-  kind       String
-  url        String
-  folderPath String   @map("folder_path")
-  fileName   String   @map("file_name")
-  storageKey String?  @map("storage_key")
-  sizeBytes  BigInt?  @map("size_bytes")
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at")
+  id                    String                 @id @default(uuid())
+  kind                  String
+  url                   String
+  folderPath            String                 @map("folder_path")
+  fileName              String                 @map("file_name")
+  storageKey            String?                @map("storage_key")
+  sizeBytes             BigInt?                @map("size_bytes")
+  createdAt             DateTime               @default(now()) @map("created_at")
+  updatedAt             DateTime               @default(now()) @updatedAt @map("updated_at")
   menuItemGalleryImages MenuItemGalleryImage[]
 
   @@index([folderPath, createdAt], map: "media_assets_folder_path_created_at_idx")

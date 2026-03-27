@@ -224,3 +224,177 @@ export async function loadItemCostMonitoringPayload(request: Request) {
     }),
   };
 }
+
+function str(value: unknown) {
+  return String(value || "").trim();
+}
+
+function toDateTime(value: unknown) {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(String(value));
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function getImportBatchIdFromMetadata(metadata: unknown): string | null {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null;
+  const batchId = str((metadata as Record<string, unknown>).importBatchId);
+  if (batchId) return batchId;
+  return str((metadata as Record<string, unknown>).rollbackOfBatchId) || null;
+}
+
+export async function listItemCostHistoryTimeline(params: {
+  q?: string;
+  supplier?: string;
+  item?: string;
+  from?: Date | null;
+  to?: Date | null;
+}) {
+  const db = prismaClient as any;
+  if (typeof db.itemCostVariationHistory?.findMany !== "function") {
+    return [];
+  }
+
+  const where: any = {};
+  const q = str(params.q);
+  const supplier = str(params.supplier);
+  const item = str(params.item);
+
+  if (params.from || params.to) {
+    where.validFrom = {
+      ...(params.from ? { gte: params.from } : {}),
+      ...(params.to ? { lte: params.to } : {}),
+    };
+  }
+
+  if (item) {
+    where.ItemVariation = {
+      is: {
+        Item: {
+          is: {
+            name: { contains: item, mode: "insensitive" },
+          },
+        },
+      },
+    };
+  }
+
+  const historyRows = await db.itemCostVariationHistory.findMany({
+    where,
+    orderBy: [{ validFrom: "desc" }, { createdAt: "desc" }],
+    include: {
+      ItemVariation: {
+        select: {
+          id: true,
+          isReference: true,
+          Item: {
+            select: {
+              id: true,
+              name: true,
+              classification: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  const filteredHistoryRows = historyRows.filter((row: any) => {
+    const supplierName = getSupplierNameFromMetadata(row?.metadata);
+    const invoiceNumber =
+      row?.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+        ? str((row.metadata as any).invoiceNumber)
+        : "";
+    const itemName = str(row?.ItemVariation?.Item?.name);
+
+    if (supplier && !String(supplierName || "").toLowerCase().includes(supplier.toLowerCase())) return false;
+    if (
+      q &&
+      ![itemName, String(supplierName || ""), invoiceNumber].some((value) =>
+        value.toLowerCase().includes(q.toLowerCase()),
+      )
+    ) {
+      return false;
+    }
+
+    return true;
+  });
+
+  const importBatchIds = Array.from(
+    new Set(filteredHistoryRows.map((row: any) => getImportBatchIdFromMetadata(row?.metadata)).filter(Boolean)),
+  );
+
+  const importBatches = importBatchIds.length > 0 && typeof db.stockMovementImportBatch?.findMany === "function"
+    ? await db.stockMovementImportBatch.findMany({
+      where: { id: { in: importBatchIds } },
+      select: { id: true, name: true },
+    })
+    : [];
+
+  const batchMap = new Map(importBatches.map((batch: any) => [String(batch.id), batch]));
+  const currentRows = filteredHistoryRows.length > 0
+    ? await db.itemCostVariation.findMany({
+      where: {
+        itemVariationId: {
+          in: Array.from(new Set(filteredHistoryRows.map((row: any) => String(row.itemVariationId || "")).filter(Boolean))),
+        },
+        deletedAt: null,
+      },
+      select: {
+        itemVariationId: true,
+        costAmount: true,
+        source: true,
+        referenceType: true,
+        referenceId: true,
+        validFrom: true,
+        updatedAt: true,
+      },
+    })
+    : [];
+
+  const currentMap = new Map(
+    currentRows.map((row: any) => [String(row.itemVariationId), `${str(row.referenceType)}::${str(row.referenceId)}`]),
+  );
+
+  return filteredHistoryRows.map((row: any) => {
+    const metadata = row?.metadata || null;
+    const importBatchId = getImportBatchIdFromMetadata(metadata);
+    const current = currentRows.find((entry: any) => String(entry.itemVariationId) === String(row.itemVariationId || ""));
+    const currentKey = currentMap.get(String(row.itemVariationId || ""));
+    const rowKey = `${str(row.referenceType)}::${str(row.referenceId)}`;
+    const rowValidFrom = toDateTime(row.validFrom)?.getTime() || null;
+    const currentValidFrom = toDateTime(current?.validFrom)?.getTime() || null;
+    const isFallbackCurrentMatch =
+      !str(row.referenceType) &&
+      !str(row.referenceId) &&
+      !str(current?.referenceType) &&
+      !str(current?.referenceId) &&
+      Number(current?.costAmount) === Number(row.costAmount) &&
+      str(current?.source) === str(row.source) &&
+      currentValidFrom != null &&
+      rowValidFrom != null &&
+      currentValidFrom === rowValidFrom;
+    return {
+      id: row.id,
+      itemVariationId: row.itemVariationId,
+      itemId: row.ItemVariation?.Item?.id || null,
+      itemName: row.ItemVariation?.Item?.name || "Item sem nome",
+      itemClassification: row.ItemVariation?.Item?.classification || null,
+      costAmount: row.costAmount,
+      previousCostAmount: row.previousCostAmount,
+      unit: row.unit,
+      source: row.source,
+      referenceType: row.referenceType,
+      referenceId: row.referenceId,
+      validFrom: row.validFrom,
+      createdAt: row.createdAt,
+      createdBy: row.createdBy,
+      metadata,
+      supplierName: getSupplierNameFromMetadata(metadata),
+      invoiceNumber: metadata && typeof metadata === "object" && !Array.isArray(metadata) ? str((metadata as any).invoiceNumber) || null : null,
+      importBatchId,
+      Batch: importBatchId ? batchMap.get(importBatchId) || null : null,
+      isCurrent: currentKey === rowKey || isFallbackCurrentMatch,
+      effectiveAt: toDateTime(row.validFrom) || toDateTime(row.createdAt),
+    };
+  });
+}

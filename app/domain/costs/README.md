@@ -13,6 +13,9 @@ Centralizar a regra de negocio ligada a:
 
 O objetivo do dominio `costs` e permitir que uma alteracao de custo de insumo chegue, de forma rastreavel, ate a analise de margem dos produtos vendidos.
 
+A origem principal de alteracao de custo hoje e a importacao de nota fiscal via `stock-movement`.
+Ver: [app/domain/stock-movement/README.md](../stock-movement/README.md)
+
 ## Regra de Negocio
 
 ### Objetivo operacional
@@ -77,85 +80,102 @@ Essa mudanca ainda nao foi concluida. Quando acontecer, sera necessario:
 
 Enquanto essa migracao nao acontece, toda a cadeia de custo comercial deve continuar respeitando `MenuItem` como referencia oficial.
 
+## Pipeline de Impacto de Custo
+
+### Gatilho
+
+O cálculo de impacto ocorre **em tempo real**, sob demanda, quando o dashboard `admin.cost-impact` e carregado. Nao ha enfileiramento de job nem escrita em banco nesse fluxo.
+
+O loader da rota:
+
+1. Lê o `ItemCostVariationHistory` dos últimos 60 dias (ou o valor configurado em `getItemAverageCostWindowDays`).
+2. Agrupa por `itemId`, mantendo a entrada mais recente de cada item.
+3. Filtra os insumos com variação de custo significativa (diferença a partir da 4ª casa decimal).
+4. Para cada insumo com variação, chama `buildCostImpactGraphForItem` para obter os `menuItemIds` afetados.
+5. Chama `listMenuItemMarginImpactRows` com o conjunto de ids e aplica `resolvePriority` em cada linha.
+
+Os filtros de canal, variação, prioridade, busca e meta são aplicados em memória sobre o resultado.
+
+### Grafo de impacto
+
+`buildCostImpactGraphForItem` parte do insumo alterado e traversa as dependencias em cascata:
+
+1. Receitas que usam o insumo como ingrediente (`recipeIngredient → recipe`).
+2. Itens intermediarios gerados por essas receitas (`recipe → item`).
+3. Fichas de custo (`itemCostSheet`) com dependencia direta ou indireta, via `itemCostSheetComponent` do tipo `recipeSheet`.
+4. Itens de cardapio (`menuItem`) vinculados a qualquer item do grafo.
+
+### Recalculo em cascata
+
+Apos montar o grafo, o pipeline recalcula na ordem correta:
+
+1. `recalcRecipeCosts` — atualiza o snapshot de custo de cada linha de receita afetada usando `ultimo custo` e `custo medio` do insumo. O custo de linha considera percentual de perda (`lossPct`).
+2. `recalcItemCostSheetTotals` — recalcula componentes e totais das fichas de custo afetadas. Componentes do tipo `recipe` usam o snapshot da receita; componentes do tipo `recipeSheet` usam o total da ficha dependente.
+3. `syncMenuItemCostsForItems` — sincroniza o custo calculado em `MenuItemCostVariation` para cada tamanho do `MenuItem`. Usa a ficha ativa do item como base. Se nao houver ficha por tamanho exato, deriva proporcoes a partir do custo da variacao de referencia (`pizza-medium`).
+
+### Calculo de impacto na margem
+
+`listMenuItemMarginImpactRows` compara o custo atualizado com o preco de venda atual e calcula:
+
+- `profitActualPerc`: margem efetiva atual apos a mudanca de custo;
+- `profitExpectedPerc`: margem alvo configurada no item;
+- `priceGapAmount`: diferenca entre preco recomendado e preco atual;
+- `marginGapPerc`: diferenca entre margem alvo e margem efetiva;
+- `recommendedPriceAmount`: preco minimo com lucro calculado pelo handler de preco de venda.
+
+So entram no resultado linhas com variacao de custo significativa (diferenca a partir da 4a casa decimal).
+
+### Classificacao de prioridade
+
+`resolvePriority` classifica a urgencia da revisao de preco:
+
+| Prioridade | Condicao |
+|------------|----------|
+| `critical` | `marginGapPerc >= 10` ou `priceGapAmount >= 15` |
+| `high`     | `marginGapPerc >= 5` ou `priceGapAmount >= 7`  |
+| `medium`   | `marginGapPerc >= 2` ou `priceGapAmount >= 3`  |
+| `low`      | abaixo disso |
+
+### Persistencia
+
+O dashboard de impacto **nao grava dados**. O resultado e efemero: calculado a cada requisicao e descartado apos a resposta.
+
+As tabelas `CostImpactRun` e `CostImpactMenuItem` permanecem no banco como historico de execucoes anteriores, mas nao sao mais alimentadas pelo fluxo normal. `runCostImpactPipelineForItemChange` (que persiste nessas tabelas) ainda existe em `cost-impact-pipeline.server.ts` e pode ser acionado sob demanda no futuro, mas nao e chamado automaticamente.
+
 ## Arquitetura Atual
 
 ### Modulos principais
 
 - `item-cost-snapshot.server.ts`
-  - resolve `ultimo custo` e `custo medio` do insumo.
+  — resolve `ultimo custo` e `custo medio` do insumo a partir do historico de `ItemCostVariationHistory`.
 - `recipe-cost-recalc.server.ts`
-  - recalcula snapshots de custo de linhas de receita.
+  — recalcula snapshots de custo das linhas de receita.
 - `item-cost-sheet-recalc.server.ts`
-  - recalcula componentes e totais de ficha tecnica.
+  — recalcula componentes e totais de ficha tecnica.
 - `cost-impact-graph.server.ts`
-  - descobre dependencias impactadas por um insumo alterado.
+  — descobre dependencias impactadas por um insumo alterado.
 - `menu-item-cost-sync.server.ts`
-  - sincroniza custo do produto comercial em `MenuItemCostVariation`.
+  — sincroniza custo do produto comercial em `MenuItemCostVariation`.
 - `menu-item-margin-impact.server.ts`
-  - le margem atual, margem alvo e preco recomendado do `MenuItem`.
+  — le margem atual, margem alvo e preco recomendado do `MenuItem`.
 - `cost-impact-pipeline.server.ts`
-  - executa a cadeia completa de propagacao e persistencia do impacto.
+  — executa a cadeia completa de propagacao e persistencia do impacto.
+- `cost-impact-pipeline.server.test.ts`
+  — testes unitarios do pipeline com mocks das dependencias.
+- `item-cost-sources.ts`
+  — lista canonica de origens de custo.
 
-### Fluxo resumido
+### Compat layers existentes
 
-1. A NF ou outra alteracao muda o custo do insumo.
-2. O pipeline monta o grafo de dependencias.
-3. Receitas afetadas sao recalculadas.
-4. Fichas tecnicas afetadas sao recalculadas.
-5. Custos do `MenuItem` sao sincronizados.
-6. O impacto de margem e calculado.
-7. O resultado e persistido em `CostImpactRun` e `CostImpactMenuItem`.
+Os arquivos abaixo sao re-exports temporarios mantidos por compatibilidade enquanto os consumidores nao foram migrados para `~/domain/costs/` diretamente:
 
-## Plano Tecnico
+- `app/domain/cardapio/menu-item-cost-sync.server.ts`
+- `app/domain/cardapio/menu-item-margin-impact.server.ts`
+- `app/domain/item-cost-sheet/item-cost-sheet-recalc.server.ts`
+- `app/domain/recipe/recipe-cost-recalc.server.ts`
+- `app/domain/item/item-cost-snapshot.server.ts`
 
-### Fase 1
-
-Unificar a regra de custo do insumo.
-
-Entregue:
-
-- snapshot padronizado de custo;
-- recalc de receita extraido;
-- recalc de ficha extraido.
-
-### Fase 2
-
-Propagar custo em cascata.
-
-Entregue:
-
-- grafo de impacto;
-- pipeline de propagacao;
-- integracao no fluxo de entrada de estoque;
-- sincronizacao do custo comercial em `MenuItem`.
-
-### Fase 3
-
-Persistir e visualizar impacto.
-
-Entregue:
-
-- tabelas `CostImpactRun` e `CostImpactMenuItem`;
-- painel administrativo inicial;
-- filtros operacionais basicos;
-- organizacao do menu administrativo para custos e margem.
-
-## Plano de Desenvolvimento
-
-### Convencoes
-
-- toda regra de negocio de custo deve nascer em `app/domain/costs/`;
-- modulos antigos fora de `costs` podem existir apenas como compat layer temporaria;
-- regras de rota nao devem reimplementar calculo de custo;
-- recalc e propagacao devem ser chamados por servicos de dominio, nao por codigo duplicado em rotas.
-
-### Ordem recomendada para evolucao
-
-1. Manter `costs` como ponto central de toda regra nova.
-2. Migrar chamadas restantes para os imports de `~/domain/costs/...`.
-3. Aumentar cobertura de testes de pipeline e sincronizacao comercial.
-4. Validar performance da propagacao para itens com alta fan-out.
-5. Preparar a transicao de `MenuItem` para `Item` como futura fonte de verdade comercial.
+Novas referencias devem usar `~/domain/costs/` diretamente.
 
 ## Estado Atual
 
@@ -164,22 +184,23 @@ Entregue:
 - snapshot unico de custo do insumo;
 - recalc de receita;
 - recalc de ficha tecnica;
-- pipeline de impacto;
-- persistencia do impacto;
-- painel inicial de impacto;
+- grafo de impacto em cascata;
+- pipeline de propagacao (disponivel para uso sob demanda);
+- dashboard de impacto em tempo real (`admin.cost-impact`);
 - sincronizacao do custo comercial em `MenuItem`.
 
 ### Limitacoes conhecidas
 
 - a fonte de verdade comercial ainda e `MenuItem`, nao `Item`;
-- ainda ha adaptacoes futuras para quando o vendido no cardapio migrar para `Item`;
-- a validacao pratica de casos pesados de propagacao comercial pode exigir execucao mais longa no ambiente;
-- ainda existe compatibilidade temporaria com paths antigos fora de `costs`.
+- a sincronizacao de custo so ocorre se existir ficha de custo ativa para o item — itens sem ficha nao propagam para `MenuItem`;
+- a propagacao em cascata e sequencial; itens com alto fan-out (muitas receitas dependentes) podem ser lentos;
+- compat layers fora de `costs/` ainda existem e devem ser migrados.
 
 ## Decisao de Arquitetura
 
-Decisao atual:
-
 - `MenuItem` continua sendo a referencia oficial do vendido no cardapio;
-- `costs` e o dominio central para regra de custo, impacto e margem;
+- `costs` e o dominio central para toda regra de custo, impacto e margem;
+- a pasta `cost-impact/` foi eliminada — os shims eram re-exports sem consumidores e o teste foi movido para `costs/`;
+- o impacto de custo e calculado em tempo real no dashboard, sem persistencia;
+- `CostImpactRun` e `CostImpactMenuItem` sao mantidas no banco apenas como historico;
 - a migracao futura para `Item` deve ser tratada como uma evolucao arquitetural separada, com adaptacoes explicitas.

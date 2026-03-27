@@ -28,7 +28,7 @@ function summaryFromAny(summary: any) {
   return {
     total: Number(summary?.total || 0),
     pendingSupplier: Number(summary?.pendingSupplier || 0),
-    readyToApply: Number(summary?.readyToApply || 0),
+    readyToImport: Number(summary?.readyToImport || 0),
   };
 }
 
@@ -71,7 +71,7 @@ export default function AdminMobileImportStockMovementsSupplierReconciliationRou
           </div>
           <div>
             <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Prontas</div>
-            <div className="mt-1 text-xl font-semibold text-slate-950">{summary.readyToApply}</div>
+            <div className="mt-1 text-xl font-semibold text-slate-950">{summary.readyToImport}</div>
           </div>
           <div>
             <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Total</div>

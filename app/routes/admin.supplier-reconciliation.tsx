@@ -11,10 +11,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~
 import { Separator } from '~/components/ui/separator';
 import { authenticator } from '~/domain/auth/google.server';
 import {
-  getStockNfImportBatchView,
-  listStockNfImportBatches,
-  reconcileStockNfImportBatchSuppliersFromFile,
-} from '~/domain/stock-nf-import/stock-nf-import.server';
+  getStockMovementImportBatchView,
+  listStockMovementImportBatches,
+  reconcileStockMovementImportBatchSuppliersFromFile,
+} from '~/domain/stock-movement/stock-movement-import.server';
 import { badRequest, ok, serverError } from '~/utils/http-response.server';
 
 export const meta: MetaFunction = () => [{ title: 'Admin | Conciliação de fornecedor' }];
@@ -41,7 +41,7 @@ function summaryFromAny(summary: any) {
   return {
     total: Number(summary?.total || 0),
     pendingSupplier: Number(summary?.pendingSupplier || 0),
-    readyToApply: Number(summary?.readyToApply || 0),
+    readyToImport: Number(summary?.readyToImport || 0),
   };
 }
 
@@ -49,7 +49,7 @@ function batchStatusBadgeClass(status: string) {
   switch (String(status || '').trim()) {
     case 'validated':
       return 'border-emerald-300 bg-emerald-100 text-emerald-900';
-    case 'applied':
+    case 'imported':
       return 'border-blue-200 bg-blue-100 text-blue-900';
     default:
       return 'border-slate-200 bg-white text-slate-700';
@@ -64,14 +64,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
   try {
     const url = new URL(request.url);
     const requestedBatchId = String(url.searchParams.get('batchId') || '').trim();
-    const batches = await listStockNfImportBatches(100);
+    const batches = await listStockMovementImportBatches(100);
 
     const fallbackBatch =
       batches.find((batch: any) => Number(batch?.summary?.pendingSupplier || 0) > 0) ||
       batches[0] ||
       null;
     const selectedBatchId = requestedBatchId || String(fallbackBatch?.id || '').trim();
-    const selected = selectedBatchId ? await getStockNfImportBatchView(selectedBatchId) : null;
+    const selected = selectedBatchId ? await getStockMovementImportBatchView(selectedBatchId) : null;
 
     return ok({
       batches,
@@ -102,7 +102,7 @@ export async function action({ request }: ActionFunctionArgs) {
       return badRequest('Arquivo inválido. Envie um .json');
     }
 
-    await reconcileStockNfImportBatchSuppliersFromFile({
+    await reconcileStockMovementImportBatchSuppliersFromFile({
       batchId,
       fileName: supplierNotesFile.name,
       fileBuffer: Buffer.from(await supplierNotesFile.arrayBuffer()),
@@ -225,7 +225,7 @@ export default function AdminSupplierReconciliationRoute() {
                   </div>
                   <div className="space-y-1 lg:text-right">
                     <div className="text-xs uppercase tracking-wide text-slate-500">Prontas p/ aplicar</div>
-                    <div className="text-2xl font-semibold text-slate-950">{summary.readyToApply}</div>
+                    <div className="text-2xl font-semibold text-slate-950">{summary.readyToImport}</div>
                   </div>
                   <div className="space-y-1 lg:text-right">
                     <div className="text-xs uppercase tracking-wide text-slate-500">Total</div>
@@ -290,9 +290,8 @@ export default function AdminSupplierReconciliationRoute() {
                     key={value}
                     type="button"
                     onClick={() => setFilter(value as 'pending' | 'all' | 'matched')}
-                    className={`inline-flex h-9 items-center rounded-full border px-3 text-xs font-medium ${
-                      filter === value ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-700'
-                    }`}
+                    className={`inline-flex h-9 items-center rounded-full border px-3 text-xs font-medium ${filter === value ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-700'
+                      }`}
                   >
                     {label}
                   </button>

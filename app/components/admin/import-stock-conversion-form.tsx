@@ -38,7 +38,7 @@ export function PendingConversionForm({ batchId, line, mobile = false }: Pending
       : null;
 
   return (
-    <Form method="post" className={mobile ? "mt-2 space-y-2" : "space-y-1"}>
+    <Form method="post" action={`/admin/import-stock-movements/${batchId}`} className={mobile ? "mt-2 space-y-2" : "space-y-1"}>
       <input type="hidden" name="_action" value="batch-set-manual-conversion" />
       <input type="hidden" name="batchId" value={batchId} />
       <input type="hidden" name="lineId" value={line.id} />

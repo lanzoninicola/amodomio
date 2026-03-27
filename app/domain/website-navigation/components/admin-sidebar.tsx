@@ -23,11 +23,12 @@ import { toast } from "~/components/ui/use-toast";
 export interface AdminSidebarProps {
   navigationLinks: Partial<WebsiteNavigationConfig>;
   pinnedHrefs?: string[];
+  pinnedItems?: { href: string; title: string; groupTitle?: string | null }[];
   className?: string;
   children?: React.ReactNode;
 }
 
-export function AdminSidebar({ navigationLinks, pinnedHrefs }: AdminSidebarProps) {
+export function AdminSidebar({ navigationLinks, pinnedHrefs, pinnedItems = [] }: AdminSidebarProps) {
   const navClickFetcher = useFetcher();
   const pinFetcher = useFetcher();
   const revalidator = useRevalidator();
@@ -290,16 +291,28 @@ export function AdminSidebar({ navigationLinks, pinnedHrefs }: AdminSidebarProps
           </div>
         </SidebarHeader>
         <SidebarContent className="mx-auto h-full min-h-0 w-[14.5rem] overflow-y-auto overflow-x-hidden px-2 pt-4 pb-10 font-sans [scrollbar-width:thin] [scrollbar-color:rgba(100,116,139,0.35)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-400/35 hover:[&::-webkit-scrollbar-thumb]:bg-slate-400/55">
-          {navigationLinks?.sidebarNav?.map((group: SidebarNavigationSection) => (
-            <SidebarGroup key={group.title} className="w-full px-0.5 py-4">
-              <SidebarGroupLabel className="px-2 text-[0.78rem] font-medium text-muted-foreground">{group.title}</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu className="gap-1">
-                  {renderSidebarItems(group.items, group.title)}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          ))}
+          {navigationLinks?.sidebarNav?.map((group: SidebarNavigationSection) => {
+            const dynamicPinnedItems =
+              group.title === "Fixados" && pinnedItems.length > 0
+                ? pinnedItems.map((p) => ({
+                    title: p.title,
+                    href: p.href,
+                    items: [] as SidebarNavigationSection[],
+                    disabled: false,
+                  }))
+                : [];
+            return (
+              <SidebarGroup key={group.title} className="w-full px-0.5 py-4">
+                <SidebarGroupLabel className="px-2 text-[0.78rem] font-medium text-muted-foreground">{group.title}</SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu className="gap-1">
+                    {renderSidebarItems(group.items, group.title)}
+                    {renderSidebarItems(dynamicPinnedItems, group.title)}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            );
+          })}
         </SidebarContent>
       </div>
     </Sidebar>

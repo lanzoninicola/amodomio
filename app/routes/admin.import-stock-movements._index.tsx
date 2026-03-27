@@ -18,7 +18,7 @@ import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '~/components/ui/table';
-import { deleteStockNfImportBatch, listStockNfImportBatches } from '~/domain/stock-nf-import/stock-nf-import.server';
+import { deleteStockMovementImportBatch, listStockMovementImportBatches } from '~/domain/stock-movement/stock-movement-import.server';
 import { badRequest, ok, serverError } from '~/utils/http-response.server';
 
 function str(value: FormDataEntryValue | null) {
@@ -36,8 +36,8 @@ function summaryFromAny(summary: any) {
   return {
     total: Number(summary?.total || 0),
     ready: Number(summary?.ready || 0),
-    readyToApply: Number(summary?.readyToApply || 0),
-    applied: Number(summary?.applied || 0),
+    readyToImport: Number(summary?.readyToImport || 0),
+    imported: Number(summary?.imported || 0),
     pendingSupplier: Number(summary?.pendingSupplier || 0),
   };
 }
@@ -47,7 +47,7 @@ function statusBadgeClass(status: string) {
     case 'validated':
     case 'ready':
       return 'border-emerald-200 bg-emerald-50 text-emerald-700';
-    case 'applied':
+    case 'imported':
       return 'border-blue-200 bg-blue-50 text-blue-700';
     case 'partial':
       return 'border-amber-200 bg-amber-50 text-amber-700';
@@ -108,7 +108,7 @@ function DeleteBatchButton({ batchId, batchName, status }: { batchId: string; ba
 
 export async function loader(_: LoaderFunctionArgs) {
   try {
-    const batches = await listStockNfImportBatches(100);
+    const batches = await listStockMovementImportBatches(100);
     return ok({ batches });
   } catch (error) {
     return serverError(error);
@@ -124,7 +124,7 @@ export async function action({ request }: ActionFunctionArgs) {
     const batchId = str(formData.get('batchId'));
     if (!batchId) return badRequest('Lote inválido');
 
-    await deleteStockNfImportBatch(batchId);
+    await deleteStockMovementImportBatch(batchId);
     return ok({ message: 'Lote eliminado com sucesso' });
   } catch (error) {
     return serverError(error);
@@ -174,6 +174,11 @@ export default function AdminImportStockMovementsIndexRoute() {
             </div>
 
             <div className="flex flex-wrap items-center gap-5 text-sm text-black">
+              <Button asChild variant="outline" className="h-10 rounded-xl border-slate-200 bg-white px-4 font-semibold text-slate-700 hover:bg-slate-50">
+                <Link to="/admin/stock-import-applied-changes">
+                  Ver histórico global de custos
+                </Link>
+              </Button>
               <span className="font-medium">ordenado por criação</span>
               <span className="text-slate-600">{batches.length} no total</span>
               <span className="text-slate-600">{filtered.length} em exibição</span>
@@ -241,13 +246,13 @@ export default function AdminImportStockMovementsIndexRoute() {
                     </TableCell>
                     <TableCell className="px-4 py-4">
                       <div className="min-w-[68px] rounded-xl bg-slate-50 px-3 py-2 text-center">
-                        <div className="text-lg font-semibold leading-none text-slate-950">{summary.applied}</div>
-                        <div className="mt-1 text-[11px] uppercase tracking-wide text-slate-500">aplicadas</div>
+                        <div className="text-lg font-semibold leading-none text-slate-950">{summary.imported}</div>
+                        <div className="mt-1 text-[11px] uppercase tracking-wide text-slate-500">importadas</div>
                       </div>
                     </TableCell>
                     <TableCell className="px-4 py-4">
                       <div className="min-w-[88px] rounded-xl bg-emerald-50 px-3 py-2 text-center">
-                        <div className="text-lg font-semibold leading-none text-emerald-800">{summary.readyToApply}</div>
+                        <div className="text-lg font-semibold leading-none text-emerald-800">{summary.readyToImport}</div>
                         <div className="mt-1 text-[11px] uppercase tracking-wide text-emerald-700">prontas</div>
                       </div>
                     </TableCell>

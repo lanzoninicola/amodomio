@@ -4,10 +4,16 @@ export const ITEM_COST_SETTINGS_CONTEXT = "items.cost";
 export const ITEM_COST_AVERAGE_WINDOW_DAYS_SETTING = "averageWindowDays";
 export const DEFAULT_ITEM_COST_AVERAGE_WINDOW_DAYS = 30;
 
+export type ItemPurchaseConversionLike = {
+  purchaseUm: string;
+  factor: number;
+};
+
 export type ItemMeasurementLike = {
   purchaseUm?: string | null;
   consumptionUm?: string | null;
   purchaseToConsumptionFactor?: number | null;
+  ItemPurchaseConversion?: ItemPurchaseConversionLike[] | null;
 };
 
 export type ItemCostHistoryLike = {
@@ -57,6 +63,16 @@ export function normalizeItemCostToConsumptionUnit(
     return amount;
   }
 
+  // Try multi-conversion table first
+  const conversions = measurement.ItemPurchaseConversion;
+  if (costUnit && conversions && conversions.length > 0) {
+    const match = conversions.find((c) => normalizeUm(c.purchaseUm) === costUnit);
+    if (match && match.factor > 0) {
+      return amount / match.factor;
+    }
+  }
+
+  // Fallback to legacy single-conversion fields
   if (costUnit && purchaseUm && costUnit === purchaseUm && Number.isFinite(factor) && factor > 0) {
     return amount / factor;
   }

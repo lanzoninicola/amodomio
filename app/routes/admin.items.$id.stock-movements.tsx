@@ -2,7 +2,7 @@ import type { LoaderFunctionArgs } from "@remix-run/node";
 import { Link, useLoaderData, useOutletContext } from "@remix-run/react";
 import { Badge } from "~/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~/components/ui/table";
-import { listStockNfImportMovements } from "~/domain/stock-nf-import/stock-nf-import.server";
+import { listStockMovementImportMovements } from "~/domain/stock-movement/stock-movement-import.server";
 import { badRequest, ok, serverError } from "~/utils/http-response.server";
 import type { AdminItemOutletContext } from "./admin.items.$id";
 
@@ -22,8 +22,8 @@ function formatMoney(value: unknown) {
   return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
-function movementStatusBadgeClass(rolledBackAt: unknown) {
-  return rolledBackAt
+function movementLifecycleBadgeClass(deletedAt: unknown) {
+  return deletedAt
     ? "border-amber-200 bg-amber-50 text-amber-700"
     : "border-emerald-200 bg-emerald-50 text-emerald-700";
 }
@@ -40,7 +40,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
     if (!itemId) return badRequest("Item inválido");
 
     const from = buildWindowStart();
-    const result = await listStockNfImportMovements({
+    const result = await listStockMovementImportMovements({
       itemId,
       from,
       status: "all",
@@ -63,7 +63,7 @@ export default function AdminItemStockMovementsTab() {
   const { item } = useOutletContext<AdminItemOutletContext>();
   const payload = (loaderData as any)?.payload || {};
   const rows = (payload.rows || []) as any[];
-  const summary = payload.summary || { total: 0, active: 0, rolledBack: 0, uniqueSuppliers: 0 };
+  const summary = payload.summary || { total: 0, active: 0, deleted: 0, uniqueSuppliers: 0 };
   const pagination = payload.pagination || { totalItems: 0 };
   const windowDays = Number(payload.windowDays || WINDOW_DAYS);
   const from = payload.from ? new Date(String(payload.from)) : buildWindowStart();
@@ -83,7 +83,7 @@ export default function AdminItemStockMovementsTab() {
         {[
           ["Movimentações", summary.total],
           ["Ativas", summary.active],
-          ["Revertidas", summary.rolledBack],
+          ["Eliminadas", summary.deleted],
           ["Fornecedores", summary.uniqueSuppliers],
         ].map(([label, value]) => (
           <div key={String(label)} className="rounded-xl border border-slate-200 bg-white px-4 py-3">
@@ -98,7 +98,7 @@ export default function AdminItemStockMovementsTab() {
           <div className="space-y-1">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Últimos {windowDays} dias</h2>
             <p className="text-sm text-slate-600">
-              Movimentações deste item desde {fromLabel}, incluindo entradas ativas e revertidas.
+              Movimentações deste item desde {fromLabel}, incluindo registros ativos e eliminados.
             </p>
             <Link
               to={`/admin/stock-movements?item=${encodeURIComponent(item.name || "")}`}
@@ -127,7 +127,7 @@ export default function AdminItemStockMovementsTab() {
                 <TableHead className="px-3 py-2 text-xs">Quantidade</TableHead>
                 <TableHead className="px-3 py-2 text-xs">Custo</TableHead>
                 <TableHead className="px-3 py-2 text-xs">Lote</TableHead>
-                <TableHead className="px-3 py-2 text-xs">Status</TableHead>
+                <TableHead className="px-3 py-2 text-xs">Situação</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -177,11 +177,10 @@ export default function AdminItemStockMovementsTab() {
                       </Link>
                     </TableCell>
                     <TableCell className="px-3 py-3 text-xs">
-                      <Badge variant="outline" className={movementStatusBadgeClass(row.rolledBackAt)}>
-                        {row.rolledBackAt ? "revertida" : "ativa"}
+                      <Badge variant="outline" className={movementLifecycleBadgeClass(row.deletedAt)}>
+                        {row.deletedAt ? "eliminada" : "ativa"}
                       </Badge>
-                      {row.rolledBackAt ? <div className="mt-1 text-slate-500">em {formatDate(row.rolledBackAt)}</div> : null}
-                      {row.rollbackMessage ? <div className="mt-1 max-w-[240px] text-red-700">{row.rollbackMessage}</div> : null}
+                      {row.deletedAt ? <div className="mt-1 text-slate-500">eliminada em {formatDate(row.deletedAt)}</div> : null}
                     </TableCell>
                   </TableRow>
                 ))

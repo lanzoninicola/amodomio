@@ -1,31 +1,30 @@
 import { createHash, randomUUID } from 'node:crypto';
 import * as XLSX from 'xlsx';
-import { Prisma } from '@prisma/client';
 import prismaClient from '~/lib/prisma/client.server';
 import { itemVariationPrismaEntity } from '~/domain/item/item-variation.prisma.entity.server';
 import { itemCostVariationPrismaEntity } from '~/domain/item/item-cost-variation.prisma.entity.server';
-import { ASYNC_JOB_TYPE, enqueueAsyncJob } from '~/domain/async-jobs/async-jobs.server';
 
 const SOURCE_SYSTEM = 'saipos';
 const SOURCE_TYPE = 'entrada_nf';
-const COST_REFERENCE_TYPE_LINE = 'stock-nf-import-line';
+const COST_REFERENCE_TYPE_LINE = 'stock-movement-import-line';
+const COST_REFERENCE_TYPE_MOVEMENT = 'stock-movement';
 
 export type BatchSummary = {
   total: number;
   ready: number;
-  readyToApply: number;
+  readyToImport: number;
   invalid: number;
   pendingMapping: number;
   pendingSupplier: number;
   pendingConversion: number;
-  applied: number;
+  imported: number;
   ignored: number;
   skippedDuplicate: number;
   error: number;
 };
 
-export type BatchApplyProgress = {
-  status: 'idle' | 'applying' | 'completed' | 'failed';
+export type BatchImportProgress = {
+  status: 'idle' | 'importing' | 'imported' | 'failed';
   processedCount: number;
   errorCount: number;
   totalCount: number;
@@ -58,6 +57,43 @@ function normalizeName(value: unknown) {
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/\s+/g, ' ')
     .toUpperCase();
+}
+
+function movementMetadataBase(params: {
+  batchId: string;
+  lineId: string;
+  line: any;
+  sourceAction?: string;
+}) {
+  const quantityAmount = params.line?.qtyEntry ?? params.line?.qtyConsumption ?? null;
+  const quantityUnit = params.line?.unitEntry || params.line?.unitConsumption || params.line?.movementUnit || null;
+
+  return {
+    importBatchId: params.batchId,
+    importLineId: params.lineId,
+    direction: 'entry',
+    movementType: 'import',
+    sourceSystem: SOURCE_SYSTEM,
+    sourceType: SOURCE_TYPE,
+    ingredientName: params.line?.ingredientName || null,
+    invoiceNumber: params.line?.invoiceNumber || null,
+    supplierId: params.line?.supplierId || null,
+    supplierName: params.line?.supplierName || null,
+    supplierCnpj: params.line?.supplierCnpj || null,
+    supplierMatchSource: params.line?.supplierMatchSource || null,
+    quantityAmount,
+    quantityUnit,
+    movementUnit: params.line?.movementUnit || null,
+    targetUnit: params.line?.targetUnit || null,
+    conversionSource: params.line?.conversionSource || null,
+    conversionFactorUsed: params.line?.conversionFactorUsed ?? null,
+    qtyEntry: params.line?.qtyEntry ?? null,
+    qtyConsumption: params.line?.qtyConsumption ?? null,
+    rawCostAmount: params.line?.costAmount ?? null,
+    rawCostTotalAmount: params.line?.costTotalAmount ?? null,
+    sourceFingerprint: params.line?.sourceFingerprint || null,
+    ...(params.sourceAction ? { sourceAction: params.sourceAction } : {}),
+  };
 }
 
 function digitsOnly(value: unknown) {
@@ -178,6 +214,7 @@ async function loadItemsAndAliases() {
         purchaseUm: true,
         consumptionUm: true,
         purchaseToConsumptionFactor: true,
+        ItemPurchaseConversion: { select: { purchaseUm: true, factor: true } },
       },
       orderBy: [{ name: 'asc' }],
     }),
@@ -531,8 +568,25 @@ async function resolveConversionForLine(line: any, item: any) {
     } as const;
   }
 
-  const itemPurchaseUm = str(item?.purchaseUm).toUpperCase() || null;
   const itemConsumptionUm = str(item?.consumptionUm).toUpperCase() || null;
+
+  // Try multi-conversion table
+  const itemConversions: Array<{ purchaseUm: string; factor: number }> = item?.ItemPurchaseConversion ?? [];
+  const matchedConversion = itemConversions.find(
+    (c) => str(c.purchaseUm).toUpperCase() === movementUnit
+  );
+  if (matchedConversion && itemConsumptionUm && targetUnit === itemConsumptionUm && matchedConversion.factor > 0) {
+    return {
+      status: 'ready',
+      targetUnit,
+      convertedCostAmount: costAmount / matchedConversion.factor,
+      conversionSource: 'item_purchase_factor',
+      conversionFactorUsed: matchedConversion.factor,
+    } as const;
+  }
+
+  // Fallback to legacy single-conversion fields
+  const itemPurchaseUm = str(item?.purchaseUm).toUpperCase() || null;
   const itemFactor = Number(item?.purchaseToConsumptionFactor ?? NaN);
 
   if (itemPurchaseUm && itemConsumptionUm && itemFactor > 0) {
@@ -638,12 +692,12 @@ function summarizeLines(lines: any[]): BatchSummary {
   const summary: BatchSummary = {
     total: lines.length,
     ready: 0,
-    readyToApply: 0,
+    readyToImport: 0,
     invalid: 0,
     pendingMapping: 0,
     pendingSupplier: 0,
     pendingConversion: 0,
-    applied: 0,
+    imported: 0,
     ignored: 0,
     skippedDuplicate: 0,
     error: 0,
@@ -655,12 +709,12 @@ function summarizeLines(lines: any[]): BatchSummary {
     switch (String(line.status)) {
       case 'ready':
         summary.ready += 1;
-        if (lineHasSupplierReconciled(line)) summary.readyToApply += 1;
+        if (lineHasSupplierReconciled(line)) summary.readyToImport += 1;
         break;
       case 'invalid': summary.invalid += 1; break;
       case 'pending_mapping': summary.pendingMapping += 1; break;
       case 'pending_conversion': summary.pendingConversion += 1; break;
-      case 'applied': summary.applied += 1; break;
+      case 'imported': summary.imported += 1; break;
       case 'ignored': summary.ignored += 1; break;
       case 'skipped_duplicate': summary.skippedDuplicate += 1; break;
       case 'error': summary.error += 1; break;
@@ -681,21 +735,30 @@ async function markExistingAppliedDuplicates(lines: any[]) {
   if (fingerprints.length === 0) return new Set<string>();
 
   const db = prismaClient as any;
-  const [appliedChanges, existingLines] = await Promise.all([
-    prismaClient.$queryRaw<Array<{ source_fingerprint: string }>>(Prisma.sql`
-      SELECT DISTINCT coalesce(ac.metadata->>'sourceFingerprint', '') AS source_fingerprint
-      FROM stock_nf_import_applied_changes ac
-      WHERE ac.rolled_back_at IS NULL
-        AND coalesce(ac.metadata->>'sourceFingerprint', '') IN (${Prisma.join(fingerprints)})
-    `).catch(() => []),
-    db.stockNfImportBatchLine.findMany({
+  const [existingMovements, existingLines] = await Promise.all([
+    db.stockMovement.findMany({
+      where: {
+        deletedAt: null,
+        ImportLine: {
+          is: {
+            sourceFingerprint: { in: fingerprints },
+          },
+        },
+      },
+      select: {
+        ImportLine: {
+          select: {
+            sourceFingerprint: true,
+          },
+        },
+      },
+    }),
+    db.stockMovementImportBatchLine.findMany({
       where: {
         sourceFingerprint: { in: fingerprints },
-        appliedAt: { not: null },
-        Batch: {
-          is: {
-            status: { in: ['applied', 'partial'] },
-            rolledBackAt: null,
+        StockMovements: {
+          some: {
+            deletedAt: null,
           },
         },
       },
@@ -704,8 +767,8 @@ async function markExistingAppliedDuplicates(lines: any[]) {
   ]);
 
   const detected = new Set<string>();
-  for (const row of appliedChanges) {
-    const fingerprint = String(row?.source_fingerprint || '').trim();
+  for (const row of existingMovements) {
+    const fingerprint = String(row?.ImportLine?.sourceFingerprint || '').trim();
     if (fingerprint) detected.add(fingerprint);
   }
 
@@ -721,24 +784,27 @@ async function hasActiveAppliedFingerprint(sourceFingerprint: string) {
   const fingerprint = String(sourceFingerprint || '').trim();
   if (!fingerprint) return false;
 
-  const rows = await prismaClient.$queryRaw<Array<{ exists: number }>>(Prisma.sql`
-    SELECT 1 AS exists
-    FROM stock_nf_import_applied_changes ac
-    WHERE ac.rolled_back_at IS NULL
-      AND coalesce(ac.metadata->>'sourceFingerprint', '') = ${fingerprint}
-    LIMIT 1
-  `).catch(() => []);
-
-  if (rows.length > 0) return true;
-
   const db = prismaClient as any;
-  const existingLine = await db.stockNfImportBatchLine.findFirst({
+  const existingMovement = await db.stockMovement.findFirst({
+    where: {
+      deletedAt: null,
+      ImportLine: {
+        is: {
+          sourceFingerprint: fingerprint,
+        },
+      },
+    },
+    select: { id: true },
+  });
+
+  if (existingMovement?.id) return true;
+
+  const existingLine = await db.stockMovementImportBatchLine.findFirst({
     where: {
       sourceFingerprint: fingerprint,
-      appliedAt: { not: null },
-      Batch: {
-        is: {
-          rolledBackAt: null,
+      StockMovements: {
+        some: {
+          deletedAt: null,
         },
       },
     },
@@ -748,7 +814,7 @@ async function hasActiveAppliedFingerprint(sourceFingerprint: string) {
   return Boolean(existingLine?.id);
 }
 
-export async function createStockNfImportBatchFromFile(params: {
+export async function createStockMovementImportBatchFromFile(params: {
   fileName: string;
   fileBuffer: Buffer;
   batchName: string;
@@ -892,7 +958,7 @@ export async function createStockNfImportBatchFromFile(params: {
 
   const summary = summarizeLines(finalLines);
   const db = prismaClient as any;
-  const batch = await db.stockNfImportBatch.create({
+  const batch = await db.stockMovementImportBatch.create({
     data: {
       name: str(params.batchName) || `Importação de movimentações ${new Date().toLocaleString('pt-BR')}`,
       sourceSystem: SOURCE_SYSTEM,
@@ -1046,7 +1112,7 @@ async function resolveDirectSupplierFromLookup(
   };
 }
 
-export async function createStockNfImportBatchFromVisionPayload(params: {
+export async function createStockMovementImportBatchFromVisionPayload(params: {
   batchName: string;
   uploadedBy?: string | null;
   originalFileName?: string | null;
@@ -1211,7 +1277,7 @@ export async function createStockNfImportBatchFromVisionPayload(params: {
   const periodStart = periodDates[0] || params.movementAt || null;
   const periodEnd = periodDates[periodDates.length - 1] || params.movementAt || null;
 
-  const batch = await db.stockNfImportBatch.create({
+  const batch = await db.stockMovementImportBatch.create({
     data: {
       name: str(params.batchName) || `Importação de movimentações por foto ${new Date().toLocaleString('pt-BR')}`,
       sourceSystem: SOURCE_SYSTEM,
@@ -1279,13 +1345,13 @@ export async function createStockNfImportBatchFromVisionPayload(params: {
   return { batchId: batch.id, summary };
 }
 
-export async function reconcileStockNfImportBatchSuppliersFromFile(params: {
+export async function reconcileStockMovementImportBatchSuppliersFromFile(params: {
   batchId: string;
   fileName?: string | null;
   fileBuffer: Buffer;
 }) {
   const db = prismaClient as any;
-  const batch = await db.stockNfImportBatch.findUnique({ where: { id: params.batchId }, select: { id: true, notes: true } });
+  const batch = await db.stockMovementImportBatch.findUnique({ where: { id: params.batchId }, select: { id: true, notes: true } });
   if (!batch) throw new Error('Lote não encontrado');
 
   const supplierNotes = parseSupplierNotesJson(params.fileBuffer || null);
@@ -1295,7 +1361,7 @@ export async function reconcileStockNfImportBatchSuppliersFromFile(params: {
 
   const supplierNotesLookup = buildSupplierNotesLookup(supplierNotes);
   const [lines, lookup] = await Promise.all([
-    db.stockNfImportBatchLine.findMany({ where: { batchId: params.batchId }, orderBy: [{ rowNumber: 'asc' }] }),
+    db.stockMovementImportBatchLine.findMany({ where: { batchId: params.batchId }, orderBy: [{ rowNumber: 'asc' }] }),
     loadItemsAndAliases(),
   ]);
 
@@ -1316,7 +1382,7 @@ export async function reconcileStockNfImportBatchSuppliersFromFile(params: {
 
     if (!matchedSupplierNote) {
       if (!lineHasSupplierReconciled(line) && !str(line.supplierName) && !str(line.supplierCnpj)) {
-        await db.stockNfImportBatchLine.update({
+        await db.stockMovementImportBatchLine.update({
           where: { id: line.id },
           data: {
             supplierReconciliationStatus: 'not_started',
@@ -1331,7 +1397,7 @@ export async function reconcileStockNfImportBatchSuppliersFromFile(params: {
 
     const supplier = resolveSupplierFromLookup(matchedSupplierNote, lookup);
     const supplierReconciliation = buildSupplierReconciliationState(supplier);
-    await db.stockNfImportBatchLine.update({
+    await db.stockMovementImportBatchLine.update({
       where: { id: line.id },
       data: {
         supplierId: supplier.supplierId || null,
@@ -1360,7 +1426,7 @@ export async function reconcileStockNfImportBatchSuppliersFromFile(params: {
   }
 
   const notesLabel = str(params.fileName) || 'arquivo informado';
-  await db.stockNfImportBatch.update({
+  await db.stockMovementImportBatch.update({
     where: { id: params.batchId },
     data: {
       supplierNotesFileName: notesLabel,
@@ -1377,7 +1443,7 @@ async function recomputeBatchLines(batchId: string) {
   const db = prismaClient as any;
   await ensureSyntheticInvoiceNumbersForVisionBatch(batchId);
   const [lines, lookup] = await Promise.all([
-    db.stockNfImportBatchLine.findMany({ where: { batchId }, orderBy: [{ rowNumber: 'asc' }] }),
+    db.stockMovementImportBatchLine.findMany({ where: { batchId }, orderBy: [{ rowNumber: 'asc' }] }),
     loadItemsAndAliases(),
   ]);
 
@@ -1481,7 +1547,7 @@ async function recomputeBatchLines(batchId: string) {
       }
     }
 
-    await db.stockNfImportBatchLine.update({
+    await db.stockMovementImportBatchLine.update({
       where: { id: line.id },
       data: next,
     });
@@ -1492,7 +1558,7 @@ async function recomputeBatchLines(batchId: string) {
 
 async function ensureSyntheticInvoiceNumbersForVisionBatch(batchId: string) {
   const db = prismaClient as any;
-  const batch = await db.stockNfImportBatch.findUnique({
+  const batch = await db.stockMovementImportBatch.findUnique({
     where: { id: batchId },
     select: {
       id: true,
@@ -1540,7 +1606,7 @@ async function ensureSyntheticInvoiceNumbersForVisionBatch(batchId: string) {
       : {};
     metadata.syntheticInvoiceNumber = syntheticInvoiceNumber;
 
-    await db.stockNfImportBatchLine.update({
+    await db.stockMovementImportBatchLine.update({
       where: { id: line.id },
       data: {
         invoiceNumber: syntheticInvoiceNumber,
@@ -1553,7 +1619,7 @@ async function ensureSyntheticInvoiceNumbersForVisionBatch(batchId: string) {
 
 export async function refreshBatchSummary(batchId: string) {
   const db = prismaClient as any;
-  const lines = await db.stockNfImportBatchLine.findMany({
+  const lines = await db.stockMovementImportBatchLine.findMany({
     where: { batchId },
     select: {
       status: true,
@@ -1564,23 +1630,23 @@ export async function refreshBatchSummary(batchId: string) {
   });
   const summary = summarizeLines(lines);
 
-  const batch = await db.stockNfImportBatch.findUnique({ where: { id: batchId }, select: { appliedAt: true, rolledBackAt: true } });
+  const batch = await db.stockMovementImportBatch.findUnique({ where: { id: batchId }, select: { appliedAt: true, rolledBackAt: true } });
   let status = derivePreApplyBatchStatus(summary);
   if (batch?.appliedAt && !batch?.rolledBackAt) {
     status =
-      summary.readyToApply > 0 ||
+      summary.readyToImport > 0 ||
       summary.pendingMapping > 0 ||
       summary.pendingSupplier > 0 ||
       summary.pendingConversion > 0 ||
       summary.error > 0
         ? 'partial'
-        : 'applied';
+        : 'imported';
   }
   if (batch?.rolledBackAt) {
     status = 'rolled_back';
   }
 
-  await db.stockNfImportBatch.update({
+  await db.stockMovementImportBatch.update({
     where: { id: batchId },
     data: { summary, status },
   });
@@ -1600,7 +1666,7 @@ export async function mapBatchLinesToItem(params: {
   const db = prismaClient as any;
   const item = await db.item.findUnique({
     where: { id: params.itemId },
-    select: { id: true, name: true, purchaseUm: true, consumptionUm: true, purchaseToConsumptionFactor: true, active: true },
+    select: { id: true, name: true, purchaseUm: true, consumptionUm: true, purchaseToConsumptionFactor: true, active: true, ItemPurchaseConversion: { select: { purchaseUm: true, factor: true } } },
   });
   if (!item) throw new Error('Item não encontrado');
 
@@ -1614,10 +1680,10 @@ export async function mapBatchLinesToItem(params: {
     throw new Error('Linha inválida para mapear');
   }
 
-  const lines = await db.stockNfImportBatchLine.findMany({ where });
+  const lines = await db.stockMovementImportBatchLine.findMany({ where });
   for (const line of lines) {
     const conv = await resolveConversionForLine({ ...line, mappedItemId: item.id }, item);
-    await db.stockNfImportBatchLine.update({
+    await db.stockMovementImportBatchLine.update({
       where: { id: line.id },
       data: {
         mappedItemId: item.id,
@@ -1673,12 +1739,425 @@ export async function setBatchLineManualConversion(params: {
 }) {
   const db = prismaClient as any;
   if (!(params.factor > 0)) throw new Error('Informe um fator maior que zero');
-  const line = await db.stockNfImportBatchLine.findUnique({ where: { id: params.lineId } });
+  const line = await db.stockMovementImportBatchLine.findUnique({ where: { id: params.lineId } });
   if (!line || line.batchId !== params.batchId) throw new Error('Linha inválida');
 
-  await db.stockNfImportBatchLine.update({
+  await db.stockMovementImportBatchLine.update({
     where: { id: params.lineId },
     data: { manualConversionFactor: params.factor },
+  });
+
+  await recomputeBatchLines(params.batchId);
+}
+
+export async function updateStockMovementImportBatchLineEditableFields(params: {
+  batchId: string;
+  lineId: string;
+  actor?: string | null;
+  movementAt?: Date | null;
+  ingredientName: string;
+  motivo?: string | null;
+  identification?: string | null;
+  invoiceNumber?: string | null;
+  supplierId?: string | null;
+  supplierName?: string | null;
+  supplierCnpj?: string | null;
+  qtyEntry?: number | null;
+  unitEntry?: string | null;
+  qtyConsumption?: number | null;
+  unitConsumption?: string | null;
+  movementUnit?: string | null;
+  costAmount?: number | null;
+  costTotalAmount?: number | null;
+  observation?: string | null;
+  mappedItemId?: string | null;
+  manualConversionFactor?: number | null;
+}) {
+  const db = prismaClient as any;
+  const line = await db.stockMovementImportBatchLine.findUnique({ where: { id: params.lineId } });
+  if (!line || line.batchId !== params.batchId) throw new Error('Linha inválida');
+  const activeMovement = await db.stockMovement.findFirst({
+    where: {
+      importBatchId: params.batchId,
+      importLineId: params.lineId,
+      deletedAt: null,
+    },
+    orderBy: [{ appliedAt: 'desc' }],
+    select: {
+      id: true,
+      itemId: true,
+      previousCostVariationId: true,
+      previousCostAmount: true,
+      previousCostUnit: true,
+      newCostAmount: true,
+      newCostUnit: true,
+      movementUnit: true,
+      conversionSource: true,
+      conversionFactorUsed: true,
+      invoiceNumber: true,
+      supplierId: true,
+      supplierName: true,
+      supplierCnpj: true,
+      movementAt: true,
+      appliedAt: true,
+      metadata: true,
+    },
+  });
+  const isActiveMovement = Boolean(activeMovement || (line.appliedAt && !line.rolledBackAt));
+
+  const ingredientName = str(params.ingredientName);
+  if (!ingredientName) throw new Error('Ingrediente é obrigatório');
+
+  const parsedCostAmount = params.costAmount == null ? null : Number(params.costAmount);
+  if (parsedCostAmount != null && !Number.isFinite(parsedCostAmount)) {
+    throw new Error('Custo unitário inválido');
+  }
+
+  const parsedCostTotalAmount = params.costTotalAmount == null ? null : Number(params.costTotalAmount);
+  if (parsedCostTotalAmount != null && !Number.isFinite(parsedCostTotalAmount)) {
+    throw new Error('Custo total inválido');
+  }
+
+  const parsedQtyEntry = params.qtyEntry == null ? null : Number(params.qtyEntry);
+  if (parsedQtyEntry != null && !Number.isFinite(parsedQtyEntry)) {
+    throw new Error('Quantidade de entrada inválida');
+  }
+
+  const parsedQtyConsumption = params.qtyConsumption == null ? null : Number(params.qtyConsumption);
+  if (parsedQtyConsumption != null && !Number.isFinite(parsedQtyConsumption)) {
+    throw new Error('Quantidade de consumo inválida');
+  }
+
+  const parsedManualConversionFactor =
+    params.manualConversionFactor == null || params.manualConversionFactor === 0
+      ? null
+      : Number(params.manualConversionFactor);
+  if (parsedManualConversionFactor != null && (!(Number.isFinite(parsedManualConversionFactor)) || parsedManualConversionFactor <= 0)) {
+    throw new Error('Fator manual inválido');
+  }
+
+  let mappedItemId = str(params.mappedItemId) || null;
+  let mappedItemName: string | null = null;
+  if (mappedItemId) {
+    const mappedItem = await db.item.findUnique({
+      where: { id: mappedItemId },
+      select: { id: true, name: true },
+    });
+    if (!mappedItem) throw new Error('Item selecionado não encontrado');
+    mappedItemId = mappedItem.id;
+    mappedItemName = mappedItem.name;
+  }
+
+  if (isActiveMovement && mappedItemId && String(mappedItemId) !== String(line.mappedItemId || '')) {
+    throw new Error('Troca de item em movimentação ativa ainda exige rollback. Ajuste os demais campos ou reverta a linha.');
+  }
+
+  let supplierId = str(params.supplierId) || null;
+  let supplierName = str(params.supplierName) || null;
+  let supplierCnpj = str(params.supplierCnpj) || null;
+  let supplierMatchSource: string | null = null;
+
+  if (supplierId) {
+    const supplier = await db.supplier.findUnique({
+      where: { id: supplierId },
+      select: { id: true, name: true, cnpj: true },
+    });
+    if (!supplier) throw new Error('Fornecedor selecionado não encontrado');
+    supplierId = supplier.id;
+    supplierName = supplier.name || supplierName;
+    supplierCnpj = supplier.cnpj || supplierCnpj;
+    supplierMatchSource = 'manual_selected_supplier';
+  } else if (supplierName || supplierCnpj) {
+    supplierMatchSource = 'manual_edited_supplier';
+  }
+
+  const supplierReconciliation = buildSupplierReconciliationState({
+    supplierId,
+    supplierName,
+    supplierCnpj,
+    supplierMatchSource,
+    manual: Boolean(supplierId),
+  });
+
+  const previousMetadata =
+    typeof line.metadata === 'object' && line.metadata && !Array.isArray(line.metadata)
+      ? { ...(line.metadata as Record<string, unknown>) }
+      : {};
+  const previousEditHistory = Array.isArray(previousMetadata.editHistory) ? [...(previousMetadata.editHistory as any[])] : [];
+  const editEntry = {
+    editedAt: new Date().toISOString(),
+    editedBy: str(params.actor) || null,
+    mode: isActiveMovement ? 'active_movement_edit' : 'pre_import_edit',
+    previousSnapshot: {
+      movementAt: line.movementAt,
+      ingredientName: line.ingredientName,
+      motivo: line.motivo,
+      identification: line.identification,
+      invoiceNumber: line.invoiceNumber,
+      supplierId: line.supplierId,
+      supplierName: line.supplierName,
+      supplierCnpj: line.supplierCnpj,
+      qtyEntry: line.qtyEntry,
+      unitEntry: line.unitEntry,
+      qtyConsumption: line.qtyConsumption,
+      unitConsumption: line.unitConsumption,
+      movementUnit: line.movementUnit,
+      costAmount: line.costAmount,
+      costTotalAmount: line.costTotalAmount,
+      observation: line.observation,
+      mappedItemId: line.mappedItemId,
+      mappedItemName: line.mappedItemName,
+      manualConversionFactor: line.manualConversionFactor,
+      convertedCostAmount: line.convertedCostAmount,
+      targetUnit: line.targetUnit,
+      conversionSource: line.conversionSource,
+      conversionFactorUsed: line.conversionFactorUsed,
+      status: line.status,
+    },
+  };
+  const nextMetadata = {
+    ...previousMetadata,
+    lastEditedAt: editEntry.editedAt,
+    lastEditedBy: editEntry.editedBy,
+    editHistory: [...previousEditHistory, editEntry],
+  };
+
+  const nextMovementAt = params.movementAt || null;
+  const nextLineDraft = {
+    ...line,
+    movementAt: nextMovementAt,
+    ingredientName,
+    ingredientNameNormalized: normalizeName(ingredientName),
+    motivo: str(params.motivo) || null,
+    identification: str(params.identification) || null,
+    invoiceNumber: str(params.invoiceNumber) || null,
+    supplierId,
+    supplierName,
+    supplierCnpj,
+    qtyEntry: parsedQtyEntry,
+    unitEntry: str(params.unitEntry).toUpperCase() || null,
+    qtyConsumption: parsedQtyConsumption,
+    unitConsumption: str(params.unitConsumption).toUpperCase() || null,
+    movementUnit: str(params.movementUnit).toUpperCase() || null,
+    costAmount: parsedCostAmount,
+    costTotalAmount: parsedCostTotalAmount,
+    observation: str(params.observation) || null,
+    mappedItemId: mappedItemId ?? line.mappedItemId ?? null,
+    mappedItemName: mappedItemName ?? line.mappedItemName ?? null,
+    mappingSource: (mappedItemId ?? line.mappedItemId) ? 'manual' : null,
+    manualConversionFactor: parsedManualConversionFactor,
+    supplierMatchSource,
+  };
+
+  if (isActiveMovement) {
+    const activeMappedItemId = String(nextLineDraft.mappedItemId || '').trim();
+    if (!activeMappedItemId) {
+      throw new Error('Movimentação ativa precisa continuar com item mapeado.');
+    }
+
+    const activeItem = await db.item.findUnique({
+      where: { id: activeMappedItemId },
+      select: {
+        id: true,
+        name: true,
+        purchaseUm: true,
+        consumptionUm: true,
+        purchaseToConsumptionFactor: true,
+        ItemPurchaseConversion: { select: { purchaseUm: true, factor: true } },
+      },
+    });
+    if (!activeItem) throw new Error('Item mapeado da movimentação ativa não encontrado');
+
+    const conversion = await resolveConversionForLine(nextLineDraft, activeItem);
+    if (conversion.status !== 'ready') {
+      throw new Error('Movimentação ativa precisa continuar com conversão válida após a edição.');
+    }
+
+    await db.stockMovementImportBatchLine.update({
+      where: { id: params.lineId },
+      data: {
+        movementAt: nextMovementAt,
+        ingredientName,
+        ingredientNameNormalized: normalizeName(ingredientName),
+        motivo: str(params.motivo) || null,
+        identification: str(params.identification) || null,
+        invoiceNumber: str(params.invoiceNumber) || null,
+        supplierId,
+        supplierName,
+        supplierNameNormalized: supplierName ? normalizeName(supplierName) : null,
+        supplierCnpj,
+        supplierMatchSource,
+        supplierReconciliationStatus: supplierReconciliation.supplierReconciliationStatus,
+        supplierReconciliationSource: supplierReconciliation.supplierReconciliationSource,
+        supplierReconciliationAt: supplierReconciliation.supplierReconciliationAt,
+        qtyEntry: parsedQtyEntry,
+        unitEntry: str(params.unitEntry).toUpperCase() || null,
+        qtyConsumption: parsedQtyConsumption,
+        unitConsumption: str(params.unitConsumption).toUpperCase() || null,
+        movementUnit: str(params.movementUnit).toUpperCase() || null,
+        costAmount: parsedCostAmount,
+        costTotalAmount: parsedCostTotalAmount,
+        observation: str(params.observation) || null,
+        mappedItemId: activeItem.id,
+        mappedItemName: activeItem.name,
+        mappingSource: 'manual',
+        manualConversionFactor: parsedManualConversionFactor,
+        targetUnit: (conversion as any).targetUnit ?? resolveTargetUnit(activeItem),
+        convertedCostAmount: (conversion as any).convertedCostAmount ?? null,
+        conversionSource: (conversion as any).conversionSource ?? null,
+        conversionFactorUsed: (conversion as any).conversionFactorUsed ?? null,
+        status: 'imported',
+        errorCode: null,
+        errorMessage: null,
+        metadata: nextMetadata,
+      },
+    });
+
+    if (activeMovement) {
+      const movementPreviousMetadata =
+        typeof activeMovement.metadata === 'object' && activeMovement.metadata && !Array.isArray(activeMovement.metadata)
+          ? { ...(activeMovement.metadata as Record<string, unknown>) }
+          : {};
+      const movementEditHistory = Array.isArray(movementPreviousMetadata.editHistory)
+        ? [...(movementPreviousMetadata.editHistory as any[])]
+        : [];
+
+      await db.stockMovement.update({
+        where: { id: activeMovement.id },
+        data: {
+        direction: 'entry',
+        movementType: 'import',
+        itemId: activeItem.id,
+        quantityAmount: parsedQtyEntry ?? parsedQtyConsumption ?? activeMovement.quantityAmount ?? null,
+        quantityUnit:
+          str(params.unitEntry).toUpperCase() ||
+          str(params.unitConsumption).toUpperCase() ||
+          str(params.movementUnit).toUpperCase() ||
+          activeMovement.quantityUnit ||
+          null,
+        newCostAmount: Number((conversion as any).convertedCostAmount ?? activeMovement.newCostAmount),
+        newCostUnit: (conversion as any).targetUnit ?? activeMovement.newCostUnit,
+        previousCostVariationId: activeMovement.previousCostVariationId || null,
+        previousCostAmount: activeMovement.previousCostAmount ?? null,
+        previousCostUnit: activeMovement.previousCostUnit ?? null,
+        movementUnit: str(params.movementUnit).toUpperCase() || null,
+        conversionSource: (conversion as any).conversionSource ?? null,
+        conversionFactorUsed: (conversion as any).conversionFactorUsed ?? null,
+        invoiceNumber: str(params.invoiceNumber) || null,
+        supplierId,
+        supplierName,
+        supplierCnpj,
+        movementAt: nextMovementAt,
+        metadata: {
+          ...movementPreviousMetadata,
+          ...movementMetadataBase({
+            batchId: params.batchId,
+            lineId: params.lineId,
+            line: {
+              ...nextLineDraft,
+              mappedItemId: activeItem.id,
+              mappedItemName: activeItem.name,
+              targetUnit: (conversion as any).targetUnit ?? resolveTargetUnit(activeItem),
+              convertedCostAmount: (conversion as any).convertedCostAmount ?? null,
+              conversionSource: (conversion as any).conversionSource ?? null,
+              conversionFactorUsed: (conversion as any).conversionFactorUsed ?? null,
+            },
+            sourceAction: 'manual_edit_on_active_import_movement',
+          }),
+          originType: 'import-line',
+          originRefId: params.lineId,
+          editHistory: [...movementEditHistory, editEntry],
+          editedActiveMovement: true,
+        },
+        },
+      });
+    }
+
+    const baseVar = await itemVariationPrismaEntity.findPrimaryVariationForItem(activeItem.id, {
+      ensureBaseIfMissing: true,
+    });
+    if (baseVar?.id) {
+      const currentCost = await db.itemCostVariation.findUnique({ where: { itemVariationId: baseVar.id } });
+      const currentRefMatchesMovement =
+        activeMovement &&
+        str(currentCost?.referenceType) === COST_REFERENCE_TYPE_MOVEMENT &&
+        str(currentCost?.referenceId) === activeMovement.id;
+      const currentRefMatchesLine =
+        str(currentCost?.referenceType) === COST_REFERENCE_TYPE_LINE &&
+        str(currentCost?.referenceId) === params.lineId;
+      const costHistoryMetadata = {
+        ...(typeof nextMetadata === 'object' ? nextMetadata : {}),
+        sourceAction: 'manual_edit_on_active_import_movement',
+        importBatchId: params.batchId,
+        importLineId: params.lineId,
+        stockMovementId: activeMovement?.id || null,
+      };
+
+      if (currentRefMatchesMovement || currentRefMatchesLine) {
+        await itemCostVariationPrismaEntity.setCurrentCost({
+          itemVariationId: baseVar.id,
+          costAmount: Number((conversion as any).convertedCostAmount ?? 0),
+          unit: (conversion as any).targetUnit ?? null,
+          source: 'adjustment',
+          referenceType: activeMovement ? COST_REFERENCE_TYPE_MOVEMENT : COST_REFERENCE_TYPE_LINE,
+          referenceId: activeMovement?.id || params.lineId,
+          validFrom: nextMovementAt || new Date(),
+          updatedBy: str(params.actor) || null,
+          metadata: costHistoryMetadata,
+        });
+      } else {
+        await itemCostVariationPrismaEntity.addHistoryEntry({
+          itemVariationId: baseVar.id,
+          costAmount: Number((conversion as any).convertedCostAmount ?? 0),
+          unit: (conversion as any).targetUnit ?? null,
+          source: 'adjustment',
+          referenceType: activeMovement ? COST_REFERENCE_TYPE_MOVEMENT : COST_REFERENCE_TYPE_LINE,
+          referenceId: activeMovement?.id || params.lineId,
+          validFrom: nextMovementAt || new Date(),
+          updatedBy: str(params.actor) || null,
+          metadata: costHistoryMetadata,
+        });
+      }
+    }
+
+    await refreshBatchSummary(params.batchId);
+    return;
+  }
+
+  await db.stockMovementImportBatchLine.update({
+    where: { id: params.lineId },
+    data: {
+      movementAt: params.movementAt || null,
+      ingredientName,
+      ingredientNameNormalized: normalizeName(ingredientName),
+      motivo: str(params.motivo) || null,
+      identification: str(params.identification) || null,
+      invoiceNumber: str(params.invoiceNumber) || null,
+      supplierId,
+      supplierName,
+      supplierNameNormalized: supplierName ? normalizeName(supplierName) : null,
+      supplierCnpj,
+      supplierMatchSource,
+      supplierReconciliationStatus: supplierReconciliation.supplierReconciliationStatus,
+      supplierReconciliationSource: supplierReconciliation.supplierReconciliationSource,
+      supplierReconciliationAt: supplierReconciliation.supplierReconciliationAt,
+      qtyEntry: parsedQtyEntry,
+      unitEntry: str(params.unitEntry).toUpperCase() || null,
+      qtyConsumption: parsedQtyConsumption,
+      unitConsumption: str(params.unitConsumption).toUpperCase() || null,
+      movementUnit: str(params.movementUnit).toUpperCase() || null,
+      costAmount: parsedCostAmount,
+      costTotalAmount: parsedCostTotalAmount,
+      observation: str(params.observation) || null,
+      mappedItemId,
+      mappedItemName,
+      mappingSource: mappedItemId ? 'manual' : null,
+      manualConversionFactor: parsedManualConversionFactor,
+      status: 'draft',
+      errorCode: null,
+      errorMessage: null,
+      metadata: nextMetadata,
+    },
   });
 
   await recomputeBatchLines(params.batchId);
@@ -1690,12 +2169,12 @@ export async function setBatchLineIgnored(params: {
   ignored: boolean;
 }) {
   const db = prismaClient as any;
-  const line = await db.stockNfImportBatchLine.findUnique({ where: { id: params.lineId } });
+  const line = await db.stockMovementImportBatchLine.findUnique({ where: { id: params.lineId } });
   if (!line || line.batchId !== params.batchId) throw new Error('Linha inválida');
-  if (line.appliedAt) throw new Error('Linha já aplicada não pode ser ignorada');
+  if (line.appliedAt) throw new Error('Linha já importada não pode ser ignorada');
 
   if (params.ignored) {
-    await db.stockNfImportBatchLine.update({
+    await db.stockMovementImportBatchLine.update({
       where: { id: params.lineId },
       data: {
         status: 'ignored',
@@ -1707,7 +2186,7 @@ export async function setBatchLineIgnored(params: {
     return;
   }
 
-  await db.stockNfImportBatchLine.update({
+  await db.stockMovementImportBatchLine.update({
     where: { id: params.lineId },
     data: {
       status: 'draft',
@@ -1719,40 +2198,81 @@ export async function setBatchLineIgnored(params: {
   await recomputeBatchLines(params.batchId);
 }
 
+export async function retryStockMovementImportBatchErrors(params: {
+  batchId: string;
+  lineId?: string | null;
+}) {
+  const db = prismaClient as any;
+  const where: Record<string, unknown> = {
+    batchId: params.batchId,
+    appliedAt: null,
+    status: 'error',
+  };
+
+  if (params.lineId) where.id = params.lineId;
+
+  const lines = await db.stockMovementImportBatchLine.findMany({
+    where,
+    select: { id: true },
+  });
+
+  if (params.lineId && lines.length <= 0) {
+    throw new Error('Linha não está em erro para retentativa');
+  }
+
+  if (lines.length <= 0) {
+    return { retriedCount: 0, summary: await refreshBatchSummary(params.batchId) };
+  }
+
+  await db.stockMovementImportBatchLine.updateMany({
+    where: {
+      id: { in: lines.map((line: { id: string }) => line.id) },
+    },
+    data: {
+      status: 'draft',
+      errorCode: null,
+      errorMessage: null,
+    },
+  });
+
+  const summary = await recomputeBatchLines(params.batchId);
+  return { retriedCount: lines.length, summary };
+}
+
 async function getBatchReadyLines(batchId: string) {
   const db = prismaClient as any;
-  return await db.stockNfImportBatchLine.findMany({
+  return await db.stockMovementImportBatchLine.findMany({
     where: { batchId, status: 'ready', appliedAt: null },
     orderBy: [{ rowNumber: 'asc' }],
   });
 }
 
-async function applySingleStockNfImportBatchLine(params: { batchId: string; actor?: string | null; line: any }) {
+async function importSingleStockMovementImportBatchLine(params: { batchId: string; actor?: string | null; line: any }) {
   const db = prismaClient as any;
   const line = params.line;
 
   if (await hasActiveAppliedFingerprint(line.sourceFingerprint)) {
-    await db.stockNfImportBatchLine.update({
+    await db.stockMovementImportBatchLine.update({
       where: { id: line.id },
       data: {
         status: 'skipped_duplicate',
         errorCode: 'duplicate_already_applied',
-        errorMessage: 'Linha já aplicada em outro lote',
+        errorMessage: 'Linha já importada em outro lote',
       },
     });
-    return { applied: 0, errors: 0, processed: 1 };
+    return { imported: 0, errors: 0, processed: 1 };
   }
 
   if (!lineHasSupplierReconciled(line)) {
-    await db.stockNfImportBatchLine.update({
+    await db.stockMovementImportBatchLine.update({
       where: { id: line.id },
       data: {
         status: 'error',
-        errorCode: 'supplier_not_reconciled_apply',
+        errorCode: 'supplier_not_reconciled_import',
         errorMessage: 'Fornecedor do documento ainda não foi conciliado para aplicação',
       },
     });
-    return { applied: 0, errors: 1, processed: 1 };
+    return { imported: 0, errors: 1, processed: 1 };
   }
 
   const item = await db.item.findUnique({
@@ -1760,72 +2280,47 @@ async function applySingleStockNfImportBatchLine(params: { batchId: string; acto
     select: { id: true, name: true },
   });
   if (!item) {
-    await db.stockNfImportBatchLine.update({
+    await db.stockMovementImportBatchLine.update({
       where: { id: line.id },
-      data: { status: 'error', errorCode: 'item_missing_apply', errorMessage: 'Item não encontrado na aplicação' },
+      data: { status: 'error', errorCode: 'item_missing_import', errorMessage: 'Item não encontrado na aplicação' },
     });
-    return { applied: 0, errors: 1, processed: 1 };
+    return { imported: 0, errors: 1, processed: 1 };
   }
 
   const baseVar = await itemVariationPrismaEntity.findPrimaryVariationForItem(item.id, {
     ensureBaseIfMissing: true,
   });
   if (!baseVar?.id) {
-    await db.stockNfImportBatchLine.update({
+    await db.stockMovementImportBatchLine.update({
       where: { id: line.id },
-      data: { status: 'error', errorCode: 'item_variation_missing_apply', errorMessage: 'Nenhuma variação disponível para aplicar o custo' },
+      data: { status: 'error', errorCode: 'item_variation_missing_import', errorMessage: 'Nenhuma variação disponível para aplicar o custo' },
     });
-    return { applied: 0, errors: 1, processed: 1 };
+    return { imported: 0, errors: 1, processed: 1 };
   }
 
   const currentCost = await db.itemCostVariation.findUnique({ where: { itemVariationId: baseVar.id } });
   const nextCost = Number(line.convertedCostAmount ?? NaN);
   if (!(nextCost > 0)) {
-    await db.stockNfImportBatchLine.update({
+    await db.stockMovementImportBatchLine.update({
       where: { id: line.id },
       data: { status: 'error', errorCode: 'invalid_converted_cost', errorMessage: 'Custo convertido inválido' },
     });
-    return { applied: 0, errors: 1, processed: 1 };
+    return { imported: 0, errors: 1, processed: 1 };
   }
 
-  await itemCostVariationPrismaEntity.setCurrentCost({
-    itemVariationId: baseVar.id,
-    costAmount: nextCost,
-    unit: line.targetUnit || line.movementUnit || null,
-    source: 'import',
-    referenceType: COST_REFERENCE_TYPE_LINE,
-    referenceId: line.id,
-    validFrom: line.movementAt || new Date(),
-    updatedBy: params.actor || null,
-    metadata: {
+  const movement = await db.stockMovement.create({
+    data: {
+      direction: 'entry',
+      movementType: 'import',
+      originType: 'import-line',
+      originRefId: line.id,
       importBatchId: params.batchId,
       importLineId: line.id,
-      sourceSystem: SOURCE_SYSTEM,
-      sourceType: SOURCE_TYPE,
-      ingredientName: line.ingredientName,
-      invoiceNumber: line.invoiceNumber,
-      supplierId: line.supplierId,
-      supplierName: line.supplierName,
-      supplierCnpj: line.supplierCnpj,
-      supplierMatchSource: line.supplierMatchSource,
-      movementUnit: line.movementUnit,
-      targetUnit: line.targetUnit,
-      conversionSource: line.conversionSource,
-      conversionFactorUsed: line.conversionFactorUsed,
-      qtyEntry: line.qtyEntry,
-      qtyConsumption: line.qtyConsumption,
-      rawCostAmount: line.costAmount,
-      rawCostTotalAmount: line.costTotalAmount,
-      sourceFingerprint: line.sourceFingerprint,
-    },
-  });
-
-  const appliedChange = await db.stockNfImportAppliedChange.create({
-    data: {
-      batchId: params.batchId,
-      lineId: line.id,
       itemId: item.id,
       itemVariationId: baseVar.id,
+      supplierId: line.supplierId || null,
+      quantityAmount: line.qtyEntry ?? line.qtyConsumption ?? null,
+      quantityUnit: line.unitEntry || line.unitConsumption || line.movementUnit || null,
       previousCostVariationId: currentCost?.id || null,
       previousCostAmount: currentCost?.costAmount ?? null,
       previousCostUnit: currentCost?.unit ?? null,
@@ -1835,66 +2330,74 @@ async function applySingleStockNfImportBatchLine(params: { batchId: string; acto
       conversionSource: line.conversionSource || null,
       conversionFactorUsed: line.conversionFactorUsed ?? null,
       invoiceNumber: line.invoiceNumber || null,
-      supplierId: line.supplierId || null,
       supplierName: line.supplierName || null,
       supplierCnpj: line.supplierCnpj || null,
       movementAt: line.movementAt || null,
       appliedBy: params.actor || null,
       metadata: {
-        ingredientName: line.ingredientName,
-        sourceFingerprint: line.sourceFingerprint,
-        rowNumber: line.rowNumber,
+        ...movementMetadataBase({
+          batchId: params.batchId,
+          lineId: line.id,
+          line,
+        }),
+        originType: 'import-line',
+        originRefId: line.id,
       },
     },
   });
 
-  await enqueueAsyncJob({
-    type: ASYNC_JOB_TYPE.costImpactRecalc,
-    dedupeKey: `cost_impact_recalc:item:${item.id}`,
-    payload: {
-      itemId: item.id,
-      sourceType: 'stock-nf-import',
-      sourceRefId: appliedChange.id,
-      updatedBy: params.actor || 'system:stock-nf-import',
-      batchId: params.batchId,
-      lineId: line.id,
+  await itemCostVariationPrismaEntity.setCurrentCost({
+    itemVariationId: baseVar.id,
+    costAmount: nextCost,
+    unit: line.targetUnit || line.movementUnit || null,
+    source: 'import',
+    referenceType: COST_REFERENCE_TYPE_MOVEMENT,
+    referenceId: movement.id,
+    validFrom: line.movementAt || new Date(),
+    updatedBy: params.actor || null,
+    metadata: {
+      ...movementMetadataBase({
+        batchId: params.batchId,
+        lineId: line.id,
+        line,
+      }),
+      stockMovementId: movement.id,
     },
-    priority: 50,
   });
 
-  await db.stockNfImportBatchLine.update({
+  await db.stockMovementImportBatchLine.update({
     where: { id: line.id },
     data: {
-      status: 'applied',
+      status: 'imported',
       appliedAt: new Date(),
       errorCode: null,
       errorMessage: null,
     },
   });
-  return { applied: 1, errors: 0, processed: 1 };
+  return { imported: 1, errors: 0, processed: 1 };
 }
 
-function batchApplyProgressFromBatch(batch: any, summary?: BatchSummary | null): BatchApplyProgress {
+function batchImportProgressFromBatch(batch: any, summary?: BatchSummary | null): BatchImportProgress {
   return {
-    status: (String(batch?.applyStatus || 'idle') as BatchApplyProgress['status']),
-    processedCount: Number(batch?.applyProcessedCount || 0),
-    errorCount: Number(batch?.applyErrorCount || 0),
-    totalCount: Number(batch?.applyTotalCount || 0),
-    remainingCount: Math.max(0, Number(summary?.readyToApply ?? 0)),
-    message: batch?.applyMessage ? String(batch.applyMessage) : null,
-    startedAt: batch?.applyStartedAt || null,
-    finishedAt: batch?.applyFinishedAt || null,
+    status: (String(batch?.importStatus || 'idle') as BatchImportProgress['status']),
+    processedCount: Number(batch?.importProcessedCount || 0),
+    errorCount: Number(batch?.importErrorCount || 0),
+    totalCount: Number(batch?.importTotalCount || 0),
+    remainingCount: Math.max(0, Number(summary?.readyToImport ?? 0)),
+    message: batch?.importMessage ? String(batch.importMessage) : null,
+    startedAt: batch?.importStartedAt || null,
+    finishedAt: batch?.importFinishedAt || null,
   };
 }
 
-export async function startStockNfImportBatchApply(params: { batchId: string; actor?: string | null }) {
+export async function startStockMovementImportBatch(params: { batchId: string; actor?: string | null }) {
   const db = prismaClient as any;
-  const batch = await db.stockNfImportBatch.findUnique({ where: { id: params.batchId } });
+  const batch = await db.stockMovementImportBatch.findUnique({ where: { id: params.batchId } });
   if (!batch) throw new Error('Lote não encontrado');
   if (batch.rolledBackAt) throw new Error('Lote já foi revertido');
-  if (String(batch.applyStatus || 'idle') === 'applying') {
+  if (String(batch.importStatus || 'idle') === 'importing') {
     const summary = await refreshBatchSummary(params.batchId);
-    return batchApplyProgressFromBatch(batch, summary);
+    return batchImportProgressFromBatch(batch, summary);
   }
 
   await recomputeBatchLines(params.batchId);
@@ -1902,52 +2405,52 @@ export async function startStockNfImportBatchApply(params: { batchId: string; ac
   const startedAt = new Date();
 
   if (readyLines.length <= 0) {
-    await db.stockNfImportBatch.update({
+    await db.stockMovementImportBatch.update({
       where: { id: params.batchId },
       data: {
-        applyStatus: 'completed',
-        applyStartedAt: startedAt,
-        applyFinishedAt: startedAt,
-        applyProcessedCount: 0,
-        applyErrorCount: 0,
-        applyTotalCount: 0,
-        applyMessage: 'Nenhuma linha pronta para aplicar.',
+        importStatus: 'imported',
+        importStartedAt: startedAt,
+        importFinishedAt: startedAt,
+        importProcessedCount: 0,
+        importErrorCount: 0,
+        importTotalCount: 0,
+        importMessage: 'Nenhuma linha pronta para importar.',
       },
     });
-    const refreshedBatch = await db.stockNfImportBatch.findUnique({ where: { id: params.batchId } });
+    const refreshedBatch = await db.stockMovementImportBatch.findUnique({ where: { id: params.batchId } });
     const summary = await refreshBatchSummary(params.batchId);
-    return batchApplyProgressFromBatch(refreshedBatch, summary);
+    return batchImportProgressFromBatch(refreshedBatch, summary);
   }
 
-  await db.stockNfImportBatch.update({
+  await db.stockMovementImportBatch.update({
     where: { id: params.batchId },
     data: {
-      applyStatus: 'applying',
-      applyStartedAt: startedAt,
-      applyFinishedAt: null,
-      applyProcessedCount: 0,
-      applyErrorCount: 0,
-      applyTotalCount: readyLines.length,
-      applyMessage: `Aplicando ${readyLines.length} linha(s) conciliada(s)...`,
+      importStatus: 'importing',
+      importStartedAt: startedAt,
+      importFinishedAt: null,
+      importProcessedCount: 0,
+      importErrorCount: 0,
+      importTotalCount: readyLines.length,
+      importMessage: `Importando ${readyLines.length} linha(s) conciliada(s)...`,
     },
   });
 
-  const refreshedBatch = await db.stockNfImportBatch.findUnique({ where: { id: params.batchId } });
+  const refreshedBatch = await db.stockMovementImportBatch.findUnique({ where: { id: params.batchId } });
   const summary = await refreshBatchSummary(params.batchId);
-  return batchApplyProgressFromBatch(refreshedBatch, summary);
+  return batchImportProgressFromBatch(refreshedBatch, summary);
 }
 
-export async function applyStockNfImportBatchStep(params: { batchId: string; actor?: string | null; limit?: number }) {
+export async function importStockMovementImportBatchStep(params: { batchId: string; actor?: string | null; limit?: number }) {
   const db = prismaClient as any;
-  const batch = await db.stockNfImportBatch.findUnique({ where: { id: params.batchId } });
+  const batch = await db.stockMovementImportBatch.findUnique({ where: { id: params.batchId } });
   if (!batch) throw new Error('Lote não encontrado');
   if (batch.rolledBackAt) throw new Error('Lote já foi revertido');
 
-  if (String(batch.applyStatus || 'idle') !== 'applying') {
+  if (String(batch.importStatus || 'idle') !== 'importing') {
     const summary = await refreshBatchSummary(params.batchId);
     return {
-      done: String(batch.applyStatus || 'idle') !== 'applying',
-      progress: batchApplyProgressFromBatch(batch, summary),
+      done: String(batch.importStatus || 'idle') !== 'importing',
+      progress: batchImportProgressFromBatch(batch, summary),
       summary,
     };
   }
@@ -1956,37 +2459,37 @@ export async function applyStockNfImportBatchStep(params: { batchId: string; act
   const readyLines = (await getBatchReadyLines(params.batchId)).slice(0, limit);
 
   if (readyLines.length <= 0) {
-    await db.stockNfImportBatch.update({
+    await db.stockMovementImportBatch.update({
       where: { id: params.batchId },
       data: {
-        applyStatus: 'completed',
-        applyFinishedAt: new Date(),
-        applyMessage: 'Aplicação concluída.',
+        importStatus: 'imported',
+        importFinishedAt: new Date(),
+        importMessage: 'Importação concluída.',
         appliedAt: new Date(),
       },
     });
-    const refreshedBatch = await db.stockNfImportBatch.findUnique({ where: { id: params.batchId } });
+    const refreshedBatch = await db.stockMovementImportBatch.findUnique({ where: { id: params.batchId } });
     const summary = await refreshBatchSummary(params.batchId);
-    return { done: true, progress: batchApplyProgressFromBatch(refreshedBatch, summary), summary };
+    return { done: true, progress: batchImportProgressFromBatch(refreshedBatch, summary), summary };
   }
 
-  let applied = 0;
+  let imported = 0;
   let errors = 0;
   let processed = 0;
 
   for (const line of readyLines) {
     try {
-      const result = await applySingleStockNfImportBatchLine({ batchId: params.batchId, actor: params.actor, line });
-      applied += result.applied;
+      const result = await importSingleStockMovementImportBatchLine({ batchId: params.batchId, actor: params.actor, line });
+      imported += result.imported;
       errors += result.errors;
       processed += result.processed;
     } catch (error) {
-      await db.stockNfImportBatchLine.update({
+      await db.stockMovementImportBatchLine.update({
         where: { id: line.id },
         data: {
           status: 'error',
-          errorCode: 'apply_error',
-          errorMessage: error instanceof Error ? error.message : 'Erro ao aplicar linha',
+          errorCode: 'import_error',
+          errorMessage: error instanceof Error ? error.message : 'Erro ao importar linha',
         },
       });
       processed += 1;
@@ -1994,12 +2497,12 @@ export async function applyStockNfImportBatchStep(params: { batchId: string; act
     }
   }
 
-  await db.stockNfImportBatch.update({
+  await db.stockMovementImportBatch.update({
     where: { id: params.batchId },
     data: {
-      applyProcessedCount: { increment: processed },
-      applyErrorCount: { increment: errors },
-      applyMessage: applied > 0 || errors > 0
+      importProcessedCount: { increment: processed },
+      importErrorCount: { increment: errors },
+      importMessage: imported > 0 || errors > 0
         ? `Processadas ${processed} linha(s) nesta etapa.`
         : 'Etapa concluída sem alterações.',
     },
@@ -2010,167 +2513,237 @@ export async function applyStockNfImportBatchStep(params: { batchId: string; act
   const done = remainingReadyLines.length <= 0;
 
   if (done) {
-    await db.stockNfImportBatch.update({
+    await db.stockMovementImportBatch.update({
       where: { id: params.batchId },
       data: {
-        applyStatus: 'completed',
-        applyFinishedAt: new Date(),
-        applyMessage: errors > 0
-          ? 'Aplicação concluída com algumas linhas em erro.'
-          : 'Aplicação concluída.',
+        importStatus: 'imported',
+        importFinishedAt: new Date(),
+        importMessage: errors > 0
+          ? 'Importação concluída com algumas linhas em erro.'
+          : 'Importação concluída.',
         appliedAt: new Date(),
       },
     });
   }
 
-  const refreshedBatch = await db.stockNfImportBatch.findUnique({ where: { id: params.batchId } });
+  const refreshedBatch = await db.stockMovementImportBatch.findUnique({ where: { id: params.batchId } });
 
   return {
     done,
-    applied,
+    imported,
     errors,
     processed,
-    progress: batchApplyProgressFromBatch(refreshedBatch, summary),
+    progress: batchImportProgressFromBatch(refreshedBatch, summary),
     summary,
   };
 }
 
-export async function applyStockNfImportBatch(params: { batchId: string; actor?: string | null }) {
-  await startStockNfImportBatchApply(params);
-  let lastStep = await applyStockNfImportBatchStep({ ...params, limit: 5 });
+export async function importStockMovementImportBatch(params: { batchId: string; actor?: string | null }) {
+  await startStockMovementImportBatch(params);
+  let lastStep = await importStockMovementImportBatchStep({ ...params, limit: 5 });
   while (!lastStep.done) {
-    lastStep = await applyStockNfImportBatchStep({ ...params, limit: 5 });
+    lastStep = await importStockMovementImportBatchStep({ ...params, limit: 5 });
   }
   const summary = await refreshBatchSummary(params.batchId);
 
   return {
-    applied: Number(lastStep.progress.processedCount || 0) - Number(lastStep.progress.errorCount || 0),
+    imported: Number(lastStep.progress.processedCount || 0) - Number(lastStep.progress.errorCount || 0),
     errors: Number(lastStep.progress.errorCount || 0),
     summary,
   };
 }
 
-export async function rollbackStockNfImportBatch(params: { batchId: string; actor?: string | null }) {
+export async function rollbackStockMovementImportBatch(params: { batchId: string; actor?: string | null }) {
   const db = prismaClient as any;
-  const batch = await db.stockNfImportBatch.findUnique({ where: { id: params.batchId } });
+  const batch = await db.stockMovementImportBatch.findUnique({ where: { id: params.batchId } });
   if (!batch) throw new Error('Lote não encontrado');
-  const changes = await db.stockNfImportAppliedChange.findMany({
-    where: { batchId: params.batchId, rolledBackAt: null },
+  const movements = await db.stockMovement.findMany({
+    where: { importBatchId: params.batchId, deletedAt: null },
     orderBy: [{ appliedAt: 'desc' }],
+    select: {
+      id: true,
+      importLineId: true,
+      itemVariationId: true,
+      previousCostAmount: true,
+      previousCostUnit: true,
+      metadata: true,
+    },
   });
 
-  let rolledBack = 0;
+  const result = await deleteImportedStockMovements({
+    batchId: params.batchId,
+    actor: params.actor,
+    movements,
+  });
+
+  await updateBatchRollbackState(params.batchId, { forceRolledBackAt: true });
+  const summary = await refreshBatchSummary(params.batchId);
+
+  return { ...result, summary };
+}
+
+async function deleteImportedStockMovements(params: {
+  batchId: string;
+  actor?: string | null;
+  movements: any[];
+}) {
+  const db = prismaClient as any;
+  let deleted = 0;
   let conflicts = 0;
   let errors = 0;
 
-  for (const change of changes) {
+  for (const movement of params.movements || []) {
     try {
-      const current = await db.itemCostVariation.findUnique({ where: { itemVariationId: change.itemVariationId } });
+      const current = await db.itemCostVariation.findUnique({ where: { itemVariationId: movement.itemVariationId } });
       if (!current) {
-        await db.stockNfImportAppliedChange.update({
-          where: { id: change.id },
-          data: { rollbackStatus: 'conflict', rollbackMessage: 'Custo atual não encontrado' },
-        });
         conflicts += 1;
         continue;
       }
 
       const currentRefType = str(current.referenceType);
       const currentRefId = str(current.referenceId);
-      if (currentRefType !== COST_REFERENCE_TYPE_LINE || currentRefId !== change.lineId) {
-        await db.stockNfImportAppliedChange.update({
-          where: { id: change.id },
-          data: {
-            rollbackStatus: 'conflict',
-            rollbackMessage: 'Item foi alterado após esta importação; referência atual difere',
-          },
-        });
+      const matchesMovementRef = currentRefType === COST_REFERENCE_TYPE_MOVEMENT && currentRefId === str(movement.id);
+      const matchesLegacyLineRef = currentRefType === COST_REFERENCE_TYPE_LINE && currentRefId === str(movement.importLineId);
+      if (!matchesMovementRef && !matchesLegacyLineRef) {
         conflicts += 1;
         continue;
       }
 
-      const previousAmount = Number(change.previousCostAmount ?? NaN);
+      const previousAmount = Number(movement.previousCostAmount ?? NaN);
       if (Number.isFinite(previousAmount) && previousAmount >= 0) {
         await itemCostVariationPrismaEntity.setCurrentCost({
-          itemVariationId: change.itemVariationId,
+          itemVariationId: movement.itemVariationId,
           costAmount: previousAmount,
-          unit: change.previousCostUnit || null,
+          unit: movement.previousCostUnit || null,
           source: 'import',
-          referenceType: 'stock-nf-import-rollback',
-          referenceId: change.id,
+          referenceType: 'stock-movement-delete',
+          referenceId: movement.id,
           validFrom: new Date(),
           updatedBy: params.actor || null,
           metadata: {
-            rollbackOfBatchId: params.batchId,
-            rollbackOfLineId: change.lineId,
-            restoredFromAppliedChangeId: change.id,
+            importBatchId: params.batchId,
+            importLineId: movement.importLineId,
+            deletedStockMovementId: movement.id,
+            action: 'delete_imported_stock_movement',
           },
         });
       }
 
-      await db.stockNfImportAppliedChange.update({
-        where: { id: change.id },
+      const movementMetadata =
+        typeof movement.metadata === 'object' && movement.metadata && !Array.isArray(movement.metadata)
+          ? { ...(movement.metadata as Record<string, unknown>) }
+          : {};
+      const deletionHistory = Array.isArray(movementMetadata.deletionHistory) ? [...(movementMetadata.deletionHistory as any[])] : [];
+      const deletedAt = new Date();
+      await db.stockMovement.update({
+        where: { id: movement.id },
         data: {
-          rolledBackAt: new Date(),
-          rollbackStatus: 'success',
-          rollbackMessage: null,
+          deletedAt,
+          metadata: {
+            ...movementMetadata,
+            deletedAt: deletedAt.toISOString(),
+            deletedBy: params.actor || null,
+            deletedReason: 'import_removed',
+            deletionHistory: [
+              ...deletionHistory,
+              {
+                deletedAt: deletedAt.toISOString(),
+                deletedBy: params.actor || null,
+                reason: 'import_removed',
+                importBatchId: params.batchId,
+                importLineId: movement.importLineId,
+                stockMovementId: movement.id,
+              },
+            ],
+          },
         },
       });
 
-      await db.stockNfImportBatchLine.update({
-        where: { id: change.lineId },
+      await db.stockMovementImportBatchLine.update({
+        where: { id: movement.importLineId },
         data: {
           rolledBackAt: new Date(),
           status: 'ready',
           appliedAt: null,
         },
       });
-      rolledBack += 1;
+      deleted += 1;
     } catch (error) {
-      await db.stockNfImportAppliedChange.update({
-        where: { id: change.id },
-        data: {
-          rollbackStatus: 'error',
-          rollbackMessage: error instanceof Error ? error.message : 'Erro no rollback',
-        },
-      });
       errors += 1;
     }
   }
 
-  await db.stockNfImportBatch.update({
-    where: { id: params.batchId },
-    data: { rolledBackAt: new Date(), status: conflicts || errors ? 'partial' : 'rolled_back' },
-  });
-  const summary = await refreshBatchSummary(params.batchId);
-
-  return { rolledBack, conflicts, errors, summary };
+  return { deleted, conflicts, errors };
 }
 
-export async function archiveStockNfImportBatch(batchId: string) {
+async function updateBatchRollbackState(batchId: string, options?: { forceRolledBackAt?: boolean }) {
   const db = prismaClient as any;
-  await db.stockNfImportBatch.update({
+  const activeMovements = await db.stockMovement.count({
+    where: { importBatchId: batchId, deletedAt: null },
+  });
+  const hasActiveMovements = activeMovements > 0;
+
+  await db.stockMovementImportBatch.update({
+    where: { id: batchId },
+    data: {
+      rolledBackAt: options?.forceRolledBackAt ? new Date() : hasActiveMovements ? null : new Date(),
+      status: hasActiveMovements ? 'partial' : 'rolled_back',
+    },
+  });
+}
+
+export async function rollbackStockMovementImportBatchLine(params: {
+  batchId: string;
+  lineId: string;
+  actor?: string | null;
+}) {
+  const db = prismaClient as any;
+  const batch = await db.stockMovementImportBatch.findUnique({ where: { id: params.batchId } });
+  if (!batch) throw new Error('Lote não encontrado');
+
+  const movement = await db.stockMovement.findFirst({
+    where: {
+      importBatchId: params.batchId,
+      importLineId: params.lineId,
+      deletedAt: null,
+    },
+    orderBy: [{ appliedAt: 'desc' }],
+    select: {
+      id: true,
+      importLineId: true,
+      itemVariationId: true,
+      previousCostAmount: true,
+      previousCostUnit: true,
+      metadata: true,
+    },
+  });
+  if (!movement) throw new Error('Movimentação já foi eliminada ou não existe para esta linha');
+
+  const result = await deleteImportedStockMovements({
+    batchId: params.batchId,
+    actor: params.actor,
+    movements: [movement],
+  });
+  await updateBatchRollbackState(params.batchId);
+  const summary = await refreshBatchSummary(params.batchId);
+
+  return { ...result, summary };
+}
+
+export async function archiveStockMovementImportBatch(batchId: string) {
+  const db = prismaClient as any;
+  await db.stockMovementImportBatch.update({
     where: { id: batchId },
     data: { archivedAt: new Date(), status: 'archived' },
   });
 }
 
-export async function deleteStockNfImportBatch(batchId: string) {
+export async function deleteStockMovementImportBatch(batchId: string) {
   const db = prismaClient as any;
-  const batch = await db.stockNfImportBatch.findUnique({
+  const batch = await db.stockMovementImportBatch.findUnique({
     where: { id: batchId },
     select: {
       id: true,
-      AppliedChanges: {
-        where: { rolledBackAt: null },
-        select: { id: true },
-        take: 1,
-      },
-      Lines: {
-        where: { appliedAt: { not: null } },
-        select: { id: true },
-        take: 1,
-      },
     },
   });
 
@@ -2178,23 +2751,40 @@ export async function deleteStockNfImportBatch(batchId: string) {
     throw new Error('Lote não encontrado');
   }
 
-  const wasImportedAsStockMovement =
-    (batch.AppliedChanges?.length || 0) > 0 ||
-    (batch.Lines?.length || 0) > 0;
+  const activeMovements = await db.stockMovement.findMany({
+    where: {
+      importBatchId: batchId,
+      deletedAt: null,
+    },
+    orderBy: [{ appliedAt: 'desc' }],
+    select: {
+      id: true,
+      importLineId: true,
+      itemVariationId: true,
+      previousCostAmount: true,
+      previousCostUnit: true,
+      metadata: true,
+    },
+  });
 
-  if (wasImportedAsStockMovement) {
-    throw new Error('Não é permitido eliminar um lote que já foi importado como movimentação de estoque');
+  if (activeMovements.length > 0) {
+    await deleteImportedStockMovements({
+      batchId,
+      actor: 'system:batch-delete',
+      movements: activeMovements,
+    });
+    await updateBatchRollbackState(batchId, { forceRolledBackAt: true });
   }
 
-  await db.stockNfImportBatch.delete({
+  await db.stockMovementImportBatch.delete({
     where: { id: batchId },
   });
 }
 
-export async function listStockNfImportBatches(limit = 30) {
+export async function listStockMovementImportBatches(limit = 30) {
   const db = prismaClient as any;
-  if (typeof db.stockNfImportBatch?.findMany !== 'function') return [];
-  return await db.stockNfImportBatch.findMany({
+  if (typeof db.stockMovementImportBatch?.findMany !== 'function') return [];
+  return await db.stockMovementImportBatch.findMany({
     where: { archivedAt: null },
     orderBy: [{ createdAt: 'desc' }],
     take: limit,
@@ -2217,22 +2807,59 @@ export async function listStockNfImportBatches(limit = 30) {
   });
 }
 
-export async function getStockNfImportBatchView(batchId: string) {
+export async function getStockMovementImportBatchView(batchId: string) {
   const db = prismaClient as any;
-  if (!batchId || typeof db.stockNfImportBatch?.findUnique !== 'function') return null;
+  if (!batchId || typeof db.stockMovementImportBatch?.findUnique !== 'function') return null;
   await ensureSyntheticInvoiceNumbersForVisionBatch(batchId);
   await refreshBatchSummary(batchId);
 
   const [batch, lines, items, changes] = await Promise.all([
-    db.stockNfImportBatch.findUnique({ where: { id: batchId } }),
-    db.stockNfImportBatchLine.findMany({ where: { batchId }, orderBy: [{ rowNumber: 'asc' }] }),
+    db.stockMovementImportBatch.findUnique({ where: { id: batchId } }),
+    db.stockMovementImportBatchLine.findMany({ where: { batchId }, orderBy: [{ rowNumber: 'asc' }] }),
     db.item.findMany({
       where: { active: true },
       select: { id: true, name: true, classification: true, purchaseUm: true, consumptionUm: true },
       orderBy: [{ name: 'asc' }],
       take: 2000,
     }),
-    db.stockNfImportAppliedChange.findMany({ where: { batchId }, orderBy: [{ appliedAt: 'desc' }], take: 200 }),
+    db.stockMovement.findMany({
+      where: { importBatchId: batchId },
+      orderBy: [{ appliedAt: 'desc' }],
+      take: 200,
+      select: {
+        id: true,
+        direction: true,
+        movementType: true,
+        itemId: true,
+        quantityAmount: true,
+        quantityUnit: true,
+        previousCostAmount: true,
+        previousCostUnit: true,
+        newCostAmount: true,
+        newCostUnit: true,
+        appliedAt: true,
+        deletedAt: true,
+        ImportBatch: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        Item: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+    }).then((rows: any[]) => rows.map((row) => ({
+      ...row,
+      stockMovementId: row.id,
+      Batch: row.ImportBatch || null,
+      rolledBackAt: row.deletedAt || null,
+      rollbackStatus: null,
+      rollbackMessage: null,
+    }))),
   ]);
 
   if (!batch) return null;
@@ -2262,33 +2889,36 @@ export async function getStockNfImportBatchView(batchId: string) {
   return { batch, lines, items, pendingMappingGroups, summary, appliedChanges: changes };
 }
 
-export async function listStockNfImportMovements(params: {
+export async function listStockMovementImportMovements(params: {
   page?: number;
   pageSize?: number;
   q?: string;
+  movementId?: string;
+  lineId?: string;
   supplier?: string;
   item?: string;
   itemId?: string;
   from?: Date | null;
   to?: Date | null;
-  status?: 'active' | 'rolled_back' | 'all';
+  status?: 'active' | 'deleted' | 'all';
 }) {
   const db = prismaClient as any;
   const page = Math.max(1, Math.floor(Number(params.page || 1)));
   const pageSize = Math.min(100, Math.max(10, Math.floor(Number(params.pageSize || 50))));
   const q = str(params.q);
+  const movementId = str(params.movementId);
+  const lineId = str(params.lineId);
   const supplier = str(params.supplier);
   const item = str(params.item);
   const itemId = str(params.itemId);
-  const status = params.status === 'rolled_back' || params.status === 'all' ? params.status : 'active';
-
-  if (typeof db.stockNfImportAppliedChange?.findMany !== 'function') {
+  const status = params.status === 'deleted' || params.status === 'all' ? params.status : 'active';
+  if (typeof db.stockMovement?.findMany !== 'function') {
     return {
       rows: [],
       summary: {
         total: 0,
         active: 0,
-        rolledBack: 0,
+        deleted: 0,
         uniqueItems: 0,
         uniqueSuppliers: 0,
       },
@@ -2305,9 +2935,9 @@ export async function listStockNfImportMovements(params: {
   const andClauses: any[] = [];
 
   if (status === 'active') {
-    where.rolledBackAt = null;
-  } else if (status === 'rolled_back') {
-    where.rolledBackAt = { not: null };
+    where.deletedAt = null;
+  } else if (status === 'deleted') {
+    where.deletedAt = { not: null };
   }
 
   if (params.from || params.to) {
@@ -2321,6 +2951,14 @@ export async function listStockNfImportMovements(params: {
     where.itemId = itemId;
   }
 
+  if (movementId) {
+    where.id = movementId;
+  }
+
+  if (lineId) {
+    where.importLineId = lineId;
+  }
+
   if (supplier) {
     andClauses.push({
       supplierName: { contains: supplier, mode: 'insensitive' },
@@ -2331,7 +2969,7 @@ export async function listStockNfImportMovements(params: {
     andClauses.push({
       OR: [
         { Item: { is: { name: { contains: item, mode: 'insensitive' } } } },
-        { Line: { is: { ingredientName: { contains: item, mode: 'insensitive' } } } },
+        { ImportLine: { is: { ingredientName: { contains: item, mode: 'insensitive' } } } },
       ],
     });
   }
@@ -2341,9 +2979,9 @@ export async function listStockNfImportMovements(params: {
       OR: [
         { invoiceNumber: { contains: q, mode: 'insensitive' } },
         { supplierName: { contains: q, mode: 'insensitive' } },
-        { Batch: { is: { name: { contains: q, mode: 'insensitive' } } } },
+        { ImportBatch: { is: { name: { contains: q, mode: 'insensitive' } } } },
         { Item: { is: { name: { contains: q, mode: 'insensitive' } } } },
-        { Line: { is: { ingredientName: { contains: q, mode: 'insensitive' } } } },
+        { ImportLine: { is: { ingredientName: { contains: q, mode: 'insensitive' } } } },
       ],
     });
   }
@@ -2352,18 +2990,24 @@ export async function listStockNfImportMovements(params: {
     where.AND = andClauses;
   }
 
-  const [totalItems, rows, activeCount, rolledBackCount, uniqueItemsRows, uniqueSuppliersRows] = await Promise.all([
-    db.stockNfImportAppliedChange.count({ where }),
-    db.stockNfImportAppliedChange.findMany({
+  const [totalItems, rows, activeCount, deletedCount, uniqueItemsRows, uniqueSuppliersRows] = await Promise.all([
+    db.stockMovement.count({ where }),
+    db.stockMovement.findMany({
       where,
       orderBy: [{ movementAt: 'desc' }, { appliedAt: 'desc' }],
       skip: (page - 1) * pageSize,
       take: pageSize,
       select: {
         id: true,
-        batchId: true,
-        lineId: true,
+        direction: true,
+        movementType: true,
+        originType: true,
+        originRefId: true,
+        importBatchId: true,
+        importLineId: true,
         itemId: true,
+        quantityAmount: true,
+        quantityUnit: true,
         previousCostAmount: true,
         previousCostUnit: true,
         newCostAmount: true,
@@ -2378,11 +3022,9 @@ export async function listStockNfImportMovements(params: {
         movementAt: true,
         appliedBy: true,
         appliedAt: true,
-        rolledBackAt: true,
-        rollbackStatus: true,
-        rollbackMessage: true,
+        deletedAt: true,
         metadata: true,
-        Batch: {
+        ImportBatch: {
           select: {
             id: true,
             name: true,
@@ -2395,28 +3037,53 @@ export async function listStockNfImportMovements(params: {
             classification: true,
           },
         },
-        Line: {
+        ImportLine: {
           select: {
+            id: true,
             rowNumber: true,
+            status: true,
+            errorCode: true,
+            errorMessage: true,
+            movementAt: true,
+            invoiceNumber: true,
+            supplierId: true,
+            supplierName: true,
+            supplierCnpj: true,
+            supplierReconciliationStatus: true,
+            supplierReconciliationSource: true,
             ingredientName: true,
+            motivo: true,
+            identification: true,
             qtyEntry: true,
             unitEntry: true,
             qtyConsumption: true,
             unitConsumption: true,
+            movementUnit: true,
             costAmount: true,
             costTotalAmount: true,
+            observation: true,
+            mappedItemId: true,
+            mappedItemName: true,
+            mappingSource: true,
+            manualConversionFactor: true,
+            targetUnit: true,
+            convertedCostAmount: true,
+            conversionSource: true,
+            conversionFactorUsed: true,
+            appliedAt: true,
+            rolledBackAt: true,
           },
         },
       },
     }),
-    db.stockNfImportAppliedChange.count({ where: { ...where, rolledBackAt: null } }),
-    db.stockNfImportAppliedChange.count({ where: { ...where, rolledBackAt: { not: null } } }),
-    db.stockNfImportAppliedChange.findMany({
+    db.stockMovement.count({ where: { ...where, deletedAt: null } }),
+    db.stockMovement.count({ where: { ...where, deletedAt: { not: null } } }),
+    db.stockMovement.findMany({
       where,
       distinct: ['itemId'],
       select: { itemId: true },
     }),
-    db.stockNfImportAppliedChange.findMany({
+    db.stockMovement.findMany({
       where,
       distinct: ['supplierId', 'supplierName'],
       select: { supplierId: true, supplierName: true },
@@ -2424,11 +3091,17 @@ export async function listStockNfImportMovements(params: {
   ]);
 
   return {
-    rows,
+    rows: rows.map((row: any) => ({
+      ...row,
+      batchId: row.importBatchId || null,
+      lineId: row.importLineId || null,
+      Batch: row.ImportBatch || null,
+      Line: row.ImportLine || null,
+    })),
     summary: {
       total: totalItems,
       active: activeCount,
-      rolledBack: rolledBackCount,
+      deleted: deletedCount,
       uniqueItems: uniqueItemsRows.filter((row: any) => Boolean(row.itemId)).length,
       uniqueSuppliers: uniqueSuppliersRows.filter((row: any) => Boolean(row.supplierId || row.supplierName)).length,
     },

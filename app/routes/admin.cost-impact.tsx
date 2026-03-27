@@ -20,6 +20,10 @@ import {
 } from "~/components/ui/select";
 import { menuItemSellingChannelPrismaEntity } from "~/domain/cardapio/menu-item-selling-channel.entity.server";
 import { menuItemSizePrismaEntity } from "~/domain/cardapio/menu-item-size.entity.server";
+import { buildCostImpactGraphForItem } from "~/domain/costs/cost-impact-graph.server";
+import { listMenuItemMarginImpactRows } from "~/domain/costs/menu-item-margin-impact.server";
+import { resolvePriority } from "~/domain/costs/cost-impact-pipeline.server";
+import { getItemAverageCostWindowDays } from "~/domain/item/item-cost-metrics.server";
 import prismaClient from "~/lib/prisma/client.server";
 import { ok } from "~/utils/http-response.server";
 
@@ -46,10 +50,10 @@ function fmtPct(value: number) {
 }
 
 function buildRowContextText(row: any) {
-  const sourceName = row.Run?.sourceItem?.name || "um insumo sem origem identificada";
-  const productName = row.MenuItem?.name || "um produto sem nome";
-  const sizeName = row.MenuItemSize?.name || "variação não informada";
-  const channelName = row.Channel?.name || "canal não informado";
+  const sourceName = row.sourceItemName || "um insumo sem origem identificada";
+  const productName = row.menuItemName || "um produto sem nome";
+  const sizeName = row.sizeName || "variação não informada";
+  const channelName = row.channelName || "canal não informado";
   const priority = row.priority || "sem prioridade";
   const currentCost = fmtMoney(row.currentCostAmount);
   const previousCost = fmtMoney(row.previousCostAmount);
@@ -78,11 +82,10 @@ function buildRowContextText(row: any) {
 
 function buildRowContextParts(row: any) {
   return {
-    sourceName: row.Run?.sourceItem?.name || "Sem item origem",
-    sourceType: row.Run?.sourceType || "-",
-    productName: row.MenuItem?.name || "-",
-    sizeName: row.MenuItemSize?.name || "Variação não informada",
-    channelName: row.Channel?.name || "Canal não informado",
+    sourceName: row.sourceItemName || "Sem item origem",
+    productName: row.menuItemName || "-",
+    sizeName: row.sizeName || "Variação não informada",
+    channelName: row.channelName || "Canal não informado",
     currentCost: fmtMoney(row.currentCostAmount),
     previousCost: fmtMoney(row.previousCostAmount),
     currentPrice: fmtMoney(row.sellingPriceAmount),
@@ -92,7 +95,6 @@ function buildRowContextParts(row: any) {
     targetMargin: fmtPct(row.profitExpectedPerc),
     marginGap: fmtPct(row.marginGapPerc),
     priority: row.priority || "sem prioridade",
-    createdAt: row.createdAt ? new Date(row.createdAt).toLocaleString("pt-BR") : "-",
   };
 }
 
@@ -103,14 +105,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const channelIdParam = String(url.searchParams.get("channelId") || "").trim();
   const sizeIdParam = String(url.searchParams.get("sizeId") || "").trim();
   const q = String(url.searchParams.get("q") || "").trim();
-  const dateFrom = String(url.searchParams.get("dateFrom") || "").trim();
-  const dateTo = String(url.searchParams.get("dateTo") || "").trim();
   const belowTargetOnly =
     String(url.searchParams.get("belowTargetOnly") || "").trim() === "true";
 
-  const [channels, sizes] = await Promise.all([
+  const [channels, sizes, windowDays] = await Promise.all([
     menuItemSellingChannelPrismaEntity.findAll(),
     menuItemSizePrismaEntity.findAll(),
+    getItemAverageCostWindowDays(),
   ]);
   const defaultChannelId = channels.find((channel: any) => channel.key === "cardapio")?.id || "";
   const defaultSizeId = sizes.find((size: any) => size.key === "pizza-medium")?.id || "";
@@ -129,96 +130,113 @@ export async function loader({ request }: LoaderFunctionArgs) {
         ? sizeIdParam
         : defaultSizeId;
 
-  if (typeof db.costImpactMenuItem?.findMany !== "function") {
-    return ok({
-      rows: [],
-      summary: null,
-      filters: {
-        priority,
-        channelId: selectedChannelId || (hasChannelParam ? ALL_OPTION : defaultChannelId),
-        sizeId: selectedSizeId || (hasSizeParam ? ALL_OPTION : defaultSizeId),
-        q,
-        dateFrom,
-        dateTo,
-        belowTargetOnly,
-      },
-      channels,
-      sizes,
-      setupRequired: true,
+  // Step 1: Load recent cost variation history (last 60 days or configured window)
+  const since = new Date();
+  since.setDate(since.getDate() - Math.max(windowDays, 60));
+
+  const recentHistory =
+    typeof db.itemCostVariationHistory?.findMany === "function"
+      ? await db.itemCostVariationHistory.findMany({
+          where: {
+            OR: [
+              { validFrom: { gte: since } },
+              { createdAt: { gte: since } },
+            ],
+          },
+          orderBy: [{ validFrom: "desc" }, { createdAt: "desc" }],
+          select: {
+            costAmount: true,
+            previousCostAmount: true,
+            ItemVariation: {
+              select: {
+                Item: { select: { id: true, name: true } },
+              },
+            },
+          },
+        })
+      : [];
+
+  // Group by itemId, keep the most recent entry per item
+  const itemMap = new Map<
+    string,
+    { itemId: string; itemName: string; costAmount: number; previousCostAmount: number }
+  >();
+  for (const row of recentHistory) {
+    const itemId = String(row.ItemVariation?.Item?.id || "").trim();
+    if (!itemId || itemMap.has(itemId)) continue;
+    itemMap.set(itemId, {
+      itemId,
+      itemName: String(row.ItemVariation?.Item?.name || itemId),
+      costAmount: Number(row.costAmount || 0),
+      previousCostAmount: Number(row.previousCostAmount || 0),
     });
   }
 
-  const where: any = {};
-  if (priority) where.priority = priority;
-  if (selectedChannelId) where.menuItemChannelId = selectedChannelId;
-  if (selectedSizeId) where.menuItemSizeId = selectedSizeId;
-  if (belowTargetOnly) {
-    where.marginGapPerc = { gt: 0 };
-  }
-  if (dateFrom || dateTo) {
-    where.createdAt = {};
-    if (dateFrom) {
-      where.createdAt.gte = new Date(`${dateFrom}T00:00:00.000`);
-    }
-    if (dateTo) {
-      where.createdAt.lte = new Date(`${dateTo}T23:59:59.999`);
-    }
-  }
-  if (q) {
-    where.OR = [
-      { MenuItem: { is: { name: { contains: q, mode: "insensitive" } } } },
-      { Run: { is: { sourceItem: { is: { name: { contains: q, mode: "insensitive" } } } } } },
-    ];
-  }
-
-  const rawRows = await db.costImpactMenuItem.findMany({
-    where,
-    orderBy: [{ createdAt: "desc" }],
-    take: 200,
-    select: {
-      id: true,
-      currentCostAmount: true,
-      previousCostAmount: true,
-      sellingPriceAmount: true,
-      profitActualPerc: true,
-      profitExpectedPerc: true,
-      recommendedPriceAmount: true,
-      priceGapAmount: true,
-      marginGapPerc: true,
-      priority: true,
-      createdAt: true,
-      metadata: true,
-      MenuItem: {
-        select: { id: true, name: true },
-      },
-      MenuItemSize: {
-        select: { id: true, name: true, key: true },
-      },
-      Channel: {
-        select: { id: true, name: true, key: true },
-      },
-      Run: {
-        select: {
-          id: true,
-          sourceType: true,
-          createdAt: true,
-          sourceItem: {
-            select: { id: true, name: true },
-          },
-        },
-      },
-    },
-  });
-  const rows = rawRows.filter((row: any) =>
-    hasMeaningfulCostChange(row.currentCostAmount, row.previousCostAmount)
+  // Step 2: Filter items with meaningful cost change and build impact graph
+  const itemsWithChanges = Array.from(itemMap.values()).filter((item) =>
+    hasMeaningfulCostChange(item.costAmount, item.previousCostAmount)
   );
 
+  const menuItemToSourceItems = new Map<string, string[]>();
+  for (const item of itemsWithChanges) {
+    const graph = await buildCostImpactGraphForItem(db, item.itemId);
+    for (const menuItemId of graph.affectedMenuItemIds) {
+      const existing = menuItemToSourceItems.get(menuItemId) || [];
+      if (!existing.includes(item.itemName)) existing.push(item.itemName);
+      menuItemToSourceItems.set(menuItemId, existing);
+    }
+  }
+
+  // Step 3: Get margin impact rows for all affected menu items
+  const allMenuItemIds = Array.from(menuItemToSourceItems.keys());
+  const marginRows = await listMenuItemMarginImpactRows(allMenuItemIds);
+
+  // Step 4: Apply priority and build flat rows
+  let rows = marginRows.map((row) => {
+    const resolvedPriority = resolvePriority(row);
+    const sourceItemNames = menuItemToSourceItems.get(row.menuItemId) || [];
+    return {
+      id: `${row.menuItemId}:${row.sizeId}:${row.channelId}`,
+      sourceItemName: sourceItemNames.join(", ") || "Sem item origem",
+      menuItemId: row.menuItemId,
+      menuItemName: row.menuItemName,
+      sizeId: row.sizeId,
+      sizeName: row.sizeName,
+      channelId: row.channelId,
+      channelName: row.channelName,
+      currentCostAmount: row.currentCostAmount,
+      previousCostAmount: row.previousCostAmount,
+      sellingPriceAmount: row.sellingPriceAmount,
+      profitActualPerc: row.profitActualPerc,
+      profitExpectedPerc: row.profitExpectedPerc,
+      recommendedPriceAmount: row.recommendedPriceAmount,
+      priceGapAmount: row.priceGapAmount,
+      marginGapPerc: row.marginGapPerc,
+      priority: resolvedPriority,
+    };
+  });
+
+  // Step 5: Apply filters in-memory
+  if (priority) rows = rows.filter((row) => row.priority === priority);
+  if (selectedChannelId) rows = rows.filter((row) => row.channelId === selectedChannelId);
+  if (selectedSizeId) rows = rows.filter((row) => row.sizeId === selectedSizeId);
+  if (belowTargetOnly) rows = rows.filter((row) => row.marginGapPerc > 0);
+  if (q) {
+    const qLower = q.toLowerCase();
+    rows = rows.filter(
+      (row) =>
+        row.menuItemName.toLowerCase().includes(qLower) ||
+        row.sourceItemName.toLowerCase().includes(qLower),
+    );
+  }
+
+  // Step 6: Build summary
   const summary = {
     totalRows: rows.length,
-    critical: rows.filter((row: any) => row.priority === "critical").length,
-    high: rows.filter((row: any) => row.priority === "high").length,
+    critical: rows.filter((row) => row.priority === "critical").length,
+    high: rows.filter((row) => row.priority === "high").length,
     totalPriceGapAmount: rows.reduce(
-      (acc: number, row: any) => acc + Number(row.priceGapAmount || 0),
+      (acc, row) => acc + Number(row.priceGapAmount || 0),
       0
     ),
   };
@@ -231,13 +249,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
       channelId: selectedChannelId || (hasChannelParam ? ALL_OPTION : defaultChannelId),
       sizeId: selectedSizeId || (hasSizeParam ? ALL_OPTION : defaultSizeId),
       q,
-      dateFrom,
-      dateTo,
       belowTargetOnly,
     },
     channels,
     sizes,
-    setupRequired: false,
   });
 }
 
@@ -254,11 +269,8 @@ export default function AdminCostImpactRoute() {
     channelId: "",
     sizeId: "",
     q: "",
-    dateFrom: "",
-    dateTo: "",
     belowTargetOnly: false,
   };
-  const setupRequired = Boolean(payload.setupRequired);
   const isLoading = navigation.state !== "idle";
   const [priorityValue, setPriorityValue] = useState(filters.priority || ALL_OPTION);
   const [channelValue, setChannelValue] = useState(filters.channelId || ALL_OPTION);
@@ -285,11 +297,9 @@ export default function AdminCostImpactRoute() {
             Impacto de custos
           </h1>
           <p className="max-w-3xl text-sm text-slate-500">
-            Quando uma importação de movimentação altera o custo de um insumo, o pipeline
-            recalcula receitas, fichas, custo do item vendido e grava o impacto
-            visualizado nesta página. Se o insumo não estiver ligado, direta ou
-            indiretamente, a uma receita, ficha ou item final vendido no cardápio,
-            a mudança pode ser processada sem gerar registros visíveis aqui.
+            Calcula em tempo real quais itens do cardápio tiveram a margem afetada por
+            variações de custo de insumos nos últimos 60 dias. Nenhum dado é gravado: o
+            resultado reflete o estado atual dos custos e preços.
           </p>
         </div>
         <div className="rounded-2xl bg-slate-50/80 px-4 py-4 text-xs text-slate-600 xl:self-start">
@@ -398,24 +408,6 @@ export default function AdminCostImpactRoute() {
             </SelectContent>
           </Select>
         </label>
-        <label className="flex min-w-0 flex-col gap-1 text-sm xl:col-span-1">
-          <span className="text-slate-600">De</span>
-          <input
-            type="date"
-            name="dateFrom"
-            defaultValue={filters.dateFrom}
-            className="h-10 rounded-xl border border-slate-200 bg-white px-3 outline-none transition focus:border-slate-300"
-          />
-        </label>
-        <label className="flex min-w-0 flex-col gap-1 text-sm xl:col-span-1">
-          <span className="text-slate-600">Até</span>
-          <input
-            type="date"
-            name="dateTo"
-            defaultValue={filters.dateTo}
-            className="h-10 rounded-xl border border-slate-200 bg-white px-3 outline-none transition focus:border-slate-300"
-          />
-        </label>
         <div className="flex flex-wrap items-end gap-3 md:col-span-2 xl:col-span-12">
           <label className="flex h-10 items-center gap-2 rounded-xl bg-slate-50 px-3 text-sm text-slate-700">
             <input
@@ -434,13 +426,6 @@ export default function AdminCostImpactRoute() {
           </button>
         </div>
       </Form>
-
-      {setupRequired ? (
-        <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          As tabelas de impacto ainda não estão disponíveis neste ambiente.
-          Rode a migration do Prisma antes de usar o painel.
-        </div>
-      ) : null}
 
       {summary ? (
         <>
@@ -487,23 +472,20 @@ export default function AdminCostImpactRoute() {
                   <tr key={row.id} className="border-t border-slate-100/80">
                     <td className="px-4 py-3 align-top">
                       <div className="font-medium text-slate-900">
-                        {row.Run?.sourceItem?.name || "Sem item origem"}
-                      </div>
-                      <div className="text-xs text-slate-500">
-                        {row.Run?.sourceType || "-"}
+                        {row.sourceItemName || "Sem item origem"}
                       </div>
                     </td>
                     <td className="px-4 py-3 align-top">
                       <div className="font-medium text-slate-900">
                         <Link
-                          to={`/admin/gerenciamento/cardapio/cost-management/${row.MenuItem?.id}`}
+                          to={`/admin/gerenciamento/cardapio/cost-management/${row.menuItemId}`}
                           className="hover:underline"
                         >
-                          {row.MenuItem?.name || "-"}
+                          {row.menuItemName || "-"}
                         </Link>
                       </div>
                       <div className="text-xs text-slate-500">
-                        {row.MenuItemSize?.name || "-"} · {row.Channel?.name || "-"}
+                        {row.sizeName || "-"} · {row.channelName || "-"}
                       </div>
                     </td>
                     <td className="px-4 py-3 text-right">
@@ -527,9 +509,6 @@ export default function AdminCostImpactRoute() {
                       </span>
                       <div className="mt-1 text-xs text-slate-500">
                         gap {fmtPct(row.marginGapPerc)}
-                      </div>
-                      <div className="text-xs text-slate-400">
-                        {new Date(row.createdAt).toLocaleString("pt-BR")}
                       </div>
                     </td>
                     <td className="px-4 py-3 text-center">
@@ -555,7 +534,6 @@ export default function AdminCostImpactRoute() {
                             <div className="rounded-xl bg-slate-50 px-4 py-3">
                               <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Origem</div>
                               <div className="mt-2 font-medium text-slate-900">{context.sourceName}</div>
-                              <div className="text-xs text-slate-500">{context.sourceType}</div>
                             </div>
                             <div className="rounded-xl bg-slate-50 px-4 py-3">
                               <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Produto afetado</div>
@@ -580,7 +558,6 @@ export default function AdminCostImpactRoute() {
                             <div className="rounded-xl bg-slate-50 px-4 py-3">
                               <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Revisão</div>
                               <div className="mt-2 font-medium text-slate-900 capitalize">{context.priority}</div>
-                              <div className="text-xs text-slate-500">{context.createdAt}</div>
                             </div>
                           </div>
                         </DialogContent>
