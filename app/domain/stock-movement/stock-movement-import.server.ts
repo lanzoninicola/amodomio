@@ -3,7 +3,6 @@ import * as XLSX from 'xlsx';
 import prismaClient from '~/lib/prisma/client.server';
 import { itemVariationPrismaEntity } from '~/domain/item/item-variation.prisma.entity.server';
 import { itemCostVariationPrismaEntity } from '~/domain/item/item-cost-variation.prisma.entity.server';
-import { ASYNC_JOB_TYPE, enqueueAsyncJob } from '~/domain/async-jobs/async-jobs.server';
 
 const SOURCE_SYSTEM = 'saipos';
 const SOURCE_TYPE = 'entrada_nf';
@@ -215,6 +214,7 @@ async function loadItemsAndAliases() {
         purchaseUm: true,
         consumptionUm: true,
         purchaseToConsumptionFactor: true,
+        ItemPurchaseConversion: { select: { purchaseUm: true, factor: true } },
       },
       orderBy: [{ name: 'asc' }],
     }),
@@ -568,8 +568,25 @@ async function resolveConversionForLine(line: any, item: any) {
     } as const;
   }
 
-  const itemPurchaseUm = str(item?.purchaseUm).toUpperCase() || null;
   const itemConsumptionUm = str(item?.consumptionUm).toUpperCase() || null;
+
+  // Try multi-conversion table
+  const itemConversions: Array<{ purchaseUm: string; factor: number }> = item?.ItemPurchaseConversion ?? [];
+  const matchedConversion = itemConversions.find(
+    (c) => str(c.purchaseUm).toUpperCase() === movementUnit
+  );
+  if (matchedConversion && itemConsumptionUm && targetUnit === itemConsumptionUm && matchedConversion.factor > 0) {
+    return {
+      status: 'ready',
+      targetUnit,
+      convertedCostAmount: costAmount / matchedConversion.factor,
+      conversionSource: 'item_purchase_factor',
+      conversionFactorUsed: matchedConversion.factor,
+    } as const;
+  }
+
+  // Fallback to legacy single-conversion fields
+  const itemPurchaseUm = str(item?.purchaseUm).toUpperCase() || null;
   const itemFactor = Number(item?.purchaseToConsumptionFactor ?? NaN);
 
   if (itemPurchaseUm && itemConsumptionUm && itemFactor > 0) {
@@ -1649,7 +1666,7 @@ export async function mapBatchLinesToItem(params: {
   const db = prismaClient as any;
   const item = await db.item.findUnique({
     where: { id: params.itemId },
-    select: { id: true, name: true, purchaseUm: true, consumptionUm: true, purchaseToConsumptionFactor: true, active: true },
+    select: { id: true, name: true, purchaseUm: true, consumptionUm: true, purchaseToConsumptionFactor: true, active: true, ItemPurchaseConversion: { select: { purchaseUm: true, factor: true } } },
   });
   if (!item) throw new Error('Item não encontrado');
 
@@ -1946,6 +1963,7 @@ export async function updateStockMovementImportBatchLineEditableFields(params: {
         purchaseUm: true,
         consumptionUm: true,
         purchaseToConsumptionFactor: true,
+        ItemPurchaseConversion: { select: { purchaseUm: true, factor: true } },
       },
     });
     if (!activeItem) throw new Error('Item mapeado da movimentação ativa não encontrado');
@@ -2345,21 +2363,6 @@ async function importSingleStockMovementImportBatchLine(params: { batchId: strin
       }),
       stockMovementId: movement.id,
     },
-  });
-
-  await enqueueAsyncJob({
-    type: ASYNC_JOB_TYPE.costImpactRecalc,
-    dedupeKey: `cost_impact_recalc:item:${item.id}`,
-    payload: {
-      itemId: item.id,
-      sourceType: 'stock-movement-import',
-      sourceRefId: movement.id,
-      updatedBy: params.actor || 'system:stock-movement-import',
-      batchId: params.batchId,
-      lineId: line.id,
-      stockMovementId: movement.id,
-    },
-    priority: 50,
   });
 
   await db.stockMovementImportBatchLine.update({

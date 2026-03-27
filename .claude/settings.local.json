@@ -4,7 +4,13 @@
       "Bash(node scripts/create-recipes-from-menu-items.mjs:*)",
       "Bash(node -e:*)",
       "Bash(npx tsc:*)",
-      "Bash(npx remix vite:build:*)"
+      "Bash(npx remix vite:build:*)",
+      "Bash(find /home/lanzo/Documents/Coding/amodomio -maxdepth 2 -type f \\\\\\(-name README* -o -name *.md -o -name *.txt \\\\\\) ! -path */node_modules/* ! -path */.next/*)",
+      "Bash(grep -r \"costImpactRecalc\\\\|CostImpactRun\\\\|CostImpactMenuItem\\\\|cost.impact\\\\|impacto de custo\" /home/lanzo/Documents/Coding/amodomio/app --include=*.ts --include=*.tsx --include=*.md)",
+      "Bash(grep -r enqueueAsyncJob /home/lanzo/Documents/Coding/amodomio/app --include=*.ts --include=*.tsx)",
+      "Bash(npx prisma:*)",
+      "Bash(grep -E \"admin\\\\.$|admin\\\\.producao|$\")",
+      "Bash(grep -E \"clientes-inativos|cost-impact|cost-monitoring|crm$|daily-orders$\")"
     ],
     "additionalDirectories": [
       "/home/lanzo/Documents/Coding/amodomio/app/routes"

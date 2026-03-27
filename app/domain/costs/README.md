@@ -84,9 +84,17 @@ Enquanto essa migracao nao acontece, toda a cadeia de custo comercial deve conti
 
 ### Gatilho
 
-Cada linha importada com sucesso pelo `stock-movement` enfileira um async job `costImpactRecalc` para o `itemId` afetado. O job e executado pelo cron `api.async-jobs-cron` e chama `runCostImpactPipelineForItemChange`.
+O cálculo de impacto ocorre **em tempo real**, sob demanda, quando o dashboard `admin.cost-impact` e carregado. Nao ha enfileiramento de job nem escrita em banco nesse fluxo.
 
-O job usa `dedupeKey = cost_impact_recalc:item:{itemId}` para evitar execucoes redundantes enquanto um job do mesmo item ainda esta pendente.
+O loader da rota:
+
+1. Lê o `ItemCostVariationHistory` dos últimos 60 dias (ou o valor configurado em `getItemAverageCostWindowDays`).
+2. Agrupa por `itemId`, mantendo a entrada mais recente de cada item.
+3. Filtra os insumos com variação de custo significativa (diferença a partir da 4ª casa decimal).
+4. Para cada insumo com variação, chama `buildCostImpactGraphForItem` para obter os `menuItemIds` afetados.
+5. Chama `listMenuItemMarginImpactRows` com o conjunto de ids e aplica `resolvePriority` em cada linha.
+
+Os filtros de canal, variação, prioridade, busca e meta são aplicados em memória sobre o resultado.
 
 ### Grafo de impacto
 
@@ -130,12 +138,9 @@ So entram no resultado linhas com variacao de custo significativa (diferenca a p
 
 ### Persistencia
 
-O resultado e salvo em:
+O dashboard de impacto **nao grava dados**. O resultado e efemero: calculado a cada requisicao e descartado apos a resposta.
 
-- `CostImpactRun`: registro da execucao com contadores de receitas, fichas e itens de cardapio afetados.
-- `CostImpactMenuItem`: uma linha por variacao de cardapio afetada, com custo atual, custo anterior, preco de venda, margem e prioridade.
-
-Se as tabelas nao existirem no banco (ex: ambiente de teste sem migracao), a persistencia e silenciosamente ignorada e o pipeline continua.
+As tabelas `CostImpactRun` e `CostImpactMenuItem` permanecem no banco como historico de execucoes anteriores, mas nao sao mais alimentadas pelo fluxo normal. `runCostImpactPipelineForItemChange` (que persiste nessas tabelas) ainda existe em `cost-impact-pipeline.server.ts` e pode ser acionado sob demanda no futuro, mas nao e chamado automaticamente.
 
 ## Arquitetura Atual
 
@@ -180,11 +185,9 @@ Novas referencias devem usar `~/domain/costs/` diretamente.
 - recalc de receita;
 - recalc de ficha tecnica;
 - grafo de impacto em cascata;
-- pipeline de propagacao;
-- persistencia do impacto em `CostImpactRun` e `CostImpactMenuItem`;
-- painel inicial de impacto;
-- sincronizacao do custo comercial em `MenuItem`;
-- integracao via async job disparado pelo `stock-movement`.
+- pipeline de propagacao (disponivel para uso sob demanda);
+- dashboard de impacto em tempo real (`admin.cost-impact`);
+- sincronizacao do custo comercial em `MenuItem`.
 
 ### Limitacoes conhecidas
 
@@ -198,4 +201,6 @@ Novas referencias devem usar `~/domain/costs/` diretamente.
 - `MenuItem` continua sendo a referencia oficial do vendido no cardapio;
 - `costs` e o dominio central para toda regra de custo, impacto e margem;
 - a pasta `cost-impact/` foi eliminada — os shims eram re-exports sem consumidores e o teste foi movido para `costs/`;
+- o impacto de custo e calculado em tempo real no dashboard, sem persistencia;
+- `CostImpactRun` e `CostImpactMenuItem` sao mantidas no banco apenas como historico;
 - a migracao futura para `Item` deve ser tratada como uma evolucao arquitetural separada, com adaptacoes explicitas.

@@ -181,192 +181,192 @@ export function AdminHeader({ urlSegment, slug, topNavItems = [] }: AdminHeaderP
 
     return (
         <>
-        <header className={
-            cn(
-                "sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60",
-                slug === "orders-delivery-time-left" && "hidden",
-                slug === "export-wall" && "hidden",
-                slug === "export-wall-two" && "hidden",
-                slug === "atendimento" && "hidden",
-                urlSegment?.includes("admin/kds/atendimento") && "hidden",
-                urlSegment?.includes("admin/kds/cozinha") && "hidden"
+            <header className={
+                cn(
+                    "sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60",
+                    slug === "orders-delivery-time-left" && "hidden",
+                    slug === "export-wall" && "hidden",
+                    slug === "export-wall-two" && "hidden",
+                    slug === "atendimento" && "hidden",
+                    urlSegment?.includes("admin/kds/atendimento") && "hidden",
+                    urlSegment?.includes("admin/kds/cozinha") && "hidden"
 
-            )
-        }>
-            <div className="container flex h-14 max-w-screen-2xl items-center">
-                <div className="flex flex-1 items-center justify-between space-x-2 md:justify-end">
-                    <div className="w-full flex-1 md:w-auto md:flex-none">
-                    </div>
-                    <nav className="flex items-center justify-center gap-3 lg:gap-4">
-                        <button
-                            type="button"
-                            className="md:hidden flex flex-col items-center gap-0.5 hover:bg-slate-50 rounded-md p-2"
-                            onClick={() => setIsMobileMenuOpen(true)}
-                            aria-label="Abrir menu"
-                        >
-                            <Menu size={18} />
-                            <span className="text-[10px] text-foreground/60">Menu</span>
-                        </button>
-                        <div className="hidden md:block">
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="flex items-center gap-2 rounded-full px-3 text-xs uppercase tracking-wide"
-                                        disabled={!openingStatus}
-                                    >
-                                        <span className={cn("h-2 w-2 rounded-full", statusDot)} />
-                                        {statusLabel}
-                                        {isManual && (
-                                            <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold">
-                                                manual
-                                            </span>
-                                        )}
-                                    </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-56">
-                                    <DropdownMenuLabel>Status</DropdownMenuLabel>
-                                    <div className="px-2 pb-2 text-xs text-muted-foreground">
-                                        {openingStatus?.isOpen ? "Recebendo pedidos" : "Nao recebendo pedidos"}
-                                    </div>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem onSelect={() => updateOverride("open")} disabled={isLoading}>
-                                        Abrir loja
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onSelect={() => updateOverride("closed")} disabled={isLoading}>
-                                        Fechar loja
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onSelect={() => updateOverride("auto")} disabled={isLoading}>
-                                        Voltar ao automatico
-                                    </DropdownMenuItem>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
+                )
+            }>
+                <div className="container flex h-14 max-w-screen-2xl items-center">
+                    <div className="flex flex-1 items-center justify-between space-x-2 md:justify-end">
+                        <div className="w-full flex-1 md:w-auto md:flex-none">
                         </div>
-                        <Link to={"/admin"}>
-                            <div className="flex flex-col items-center gap-0.5 hover:bg-slate-50 rounded-md p-2">
-                                <House size={18} />
-                                <span className="text-[10px] lg:text-xs text-foreground/60 transition-colors hover:text-foreground/80">Início</span>
-                            </div>
-                        </Link>
-                        <Link to={"/admin/administracao/settings"}>
-                            <div className="flex flex-col items-center gap-0.5 hover:bg-slate-50 rounded-md p-2">
-                                <Settings size={18} />
-                                <span className="text-[10px] lg:text-xs text-foreground/60 transition-colors hover:text-foreground/80">Config</span>
-                            </div>
-                        </Link>
-                        <Link to={"/cardapio"} prefetch="none" target="_blank">
-                            <div className="flex flex-col items-center gap-0.5 hover:bg-slate-50 rounded-md p-2">
-                                <Globe size={18} />
-                                <span className="text-[10px] lg:text-xs text-foreground/60 transition-colors hover:text-foreground/80">Cardápio</span>
-                            </div>
-                        </Link>
-
-                        <FastLinks topNavItems={topNavItems} />
-
-                        <Link to={"/admin/mobile"} prefetch="none">
-                            <div className="flex flex-col items-center gap-0.5 hover:bg-slate-50 rounded-md p-2">
-                                <Smartphone size={18} color="blue" />
-                                <span className="text-[10px] lg:text-xs transition-colors hover:text-foreground/80 text-blue-700">Mobile</span>
-                            </div>
-                        </Link>
-
-                        {/* <ModeToggle /> */}
-                    </nav>
-                </div>
-            </div>
-
-            {/* Mobile store status banner */}
-            <div className="md:hidden">
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <button
-                            disabled={!openingStatus}
-                            className={cn(
-                                "w-full flex items-center justify-center gap-2 px-4 py-1.5 text-xs font-semibold uppercase tracking-wide",
-                                openingStatus?.isOpen
-                                    ? "bg-emerald-500 text-white"
-                                    : "bg-red-500 text-white"
-                            )}
-                        >
-                            <span className="h-2 w-2 rounded-full bg-white/80" />
-                            {statusLabel}
-                            {isManual && (
-                                <span className="rounded-full bg-white/20 px-2 py-0.5 text-[10px]">
-                                    manual
-                                </span>
-                            )}
-                        </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="center" className="w-56">
-                        <DropdownMenuLabel>Status</DropdownMenuLabel>
-                        <div className="px-2 pb-2 text-xs text-muted-foreground">
-                            {openingStatus?.isOpen ? "Recebendo pedidos" : "Nao recebendo pedidos"}
-                        </div>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem onSelect={() => updateOverride("open")} disabled={isLoading}>
-                            Abrir loja
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onSelect={() => updateOverride("closed")} disabled={isLoading}>
-                            Fechar loja
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onSelect={() => updateOverride("auto")} disabled={isLoading}>
-                            Voltar ao automatico
-                        </DropdownMenuItem>
-                    </DropdownMenuContent>
-                </DropdownMenu>
-            </div>
-
-            <CommandDialog
-                open={openSearch}
-                onOpenChange={setOpenSearch}
-                title="Buscar no admin"
-                description="Encontre páginas do menu de administração"
-                className="max-w-2xl overflow-hidden border border-slate-200 bg-white/95 p-0 shadow-[0_30px_90px_rgba(15,23,42,0.20)] backdrop-blur-2xl [&_[data-slot=command-input-wrapper]]:mx-2 [&_[data-slot=command-input-wrapper]]:mt-2 [&_[data-slot=command-input-wrapper]]:rounded-lg [&_[data-slot=command-input-wrapper]]:border-b-0 [&_[data-slot=command-input-wrapper]]:border [&_[data-slot=command-input-wrapper]]:border-slate-200 [&_[data-slot=command-input-wrapper]]:bg-slate-50/80 [&_[data-slot=command-input-wrapper]]:px-3 [&_[data-slot=command-input-wrapper]]:focus-within:ring-2 [&_[data-slot=command-input-wrapper]]:focus-within:ring-slate-300 [&_[data-slot=command-input-wrapper]]:focus-within:ring-offset-2 [&_[data-slot=command-input-wrapper]]:focus-within:ring-offset-white"
-            >
-                <CommandInput
-                    placeholder="Buscar item de menu..."
-                    className="h-12 text-sm"
-                />
-                <CommandList className="max-h-[56vh]">
-                    <CommandEmpty>Nenhum item encontrado.</CommandEmpty>
-                    {Object.entries(searchItemsByGroup).map(([groupTitle, items]) => (
-                        <CommandGroup key={groupTitle} heading={groupTitle}>
-                            {items.map((item) => (
-                                <CommandItem
-                                    key={`${item.groupTitle}-${item.href}`}
-                                    value={`${item.title} ${item.contextLabel ?? ""} ${item.href}`}
-                                    onSelect={() => {
-                                        setOpenSearch(false);
-                                        trackNavClick({
-                                            href: item.href,
-                                            title: item.title,
-                                            groupTitle: item.groupTitle,
-                                        });
-                                        navigate(item.href);
-                                    }}
-                                    className="rounded-md px-3 py-2"
-                                >
-                                    <div className="flex w-full min-w-0 items-center gap-3">
-                                        <Search size={14} className="text-slate-400" />
-                                        <div className="min-w-0 flex-1">
-                                            <p className="truncate font-medium text-slate-900">{item.title}</p>
-                                            {item.contextLabel ? (
-                                                <p className="truncate text-xs text-muted-foreground">{item.contextLabel}</p>
-                                            ) : null}
+                        <nav className="flex items-center justify-center gap-3 lg:gap-4">
+                            <button
+                                type="button"
+                                className="md:hidden flex flex-col items-center gap-0.5 hover:bg-slate-50 rounded-md p-2"
+                                onClick={() => setIsMobileMenuOpen(true)}
+                                aria-label="Abrir menu"
+                            >
+                                <Menu size={18} />
+                                <span className="text-[10px] text-foreground/60">Menu</span>
+                            </button>
+                            <div className="hidden md:block">
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="flex items-center gap-2 rounded-full px-3 text-xs uppercase tracking-wide"
+                                            disabled={!openingStatus}
+                                        >
+                                            <span className={cn("h-2 w-2 rounded-full", statusDot)} />
+                                            {statusLabel}
+                                            {isManual && (
+                                                <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold">
+                                                    manual
+                                                </span>
+                                            )}
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end" className="w-56">
+                                        <DropdownMenuLabel>Status</DropdownMenuLabel>
+                                        <div className="px-2 pb-2 text-xs text-muted-foreground">
+                                            {openingStatus?.isOpen ? "Recebendo pedidos" : "Nao recebendo pedidos"}
                                         </div>
-                                        <CommandShortcut className="max-w-[180px] truncate text-[10px] uppercase tracking-[0.14em]">
-                                            {item.href}
-                                        </CommandShortcut>
-                                    </div>
-                                </CommandItem>
-                            ))}
-                        </CommandGroup>
-                    ))}
-                </CommandList>
-            </CommandDialog>
-        </header>
-        <MobileMenu isOpen={isMobileMenuOpen} onClose={() => setIsMobileMenuOpen(false)} />
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem onSelect={() => updateOverride("open")} disabled={isLoading}>
+                                            Abrir loja
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onSelect={() => updateOverride("closed")} disabled={isLoading}>
+                                            Fechar loja
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onSelect={() => updateOverride("auto")} disabled={isLoading}>
+                                            Voltar ao automatico
+                                        </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                            </div>
+                            <Link to={"/admin"}>
+                                <div className="flex flex-col items-center gap-0.5 hover:bg-slate-50 rounded-md p-2">
+                                    <House size={18} />
+                                    <span className="text-[10px] lg:text-xs text-foreground/60 transition-colors hover:text-foreground/80">Início</span>
+                                </div>
+                            </Link>
+                            <Link to={"/admin/administracao/settings"}>
+                                <div className="flex flex-col items-center gap-0.5 hover:bg-slate-50 rounded-md p-2">
+                                    <Settings size={18} />
+                                    <span className="text-[10px] lg:text-xs text-foreground/60 transition-colors hover:text-foreground/80">Config</span>
+                                </div>
+                            </Link>
+                            <Link to={"/cardapio"} prefetch="none" target="_blank">
+                                <div className="flex flex-col items-center gap-0.5 hover:bg-slate-50 rounded-md p-2">
+                                    <Globe size={18} />
+                                    <span className="text-[10px] lg:text-xs text-foreground/60 transition-colors hover:text-foreground/80">Cardápio</span>
+                                </div>
+                            </Link>
+
+                            <FastLinks topNavItems={topNavItems} />
+
+                            <Link to={"/admin/mobile"} prefetch="none">
+                                <div className="flex flex-col items-center gap-0.5 hover:bg-slate-50 rounded-md p-2">
+                                    <Smartphone size={18} color="blue" />
+                                    <span className="text-[10px] lg:text-xs transition-colors hover:text-foreground/80 text-blue-700">Mobile</span>
+                                </div>
+                            </Link>
+
+                            {/* <ModeToggle /> */}
+                        </nav>
+                    </div>
+                </div>
+
+                {/* Mobile store status banner */}
+                <div className="md:hidden">
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <button
+                                disabled={!openingStatus}
+                                className={cn(
+                                    "w-full flex items-center justify-center gap-2 px-4 py-1.5 text-xs font-semibold uppercase tracking-wide",
+                                    openingStatus?.isOpen
+                                        ? "bg-emerald-500 text-white"
+                                        : "bg-red-500 text-white"
+                                )}
+                            >
+                                <span className="h-2 w-2 rounded-full bg-white/80" />
+                                {statusLabel}
+                                {isManual && (
+                                    <span className="rounded-full bg-white/20 px-2 py-0.5 text-[10px]">
+                                        manual
+                                    </span>
+                                )}
+                            </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="center" className="w-56">
+                            <DropdownMenuLabel>Status</DropdownMenuLabel>
+                            <div className="px-2 pb-2 text-xs text-muted-foreground">
+                                {openingStatus?.isOpen ? "Recebendo pedidos" : "Nao recebendo pedidos"}
+                            </div>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onSelect={() => updateOverride("open")} disabled={isLoading}>
+                                Abrir loja
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => updateOverride("closed")} disabled={isLoading}>
+                                Fechar loja
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => updateOverride("auto")} disabled={isLoading}>
+                                Voltar ao automatico
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                </div>
+
+                <CommandDialog
+                    open={openSearch}
+                    onOpenChange={setOpenSearch}
+                    title="Buscar no admin"
+                    description="Encontre páginas do menu de administração"
+                    className="max-w-2xl overflow-hidden border border-slate-200 bg-white/95 p-0 shadow-[0_30px_90px_rgba(15,23,42,0.20)] backdrop-blur-2xl [&_[data-slot=command-input-wrapper]]:mx-2 [&_[data-slot=command-input-wrapper]]:mt-2 [&_[data-slot=command-input-wrapper]]:rounded-lg [&_[data-slot=command-input-wrapper]]:border-b-0 [&_[data-slot=command-input-wrapper]]:border [&_[data-slot=command-input-wrapper]]:border-slate-200 [&_[data-slot=command-input-wrapper]]:bg-slate-50/80 [&_[data-slot=command-input-wrapper]]:px-3 [&_[data-slot=command-input-wrapper]]:focus-within:ring-2 [&_[data-slot=command-input-wrapper]]:focus-within:ring-slate-300 [&_[data-slot=command-input-wrapper]]:focus-within:ring-offset-2 [&_[data-slot=command-input-wrapper]]:focus-within:ring-offset-white"
+                >
+                    <CommandInput
+                        placeholder="Buscar item de menu..."
+                        className="h-12 text-sm"
+                    />
+                    <CommandList className="max-h-[56vh]">
+                        <CommandEmpty>Nenhum item encontrado.</CommandEmpty>
+                        {Object.entries(searchItemsByGroup).map(([groupTitle, items]) => (
+                            <CommandGroup key={groupTitle} heading={groupTitle}>
+                                {items.map((item) => (
+                                    <CommandItem
+                                        key={`${item.groupTitle}-${item.href}`}
+                                        value={`${item.title} ${item.contextLabel ?? ""} ${item.href}`}
+                                        onSelect={() => {
+                                            setOpenSearch(false);
+                                            trackNavClick({
+                                                href: item.href,
+                                                title: item.title,
+                                                groupTitle: item.groupTitle,
+                                            });
+                                            navigate(item.href);
+                                        }}
+                                        className="rounded-md px-3 py-2"
+                                    >
+                                        <div className="flex w-full min-w-0 items-center gap-3">
+                                            <Search size={14} className="text-slate-400" />
+                                            <div className="min-w-0 flex-1">
+                                                <p className="truncate font-medium text-slate-900">{item.title}</p>
+                                                {item.contextLabel ? (
+                                                    <p className="truncate text-xs text-muted-foreground">{item.contextLabel}</p>
+                                                ) : null}
+                                            </div>
+                                            <CommandShortcut className="max-w-[180px] truncate text-[10px] uppercase tracking-[0.14em]">
+                                                {item.href}
+                                            </CommandShortcut>
+                                        </div>
+                                    </CommandItem>
+                                ))}
+                            </CommandGroup>
+                        ))}
+                    </CommandList>
+                </CommandDialog>
+            </header>
+            <MobileMenu isOpen={isMobileMenuOpen} onClose={() => setIsMobileMenuOpen(false)} />
         </>
     )
 }
@@ -447,7 +447,7 @@ function FastLinks({ topNavItems }: { topNavItems: TopNavItem[] }) {
                             <div key={navItem.id} className="flex items-center gap-1 rounded-md hover:bg-slate-50">
                                 <Link
                                     to={navItem.href}
-                                    className="flex flex-1 min-w-0 items-center gap-2 px-2 py-1.5"
+                                    className="flex flex-1 min-w-0 items-center gap-2 px-2 py-3"
                                 >
                                     <Zap className="h-3.5 w-3.5 shrink-0 text-amber-400" />
                                     <span className="flex-1 truncate text-sm text-slate-800">{navItem.title}</span>

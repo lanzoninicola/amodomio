@@ -17,7 +17,7 @@ Ele cobre:
 - registro de alteracoes aplicadas para rollback e auditoria;
 - deduplicacao por `sourceFingerprint`;
 - consulta administrativa das movimentacoes geradas;
-- disparo de `costImpactRecalc` por async job.
+- atualizacao de custo do insumo como base para o calculo de impacto de margem.
 
 ## Entradas suportadas
 
@@ -45,7 +45,6 @@ O **numero da nota fiscal** e a chave de vinculo entre as linhas da planilha e o
 7. Persistir o lote com `summary`.
 8. Importar para estoque apenas linhas `ready` que tambem entram em `summary.readyToImport`.
 9. Criar `stock_nf_import_applied_changes` e `stock_movements`.
-10. Enfileirar `costImpactRecalc` para os itens afetados.
 
 ## Status de linha
 
@@ -157,47 +156,13 @@ Observacao operacional:
 
 - hoje a experiencia depende da pagina do lote permanecer aberta durante a importacao.
 
-## Async job de impacto de custo
+## Impacto de custo apos importacao
 
-O `job-async` de `costImpactRecalc` e criado automaticamente durante a importacao do lote, nao na criacao do upload.
+O custo do insumo e atualizado diretamente via `setCurrentCost` e o impacto sobre a margem do cardapio e calculado em tempo real no dashboard `admin.cost-impact`.
 
-Ele e enfileirado quando:
+O dashboard le o `ItemCostVariationHistory` dos ultimos 60 dias, detecta variacoes significativas por insumo e monta o grafo de dependencias para exibir custo, margem e prioridade de revisao de preco de cada item afetado.
 
-- `startStockMovementImportBatch` encontrou pelo menos uma linha em `readyToImport` e a etapa `importStockMovementImportBatchStep` processa a linha;
-- a linha foi importada com sucesso em `importSingleStockMovementImportBatchLine`;
-- a importacao conseguiu criar a `stock_movement`;
-- o custo atual do item foi atualizado com `setCurrentCost`.
-
-Na pratica, isso significa:
-
-- cada linha que realmente vira movimentacao de estoque tenta enfileirar um `costImpactRecalc`;
-- linhas com erro, invalidas, ignoradas, duplicadas, sem fornecedor conciliado ou sem conversao resolvida nao criam job;
-- se nao existir nenhuma linha pronta para importar, nenhum job e criado.
-
-Regra importante de deduplicacao:
-
-- o job usa `dedupeKey = cost_impact_recalc:item:{itemId}`;
-- se varias linhas do mesmo item forem importadas enquanto ainda existe job pendente para esse item, o sistema nao cria varios registros independentes;
-- nesse caso ele reutiliza/atualiza o job pendente para aquele `itemId`;
-- se ja existir job com esse `dedupeKey` em `running`, o enfileiramento retorna o job em execucao e nao recria outro.
-
-Payload enviado hoje no job:
-
-- `itemId`
-- `sourceType = stock-movement-import`
-- `sourceRefId = stockMovementId`
-- `updatedBy`
-- `batchId`
-- `lineId`
-- `stockMovementId`
-
-Execucao:
-
-- o job fica em `async_jobs` com status inicial `pending`;
-- a execucao acontece depois pelo cron `api.async-jobs-cron`;
-- a tela `admin.async-jobs` serve para acompanhar pendentes, falhas e execucoes recentes.
-
-O que o job faz apos ser executado — grafo de dependencias, recalculo em cascata, sincronizacao de custo do cardapio e calculo de margem — esta documentado em:
+Para detalhes do calculo de impacto, ver:
 [app/domain/costs/README.md](../costs/README.md)
 
 ## Rollback e edicao
@@ -272,8 +237,8 @@ Regras atuais:
   Lista das movimentacoes geradas, com filtro por `movementId` e `lineId`, rollback de linha e edicao da origem.
 - `admin.stock-import-applied-changes`
   Historico global das alteracoes de custo disparadas pela importacao.
-- `admin.async-jobs`
-  Acompanhamento dos jobs de `costImpactRecalc`.
+- `admin.cost-impact`
+  Dashboard de impacto de custo em tempo real.
 
 ## Decisoes de arquitetura
 
@@ -282,7 +247,7 @@ Regras atuais:
 - a importacao continua incremental via HTTP polling, sem worker dedicado;
 - rollback e conservador e respeita a referencia de custo atual;
 - a correcao da origem acontece sobre a linha importada, preservando a rastreabilidade;
-- impacto de custo downstream fica desacoplado em async jobs.
+- impacto de custo downstream e calculado em tempo real no dashboard, sem jobs assincronos.
 
 ## Limitacoes conhecidas
 

@@ -202,12 +202,6 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
               items: [],
               disabled: false,
             },
-            {
-              title: "Jobs assíncronos",
-              href: "/admin/async-jobs",
-              items: [],
-              disabled: false,
-            },
           ],
           disabled: false,
         },

@@ -26,6 +26,7 @@ import { Separator } from '~/components/ui/separator';
 import { authenticator } from '~/domain/auth/google.server';
 import { itemPrismaEntity } from '~/domain/item/item.prisma.entity.server';
 import { getAvailableItemUnits } from '~/domain/item/item-units.server';
+import { normalizeItemCostToConsumptionUnit } from '~/domain/item/item-cost-metrics.server';
 import {
   archiveStockMovementImportBatch,
   deleteStockMovementImportBatch,
@@ -37,6 +38,7 @@ import {
   setBatchLineIgnored,
   setBatchLineManualConversion,
   startStockMovementImportBatch,
+  updateStockMovementImportBatchLineEditableFields,
 } from '~/domain/stock-movement/stock-movement-import.server';
 import { cn } from '~/lib/utils';
 import { badRequest, ok, serverError } from '~/utils/http-response.server';
@@ -240,11 +242,13 @@ export function ItemSystemMapperCell({
   items,
   batchId,
   unitOptions,
+  costHint,
 }: {
   line: any;
   items: any[];
   batchId: string;
   unitOptions: string[];
+  costHint?: { lastCostPerUnit: number | null; avgCostPerUnit: number | null } | null;
 }) {
   const [itemPickerOpen, setItemPickerOpen] = useState(false);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -287,7 +291,7 @@ export function ItemSystemMapperCell({
 
   return (
     <div className="space-y-1">
-      <mapItemFetcher.Form method="post" className="space-y-1">
+      <mapItemFetcher.Form method="post" action={`/admin/import-stock-movements/${batchId}`} className="space-y-1">
         <input type="hidden" name="_action" value="batch-map-item" />
         <input type="hidden" name="batchId" value={batchId} />
         <input type="hidden" name="lineId" value={line.id} />
@@ -330,7 +334,7 @@ export function ItemSystemMapperCell({
                             itemId: item.id,
                             saveAlias: 'on',
                           },
-                          { method: 'post' },
+                          { method: 'post', action: `/admin/import-stock-movements/${batchId}` },
                         );
                       }}
                     >
@@ -386,6 +390,7 @@ export function ItemSystemMapperCell({
               </DialogHeader>
               <createItemFetcher.Form
                 method="post"
+                action={`/admin/import-stock-movements/${batchId}`}
                 className="space-y-3"
                 preventScrollReset
                 onSubmit={() => {
@@ -463,7 +468,16 @@ export function ItemSystemMapperCell({
             <span className="text-[11px] text-slate-400">Editar item</span>
           )}
         </div>
-        <div className="text-[11px] text-slate-500">{line.mappingSource || '-'}</div>
+        {costHint && (costHint.lastCostPerUnit != null || costHint.avgCostPerUnit != null) ? (
+          <div className="text-[11px] text-slate-500">
+            {costHint.lastCostPerUnit != null && <>último: {formatMoney(costHint.lastCostPerUnit)}</>}
+            {costHint.avgCostPerUnit != null && (
+              <> {costHint.lastCostPerUnit != null ? '• ' : ''}médio: {formatMoney(costHint.avgCostPerUnit)}</>
+            )}
+          </div>
+        ) : (
+          <div className="text-[11px] text-slate-500">{line.mappingSource || '-'}</div>
+        )}
       </mapItemFetcher.Form>
     </div>
   );
@@ -475,7 +489,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
     if (!batchId) return badRequest('Lote inválido');
 
     const db = itemPrismaEntity.client as any;
-    const [selected, unitOptions, categories] = await Promise.all([
+    const [selected, unitOptions, categories, suppliers] = await Promise.all([
       getStockMovementImportBatchView(batchId),
       getAvailableItemUnits(),
       db.category.findMany({
@@ -483,10 +497,122 @@ export async function loader({ params }: LoaderFunctionArgs) {
         select: { id: true, name: true },
         orderBy: [{ name: 'asc' }],
       }),
+      typeof db.supplier?.findMany === 'function'
+        ? db.supplier.findMany({
+            select: { id: true, name: true, cnpj: true },
+            orderBy: [{ name: 'asc' }],
+            take: 2000,
+          })
+        : Promise.resolve([]),
     ]);
     if (!selected) return badRequest('Lote não encontrado');
 
-    return ok({ selected, batchId, unitOptions, categories });
+    const itemIds = Array.from(
+      new Set(
+        ((selected.items as any[]) || [])
+          .map((item) => String(item?.id || '').trim())
+          .filter(Boolean),
+      ),
+    );
+    const itemUnitOptionsByItemId: Record<string, string[]> = {};
+    if (itemIds.length > 0 && typeof db.itemUnit?.findMany === 'function') {
+      const linkedUnits = await db.itemUnit.findMany({
+        where: {
+          itemId: { in: itemIds },
+          MeasurementUnit: { active: true },
+        },
+        select: {
+          itemId: true,
+          unitCode: true,
+        },
+      });
+
+      for (const itemId of itemIds) {
+        itemUnitOptionsByItemId[itemId] = [];
+      }
+
+      for (const row of linkedUnits as Array<{ itemId: string; unitCode: string }>) {
+        const itemId = String(row.itemId || '').trim();
+        const unitCode = normalizeItemUnit(row.unitCode);
+        if (!itemId || !unitCode) continue;
+        if (!itemUnitOptionsByItemId[itemId]) itemUnitOptionsByItemId[itemId] = [];
+        if (!itemUnitOptionsByItemId[itemId].includes(unitCode)) {
+          itemUnitOptionsByItemId[itemId].push(unitCode);
+        }
+      }
+
+      for (const itemId of Object.keys(itemUnitOptionsByItemId)) {
+        itemUnitOptionsByItemId[itemId].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+      }
+    }
+
+    const mappedItemIds = [
+      ...new Set(
+        (selected.lines as any[]).filter((l) => l.mappedItemId).map((l) => String(l.mappedItemId)),
+      ),
+    ];
+    const itemCostHints: Record<string, { lastCostPerUnit: number | null; avgCostPerUnit: number | null }> = {};
+    if (mappedItemIds.length > 0) {
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const itemVariationSelect = {
+        itemId: true,
+        isReference: true,
+        Item: { select: { purchaseUm: true, consumptionUm: true, purchaseToConsumptionFactor: true } },
+      };
+      const [costRows, historyRows] = await Promise.all([
+        db.itemCostVariation.findMany({
+          where: { ItemVariation: { itemId: { in: mappedItemIds }, deletedAt: null } },
+          select: { costAmount: true, unit: true, ItemVariation: { select: itemVariationSelect } },
+        }),
+        db.itemCostVariationHistory.findMany({
+          where: {
+            ItemVariation: { itemId: { in: mappedItemIds }, deletedAt: null },
+            OR: [{ validFrom: { gte: thirtyDaysAgo } }, { createdAt: { gte: thirtyDaysAgo } }],
+          },
+          select: {
+            costAmount: true,
+            unit: true,
+            source: true,
+            metadata: true,
+            ItemVariation: { select: itemVariationSelect },
+          },
+          orderBy: [{ validFrom: 'desc' }, { createdAt: 'desc' }],
+          take: 500,
+        }),
+      ]);
+      for (const row of costRows as any[]) {
+        const itemId = row.ItemVariation?.itemId;
+        if (!itemId) continue;
+        if (itemId in itemCostHints && !row.ItemVariation?.isReference) continue;
+        const normalized = normalizeItemCostToConsumptionUnit(
+          { costAmount: row.costAmount, unit: row.unit },
+          row.ItemVariation?.Item || {},
+        );
+        itemCostHints[itemId] = { lastCostPerUnit: normalized, avgCostPerUnit: null };
+      }
+      const historyByItemId = new Map<string, any[]>();
+      for (const row of historyRows as any[]) {
+        const itemId = row.ItemVariation?.itemId;
+        if (!itemId) continue;
+        if (!historyByItemId.has(itemId)) historyByItemId.set(itemId, []);
+        historyByItemId.get(itemId)!.push(row);
+      }
+      for (const [itemId, entries] of historyByItemId.entries()) {
+        const item = (entries[0] as any)?.ItemVariation?.Item || {};
+        const normalized = (entries as any[])
+          .map((e) => normalizeItemCostToConsumptionUnit({ costAmount: e.costAmount, unit: e.unit }, item))
+          .filter((v): v is number => Number.isFinite(v as number) && (v as number) > 0);
+        const avg = normalized.length > 0 ? normalized.reduce((a, b) => a + b, 0) / normalized.length : null;
+        if (itemId in itemCostHints) {
+          itemCostHints[itemId].avgCostPerUnit = avg;
+        } else {
+          itemCostHints[itemId] = { lastCostPerUnit: null, avgCostPerUnit: avg };
+        }
+      }
+    }
+
+    return ok({ selected, batchId, unitOptions, itemUnitOptionsByItemId, categories, suppliers, itemCostHints });
   } catch (error) {
     return serverError(error);
   }
@@ -545,6 +671,45 @@ export async function action({ request, params }: ActionFunctionArgs) {
       if (!(factor > 0)) return badRequest('Informe um fator maior que zero');
       await setBatchLineManualConversion({ batchId, lineId, factor });
       return redirect(redirectToCurrentPath(request, `/admin/import-stock-movements/${batchId}`));
+    }
+
+    if (_action === 'batch-edit-line') {
+      const lineId = str(formData.get('lineId'));
+      if (!lineId) return badRequest('Linha inválida');
+      const mappedItemId = str(formData.get('mappedItemId')) || null;
+      const movementUnit = str(formData.get('movementUnit')).toUpperCase() || null;
+      if (movementUnit) {
+        const availableUnits = await getAvailableItemUnits(mappedItemId || undefined);
+        if (!availableUnits.includes(movementUnit)) {
+          return badRequest('UM do movimento inválida');
+        }
+      }
+      const movementAtRaw = str(formData.get('movementAt'));
+      const movementAt = movementAtRaw ? new Date(movementAtRaw) : null;
+      const manualFactorRaw = num(formData.get('manualConversionFactor'));
+      await updateStockMovementImportBatchLineEditableFields({
+        batchId,
+        lineId,
+        actor,
+        movementAt: movementAt && !Number.isNaN(movementAt.getTime()) ? movementAt : null,
+        ingredientName: str(formData.get('ingredientName')),
+        motivo: str(formData.get('motivo')) || null,
+        invoiceNumber: str(formData.get('invoiceNumber')) || null,
+        supplierId: str(formData.get('supplierId')) || null,
+        supplierName: str(formData.get('supplierName')) || null,
+        supplierCnpj: str(formData.get('supplierCnpj')) || null,
+        qtyEntry: num(formData.get('qtyEntry')) || null,
+        unitEntry: movementUnit,
+        qtyConsumption: num(formData.get('qtyEntry')) || null,
+        unitConsumption: movementUnit,
+        movementUnit,
+        costAmount: num(formData.get('costAmount')) || null,
+        costTotalAmount: num(formData.get('costTotalAmount')) || null,
+        mappedItemId,
+        manualConversionFactor: Number.isFinite(manualFactorRaw) && manualFactorRaw > 0 ? manualFactorRaw : null,
+        observation: str(formData.get('observation')) || null,
+      });
+      return ok({ updatedLineId: lineId });
     }
 
     if (_action === 'batch-ignore-line' || _action === 'batch-unignore-line') {
@@ -670,6 +835,9 @@ export type AdminImportStockMovementsBatchOutletContext = {
   items: any[];
   appliedChanges: any[];
   unitOptions: string[];
+  itemUnitOptionsByItemId: Record<string, string[]>;
+  suppliers: any[];
+  itemCostHints: Record<string, { lastCostPerUnit: number | null; avgCostPerUnit: number | null }>;
   summary: ReturnType<typeof summaryFromAny>;
   isImportingBatch: boolean;
 };
@@ -687,6 +855,9 @@ export default function AdminImportStockMovementsBatchDetailRoute() {
   const items = (selected?.items || []) as any[];
   const appliedChanges = (selected?.appliedChanges || []) as any[];
   const unitOptions = (((loaderData as any)?.payload?.unitOptions || []) as string[]);
+  const itemUnitOptionsByItemId = (((loaderData as any)?.payload?.itemUnitOptionsByItemId || {}) as Record<string, string[]>);
+  const suppliers = (((loaderData as any)?.payload?.suppliers || []) as any[]);
+  const itemCostHints = (((loaderData as any)?.payload?.itemCostHints || {}) as Record<string, { lastCostPerUnit: number | null }>);
   const summary = summaryFromAny(selected?.summary || selectedBatch?.summary);
   const batchImportStatus = String(selectedBatch?.importStatus || 'idle');
   const batchImportProcessedCount = Number(selectedBatch?.importProcessedCount || 0);
@@ -740,6 +911,9 @@ export default function AdminImportStockMovementsBatchDetailRoute() {
     items,
     appliedChanges,
     unitOptions,
+    itemUnitOptionsByItemId,
+    suppliers,
+    itemCostHints,
     summary,
     isImportingBatch,
   };

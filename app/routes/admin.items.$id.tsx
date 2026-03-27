@@ -14,6 +14,7 @@ import {
 } from "~/components/ui/alert-dialog";
 import { toast } from "~/components/ui/use-toast";
 import { calculateItemCostMetrics, getItemAverageCostWindowDays } from "~/domain/item/item-cost-metrics.server";
+import { getAvailableItemUnits as getAvailableItemUnitsFromServer } from "~/domain/item/item-units.server";
 import { itemCostVariationPrismaEntity } from "~/domain/item/item-cost-variation.prisma.entity.server";
 import { itemVariationPrismaEntity } from "~/domain/item/item-variation.prisma.entity.server";
 import { supplierPrismaEntity } from "~/domain/supplier/supplier.prisma.entity.server";
@@ -83,43 +84,8 @@ function findLatestPurchaseSupplierName(history: any[]): string {
   return "";
 }
 
-async function getAvailableItemUnits() {
-  const db = prismaClient as any;
-  const staticUnits = ITEM_UNIT_OPTIONS;
-  let dbUnits: Array<{ code?: string | null }> | undefined;
-  const measurementUnitModel = db.measurementUnit;
-
-  if (typeof measurementUnitModel?.findMany !== "function") {
-    return [...staticUnits].sort((a, b) => a.localeCompare(b, "pt-BR"));
-  }
-
-  try {
-    dbUnits = await measurementUnitModel.findMany({
-      where: { active: true },
-      select: { code: true },
-      orderBy: [{ code: "asc" }],
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error || "");
-    const isMissingTable =
-      message.includes("measurement_units") &&
-      (message.includes("does not exist") || message.includes("no such table"));
-
-    if (isMissingTable) {
-      console.error("[admin.items.$id] measurement_units table is required but missing");
-      throw error;
-    } else {
-      console.warn("[admin.items.$id] measurementUnit lookup failed, using static units only");
-    }
-  }
-
-  const merged = new Set<string>(staticUnits);
-  for (const row of dbUnits || []) {
-    const code = normalizeUnit(row?.code);
-    if (code) merged.add(code);
-  }
-
-  return Array.from(merged).sort((a, b) => a.localeCompare(b, "pt-BR"));
+function getAvailableItemUnits(itemId?: string) {
+  return getAvailableItemUnitsFromServer(itemId);
 }
 
 export async function loader({ params }: LoaderFunctionArgs) {
@@ -218,7 +184,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
         },
       }),
       getItemAverageCostWindowDays(),
-      getAvailableItemUnits(),
+      getAvailableItemUnits(id),
       db.category.findMany({
         where: { type: "item" },
         select: { id: true, name: true },
@@ -289,10 +255,29 @@ export async function loader({ params }: LoaderFunctionArgs) {
           },
           orderBy: [{ createdAt: "asc" }],
         },
+        ItemPurchaseConversion: {
+          select: { id: true, purchaseUm: true, factor: true },
+          orderBy: { purchaseUm: "asc" },
+        },
+        ItemUnit: {
+          select: { id: true, unitCode: true },
+        },
       },
     });
 
     if (!item) return badRequest("Item não encontrado");
+
+    // Load all restricted units and which ones are linked to this item
+    const restrictedUnits = typeof db.measurementUnit?.findMany === "function"
+      ? await db.measurementUnit.findMany({
+          where: { active: true, scope: "restricted" },
+          select: { id: true, code: true, name: true, kind: true },
+          orderBy: [{ code: "asc" }],
+        })
+      : [];
+    const linkedUnitCodes = new Set<string>(
+      (item.ItemUnit ?? []).map((u: any) => u.unitCode)
+    );
 
     const primaryVariation = pickPrimaryItemVariation(item);
     const primaryHistory = primaryVariation?.ItemCostVariationHistory || [];
@@ -319,6 +304,8 @@ export async function loader({ params }: LoaderFunctionArgs) {
       unitOptions,
       categories,
       suppliers,
+      restrictedUnits,
+      linkedUnitCodes: Array.from(linkedUnitCodes),
     });
   } catch (error) {
     return serverError(error);
@@ -349,7 +336,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       if (!name) return badRequest("Informe o nome do item");
       if (!classification) return badRequest("Informe a classificação");
 
-      const availableUnits = await getAvailableItemUnits();
+      const availableUnits = await getAvailableItemUnits(id);
 
       if (consumptionUm && !availableUnits.includes(consumptionUm)) {
         return badRequest("Unidade de consumo inválida");
@@ -402,7 +389,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       });
     }
 
-    if (_action === "item-purchase-conversion-update") {
+    if (_action === "item-purchase-conversion-add") {
       const currentItem = await db.item.findUnique({
         where: { id },
         select: { id: true, consumptionUm: true },
@@ -414,33 +401,34 @@ export async function action({ request, params }: ActionFunctionArgs) {
       }
 
       const purchaseUm = normalizeUnit(formData.get("purchaseUm"));
-      const factorRaw = String(formData.get("purchaseToConsumptionFactor") || "").trim();
-      const purchaseToConsumptionFactor = factorRaw ? Number(factorRaw) : null;
-      const hasFactor = Number.isFinite(purchaseToConsumptionFactor) && purchaseToConsumptionFactor > 0;
-      const filledConversionFields = [Boolean(purchaseUm), hasFactor].filter(Boolean).length;
+      const factorRaw = String(formData.get("factor") || "").trim();
+      const factor = factorRaw ? Number(factorRaw) : null;
 
-      if (filledConversionFields > 0 && filledConversionFields < 2) {
-        return badRequest("Preencha unidade de compra e fator de conversão para salvar");
-      }
+      if (!purchaseUm) return badRequest("Informe a unidade de compra");
+      if (!(Number.isFinite(factor) && factor > 0)) return badRequest("Informe um fator maior que zero");
 
-      if (filledConversionFields === 2 && !hasFactor) {
-        return badRequest("Informe um fator de conversão maior que zero");
-      }
+      const availableUnits = await getAvailableItemUnits(id);
+      if (!availableUnits.includes(purchaseUm)) return badRequest("Unidade de compra inválida");
 
-      const availableUnits = await getAvailableItemUnits();
-      if (purchaseUm && !availableUnits.includes(purchaseUm)) {
-        return badRequest("Unidade de compra inválida");
-      }
-
-      await db.item.update({
-        where: { id },
-        data: {
-          purchaseUm: filledConversionFields === 2 ? purchaseUm : null,
-          purchaseToConsumptionFactor: filledConversionFields === 2 ? purchaseToConsumptionFactor : null,
-        },
+      await db.itemPurchaseConversion.upsert({
+        where: { itemId_purchaseUm: { itemId: id, purchaseUm } },
+        create: { id: crypto.randomUUID(), itemId: id, purchaseUm, factor },
+        update: { factor },
       });
 
-      return ok("Conversão de compra atualizada com sucesso");
+      return ok("Conversão adicionada com sucesso");
+    }
+
+    if (_action === "item-purchase-conversion-delete") {
+      const conversionId = String(formData.get("conversionId") || "").trim();
+      if (!conversionId) return badRequest("Conversão inválida");
+
+      const existing = await db.itemPurchaseConversion.findUnique({ where: { id: conversionId } });
+      if (!existing || existing.itemId !== id) return badRequest("Conversão não encontrada");
+
+      await db.itemPurchaseConversion.delete({ where: { id: conversionId } });
+
+      return ok("Conversão removida com sucesso");
     }
 
     if (_action === "item-cost-add") {
@@ -547,6 +535,28 @@ export async function action({ request, params }: ActionFunctionArgs) {
       return ok("Variantes do item atualizadas com sucesso");
     }
 
+    if (_action === "item-unit-link") {
+      const unitCode = String(formData.get("unitCode") || "").trim().toUpperCase();
+      if (!unitCode) return badRequest("Informe a unidade");
+      const unit = await db.measurementUnit.findUnique({ where: { code: unitCode } });
+      if (!unit || unit.scope !== "restricted") return badRequest("Unidade inválida ou não restrita");
+      await db.itemUnit.upsert({
+        where: { itemId_unitCode: { itemId: id, unitCode } },
+        create: { id: crypto.randomUUID(), itemId: id, unitCode },
+        update: {},
+      });
+      return ok("Unidade vinculada");
+    }
+
+    if (_action === "item-unit-unlink") {
+      const itemUnitId = String(formData.get("itemUnitId") || "").trim();
+      if (!itemUnitId) return badRequest("Vínculo inválido");
+      const existing = await db.itemUnit.findUnique({ where: { id: itemUnitId } });
+      if (!existing || existing.itemId !== id) return badRequest("Vínculo não encontrado");
+      await db.itemUnit.delete({ where: { id: itemUnitId } });
+      return ok("Unidade desvinculada");
+    }
+
     return badRequest("Ação inválida");
   } catch (error) {
     return serverError(error);
@@ -561,6 +571,8 @@ export type AdminItemOutletContext = {
   suppliers: Array<{ id: string; name: string; cnpj?: string | null }>;
   costMetrics: any;
   averageWindowDays: number;
+  restrictedUnits: Array<{ id: string; code: string; name: string; kind: string | null }>;
+  linkedUnitCodes: string[];
 };
 
 export default function AdminItemDetailLayout() {
@@ -645,6 +657,8 @@ export default function AdminItemDetailLayout() {
             suppliers,
             costMetrics,
             averageWindowDays,
+            restrictedUnits: ((loaderData?.payload as any)?.restrictedUnits || []),
+            linkedUnitCodes: ((loaderData?.payload as any)?.linkedUnitCodes || []),
           }}
         />
       </div>

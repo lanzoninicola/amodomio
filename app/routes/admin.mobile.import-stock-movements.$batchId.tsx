@@ -518,7 +518,7 @@ export default function AdminMobileImportStockMovementsBatchRoute() {
                         <div className="space-y-4 text-sm">
                           <div className="border-b border-slate-200 pb-3">
                             <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Documento</div>
-                            <div className="mt-1 text-slate-900">{formatDocumentLabel(line.invoiceNumber)}</div>
+                            <div className="mt-1 text-slate-900"><DocumentLink value={line.invoiceNumber} /></div>
                             <div className="text-xs text-slate-500">{formatDate(line.movementAt)}</div>
                           </div>
                           <div className="border-b border-slate-200 pb-3">

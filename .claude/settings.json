@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -E \"^admin\\\\.[a-z-]+\\\\.tsx$\")",
+      "Bash(ls -la /home/lanzo/Documents/Coding/amodomio/app/routes/admin.async-jobs*)",
+      "Read(//home/lanzo/Documents/Coding/amodomio/**)",
+      "Bash(PGPASSWORD=cglCDH3gxCOaaheFGBw psql -h 69.62.91.94 -p 55433 -U zzeeuuss -d amodomio -c \"SELECT href, title, pinned, \"\"groupTitle\"\" FROM admin_navigation_click WHERE title ILIKE ''%programa%'' OR title ILIKE ''%produ%'' LIMIT 10;\")",
+      "Read(//home/lanzo/.nvm/**)"
+    ]
+  }
+}
