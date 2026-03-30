@@ -13,15 +13,26 @@ import { badRequest, ok, serverError } from "~/utils/http-response.server";
 
 const KIND_OPTIONS = ["weight", "volume", "count", "custom"] as const;
 
-export async function loader({}: LoaderFunctionArgs) {
+function safeReturnTo(value: string | null): string | null {
+  if (!value) return null;
+  try {
+    const decoded = decodeURIComponent(value);
+    if (decoded.startsWith("/admin/")) return decoded;
+  } catch {}
+  return null;
+}
+
+export async function loader({ request }: LoaderFunctionArgs) {
   try {
     const db = prismaClient as any;
+    const url = new URL(request.url);
+    const returnTo = safeReturnTo(url.searchParams.get("returnTo"));
     const items = await db.item.findMany({
       where: { active: true },
       select: { id: true, name: true, classification: true },
       orderBy: [{ classification: "asc" }, { name: "asc" }],
     });
-    return ok({ items });
+    return ok({ items, returnTo });
   } catch (error) {
     return serverError(error);
   }
@@ -52,6 +63,8 @@ export async function action({ request }: ActionFunctionArgs) {
     const existing = await db.measurementUnit.findFirst({ where: { code } });
     if (existing) return badRequest("Já existe uma unidade com esse código");
 
+    const returnTo = safeReturnTo(String(formData.get("returnTo") || ""));
+
     const unit = await db.measurementUnit.create({
       data: {
         code,
@@ -67,7 +80,7 @@ export async function action({ request }: ActionFunctionArgs) {
       },
     });
 
-    return redirect(`/admin/unidades-consumo/${unit.id}`);
+    return redirect(returnTo ?? `/admin/unidades-consumo/${unit.id}`);
   } catch (error) {
     return serverError(error);
   }
@@ -78,6 +91,7 @@ export default function AdminUnidadesConsumoNew() {
   const loaderData = useLoaderData<typeof loader>();
   const items: Array<{ id: string; name: string; classification: string | null }> =
     ((loaderData?.payload as any)?.items || []);
+  const returnTo: string | null = (loaderData?.payload as any)?.returnTo ?? null;
   const [kind, setKind] = useState("custom");
   const [scope, setScope] = useState("global");
   const [search, setSearch] = useState("");
@@ -117,13 +131,13 @@ export default function AdminUnidadesConsumoNew() {
       <section className="space-y-5 border-b border-slate-200/80 pb-5">
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <Link
-            to="/admin/unidades-consumo"
+            to={returnTo ?? "/admin/unidades-consumo"}
             className="flex items-center gap-1 text-slate-500 hover:text-slate-700"
           >
             <span className="flex size-5 items-center justify-center rounded-full border border-slate-200 text-slate-500">
               <ChevronLeft size={12} />
             </span>
-            unidades de consumo
+            {returnTo ? "voltar" : "unidades de consumo"}
           </Link>
         </div>
         <div className="space-y-1">
@@ -139,6 +153,7 @@ export default function AdminUnidadesConsumoNew() {
       ) : null}
 
       <Form method="post" className="space-y-5">
+        {returnTo && <input type="hidden" name="returnTo" value={returnTo} />}
         <div className="grid gap-6 lg:grid-cols-[minmax(0,28rem)_minmax(0,1fr)]">
           <div className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-2">
@@ -261,7 +276,7 @@ export default function AdminUnidadesConsumoNew() {
 
         <div className="flex gap-2">
           <Button type="submit" className="bg-slate-900 hover:bg-slate-700">Criar unidade</Button>
-          <Link to="/admin/unidades-consumo">
+          <Link to={returnTo ?? "/admin/unidades-consumo"}>
             <Button type="button" variant="outline">Cancelar</Button>
           </Link>
         </div>

@@ -45,8 +45,6 @@ function sourceBadgeClass(source: string) {
       return 'border-blue-200 bg-blue-50 text-blue-700';
     case 'manual':
       return 'border-slate-200 bg-slate-50 text-slate-700';
-    case 'purchase':
-      return 'border-emerald-200 bg-emerald-50 text-emerald-700';
     case 'adjustment':
       return 'border-amber-200 bg-amber-50 text-amber-700';
     case 'item-cost-sheet':
@@ -58,14 +56,19 @@ function sourceBadgeClass(source: string) {
 
 function sourceLabel(row: any) {
   const source = String(row?.source || '').trim().toLowerCase();
-  const referenceType = String(row?.referenceType || '').trim().toLowerCase();
-  if (source === 'import' && referenceType === 'stock-movement-import-rollback') return 'rollback import';
   if (source === 'import') return 'importação';
   if (source === 'manual') return 'manual';
-  if (source === 'purchase') return 'compra';
   if (source === 'adjustment') return 'ajuste';
   if (source === 'item-cost-sheet') return 'ficha de custo';
   return source || '-';
+}
+
+function isImportMovementRow(row: any) {
+  const metadata =
+    row?.metadata && typeof row.metadata === 'object' && !Array.isArray(row.metadata)
+      ? (row.metadata as Record<string, unknown>)
+      : {};
+  return String(metadata.originType || '').trim().toLowerCase() === 'import-line';
 }
 
 export function ItemCostHistoryTable({
@@ -138,13 +141,15 @@ export function ItemCostHistoryTable({
                     {(row.referenceType === 'stock-movement-import-line' || row.referenceType === 'stock-movement') && row.referenceId ? (
                       <Link
                         to={
-                          row.referenceType === 'stock-movement'
-                            ? `/admin/stock-movements?movementId=${encodeURIComponent(row.referenceId)}&status=all&openEdit=1`
-                            : `/admin/stock-movements?lineId=${encodeURIComponent(row.referenceId)}&status=all&openEdit=1`
+                          row.referenceType === 'stock-movement' && isImportMovementRow(row)
+                            ? `/admin/stock-movements/${encodeURIComponent(row.referenceId)}?returnTo=${encodeURIComponent(row.itemId ? `/admin/items/${row.itemId}/costs` : '/admin/items')}`
+                            : row.referenceType === 'stock-movement'
+                              ? `/admin/stock-movements?movementId=${encodeURIComponent(row.referenceId)}`
+                            : `/admin/stock-movements/line/${encodeURIComponent(row.referenceId)}?returnTo=${encodeURIComponent(row.itemId ? `/admin/items/${row.itemId}/costs` : '/admin/items')}`
                         }
                         className="text-[11px] font-medium text-sky-700 hover:underline"
                       >
-                        editar movimento
+                        {row.referenceType === 'stock-movement' && !isImportMovementRow(row) ? 'abrir movimento' : 'editar movimento'}
                       </Link>
                     ) : null}
                     {row.Batch?.id ? (

@@ -175,7 +175,7 @@ export default function AdminImportStockMovementsIndexRoute() {
 
             <div className="flex flex-wrap items-center gap-5 text-sm text-black">
               <Button asChild variant="outline" className="h-10 rounded-xl border-slate-200 bg-white px-4 font-semibold text-slate-700 hover:bg-slate-50">
-                <Link to="/admin/stock-import-applied-changes">
+                <Link to="/admin/global-cost-history">
                   Ver histórico global de custos
                 </Link>
               </Button>

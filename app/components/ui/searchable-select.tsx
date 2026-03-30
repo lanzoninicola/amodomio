@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useMemo, useRef, useEffect, useState } from "react"
 import { Check, ChevronDown } from "lucide-react"
 import { cn } from "~/lib/utils"
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from "~/components/ui/command"
@@ -35,6 +35,11 @@ export function SearchableSelect({
 }: SearchableSelectProps) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState("")
+  const listRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (listRef.current) listRef.current.scrollTop = 0
+  }, [search])
 
   const selected = useMemo(
     () => options.find((option) => option.value === value),
@@ -68,7 +73,7 @@ export function SearchableSelect({
             value={search}
             onValueChange={setSearch}
           />
-          <CommandList className="max-h-[240px]">
+          <CommandList ref={listRef} className="max-h-[240px]">
             <CommandEmpty>{emptyText}</CommandEmpty>
             {options.map((option) => (
               <CommandItem

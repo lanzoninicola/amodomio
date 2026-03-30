@@ -392,12 +392,37 @@ model ItemCostVariationHistory {
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @default(now()) @updatedAt @map("updated_at")
 
-  ItemVariation ItemVariation @relation(fields: [itemVariationId], references: [id], onDelete: Cascade)
+  ItemVariation             ItemVariation                  @relation(fields: [itemVariationId], references: [id], onDelete: Cascade)
+  ItemCostVariationHistoryAudit ItemCostVariationHistoryAudit[]
 
   @@index([itemVariationId, validFrom], map: "item_cost_variation_history_item_variation_valid_from_idx")
   @@index([itemVariationId, createdAt], map: "item_cost_variation_history_item_variation_created_at_idx")
   @@index([source, referenceType, referenceId], map: "item_cost_variation_history_source_ref_idx")
   @@map("item_cost_variations_history")
+}
+
+model ItemCostVariationHistoryAudit {
+  id                String   @id @default(uuid())
+  historyRecordId   String   @map("history_record_id")
+  itemVariationId   String   @map("item_variation_id")
+  costAmountBefore  Float    @map("cost_amount_before")
+  costAmountAfter   Float    @map("cost_amount_after")
+  unitBefore        String?  @map("unit_before")
+  unitAfter         String?  @map("unit_after")
+  sourceBefore      String?  @map("source_before")
+  sourceAfter       String?  @map("source_after")
+  validFromBefore   DateTime @map("valid_from_before")
+  validFromAfter    DateTime @map("valid_from_after")
+  changedBy         String?  @map("changed_by")
+  changeReason      String?  @map("change_reason")
+  metadata          Json?
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  ItemCostVariationHistory ItemCostVariationHistory @relation(fields: [historyRecordId], references: [id], onDelete: Cascade)
+
+  @@index([historyRecordId], map: "item_cost_var_history_audit_history_record_id_idx")
+  @@index([itemVariationId, createdAt], map: "item_cost_var_history_audit_item_var_created_at_idx")
+  @@map("item_cost_variations_history_audit")
 }
 
 model Supplier {

@@ -30,6 +30,10 @@ function normalizeItemUnit(value: unknown) {
   return normalized || null;
 }
 
+function getItemBaseUnit(item: { purchaseUm?: string | null; consumptionUm?: string | null } | null | undefined) {
+  return item?.consumptionUm || item?.purchaseUm || "-";
+}
+
 function formatDate(value: any) {
   if (!value) return "-";
   const date = new Date(value);
@@ -188,7 +192,7 @@ function MobileItemMapperCard({
     () =>
       items.map((item) => ({
         value: item.id,
-        label: `${item.name} [${item.classification || "-"}] (${item.purchaseUm || item.consumptionUm || "-"})`,
+        label: `${item.name} [${item.classification || "-"}] (${getItemBaseUnit(item)})`,
         searchText: [item.name, item.classification || "", item.purchaseUm || "", item.consumptionUm || "", item.id]
           .filter(Boolean)
           .join(" "),

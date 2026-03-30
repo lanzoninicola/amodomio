@@ -101,14 +101,14 @@ export default function AdminItemStockMovementsTab() {
               Movimentações deste item desde {fromLabel}, incluindo registros ativos e eliminados.
             </p>
             <Link
-              to={`/admin/stock-movements?item=${encodeURIComponent(item.name || "")}`}
+              to={`/admin/stock-movements?itemId=${encodeURIComponent(item.id)}`}
               className="inline-flex text-sm font-medium text-slate-900 underline underline-offset-4 transition hover:text-slate-700"
             >
               Ver todas as movimentações do estoque deste produto
             </Link>
           </div>
           <Link
-            to={`/admin/stock-movements?item=${encodeURIComponent(item.name || "")}`}
+            to={`/admin/stock-movements?itemId=${encodeURIComponent(item.id)}`}
             className="inline-flex h-9 items-center justify-center rounded-md border border-slate-200 px-4 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
           >
             Ver listagem completa

@@ -1,5 +1,5 @@
 import { Link, Outlet, useLocation } from "@remix-run/react";
-import { CalendarDays, Camera, Images, Package, Pizza, ReceiptText, Search } from "lucide-react";
+import { CalendarDays, Camera, Images, Package, Pizza, ReceiptText, Search, Store } from "lucide-react";
 
 export default function AdminMobileLayout() {
   const { pathname } = useLocation();
@@ -7,7 +7,8 @@ export default function AdminMobileLayout() {
   const isEstoque = pathname.startsWith("/admin/mobile/estoque-massa");
   const isProgramacao = pathname.startsWith("/admin/mobile/programacao-diaria");
   const isAssetsBatch = pathname.startsWith("/admin/mobile/cardapio-assets-batch");
-  const isCosts = pathname.startsWith("/admin/mobile/custos");
+  const isCostsBySupplier = pathname.startsWith("/admin/mobile/custos-fornecedor");
+  const isCosts = !isCostsBySupplier && pathname.startsWith("/admin/mobile/custos");
   const isItemCostSurvey = pathname.startsWith("/admin/mobile/levantamento-custo-item");
   const isStockPhotoEntry = pathname.startsWith("/admin/mobile/entrada-estoque-foto");
   const isImportStockMovementsBatch = pathname.startsWith("/admin/mobile/import-stock-movements");
@@ -26,6 +27,8 @@ export default function AdminMobileLayout() {
           ? "Entrada por foto"
         : isItemCostSurvey
           ? "Levantamento de custo"
+        : isCostsBySupplier
+          ? "Custos por fornecedor"
         : isCosts
           ? "Consulta de custos"
         : "Atalhos";
@@ -103,6 +106,19 @@ export default function AdminMobileLayout() {
               <span>
                 <span className="block text-sm font-semibold text-slate-900">Consulta de custos</span>
                 <span className="block text-xs text-slate-600">Buscar produto e ver custos por fornecedor</span>
+              </span>
+            </Link>
+
+            <Link
+              to="/admin/mobile/custos-fornecedor"
+              className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+            >
+              <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-teal-100 text-teal-700">
+                <Store className="h-5 w-5" />
+              </span>
+              <span>
+                <span className="block text-sm font-semibold text-slate-900">Custos por fornecedor</span>
+                <span className="block text-xs text-slate-600">Ver itens e comparar preços no mercado</span>
               </span>
             </Link>
 

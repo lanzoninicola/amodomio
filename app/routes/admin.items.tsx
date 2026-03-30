@@ -30,6 +30,12 @@ export default function AdminItemsOutlet() {
                 Importar movimentações
               </Link>
               <Link
+                to="recalculate-costs"
+                className="inline-flex h-9 items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              >
+                Recalcular custos
+              </Link>
+              <Link
                 to="new"
                 reloadDocument
                 className="inline-flex h-9 items-center justify-center gap-2 rounded-full bg-black px-4 text-sm font-semibold text-white transition hover:bg-blue-500"

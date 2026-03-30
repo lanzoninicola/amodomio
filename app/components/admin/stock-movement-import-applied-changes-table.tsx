@@ -118,7 +118,7 @@ export function StockMovementImportAppliedChangesTable({
                   </Badge>
                   <div className="mt-1 space-x-3">
                     <Link
-                      to={`/admin/stock-movements?movementId=${encodeURIComponent(change.id)}`}
+                      to={`/admin/stock-movements/${encodeURIComponent(change.id)}?returnTo=${encodeURIComponent(change.Batch?.id ? `/admin/import-stock-movements/${change.Batch.id}/applied-changes` : '/admin/import-stock-movements')}`}
                       className="text-[11px] font-medium text-sky-700 hover:underline"
                     >
                       abrir movimentação

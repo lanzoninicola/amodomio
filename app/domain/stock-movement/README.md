@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-O dominio `stock-movement-import` registra movimentacoes de **entrada** de estoque para rastrear o custo atual dos produtos e as variacoes de custo ao longo do tempo.
+O dominio `stock-movement` registra a trilha canonica de eventos que alteram custo e, quando aplicavel, a movimentacao fisica de estoque.
 
 O fluxo principal hoje e a importacao via payload estruturado gerado pelo fluxo mobile de foto/cupom (`admin.mobile.entrada-estoque-foto`). O suporte a planilha `.xlsx` do Saipos tambem existe e converge para o mesmo pipeline.
 
@@ -10,6 +10,7 @@ Ele cobre:
 
 - criacao de lote a partir de payload estruturado do fluxo mobile de foto;
 - criacao de lote a partir de planilha `.xlsx` exportado do Saipos;
+- eventos canonicos de custo manual e ficha de custo;
 - conciliacao de fornecedor via JSON gerado por extensao do navegador, por JSON posterior ou manualmente;
 - mapeamento de ingrediente para `Item`, inclusive com criacao de item no fluxo do lote;
 - resolucao de conversao de unidade e custo;
@@ -45,6 +46,18 @@ O **numero da nota fiscal** e a chave de vinculo entre as linhas da planilha e o
 7. Persistir o lote com `summary`.
 8. Importar para estoque apenas linhas `ready` que tambem entram em `summary.readyToImport`.
 9. Criar `stock_nf_import_applied_changes` e `stock_movements`.
+
+## Direcao e tipo
+
+Os eixos canonicos sao:
+
+- `direction`: `entry | exit | neutral`
+- `movementType`: `import | manual | adjustment | item-cost-sheet`
+
+Regra:
+
+- eventos sem movimentacao fisica usam `direction = neutral`;
+- o recalc de correcao historica continua restrito aos eventos de `movementType = import`.
 
 ## Status de linha
 
@@ -235,7 +248,7 @@ Regras atuais:
 
 - `admin.stock-movements`
   Lista das movimentacoes geradas, com filtro por `movementId` e `lineId`, rollback de linha e edicao da origem.
-- `admin.stock-import-applied-changes`
+- `admin.global-cost-history`
   Historico global das alteracoes de custo disparadas pela importacao.
 - `admin.cost-impact`
   Dashboard de impacto de custo em tempo real.
@@ -269,4 +282,4 @@ Regras atuais:
 - `app/routes/admin.mobile.import-stock-movements.$batchId.supplier-reconciliation.tsx`
 - `app/routes/api.admin-stock-import-batch-import-step.tsx`
 - `app/routes/admin.stock-movements.tsx`
-- `app/routes/admin.stock-import-applied-changes.tsx`
+- `app/routes/admin.global-cost-history.tsx`

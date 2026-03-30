@@ -745,6 +745,7 @@ function DecisionFocusedChannelComparison({ report }: { report: MonthlyReportDat
     previousGross: report.channelDashboard.prev.marketplaceRevenue,
     previousNet: report.channelDashboard.prev.marketplaceNetRevenue,
     previousFee: report.channelDashboard.prev.marketplaceFeeAmount,
+    previousOrders: report.channelDashboard.prev.marketplaceOrders,
   };
   const otherChannels = {
     label: "Outros canais",
@@ -755,9 +756,11 @@ function DecisionFocusedChannelComparison({ report }: { report: MonthlyReportDat
     previousGross: report.channelDashboard.prev.ownRevenue,
     previousNet: report.channelDashboard.prev.ownNetRevenue,
     previousFee: 0,
+    previousOrders: report.channelDashboard.prev.ownOrders,
   };
 
   const totalCombinedGross = Math.max(1, marketplace.gross + otherChannels.gross);
+  const totalCombinedPrevGross = Math.max(1, marketplace.previousGross + otherChannels.previousGross);
   const marketplaceGrossWidth = `${(marketplace.gross / totalCombinedGross) * 100}%`;
   const marketplaceNetWidth = marketplace.gross > 0 ? `${(marketplace.net / marketplace.gross) * 100}%` : "0%";
   const marketplaceFeeWidth = marketplace.gross > 0 ? `${(marketplace.fee / marketplace.gross) * 100}%` : "0%";
@@ -794,7 +797,12 @@ function DecisionFocusedChannelComparison({ report }: { report: MonthlyReportDat
               barWidth={marketplaceGrossWidth}
               netSegmentWidth={marketplaceNetWidth}
               feeSegmentWidth={marketplaceFeeWidth}
-              footer={`${((marketplace.gross / totalCombinedGross) * 100).toFixed(1).replace(".", ",")}% da receita no periodo · ${fmtNumber(marketplace.orders, 0)} pedidos`}
+              footer={
+                <div className="flex flex-col gap-0.5">
+                  <span>{((marketplace.gross / totalCombinedGross) * 100).toFixed(1).replace(".", ",")}% da receita no periodo · {fmtNumber(marketplace.orders, 0)} pedidos</span>
+                  <span className="text-slate-400">Mês ant.: {((marketplace.previousGross / totalCombinedPrevGross) * 100).toFixed(1).replace(".", ",")}% da receita · {fmtNumber(marketplace.previousOrders, 0)} pedidos</span>
+                </div>
+              }
               overlayContent={
                 <div className="flex min-w-0 items-center gap-4">
                   <span className="truncate font-semibold">{marketplace.label}</span>
@@ -807,7 +815,12 @@ function DecisionFocusedChannelComparison({ report }: { report: MonthlyReportDat
               barWidth={otherGrossWidth}
               netSegmentWidth="100%"
               feeSegmentWidth="0%"
-              footer={`${((otherChannels.gross / totalCombinedGross) * 100).toFixed(1).replace(".", ",")}% da receita no periodo · ${fmtNumber(otherChannels.orders, 0)} pedidos`}
+              footer={
+                <div className="flex flex-col gap-0.5">
+                  <span>{((otherChannels.gross / totalCombinedGross) * 100).toFixed(1).replace(".", ",")}% da receita no periodo · {fmtNumber(otherChannels.orders, 0)} pedidos</span>
+                  <span className="text-slate-400">Mês ant.: {((otherChannels.previousGross / totalCombinedPrevGross) * 100).toFixed(1).replace(".", ",")}% da receita · {fmtNumber(otherChannels.previousOrders, 0)} pedidos</span>
+                </div>
+              }
               overlayContent={
                 <div className="flex min-w-0 items-center gap-2">
                   <span className="truncate font-semibold">{otherChannels.label}</span>

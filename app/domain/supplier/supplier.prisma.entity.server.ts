@@ -2,6 +2,13 @@ import type { Prisma, Supplier } from "@prisma/client";
 import prismaClient from "~/lib/prisma/client.server";
 import type { PrismaEntityProps } from "~/lib/prisma/types.server";
 
+export function capitalizeSupplierName(name: string): string {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/(?:^|\s)\S/g, (char) => char.toUpperCase());
+}
+
 class SupplierPrismaEntity {
   client;
 
@@ -45,13 +52,18 @@ class SupplierPrismaEntity {
   }
 
   async create(data: Prisma.SupplierCreateInput): Promise<Supplier> {
-    return await this.client.supplier.create({ data });
+    return await this.client.supplier.create({
+      data: { ...data, name: capitalizeSupplierName(data.name) },
+    });
   }
 
   async update(id: string, data: Prisma.SupplierUpdateInput): Promise<Supplier> {
     return await this.client.supplier.update({
       where: { id },
-      data,
+      data: {
+        ...data,
+        ...(typeof data.name === "string" ? { name: capitalizeSupplierName(data.name) } : {}),
+      },
     });
   }
 

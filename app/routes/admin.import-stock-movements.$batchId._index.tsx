@@ -1,5 +1,5 @@
-import { Form, useFetcher, useOutletContext } from '@remix-run/react';
-import { EyeOff, Eye, Pencil, RotateCcw } from 'lucide-react';
+import { Form, Link, useFetcher, useLocation, useOutletContext } from '@remix-run/react';
+import { EyeOff, Eye, Loader2, Pencil, RotateCcw } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { DecimalInput } from '~/components/inputs/inputs';
 import { PendingConversionForm } from '~/components/admin/import-stock-conversion-form';
@@ -14,6 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '~
 import { Textarea } from '~/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '~/components/ui/tooltip';
 import { cn } from '~/lib/utils';
+import { ITEM_UNIT_OPTIONS } from '~/domain/item/item-units';
 import type { AdminImportStockMovementsBatchOutletContext } from './admin.import-stock-movements.$batchId';
 import {
   formatDate,
@@ -24,7 +25,6 @@ import {
   statusBadgeClass,
   supplierReconciliationLabel,
 } from './admin.import-stock-movements.$batchId';
-import { Separator } from '~/components/ui/separator';
 
 const COST_DISCREPANCY_THRESHOLD = 0.3;
 
@@ -34,6 +34,42 @@ function formatDateTimeLocalValue(value: unknown) {
   if (Number.isNaN(d.getTime())) return '';
   const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
   return local.toISOString().slice(0, 16);
+}
+
+function normalizeUnit(value: unknown) {
+  const normalized = String(value || '').trim().toUpperCase();
+  return normalized || null;
+}
+
+function parseDecimal(value: string) {
+  const normalized = String(value || '').trim().replace(',', '.');
+  const amount = Number(normalized);
+  return Number.isFinite(amount) ? amount : NaN;
+}
+
+function formatDecimal(value: unknown) {
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return '-';
+  return amount.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+}
+
+function findMeasurementConversion(
+  measurementConversions: Array<{ fromUnit: string; toUnit: string; factor: number }>,
+  fromUnit: string | null,
+  toUnit: string | null,
+) {
+  if (!fromUnit || !toUnit || fromUnit === toUnit) return null;
+
+  for (const row of measurementConversions) {
+    const rowFrom = normalizeUnit(row?.fromUnit);
+    const rowTo = normalizeUnit(row?.toUnit);
+    const factor = Number(row?.factor ?? NaN);
+    if (!rowFrom || !rowTo || !(factor > 0)) continue;
+    if (rowFrom === fromUnit && rowTo === toUnit) return { factor, mode: 'direct' as const };
+    if (rowFrom === toUnit && rowTo === fromUnit) return { factor, mode: 'reverse' as const };
+  }
+
+  return null;
 }
 
 function hasCostDiscrepancy(
@@ -57,6 +93,7 @@ function LineEditDialog({
   suppliers,
   unitOptions,
   itemUnitOptionsByItemId,
+  measurementConversions,
   open,
   onOpenChange,
 }: {
@@ -66,6 +103,7 @@ function LineEditDialog({
   suppliers: any[];
   unitOptions: string[];
   itemUnitOptionsByItemId: Record<string, string[]>;
+  measurementConversions: Array<{ fromUnit: string; toUnit: string; factor: number }>;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -78,22 +116,190 @@ function LineEditDialog({
   );
   const [qtyEntryDraft, setQtyEntryDraft] = useState<number>(Number(line?.qtyEntry ?? 0));
   const [costAmountDraft, setCostAmountDraft] = useState<number>(Number(line?.costAmount ?? 0));
+  const [manualConversionFactorDraft, setManualConversionFactorDraft] = useState(String(line?.manualConversionFactor ?? ''));
 
   const selectedSupplier = suppliers.find((s) => s.id === supplierIdDraft) || null;
+  const selectedItem = items.find((item) => item.id === mappedItemIdDraft) || null;
   const supplierNameHiddenValue = selectedSupplier?.name || line?.supplierName || '';
   const supplierCnpjHiddenValue = selectedSupplier?.cnpj || line?.supplierCnpj || '';
   const computedCostTotal =
     Number.isFinite(qtyEntryDraft) && Number.isFinite(costAmountDraft)
       ? qtyEntryDraft * costAmountDraft
       : NaN;
+  const conversionPreview = useMemo(() => {
+    const movementUnit = normalizeUnit(movementUnitDraft);
+    const targetUnit = normalizeUnit(selectedItem?.consumptionUm || selectedItem?.purchaseUm);
+    const costAmount = Number(costAmountDraft);
+    const manualFactor = parseDecimal(manualConversionFactorDraft);
+
+    if (!Number.isFinite(costAmount) || costAmount <= 0) {
+      return {
+        status: 'invalid',
+        targetUnit,
+        convertedCostAmount: null,
+        conversionSource: null,
+        conversionFactorUsed: null,
+        errorMessage: 'Custo inválido',
+      };
+    }
+
+    if (!movementUnit) {
+      return {
+        status: 'pending_conversion',
+        targetUnit,
+        convertedCostAmount: null,
+        conversionSource: null,
+        conversionFactorUsed: null,
+        errorMessage: 'UM da movimentação não identificada',
+      };
+    }
+
+    if (!targetUnit) {
+      return {
+        status: 'pending_conversion',
+        targetUnit: null,
+        convertedCostAmount: null,
+        conversionSource: null,
+        conversionFactorUsed: null,
+        errorMessage: 'Item sem UM configurada',
+      };
+    }
+
+    if (movementUnit === targetUnit) {
+      return {
+        status: 'ready',
+        targetUnit,
+        convertedCostAmount: costAmount,
+        conversionSource: 'same-unit',
+        conversionFactorUsed: 1,
+        errorMessage: null,
+      };
+    }
+
+    if (manualFactor > 0) {
+      return {
+        status: 'ready',
+        targetUnit,
+        convertedCostAmount: costAmount / manualFactor,
+        conversionSource: 'manual',
+        conversionFactorUsed: manualFactor,
+        errorMessage: null,
+      };
+    }
+
+    const itemConsumptionUm = normalizeUnit(selectedItem?.consumptionUm);
+    const itemPurchaseUm = normalizeUnit(selectedItem?.purchaseUm);
+    const multiConversion = Array.isArray(selectedItem?.ItemPurchaseConversion)
+      ? selectedItem.ItemPurchaseConversion.find((conversion: any) => normalizeUnit(conversion?.purchaseUm) === movementUnit)
+      : null;
+    const multiFactor = Number(multiConversion?.factor ?? NaN);
+    if (multiConversion && itemConsumptionUm && targetUnit === itemConsumptionUm && multiFactor > 0) {
+      return {
+        status: 'ready',
+        targetUnit,
+        convertedCostAmount: costAmount / multiFactor,
+        conversionSource: 'item_purchase_factor',
+        conversionFactorUsed: multiFactor,
+        errorMessage: null,
+      };
+    }
+
+    const itemFactor = Number(selectedItem?.purchaseToConsumptionFactor ?? NaN);
+    if (itemPurchaseUm && itemConsumptionUm && itemFactor > 0) {
+      if (movementUnit === itemPurchaseUm && targetUnit === itemConsumptionUm) {
+        return {
+          status: 'ready',
+          targetUnit,
+          convertedCostAmount: costAmount / itemFactor,
+          conversionSource: 'item_purchase_factor',
+          conversionFactorUsed: itemFactor,
+          errorMessage: null,
+        };
+      }
+
+      if (movementUnit === itemConsumptionUm && targetUnit === itemPurchaseUm) {
+        return {
+          status: 'ready',
+          targetUnit,
+          convertedCostAmount: costAmount * itemFactor,
+          conversionSource: 'item_purchase_factor_reverse',
+          conversionFactorUsed: itemFactor,
+          errorMessage: null,
+        };
+      }
+    }
+
+    const measured = findMeasurementConversion(measurementConversions, movementUnit, targetUnit);
+    if (measured) {
+      return measured.mode === 'direct'
+        ? {
+            status: 'ready',
+            targetUnit,
+            convertedCostAmount: costAmount / measured.factor,
+            conversionSource: 'measurement_conversion_direct',
+            conversionFactorUsed: measured.factor,
+            errorMessage: null,
+          }
+        : {
+            status: 'ready',
+            targetUnit,
+            convertedCostAmount: costAmount * measured.factor,
+            conversionSource: 'measurement_conversion_reverse',
+            conversionFactorUsed: measured.factor,
+            errorMessage: null,
+          };
+    }
+
+    return {
+      status: 'pending_conversion',
+      targetUnit,
+      convertedCostAmount: null,
+      conversionSource: null,
+      conversionFactorUsed: null,
+      errorMessage: `Prévia local sem conversão automática de ${movementUnit} para ${targetUnit}`,
+    };
+  }, [costAmountDraft, manualConversionFactorDraft, measurementConversions, movementUnitDraft, selectedItem]);
+  const convertedQuantityPreview = useMemo(() => {
+    if (!Number.isFinite(qtyEntryDraft) || qtyEntryDraft <= 0) return null;
+    if (conversionPreview.status !== 'ready' || !conversionPreview.targetUnit) return null;
+
+    const movementUnit = normalizeUnit(movementUnitDraft);
+    const targetUnit = normalizeUnit(conversionPreview.targetUnit);
+    const manualFactor = parseDecimal(manualConversionFactorDraft);
+    const itemConsumptionUm = normalizeUnit(selectedItem?.consumptionUm);
+    const itemPurchaseUm = normalizeUnit(selectedItem?.purchaseUm);
+
+    if (!movementUnit || !targetUnit) return null;
+    if (movementUnit === targetUnit) return qtyEntryDraft;
+    if (manualFactor > 0) return qtyEntryDraft * manualFactor;
+
+    const multiConversion = Array.isArray(selectedItem?.ItemPurchaseConversion)
+      ? selectedItem.ItemPurchaseConversion.find((conversion: any) => normalizeUnit(conversion?.purchaseUm) === movementUnit)
+      : null;
+    const multiFactor = Number(multiConversion?.factor ?? NaN);
+    if (multiConversion && itemConsumptionUm && targetUnit === itemConsumptionUm && multiFactor > 0) {
+      return qtyEntryDraft * multiFactor;
+    }
+
+    const itemFactor = Number(selectedItem?.purchaseToConsumptionFactor ?? NaN);
+    if (itemPurchaseUm && itemConsumptionUm && itemFactor > 0) {
+      if (movementUnit === itemPurchaseUm && targetUnit === itemConsumptionUm) return qtyEntryDraft * itemFactor;
+      if (movementUnit === itemConsumptionUm && targetUnit === itemPurchaseUm) return qtyEntryDraft / itemFactor;
+    }
+
+    const measured = findMeasurementConversion(measurementConversions, movementUnit, targetUnit);
+    if (measured) {
+      return measured.mode === 'direct' ? qtyEntryDraft * measured.factor : qtyEntryDraft / measured.factor;
+    }
+
+    return null;
+  }, [conversionPreview, manualConversionFactorDraft, measurementConversions, movementUnitDraft, qtyEntryDraft, selectedItem]);
   const availableMovementUnits = useMemo(() => {
-    const merged = new Set<string>(unitOptions);
+    const merged = new Set<string>(ITEM_UNIT_OPTIONS);
     const linkedUnits = itemUnitOptionsByItemId[mappedItemIdDraft] || [];
     for (const unit of linkedUnits) merged.add(unit);
-    const currentUnit = String(movementUnitDraft || '').trim().toUpperCase();
-    if (currentUnit) merged.add(currentUnit);
     return Array.from(merged).sort((a, b) => a.localeCompare(b, 'pt-BR'));
-  }, [itemUnitOptionsByItemId, mappedItemIdDraft, movementUnitDraft, unitOptions]);
+  }, [itemUnitOptionsByItemId, mappedItemIdDraft]);
 
   useEffect(() => {
     if (fetcher.state !== 'idle') return;
@@ -108,7 +314,7 @@ function LineEditDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Editar linha do lote</DialogTitle>
+          <DialogTitle>{`Editar linha ${line.rowNumber}${line.ingredientName ? ` • ${line.ingredientName}` : ''}`}</DialogTitle>
         </DialogHeader>
 
         {fetcher.data?.message ? (
@@ -123,6 +329,7 @@ function LineEditDialog({
           method="post"
           action={`/admin/import-stock-movements/${batchId}`}
           className="space-y-5"
+          preventScrollReset
         >
           <input type="hidden" name="_action" value="batch-edit-line" />
           <input type="hidden" name="batchId" value={batchId} />
@@ -208,12 +415,36 @@ function LineEditDialog({
                   <SelectItem value="__EMPTY__">Sem item mapeado</SelectItem>
                   {items.map((item) => (
                     <SelectItem key={item.id} value={item.id}>
-                      {item.name} [{item.classification || '-'}] (
-                      {item.purchaseUm || item.consumptionUm || '-'})
+                      {item.name} [{item.classification || '-'}] ({getItemBaseUnit(item)})
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {mappedItemIdDraft ? (
+                <div className="flex items-center gap-2 pt-1">
+                  <Link
+                    to={`/admin/items/${mappedItemIdDraft}/main`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[11px] font-medium text-slate-600 underline underline-offset-2 hover:text-slate-900"
+                  >
+                    Editar item
+                  </Link>
+                  <Link
+                    to={`/admin/stock-movements?itemId=${encodeURIComponent(selectedItemId)}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[11px] font-medium text-slate-600 underline underline-offset-2 hover:text-slate-900"
+                  >
+                    Movimentações estoque
+                  </Link>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 pt-1">
+                  <span className="text-[11px] text-slate-400">Editar item</span>
+                  <span className="text-[11px] text-slate-400">Movimentações estoque</span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -282,7 +513,8 @@ function LineEditDialog({
               <Input
                 id="manualConversionFactor"
                 name="manualConversionFactor"
-                defaultValue={line.manualConversionFactor ?? ''}
+                value={manualConversionFactorDraft}
+                onChange={(event) => setManualConversionFactorDraft(event.currentTarget.value)}
                 placeholder="Ex.: 1000"
                 disabled={isSubmitting}
               />
@@ -302,22 +534,26 @@ function LineEditDialog({
             </div>
             <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
               <div>
-                <span className="font-medium text-slate-900">Status:</span> {line.status || '-'}
+                <span className="font-medium text-slate-900">Status:</span> {conversionPreview.status || '-'}
               </div>
               <div>
                 <span className="font-medium text-slate-900">Conversão:</span>{' '}
-                {line.conversionSource || '-'}
-                {line.conversionFactorUsed
-                  ? ` • fator ${Number(line.conversionFactorUsed).toFixed(6)}`
+                {conversionPreview.conversionSource || '-'}
+                {conversionPreview.conversionFactorUsed
+                  ? ` • fator ${Number(conversionPreview.conversionFactorUsed).toFixed(6)}`
                   : ''}
               </div>
               <div>
-                <span className="font-medium text-slate-900">Custo convertido:</span>{' '}
-                {formatMoney(line.convertedCostAmount)} / {line.targetUnit || '-'}
+                <span className="font-medium text-slate-900">Custo unitário convertido:</span>{' '}
+                {formatMoney(conversionPreview.convertedCostAmount)} / {conversionPreview.targetUnit || '-'}
               </div>
-              {line.errorMessage ? (
+              <div>
+                <span className="font-medium text-slate-900">Quantidade convertida:</span>{' '}
+                {formatDecimal(convertedQuantityPreview)} {conversionPreview.targetUnit || '-'}
+              </div>
+              {conversionPreview.errorMessage ? (
                 <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-red-700">
-                  {line.errorMessage}
+                  {conversionPreview.errorMessage}
                 </div>
               ) : null}
             </div>
@@ -342,24 +578,57 @@ function LineEditDialog({
   );
 }
 
-export default function AdminImportStockMovementsBatchLinesRoute() {
-  const { lines, items, suppliers, selectedBatch, unitOptions, itemUnitOptionsByItemId, itemCostHints } =
+function LineStatusBadge({ line, batchId }: { line: any; batchId: string }) {
+  const fetcher = useFetcher<any>();
+  const isApproving =
+    fetcher.state !== 'idle' &&
+    String(fetcher.formData?.get('_action') || '') === 'batch-approve-cost-review' &&
+    String(fetcher.formData?.get('lineId') || '') === String(line.id);
+
+  if (line.status !== 'pending_cost_review') {
+    return (
+      <Badge variant="outline" className={statusBadgeClass(String(line.status))}>
+        {line.status}
+      </Badge>
+    );
+  }
+
+  return (
+    <fetcher.Form method="post" action={`/admin/import-stock-movements/${batchId}`} preventScrollReset>
+      <input type="hidden" name="_action" value="batch-approve-cost-review" />
+      <input type="hidden" name="batchId" value={batchId} />
+      <input type="hidden" name="lineId" value={line.id} />
+      <button
+        type="submit"
+        className={cn(
+          'inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition hover:bg-amber-100',
+          statusBadgeClass(String(line.status)),
+        )}
+        disabled={isApproving}
+        title="Aprovar revisão de custo e marcar como ready"
+      >
+        {isApproving ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+        {isApproving ? 'Aprovando...' : line.status}
+      </button>
+    </fetcher.Form>
+  );
+}
+
+type AdminImportStockMovementsBatchLinesRouteProps = {
+  forcedStatus?: string | null;
+};
+
+export function AdminImportStockMovementsBatchLinesRoute({
+  forcedStatus = null,
+}: AdminImportStockMovementsBatchLinesRouteProps) {
+  const { lines, items, suppliers, selectedBatch, unitOptions, itemUnitOptionsByItemId, measurementConversions, itemCostHints } =
     useOutletContext<AdminImportStockMovementsBatchOutletContext>();
-  const [statusFilter, setStatusFilter] = useState('all');
+  const location = useLocation();
   const [statusGuideOpen, setStatusGuideOpen] = useState(false);
-  const [editingLine, setEditingLine] = useState<any>(null);
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [supplierFilter, setSupplierFilter] = useState('all');
   const [ingredientFilter, setIngredientFilter] = useState('');
   const [discrepancyOnly, setDiscrepancyOnly] = useState(false);
-
-  const availableStatuses = useMemo(
-    () =>
-      Array.from(new Set(lines.map((line) => String(line.status || '').trim()).filter(Boolean))).sort(
-        (a, b) => a.localeCompare(b, 'pt-BR'),
-      ),
-    [lines],
-  );
+  const normalizedForcedStatus = String(forcedStatus || '').trim();
 
   const availableSuppliers = useMemo(
     () =>
@@ -377,7 +646,7 @@ export default function AdminImportStockMovementsBatchLinesRoute() {
 
   const filteredLines = useMemo(() => {
     return lines.filter((line) => {
-      if (statusFilter !== 'all' && String(line.status || '') !== statusFilter) return false;
+      if (normalizedForcedStatus && String(line.status || '') !== normalizedForcedStatus) return false;
       if (supplierFilter !== 'all' && String(line.supplierName || '') !== supplierFilter) return false;
       if (ingredientFilter.trim()) {
         const needle = ingredientFilter.trim().toLowerCase();
@@ -386,28 +655,11 @@ export default function AdminImportStockMovementsBatchLinesRoute() {
       if (discrepancyOnly && !hasCostDiscrepancy(line, itemCostHints)) return false;
       return true;
     });
-  }, [lines, statusFilter, supplierFilter, ingredientFilter, discrepancyOnly, itemCostHints]);
+  }, [lines, normalizedForcedStatus, supplierFilter, ingredientFilter, discrepancyOnly, itemCostHints]);
 
   return (
     <TooltipProvider>
       <div className="bg-white">
-        {editingLine ? (
-          <LineEditDialog
-            key={editingLine.id}
-            line={editingLine}
-            batchId={selectedBatch.id}
-            items={items}
-            suppliers={suppliers}
-            unitOptions={unitOptions}
-            itemUnitOptionsByItemId={itemUnitOptionsByItemId}
-            open={editDialogOpen}
-            onOpenChange={(open) => {
-              setEditDialogOpen(open);
-              if (!open) setEditingLine(null);
-            }}
-          />
-        ) : null}
-
         <Dialog open={statusGuideOpen} onOpenChange={setStatusGuideOpen}>
           <DialogContent className="max-w-4xl rounded-2xl">
             <DialogHeader>
@@ -442,7 +694,16 @@ export default function AdminImportStockMovementsBatchLinesRoute() {
 
         <div className="relative z-10">
           <div className="flex items-center justify-between gap-2 pb-3">
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Linhas do lote</h3>
+            <div className="space-y-1">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+                {normalizedForcedStatus ? `Linhas com status ${normalizedForcedStatus}` : 'Linhas do lote'}
+              </h3>
+              {normalizedForcedStatus ? (
+                <div className="text-xs text-slate-500">
+                  Filtro por status aplicado via navegação da página.
+                </div>
+              ) : null}
+            </div>
             <div className="text-xs text-slate-500">
               {filteredLines.length} de {lines.length} linha(s)
             </div>
@@ -480,7 +741,6 @@ export default function AdminImportStockMovementsBatchLinesRoute() {
               </Select>
             </div>
 
-            {/* Status */}
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-1">
                 <span className="text-[11px] font-medium uppercase tracking-wide text-slate-400">Status</span>
@@ -494,35 +754,15 @@ export default function AdminImportStockMovementsBatchLinesRoute() {
                   ?
                 </button>
               </div>
-              <div className="flex flex-wrap items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setStatusFilter('all')}
-                  className={cn(
-                    'inline-flex h-7 items-center rounded-full border px-2.5 text-xs font-medium transition',
-                    statusFilter === 'all'
-                      ? 'border-slate-900 bg-slate-900 text-white'
-                      : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100',
-                  )}
-                >
-                  Todos
-                </button>
-                {availableStatuses.map((status) => (
-                  <button
-                    key={status}
-                    type="button"
-                    onClick={() => setStatusFilter(status)}
-                    className={cn(
-                      'inline-flex h-7 items-center rounded-full border px-2.5 text-xs font-medium transition',
-                      statusFilter === status
-                        ? 'border-slate-900 bg-slate-900 text-white'
-                        : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100',
-                    )}
-                  >
-                    {status}
-                  </button>
-                ))}
-              </div>
+              <Badge
+                variant="outline"
+                className={cn(
+                  'w-fit rounded-full px-2.5 py-1 text-xs font-medium',
+                  normalizedForcedStatus ? statusBadgeClass(normalizedForcedStatus) : 'border-slate-200 bg-white text-slate-700',
+                )}
+              >
+                {normalizedForcedStatus || 'Todos'}
+              </Badge>
             </div>
 
             {/* Discrepância */}
@@ -561,7 +801,7 @@ export default function AdminImportStockMovementsBatchLinesRoute() {
               {filteredLines.length === 0 ? (
                 <TableRow className="border-slate-100">
                   <TableCell colSpan={10} className="px-3 py-8 text-center text-sm text-slate-500">
-                    Nenhuma linha encontrada para o status selecionado.
+                    Nenhuma linha encontrada para os filtros atuais.
                   </TableCell>
                 </TableRow>
               ) : (
@@ -645,7 +885,7 @@ export default function AdminImportStockMovementsBatchLinesRoute() {
                                 ? ` • fator ${Number(line.conversionFactorUsed).toFixed(6)}`
                                 : ''}
                             </div>
-                            {discrepancy && hint?.lastCostPerUnit != null ? (
+                            {line.status !== 'ready' && discrepancy && hint?.lastCostPerUnit != null ? (
                               <div className="mt-1 text-[11px] font-medium text-red-600">
                                 último: {formatMoney(hint.lastCostPerUnit)} / {line.targetUnit || '-'}
                               </div>
@@ -654,9 +894,7 @@ export default function AdminImportStockMovementsBatchLinesRoute() {
                         )}
                       </TableCell>
                       <TableCell className="px-3 py-2 text-xs">
-                        <Badge variant="outline" className={statusBadgeClass(String(line.status))}>
-                          {line.status}
-                        </Badge>
+                        <LineStatusBadge line={line} batchId={selectedBatch.id} />
                         {line.errorMessage ? (
                           <div className="mt-1 max-w-[180px] text-[11px] text-red-700">
                             {line.errorMessage}
@@ -667,17 +905,14 @@ export default function AdminImportStockMovementsBatchLinesRoute() {
                         <div className="flex flex-col items-center gap-1">
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="icon"
-                                className="h-7 w-7"
-                                onClick={() => {
-                                  setEditingLine(line);
-                                  setEditDialogOpen(true);
-                                }}
-                              >
-                                <Pencil className="h-3.5 w-3.5" />
+                              <Button asChild variant="outline" size="icon" className="h-7 w-7">
+                                <Link
+                                  to={`/admin/import-stock-movements/${selectedBatch.id}/line/${line.id}?returnTo=${encodeURIComponent(`${location.pathname}${location.search}`)}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Link>
                               </Button>
                             </TooltipTrigger>
                             <TooltipContent>Editar linha</TooltipContent>
@@ -686,6 +921,7 @@ export default function AdminImportStockMovementsBatchLinesRoute() {
                           <Form
                             method="post"
                             action={`/admin/import-stock-movements/${selectedBatch.id}`}
+                            preventScrollReset
                           >
                             <input
                               type="hidden"
@@ -714,6 +950,7 @@ export default function AdminImportStockMovementsBatchLinesRoute() {
                             <Form
                               method="post"
                               action={`/admin/import-stock-movements/${selectedBatch.id}`}
+                              preventScrollReset
                             >
                               <input type="hidden" name="_action" value="batch-retry-line-error" />
                               <input type="hidden" name="batchId" value={selectedBatch.id} />
@@ -740,4 +977,11 @@ export default function AdminImportStockMovementsBatchLinesRoute() {
       </div>
     </TooltipProvider>
   );
+}
+
+export default function AdminImportStockMovementsBatchLinesIndexRoute() {
+  return <AdminImportStockMovementsBatchLinesRoute />;
+}
+function getItemBaseUnit(item: { purchaseUm?: string | null; consumptionUm?: string | null } | null | undefined) {
+  return item?.consumptionUm || item?.purchaseUm || '-';
 }

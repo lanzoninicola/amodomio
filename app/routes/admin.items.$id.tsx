@@ -14,9 +14,11 @@ import {
 } from "~/components/ui/alert-dialog";
 import { toast } from "~/components/ui/use-toast";
 import { calculateItemCostMetrics, getItemAverageCostWindowDays } from "~/domain/item/item-cost-metrics.server";
+import { recalculateItemCostHistory } from "~/domain/item/item-cost-recalculate.server";
+import { loadItemCostAuditForItem } from "~/domain/item/item-cost-audit.server";
 import { getAvailableItemUnits as getAvailableItemUnitsFromServer } from "~/domain/item/item-units.server";
-import { itemCostVariationPrismaEntity } from "~/domain/item/item-cost-variation.prisma.entity.server";
 import { itemVariationPrismaEntity } from "~/domain/item/item-variation.prisma.entity.server";
+import { registerItemCostEvent } from "~/domain/costs/item-cost-event.server";
 import { supplierPrismaEntity } from "~/domain/supplier/supplier.prisma.entity.server";
 import prismaClient from "~/lib/prisma/client.server";
 import { badRequest, ok, serverError } from "~/utils/http-response.server";
@@ -66,6 +68,25 @@ function getSupplierNameFromMetadata(metadata: unknown): string | null {
   const supplierName = (metadata as Record<string, unknown>).supplierName;
   const normalized = String(supplierName || "").trim();
   return normalized || null;
+}
+
+function shouldHideItemHistoryRow(row: any, movementLookup: Map<string, { itemId: string | null; deletedAt: Date | null }>, itemId: string) {
+  const referenceType = String(row?.referenceType || "").trim();
+  if (referenceType === "stock-movement-delete") return true;
+
+  const metadata =
+    row?.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+      ? (row.metadata as Record<string, unknown>)
+      : null;
+  if (metadata?.hideFromItemHistory === true) return true;
+
+  const referenceId = String(row?.referenceId || "").trim();
+  if (referenceType !== "stock-movement" || !referenceId) return false;
+
+  const movement = movementLookup.get(referenceId);
+  if (!movement) return true;
+  if (movement.deletedAt) return true;
+  return String(movement.itemId || "") !== String(itemId);
 }
 
 function findLatestPurchaseSupplierName(history: any[]): string {
@@ -280,7 +301,22 @@ export async function loader({ params }: LoaderFunctionArgs) {
     );
 
     const primaryVariation = pickPrimaryItemVariation(item);
-    const primaryHistory = primaryVariation?.ItemCostVariationHistory || [];
+    const rawPrimaryHistory = primaryVariation?.ItemCostVariationHistory || [];
+    const stockMovementReferenceIds = Array.from(new Set(
+      rawPrimaryHistory
+        .filter((row: any) => String(row?.referenceType || "").trim() === "stock-movement" && row?.referenceId)
+        .map((row: any) => String(row.referenceId)),
+    ));
+    const referencedMovements = stockMovementReferenceIds.length > 0
+      ? await db.stockMovement.findMany({
+          where: { id: { in: stockMovementReferenceIds } },
+          select: { id: true, itemId: true, deletedAt: true },
+        })
+      : [];
+    const movementLookup = new Map<string, { itemId: string | null; deletedAt: Date | null }>(
+      referencedMovements.map((movement: any) => [String(movement.id), { itemId: movement.itemId || null, deletedAt: movement.deletedAt || null }]),
+    );
+    const primaryHistory = rawPrimaryHistory.filter((row: any) => !shouldHideItemHistoryRow(row, movementLookup, item.id));
     const currentCost = primaryVariation?.ItemCostVariation || null;
     const historyForMetrics = primaryHistory.length > 0 ? primaryHistory : currentCost ? [currentCost] : [];
     const costMetrics = calculateItemCostMetrics({
@@ -289,6 +325,9 @@ export async function loader({ params }: LoaderFunctionArgs) {
       averageWindowDays,
     });
     const latestPurchaseSupplierName = findLatestPurchaseSupplierName(primaryHistory);
+    const costAuditHistory = primaryVariation?.id
+      ? await loadItemCostAuditForItem(primaryVariation.id, 30)
+      : [];
 
     return ok({
       item: {
@@ -298,6 +337,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
         _itemCostVariationCurrent: currentCost,
         _ingredientRecipeUsage: ingredientRecipeUsage,
         _latestPurchaseSupplierName: latestPurchaseSupplierName,
+        _costAuditHistory: costAuditHistory,
       },
       costMetrics,
       averageWindowDays,
@@ -454,20 +494,29 @@ export async function action({ request, params }: ActionFunctionArgs) {
       };
 
       if (comparisonOnly) {
-        await itemCostVariationPrismaEntity.addHistoryEntry({
+        await registerItemCostEvent({
           itemVariationId: baseItemVariation.id,
           costAmount,
           unit: unit || null,
           source: source || "manual",
+          movementType: source as any,
+          originType: "item-cost-manual-entry",
+          originRefId: id,
+          appliedBy: null,
           validFrom: new Date(),
           metadata,
+          comparisonOnly: true,
         });
       } else {
-        await itemCostVariationPrismaEntity.setCurrentCost({
+        await registerItemCostEvent({
           itemVariationId: baseItemVariation.id,
           costAmount,
           unit: unit || null,
           source: source || "manual",
+          movementType: source as any,
+          originType: "item-cost-manual-entry",
+          originRefId: id,
+          appliedBy: null,
           validFrom: new Date(),
           metadata,
         });
@@ -555,6 +604,14 @@ export async function action({ request, params }: ActionFunctionArgs) {
       if (!existing || existing.itemId !== id) return badRequest("Vínculo não encontrado");
       await db.itemUnit.delete({ where: { id: itemUnitId } });
       return ok("Unidade desvinculada");
+    }
+
+    if (_action === "item-cost-recalculate") {
+      const result = await recalculateItemCostHistory(id);
+      return ok({
+        message: `Recalculado: ${result.updated} atualizados, ${result.skipped} sem alteração, ${result.errors} erros`,
+        ...result,
+      });
     }
 
     return badRequest("Ação inválida");
