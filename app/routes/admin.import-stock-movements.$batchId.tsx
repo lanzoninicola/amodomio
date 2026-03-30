@@ -31,10 +31,12 @@ import {
   archiveStockMovementImportBatch,
   deleteStockMovementImportBatch,
   getStockMovementImportBatchView,
+  importStockMovementImportBatchLine,
   mapBatchLinesToItem,
   reconcileStockMovementImportBatchSuppliersFromFile,
   rollbackStockMovementImportBatch,
   retryStockMovementImportBatchErrors,
+  approveBatchLineCostReview,
   setBatchLineIgnored,
   setBatchLineManualConversion,
   startStockMovementImportBatch,
@@ -69,6 +71,11 @@ export const LINE_STATUS_GUIDE = [
     impact: 'Bloqueia a aplicação da linha até a conciliação do fornecedor.',
   },
   {
+    status: 'pending_cost_review',
+    meaning: 'Linha com variacao relevante de custo em relacao ao ultimo valor conhecido.',
+    impact: 'Bloqueia a importação até o usuário revisar e aprovar manualmente.',
+  },
+  {
     status: 'pending_conversion',
     meaning: 'Não foi encontrada conversão válida de unidade/custo.',
     impact: 'Bloqueia a importação até informar ou resolver a conversão.',
@@ -100,6 +107,23 @@ export const LINE_STATUS_GUIDE = [
   },
 ] as const;
 
+const LINE_STATUS_NAV = LINE_STATUS_GUIDE.map((row) => ({
+  status: row.status,
+  label:
+    {
+      ready: 'Prontas',
+      pending_mapping: 'Pend. vínculo',
+      pending_supplier: 'Pend. fornecedor',
+      pending_cost_review: 'Rev. custo',
+      pending_conversion: 'Pend. conversão',
+      skipped_duplicate: 'Duplicadas',
+      ignored: 'Ignoradas',
+      invalid: 'Inválidas',
+      error: 'Erros',
+      imported: 'Importadas',
+    }[row.status] || String(row.status),
+}));
+
 function str(value: FormDataEntryValue | null) {
   return String(value || '').trim();
 }
@@ -109,9 +133,21 @@ function normalizeItemUnit(value: unknown) {
   return normalized || null;
 }
 
+function getItemBaseUnit(item: { purchaseUm?: string | null; consumptionUm?: string | null } | null | undefined) {
+  return item?.consumptionUm || item?.purchaseUm || '-';
+}
+
 function num(value: FormDataEntryValue | null) {
   const n = Number(String(value || '').replace(',', '.'));
   return Number.isFinite(n) ? n : NaN;
+}
+
+function deriveUnitCost(totalAmount: unknown, quantity: unknown) {
+  const total = Number(totalAmount);
+  const qty = Number(quantity);
+  if (!Number.isFinite(total) || !Number.isFinite(qty) || qty <= 0) return null;
+  const unitCost = total / qty;
+  return Number.isFinite(unitCost) && unitCost > 0 ? unitCost : null;
 }
 
 export function formatDate(value: any) {
@@ -155,6 +191,7 @@ function summaryFromAny(summary: any) {
     pendingMapping: Number(summary?.pendingMapping || 0),
     pendingSupplier: Number(summary?.pendingSupplier || 0),
     pendingConversion: Number(summary?.pendingConversion || 0),
+    pendingCostReview: Number(summary?.pendingCostReview || 0),
     imported: Number(summary?.imported || 0),
     ignored: Number(summary?.ignored || 0),
     skippedDuplicate: Number(summary?.skippedDuplicate || 0),
@@ -178,6 +215,7 @@ export function statusBadgeClass(status: string) {
     case 'pending_mapping':
     case 'pending_supplier':
     case 'pending_conversion':
+    case 'pending_cost_review':
       return 'border-amber-200 bg-amber-50 text-amber-700';
     case 'invalid':
     case 'error':
@@ -271,7 +309,7 @@ export function ItemSystemMapperCell({
     createItemFetcher.formData?.get('_action') === 'batch-create-and-map-item' &&
     String(createItemFetcher.formData?.get('lineId') || '') === String(line.id);
   const buttonLabel = selectedItem
-    ? `${selectedItem.name} [${selectedItem.classification || '-'}] (${selectedItem.purchaseUm || selectedItem.consumptionUm || '-'})`
+    ? `${selectedItem.name} [${selectedItem.classification || '-'}] (${getItemBaseUnit(selectedItem)})`
     : line.mappedItemName || 'Selecionar item...';
 
   useEffect(() => {
@@ -341,7 +379,7 @@ export function ItemSystemMapperCell({
                       <Check className={cn('mr-2 h-4 w-4', selectedItemId === item.id ? 'opacity-100' : 'opacity-0')} />
                       <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
                         <span className="truncate">
-                          {item.name} [{item.classification || '-'}] ({item.purchaseUm || item.consumptionUm || '-'})
+                          {item.name} [{item.classification || '-'}] ({getItemBaseUnit(item)})
                         </span>
                         <Link
                           to={`/admin/items/${item.id}/main`}
@@ -489,7 +527,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
     if (!batchId) return badRequest('Lote inválido');
 
     const db = itemPrismaEntity.client as any;
-    const [selected, unitOptions, categories, suppliers] = await Promise.all([
+    const [selected, unitOptions, categories, suppliers, measurementConversionsRaw] = await Promise.all([
       getStockMovementImportBatchView(batchId),
       getAvailableItemUnits(),
       db.category.findMany({
@@ -504,8 +542,30 @@ export async function loader({ params }: LoaderFunctionArgs) {
             take: 2000,
           })
         : Promise.resolve([]),
+      typeof db.measurementUnitConversion?.findMany === 'function'
+        ? db.measurementUnitConversion.findMany({
+            where: { active: true },
+            select: {
+              factor: true,
+              FromUnit: { select: { code: true } },
+              ToUnit: { select: { code: true } },
+            },
+          })
+        : Promise.resolve([]),
     ]);
     if (!selected) return badRequest('Lote não encontrado');
+
+    const measurementConversions = (measurementConversionsRaw as Array<{
+      factor: number;
+      FromUnit?: { code?: string | null } | null;
+      ToUnit?: { code?: string | null } | null;
+    }>).flatMap((row) => {
+      const fromUnit = normalizeItemUnit(row?.FromUnit?.code);
+      const toUnit = normalizeItemUnit(row?.ToUnit?.code);
+      const factor = Number(row?.factor ?? NaN);
+      if (!fromUnit || !toUnit || !(factor > 0)) return [];
+      return [{ fromUnit, toUnit, factor }];
+    });
 
     const itemIds = Array.from(
       new Set(
@@ -612,7 +672,16 @@ export async function loader({ params }: LoaderFunctionArgs) {
       }
     }
 
-    return ok({ selected, batchId, unitOptions, itemUnitOptionsByItemId, categories, suppliers, itemCostHints });
+    return ok({
+      selected,
+      batchId,
+      unitOptions,
+      itemUnitOptionsByItemId,
+      measurementConversions,
+      categories,
+      suppliers,
+      itemCostHints,
+    });
   } catch (error) {
     return serverError(error);
   }
@@ -676,8 +745,12 @@ export async function action({ request, params }: ActionFunctionArgs) {
     if (_action === 'batch-edit-line') {
       const lineId = str(formData.get('lineId'));
       if (!lineId) return badRequest('Linha inválida');
+      const autoApproveCostReview = str(formData.get('autoApproveCostReview')) === 'on';
       const mappedItemId = str(formData.get('mappedItemId')) || null;
       const movementUnit = str(formData.get('movementUnit')).toUpperCase() || null;
+      const qtyEntryRaw = num(formData.get('qtyEntry'));
+      const costTotalAmountRaw = num(formData.get('costTotalAmount'));
+      const derivedCostAmount = deriveUnitCost(costTotalAmountRaw, qtyEntryRaw);
       if (movementUnit) {
         const availableUnits = await getAvailableItemUnits(mappedItemId || undefined);
         if (!availableUnits.includes(movementUnit)) {
@@ -687,6 +760,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
       const movementAtRaw = str(formData.get('movementAt'));
       const movementAt = movementAtRaw ? new Date(movementAtRaw) : null;
       const manualFactorRaw = num(formData.get('manualConversionFactor'));
+      const previousLine = await db.stockMovementImportBatchLine.findUnique({
+        where: { id: lineId },
+        select: { appliedAt: true, rolledBackAt: true },
+      });
       await updateStockMovementImportBatchLineEditableFields({
         batchId,
         lineId,
@@ -698,18 +775,45 @@ export async function action({ request, params }: ActionFunctionArgs) {
         supplierId: str(formData.get('supplierId')) || null,
         supplierName: str(formData.get('supplierName')) || null,
         supplierCnpj: str(formData.get('supplierCnpj')) || null,
-        qtyEntry: num(formData.get('qtyEntry')) || null,
+        qtyEntry: qtyEntryRaw || null,
         unitEntry: movementUnit,
-        qtyConsumption: num(formData.get('qtyEntry')) || null,
+        qtyConsumption: qtyEntryRaw || null,
         unitConsumption: movementUnit,
         movementUnit,
-        costAmount: num(formData.get('costAmount')) || null,
-        costTotalAmount: num(formData.get('costTotalAmount')) || null,
+        costAmount: derivedCostAmount,
+        costTotalAmount: costTotalAmountRaw || null,
         mappedItemId,
         manualConversionFactor: Number.isFinite(manualFactorRaw) && manualFactorRaw > 0 ? manualFactorRaw : null,
         observation: str(formData.get('observation')) || null,
       });
-      return ok({ updatedLineId: lineId });
+      let autoApprovedCostReview = false;
+      if (autoApproveCostReview) {
+        const updatedLine = await db.stockMovementImportBatchLine.findUnique({
+          where: { id: lineId },
+          select: { status: true },
+        });
+        if (String(updatedLine?.status || '') === 'pending_cost_review') {
+          await approveBatchLineCostReview({ batchId, lineId, actor });
+          autoApprovedCostReview = true;
+        }
+      }
+      let importedLine = false;
+      if (previousLine?.rolledBackAt || !previousLine?.appliedAt) {
+        const importResult = await importStockMovementImportBatchLine({
+          batchId,
+          lineId,
+          actor,
+        });
+        importedLine = importResult.imported > 0;
+      }
+      return ok({ updatedLineId: lineId, autoApprovedCostReview, importedLine });
+    }
+
+    if (_action === 'batch-approve-cost-review') {
+      const lineId = str(formData.get('lineId'));
+      if (!lineId) return badRequest('Linha inválida');
+      await approveBatchLineCostReview({ batchId, lineId, actor });
+      return ok({ approvedLineId: lineId });
     }
 
     if (_action === 'batch-ignore-line' || _action === 'batch-unignore-line') {
@@ -836,6 +940,7 @@ export type AdminImportStockMovementsBatchOutletContext = {
   appliedChanges: any[];
   unitOptions: string[];
   itemUnitOptionsByItemId: Record<string, string[]>;
+  measurementConversions: Array<{ fromUnit: string; toUnit: string; factor: number }>;
   suppliers: any[];
   itemCostHints: Record<string, { lastCostPerUnit: number | null; avgCostPerUnit: number | null }>;
   summary: ReturnType<typeof summaryFromAny>;
@@ -856,8 +961,16 @@ export default function AdminImportStockMovementsBatchDetailRoute() {
   const appliedChanges = (selected?.appliedChanges || []) as any[];
   const unitOptions = (((loaderData as any)?.payload?.unitOptions || []) as string[]);
   const itemUnitOptionsByItemId = (((loaderData as any)?.payload?.itemUnitOptionsByItemId || {}) as Record<string, string[]>);
+  const measurementConversions = (((loaderData as any)?.payload?.measurementConversions || []) as Array<{
+    fromUnit: string;
+    toUnit: string;
+    factor: number;
+  }>);
   const suppliers = (((loaderData as any)?.payload?.suppliers || []) as any[]);
-  const itemCostHints = (((loaderData as any)?.payload?.itemCostHints || {}) as Record<string, { lastCostPerUnit: number | null }>);
+  const itemCostHints = (((loaderData as any)?.payload?.itemCostHints || {}) as Record<
+    string,
+    { lastCostPerUnit: number | null; avgCostPerUnit: number | null }
+  >);
   const summary = summaryFromAny(selected?.summary || selectedBatch?.summary);
   const batchImportStatus = String(selectedBatch?.importStatus || 'idle');
   const batchImportProcessedCount = Number(selectedBatch?.importProcessedCount || 0);
@@ -874,6 +987,22 @@ export default function AdminImportStockMovementsBatchDetailRoute() {
   const displayedErrorCount = Number(importStepFetcher.data?.payload?.progress?.errorCount ?? batchImportErrorCount);
   const displayedTotalCount = Number(importStepFetcher.data?.payload?.progress?.totalCount ?? batchImportTotalCount);
   const displayedImportMessage = String(importStepFetcher.data?.payload?.progress?.message || batchImportMessage || '').trim();
+  const statusCounts = lines.reduce(
+    (acc, line) => {
+      const status = String(line?.status || '').trim();
+      if (!status) return acc;
+      acc[status] = Number(acc[status] || 0) + 1;
+      return acc;
+    },
+    {} as Record<string, number>,
+  );
+  const availableStatusTabs = LINE_STATUS_NAV.filter((item) => Number(statusCounts[item.status] || 0) > 0);
+  const tabClass = ({ isActive }: { isActive: boolean }) =>
+    `border-b-2 pb-3 font-medium transition ${
+      isActive
+        ? 'border-slate-950 text-slate-950'
+        : 'border-transparent text-slate-400 hover:text-slate-700'
+    }`;
 
   useEffect(() => {
     if (!selectedBatch?.id) return;
@@ -912,6 +1041,7 @@ export default function AdminImportStockMovementsBatchDetailRoute() {
     appliedChanges,
     unitOptions,
     itemUnitOptionsByItemId,
+    measurementConversions,
     suppliers,
     itemCostHints,
     summary,
@@ -1068,7 +1198,7 @@ export default function AdminImportStockMovementsBatchDetailRoute() {
           </div>
         ) : null}
 
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-11">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-12">
           {[
             ['Total', summary.total],
             ['Prontas', summary.ready],
@@ -1076,6 +1206,7 @@ export default function AdminImportStockMovementsBatchDetailRoute() {
             ['Importadas', summary.imported],
             ['Pend. vínculo', summary.pendingMapping],
             ['Pend. fornecedor', summary.pendingSupplier],
+            ['Rev. custo', summary.pendingCostReview],
             ['Pend. conversão', summary.pendingConversion],
             ['Ignoradas', summary.ignored],
             ['Duplicadas', summary.skippedDuplicate],
@@ -1088,38 +1219,26 @@ export default function AdminImportStockMovementsBatchDetailRoute() {
             </div>
           ))}
         </div>
+
+        <Separator />
       </section>
 
       <section className="space-y-4">
         <nav className="overflow-x-auto border-b border-slate-100">
           <div className="flex min-w-max items-center gap-6 text-sm">
-            <NavLink
-              to="."
-              end
-              className={({ isActive }) =>
-                isActive
-                  ? 'border-b-2 border-slate-950 pb-3 font-medium text-slate-950'
-                  : 'border-b-2 border-transparent pb-3 font-medium text-slate-400 transition hover:text-slate-700'
-              }
-            >
-              Linhas do lote ({lines.length})
+            <NavLink to="." end className={tabClass}>
+              Todas ({lines.length})
             </NavLink>
-            <NavLink
-              to="applied-changes"
-              className={({ isActive }) =>
-                isActive
-                  ? 'border-b-2 border-slate-950 pb-3 font-medium text-slate-950'
-                  : 'border-b-2 border-transparent pb-3 font-medium text-slate-400 transition hover:text-slate-700'
-              }
-            >
+
+            {availableStatusTabs.map((item) => (
+              <NavLink key={item.status} to={`status/${item.status}`} className={tabClass}>
+                {item.label} ({statusCounts[item.status] || 0})
+              </NavLink>
+            ))}
+
+            <NavLink to="applied-changes" className={tabClass}>
               Alterações importadas ({appliedChanges.length})
             </NavLink>
-            <Link
-              to="/admin/stock-import-applied-changes"
-              className="border-b-2 border-transparent pb-3 font-medium text-slate-400 transition hover:text-slate-700"
-            >
-              Histórico global de custos
-            </Link>
           </div>
         </nav>
 

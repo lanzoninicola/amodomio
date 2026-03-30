@@ -1,4 +1,5 @@
 import prismaClient from "~/lib/prisma/client.server";
+import { capitalizeSupplierName } from "~/domain/supplier/supplier.prisma.entity.server";
 import {
   calculateItemCostMetrics,
   getItemAverageCostWindowDays,
@@ -220,6 +221,157 @@ export async function loadItemCostMonitoringPayload(request: Request) {
         averageSamplesCount: metrics.averageSamplesCount,
         suppliers,
         trend,
+      };
+    }),
+  };
+}
+
+export async function loadSupplierItemCostsPayload(request: Request) {
+  const db = prismaClient as any;
+  const url = new URL(request.url);
+  const supplierName = String(url.searchParams.get("supplier") || "").trim();
+
+  const allSuppliers = (
+    await db.supplier.findMany({
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    })
+  ).map((s: { id: string; name: string }) => ({
+    ...s,
+    name: capitalizeSupplierName(s.name),
+  }));
+
+  if (!supplierName) {
+    return { supplierName: "", suppliers: allSuppliers, items: [] };
+  }
+
+  // Fetch history rows matching the supplier name in metadata (PostgreSQL JSON path filter)
+  const historyRows = await db.itemCostVariationHistory.findMany({
+    where: {
+      metadata: {
+        path: ["supplierName"],
+        string_contains: supplierName,
+      },
+    },
+    orderBy: [{ validFrom: "desc" }, { createdAt: "desc" }],
+    select: {
+      id: true,
+      itemVariationId: true,
+      costAmount: true,
+      unit: true,
+      validFrom: true,
+      createdAt: true,
+      metadata: true,
+      ItemVariation: {
+        select: {
+          id: true,
+          isReference: true,
+          Item: {
+            select: {
+              id: true,
+              name: true,
+              active: true,
+              purchaseUm: true,
+              consumptionUm: true,
+              purchaseToConsumptionFactor: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  // JS-level filter for case-insensitive match (safety net)
+  const supplierLower = supplierName.toLowerCase();
+  const filteredRows = historyRows.filter((row: any) => {
+    const sn = getSupplierNameFromMetadata(row.metadata);
+    return sn && sn.toLowerCase().includes(supplierLower);
+  });
+
+  // Collect unique active item IDs
+  const itemIdSet = new Set<string>();
+  for (const row of filteredRows) {
+    const item = row.ItemVariation?.Item;
+    if (item?.active && item.id) itemIdSet.add(item.id);
+  }
+
+  const uniqueItemIds = Array.from(itemIdSet);
+
+  if (uniqueItemIds.length === 0) {
+    return { supplierName, suppliers: allSuppliers, items: [] };
+  }
+
+  // Fetch items with full history to compare all suppliers
+  const items = await db.item.findMany({
+    where: { id: { in: uniqueItemIds }, active: true },
+    include: {
+      ItemVariation: {
+        where: { deletedAt: null },
+        include: {
+          ItemCostVariationHistory: {
+            select: {
+              id: true,
+              costAmount: true,
+              unit: true,
+              validFrom: true,
+              createdAt: true,
+              source: true,
+              metadata: true,
+            },
+            orderBy: [{ validFrom: "desc" }, { createdAt: "desc" }],
+            take: 90,
+          },
+        },
+        orderBy: [{ createdAt: "asc" }],
+      },
+    },
+    orderBy: [{ name: "asc" }],
+  });
+
+  return {
+    supplierName,
+    suppliers: allSuppliers,
+    items: items.map((item: any) => {
+      const baseVariation = pickPrimaryItemVariation(item);
+      const history: CostRowLike[] = baseVariation?.ItemCostVariationHistory || [];
+
+      // This supplier's latest cost
+      const thisRows = history.filter((row) => {
+        const sn = getSupplierNameFromMetadata(row.metadata);
+        return sn && sn.toLowerCase().includes(supplierLower);
+      });
+      const thisLatest = thisRows[0] || null;
+
+      // Other suppliers' latest cost (one entry per supplier name)
+      const othersMap = new Map<string, CostRowLike>();
+      for (const row of history) {
+        const sn = getSupplierNameFromMetadata(row.metadata);
+        if (!sn || sn.toLowerCase().includes(supplierLower)) continue;
+        if (!othersMap.has(sn)) othersMap.set(sn, row);
+      }
+
+      const otherSuppliers = Array.from(othersMap.entries())
+        .map(([sn, row]) => ({
+          supplierName: sn,
+          costAmount: Number(row.costAmount || 0),
+          unit: row.unit || item.purchaseUm || item.consumptionUm || null,
+          validFrom: row.validFrom || row.createdAt || null,
+        }))
+        .sort((a, b) => b.costAmount - a.costAmount); // most expensive first
+
+      return {
+        id: item.id,
+        name: item.name,
+        consumptionUm: item.consumptionUm,
+        purchaseUm: item.purchaseUm,
+        thisSupplierCost: thisLatest
+          ? {
+              costAmount: Number(thisLatest.costAmount || 0),
+              unit: thisLatest.unit || item.purchaseUm || item.consumptionUm || null,
+              validFrom: thisLatest.validFrom || thisLatest.createdAt || null,
+            }
+          : null,
+        otherSuppliers,
       };
     }),
   };

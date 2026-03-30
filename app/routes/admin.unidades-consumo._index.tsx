@@ -21,6 +21,38 @@ async function seedDefaultMeasurementUnits() {
       await db.measurementUnit.create({ data: unit });
     }
   }
+
+  // Seed standard conversions between units of the same kind
+  const defaultConversions = [
+    { fromCode: "KG", toCode: "G",  factor: 1000,   notes: "1 kg = 1000 g" },
+    { fromCode: "G",  toCode: "KG", factor: 0.001,  notes: "1 g = 0,001 kg" },
+    { fromCode: "L",  toCode: "ML", factor: 1000,   notes: "1 L = 1000 mL" },
+    { fromCode: "ML", toCode: "L",  factor: 0.001,  notes: "1 mL = 0,001 L" },
+  ];
+
+  const unitMap = new Map<string, string>();
+  for (const { fromCode, toCode } of defaultConversions) {
+    for (const code of [fromCode, toCode]) {
+      if (!unitMap.has(code)) {
+        const unit = await db.measurementUnit.findFirst({ where: { code } });
+        if (unit) unitMap.set(code, unit.id);
+      }
+    }
+  }
+
+  for (const { fromCode, toCode, factor, notes } of defaultConversions) {
+    const fromId = unitMap.get(fromCode);
+    const toId = unitMap.get(toCode);
+    if (!fromId || !toId) continue;
+    const existing = await db.measurementUnitConversion.findFirst({
+      where: { fromUnitId: fromId, toUnitId: toId },
+    });
+    if (!existing) {
+      await db.measurementUnitConversion.create({
+        data: { fromUnitId: fromId, toUnitId: toId, factor, notes },
+      });
+    }
+  }
 }
 
 export async function loader({}: LoaderFunctionArgs) {

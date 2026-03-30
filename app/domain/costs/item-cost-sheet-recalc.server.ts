@@ -1,4 +1,5 @@
 import { listRecipeCompositionLines } from "~/domain/recipe/recipe-composition.server";
+import { registerItemCostEvent } from "~/domain/costs/item-cost-event.server";
 
 export function roundItemCostSheetMoney(value: number) {
   return Number(Number(value || 0).toFixed(6));
@@ -214,5 +215,109 @@ export async function recalcItemCostSheetTotals(db: any, itemCostSheetId: string
     });
   }
 
-  return { rootSheetId, updatedSheets: groupSheets.length };
+  const publishedSnapshots = await publishActiveItemCostSheetSnapshots(db, rootSheetId);
+
+  return { rootSheetId, updatedSheets: groupSheets.length, publishedSnapshots };
+}
+
+async function publishActiveItemCostSheetSnapshots(db: any, rootSheetId: string) {
+  if (!rootSheetId) return 0;
+
+  const activeSheets = await db.itemCostSheet.findMany({
+    where: {
+      isActive: true,
+      OR: [{ id: rootSheetId }, { baseItemCostSheetId: rootSheetId }],
+    },
+    select: {
+      id: true,
+      name: true,
+      notes: true,
+      costAmount: true,
+      itemVariationId: true,
+    },
+  });
+
+  const activeVariationIds = activeSheets
+    .map((sheet: any) => String(sheet.itemVariationId || ""))
+    .filter(Boolean);
+  if (activeVariationIds.length === 0) return 0;
+
+  const currentCosts = await db.itemCostVariation.findMany({
+    where: {
+      itemVariationId: { in: activeVariationIds },
+    },
+    select: {
+      itemVariationId: true,
+      costAmount: true,
+      unit: true,
+      source: true,
+      referenceType: true,
+      referenceId: true,
+    },
+  });
+
+  const currentCostByVariationId = new Map<string, any>(
+    currentCosts.map((row: any) => [String(row.itemVariationId || ""), row])
+  );
+
+  const currentReferenceIds = currentCosts
+    .map((row: any) => String(row.referenceId || ""))
+    .filter(Boolean);
+  const movementRows = currentReferenceIds.length
+    ? await db.stockMovement.findMany({
+        where: { id: { in: currentReferenceIds } },
+        select: {
+          id: true,
+          originType: true,
+          originRefId: true,
+        },
+      })
+    : [];
+  const movementById = new Map<string, any>(
+    movementRows.map((row: any) => [String(row.id || ""), row])
+  );
+
+  let published = 0;
+
+  for (const sheet of activeSheets) {
+    const itemVariationId = String(sheet.itemVariationId || "").trim();
+    if (!itemVariationId) continue;
+
+    const nextCost = Number(sheet.costAmount || 0);
+    if (!(nextCost > 0)) continue;
+
+    const current = currentCostByVariationId.get(itemVariationId);
+    const currentMovement = current?.referenceId ? movementById.get(String(current.referenceId)) : null;
+    const currentMatchesSameSheet =
+      String(current?.source || "").trim().toLowerCase() === "item-cost-sheet" &&
+      String(current?.referenceType || "").trim().toLowerCase() === "stock-movement" &&
+      String(currentMovement?.originType || "").trim().toLowerCase() === "item-cost-sheet" &&
+      String(currentMovement?.originRefId || "").trim() === String(sheet.id);
+
+    if (currentMatchesSameSheet && Math.abs(Number(current?.costAmount || 0) - nextCost) < 0.000001) {
+      continue;
+    }
+
+    await registerItemCostEvent({
+      client: db,
+      itemVariationId,
+      costAmount: nextCost,
+      unit: null,
+      source: "item-cost-sheet",
+      movementType: "item-cost-sheet",
+      originType: "item-cost-sheet",
+      originRefId: String(sheet.id),
+      appliedBy: "system:item-cost-sheet",
+      validFrom: new Date(),
+      metadata: {
+        itemCostSheetId: String(sheet.id),
+        itemCostSheetName: String(sheet.name || "").trim() || null,
+        notes: String(sheet.notes || "").trim() || null,
+        sourceAction: "item_cost_sheet_recalc",
+      },
+    });
+    published++;
+  }
+
+  return published;
 }

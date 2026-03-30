@@ -24,7 +24,7 @@ export default function AdminImportStockMovementsOutlet() {
 
             <div className="flex flex-wrap items-center gap-2">
               <Link
-                to="/admin/stock-import-applied-changes"
+                to="/admin/global-cost-history"
                 className="inline-flex h-9 items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
               >
                 Histórico global de custos

@@ -1,10 +1,6 @@
-export const ITEM_COST_SOURCE_VALUES = [
-  "manual",
-  "purchase",
-  "import",
-  "adjustment",
-  "item-cost-sheet",
-] as const;
+import { STOCK_MOVEMENT_TYPE_VALUES } from "~/domain/stock-movement/stock-movement-types";
+
+export const ITEM_COST_SOURCE_VALUES = STOCK_MOVEMENT_TYPE_VALUES;
 
 export type ItemCostSource = (typeof ITEM_COST_SOURCE_VALUES)[number];
 
@@ -19,11 +15,6 @@ export const ITEM_COST_SOURCE_OPTIONS: ItemCostSourceOption[] = [
     value: "manual",
     label: "Manual",
     hint: "Levantamento digitado/manual.",
-  },
-  {
-    value: "purchase",
-    label: "Compra",
-    hint: "Custo confirmado em compra.",
   },
   {
     value: "import",

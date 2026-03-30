@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
+import { DecimalInput } from "~/components/inputs/inputs";
 import { Label } from "~/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~/components/ui/table";
@@ -109,7 +110,7 @@ export default function AdminUnidadesConsumoEdit() {
   const successClass = "border-emerald-200 bg-emerald-50 text-emerald-700";
 
   return (
-    <div className="grid gap-6 lg:grid-cols-2">
+    <div className="grid gap-6 pb-16 lg:grid-cols-2">
       {/* Left column — unit fields + status */}
       <div className="space-y-4">
         {actionData?.message ? (
@@ -251,16 +252,14 @@ export default function AdminUnidadesConsumoEdit() {
               <Label htmlFor="factor">
                 Fator (1 {unit?.code} = ? {availableToUnits.find((u: any) => u.id === toUnitId)?.code || "destino"})
               </Label>
-              <Input
-                id="factor"
-                name="factor"
-                type="number"
-                min="0"
-                step="0.000001"
-                placeholder="ex: 1000"
-                required
-                className="mt-1"
-              />
+              <div className="mt-1">
+                <DecimalInput
+                  name="factor"
+                  placeholder="ex: 1000"
+                  fractionDigits={6}
+                  className="w-full"
+                />
+              </div>
             </div>
           </div>
           <div className="flex items-center gap-4">

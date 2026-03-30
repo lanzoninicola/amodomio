@@ -186,19 +186,7 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
             },
             {
               title: "Histórico global de custos",
-              href: "/admin/stock-import-applied-changes",
-              items: [],
-              disabled: false,
-            },
-            {
-              title: "Importação de movimentações",
-              href: "/admin/import-stock-movements",
-              items: [],
-              disabled: false,
-            },
-            {
-              title: "Conciliação de fornecedor",
-              href: "/admin/supplier-reconciliation",
+              href: "/admin/global-cost-history",
               items: [],
               disabled: false,
             },
@@ -236,6 +224,31 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
             {
               title: "Aliases de Importação",
               href: "/admin/item-import-aliases",
+              items: [],
+              disabled: false,
+            },
+          ],
+          disabled: false,
+        },
+        {
+          title: "Ferramentas",
+          href: "",
+          items: [
+            {
+              title: "Recalcular custos",
+              href: "/admin/recalculate-costs",
+              items: [],
+              disabled: false,
+            },
+            {
+              title: "Importação de movimentações",
+              href: "/admin/import-stock-movements",
+              items: [],
+              disabled: false,
+            },
+            {
+              title: "Conciliação de fornecedor",
+              href: "/admin/supplier-reconciliation",
               items: [],
               disabled: false,
             },

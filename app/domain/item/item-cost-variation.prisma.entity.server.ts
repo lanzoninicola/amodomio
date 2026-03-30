@@ -16,6 +16,10 @@ export type SetItemVariationCostInput = {
   metadata?: unknown;
 };
 
+// referenceTypes that represent a real purchase/import event.
+// Only these are upserted in-place; everything else always creates a new record.
+const UPSERTABLE_REFERENCE_TYPES = new Set(["stock-movement"]);
+
 class ItemCostVariationPrismaEntity {
   client;
 
@@ -79,6 +83,10 @@ class ItemCostVariationPrismaEntity {
   }
 
   async setCurrentCost(input: SetItemVariationCostInput) {
+    return await this.setCurrentCostWithClient(this.client, input);
+  }
+
+  async setCurrentCostWithClient(client: any, input: SetItemVariationCostInput) {
     if (!input.itemVariationId) {
       throw new Error("itemVariationId é obrigatório");
     }
@@ -90,7 +98,7 @@ class ItemCostVariationPrismaEntity {
 
     const validFrom = input.validFrom || new Date();
 
-    return await this.client.$transaction(async (tx) => {
+    const run = async (tx: any) => {
       const itemVariation = await (tx as any).itemVariation.findUnique({
         where: { id: input.itemVariationId },
         include: { Variation: true, Item: true },
@@ -107,6 +115,7 @@ class ItemCostVariationPrismaEntity {
       const previousCostAmount = Number(current?.costAmount || 0);
       const now = new Date();
 
+      // Update or create the active cost record (ItemCostVariation).
       const saved = current
         ? await (tx as any).itemCostVariation.update({
             where: { id: current.id },
@@ -139,28 +148,110 @@ class ItemCostVariationPrismaEntity {
             },
           });
 
-      await (tx as any).itemCostVariationHistory.create({
-        data: {
-          itemVariationId: input.itemVariationId,
-          costAmount: nextCost,
-          previousCostAmount,
-          unit: input.unit ?? current?.unit ?? null,
-          source: input.source ?? current?.source ?? null,
-          referenceType: input.referenceType ?? null,
-          referenceId: input.referenceId ?? null,
-          validFrom,
-          createdBy: input.updatedBy ?? null,
-          metadata: (input.metadata as any) ?? null,
-          createdAt: now,
-          updatedAt: now,
-        },
-      });
+      // History: upsert in-place when referenceType is a real purchase event
+      // (stock-movement), so the history table stays 1 record per movement.
+      // Any other case (manual entries, deletions, etc.) always appends.
+      const canUpsert =
+        input.referenceId &&
+        input.referenceType &&
+        UPSERTABLE_REFERENCE_TYPES.has(input.referenceType);
+
+      if (canUpsert) {
+        const existingHistory = await (tx as any).itemCostVariationHistory.findFirst({
+          where: {
+            itemVariationId: input.itemVariationId,
+            referenceType: input.referenceType,
+            referenceId: input.referenceId,
+          },
+        });
+
+        if (existingHistory) {
+          // Update the existing history record in-place and write an audit row.
+          await (tx as any).itemCostVariationHistory.update({
+            where: { id: existingHistory.id },
+            data: {
+              costAmount: nextCost,
+              previousCostAmount: Number(existingHistory.previousCostAmount || 0),
+              unit: input.unit ?? existingHistory.unit ?? null,
+              source: input.source ?? existingHistory.source ?? null,
+              validFrom,
+              updatedAt: now,
+              metadata: (input.metadata as any) ?? existingHistory.metadata ?? null,
+            },
+          });
+
+          await (tx as any).itemCostVariationHistoryAudit.create({
+            data: {
+              historyRecordId: existingHistory.id,
+              itemVariationId: input.itemVariationId,
+              costAmountBefore: Number(existingHistory.costAmount),
+              costAmountAfter: nextCost,
+              unitBefore: existingHistory.unit ?? null,
+              unitAfter: input.unit ?? null,
+              sourceBefore: existingHistory.source ?? null,
+              sourceAfter: input.source ?? null,
+              validFromBefore: existingHistory.validFrom,
+              validFromAfter: validFrom,
+              changedBy: input.updatedBy ?? null,
+              changeReason: input.source ?? "adjustment",
+              metadata: (input.metadata as any) ?? null,
+              createdAt: now,
+            },
+          });
+        } else {
+          // First time this movement is recorded — create a new history entry.
+          await (tx as any).itemCostVariationHistory.create({
+            data: {
+              itemVariationId: input.itemVariationId,
+              costAmount: nextCost,
+              previousCostAmount,
+              unit: input.unit ?? current?.unit ?? null,
+              source: input.source ?? current?.source ?? null,
+              referenceType: input.referenceType ?? null,
+              referenceId: input.referenceId ?? null,
+              validFrom,
+              createdBy: input.updatedBy ?? null,
+              metadata: (input.metadata as any) ?? null,
+              createdAt: now,
+              updatedAt: now,
+            },
+          });
+        }
+      } else {
+        // No referenceId or not a upsertable type — always append to history.
+        await (tx as any).itemCostVariationHistory.create({
+          data: {
+            itemVariationId: input.itemVariationId,
+            costAmount: nextCost,
+            previousCostAmount,
+            unit: input.unit ?? current?.unit ?? null,
+            source: input.source ?? current?.source ?? null,
+            referenceType: input.referenceType ?? null,
+            referenceId: input.referenceId ?? null,
+            validFrom,
+            createdBy: input.updatedBy ?? null,
+            metadata: (input.metadata as any) ?? null,
+            createdAt: now,
+            updatedAt: now,
+          },
+        });
+      }
 
       return saved;
-    });
+    };
+
+    if (typeof client?.$transaction === "function") {
+      return await client.$transaction(async (tx: any) => await run(tx));
+    }
+
+    return await run(client);
   }
 
   async addHistoryEntry(input: SetItemVariationCostInput) {
+    return await this.addHistoryEntryWithClient(this.client, input);
+  }
+
+  async addHistoryEntryWithClient(client: any, input: SetItemVariationCostInput) {
     if (!input.itemVariationId) {
       throw new Error("itemVariationId é obrigatório");
     }
@@ -172,7 +263,7 @@ class ItemCostVariationPrismaEntity {
 
     const validFrom = input.validFrom || new Date();
 
-    return await this.client.$transaction(async (tx) => {
+    const run = async (tx: any) => {
       const itemVariation = await (tx as any).itemVariation.findUnique({
         where: { id: input.itemVariationId },
         include: { Variation: true, Item: true },
@@ -205,7 +296,13 @@ class ItemCostVariationPrismaEntity {
           updatedAt: now,
         },
       });
-    });
+    };
+
+    if (typeof client?.$transaction === "function") {
+      return await client.$transaction(async (tx: any) => await run(tx));
+    }
+
+    return await run(client);
   }
 
   async softDeleteCurrentByItemVariationId(itemVariationId: string) {

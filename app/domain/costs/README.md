@@ -13,7 +13,7 @@ Centralizar a regra de negocio ligada a:
 
 O objetivo do dominio `costs` e permitir que uma alteracao de custo de insumo chegue, de forma rastreavel, ate a analise de margem dos produtos vendidos.
 
-A origem principal de alteracao de custo hoje e a importacao de nota fiscal via `stock-movement`.
+A origem principal de alteracao de custo hoje e o journal canonico em `stock-movement`.
 Ver: [app/domain/stock-movement/README.md](../stock-movement/README.md)
 
 ## Regra de Negocio
@@ -29,7 +29,7 @@ Por isso, o sistema trabalha com duas leituras de custo:
 
 ### Regras principais
 
-1. Uma entrada de estoque deve atualizar o custo corrente do insumo.
+1. Um evento canônico de custo deve atualizar o custo corrente do insumo.
 2. Essa alteracao deve impactar a base de custo usada por receitas e fichas.
 3. O impacto deve poder chegar ate o item vendido no cardapio.
 4. O sistema deve permitir comparar:
@@ -46,10 +46,15 @@ As leituras de custo do item carregam uma origem operacional padronizada.
 Valores atuais:
 
 - `manual`: levantamento avulso ou conferencia manual;
-- `purchase`: custo confirmado em compra;
 - `import`: custo vindo de importacao de NF;
 - `adjustment`: correcao operacional interna;
 - `item-cost-sheet`: snapshot calculado por ficha de custo.
+
+Convencao atual de persistencia:
+
+- `manual`, `import`, `adjustment` e `item-cost-sheet` devem gerar um `StockMovement`;
+- quando nao houver movimento fisico, o evento usa `direction = neutral`;
+- `ItemCostVariationHistory` referencia esse evento com `referenceType = "stock-movement"`.
 
 Convencao atual:
 

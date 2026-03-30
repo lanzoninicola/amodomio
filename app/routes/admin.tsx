@@ -544,7 +544,7 @@ export default function AdminOutlet() {
                 ) : null}
                 <AdminHeader slug={slug} urlSegment={urlSegment} topNavItems={topNavItems} />
                 {/* {env === "development" && <EnvironmentAlert />} */}
-                <div className="mt-6 mx-4 md:mr-12" data-element="outer-div-admin-outlet">
+                <div className="mt-6 mx-4 md:mr-12 pb-16" data-element="outer-div-admin-outlet">
                     <Outlet context={{
                         loggedUser,
                     }} />

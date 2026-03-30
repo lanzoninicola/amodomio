@@ -41,12 +41,17 @@ export default function AdminItemPurchasesTab() {
 
         {/* Conversões de compra — unified with linked restricted units */}
         <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Conversões de compra</h2>
               <p className="mt-0.5 text-xs text-slate-400">Fator fixo por unidade. Ex: 1 KG = 1 KG.</p>
             </div>
-            <span className="text-xs text-slate-500">Base: {item.consumptionUm || "não definida"}</span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-500">Base: {item.consumptionUm || "não definida"}</span>
+              <Button asChild size="sm" variant="outline" className="h-8">
+                <Link to="/admin/unidades-consumo/new">Nova UM</Link>
+              </Button>
+            </div>
           </div>
 
           {conversions.length === 0 && pendingLinkedUnits.length === 0 ? (

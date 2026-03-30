@@ -84,18 +84,27 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
     const unit = await db.measurementUnit.findUnique({
       where: { id: params.unitId },
-      select: { code: true },
+      select: { code: true, scope: true },
     });
     if (!unit) return badRequest("Unidade não encontrada");
+
+    async function ensureRestricted() {
+      if (unit.scope !== "restricted") {
+        await db.measurementUnit.update({ where: { id: params.unitId }, data: { scope: "restricted" } });
+      }
+    }
 
     if (_action === "item-unit-link") {
       const itemId = String(formData.get("itemId") || "").trim();
       if (!itemId) return badRequest("Item inválido");
-      await db.itemUnit.upsert({
-        where: { itemId_unitCode: { itemId, unitCode: unit.code } },
-        create: { itemId, unitCode: unit.code },
-        update: {},
-      });
+      await Promise.all([
+        db.itemUnit.upsert({
+          where: { itemId_unitCode: { itemId, unitCode: unit.code } },
+          create: { itemId, unitCode: unit.code },
+          update: {},
+        }),
+        ensureRestricted(),
+      ]);
       return ok("Item vinculado");
     }
 
@@ -109,15 +118,16 @@ export async function action({ request, params }: ActionFunctionArgs) {
     if (_action === "item-unit-link-bulk") {
       const itemIds = formData.getAll("itemId").map((v) => String(v).trim()).filter(Boolean);
       if (itemIds.length === 0) return badRequest("Selecione ao menos um item");
-      await Promise.all(
-        itemIds.map((itemId) =>
+      await Promise.all([
+        ...itemIds.map((itemId) =>
           db.itemUnit.upsert({
             where: { itemId_unitCode: { itemId, unitCode: unit.code } },
             create: { itemId, unitCode: unit.code },
             update: {},
           })
-        )
-      );
+        ),
+        ensureRestricted(),
+      ]);
       return ok(`${itemIds.length} item(s) vinculado(s)`);
     }
 
@@ -150,15 +160,16 @@ export async function action({ request, params }: ActionFunctionArgs) {
       }
 
       if (_action === "item-unit-link-batch") {
-        await Promise.all(
-          itemIds.map((itemId) =>
+        await Promise.all([
+          ...itemIds.map((itemId) =>
             db.itemUnit.upsert({
               where: { itemId_unitCode: { itemId, unitCode: unit.code } },
               create: { itemId, unitCode: unit.code },
               update: {},
             })
-          )
-        );
+          ),
+          ensureRestricted(),
+        ]);
         return ok(`${itemIds.length} item(s) do lote vinculado(s)`);
       }
 

@@ -11,8 +11,8 @@ import { Label } from "~/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { toast } from "~/components/ui/use-toast";
 import { calculateItemCostMetrics, getItemAverageCostWindowDays } from "~/domain/item/item-cost-metrics.server";
-import { itemCostVariationPrismaEntity } from "~/domain/item/item-cost-variation.prisma.entity.server";
 import { itemVariationPrismaEntity } from "~/domain/item/item-variation.prisma.entity.server";
+import { registerItemCostEvent } from "~/domain/costs/item-cost-event.server";
 import { supplierPrismaEntity } from "~/domain/supplier/supplier.prisma.entity.server";
 import prismaClient from "~/lib/prisma/client.server";
 import { badRequest, ok, serverError } from "~/utils/http-response.server";
@@ -191,20 +191,29 @@ export async function action({ request }: ActionFunctionArgs) {
       };
 
       if (comparisonOnly) {
-        await itemCostVariationPrismaEntity.addHistoryEntry({
+        await registerItemCostEvent({
           itemVariationId: baseItemVariation.id,
           costAmount,
           unit: unit || null,
           source: source || "manual",
+          movementType: source as any,
+          originType: "item-cost-manual-entry-mobile",
+          originRefId: itemId,
+          appliedBy: null,
           validFrom: new Date(),
           metadata,
+          comparisonOnly: true,
         });
       } else {
-        await itemCostVariationPrismaEntity.setCurrentCost({
+        await registerItemCostEvent({
           itemVariationId: baseItemVariation.id,
           costAmount,
           unit: unit || null,
           source: source || "manual",
+          movementType: source as any,
+          originType: "item-cost-manual-entry-mobile",
+          originRefId: itemId,
+          appliedBy: null,
           validFrom: new Date(),
           metadata,
         });
@@ -341,16 +350,14 @@ export default function AdminMobileItemCostSurveyPage() {
 
       {item ? (
       <Collapsible open={quickSupplierOpen} onOpenChange={setQuickSupplierOpen} className="border-b border-slate-200 pb-4">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Fornecedor ao voo</div>
-          </div>
-          <CollapsibleTrigger asChild>
-            <Button type="button" className="h-9 w-9 rounded-full bg-slate-950 p-0 text-white hover:bg-slate-800">
+        <CollapsibleTrigger asChild>
+          <Button type="button" className="h-11 w-full justify-between rounded-xl bg-slate-700 px-4 text-base font-medium text-white hover:bg-slate-600">
+            <span className="flex items-center gap-2">
               {quickSupplierOpen ? <Minus className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-            </Button>
-          </CollapsibleTrigger>
-        </div>
+              Cadastrar novo fornecedor
+            </span>
+          </Button>
+        </CollapsibleTrigger>
         <CollapsibleContent className="pt-3">
           <fetcher.Form method="post" className="space-y-3">
             <input type="hidden" name="_action" value="supplier-quick-create" />
@@ -380,6 +387,9 @@ export default function AdminMobileItemCostSurveyPage() {
 
         <div>
           <div className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Levantamento rápido</div>
+          <p className="mt-1 text-sm leading-snug text-slate-600">
+            Esta rota salva o levantamento sempre como comparação: não altera o custo vigente, só adiciona histórico e fica fora das métricas e do gráfico.
+          </p>
         </div>
 
         <div className="space-y-3">
