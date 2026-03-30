@@ -27,7 +27,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       str(url.searchParams.get('returnTo')),
       `/admin/stock-movements?lineId=${encodeURIComponent(lineId)}&status=all`,
     );
-    const [result, items, suppliers, unitOptions] = await Promise.all([
+    const [result, items, suppliers] = await Promise.all([
       listStockMovementImportMovements({
         lineId,
         status: 'all',
@@ -47,14 +47,17 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           take: 2000,
         })
         : [],
-      getAvailableItemUnits(),
     ]);
 
     if ((result.rows || []).length !== 1) {
       return badRequest('Não foi possível identificar uma única movimentação para esta linha');
     }
 
-    return ok({ row: result.rows[0], items, suppliers, unitOptions, returnTo });
+    const row = result.rows[0];
+    const mappedItemId = str(row.itemId || row.Line?.mappedItemId || row.ImportLine?.mappedItemId || null) || undefined;
+    const unitOptions = await getAvailableItemUnits(mappedItemId);
+
+    return ok({ row, items, suppliers, unitOptions, returnTo });
   } catch (error) {
     return serverError(error);
   }

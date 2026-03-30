@@ -420,6 +420,31 @@ function LineEditDialog({
                   ))}
                 </SelectContent>
               </Select>
+              {mappedItemIdDraft ? (
+                <div className="flex items-center gap-2 pt-1">
+                  <Link
+                    to={`/admin/items/${mappedItemIdDraft}/main`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[11px] font-medium text-slate-600 underline underline-offset-2 hover:text-slate-900"
+                  >
+                    Editar item
+                  </Link>
+                  <Link
+                    to={`/admin/stock-movements?itemId=${encodeURIComponent(selectedItemId)}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[11px] font-medium text-slate-600 underline underline-offset-2 hover:text-slate-900"
+                  >
+                    Movimentações estoque
+                  </Link>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 pt-1">
+                  <span className="text-[11px] text-slate-400">Editar item</span>
+                  <span className="text-[11px] text-slate-400">Movimentações estoque</span>
+                </div>
+              )}
             </div>
           </div>
 

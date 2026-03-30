@@ -116,37 +116,34 @@ class ItemCostVariationPrismaEntity {
       const now = new Date();
 
       // Update or create the active cost record (ItemCostVariation).
-      const saved = current
-        ? await (tx as any).itemCostVariation.update({
-            where: { id: current.id },
-            data: {
-              costAmount: nextCost,
-              previousCostAmount,
-              unit: input.unit ?? current.unit ?? null,
-              source: input.source ?? current.source ?? null,
-              referenceType: input.referenceType ?? null,
-              referenceId: input.referenceId ?? null,
-              validFrom,
-              updatedBy: input.updatedBy ?? null,
-              deletedAt: null,
-              updatedAt: now,
-            },
-          })
-        : await (tx as any).itemCostVariation.create({
-            data: {
-              itemVariationId: input.itemVariationId,
-              costAmount: nextCost,
-              previousCostAmount: 0,
-              unit: input.unit ?? null,
-              source: input.source ?? null,
-              referenceType: input.referenceType ?? null,
-              referenceId: input.referenceId ?? null,
-              validFrom,
-              updatedBy: input.updatedBy ?? null,
-              createdAt: now,
-              updatedAt: now,
-            },
-          });
+      const saved = await (tx as any).itemCostVariation.upsert({
+        where: { itemVariationId: input.itemVariationId },
+        update: {
+          costAmount: nextCost,
+          previousCostAmount,
+          unit: input.unit ?? current?.unit ?? null,
+          source: input.source ?? current?.source ?? null,
+          referenceType: input.referenceType ?? null,
+          referenceId: input.referenceId ?? null,
+          validFrom,
+          updatedBy: input.updatedBy ?? null,
+          deletedAt: null,
+          updatedAt: now,
+        },
+        create: {
+          itemVariationId: input.itemVariationId,
+          costAmount: nextCost,
+          previousCostAmount: 0,
+          unit: input.unit ?? null,
+          source: input.source ?? null,
+          referenceType: input.referenceType ?? null,
+          referenceId: input.referenceId ?? null,
+          validFrom,
+          updatedBy: input.updatedBy ?? null,
+          createdAt: now,
+          updatedAt: now,
+        },
+      });
 
       // History: upsert in-place when referenceType is a real purchase event
       // (stock-movement), so the history table stays 1 record per movement.

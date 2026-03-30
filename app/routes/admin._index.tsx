@@ -275,6 +275,196 @@ type TrendModal = {
   avgSamples?: number;
 };
 
+// ─── AI prompt modal ──────────────────────────────────────────────────────────
+
+function AiPromptModal({ title, prompt, onClose }: { title: string; prompt: string; onClose: () => void }) {
+  const [copied, setCopied] = useState(false);
+
+  function copy() {
+    navigator.clipboard.writeText(prompt).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle className="text-sm font-semibold uppercase tracking-widest text-slate-500">
+            {title}
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <p className="text-xs text-slate-400">
+            Copie o prompt abaixo e cole num chat de IA (ChatGPT, Claude, Gemini etc.) para obter análise e sugestões práticas.
+          </p>
+          <textarea
+            readOnly
+            value={prompt}
+            rows={16}
+            className="w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-mono text-slate-700 resize-none focus:outline-none"
+          />
+          <div className="flex justify-end">
+            <Button onClick={copy} variant="outline" size="sm" className="gap-2">
+              {copied ? (
+                <>
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8l3.5 3.5L13 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  Copiado!
+                </>
+              ) : (
+                <>
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="5" y="1" width="9" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.3"/><rect x="2" y="4" width="9" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.3" fill="white"/></svg>
+                  Copiar prompt
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function AiPromptButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-center gap-1.5 text-[11px] font-medium text-slate-400 hover:text-violet-600 transition-colors border border-slate-200 hover:border-violet-300 rounded-md px-3 py-1.5 bg-white hover:bg-violet-50 w-full justify-center"
+    >
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M8 1.5L9.5 5.5L13.5 7L9.5 8.5L8 12.5L6.5 8.5L2.5 7L6.5 5.5L8 1.5Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/>
+        <path d="M13 11L13.7 12.3L15 13L13.7 13.7L13 15L12.3 13.7L11 13L12.3 12.3L13 11Z" stroke="currentColor" strokeWidth="1" strokeLinejoin="round"/>
+      </svg>
+      Analisar com IA
+    </button>
+  );
+}
+
+// ─── weekday chart card with explanation ──────────────────────────────────────
+
+function WeekdayChartCard({ chart, onExpand }: { chart: WeekdayChart; onExpand: () => void }) {
+  const [open, setOpen] = useState(false);
+
+  const explanation = (() => {
+    // current month is the first series, previous months follow
+    const current = chart.series[0];
+    const previous = chart.series.slice(1);
+    if (!current || current.points.length === 0) return null;
+
+    const fmtBRLs = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 0 });
+    const fmtPct1 = (v: number) => `${v >= 0 ? "+" : ""}${v.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+
+    // best and worst week in current month
+    const sorted = [...current.points].sort((a, b) => b.total - a.total);
+    const best = sorted[0];
+    const worst = sorted[sorted.length - 1];
+
+    // trend within current month (first vs last point)
+    const first = current.points[0];
+    const last = current.points[current.points.length - 1];
+    const internalTrend = first.total > 0
+      ? ((last.total - first.total) / first.total) * 100
+      : null;
+
+    // compare avg of current month vs avg of most recent previous series
+    const avgCurrent = current.points.reduce((s, p) => s + p.total, 0) / current.points.length;
+    const prev = previous[0];
+    const avgPrev = prev && prev.points.length > 0
+      ? prev.points.reduce((s, p) => s + p.total, 0) / prev.points.length
+      : null;
+    const vsLast = avgPrev != null && avgPrev > 0
+      ? ((avgCurrent - avgPrev) / avgPrev) * 100
+      : null;
+
+    const trendText = internalTrend != null
+      ? internalTrend > 5
+        ? `Dentro de ${current.seriesLabel}, o dia está em tendência de alta ao longo do mês (${fmtPct1(internalTrend)} da 1ª para a última semana).`
+        : internalTrend < -5
+        ? `Dentro de ${current.seriesLabel}, o dia está em tendência de queda ao longo do mês (${fmtPct1(internalTrend)} da 1ª para a última semana).`
+        : `Dentro de ${current.seriesLabel}, o desempenho está relativamente estável ao longo das semanas.`
+      : null;
+
+    const vsLastText = vsLast != null
+      ? `Comparado a ${prev!.seriesLabel}, a média por semana está ${vsLast >= 0 ? "acima" : "abaixo"} em ${fmtPct1(vsLast)}.`
+      : null;
+
+    return { best, worst, trendText, vsLastText, fmtBRLs, current };
+  })();
+
+  return (
+    <>
+      <Card className="p-4">
+        <CardContent className="p-0">
+          <div className="flex items-start justify-between mb-0">
+            <ChartHeader
+              title={chart.label}
+              subtitle="Por semana do mês"
+              onExpand={onExpand}
+            />
+            <button
+              onClick={() => setOpen(true)}
+              className="text-slate-300 hover:text-slate-500 transition-colors mt-0.5 ml-1 flex-shrink-0"
+              title="Entender este gráfico"
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                <circle cx="8" cy="8" r="7.5" stroke="currentColor"/>
+                <path d="M6.5 6C6.5 5.17 7.17 4.5 8 4.5C8.83 4.5 9.5 5.17 9.5 6C9.5 6.83 8.83 7.5 8 7.5V9" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+                <circle cx="8" cy="11" r="0.7" fill="currentColor"/>
+              </svg>
+            </button>
+          </div>
+          <MultiLineChart
+            series={chart.series.map(s => ({ label: s.seriesLabel, data: s.points.map(p => p.total) }))}
+            xLabels={chart.xLabels}
+          />
+        </CardContent>
+      </Card>
+
+      {open && explanation && (
+        <Dialog open onOpenChange={() => setOpen(false)}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="text-sm font-semibold uppercase tracking-widest text-slate-500">
+                {chart.label} — o que o gráfico mostra
+              </DialogTitle>
+            </DialogHeader>
+            <div className="text-sm text-slate-600 space-y-3">
+              {explanation.trendText && <p>{explanation.trendText}</p>}
+              {explanation.vsLastText && <p>{explanation.vsLastText}</p>}
+              {explanation.best && explanation.worst && explanation.best !== explanation.worst && (
+                <div className="border-t border-slate-100 pt-3 space-y-1">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400 mb-2">Destaques em {explanation.current.seriesLabel}</p>
+                  <p>
+                    <span className="text-emerald-600 font-medium">Melhor semana:</span>{" "}
+                    {explanation.best.occurrence}ª — {explanation.fmtBRLs(explanation.best.total)}
+                  </p>
+                  <p>
+                    <span className="text-red-500 font-medium">Pior semana:</span>{" "}
+                    {explanation.worst.occurrence}ª — {explanation.fmtBRLs(explanation.worst.total)}
+                  </p>
+                </div>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+      {open && !explanation && (
+        <Dialog open onOpenChange={() => setOpen(false)}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="text-sm font-semibold uppercase tracking-widest text-slate-500">
+                {chart.label}
+              </DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-slate-400">Sem dados suficientes para análise.</p>
+          </DialogContent>
+        </Dialog>
+      )}
+    </>
+  );
+}
+
 // ─── left column content ──────────────────────────────────────────────────────
 
 function LeftColumn({
@@ -292,6 +482,8 @@ function LeftColumn({
   onExpandMonthly: (modal: MonthlyChartModal) => void;
   onExpandWeekday: (chart: WeekdayChart) => void;
 }) {
+  const [showAiPrompt, setShowAiPrompt] = useState(false);
+
   const currentMonth = monthlyRevenue.find(m => m.isCurrent);
   const currentRevenue = currentMonth?.total ?? 0;
   const estimatedProfit = avgProfitMarginPerc != null && currentRevenue > 0
@@ -306,8 +498,64 @@ function LeftColumn({
   ];
   const chartLabels = monthlyRevenue.map(m => m.label);
 
+  function buildRevenuePrompt() {
+    const fmtN = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 0 });
+    const fmtPct1 = (v: number) => `${v >= 0 ? "+" : ""}${v.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+
+    const revenueLines = monthlyRevenue.map((m, i) => {
+      const ly = previousYearMonthlyRevenue?.[i];
+      const yoy = ly && ly.total > 0
+        ? ` (vs ano anterior: ${fmtN(ly.total)}, ${fmtPct1(((m.total - ly.total) / ly.total) * 100)})`
+        : "";
+      return `  - ${m.label}: ${fmtN(m.total)}${yoy}${m.isCurrent ? " ← mês atual" : ""}`;
+    }).join("\n");
+
+    const weekdayLines = weekdayCharts.map(chart => {
+      const series = chart.series.map(s => {
+        const vals = s.points.map(p => fmtN(p.total)).join(", ");
+        return `    ${s.seriesLabel}: [${vals}]`;
+      }).join("\n");
+      return `  ${chart.label}:\n${series}`;
+    }).join("\n");
+
+    const profitLine = avgProfitMarginPerc != null && estimatedProfit != null
+      ? `\nMargem média: ${avgProfitMarginPerc.toLocaleString("pt-BR", { minimumFractionDigits: 1 })}% → Lucro presumido ${currentMonth?.label ?? ""}: ${fmtN(estimatedProfit)}`
+      : "";
+
+    return `Você é um consultor de negócios especializado em restaurantes e pizzarias. Analise os dados de faturamento abaixo e forneça insights práticos e ações concretas.
+
+## DADOS DE FATURAMENTO
+
+Faturamento mensal (últimos 3 meses):
+${revenueLines}
+${profitLine}
+
+Faturamento por dia da semana (por semana do mês):
+${weekdayLines}
+
+## O QUE PRECISO
+
+1. **Tendência geral**: o negócio está crescendo, estável ou em queda? Com base em quê?
+2. **Comparação anual**: como estamos em relação ao mesmo período do ano passado?
+3. **Padrões por dia da semana**: quais dias têm melhor e pior desempenho? Há semanas atípicas?
+4. **3 ações práticas imediatas** que posso tomar para melhorar o faturamento no próximo mês.
+5. **1 alerta** se você identificar algo preocupante nos dados.
+
+Seja direto e objetivo. Prefiro sugestões específicas ao meu contexto a conselhos genéricos.`;
+  }
+
   return (
     <div className="flex flex-col gap-6">
+
+      <AiPromptButton onClick={() => setShowAiPrompt(true)} />
+
+      {showAiPrompt && (
+        <AiPromptModal
+          title="Prompt — Análise de Faturamento"
+          prompt={buildRevenuePrompt()}
+          onClose={() => setShowAiPrompt(false)}
+        />
+      )}
 
       {/* ── Current Revenue + Estimated Profit ── */}
       <div className="grid grid-cols-2 gap-4">
@@ -364,20 +612,8 @@ function LeftColumn({
       </Card>
 
       <div className="grid grid-cols-2 gap-4">
-        {weekdayCharts.map(chart => (
-          <Card key={chart.weekday} className="p-4">
-            <CardContent className="p-0">
-              <ChartHeader
-                title={chart.label}
-                subtitle="Por semana do mês"
-                onExpand={() => onExpandWeekday(chart)}
-              />
-              <MultiLineChart
-                series={chart.series.map(s => ({ label: s.seriesLabel, data: s.points.map(p => p.total) }))}
-                xLabels={chart.xLabels}
-              />
-            </CardContent>
-          </Card>
+        {weekdayCharts.filter(c => c.weekday !== 1 && c.weekday !== 2).map(chart => (
+          <WeekdayChartCard key={chart.weekday} chart={chart} onExpand={() => onExpandWeekday(chart)} />
         ))}
       </div>
     </div>
@@ -744,9 +980,125 @@ function IngredientImpactModal({
   );
 }
 
+// ─── net avg card ─────────────────────────────────────────────────────────────
+
+function NetAvgCard({ netAvg, total, increased, decreased, avgIncrease, avgDecrease, latestCurrentDate }: {
+  netAvg: number;
+  total: number;
+  increased: number;
+  decreased: number;
+  avgIncrease: number | null;
+  avgDecrease: number | null;
+  latestCurrentDate: string | null;
+}) {
+  const [open, setOpen] = useState(false);
+
+  const fmt1 = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  const fmtSigned = (v: number) => `${v > 0 ? "+" : ""}${fmt1(v)}%`;
+
+  const monthLabel = latestCurrentDate
+    ? new Date(latestCurrentDate).toLocaleDateString("pt-BR", { month: "long", year: "numeric" })
+    : "este mês";
+
+  const explanation = (() => {
+    const parts: string[] = [];
+    if (avgIncrease !== null) parts.push(`${increased} × ${fmtSigned(avgIncrease)}`);
+    if (avgDecrease !== null) parts.push(`${decreased} × ${fmtSigned(avgDecrease)}`);
+    const formula = `(${parts.join(" + ")}) ÷ ${total}`;
+
+    const headline = netAvg > 0
+      ? `Seu custo de insumos subiu ${fmt1(Math.abs(netAvg))}% em ${monthLabel} — sua margem encolheu na mesma proporção, a menos que os preços de venda tenham acompanhado.`
+      : netAvg < 0
+      ? `Seu custo de insumos caiu ${fmt1(Math.abs(netAvg))}% em ${monthLabel} — sua margem melhorou na mesma proporção se os preços de venda ficaram estáveis.`
+      : `As variações se equilibraram em ${monthLabel} — o custo médio dos insumos ficou praticamente estável.`;
+
+    const actions: string[] = netAvg > 0 ? [
+      `Verifique os ${increased} insumos que subiram e priorize os que têm mais receitas dependentes (veja a tabela "Por Impacto").`,
+      `Avalie reajuste de preço nos itens do cardápio que usam os insumos mais afetados.`,
+      `Pesquise fornecedores alternativos para os insumos com maior variação positiva.`,
+      `Se o aumento for pontual (sazonalidade), considere substituição temporária de ingredientes.`,
+    ] : netAvg < 0 ? [
+      `Aproveite a queda para revisar os preços de venda — a margem extra pode ser reinvestida ou retida.`,
+      `Verifique se a queda é estrutural (mudança de fornecedor) ou pontual (promoção/sazonalidade) antes de tomar decisões de médio prazo.`,
+      `Monitore os ${increased} insumos que ainda subiram — eles podem pressionar a margem nos próximos meses.`,
+    ] : [
+      `Equilíbrio saudável — monitore os ${increased} insumos que subiram para garantir que não se agravem no próximo mês.`,
+    ];
+
+    return { formula, headline, actions };
+  })();
+
+  return (
+    <>
+      <Card className="p-4">
+        <CardContent className="p-0">
+          <div className="flex items-start justify-between">
+            <p className="text-[10px] uppercase tracking-wide text-slate-400">Saldo geral</p>
+            <button
+              onClick={() => setOpen(true)}
+              className="text-slate-300 hover:text-slate-500 transition-colors -mt-0.5"
+              title="Como é calculado?"
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="8" cy="8" r="7.5" stroke="currentColor"/>
+                <path d="M6.5 6C6.5 5.17 7.17 4.5 8 4.5C8.83 4.5 9.5 5.17 9.5 6C9.5 6.83 8.83 7.5 8 7.5V9" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+                <circle cx="8" cy="11" r="0.7" fill="currentColor"/>
+              </svg>
+            </button>
+          </div>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-500 mb-1">
+            {total} insumos — {monthLabel.toUpperCase()}
+          </p>
+          <p className={`text-2xl font-bold ${netAvg > 0 ? "text-red-600" : netAvg < 0 ? "text-emerald-600" : "text-slate-700"}`}>
+            {fmtSigned(netAvg)}
+          </p>
+        </CardContent>
+      </Card>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-sm font-semibold uppercase tracking-widest text-slate-500">
+              O que esse número significa?
+            </DialogTitle>
+          </DialogHeader>
+          <div className="text-sm text-slate-600 space-y-4">
+            {/* 1. impacto direto — o mais importante */}
+            <p className={`font-medium ${netAvg > 0 ? "text-red-700" : netAvg < 0 ? "text-emerald-700" : "text-slate-700"}`}>
+              {explanation.headline}
+            </p>
+
+            {/* 2. ações concretas */}
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400 mb-2">O que fazer agora</p>
+              <ul className="space-y-1.5">
+                {explanation.actions.map((a, i) => (
+                  <li key={i} className="flex gap-2 text-xs text-slate-600">
+                    <span className="text-slate-300 mt-0.5">→</span>
+                    <span>{a}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* 3. como é calculado — detalhe técnico por último */}
+            <div className="border-t border-slate-100 pt-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400 mb-1">Como é calculado</p>
+              <p className="text-xs text-slate-400 mb-1">Média da variação % de todos os {total} insumos (alta e queda):</p>
+              <p className="font-mono text-xs bg-slate-50 rounded px-3 py-2 text-slate-500">
+                {explanation.formula} ≈ {fmtSigned(netAvg)}
+              </p>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 // ─── right column: cost variation tables ─────────────────────────────────────
 
-function CostVarTables({ byAbs, byPct, byImpact, missingConsumptionUm }: { byAbs: CostVarItem[]; byPct: CostVarItem[]; byImpact: CostVarImpactItem[]; missingConsumptionUm: MissingUmItem[] }) {
+function CostVarTables({ byAbs, byPct, byImpact, missingConsumptionUm, all }: { byAbs: CostVarItem[]; byPct: CostVarItem[]; byImpact: CostVarImpactItem[]; missingConsumptionUm: MissingUmItem[]; all: CostVarItem[] }) {
   const [showAllAbs, setShowAllAbs] = useState(false);
   const [showAllPct, setShowAllPct] = useState(false);
   const [showAllImpact, setShowAllImpact] = useState(false);
@@ -861,9 +1213,136 @@ function CostVarTables({ byAbs, byPct, byImpact, missingConsumptionUm }: { byAbs
     </Card>
   );
 
+  const [showCostAiPrompt, setShowCostAiPrompt] = useState(false);
+
+  // ── monthly cost variation summary ──
+  const increased = all.filter(i => i.pctDelta > 0);
+  const decreased = all.filter(i => i.pctDelta < 0);
+  const avgIncrease = increased.length > 0
+    ? increased.reduce((s, i) => s + i.pctDelta, 0) / increased.length
+    : null;
+  const avgDecrease = decreased.length > 0
+    ? decreased.reduce((s, i) => s + i.pctDelta, 0) / decreased.length
+    : null;
+  const netAvg = all.length > 0
+    ? all.reduce((s, i) => s + i.pctDelta, 0) / all.length
+    : null;
+  const latestCurrentDate = all
+    .map(i => i.currentDate)
+    .filter(Boolean)
+    .sort()
+    .at(-1) ?? null;
+
+  function buildCostPrompt() {
+    const fmtPct1 = (v: number) => `${v >= 0 ? "+" : ""}${v.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+    const fmtBRLm = (v: number) => `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const monthRef = latestCurrentDate
+      ? new Date(latestCurrentDate).toLocaleDateString("pt-BR", { month: "long", year: "numeric" })
+      : "mês corrente";
+
+    const sortedUp = [...increased].sort((a, b) => b.pctDelta - a.pctDelta);
+    const sortedDown = [...decreased].sort((a, b) => a.pctDelta - b.pctDelta);
+
+    const upLines = sortedUp.map(i =>
+      `  - ${i.name}: ${fmtBRLm(i.previous)} → ${fmtBRLm(i.current)} (${fmtPct1(i.pctDelta)})`
+    ).join("\n");
+    const downLines = sortedDown.map(i =>
+      `  - ${i.name}: ${fmtBRLm(i.previous)} → ${fmtBRLm(i.current)} (${fmtPct1(i.pctDelta)})`
+    ).join("\n");
+
+    const impactLines = byImpact.slice(0, 5).map(i =>
+      `  - ${i.name}: ${i.recipeUsageCount} receita${i.recipeUsageCount !== 1 ? "s" : ""} afetada${i.recipeUsageCount !== 1 ? "s" : ""}, variação ${fmtPct1(i.pctDelta)}`
+    ).join("\n");
+
+    const netLine = netAvg != null
+      ? `Variação líquida média (todos os insumos): ${fmtPct1(netAvg)}`
+      : "";
+
+    return `Você é um consultor de negócios especializado em restaurantes e pizzarias. Analise os dados de variação de custo de insumos abaixo e forneça recomendações práticas.
+
+## DADOS DE CUSTO DE INSUMOS — ${monthRef.toUpperCase()}
+
+${netLine}
+
+Insumos que SUBIRAM de preço (${increased.length} no total):
+${upLines || "  (nenhum)"}
+
+Insumos que CAÍRAM de preço (${decreased.length} no total):
+${downLines || "  (nenhum)"}
+
+Top insumos por IMPACTO NAS RECEITAS (usados em mais pratos):
+${impactLines || "  (sem dados)"}
+
+## O QUE PRECISO
+
+1. **Prioridade imediata**: quais insumos merecem atenção urgente e por quê?
+2. **Impacto na margem**: com base nos insumos mais usados em receitas, como isso afeta meu lucro?
+3. **Ações de curto prazo** (próximas 2 semanas):
+   - Negociação com fornecedores: quais e como abordar?
+   - Substituição de ingredientes: onde é viável sem impactar qualidade?
+   - Ajuste de cardápio: algum item merece revisão de preço ou descontinuação?
+4. **1 oportunidade** que você enxerga nos insumos que caíram de preço.
+5. **Alerta** caso identifique algo preocupante no padrão de variação.
+
+Seja direto e objetivo. Prefiro sugestões específicas ao meu contexto a conselhos genéricos.`;
+  }
+
   return (
     <>
       <MissingConsumptionUmAlert items={missingConsumptionUm} />
+
+      <AiPromptButton onClick={() => setShowCostAiPrompt(true)} />
+
+      {showCostAiPrompt && (
+        <AiPromptModal
+          title="Prompt — Análise de Custos de Insumos"
+          prompt={buildCostPrompt()}
+          onClose={() => setShowCostAiPrompt(false)}
+        />
+      )}
+
+      {/* Monthly cost variation summary */}
+      {(avgIncrease !== null || avgDecrease !== null) && (
+        <div className="grid grid-cols-3 gap-4">
+          {avgIncrease !== null && (
+            <Card className="p-4">
+              <CardContent className="p-0">
+                <p className="text-[10px] uppercase tracking-wide text-slate-400">Insumos com alta</p>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-500 mb-1">
+                  {increased.length} insumo{increased.length !== 1 ? "s" : ""} — variação média
+                </p>
+                <p className="text-2xl font-bold text-red-600">
+                  +{avgIncrease.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%
+                </p>
+              </CardContent>
+            </Card>
+          )}
+          {avgDecrease !== null && (
+            <Card className="p-4">
+              <CardContent className="p-0">
+                <p className="text-[10px] uppercase tracking-wide text-slate-400">Insumos com queda</p>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-500 mb-1">
+                  {decreased.length} insumo{decreased.length !== 1 ? "s" : ""} — variação média
+                </p>
+                <p className="text-2xl font-bold text-emerald-600">
+                  {avgDecrease.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%
+                </p>
+              </CardContent>
+            </Card>
+          )}
+          {netAvg !== null && (
+            <NetAvgCard
+              netAvg={netAvg}
+              total={all.length}
+              increased={increased.length}
+              decreased={decreased.length}
+              avgIncrease={avgIncrease}
+              avgDecrease={avgDecrease}
+              latestCurrentDate={latestCurrentDate}
+            />
+          )}
+        </div>
+      )}
 
       {/* Impact-weighted table */}
       {byImpact.length > 0 && (
@@ -1005,6 +1484,7 @@ export default function AdminIndex() {
                     byPct={costVarData.byPct}
                     byImpact={costVarData.byImpact}
                     missingConsumptionUm={costVarData.missingConsumptionUm}
+                    all={costVarData.all}
                   />
                 )}
               </Await>

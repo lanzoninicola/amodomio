@@ -1,5 +1,5 @@
 import { Link, useFetcher, useNavigate, useRevalidator } from '@remix-run/react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronsUpDown } from 'lucide-react';
 import { DecimalInput } from '~/components/inputs/inputs';
 import { MoneyInput } from '~/components/money-input/MoneyInput';
@@ -65,21 +65,31 @@ export function StockMovementEditor({
   const rollbackFetcher = useFetcher<any>();
   const navigate = useNavigate();
   const revalidator = useRevalidator();
+  const handledRollbackMovementIdRef = useRef<string | null>(null);
   const isSaving = fetcher.state !== 'idle';
   const isRollingBack = rollbackFetcher.state !== 'idle';
   const rollbackAction = String(rollbackFetcher.formData?.get('_action') || '');
   const isSubmitting = isSaving || isRollingBack;
   const line = row?.Line || null;
   const updatedLineId = fetcher.data?.payload?.updatedLineId;
+  const [hasRolledBackForEditing, setHasRolledBackForEditing] = useState(false);
   const rollbackSucceededForRow =
-    rollbackFetcher.state === 'idle' &&
-    rollbackFetcher.data?.status === 200 &&
-    rollbackFetcher.data?.payload?.rolledBackMovementId === row?.id;
-  const isActiveMovement = !rollbackSucceededForRow && Boolean(!row?.deletedAt);
+    hasRolledBackForEditing ||
+    (
+      rollbackFetcher.state === 'idle' &&
+      rollbackFetcher.data?.status === 200 &&
+      rollbackFetcher.data?.payload?.rolledBackMovementId === row?.id
+    );
+  const isActiveMovement = !isActiveMovementDeleted(row) && !rollbackSucceededForRow;
   const canRemapItem = !isActiveMovement;
   const supplierOptions = useMemo(() => suppliers || [], [suppliers]);
   const itemOptions = useMemo(() => items || [], [items]);
   const movementUnitInitial = String(line?.movementUnit || line?.unitEntry || line?.unitConsumption || row?.movementUnit || '').trim().toUpperCase();
+  const resolvedUnitOptions = useMemo(() => {
+    const merged = new Set<string>((unitOptions || []).filter(Boolean));
+    if (movementUnitInitial) merged.add(movementUnitInitial);
+    return Array.from(merged).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [movementUnitInitial, unitOptions]);
   const [qtyEntryDraft, setQtyEntryDraft] = useState<number>(Number(line?.qtyEntry ?? 0));
   const [movementUnitDraft, setMovementUnitDraft] = useState(movementUnitInitial || '');
   const [costTotalAmountDraft, setCostTotalAmountDraft] = useState<number>(
@@ -119,9 +129,18 @@ export function StockMovementEditor({
   useEffect(() => {
     if (rollbackFetcher.state !== 'idle') return;
     if (rollbackFetcher.data?.status !== 200) return;
-    if (rollbackFetcher.data?.payload?.rolledBackMovementId !== row?.id) return;
+    const rolledBackMovementId = String(rollbackFetcher.data?.payload?.rolledBackMovementId || '');
+    if (rolledBackMovementId !== String(row?.id || '')) return;
+    if (handledRollbackMovementIdRef.current === rolledBackMovementId) return;
+    handledRollbackMovementIdRef.current = rolledBackMovementId;
+    setHasRolledBackForEditing(true);
     revalidator.revalidate();
   }, [revalidator, rollbackFetcher.data, rollbackFetcher.state, row?.id]);
+
+  useEffect(() => {
+    handledRollbackMovementIdRef.current = null;
+    setHasRolledBackForEditing(false);
+  }, [row?.id]);
 
   if (!row || !line) return null;
 
@@ -318,7 +337,7 @@ export function StockMovementEditor({
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="__EMPTY__">Sem unidade</SelectItem>
-                      {unitOptions.map((unit) => (
+                      {resolvedUnitOptions.map((unit) => (
                         <SelectItem key={unit} value={unit}>
                           {unit}
                         </SelectItem>
@@ -438,6 +457,9 @@ export function StockMovementEditor({
                 <p className="text-sm text-amber-900">
                   Se você precisa remapear esta linha para outro item, reverta a movimentação agora. Depois disso, a tela recarrega já liberando a troca do item.
                 </p>
+                <p className="text-xs text-amber-800">
+                  Se o item atual já recebeu atualizações de custo depois desta importação, o sistema preserva o custo mais recente durante a reversão.
+                </p>
                 <Button
                   type="button"
                   variant="outline"
@@ -523,4 +545,8 @@ export function StockMovementEditor({
       </fetcher.Form>
     </div>
   );
+}
+
+function isActiveMovementDeleted(row: any) {
+  return Boolean(row?.deletedAt);
 }

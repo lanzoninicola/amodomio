@@ -612,6 +612,7 @@ export default function AdminImportStockMovementsBatchLineDetailRoute() {
           <input type="hidden" name="supplierCnpj" value={editableLine?.supplierCnpj || ''} />
           <input type="hidden" name="observation" value={editableLine?.observation || ''} />
           <input type="hidden" name="autoApproveCostReview" value="off" />
+          <input type="hidden" name="importAfterSave" value="off" />
         <div className="space-y-1">
           <h4 className="text-sm font-semibold text-slate-900">Comparativo por item do documento</h4>
           <p className="text-xs text-slate-500">Cada item aparece em dois níveis: primeiro a entrada do arquivo e logo abaixo o movimento gerado, com leve recuo à direita. Só a linha aberta é editável no bloco de movimento.</p>
@@ -629,6 +630,7 @@ export default function AdminImportStockMovementsBatchLineDetailRoute() {
                 <TableHead className="bg-slate-50 px-3 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Custo total</TableHead>
                 <TableHead className="bg-slate-50 px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Fator</TableHead>
                 <TableHead className="bg-slate-50 px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Status</TableHead>
+                <TableHead className="bg-slate-50 px-3 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Ação</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -683,6 +685,7 @@ export default function AdminImportStockMovementsBatchLineDetailRoute() {
                     </TableCell>
                     <TableCell className="px-3 py-3 text-xs text-slate-400">-</TableCell>
                     <TableCell className="px-3 py-3 text-xs text-slate-400">-</TableCell>
+                    <TableCell className="px-3 py-3 text-xs text-slate-400"></TableCell>
                     </TableRow>
                     <TableRow
                       key={`${line.id}-movement`}
@@ -844,16 +847,29 @@ export default function AdminImportStockMovementsBatchLineDetailRoute() {
                                 </DialogContent>
                               </Dialog>
                               {mappedItemIdDraft ? (
-                                <Link
-                                  to={`/admin/items/${mappedItemIdDraft}/main`}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="text-[11px] font-medium text-slate-600 underline underline-offset-2 hover:text-slate-900"
-                                >
-                                  Editar item
-                                </Link>
+                                <div className="flex items-center gap-2">
+                                  <Link
+                                    to={`/admin/items/${mappedItemIdDraft}/main`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="text-[11px] font-medium text-slate-600 underline underline-offset-2 hover:text-slate-900"
+                                  >
+                                    Editar item
+                                  </Link>
+                                  <Link
+                                    to={`/admin/stock-movements?itemId=${encodeURIComponent(mappedItemIdDraft)}`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="text-[11px] font-medium text-slate-600 underline underline-offset-2 hover:text-slate-900"
+                                  >
+                                    Movimentações estoque
+                                  </Link>
+                                </div>
                               ) : (
-                                <span className="text-[11px] text-slate-400">Editar item</span>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[11px] text-slate-400">Editar item</span>
+                                  <span className="text-[11px] text-slate-400">Movimentações estoque</span>
+                                </div>
                               )}
                             </div>
                           </div>
@@ -1005,6 +1021,18 @@ export default function AdminImportStockMovementsBatchLineDetailRoute() {
                         <div className="mt-1 text-[11px] text-slate-600">{preview.statusMessage}</div>
                       ) : null}
                     </TableCell>
+                    <TableCell className="min-w-[160px] px-3 py-3 text-right">
+                      {isActive ? (
+                        <Button
+                          type="submit"
+                          className="rounded-xl bg-slate-900 text-white hover:bg-slate-800"
+                          disabled={fetcher.state !== 'idle'}
+                        >
+                          {fetcher.state !== 'idle' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                          Salvar
+                        </Button>
+                      ) : null}
+                    </TableCell>
                   </TableRow>
                   </Fragment>
                 );
@@ -1015,10 +1043,6 @@ export default function AdminImportStockMovementsBatchLineDetailRoute() {
         <div className="flex flex-wrap items-center justify-end gap-2">
           <Button asChild type="button" variant="outline" className="rounded-xl">
             <Link to={returnTo}>Fechar</Link>
-          </Button>
-          <Button type="submit" className="rounded-xl bg-slate-900 text-white hover:bg-slate-800" disabled={fetcher.state !== 'idle'}>
-            {fetcher.state !== 'idle' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            Salvar linha {editableLine?.rowNumber || activeLine.rowNumber}
           </Button>
         </div>
       </fetcher.Form>

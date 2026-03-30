@@ -47,6 +47,10 @@ function toValidDate(value: unknown): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+function getRowEventDate(row: { validFrom?: unknown; createdAt?: unknown }): Date | null {
+  return toValidDate(row?.validFrom) || toValidDate(row?.createdAt);
+}
+
 export default function AdminItemCostsIndex() {
   const { item, costMetrics, averageWindowDays } = useOutletContext<AdminItemOutletContext>();
 
@@ -56,27 +60,37 @@ export default function AdminItemCostsIndex() {
     history.map((r: any) => getSupplierNameFromMetadata(r?.metadata)).find(Boolean) || "";
 
   // Build sparkline from history
-  const chartMap = new Map<string, { date: string; label: string; total: number; count: number }>();
+  const chartMap = new Map<string, { date: string; label: string; value: number; suppliers: Set<string>; latestAt: number }>();
   for (const row of history) {
     if (isComparisonOnly(row?.metadata)) continue;
-    const date = toValidDate(row?.validFrom) || toValidDate(row?.createdAt);
+    const date = getRowEventDate(row);
     if (!date) continue;
     const amount = normalizeCostToConsumptionUnit(row, item);
     if (!Number.isFinite(amount) || (amount as number) < 0) continue;
     const key = date.toISOString().slice(0, 10);
+    const eventTime = date.getTime();
     const bucket = chartMap.get(key) || {
       date: key,
       label: date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }),
-      total: 0,
-      count: 0,
+      value: amount as number,
+      suppliers: new Set<string>(),
+      latestAt: eventTime,
     };
-    bucket.total += amount as number;
-    bucket.count += 1;
+    if (eventTime >= bucket.latestAt) {
+      bucket.value = amount as number;
+      bucket.latestAt = eventTime;
+    }
+    const supplierName = getSupplierNameFromMetadata(row?.metadata);
+    if (supplierName) bucket.suppliers.add(supplierName);
     chartMap.set(key, bucket);
   }
   const chartData = Array.from(chartMap.values())
-    .map((b) => ({ ...b, value: b.count > 0 ? b.total / b.count : 0 }))
     .sort((a, b) => a.date.localeCompare(b.date));
+  const chartSupplierLegend = chartData.map((bucket) => ({
+    date: bucket.date,
+    label: bucket.label,
+    suppliers: Array.from(bucket.suppliers.values()),
+  }));
   const chartMax = Math.max(...chartData.map((b) => b.value), 0);
 
   const basePath = `/admin/items/${item.id}/costs`;
@@ -199,6 +213,21 @@ export default function AdminItemCostsIndex() {
                 );
               })}
             </svg>
+            {chartSupplierLegend.length > 0 ? (
+              <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                <div className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Fornecedores por data</div>
+                <div className="space-y-2">
+                  {chartSupplierLegend.map((entry) => (
+                    <div key={entry.date} className="grid gap-1 text-xs text-slate-600 sm:grid-cols-[72px_minmax(0,1fr)] sm:gap-3">
+                      <div className="font-semibold text-slate-700">{entry.label}</div>
+                      <div className="min-w-0">
+                        {entry.suppliers.length > 0 ? entry.suppliers.join(", ") : <span className="text-slate-400">Sem fornecedor informado</span>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
         ) : (
           <div className="flex flex-1 items-center justify-center text-sm text-slate-400">

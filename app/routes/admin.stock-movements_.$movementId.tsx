@@ -25,7 +25,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     const db = itemPrismaEntity.client as any;
     const url = new URL(request.url);
     const returnTo = sanitizeReturnTo(str(url.searchParams.get('returnTo')), '/admin/stock-movements');
-    const [result, items, suppliers, unitOptions] = await Promise.all([
+    const [result, items, suppliers] = await Promise.all([
       listStockMovementImportMovements({
         movementId,
         status: 'all',
@@ -45,11 +45,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           take: 2000,
         })
         : [],
-      getAvailableItemUnits(),
     ]);
 
     const row = result.rows?.[0] || null;
     if (!row) return badRequest('Movimentação não encontrada');
+    const mappedItemId = str(row.itemId || row.Line?.mappedItemId || row.ImportLine?.mappedItemId || null) || undefined;
+    const unitOptions = await getAvailableItemUnits(mappedItemId);
 
     return ok({ row, items, suppliers, unitOptions, returnTo });
   } catch (error) {

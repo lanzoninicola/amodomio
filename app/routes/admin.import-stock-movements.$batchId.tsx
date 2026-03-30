@@ -26,7 +26,7 @@ import { Separator } from '~/components/ui/separator';
 import { authenticator } from '~/domain/auth/google.server';
 import { itemPrismaEntity } from '~/domain/item/item.prisma.entity.server';
 import { getAvailableItemUnits } from '~/domain/item/item-units.server';
-import { normalizeItemCostToConsumptionUnit } from '~/domain/item/item-cost-metrics.server';
+import { isItemCostExcludedFromMetrics, normalizeItemCostToConsumptionUnit } from '~/domain/item/item-cost-metrics.server';
 import {
   archiveStockMovementImportBatch,
   deleteStockMovementImportBatch,
@@ -53,6 +53,37 @@ const ITEM_CLASSIFICATIONS = [
   'servico',
   'outro',
 ] as const;
+
+function resolveLatestCostHint(params: {
+  currentRows: any[];
+  historyRows: any[];
+}) {
+  const firstHistoryRow = params.historyRows[0];
+  const item = firstHistoryRow?.ItemVariation?.Item || params.currentRows[0]?.ItemVariation?.Item || {};
+
+  for (const row of params.historyRows) {
+    if (isItemCostExcludedFromMetrics(row)) continue;
+    const normalized = normalizeItemCostToConsumptionUnit(
+      { costAmount: row.costAmount, unit: row.unit, source: row.source },
+      item,
+    );
+    if (Number.isFinite(normalized) && Number(normalized) > 0) {
+      return Number(normalized);
+    }
+  }
+
+  for (const row of params.currentRows) {
+    const normalized = normalizeItemCostToConsumptionUnit(
+      { costAmount: row.costAmount, unit: row.unit, source: row.source },
+      row?.ItemVariation?.Item || item,
+    );
+    if (Number.isFinite(normalized) && Number(normalized) > 0) {
+      return Number(normalized);
+    }
+  }
+
+  return null;
+}
 
 export const LINE_STATUS_GUIDE = [
   {
@@ -494,16 +525,29 @@ export function ItemSystemMapperCell({
             </DialogContent>
           </Dialog>
           {selectedItemId ? (
-            <Link
-              to={`/admin/items/${selectedItemId}/main`}
-              target="_blank"
-              rel="noreferrer"
-              className="text-[11px] font-medium text-slate-600 underline underline-offset-2 hover:text-slate-900"
-            >
-              Editar item
-            </Link>
+            <>
+              <Link
+                to={`/admin/items/${selectedItemId}/main`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-[11px] font-medium text-slate-600 underline underline-offset-2 hover:text-slate-900"
+              >
+                Editar item
+              </Link>
+              <Link
+                to={`/admin/stock-movements?itemId=${encodeURIComponent(selectedItemId)}`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-[11px] font-medium text-slate-600 underline underline-offset-2 hover:text-slate-900"
+              >
+                Movimentações estoque
+              </Link>
+            </>
           ) : (
-            <span className="text-[11px] text-slate-400">Editar item</span>
+            <>
+              <span className="text-[11px] text-slate-400">Editar item</span>
+              <span className="text-[11px] text-slate-400">Movimentações estoque</span>
+            </>
           )}
         </div>
         {costHint && (costHint.lastCostPerUnit != null || costHint.avgCostPerUnit != null) ? (
@@ -618,12 +662,25 @@ export async function loader({ params }: LoaderFunctionArgs) {
       const itemVariationSelect = {
         itemId: true,
         isReference: true,
-        Item: { select: { purchaseUm: true, consumptionUm: true, purchaseToConsumptionFactor: true } },
+        Item: {
+          select: {
+            purchaseUm: true,
+            consumptionUm: true,
+            purchaseToConsumptionFactor: true,
+            ItemPurchaseConversion: {
+              select: {
+                purchaseUm: true,
+                factor: true,
+              },
+            },
+          },
+        },
       };
       const [costRows, historyRows] = await Promise.all([
         db.itemCostVariation.findMany({
           where: { ItemVariation: { itemId: { in: mappedItemIds }, deletedAt: null } },
-          select: { costAmount: true, unit: true, ItemVariation: { select: itemVariationSelect } },
+          select: { costAmount: true, unit: true, source: true, ItemVariation: { select: itemVariationSelect } },
+          orderBy: [{ validFrom: 'desc' }, { createdAt: 'desc' }],
         }),
         db.itemCostVariationHistory.findMany({
           where: {
@@ -635,21 +692,20 @@ export async function loader({ params }: LoaderFunctionArgs) {
             unit: true,
             source: true,
             metadata: true,
+            validFrom: true,
+            createdAt: true,
             ItemVariation: { select: itemVariationSelect },
           },
           orderBy: [{ validFrom: 'desc' }, { createdAt: 'desc' }],
           take: 500,
         }),
       ]);
+      const currentRowsByItemId = new Map<string, any[]>();
       for (const row of costRows as any[]) {
         const itemId = row.ItemVariation?.itemId;
         if (!itemId) continue;
-        if (itemId in itemCostHints && !row.ItemVariation?.isReference) continue;
-        const normalized = normalizeItemCostToConsumptionUnit(
-          { costAmount: row.costAmount, unit: row.unit },
-          row.ItemVariation?.Item || {},
-        );
-        itemCostHints[itemId] = { lastCostPerUnit: normalized, avgCostPerUnit: null };
+        if (!currentRowsByItemId.has(itemId)) currentRowsByItemId.set(itemId, []);
+        currentRowsByItemId.get(itemId)!.push(row);
       }
       const historyByItemId = new Map<string, any[]>();
       for (const row of historyRows as any[]) {
@@ -658,10 +714,20 @@ export async function loader({ params }: LoaderFunctionArgs) {
         if (!historyByItemId.has(itemId)) historyByItemId.set(itemId, []);
         historyByItemId.get(itemId)!.push(row);
       }
+      for (const itemId of mappedItemIds) {
+        itemCostHints[itemId] = {
+          lastCostPerUnit: resolveLatestCostHint({
+            currentRows: currentRowsByItemId.get(itemId) || [],
+            historyRows: historyByItemId.get(itemId) || [],
+          }),
+          avgCostPerUnit: null,
+        };
+      }
       for (const [itemId, entries] of historyByItemId.entries()) {
         const item = (entries[0] as any)?.ItemVariation?.Item || {};
         const normalized = (entries as any[])
-          .map((e) => normalizeItemCostToConsumptionUnit({ costAmount: e.costAmount, unit: e.unit }, item))
+          .filter((e) => !isItemCostExcludedFromMetrics(e))
+          .map((e) => normalizeItemCostToConsumptionUnit({ costAmount: e.costAmount, unit: e.unit, source: e.source }, item))
           .filter((v): v is number => Number.isFinite(v as number) && (v as number) > 0);
         const avg = normalized.length > 0 ? normalized.reduce((a, b) => a + b, 0) / normalized.length : null;
         if (itemId in itemCostHints) {
@@ -746,6 +812,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       const lineId = str(formData.get('lineId'));
       if (!lineId) return badRequest('Linha inválida');
       const autoApproveCostReview = str(formData.get('autoApproveCostReview')) === 'on';
+      const importAfterSave = str(formData.get('importAfterSave')) === 'on';
       const mappedItemId = str(formData.get('mappedItemId')) || null;
       const movementUnit = str(formData.get('movementUnit')).toUpperCase() || null;
       const qtyEntryRaw = num(formData.get('qtyEntry'));
@@ -798,7 +865,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         }
       }
       let importedLine = false;
-      if (previousLine?.rolledBackAt || !previousLine?.appliedAt) {
+      if (importAfterSave && (previousLine?.rolledBackAt || !previousLine?.appliedAt)) {
         const importResult = await importStockMovementImportBatchLine({
           batchId,
           lineId,

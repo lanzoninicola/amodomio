@@ -3,7 +3,7 @@ import * as XLSX from 'xlsx';
 import prismaClient from '~/lib/prisma/client.server';
 import { itemVariationPrismaEntity } from '~/domain/item/item-variation.prisma.entity.server';
 import { itemCostVariationPrismaEntity } from '~/domain/item/item-cost-variation.prisma.entity.server';
-import { normalizeItemCostToConsumptionUnit } from '~/domain/item/item-cost-metrics.server';
+import { isItemCostExcludedFromMetrics, normalizeItemCostToConsumptionUnit } from '~/domain/item/item-cost-metrics.server';
 
 const SOURCE_SYSTEM = 'saipos';
 const SOURCE_TYPE = 'entrada_nf';
@@ -533,6 +533,37 @@ function resolveTargetUnit(item: any) {
   return str(item?.consumptionUm || item?.purchaseUm).toUpperCase() || null;
 }
 
+function resolveLatestCostHint(params: {
+  currentRows: any[];
+  historyRows: any[];
+}) {
+  const firstHistoryRow = params.historyRows[0];
+  const item = firstHistoryRow?.ItemVariation?.Item || params.currentRows[0]?.ItemVariation?.Item || {};
+
+  for (const row of params.historyRows) {
+    if (isItemCostExcludedFromMetrics(row)) continue;
+    const normalized = normalizeItemCostToConsumptionUnit(
+      { costAmount: row.costAmount, unit: row.unit, source: row.source },
+      item,
+    );
+    if (Number.isFinite(normalized) && Number(normalized) > 0) {
+      return Number(normalized);
+    }
+  }
+
+  for (const row of params.currentRows) {
+    const normalized = normalizeItemCostToConsumptionUnit(
+      { costAmount: row.costAmount, unit: row.unit, source: row.source },
+      row?.ItemVariation?.Item || item,
+    );
+    if (Number.isFinite(normalized) && Number(normalized) > 0) {
+      return Number(normalized);
+    }
+  }
+
+  return null;
+}
+
 async function getCurrentCostHintsByItemIds(itemIds: string[]) {
   const normalizedIds = Array.from(new Set(itemIds.map((id) => str(id)).filter(Boolean)));
   if (normalizedIds.length === 0) return {} as Record<string, { lastCostPerUnit: number | null }>;
@@ -541,23 +572,65 @@ async function getCurrentCostHintsByItemIds(itemIds: string[]) {
   const itemVariationSelect = {
     itemId: true,
     isReference: true,
-    Item: { select: { purchaseUm: true, consumptionUm: true, purchaseToConsumptionFactor: true } },
+    Item: {
+      select: {
+        purchaseUm: true,
+        consumptionUm: true,
+        purchaseToConsumptionFactor: true,
+        ItemPurchaseConversion: {
+          select: {
+            purchaseUm: true,
+            factor: true,
+          },
+        },
+      },
+    },
   };
-  const costRows = await db.itemCostVariation.findMany({
-    where: { ItemVariation: { itemId: { in: normalizedIds }, deletedAt: null } },
-    select: { costAmount: true, unit: true, ItemVariation: { select: itemVariationSelect } },
-  });
+  const [costRows, historyRows] = await Promise.all([
+    db.itemCostVariation.findMany({
+      where: { ItemVariation: { itemId: { in: normalizedIds }, deletedAt: null } },
+      select: { costAmount: true, unit: true, source: true, ItemVariation: { select: itemVariationSelect } },
+      orderBy: [{ validFrom: 'desc' }, { createdAt: 'desc' }],
+    }),
+    db.itemCostVariationHistory.findMany({
+      where: { ItemVariation: { itemId: { in: normalizedIds }, deletedAt: null } },
+      select: {
+        costAmount: true,
+        unit: true,
+        source: true,
+        metadata: true,
+        validFrom: true,
+        createdAt: true,
+        ItemVariation: { select: itemVariationSelect },
+      },
+      orderBy: [{ validFrom: 'desc' }, { createdAt: 'desc' }],
+    }),
+  ]);
 
   const itemCostHints: Record<string, { lastCostPerUnit: number | null }> = {};
+  const currentRowsByItemId = new Map<string, any[]>();
   for (const row of costRows as any[]) {
     const itemId = str(row?.ItemVariation?.itemId);
     if (!itemId) continue;
-    if (itemId in itemCostHints && !row?.ItemVariation?.isReference) continue;
-    const normalized = normalizeItemCostToConsumptionUnit(
-      { costAmount: row.costAmount, unit: row.unit },
-      row.ItemVariation?.Item || {},
-    );
-    itemCostHints[itemId] = { lastCostPerUnit: normalized };
+    if (!currentRowsByItemId.has(itemId)) currentRowsByItemId.set(itemId, []);
+    currentRowsByItemId.get(itemId)!.push(row);
+  }
+
+  const historyRowsByItemId = new Map<string, any[]>();
+  for (const row of historyRows as any[]) {
+    const itemId = str(row?.ItemVariation?.itemId);
+    if (!itemId) continue;
+    if (!historyRowsByItemId.has(itemId)) historyRowsByItemId.set(itemId, []);
+    historyRowsByItemId.get(itemId)!.push(row);
+  }
+
+  for (const itemId of normalizedIds) {
+    itemCostHints[itemId] = {
+      lastCostPerUnit: resolveLatestCostHint({
+        currentRows: currentRowsByItemId.get(itemId) || [],
+        historyRows: historyRowsByItemId.get(itemId) || [],
+      }),
+    };
   }
 
   return itemCostHints;
@@ -2522,7 +2595,6 @@ async function importSingleStockMovementImportBatchLine(params: { batchId: strin
     return { imported: 0, errors: 1, processed: 1 };
   }
 
-  const currentCost = await db.itemCostVariation.findUnique({ where: { itemVariationId: baseVar.id } });
   const nextCost = Number(line.convertedCostAmount ?? NaN);
   if (!(nextCost > 0)) {
     await db.stockMovementImportBatchLine.update({
@@ -2532,71 +2604,77 @@ async function importSingleStockMovementImportBatchLine(params: { batchId: strin
     return { imported: 0, errors: 1, processed: 1 };
   }
 
-  const movement = await db.stockMovement.create({
-    data: {
-      direction: 'entry',
-      movementType: 'import',
-      originType: 'import-line',
-      originRefId: line.id,
-      importBatchId: params.batchId,
-      importLineId: line.id,
-      itemId: item.id,
+  await db.$transaction(async (tx: any) => {
+    const currentCost = await tx.itemCostVariation.findUnique({
+      where: { itemVariationId: baseVar.id },
+    });
+
+    const movement = await tx.stockMovement.create({
+      data: {
+        direction: 'entry',
+        movementType: 'import',
+        originType: 'import-line',
+        originRefId: line.id,
+        importBatchId: params.batchId,
+        importLineId: line.id,
+        itemId: item.id,
+        itemVariationId: baseVar.id,
+        supplierId: line.supplierId || null,
+        quantityAmount: line.qtyEntry ?? line.qtyConsumption ?? null,
+        quantityUnit: line.unitEntry || line.unitConsumption || line.movementUnit || null,
+        previousCostVariationId: currentCost?.id || null,
+        previousCostAmount: currentCost?.costAmount ?? null,
+        previousCostUnit: currentCost?.unit ?? null,
+        newCostAmount: nextCost,
+        newCostUnit: line.targetUnit || line.movementUnit || null,
+        movementUnit: line.movementUnit || null,
+        conversionSource: line.conversionSource || null,
+        conversionFactorUsed: line.conversionFactorUsed ?? null,
+        invoiceNumber: line.invoiceNumber || null,
+        supplierName: line.supplierName || null,
+        supplierCnpj: line.supplierCnpj || null,
+        movementAt: line.movementAt || null,
+        appliedBy: params.actor || null,
+        metadata: {
+          ...movementMetadataBase({
+            batchId: params.batchId,
+            lineId: line.id,
+            line,
+          }),
+          originType: 'import-line',
+          originRefId: line.id,
+        },
+      },
+    });
+
+    await itemCostVariationPrismaEntity.setCurrentCostWithClient(tx, {
       itemVariationId: baseVar.id,
-      supplierId: line.supplierId || null,
-      quantityAmount: line.qtyEntry ?? line.qtyConsumption ?? null,
-      quantityUnit: line.unitEntry || line.unitConsumption || line.movementUnit || null,
-      previousCostVariationId: currentCost?.id || null,
-      previousCostAmount: currentCost?.costAmount ?? null,
-      previousCostUnit: currentCost?.unit ?? null,
-      newCostAmount: nextCost,
-      newCostUnit: line.targetUnit || line.movementUnit || null,
-      movementUnit: line.movementUnit || null,
-      conversionSource: line.conversionSource || null,
-      conversionFactorUsed: line.conversionFactorUsed ?? null,
-      invoiceNumber: line.invoiceNumber || null,
-      supplierName: line.supplierName || null,
-      supplierCnpj: line.supplierCnpj || null,
-      movementAt: line.movementAt || null,
-      appliedBy: params.actor || null,
+      costAmount: nextCost,
+      unit: line.targetUnit || line.movementUnit || null,
+      source: 'import',
+      referenceType: COST_REFERENCE_TYPE_MOVEMENT,
+      referenceId: movement.id,
+      validFrom: line.movementAt || new Date(),
+      updatedBy: params.actor || null,
       metadata: {
         ...movementMetadataBase({
           batchId: params.batchId,
           lineId: line.id,
           line,
         }),
-        originType: 'import-line',
-        originRefId: line.id,
+        stockMovementId: movement.id,
       },
-    },
-  });
+    });
 
-  await itemCostVariationPrismaEntity.setCurrentCost({
-    itemVariationId: baseVar.id,
-    costAmount: nextCost,
-    unit: line.targetUnit || line.movementUnit || null,
-    source: 'import',
-    referenceType: COST_REFERENCE_TYPE_MOVEMENT,
-    referenceId: movement.id,
-    validFrom: line.movementAt || new Date(),
-    updatedBy: params.actor || null,
-    metadata: {
-      ...movementMetadataBase({
-        batchId: params.batchId,
-        lineId: line.id,
-        line,
-      }),
-      stockMovementId: movement.id,
-    },
-  });
-
-  await db.stockMovementImportBatchLine.update({
-    where: { id: line.id },
-    data: {
-      status: 'imported',
-      appliedAt: new Date(),
-      errorCode: null,
-      errorMessage: null,
-    },
+    await tx.stockMovementImportBatchLine.update({
+      where: { id: line.id },
+      data: {
+        status: 'imported',
+        appliedAt: new Date(),
+        errorCode: null,
+        errorMessage: null,
+      },
+    });
   });
   return { imported: 1, errors: 0, processed: 1 };
 }
@@ -3332,7 +3410,7 @@ export async function listStockMovementImportMovements(params: {
     db.stockMovement.count({ where }),
     db.stockMovement.findMany({
       where,
-      orderBy: [{ movementAt: 'desc' }, { appliedAt: 'desc' }],
+      orderBy: [{ movementAt: 'desc' }, { appliedAt: 'desc' }, { createdAt: 'desc' }],
       skip: (page - 1) * pageSize,
       take: pageSize,
       select: {

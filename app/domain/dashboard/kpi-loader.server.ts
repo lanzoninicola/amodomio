@@ -717,5 +717,5 @@ export async function loadCostVarGroupData() {
     .sort((a, b) => b.weightedImpact - a.weightedImpact)
     .slice(0, 10);
 
-  return { byAbs, byPct, byImpact, missingConsumptionUm };
+  return { byAbs, byPct, byImpact, missingConsumptionUm, all };
 }

@@ -1,6 +1,7 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from '@remix-run/node';
 import { Form, Link, useLoaderData, useNavigation, useSearchParams } from '@remix-run/react';
 import { ArrowLeftRight, Eye, PlusCircle } from 'lucide-react';
+import { Separator } from '~/components/ui/separator';
 import { getItemBaseUnit } from '~/components/admin/stock-movement-editor';
 import Container from '~/components/layout/container/container';
 import { Badge } from '~/components/ui/badge';
@@ -71,6 +72,11 @@ function formatDate(value: unknown) {
   return d.toLocaleString('pt-BR');
 }
 
+function extractSupplierNoteInvoiceDate(row: any) {
+  const note = row?.Line?.metadata?.supplierNote || row?.metadata?.supplierNote || null;
+  return note?.data_emissao || note?.dataEntrada || note?.data_entrada || note?.dataCadastro || note?.data_cadastro || null;
+}
+
 function formatMoney(value: unknown) {
   const n = Number(value);
   if (!Number.isFinite(n)) return '-';
@@ -106,6 +112,7 @@ function buildPageHref(filters: {
   lineId: string;
   supplier: string;
   item: string;
+  itemId: string;
   from: string;
   to: string;
   status: string;
@@ -117,6 +124,7 @@ function buildPageHref(filters: {
   if (filters.lineId) searchParams.set('lineId', filters.lineId);
   if (filters.supplier) searchParams.set('supplier', filters.supplier);
   if (filters.item) searchParams.set('item', filters.item);
+  if (filters.itemId) searchParams.set('itemId', filters.itemId);
   if (filters.from) searchParams.set('from', filters.from);
   if (filters.to) searchParams.set('to', filters.to);
   if (filters.status && filters.status !== 'active') searchParams.set('status', filters.status);
@@ -145,6 +153,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const lineId = str(url.searchParams.get('lineId'));
     const supplier = str(url.searchParams.get('supplier'));
     const item = str(url.searchParams.get('item'));
+    const itemId = str(url.searchParams.get('itemId'));
     const from = str(url.searchParams.get('from'));
     const to = str(url.searchParams.get('to'));
     const requestedStatus = str(url.searchParams.get('status'));
@@ -159,6 +168,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         lineId,
         supplier,
         item,
+        itemId,
         from: parseYmdStart(from),
         to: parseYmdEnd(to),
         status: status as 'active' | 'deleted' | 'all',
@@ -192,6 +202,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         lineId,
         supplier,
         item,
+        itemId,
         from,
         to,
         status,
@@ -234,12 +245,16 @@ export async function action({ request }: ActionFunctionArgs) {
         batchId,
         lineId,
         actor,
+        allowDeleteWithoutCostRollback: true,
       });
       const rollbackError = rollbackFailureMessage(result);
       if (rollbackError) return badRequest(rollbackError);
       return ok({
         rolledBackMovementId: movementId || null,
-        message: 'Movimentação revertida. A linha de origem já pode ser remapeada e editada novamente.',
+        message:
+          Number((result as any)?.deletedWithoutCostRollback || 0) > 0
+            ? 'Movimentação revertida para remapeamento. O custo atual do item anterior foi preservado porque já havia alterações posteriores.'
+            : 'Movimentação revertida. A linha de origem já pode ser remapeada e editada novamente.',
       });
     }
 
@@ -293,6 +308,12 @@ export async function action({ request }: ActionFunctionArgs) {
     const movementAtRaw = str(formData.get('movementAt'));
     const movementAt = movementAtRaw ? parseDateTimeLocal(movementAtRaw) : null;
     if (movementAtRaw && !movementAt) return badRequest('Data da movimentação inválida');
+    const mappedItemId = str(formData.get('mappedItemId')) || null;
+    const movementUnit = str(formData.get('movementUnit')).toUpperCase() || null;
+    if (movementUnit) {
+      const availableUnits = await getAvailableItemUnits(mappedItemId || undefined);
+      if (!availableUnits.includes(movementUnit)) return badRequest('UM do movimento inválida');
+    }
 
     const db = itemPrismaEntity.client as any;
     const previousLine = await db.stockMovementImportBatchLine.findUnique({
@@ -313,14 +334,14 @@ export async function action({ request }: ActionFunctionArgs) {
       supplierName: str(formData.get('supplierName')) || null,
       supplierCnpj: str(formData.get('supplierCnpj')) || null,
       qtyEntry,
-      unitEntry: str(formData.get('unitEntry')) || null,
+      unitEntry: movementUnit,
       qtyConsumption,
-      unitConsumption: str(formData.get('unitConsumption')) || null,
-      movementUnit: str(formData.get('movementUnit')) || null,
+      unitConsumption: movementUnit,
+      movementUnit,
       costAmount,
       costTotalAmount,
       observation: str(formData.get('observation')) || null,
-      mappedItemId: str(formData.get('mappedItemId')) || null,
+      mappedItemId,
       manualConversionFactor,
     });
 
@@ -354,7 +375,7 @@ export default function AdminStockMovementsRoute() {
   const rows = (payload.rows || []) as any[];
   const summary = payload.summary || { total: 0, active: 0, deleted: 0, uniqueItems: 0, uniqueSuppliers: 0 };
   const pagination = payload.pagination || { page: 1, totalPages: 1, totalItems: 0 };
-  const filters = payload.filters || { q: '', movementId: '', lineId: '', supplier: '', item: '', from: '', to: '', status: 'active' };
+  const filters = payload.filters || { q: '', movementId: '', lineId: '', supplier: '', item: '', itemId: '', from: '', to: '', status: 'active' };
   const isFiltering = navigation.state !== 'idle' && navigation.location?.pathname === '/admin/stock-movements';
   const currentPath = `/admin/stock-movements${searchParams.toString() ? `?${searchParams.toString()}` : ''}`;
 
@@ -402,66 +423,53 @@ export default function AdminStockMovementsRoute() {
           </div>
         </section>
 
-        <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-          {[
-            ['Movimentações', summary.total],
-            ['Ativas', summary.active],
-            ['Eliminadas', summary.deleted],
-            ['Itens', summary.uniqueItems],
-            ['Fornecedores', summary.uniqueSuppliers],
-          ].map(([label, value]) => (
-            <div key={String(label)} className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-              <div className="text-[11px] uppercase tracking-wide text-slate-500">{label}</div>
-              <div className="text-2xl font-semibold text-slate-950">{value as any}</div>
-            </div>
-          ))}
-        </section>
-
-        <section className="rounded-xl border border-slate-200 bg-white p-4">
+        <section>
           <Form method="get" className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+            {filters.itemId ? <input type="hidden" name="itemId" value={filters.itemId} /> : null}
             <div className="xl:col-span-2">
-              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Busca geral</label>
-              <Input name="q" defaultValue={filters.q} placeholder="documento, lote, fornecedor ou ingrediente" className="h-10" />
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-400">Busca geral</label>
+              <Input name="q" defaultValue={filters.q} placeholder="documento, lote, fornecedor ou ingrediente" className="h-9 border-0 border-b border-slate-200 rounded-none bg-transparent px-0 shadow-none focus-visible:ring-0 focus-visible:border-slate-400" />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Movimentação ID</label>
-              <Input name="movementId" defaultValue={filters.movementId} placeholder="ID exato da movimentação" className="h-10" />
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-400">Movimentação ID</label>
+              <Input name="movementId" defaultValue={filters.movementId} placeholder="ID exato da movimentação" className="h-9 border-0 border-b border-slate-200 rounded-none bg-transparent px-0 shadow-none focus-visible:ring-0 focus-visible:border-slate-400" />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Fornecedor</label>
-              <Input name="supplier" defaultValue={filters.supplier} placeholder="Nome do fornecedor" className="h-10" />
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-400">Fornecedor</label>
+              <Input name="supplier" defaultValue={filters.supplier} placeholder="Nome do fornecedor" className="h-9 border-0 border-b border-slate-200 rounded-none bg-transparent px-0 shadow-none focus-visible:ring-0 focus-visible:border-slate-400" />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Produto</label>
-              <Input name="item" defaultValue={filters.item} placeholder="Item ou ingrediente" className="h-10" />
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-400">Produto</label>
+              <Input name="item" defaultValue={filters.item} placeholder="Item ou ingrediente" className="h-9 border-0 border-b border-slate-200 rounded-none bg-transparent px-0 shadow-none focus-visible:ring-0 focus-visible:border-slate-400" />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">De</label>
-              <Input name="from" type="date" defaultValue={filters.from} className="h-10" />
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-400">De</label>
+              <Input name="from" type="date" defaultValue={filters.from} className="h-9 border-0 border-b border-slate-200 rounded-none bg-transparent px-0 shadow-none focus-visible:ring-0 focus-visible:border-slate-400" />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Até</label>
-              <Input name="to" type="date" defaultValue={filters.to} className="h-10" />
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-400">Até</label>
+              <Input name="to" type="date" defaultValue={filters.to} className="h-9 border-0 border-b border-slate-200 rounded-none bg-transparent px-0 shadow-none focus-visible:ring-0 focus-visible:border-slate-400" />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Status</label>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-400">Status</label>
               <select
                 name="status"
                 defaultValue={filters.status}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
+                className="h-9 w-full border-0 border-b border-slate-200 bg-transparent px-0 text-sm text-slate-700 focus:outline-none focus:border-slate-400"
               >
                 <option value="active">Somente ativas</option>
                 <option value="deleted">Somente eliminadas</option>
                 <option value="all">Todas</option>
               </select>
             </div>
-            <div className="flex items-end gap-2 xl:col-span-6">
-              <Button type="submit" disabled={isFiltering}>
+            <Separator className="xl:col-span-6" />
+            <div className="flex items-center gap-2 xl:col-span-6">
+              <Button type="submit" disabled={isFiltering} size="sm">
                 {isFiltering ? 'Filtrando...' : 'Aplicar filtros'}
               </Button>
               <Link
                 to="/admin/stock-movements"
-                className="inline-flex h-10 items-center justify-center rounded-md border border-slate-200 px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                className="inline-flex h-8 items-center justify-center rounded-md px-3 text-sm text-slate-500 hover:text-slate-800"
               >
                 Limpar
               </Link>
@@ -475,12 +483,12 @@ export default function AdminStockMovementsRoute() {
               <TableHeader className="bg-slate-50/80">
                 <TableRow className="hover:bg-slate-50/80">
                   <TableHead className="px-3 py-2 text-xs">Movimentação</TableHead>
-                  <TableHead className="px-3 py-2 text-xs">Fornecedor / NF</TableHead>
+                  <TableHead className="px-3 py-2 text-xs">Fornecedor / Documento</TableHead>
                   <TableHead className="px-3 py-2 text-xs">Produto</TableHead>
                   <TableHead className="px-3 py-2 text-xs">Direção</TableHead>
                   <TableHead className="px-3 py-2 text-xs">Quantidade</TableHead>
                   <TableHead className="px-3 py-2 text-xs">Custo</TableHead>
-                  <TableHead className="px-3 py-2 text-xs">Lote</TableHead>
+                  <TableHead className="px-3 py-2 text-xs">Origem</TableHead>
                   <TableHead className="px-3 py-2 text-xs">Ações</TableHead>
                 </TableRow>
               </TableHeader>
@@ -496,14 +504,16 @@ export default function AdminStockMovementsRoute() {
                     <TableRow key={row.id} className="border-slate-100 align-top">
                       <TableCell className="px-3 py-3 text-xs text-slate-700">
                         <div className="font-medium text-slate-900">{formatDate(row.movementAt)}</div>
-                        <div className="text-slate-500">importado em {formatDate(row.appliedAt)}</div>
+                        <div className="text-slate-500">lançado em {formatDate(row.appliedAt)}</div>
                         <div className="text-slate-400">mov. {row.id}</div>
                         <div className="text-slate-400">linha {row.Line?.rowNumber ?? '-'}</div>
                       </TableCell>
                       <TableCell className="px-3 py-3 text-xs text-slate-700">
                         <div className="font-medium text-slate-900">{row.supplierName || 'Sem fornecedor'}</div>
                         <div className="text-slate-500">Doc. {row.invoiceNumber || '-'}</div>
-                        <div className="text-slate-400">{row.supplierCnpj || 'sem CNPJ'}</div>
+                        <div className="text-slate-400">
+                          {extractSupplierNoteInvoiceDate(row) ? `NF em ${formatDate(extractSupplierNoteInvoiceDate(row))}` : 'data NF indisponível'}
+                        </div>
                       </TableCell>
                       <TableCell className="px-3 py-3 text-xs text-slate-700">
                         {row.itemId && row.Item?.name ? (
@@ -544,14 +554,26 @@ export default function AdminStockMovementsRoute() {
                         </div>
                       </TableCell>
                       <TableCell className="px-3 py-3 text-xs text-slate-700">
-                        {row.batchId ? (
-                          <Link to={`/admin/import-stock-movements/${row.batchId}`} className="font-medium text-slate-900 hover:underline">
-                            {row.Batch?.name || row.batchId}
-                          </Link>
-                        ) : (
-                          <span className="font-medium text-slate-500">sem lote</span>
-                        )}
-                        <div className="text-slate-500">item ID: {row.itemId}</div>
+                        <div className="flex flex-col gap-2">
+                          <div>
+                            <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-700">
+                              {getStockMovementTypeLabel(row.movementType || 'manual')}
+                            </Badge>
+                          </div>
+                          {row.batchId ? (
+                            <div className="rounded-lg border border-slate-200 bg-slate-50/70 px-2.5 py-2">
+                              <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Lote</div>
+                              <Link to={`/admin/import-stock-movements/${row.batchId}`} className="mt-0.5 block font-medium text-slate-900 hover:underline">
+                                {row.Batch?.name || row.batchId}
+                              </Link>
+                            </div>
+                          ) : (
+                            <div className="rounded-lg border border-dashed border-slate-200 px-2.5 py-2 text-slate-500">
+                              Origem sem lote vinculado
+                            </div>
+                          )}
+                          <div className="text-slate-400">item ID: {row.itemId}</div>
+                        </div>
                       </TableCell>
 
                       <TableCell className="px-3 py-3 text-xs text-slate-700">
