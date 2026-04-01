@@ -1,7 +1,7 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from '@remix-run/node';
 import { redirect } from '@remix-run/node';
 import { Form, Link, NavLink, Outlet, useActionData, useFetcher, useLoaderData, useNavigation, useRevalidator } from '@remix-run/react';
-import { Check, ChevronsUpDown, Loader2 } from 'lucide-react';
+import { Archive, BarChart2, Check, ChevronsUpDown, Download, Info, Loader2, RotateCcw, Smartphone, Trash2, Users } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import {
   AlertDialog,
@@ -260,6 +260,8 @@ export function statusBadgeClass(status: string) {
   }
 }
 
+const toolbarBtnRed = 'flex flex-col items-center justify-center gap-1 px-4 py-2.5 text-red-700 hover:bg-red-50 transition min-w-[64px] h-full';
+
 export function DeleteBatchButton({ batchId, batchName, status }: { batchId: string; batchName: string; status: string }) {
   const isValidated = status === 'validated';
 
@@ -268,9 +270,10 @@ export function DeleteBatchButton({ batchId, batchName, status }: { batchId: str
       <Form method="post">
         <input type="hidden" name="_action" value="batch-delete" />
         <input type="hidden" name="batchId" value={batchId} />
-        <Button type="submit" variant="outline" className="border-red-200 text-red-700 hover:bg-red-50">
-          Eliminar lote
-        </Button>
+        <button type="submit" className={toolbarBtnRed}>
+          <Trash2 className="h-4 w-4" />
+          <span className="text-[11px] font-medium">Eliminar</span>
+        </button>
       </Form>
     );
   }
@@ -278,9 +281,10 @@ export function DeleteBatchButton({ batchId, batchName, status }: { batchId: str
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
-        <Button type="button" variant="outline" className="border-red-200 text-red-700 hover:bg-red-50">
-          Eliminar lote
-        </Button>
+        <button type="button" className={toolbarBtnRed}>
+          <Trash2 className="h-4 w-4" />
+          <span className="text-[11px] font-medium">Eliminar</span>
+        </button>
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
@@ -1153,141 +1157,202 @@ export default function AdminImportStockMovementsBatchDetailRoute() {
         </div>
       ) : null}
 
-      <section className="space-y-5">
-        <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-          <div className="min-w-0 space-y-4">
-            <Link
-              to="/admin/import-stock-movements"
-              className="inline-flex w-fit items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-600 transition hover:bg-slate-200 hover:text-slate-900"
-            >
-              <span className="text-slate-400">←</span>
-              Voltar para lotes
-            </Link>
-
-            <div className="space-y-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-[28px] font-semibold tracking-tight text-slate-950">{selectedBatch.name}</h2>
-                <Badge variant="outline" className={cn('rounded-full px-2.5 py-1 text-[11px] font-semibold', statusBadgeClass(String(selectedBatch.status)))}>
-                  {selectedBatch.status}
-                </Badge>
-              </div>
-
-              <div className="flex flex-wrap gap-2 text-xs font-medium text-slate-500">
-                <span className="rounded-full bg-slate-100 px-2.5 py-1 font-mono text-slate-600">{selectedBatch.id}</span>
-                <span className="rounded-full bg-slate-100 px-2.5 py-1">{selectedBatch.worksheetName || 'sem aba'}</span>
-                <span className="rounded-full bg-slate-100 px-2.5 py-1">
-                  {summary.pendingSupplier > 0 ? `${summary.pendingSupplier} pend. fornecedor` : 'fornecedor conciliado'}
-                </span>
-              </div>
-
-              <div className="grid gap-x-8 gap-y-2 text-sm text-slate-600 sm:grid-cols-2 xl:grid-cols-3">
-                <div>
-                  <div className="text-[11px] uppercase tracking-wide text-slate-400">Arquivo</div>
-                  <div className="mt-1 text-slate-700">{selectedBatch.originalFileName || '-'}</div>
-                </div>
-                <div>
-                  <div className="text-[11px] uppercase tracking-wide text-slate-400">JSON fornecedor</div>
-                  <div className="mt-1 text-slate-700">{selectedBatch.supplierNotesFileName || 'não anexado'}</div>
-                </div>
-                <div>
-                  <div className="text-[11px] uppercase tracking-wide text-slate-400">Período</div>
-                  <div className="mt-1 text-slate-700">{formatDate(selectedBatch.periodStart)} até {formatDate(selectedBatch.periodEnd)}</div>
-                </div>
-              </div>
-
-              {selectedBatch.notes ? <div className="max-w-3xl text-sm text-slate-500">{selectedBatch.notes}</div> : null}
+      <section className="space-y-4">
+        {/* Title row with all button groups on the right */}
+        <div className="flex items-start justify-between gap-6">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-[28px] font-semibold tracking-tight text-slate-950">{selectedBatch.name}</h2>
+              <Badge variant="outline" className={cn('rounded-full px-2.5 py-1 text-[11px] font-semibold', statusBadgeClass(String(selectedBatch.status)))}>
+                {selectedBatch.status}
+              </Badge>
             </div>
+            {selectedBatch.createdAt ? (
+              <div className="mt-1 text-sm text-slate-400">Criado em {formatDate(selectedBatch.createdAt)}</div>
+            ) : null}
           </div>
 
-          <div className="flex w-full flex-col gap-2 xl:w-[420px] xl:items-stretch">
-            <div className="grid gap-2 sm:grid-cols-2">
-              <Link
-                to={`/admin/mobile/import-stock-movements/${selectedBatch.id}`}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-              >
-                Abrir mobile
-              </Link>
-              <Link
-                to={`/admin/supplier-reconciliation?batchId=${selectedBatch.id}`}
-                className="inline-flex h-11 items-center justify-center rounded-xl border border-amber-200 bg-amber-50 px-4 text-sm font-medium text-amber-900 transition hover:bg-amber-100"
-              >
-                Conciliar fornecedor
-              </Link>
-            </div>
+          <div className="flex shrink-0 items-stretch gap-2">
 
-            <Form method="post">
-              <input type="hidden" name="_action" value="batch-import" />
-              <input type="hidden" name="batchId" value={selectedBatch.id} />
-              <Button type="submit" className="h-11 w-full rounded-xl bg-emerald-600 hover:bg-emerald-700" disabled={summary.readyToImport <= 0 || isImportingBatch}>
-                {isImportingBatch ? 'Importação em andamento...' : `Importar conciliadas (${summary.readyToImport})`}
-              </Button>
-            </Form>
-
-            {summary.error > 0 ? (
+            {/* Grupo 1: Importar, Desfazer, Arquivar, Eliminar */}
+            <div className="flex items-stretch overflow-hidden rounded-lg border border-slate-200">
               <Form method="post">
-                <input type="hidden" name="_action" value="batch-retry-errors" />
+                <input type="hidden" name="_action" value="batch-import" />
                 <input type="hidden" name="batchId" value={selectedBatch.id} />
-                <Button type="submit" variant="outline" className="h-11 w-full rounded-xl" disabled={isImportingBatch}>
-                  Retentar erros ({summary.error})
-                </Button>
+                <button
+                  type="submit"
+                  disabled={summary.readyToImport <= 0 || isImportingBatch}
+                  className="flex flex-col items-center justify-center gap-1 px-4 py-2.5 text-emerald-700 hover:bg-emerald-50 transition min-w-[64px] disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <Download className="h-4 w-4" />
+                  <span className="text-[11px] font-medium">Importar ({summary.readyToImport})</span>
+                </button>
               </Form>
-            ) : null}
 
-            <div className="grid gap-2 sm:grid-cols-3">
+              {summary.error > 0 ? (
+                <>
+                  <Separator orientation="vertical" className="h-auto self-stretch" />
+                  <Form method="post">
+                    <input type="hidden" name="_action" value="batch-retry-errors" />
+                    <input type="hidden" name="batchId" value={selectedBatch.id} />
+                    <button
+                      type="submit"
+                      disabled={isImportingBatch}
+                      className="flex flex-col items-center justify-center gap-1 px-4 py-2.5 text-orange-700 hover:bg-orange-50 transition min-w-[64px] disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <RotateCcw className="h-4 w-4" />
+                      <span className="text-[11px] font-medium">Retentar ({summary.error})</span>
+                    </button>
+                  </Form>
+                </>
+              ) : null}
+
+              <Separator orientation="vertical" className="h-auto self-stretch" />
+
               <Form method="post">
                 <input type="hidden" name="_action" value="batch-rollback" />
                 <input type="hidden" name="batchId" value={selectedBatch.id} />
-                <Button type="submit" variant="outline" className="h-11 w-full rounded-xl" disabled={appliedChanges.length <= 0 || isImportingBatch}>
-                  Desfazer importação
-                </Button>
+                <button
+                  type="submit"
+                  disabled={appliedChanges.length <= 0 || isImportingBatch}
+                  className="flex flex-col items-center justify-center gap-1 px-4 py-2.5 text-slate-600 hover:bg-slate-50 transition min-w-[64px] disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  <span className="text-[11px] font-medium">Desfazer</span>
+                </button>
               </Form>
+
+              <Separator orientation="vertical" className="h-auto self-stretch" />
+
               <Form method="post">
                 <input type="hidden" name="_action" value="batch-archive" />
                 <input type="hidden" name="batchId" value={selectedBatch.id} />
-                <Button type="submit" variant="outline" className="h-11 w-full rounded-xl" disabled={isImportingBatch}>Arquivar</Button>
+                <button
+                  type="submit"
+                  disabled={isImportingBatch}
+                  className="flex flex-col items-center justify-center gap-1 px-4 py-2.5 text-slate-600 hover:bg-slate-50 transition min-w-[64px] disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <Archive className="h-4 w-4" />
+                  <span className="text-[11px] font-medium">Arquivar</span>
+                </button>
               </Form>
+
+              <Separator orientation="vertical" className="h-auto self-stretch" />
+
               <DeleteBatchButton
                 batchId={String(selectedBatch.id)}
                 batchName={String(selectedBatch.name || 'sem nome')}
                 status={String(selectedBatch.status || '')}
               />
             </div>
+
+            {/* Grupo 2: Detalhes, Estatísticas */}
+            <div className="flex items-stretch overflow-hidden rounded-lg border border-slate-200">
+              <Dialog>
+                <DialogTrigger asChild>
+                  <button className="flex flex-col items-center justify-center gap-1 px-4 py-2.5 text-slate-600 hover:bg-slate-50 transition min-w-[64px]">
+                    <Info className="h-4 w-4" />
+                    <span className="text-[11px] font-medium">Detalhes</span>
+                  </button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Detalhes do lote</DialogTitle>
+                  </DialogHeader>
+                  <div className="grid gap-4 text-sm">
+                    <div>
+                      <div className="text-[11px] uppercase tracking-wide text-slate-400 mb-1">ID</div>
+                      <div className="font-mono text-slate-700">{selectedBatch.id}</div>
+                    </div>
+                    <div>
+                      <div className="text-[11px] uppercase tracking-wide text-slate-400 mb-1">Aba</div>
+                      <div className="text-slate-700">{selectedBatch.worksheetName || 'sem aba'}</div>
+                    </div>
+                    <div>
+                      <div className="text-[11px] uppercase tracking-wide text-slate-400 mb-1">Arquivo</div>
+                      <div className="text-slate-700">{selectedBatch.originalFileName || '-'}</div>
+                    </div>
+                    <div>
+                      <div className="text-[11px] uppercase tracking-wide text-slate-400 mb-1">JSON fornecedor</div>
+                      <div className="text-slate-700">{selectedBatch.supplierNotesFileName || 'não anexado'}</div>
+                    </div>
+                    <div>
+                      <div className="text-[11px] uppercase tracking-wide text-slate-400 mb-1">Período</div>
+                      <div className="text-slate-700">{formatDate(selectedBatch.periodStart)} até {formatDate(selectedBatch.periodEnd)}</div>
+                    </div>
+                    <div>
+                      <div className="text-[11px] uppercase tracking-wide text-slate-400 mb-1">Fornecedor</div>
+                      <div className="text-slate-700">{summary.pendingSupplier > 0 ? `${summary.pendingSupplier} pend. fornecedor` : 'fornecedor conciliado'}</div>
+                    </div>
+                    {selectedBatch.notes ? (
+                      <div>
+                        <div className="text-[11px] uppercase tracking-wide text-slate-400 mb-1">Notas</div>
+                        <div className="text-slate-700">{selectedBatch.notes}</div>
+                      </div>
+                    ) : null}
+                  </div>
+                </DialogContent>
+              </Dialog>
+
+              <Separator orientation="vertical" className="h-auto self-stretch" />
+
+              <Dialog>
+                <DialogTrigger asChild>
+                  <button className="flex flex-col items-center justify-center gap-1 px-4 py-2.5 text-slate-600 hover:bg-slate-50 transition min-w-[64px]">
+                    <BarChart2 className="h-4 w-4" />
+                    <span className="text-[11px] font-medium">Estatísticas</span>
+                  </button>
+                </DialogTrigger>
+                <DialogContent className="max-w-lg">
+                  <DialogHeader>
+                    <DialogTitle>Estatísticas do lote</DialogTitle>
+                  </DialogHeader>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    {[
+                      ['Total', summary.total],
+                      ['Prontas', summary.ready],
+                      ['Prontas p/ importar', summary.readyToImport],
+                      ['Importadas', summary.imported],
+                      ['Pend. vínculo', summary.pendingMapping],
+                      ['Pend. fornecedor', summary.pendingSupplier],
+                      ['Rev. custo', summary.pendingCostReview],
+                      ['Pend. conversão', summary.pendingConversion],
+                      ['Ignoradas', summary.ignored],
+                      ['Duplicadas', summary.skippedDuplicate],
+                      ['Inválidas', summary.invalid],
+                      ['Erros', summary.error],
+                    ].map(([label, value]) => (
+                      <div key={String(label)} className="rounded-xl bg-slate-50 px-3 py-2.5">
+                        <div className="truncate text-[10px] uppercase tracking-[0.08em] text-slate-500">{label}</div>
+                        <div className="mt-0.5 text-[18px] font-semibold leading-none tracking-tight text-slate-950">{value as any}</div>
+                      </div>
+                    ))}
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </div>
+
+            {/* Grupo 3: Mobile */}
+            <div className="flex items-stretch overflow-hidden rounded-lg border border-slate-200">
+              <Link
+                to={`/admin/mobile/import-stock-movements/${selectedBatch.id}`}
+                target="_blank"
+                rel="noreferrer"
+                className="flex flex-col items-center justify-center gap-1 px-4 py-2.5 text-slate-600 hover:bg-slate-50 transition min-w-[64px]"
+              >
+                <Smartphone className="h-4 w-4" />
+                <span className="text-[11px] font-medium">Mobile</span>
+              </Link>
+            </div>
+
           </div>
         </div>
-
-        <Separator />
 
         {summary.pendingSupplier > 0 ? (
           <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
             Este lote ainda tem {summary.pendingSupplier} registro(s) sem conciliação de fornecedor.
           </div>
         ) : null}
-
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-12">
-          {[
-            ['Total', summary.total],
-            ['Prontas', summary.ready],
-            ['Prontas p/ importar', summary.readyToImport],
-            ['Importadas', summary.imported],
-            ['Pend. vínculo', summary.pendingMapping],
-            ['Pend. fornecedor', summary.pendingSupplier],
-            ['Rev. custo', summary.pendingCostReview],
-            ['Pend. conversão', summary.pendingConversion],
-            ['Ignoradas', summary.ignored],
-            ['Duplicadas', summary.skippedDuplicate],
-            ['Inválidas', summary.invalid],
-            ['Erros', summary.error],
-          ].map(([label, value]) => (
-            <div key={String(label)} className="rounded-2xl bg-slate-50 px-3 py-2.5">
-              <div className="truncate text-[10px] uppercase tracking-[0.08em] text-slate-500">{label}</div>
-              <div className="mt-0.5 text-[18px] font-semibold leading-none tracking-tight text-slate-950">{value as any}</div>
-            </div>
-          ))}
-        </div>
-
-        <Separator />
       </section>
 
       <section className="space-y-4">

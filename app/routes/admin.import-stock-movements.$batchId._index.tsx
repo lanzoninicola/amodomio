@@ -1,17 +1,15 @@
-import { Form, Link, useFetcher, useLocation, useOutletContext } from '@remix-run/react';
-import { EyeOff, Eye, Loader2, Pencil, RotateCcw } from 'lucide-react';
+import { Form, Link, useFetcher, useLocation, useOutletContext, useRevalidator } from '@remix-run/react';
+import { EyeOff, Eye, Loader2, Pencil, RotateCcw, AlignJustify, Layers, X, Check } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { TwoLevelLineRow } from '~/components/admin/import-stock-two-level-row';
 import { DecimalInput } from '~/components/inputs/inputs';
 import { PendingConversionForm } from '~/components/admin/import-stock-conversion-form';
-import { MoneyInput } from '~/components/money-input/MoneyInput';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '~/components/ui/dialog';
 import { Input } from '~/components/ui/input';
-import { Label } from '~/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '~/components/ui/table';
-import { Textarea } from '~/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '~/components/ui/tooltip';
 import { cn } from '~/lib/utils';
 import { ITEM_UNIT_OPTIONS } from '~/domain/item/item-units';
@@ -86,495 +84,439 @@ function hasCostDiscrepancy(
   return discrepancy > COST_DISCREPANCY_THRESHOLD;
 }
 
-function LineEditDialog({
+function EditableTwoLevelRow({
   line,
-  batchId,
   items,
-  suppliers,
+  itemCostHints,
+  selectedBatchId,
   unitOptions,
   itemUnitOptionsByItemId,
   measurementConversions,
-  open,
-  onOpenChange,
+  location,
+  isEditing,
+  onStartEditing,
+  onStopEditing,
 }: {
   line: any;
-  batchId: string;
   items: any[];
-  suppliers: any[];
+  itemCostHints: Record<string, { lastCostPerUnit: number | null; avgCostPerUnit: number | null }>;
+  selectedBatchId: string;
   unitOptions: string[];
   itemUnitOptionsByItemId: Record<string, string[]>;
   measurementConversions: Array<{ fromUnit: string; toUnit: string; factor: number }>;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  location: { pathname: string; search: string };
+  isEditing: boolean;
+  onStartEditing: () => void;
+  onStopEditing: () => void;
 }) {
   const fetcher = useFetcher<any>();
-  const isSubmitting = fetcher.state !== 'idle';
-  const [supplierIdDraft, setSupplierIdDraft] = useState(String(line?.supplierId || ''));
-  const [mappedItemIdDraft, setMappedItemIdDraft] = useState(String(line?.mappedItemId || ''));
+  const revalidator = useRevalidator();
   const [movementUnitDraft, setMovementUnitDraft] = useState(
-    String(line?.movementUnit || line?.unitEntry || '').toUpperCase(),
+    String(line.movementUnit || line.unitEntry || '').toUpperCase(),
   );
-  const [qtyEntryDraft, setQtyEntryDraft] = useState<number>(Number(line?.qtyEntry ?? 0));
-  const [costAmountDraft, setCostAmountDraft] = useState<number>(Number(line?.costAmount ?? 0));
-  const [manualConversionFactorDraft, setManualConversionFactorDraft] = useState(String(line?.manualConversionFactor ?? ''));
-
-  const selectedSupplier = suppliers.find((s) => s.id === supplierIdDraft) || null;
-  const selectedItem = items.find((item) => item.id === mappedItemIdDraft) || null;
-  const supplierNameHiddenValue = selectedSupplier?.name || line?.supplierName || '';
-  const supplierCnpjHiddenValue = selectedSupplier?.cnpj || line?.supplierCnpj || '';
-  const computedCostTotal =
-    Number.isFinite(qtyEntryDraft) && Number.isFinite(costAmountDraft)
-      ? qtyEntryDraft * costAmountDraft
-      : NaN;
-  const conversionPreview = useMemo(() => {
-    const movementUnit = normalizeUnit(movementUnitDraft);
-    const targetUnit = normalizeUnit(selectedItem?.consumptionUm || selectedItem?.purchaseUm);
-    const costAmount = Number(costAmountDraft);
-    const manualFactor = parseDecimal(manualConversionFactorDraft);
-
-    if (!Number.isFinite(costAmount) || costAmount <= 0) {
-      return {
-        status: 'invalid',
-        targetUnit,
-        convertedCostAmount: null,
-        conversionSource: null,
-        conversionFactorUsed: null,
-        errorMessage: 'Custo inválido',
-      };
-    }
-
-    if (!movementUnit) {
-      return {
-        status: 'pending_conversion',
-        targetUnit,
-        convertedCostAmount: null,
-        conversionSource: null,
-        conversionFactorUsed: null,
-        errorMessage: 'UM da movimentação não identificada',
-      };
-    }
-
-    if (!targetUnit) {
-      return {
-        status: 'pending_conversion',
-        targetUnit: null,
-        convertedCostAmount: null,
-        conversionSource: null,
-        conversionFactorUsed: null,
-        errorMessage: 'Item sem UM configurada',
-      };
-    }
-
-    if (movementUnit === targetUnit) {
-      return {
-        status: 'ready',
-        targetUnit,
-        convertedCostAmount: costAmount,
-        conversionSource: 'same-unit',
-        conversionFactorUsed: 1,
-        errorMessage: null,
-      };
-    }
-
-    if (manualFactor > 0) {
-      return {
-        status: 'ready',
-        targetUnit,
-        convertedCostAmount: costAmount / manualFactor,
-        conversionSource: 'manual',
-        conversionFactorUsed: manualFactor,
-        errorMessage: null,
-      };
-    }
-
-    const itemConsumptionUm = normalizeUnit(selectedItem?.consumptionUm);
-    const itemPurchaseUm = normalizeUnit(selectedItem?.purchaseUm);
-    const multiConversion = Array.isArray(selectedItem?.ItemPurchaseConversion)
-      ? selectedItem.ItemPurchaseConversion.find((conversion: any) => normalizeUnit(conversion?.purchaseUm) === movementUnit)
-      : null;
-    const multiFactor = Number(multiConversion?.factor ?? NaN);
-    if (multiConversion && itemConsumptionUm && targetUnit === itemConsumptionUm && multiFactor > 0) {
-      return {
-        status: 'ready',
-        targetUnit,
-        convertedCostAmount: costAmount / multiFactor,
-        conversionSource: 'item_purchase_factor',
-        conversionFactorUsed: multiFactor,
-        errorMessage: null,
-      };
-    }
-
-    const itemFactor = Number(selectedItem?.purchaseToConsumptionFactor ?? NaN);
-    if (itemPurchaseUm && itemConsumptionUm && itemFactor > 0) {
-      if (movementUnit === itemPurchaseUm && targetUnit === itemConsumptionUm) {
-        return {
-          status: 'ready',
-          targetUnit,
-          convertedCostAmount: costAmount / itemFactor,
-          conversionSource: 'item_purchase_factor',
-          conversionFactorUsed: itemFactor,
-          errorMessage: null,
-        };
-      }
-
-      if (movementUnit === itemConsumptionUm && targetUnit === itemPurchaseUm) {
-        return {
-          status: 'ready',
-          targetUnit,
-          convertedCostAmount: costAmount * itemFactor,
-          conversionSource: 'item_purchase_factor_reverse',
-          conversionFactorUsed: itemFactor,
-          errorMessage: null,
-        };
-      }
-    }
-
-    const measured = findMeasurementConversion(measurementConversions, movementUnit, targetUnit);
-    if (measured) {
-      return measured.mode === 'direct'
-        ? {
-            status: 'ready',
-            targetUnit,
-            convertedCostAmount: costAmount / measured.factor,
-            conversionSource: 'measurement_conversion_direct',
-            conversionFactorUsed: measured.factor,
-            errorMessage: null,
-          }
-        : {
-            status: 'ready',
-            targetUnit,
-            convertedCostAmount: costAmount * measured.factor,
-            conversionSource: 'measurement_conversion_reverse',
-            conversionFactorUsed: measured.factor,
-            errorMessage: null,
-          };
-    }
-
-    return {
-      status: 'pending_conversion',
-      targetUnit,
-      convertedCostAmount: null,
-      conversionSource: null,
-      conversionFactorUsed: null,
-      errorMessage: `Prévia local sem conversão automática de ${movementUnit} para ${targetUnit}`,
-    };
-  }, [costAmountDraft, manualConversionFactorDraft, measurementConversions, movementUnitDraft, selectedItem]);
-  const convertedQuantityPreview = useMemo(() => {
-    if (!Number.isFinite(qtyEntryDraft) || qtyEntryDraft <= 0) return null;
-    if (conversionPreview.status !== 'ready' || !conversionPreview.targetUnit) return null;
-
-    const movementUnit = normalizeUnit(movementUnitDraft);
-    const targetUnit = normalizeUnit(conversionPreview.targetUnit);
-    const manualFactor = parseDecimal(manualConversionFactorDraft);
-    const itemConsumptionUm = normalizeUnit(selectedItem?.consumptionUm);
-    const itemPurchaseUm = normalizeUnit(selectedItem?.purchaseUm);
-
-    if (!movementUnit || !targetUnit) return null;
-    if (movementUnit === targetUnit) return qtyEntryDraft;
-    if (manualFactor > 0) return qtyEntryDraft * manualFactor;
-
-    const multiConversion = Array.isArray(selectedItem?.ItemPurchaseConversion)
-      ? selectedItem.ItemPurchaseConversion.find((conversion: any) => normalizeUnit(conversion?.purchaseUm) === movementUnit)
-      : null;
-    const multiFactor = Number(multiConversion?.factor ?? NaN);
-    if (multiConversion && itemConsumptionUm && targetUnit === itemConsumptionUm && multiFactor > 0) {
-      return qtyEntryDraft * multiFactor;
-    }
-
-    const itemFactor = Number(selectedItem?.purchaseToConsumptionFactor ?? NaN);
-    if (itemPurchaseUm && itemConsumptionUm && itemFactor > 0) {
-      if (movementUnit === itemPurchaseUm && targetUnit === itemConsumptionUm) return qtyEntryDraft * itemFactor;
-      if (movementUnit === itemConsumptionUm && targetUnit === itemPurchaseUm) return qtyEntryDraft / itemFactor;
-    }
-
-    const measured = findMeasurementConversion(measurementConversions, movementUnit, targetUnit);
-    if (measured) {
-      return measured.mode === 'direct' ? qtyEntryDraft * measured.factor : qtyEntryDraft / measured.factor;
-    }
-
-    return null;
-  }, [conversionPreview, manualConversionFactorDraft, measurementConversions, movementUnitDraft, qtyEntryDraft, selectedItem]);
-  const availableMovementUnits = useMemo(() => {
-    const merged = new Set<string>(ITEM_UNIT_OPTIONS);
-    const linkedUnits = itemUnitOptionsByItemId[mappedItemIdDraft] || [];
-    for (const unit of linkedUnits) merged.add(unit);
-    return Array.from(merged).sort((a, b) => a.localeCompare(b, 'pt-BR'));
-  }, [itemUnitOptionsByItemId, mappedItemIdDraft]);
+  const [qtyEntryDraft, setQtyEntryDraft] = useState(Number(line.qtyEntry ?? 0));
+  const [costTotalAmountDraft, setCostTotalAmountDraft] = useState(Number(line.costTotalAmount ?? 0));
+  const [manualConversionFactorDraft, setManualConversionFactorDraft] = useState(
+    String(line.manualConversionFactor ?? ''),
+  );
 
   useEffect(() => {
     if (fetcher.state !== 'idle') return;
     if (fetcher.data?.status !== 200) return;
-    if (fetcher.data?.payload?.updatedLineId !== line?.id) return;
-    onOpenChange(false);
-  }, [fetcher.state, fetcher.data, line?.id, onOpenChange]);
+    if (fetcher.data?.payload?.updatedLineId !== line.id) return;
+    onStopEditing();
+    revalidator.revalidate();
+  }, [fetcher.state, fetcher.data, line.id, revalidator, onStopEditing]);
 
-  if (!line) return null;
+  // Reset drafts when another row takes focus (isEditing flips to false externally)
+  useEffect(() => {
+    if (!isEditing) {
+      setMovementUnitDraft(String(line.movementUnit || line.unitEntry || '').toUpperCase());
+      setQtyEntryDraft(Number(line.qtyEntry ?? 0));
+      setCostTotalAmountDraft(Number(line.costTotalAmount ?? 0));
+      setManualConversionFactorDraft(String(line.manualConversionFactor ?? ''));
+    }
+  }, [isEditing, line]);
+
+  const isSaving = fetcher.state !== 'idle';
+
+  const derivedCostAmount =
+    Number.isFinite(qtyEntryDraft) && qtyEntryDraft > 0
+      ? costTotalAmountDraft / qtyEntryDraft
+      : null;
+
+  const selectedItem = useMemo(
+    () => items.find((item: any) => item.id === line.mappedItemId) || null,
+    [items, line.mappedItemId],
+  );
+
+  const availableMovementUnits = useMemo(() => {
+    const merged = new Set<string>(ITEM_UNIT_OPTIONS);
+    const linkedUnits = itemUnitOptionsByItemId[line.mappedItemId || ''] || [];
+    for (const unit of linkedUnits) merged.add(unit);
+    return Array.from(merged).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [itemUnitOptionsByItemId, line.mappedItemId]);
+
+  // live conversion preview while editing
+  const conversionPreview = useMemo(() => {
+    const movUnit = normalizeUnit(movementUnitDraft);
+    const targetUnit = normalizeUnit(selectedItem?.consumptionUm || selectedItem?.purchaseUm);
+    const costAmt = derivedCostAmount;
+    const manualFactor = parseDecimal(manualConversionFactorDraft);
+
+    if (!costAmt || costAmt <= 0 || !movUnit || !targetUnit) return null;
+    if (movUnit === targetUnit) return { convertedCostAmount: costAmt, conversionSource: 'same-unit', conversionFactorUsed: 1 };
+    if (manualFactor > 0) return { convertedCostAmount: costAmt / manualFactor, conversionSource: 'manual', conversionFactorUsed: manualFactor };
+
+    const itemFactor = Number(selectedItem?.purchaseToConsumptionFactor ?? NaN);
+    const itemPurchaseUm = normalizeUnit(selectedItem?.purchaseUm);
+    const itemConsumptionUm = normalizeUnit(selectedItem?.consumptionUm);
+    if (itemFactor > 0 && itemPurchaseUm && itemConsumptionUm) {
+      if (movUnit === itemPurchaseUm && targetUnit === itemConsumptionUm)
+        return { convertedCostAmount: costAmt / itemFactor, conversionSource: 'item_purchase_factor', conversionFactorUsed: itemFactor };
+      if (movUnit === itemConsumptionUm && targetUnit === itemPurchaseUm)
+        return { convertedCostAmount: costAmt * itemFactor, conversionSource: 'item_purchase_factor_reverse', conversionFactorUsed: itemFactor };
+    }
+
+    const measured = findMeasurementConversion(measurementConversions, movUnit, targetUnit);
+    if (measured)
+      return {
+        convertedCostAmount: measured.mode === 'direct' ? costAmt / measured.factor : costAmt * measured.factor,
+        conversionSource: measured.mode === 'direct' ? 'measurement_conversion_direct' : 'measurement_conversion_reverse',
+        conversionFactorUsed: measured.factor,
+      };
+
+    return null;
+  }, [derivedCostAmount, manualConversionFactorDraft, measurementConversions, movementUnitDraft, selectedItem]);
+
+  function handleSave() {
+    const fd = new FormData();
+    fd.set('_action', 'batch-edit-line');
+    fd.set('batchId', selectedBatchId);
+    fd.set('lineId', line.id);
+    fd.set('movementUnit', movementUnitDraft);
+    fd.set('qtyEntry', String(qtyEntryDraft));
+    fd.set('costAmount', derivedCostAmount != null ? String(derivedCostAmount) : '');
+    fd.set('costTotalAmount', String(costTotalAmountDraft));
+    fd.set('manualConversionFactor', manualConversionFactorDraft);
+    fd.set('mappedItemId', line.mappedItemId || '');
+    fd.set('supplierId', line.supplierId || '');
+    fd.set('supplierName', line.supplierName || '');
+    fd.set('supplierCnpj', line.supplierCnpj || '');
+    fd.set('movementAt', formatDateTimeLocalValue(line.movementAt));
+    fd.set('ingredientName', line.ingredientName || '');
+    fd.set('motivo', line.motivo || '');
+    fd.set('invoiceNumber', line.invoiceNumber || '');
+    fd.set('observation', line.observation || '');
+    fd.set('autoApproveCostReview', 'off');
+    fd.set('importAfterSave', 'off');
+    fetcher.submit(fd, { method: 'post', action: `/admin/import-stock-movements/${selectedBatchId}` });
+  }
+
+  function handleCancel() {
+    setMovementUnitDraft(String(line.movementUnit || line.unitEntry || '').toUpperCase());
+    setQtyEntryDraft(Number(line.qtyEntry ?? 0));
+    setCostTotalAmountDraft(Number(line.costTotalAmount ?? 0));
+    setManualConversionFactorDraft(String(line.manualConversionFactor ?? ''));
+    onStopEditing();
+  }
+
+  const hint = itemCostHints[line.mappedItemId] ?? null;
+  const discrepancy = hasCostDiscrepancy(line, itemCostHints);
+  const displayConvertedCost = isEditing ? (conversionPreview?.convertedCostAmount ?? null) : line.convertedCostAmount;
+  const displayTargetUnit = isEditing
+    ? normalizeUnit(selectedItem?.consumptionUm || selectedItem?.purchaseUm)
+    : line.targetUnit;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{`Editar linha ${line.rowNumber}${line.ingredientName ? ` • ${line.ingredientName}` : ''}`}</DialogTitle>
-        </DialogHeader>
-
-        {fetcher.data?.message ? (
-          <div
-            className={`rounded-lg border px-3 py-2 text-sm ${fetcher.data?.status >= 400 ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}
-          >
-            {fetcher.data.message}
-          </div>
-        ) : null}
-
-        <fetcher.Form
-          method="post"
-          action={`/admin/import-stock-movements/${batchId}`}
-          className="space-y-5"
-          preventScrollReset
-        >
-          <input type="hidden" name="_action" value="batch-edit-line" />
-          <input type="hidden" name="batchId" value={batchId} />
-          <input type="hidden" name="lineId" value={line.id} />
-          <input type="hidden" name="supplierId" value={supplierIdDraft} />
-          <input type="hidden" name="supplierName" value={supplierNameHiddenValue} />
-          <input type="hidden" name="supplierCnpj" value={supplierCnpjHiddenValue} />
-          <input type="hidden" name="mappedItemId" value={mappedItemIdDraft} />
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="movementAt">Data</Label>
-              <Input
-                id="movementAt"
-                name="movementAt"
-                type="datetime-local"
-                defaultValue={formatDateTimeLocalValue(line.movementAt)}
-                disabled={isSubmitting}
+    <TwoLevelLineRow
+      rowNumber={line.rowNumber}
+      isActive={isEditing}
+      canMovementRowClick={!isEditing}
+      onMovementRowClick={() => onStartEditing()}
+      spacingAfter
+      archiveCells={
+        <>
+          <TableCell className="min-w-[260px] px-3 py-3 text-xs">
+            <a
+              href={`https://www.google.com/search?q=${encodeURIComponent(String(line.ingredientName || '').trim())}`}
+              target="_blank"
+              rel="noreferrer"
+              className="font-medium text-slate-900 hover:text-slate-700 hover:underline hover:underline-offset-2"
+            >
+              {line.ingredientName || '-'}
+            </a>
+            <div className="text-slate-500">
+              {formatDate(line.movementAt)} • Doc. {formatDocumentLabel(line.invoiceNumber)}
+            </div>
+            {line.motivo ? <div className="text-slate-400">{line.motivo}</div> : null}
+          </TableCell>
+          <TableCell className="px-3 py-3 text-xs text-slate-700">
+            {line.movementUnit || line.unitEntry || '-'}
+          </TableCell>
+          <TableCell className="px-3 py-3 text-right font-mono text-xs tabular-nums text-slate-700">
+            {formatDecimal(line.qtyEntry)}
+          </TableCell>
+          <TableCell className="px-3 py-3 text-right font-mono text-xs tabular-nums text-slate-700">
+            {formatMoney(line.costAmount)}
+          </TableCell>
+          <TableCell className="px-3 py-3 text-right font-mono text-xs tabular-nums text-slate-700">
+            {formatMoney(line.costTotalAmount)}
+          </TableCell>
+          <TableCell className="px-3 py-3 text-xs text-slate-400">-</TableCell>
+          <TableCell className="px-3 py-3 text-xs text-slate-400">-</TableCell>
+          <TableCell className="px-3 py-3" />
+        </>
+      }
+      movementCells={
+        <>
+          {/* Produto (sistema) */}
+          <TableCell className="min-w-[280px] px-3 py-3 pl-8 text-xs">
+            <div className="text-slate-500">
+              {line.supplierName || '-'} • {supplierReconciliationLabel(line)}
+            </div>
+            {line.status === 'ignored' ? (
+              <span className="text-slate-400">ignorada</span>
+            ) : (
+              <ItemSystemMapperCell
+                line={line}
+                items={items}
+                batchId={selectedBatchId}
+                unitOptions={unitOptions}
+                costHint={hint}
               />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="invoiceNumber">Documento</Label>
-              <Input
-                id="invoiceNumber"
-                name="invoiceNumber"
-                defaultValue={line.invoiceNumber || ''}
-                disabled={isSubmitting}
-              />
-            </div>
-            <div className="space-y-1.5 md:col-span-2">
-              <Label htmlFor="ingredientName">Ingrediente</Label>
-              <Input
-                id="ingredientName"
-                name="ingredientName"
-                defaultValue={line.ingredientName || ''}
-                required
-                disabled={isSubmitting}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="motivo">Motivo</Label>
-              <Input
-                id="motivo"
-                name="motivo"
-                defaultValue={line.motivo || ''}
-                disabled={isSubmitting}
-              />
-            </div>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label>Fornecedor</Label>
-              <Select
-                value={supplierIdDraft || '__EMPTY__'}
-                onValueChange={(v) => setSupplierIdDraft(v === '__EMPTY__' ? '' : v)}
-                disabled={isSubmitting}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Sem vínculo" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__EMPTY__">Sem vínculo</SelectItem>
-                  {suppliers.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.name} {s.cnpj ? `• ${s.cnpj}` : ''}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Item do sistema</Label>
-              <Select
-                value={mappedItemIdDraft || '__EMPTY__'}
-                onValueChange={(v) => setMappedItemIdDraft(v === '__EMPTY__' ? '' : v)}
-                disabled={isSubmitting}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Sem item mapeado" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__EMPTY__">Sem item mapeado</SelectItem>
-                  {items.map((item) => (
-                    <SelectItem key={item.id} value={item.id}>
-                      {item.name} [{item.classification || '-'}] ({getItemBaseUnit(item)})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {mappedItemIdDraft ? (
-                <div className="flex items-center gap-2 pt-1">
-                  <Link
-                    to={`/admin/items/${mappedItemIdDraft}/main`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-[11px] font-medium text-slate-600 underline underline-offset-2 hover:text-slate-900"
-                  >
-                    Editar item
-                  </Link>
-                  <Link
-                    to={`/admin/stock-movements?itemId=${encodeURIComponent(selectedItemId)}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-[11px] font-medium text-slate-600 underline underline-offset-2 hover:text-slate-900"
-                  >
-                    Movimentações estoque
-                  </Link>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 pt-1">
-                  <span className="text-[11px] text-slate-400">Editar item</span>
-                  <span className="text-[11px] text-slate-400">Movimentações estoque</span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="qtyEntry">Quantidade</Label>
+            )}
+          </TableCell>
+          {/* UM */}
+          <TableCell className="min-w-[120px] px-3 py-3 text-xs text-slate-700">
+            {isEditing ? (
+              <>
+                <input type="hidden" name="movementUnit" value={movementUnitDraft} />
+                <Select
+                  value={movementUnitDraft || '__EMPTY__'}
+                  onValueChange={(v) => setMovementUnitDraft(v === '__EMPTY__' ? '' : v)}
+                >
+                  <SelectTrigger className="h-8 bg-white text-xs">
+                    <SelectValue placeholder="UM" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__EMPTY__">Selecionar...</SelectItem>
+                    {availableMovementUnits.map((unit) => (
+                      <SelectItem key={unit} value={unit}>
+                        {unit}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </>
+            ) : (
+              displayTargetUnit || '-'
+            )}
+          </TableCell>
+          {/* Quantidade */}
+          <TableCell className="min-w-[120px] px-3 py-3 text-right font-mono text-xs tabular-nums text-slate-700">
+            {isEditing ? (
               <DecimalInput
-                id="qtyEntry"
                 name="qtyEntry"
                 defaultValue={qtyEntryDraft}
-                fractionDigits={4}
-                className="w-full"
                 onValueChange={setQtyEntryDraft}
-                disabled={isSubmitting}
+                fractionDigits={3}
+                className="w-full bg-white"
               />
-            </div>
-            <div className="space-y-1.5">
-              <Label>UM do movimento</Label>
-              <Select
-                name="movementUnit"
-                value={movementUnitDraft || '__EMPTY__'}
-                onValueChange={(v) => setMovementUnitDraft(v === '__EMPTY__' ? '' : v)}
-                disabled={isSubmitting}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecionar" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__EMPTY__">Sem unidade</SelectItem>
-                  {availableMovementUnits.map((unit) => (
-                    <SelectItem key={unit} value={unit}>
-                      {unit}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="costAmount">Custo unitário</Label>
-              <DecimalInput
-                id="costAmount"
-                name="costAmount"
-                defaultValue={costAmountDraft}
-                fractionDigits={4}
-                className="w-full"
-                onValueChange={setCostAmountDraft}
-                disabled={isSubmitting}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="costTotalAmountPreview">Custo total</Label>
-              <MoneyInput
-                id="costTotalAmountPreview"
-                name="costTotalAmount"
-                defaultValue={Number.isFinite(computedCostTotal) ? computedCostTotal : 0}
-                className="h-10 w-full"
-                readOnly
-                disabled={isSubmitting}
-              />
-            </div>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="manualConversionFactor">Fator manual de conversão</Label>
-              <Input
-                id="manualConversionFactor"
-                name="manualConversionFactor"
-                value={manualConversionFactorDraft}
-                onChange={(event) => setManualConversionFactorDraft(event.currentTarget.value)}
-                placeholder="Ex.: 1000"
-                disabled={isSubmitting}
-              />
-            </div>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="observation">Observação</Label>
-              <Textarea
-                id="observation"
-                name="observation"
-                defaultValue={line.observation || ''}
-                disabled={isSubmitting}
-                className="min-h-[80px]"
-              />
-            </div>
-            <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-              <div>
-                <span className="font-medium text-slate-900">Status:</span> {conversionPreview.status || '-'}
-              </div>
-              <div>
-                <span className="font-medium text-slate-900">Conversão:</span>{' '}
-                {conversionPreview.conversionSource || '-'}
-                {conversionPreview.conversionFactorUsed
-                  ? ` • fator ${Number(conversionPreview.conversionFactorUsed).toFixed(6)}`
-                  : ''}
-              </div>
-              <div>
-                <span className="font-medium text-slate-900">Custo unitário convertido:</span>{' '}
-                {formatMoney(conversionPreview.convertedCostAmount)} / {conversionPreview.targetUnit || '-'}
-              </div>
-              <div>
-                <span className="font-medium text-slate-900">Quantidade convertida:</span>{' '}
-                {formatDecimal(convertedQuantityPreview)} {conversionPreview.targetUnit || '-'}
-              </div>
-              {conversionPreview.errorMessage ? (
-                <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-red-700">
-                  {conversionPreview.errorMessage}
+            ) : (
+              formatDecimal(line.qtyConsumption)
+            )}
+          </TableCell>
+          {/* Custo unit. convertido */}
+          <TableCell className="min-w-[130px] px-3 py-3 text-right font-mono text-xs tabular-nums">
+            {isEditing ? (
+              <div className="space-y-0.5 text-right">
+                <div className={cn(conversionPreview ? 'text-slate-700' : 'text-slate-400')}>
+                  {conversionPreview ? formatMoney(conversionPreview.convertedCostAmount) : '-'}
                 </div>
-              ) : null}
+                {conversionPreview && (
+                  <div className="text-[10px] text-slate-400">{conversionPreview.conversionSource}</div>
+                )}
+              </div>
+            ) : (
+              <span className={cn(discrepancy ? 'text-red-600' : 'text-slate-700')}>
+                {displayConvertedCost != null ? formatMoney(displayConvertedCost) : '-'}
+                {discrepancy && hint?.lastCostPerUnit != null ? (
+                  <div className="text-[11px] text-slate-500">último: {formatMoney(hint.lastCostPerUnit)}</div>
+                ) : null}
+              </span>
+            )}
+          </TableCell>
+          {/* Custo total */}
+          <TableCell className="min-w-[130px] px-3 py-3 text-right font-mono text-xs tabular-nums text-slate-700">
+            {isEditing ? (
+              <DecimalInput
+                name="costTotalAmount"
+                defaultValue={costTotalAmountDraft}
+                onValueChange={setCostTotalAmountDraft}
+                fractionDigits={2}
+                className="w-full bg-white"
+              />
+            ) : (
+              formatMoney(line.costTotalAmount)
+            )}
+          </TableCell>
+          {/* Fator / Conversão */}
+          <TableCell className="px-3 py-3 text-xs text-slate-700">
+            {line.status === 'ignored' ? (
+              <span className="text-slate-400">-</span>
+            ) : line.status === 'pending_conversion' && !isEditing ? (
+              <PendingConversionForm batchId={selectedBatchId} line={line} />
+            ) : isEditing ? (
+              <div className="space-y-1">
+                <Input
+                  name="manualConversionFactor"
+                  value={manualConversionFactorDraft}
+                  onChange={(e) => setManualConversionFactorDraft(e.currentTarget.value)}
+                  placeholder="fator manual"
+                  className="h-8 w-24 bg-white text-xs"
+                />
+                {derivedCostAmount != null && (
+                  <div className="text-[11px] text-slate-500">
+                    unit: {formatMoney(derivedCostAmount)}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <>
+                {line.conversionFactorUsed ? (
+                  <div className="font-mono">{Number(line.conversionFactorUsed).toFixed(4)}</div>
+                ) : null}
+                <div className="text-slate-500">{line.conversionSource || '-'}</div>
+              </>
+            )}
+          </TableCell>
+          {/* Status */}
+          <TableCell className="px-3 py-3 text-xs">
+            <LineStatusBadge line={line} batchId={selectedBatchId} />
+            {line.errorMessage ? (
+              <div className="mt-1 max-w-[180px] text-[11px] text-red-700">{line.errorMessage}</div>
+            ) : null}
+          </TableCell>
+          {/* Ações */}
+          <TableCell className="w-20 px-2 py-3">
+            <div className="flex flex-col items-center gap-1">
+              {isEditing ? (
+                <>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="h-7 w-7 border-emerald-300 hover:bg-emerald-50"
+                        onClick={handleSave}
+                        disabled={isSaving}
+                      >
+                        {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5 text-emerald-600" />}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Salvar</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={handleCancel}
+                        disabled={isSaving}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Cancelar</TooltipContent>
+                  </Tooltip>
+                </>
+              ) : (
+                <>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => onStartEditing()}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Editar linha</TooltipContent>
+                  </Tooltip>
+                  <Form
+                    method="post"
+                    action={`/admin/import-stock-movements/${selectedBatchId}`}
+                    preventScrollReset
+                  >
+                    <input
+                      type="hidden"
+                      name="_action"
+                      value={line.status === 'ignored' ? 'batch-unignore-line' : 'batch-ignore-line'}
+                    />
+                    <input type="hidden" name="batchId" value={selectedBatchId} />
+                    <input type="hidden" name="lineId" value={line.id} />
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button type="submit" variant="outline" size="icon" className="h-7 w-7">
+                          {line.status === 'ignored' ? (
+                            <Eye className="h-3.5 w-3.5" />
+                          ) : (
+                            <EyeOff className="h-3.5 w-3.5" />
+                          )}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        {line.status === 'ignored' ? 'Reativar' : 'Ignorar'}
+                      </TooltipContent>
+                    </Tooltip>
+                  </Form>
+                  {line.status === 'error' ? (
+                    <Form
+                      method="post"
+                      action={`/admin/import-stock-movements/${selectedBatchId}`}
+                      preventScrollReset
+                    >
+                      <input type="hidden" name="_action" value="batch-retry-line-error" />
+                      <input type="hidden" name="batchId" value={selectedBatchId} />
+                      <input type="hidden" name="lineId" value={line.id} />
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button type="submit" variant="outline" size="icon" className="h-7 w-7">
+                            <RotateCcw className="h-3.5 w-3.5" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Retentar</TooltipContent>
+                      </Tooltip>
+                    </Form>
+                  ) : null}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button asChild variant="ghost" size="icon" className="h-7 w-7">
+                        <Link
+                          to={`/admin/import-stock-movements/${selectedBatchId}/line/${line.id}?returnTo=${encodeURIComponent(`${location.pathname}${location.search}`)}`}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          <Layers className="h-3.5 w-3.5" />
+                        </Link>
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Ver detalhe completo</TooltipContent>
+                  </Tooltip>
+                </>
+              )}
             </div>
-          </div>
-
-          <div className="flex items-center justify-end gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={isSubmitting}
-            >
-              Fechar
-            </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? 'Salvando...' : 'Salvar'}
-            </Button>
-          </div>
-        </fetcher.Form>
-      </DialogContent>
-    </Dialog>
+          </TableCell>
+        </>
+      }
+    />
   );
 }
 
@@ -624,10 +566,24 @@ export function AdminImportStockMovementsBatchLinesRoute({
   const { lines, items, suppliers, selectedBatch, unitOptions, itemUnitOptionsByItemId, measurementConversions, itemCostHints } =
     useOutletContext<AdminImportStockMovementsBatchOutletContext>();
   const location = useLocation();
+  const [activeEditingLineId, setActiveEditingLineId] = useState<string | null>(null);
   const [statusGuideOpen, setStatusGuideOpen] = useState(false);
   const [supplierFilter, setSupplierFilter] = useState('all');
   const [ingredientFilter, setIngredientFilter] = useState('');
   const [discrepancyOnly, setDiscrepancyOnly] = useState(false);
+  const [viewMode, setViewMode] = useState<'flat' | 'two-level'>(() => {
+    try {
+      const stored = typeof window !== 'undefined' ? window.localStorage.getItem('import-lines-view-mode') : null;
+      return stored === 'two-level' ? 'two-level' : 'flat';
+    } catch {
+      return 'flat';
+    }
+  });
+
+  function handleSetViewMode(mode: 'flat' | 'two-level') {
+    setViewMode(mode);
+    try { window.localStorage.setItem('import-lines-view-mode', mode); } catch { /* ignore */ }
+  }
   const normalizedForcedStatus = String(forcedStatus || '').trim();
 
   const availableSuppliers = useMemo(
@@ -704,8 +660,40 @@ export function AdminImportStockMovementsBatchLinesRoute({
                 </div>
               ) : null}
             </div>
-            <div className="text-xs text-slate-500">
-              {filteredLines.length} de {lines.length} linha(s)
+            <div className="flex items-center gap-3">
+              <div className="text-xs text-slate-500">
+                {filteredLines.length} de {lines.length} linha(s)
+              </div>
+              <div className="flex items-center rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+                <button
+                  type="button"
+                  title="Visualização simples"
+                  onClick={() => handleSetViewMode('flat')}
+                  className={cn(
+                    'flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition',
+                    viewMode === 'flat'
+                      ? 'bg-white text-slate-900 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-700',
+                  )}
+                >
+                  <AlignJustify className="h-3.5 w-3.5" />
+                  Simples
+                </button>
+                <button
+                  type="button"
+                  title="Visualização comparativa (arquivo vs movimento)"
+                  onClick={() => handleSetViewMode('two-level')}
+                  className={cn(
+                    'flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition',
+                    viewMode === 'two-level'
+                      ? 'bg-white text-slate-900 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-700',
+                  )}
+                >
+                  <Layers className="h-3.5 w-3.5" />
+                  Comparativo
+                </button>
+              </div>
             </div>
           </div>
 
@@ -786,13 +774,29 @@ export function AdminImportStockMovementsBatchLinesRoute({
             <TableHeader className="bg-slate-50/90">
               <TableRow className="hover:bg-slate-50/90">
                 <TableHead className="px-3 py-2 text-xs">Linha</TableHead>
-                <TableHead className="px-3 py-2 text-xs">Data/Doc.</TableHead>
-                <TableHead className="px-3 py-2 text-xs">Fornecedor</TableHead>
-                <TableHead className="px-3 py-2 text-xs">Ingrediente</TableHead>
-                <TableHead className="px-3 py-2 text-xs">Mov.</TableHead>
-                <TableHead className="px-3 py-2 text-xs">Custo</TableHead>
-                <TableHead className="w-64 px-3 py-2 text-xs">Item do sistema</TableHead>
-                <TableHead className="px-3 py-2 text-xs">Conversão</TableHead>
+                {viewMode === 'two-level' && (
+                  <TableHead className="px-3 py-2 text-xs">Tipo</TableHead>
+                )}
+                {viewMode === 'flat' ? (
+                  <>
+                    <TableHead className="px-3 py-2 text-xs">Data/Doc.</TableHead>
+                    <TableHead className="px-3 py-2 text-xs">Fornecedor</TableHead>
+                    <TableHead className="px-3 py-2 text-xs">Ingrediente</TableHead>
+                    <TableHead className="px-3 py-2 text-xs">Mov.</TableHead>
+                    <TableHead className="px-3 py-2 text-xs">Custo</TableHead>
+                    <TableHead className="w-64 px-3 py-2 text-xs">Item do sistema</TableHead>
+                    <TableHead className="px-3 py-2 text-xs">Conversão</TableHead>
+                  </>
+                ) : (
+                  <>
+                    <TableHead className="min-w-[260px] px-3 py-2 text-xs">Produto</TableHead>
+                    <TableHead className="px-3 py-2 text-xs">UM</TableHead>
+                    <TableHead className="px-3 py-2 text-right text-xs">Quantidade</TableHead>
+                    <TableHead className="px-3 py-2 text-right text-xs">Custo unit.</TableHead>
+                    <TableHead className="px-3 py-2 text-right text-xs">Custo total</TableHead>
+                    <TableHead className="px-3 py-2 text-xs">Fator / Conversão</TableHead>
+                  </>
+                )}
                 <TableHead className="px-3 py-2 text-xs">Status</TableHead>
                 <TableHead className="w-20 px-3 py-2 text-xs">Ações</TableHead>
               </TableRow>
@@ -800,11 +804,11 @@ export function AdminImportStockMovementsBatchLinesRoute({
             <TableBody>
               {filteredLines.length === 0 ? (
                 <TableRow className="border-slate-100">
-                  <TableCell colSpan={10} className="px-3 py-8 text-center text-sm text-slate-500">
+                  <TableCell colSpan={viewMode === 'flat' ? 10 : 10} className="px-3 py-8 text-center text-sm text-slate-500">
                     Nenhuma linha encontrada para os filtros atuais.
                   </TableCell>
                 </TableRow>
-              ) : (
+              ) : viewMode === 'flat' ? (
                 filteredLines.map((line) => {
                   const discrepancy = hasCostDiscrepancy(line, itemCostHints);
                   const hint = itemCostHints[line.mappedItemId] ?? null;
@@ -970,6 +974,24 @@ export function AdminImportStockMovementsBatchLinesRoute({
                     </TableRow>
                   );
                 })
+              ) : (
+                /* ── Modo Comparativo (two-level) ── */
+                filteredLines.map((line) => (
+                  <EditableTwoLevelRow
+                    key={line.id}
+                    line={line}
+                    items={items}
+                    itemCostHints={itemCostHints}
+                    selectedBatchId={selectedBatch.id}
+                    unitOptions={unitOptions}
+                    itemUnitOptionsByItemId={itemUnitOptionsByItemId}
+                    measurementConversions={measurementConversions}
+                    location={location}
+                    isEditing={activeEditingLineId === line.id}
+                    onStartEditing={() => setActiveEditingLineId(line.id)}
+                    onStopEditing={() => setActiveEditingLineId(null)}
+                  />
+                ))
               )}
             </TableBody>
           </Table>

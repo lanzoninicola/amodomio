@@ -47,9 +47,6 @@ export default function AdminImportStockMovementsOutlet() {
 
           <div className="space-y-1">
             <h1 className="text-2xl font-semibold tracking-tight text-slate-950">Importação de movimentações de estoque</h1>
-            <p className="max-w-3xl text-sm text-slate-500">
-              Gerencie lotes de importação de entradas de estoque, acompanhe o que já foi aplicado em visão global e abra um lote específico para revisar as linhas antes da importação.
-            </p>
           </div>
         </section>
 
