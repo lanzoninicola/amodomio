@@ -571,6 +571,7 @@ export function AdminImportStockMovementsBatchLinesRoute({
   const [supplierFilter, setSupplierFilter] = useState('all');
   const [ingredientFilter, setIngredientFilter] = useState('');
   const [discrepancyOnly, setDiscrepancyOnly] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
   const [viewMode, setViewMode] = useState<'flat' | 'two-level'>(() => {
     try {
       const stored = typeof window !== 'undefined' ? window.localStorage.getItem('import-lines-view-mode') : null;
@@ -651,9 +652,20 @@ export function AdminImportStockMovementsBatchLinesRoute({
         <div className="relative z-10">
           <div className="flex items-center justify-between gap-2 pb-3">
             <div className="space-y-1">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-                {normalizedForcedStatus ? `Linhas com status ${normalizedForcedStatus}` : 'Linhas do lote'}
-              </h3>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+                  {normalizedForcedStatus ? `Linhas com status ${normalizedForcedStatus}` : 'Linhas do lote'}
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setShowFilters((v) => !v)}
+                  title={showFilters ? 'Esconder filtros' : 'Mostrar filtros'}
+                  className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition"
+                >
+                  {showFilters ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                  {showFilters ? 'Filtros' : 'Filtros'}
+                </button>
+              </div>
               {normalizedForcedStatus ? (
                 <div className="text-xs text-slate-500">
                   Filtro por status aplicado via navegação da página.
@@ -699,6 +711,7 @@ export function AdminImportStockMovementsBatchLinesRoute({
 
 
 
+          {showFilters && (
           <div className="flex flex-wrap items-center gap-x-4 gap-y-3 border-t border-slate-200 pt-3">
             {/* Ingrediente */}
             <div className="flex flex-col gap-1">
@@ -767,6 +780,7 @@ export function AdminImportStockMovementsBatchLinesRoute({
               </label>
             </div>
           </div>
+          )}
         </div>
 
         <div className="mt-3 overflow-auto rounded-lg">

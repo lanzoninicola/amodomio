@@ -1,7 +1,8 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from '@remix-run/node';
 import { Form, Link, useActionData, useLoaderData } from '@remix-run/react';
 import { useMemo, useState } from 'react';
-import { CheckCircle2, Eye, Search, Trash2 } from 'lucide-react';
+import type React from 'react';
+import { CheckCircle2, Eye, FileSpreadsheet, Image, Globe, Search, Trash2 } from 'lucide-react';
 import NoRecordsFound from '~/components/primitives/no-records-found/no-records-found';
 import {
   AlertDialog,
@@ -40,6 +41,35 @@ function summaryFromAny(summary: any) {
     imported: Number(summary?.imported || 0),
     pendingSupplier: Number(summary?.pendingSupplier || 0),
   };
+}
+
+const SOURCE_TYPE_LABELS: Record<string, { label: string; className: string; icon: React.ReactNode }> = {
+  file_upload: {
+    label: 'Arquivo',
+    className: 'border-violet-200 bg-violet-50 text-violet-700',
+    icon: <FileSpreadsheet className="h-3 w-3" />,
+  },
+  photo_vision: {
+    label: 'Foto',
+    className: 'border-sky-200 bg-sky-50 text-sky-700',
+    icon: <Image className="h-3 w-3" />,
+  },
+  rest_api: {
+    label: 'API',
+    className: 'border-orange-200 bg-orange-50 text-orange-700',
+    icon: <Globe className="h-3 w-3" />,
+  },
+};
+
+function SourceTypeBadge({ sourceType }: { sourceType: string | null | undefined }) {
+  const config = SOURCE_TYPE_LABELS[sourceType || ''];
+  if (!config) return null;
+  return (
+    <Badge variant="outline" className={`flex items-center gap-1 ${config.className}`}>
+      {config.icon}
+      {config.label}
+    </Badge>
+  );
 }
 
 function statusBadgeClass(status: string) {
@@ -136,17 +166,18 @@ export default function AdminImportStockMovementsIndexRoute() {
   const actionData = useActionData<typeof action>();
   const batches = ((loaderData as any)?.payload?.batches || []) as any[];
   const [search, setSearch] = useState('');
+  const [sourceTypeFilter, setSourceTypeFilter] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
-    if (!query) return batches;
-
     return batches.filter((batch) => {
+      if (sourceTypeFilter && batch.sourceType !== sourceTypeFilter) return false;
+      if (!query) return true;
       const haystack = [batch.name, batch.originalFileName, batch.worksheetName, batch.status]
         .map((value) => String(value || '').toLowerCase());
       return haystack.some((value) => value.includes(query));
     });
-  }, [batches, search]);
+  }, [batches, search, sourceTypeFilter]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -162,15 +193,38 @@ export default function AdminImportStockMovementsIndexRoute() {
           </p>
 
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="relative w-full max-w-[620px]">
-              <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-              <Input
-                type="search"
-                className="h-12 rounded-xl border-slate-300 bg-white pl-10 text-sm text-black placeholder:text-slate-400 focus-visible:border-black focus-visible:ring-1 focus-visible:ring-black"
-                placeholder="Pesquise por lote, arquivo ou status"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-              />
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <div className="relative w-full max-w-[400px]">
+                <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                <Input
+                  type="search"
+                  className="h-10 rounded-xl border-slate-300 bg-white pl-10 text-sm text-black placeholder:text-slate-400 focus-visible:border-black focus-visible:ring-1 focus-visible:ring-black"
+                  placeholder="Pesquise por lote, arquivo ou status"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                />
+              </div>
+              <div className="flex items-center gap-1.5">
+                {([null, 'file_upload', 'photo_vision', 'rest_api'] as const).map((type) => {
+                  const config = type ? SOURCE_TYPE_LABELS[type] : null;
+                  const isActive = sourceTypeFilter === type;
+                  return (
+                    <button
+                      key={type ?? 'all'}
+                      type="button"
+                      onClick={() => setSourceTypeFilter(type)}
+                      className={`flex h-10 items-center gap-1.5 rounded-xl border px-3 text-sm font-medium transition-colors ${
+                        isActive
+                          ? 'border-slate-900 bg-slate-900 text-white'
+                          : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      {config ? config.icon : null}
+                      {config ? config.label : 'Todos'}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-5 text-sm text-black">
@@ -222,6 +276,7 @@ export default function AdminImportStockMovementsIndexRoute() {
                           <span className="rounded-full bg-slate-100 px-2.5 py-1 font-mono text-[11px] text-slate-600">
                             {batch.id}
                           </span>
+                          <SourceTypeBadge sourceType={batch.sourceType} />
                           {summary.pendingSupplier > 0 ? (
                             <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-800">
                               {summary.pendingSupplier} pend. fornecedor

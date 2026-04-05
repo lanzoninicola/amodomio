@@ -6,7 +6,10 @@ import { itemCostVariationPrismaEntity } from '~/domain/item/item-cost-variation
 import { isItemCostExcludedFromMetrics, normalizeItemCostToConsumptionUnit } from '~/domain/item/item-cost-metrics.server';
 
 const SOURCE_SYSTEM = 'saipos';
-const SOURCE_TYPE = 'entrada_nf';
+const SOURCE_TYPE_FILE = 'file_upload';
+const SOURCE_TYPE_VISION = 'photo_vision';
+const SOURCE_TYPE_API = 'rest_api';
+const ALIAS_SOURCE_TYPE = 'entrada_nf'; // compartilhado entre todos os tipos de importação
 const COST_REFERENCE_TYPE_LINE = 'stock-movement-import-line';
 const COST_REFERENCE_TYPE_MOVEMENT = 'stock-movement';
 const COST_DISCREPANCY_THRESHOLD = 0.3;
@@ -223,7 +226,7 @@ async function loadItemsAndAliases() {
     }),
     typeof db.itemImportAlias?.findMany === 'function'
       ? db.itemImportAlias.findMany({
-          where: { active: true, sourceSystem: SOURCE_SYSTEM, sourceType: SOURCE_TYPE },
+          where: { active: true, sourceSystem: SOURCE_SYSTEM, sourceType: ALIAS_SOURCE_TYPE },
           select: { id: true, aliasName: true, aliasNormalized: true, itemId: true },
         })
       : [],
@@ -1081,7 +1084,7 @@ export async function createStockMovementImportBatchFromFile(params: {
 
     const sourceFingerprint = hashFingerprint({
       sourceSystem: SOURCE_SYSTEM,
-      sourceType: SOURCE_TYPE,
+      sourceType: SOURCE_TYPE_FILE,
       movementAt: movementAt?.toISOString() || str(rawRow[0]),
       ingredientName: normalizeName(ingredientName),
       invoiceNumber,
@@ -1179,7 +1182,7 @@ export async function createStockMovementImportBatchFromFile(params: {
     data: {
       name: str(params.batchName) || `Importação de movimentações ${new Date().toLocaleString('pt-BR')}`,
       sourceSystem: SOURCE_SYSTEM,
-      sourceType: SOURCE_TYPE,
+      sourceType: SOURCE_TYPE_FILE,
       status: derivePreApplyBatchStatus(summary),
       originalFileName: params.fileName,
       worksheetName: sheetName,
@@ -1331,6 +1334,7 @@ async function resolveDirectSupplierFromLookup(
 
 export async function createStockMovementImportBatchFromVisionPayload(params: {
   batchName: string;
+  sourceType?: typeof SOURCE_TYPE_VISION | typeof SOURCE_TYPE_API;
   uploadedBy?: string | null;
   originalFileName?: string | null;
   worksheetName?: string | null;
@@ -1395,7 +1399,7 @@ export async function createStockMovementImportBatchFromVisionPayload(params: {
 
     const sourceFingerprint = hashFingerprint({
       sourceSystem: SOURCE_SYSTEM,
-      sourceType: SOURCE_TYPE,
+      sourceType: params.sourceType || SOURCE_TYPE_VISION,
       movementAt: movementAt?.toISOString() || '',
       ingredientName: normalizeName(ingredientName),
       invoiceNumber,
@@ -1500,7 +1504,7 @@ export async function createStockMovementImportBatchFromVisionPayload(params: {
     data: {
       name: str(params.batchName) || `Importação de movimentações por foto ${new Date().toLocaleString('pt-BR')}`,
       sourceSystem: SOURCE_SYSTEM,
-      sourceType: SOURCE_TYPE,
+      sourceType: params.sourceType || SOURCE_TYPE_VISION,
       status: derivePreApplyBatchStatus(summary),
       originalFileName: str(params.originalFileName) || 'chatgpt-photo-import.json',
       worksheetName: str(params.worksheetName) || 'chatgpt-vision',
@@ -1798,6 +1802,7 @@ async function ensureSyntheticInvoiceNumbersForVisionBatch(batchId: string) {
     where: { id: batchId },
     select: {
       id: true,
+      sourceType: true,
       worksheetName: true,
       originalFileName: true,
       periodStart: true,
@@ -1821,10 +1826,7 @@ async function ensureSyntheticInvoiceNumbersForVisionBatch(batchId: string) {
   });
 
   if (!batch) return;
-  const isVisionBatch =
-    String(batch.worksheetName || '') === 'chatgpt-vision' ||
-    String(batch.originalFileName || '') === 'chatgpt-photo-import.json';
-  if (!isVisionBatch) return;
+  if (batch.sourceType !== SOURCE_TYPE_VISION) return;
 
   const linesMissingInvoice = (batch.Lines || []).filter((line: any) => !str(line.invoiceNumber));
   if (linesMissingInvoice.length === 0) return;
@@ -1953,13 +1955,13 @@ export async function mapBatchLinesToItem(params: {
         where: {
           sourceSystem_sourceType_aliasNormalized: {
             sourceSystem: SOURCE_SYSTEM,
-            sourceType: SOURCE_TYPE,
+            sourceType: ALIAS_SOURCE_TYPE,
             aliasNormalized: aliasLine.ingredientNameNormalized,
           },
         },
         create: {
           sourceSystem: SOURCE_SYSTEM,
-          sourceType: SOURCE_TYPE,
+          sourceType: ALIAS_SOURCE_TYPE,
           aliasName: aliasLine.ingredientName,
           aliasNormalized: aliasLine.ingredientNameNormalized,
           itemId: item.id,
@@ -3199,6 +3201,7 @@ export async function listStockMovementImportBatches(limit = 30) {
     select: {
       id: true,
       name: true,
+      sourceType: true,
       status: true,
       originalFileName: true,
       worksheetName: true,

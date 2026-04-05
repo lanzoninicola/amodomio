@@ -124,6 +124,70 @@ Retorna se a loja está aberta ou fechada no momento.
 
 ---
 
+### POST /api/nfe/conciliacao — Importação de estoque via NF-e
+
+Cria um lote de importação de movimentação de estoque a partir dos dados de uma NF-e. Usado pela extensão de navegador integrada ao Saipos.
+
+Se já existir um lote não-arquivado com o mesmo `numero_nfe`, a rota retorna o lote existente sem criar um novo.
+
+**Rota:** `app/routes/api.nfe.conciliacao.tsx`
+
+#### Body (JSON)
+
+| Campo | Tipo | Obrigatório | Descrição |
+|-------|------|-------------|-----------|
+| `fornecedor` | string | sim | Nome do fornecedor |
+| `numero_nfe` | string | sim | Número da NF-e |
+| `items` | array | sim | Lista de itens (ver abaixo) |
+| `exportado_em` | ISO 8601 | não | Data/hora de emissão da NF-e |
+
+**Item (`items[]`)**
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `nome` | string | Nome do ingrediente |
+| `unidade_entrada` | string | Unidade de entrada (ex: `KG`, `UN`) |
+| `quantidade` | string | Quantidade no formato BR (ex: `"1,500"`) |
+| `valor_total` | string | Valor total no formato BR (ex: `"29,16"`) |
+
+#### Exemplo de body
+
+```json
+{
+  "fornecedor": "Distribuidora XYZ",
+  "numero_nfe": "12345",
+  "exportado_em": "2026-03-31T14:00:00.000Z",
+  "items": [
+    { "nome": "Pistache", "unidade_entrada": "KG", "quantidade": "0,108", "valor_total": "29,16" },
+    { "nome": "Farinha de Trigo", "unidade_entrada": "KG", "quantidade": "25,000", "valor_total": "87,50" }
+  ]
+}
+```
+
+#### Resposta 200
+
+```json
+{ "success": true, "url": "https://<host>/admin/import-stock-movements/<id>", "message": "Lote importacao criado." }
+```
+
+Quando o lote já existe:
+```json
+{ "success": true, "url": "https://<host>/admin/import-stock-movements/<id>", "message": "Lote já existente para esta NF-e." }
+```
+
+#### Erros específicos
+
+| Status | `error` | Causa |
+|--------|---------|-------|
+| `400` | `invalid_json` | Corpo da requisição não é JSON válido |
+| `400` | `validation_error` | Campo obrigatório ausente ou `items` vazio |
+| `429` | `rate_limited` | Rate limit específico deste endpoint excedido |
+| `500` | `internal_error` | Erro ao criar o lote |
+
+> O lote criado recebe `sourceType: "rest_api"`. Ver seção [Modelo de dados — StockMovementImportBatch](#modelo-de-dados--stockmovementimportbatch-prisma) abaixo.
+
+---
+
 ## Modelo de dados — MeasurementUnit (Prisma)
 
 ```prisma
@@ -153,6 +217,44 @@ Unidades padrão inseridas por seed:
 
 ---
 
+## Modelo de dados — StockMovementImportBatch (Prisma)
+
+Representa um lote de importação de movimentações de estoque.
+
+### Campo `sourceType`
+
+Identifica a origem do lote:
+
+| Valor | Origem | Função que cria o lote |
+|-------|--------|------------------------|
+| `file_upload` | Upload de planilha Excel/CSV pela interface web | `createStockMovementImportBatchFromFile` |
+| `photo_vision` | Import via foto com ChatGPT Vision (cupom/nota fiscal) | `createStockMovementImportBatchFromVisionPayload` (default) |
+| `rest_api` | Criado via REST API (ex: extensão de navegador NF-e) | `createStockMovementImportBatchFromVisionPayload` com `sourceType: "rest_api"` |
+
+> **Nota:** `ItemImportAlias` usa `sourceType: "entrada_nf"` independentemente da origem do lote — os aliases são compartilhados entre todos os tipos de importação.
+
+### Campo `status`
+
+| Valor | Descrição |
+|-------|-----------|
+| `draft` | Criado, aguardando validação |
+| `validated` | Validado, pronto para importar |
+| `imported` | Importado com sucesso |
+| `partial` | Importado parcialmente |
+| `rolled_back` | Revertido |
+| `archived` | Arquivado |
+
+### Campo `importStatus`
+
+| Valor | Descrição |
+|-------|-----------|
+| `idle` | Aguardando início |
+| `importing` | Em progresso |
+| `imported` | Concluído |
+| `failed` | Falhou |
+
+---
+
 ## Implementação — padrão de autorização
 
 ```typescript
@@ -167,4 +269,4 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 ```
 
-A chave é lida da variável de ambiente `VITE_API_KEY` no servidor. O rate limit padrão é 60 req/min por IP, configurável via `VITE_REST_API_RATE_LIMIT_PER_MINUTE`.
+A chave é lida da variável de ambiente `VITE_REST_API_SECRET_KEY` no servidor. O rate limit padrão é 60 req/min por IP, configurável via `VITE_REST_API_RATE_LIMIT_PER_MINUTE`.

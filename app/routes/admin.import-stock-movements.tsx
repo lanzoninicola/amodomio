@@ -4,7 +4,7 @@ import Container from '~/components/layout/container/container';
 
 export default function AdminImportStockMovementsOutlet() {
   return (
-    <Container fullWidth className="mt-12 px-4">
+    <Container fullWidth className="px-4">
       <div className="flex flex-col gap-6">
         <section className="space-y-5 border-b border-slate-200/80 pb-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -46,7 +46,7 @@ export default function AdminImportStockMovementsOutlet() {
           </div>
 
           <div className="space-y-1">
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-950">Importação de movimentações de estoque</h1>
+            <h1 className="text-xl font-semibold tracking-tight text-slate-950">Importação de movimentações de estoque</h1>
           </div>
         </section>
 

@@ -1,7 +1,81 @@
 import { json } from "@remix-run/node";
-import type { ActionFunctionArgs } from "@remix-run/node";
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
+import prisma from "~/lib/prisma/client.server";
 import { restApi } from "~/domain/rest-api/rest-api.entity.server";
 import { createStockMovementImportBatchFromVisionPayload } from "~/domain/stock-movement/stock-movement-import.server";
+
+/**
+ * GET /api/nfe/conciliacao?numero_nfe=1234
+ *
+ * Verifica se um lote de importação já foi criado para uma NF-e.
+ * Usado pela extensão de navegador para checar o status de cada linha
+ * da tabela "Notas de Entrada" do Saipos.
+ *
+ * Headers:
+ *   x-api-key  (required) - REST API secret key
+ *
+ * Query params:
+ *   numero_nfe  (required) - número da NF-e
+ *
+ * Response 200:
+ *   {
+ *     "status": "complete" | "partial" | "not_found",
+ *     "total_items": 5,      // total de linhas no lote (0 se not_found)
+ *     "processed_items": 5,  // linhas já aplicadas ao estoque (0 se not_found)
+ *     "url": "https://..."   // null se not_found
+ *   }
+ *
+ * "complete": lote existe e foi totalmente aplicado ao estoque
+ * "partial":  lote existe mas ainda não foi aplicado (draft, validated, etc.)
+ * "not_found": nenhum lote criado para essa NF
+ */
+export async function loader({ request }: LoaderFunctionArgs) {
+  const auth = restApi.authorize(request.headers.get("x-api-key"));
+  if (auth.status !== 200) {
+    const status = auth.status === 500 ? 500 : 401;
+    return json({ error: "unauthorized", message: auth.message }, { status });
+  }
+
+  const url = new URL(request.url);
+  const numeroNfe = url.searchParams.get("numero_nfe")?.trim() || null;
+
+  if (!numeroNfe) {
+    return json({ error: "validation_error", message: "Parâmetro 'numero_nfe' é obrigatório." }, { status: 400 });
+  }
+
+  const db = prisma as any;
+  const batch = await db.stockMovementImportBatch.findFirst({
+    where: {
+      Lines: { some: { invoiceNumber: numeroNfe } },
+      status: { not: "archived" },
+    },
+    select: {
+      id: true,
+      status: true,
+      _count: {
+        select: {
+          Lines: { where: { invoiceNumber: numeroNfe } },
+        },
+      },
+      Lines: {
+        where: { invoiceNumber: numeroNfe, appliedAt: { not: null } },
+        select: { id: true },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  if (!batch) {
+    return json({ status: "not_found", total_items: 0, processed_items: 0, url: null });
+  }
+
+  const totalItems: number = batch._count.Lines;
+  const processedItems: number = batch.Lines.length;
+  const conciliationStatus = batch.status === "imported" ? "complete" : "partial";
+  const batchUrl = `${url.origin}/admin/import-stock-movements/${batch.id}`;
+
+  return json({ status: conciliationStatus, total_items: totalItems, processed_items: processedItems, url: batchUrl });
+}
 
 /**
  * POST /api/nfe/conciliacao
@@ -92,10 +166,28 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
+  // Verifica se já existe um lote não-arquivado com o mesmo número de NF-e
+  const db = prisma as any;
+  const existingBatch = await db.stockMovementImportBatch.findFirst({
+    where: {
+      Lines: { some: { invoiceNumber: numeroNfe } },
+      status: { not: "archived" },
+    },
+    select: { id: true },
+    orderBy: { createdAt: "desc" },
+  });
+
+  if (existingBatch) {
+    const origin = new URL(request.url).origin;
+    const url = `${origin}/admin/import-stock-movements/${existingBatch.id}`;
+    return json({ success: true, url, message: "Lote já existente para esta NF-e." });
+  }
+
   let batchId: string;
   try {
     const result = await createStockMovementImportBatchFromVisionPayload({
       batchName,
+      sourceType: "rest_api",
       supplierName: fornecedor,
       invoiceNumber: numeroNfe,
       movementAt,
