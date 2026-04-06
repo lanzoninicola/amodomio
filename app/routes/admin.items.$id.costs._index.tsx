@@ -52,7 +52,7 @@ function getRowEventDate(row: { validFrom?: unknown; createdAt?: unknown }): Dat
 }
 
 export default function AdminItemCostsIndex() {
-  const { item, costMetrics, averageWindowDays } = useOutletContext<AdminItemOutletContext>();
+  const { item, costMetrics, costAverageWindows } = useOutletContext<AdminItemOutletContext>();
 
   const history: any[] = item._itemCostVariationHistory || [];
   const referenceUnit = item.consumptionUm || item.purchaseUm || costMetrics?.latestCost?.unit || "";
@@ -130,16 +130,35 @@ export default function AdminItemCostsIndex() {
           {referenceUnit && <div className="text-xs text-slate-400">por {referenceUnit}</div>}
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-1">
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-            Custo médio ({averageWindowDays}d)
+            Custo médio
           </div>
-          <div className="text-2xl font-bold text-slate-900">
-            {costMetrics?.averageCostPerConsumptionUnit != null
-              ? BRL.format(Number(costMetrics.averageCostPerConsumptionUnit))
-              : <span className="text-base font-normal text-slate-400">não informado</span>}
+          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+            {costAverageWindows.map((windowMetric) => (
+              <div
+                key={windowMetric.averageWindowDays}
+                className="space-y-1 rounded-lg border border-slate-100 bg-slate-50/50 p-3"
+              >
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                  {windowMetric.averageWindowDays}d
+                </div>
+                <div className="text-lg font-bold text-slate-900">
+                  {windowMetric.averageCostPerConsumptionUnit != null
+                    ? BRL.format(Number(windowMetric.averageCostPerConsumptionUnit))
+                    : <span className="text-sm font-normal text-slate-400">não informado</span>}
+                </div>
+                <div className="text-xs text-slate-400">
+                  {referenceUnit ? `por ${referenceUnit}` : "sem unidade"}
+                </div>
+                <div className="text-[11px] text-slate-400">
+                  {windowMetric.averageSamplesCount > 0
+                    ? `${windowMetric.averageSamplesCount} registro(s)`
+                    : "Sem amostras"}
+                </div>
+              </div>
+            ))}
           </div>
-          {referenceUnit && <div className="text-xs text-slate-400">por {referenceUnit}</div>}
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-1">

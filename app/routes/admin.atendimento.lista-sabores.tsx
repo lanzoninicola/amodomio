@@ -1,16 +1,14 @@
 import { Await, Form, Link, defer, useActionData, useLoaderData } from "@remix-run/react";
 import Container from "~/components/layout/container/container";
-import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
+import { MenuItemWithAssociations } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { Suspense, useEffect, useState } from "react";
 import { Input } from "~/components/ui/input";
-import { mapPriceVariationsLabel } from "~/domain/cardapio/fn.utils";
 import CopyButton from "~/components/primitives/copy-button/copy-button";
 import Loading from "~/components/loading/loading";
 import MenuItemSwitchVisibilitySubmit from "~/domain/cardapio/components/menu-item-switch-visibility/menu-item-switch-visibility-submit";
 import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { badRequest, ok } from "~/utils/http-response.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
-import tryit from "~/utils/try-it";
 import { Separator } from "~/components/ui/separator";
 import { cn } from "~/lib/utils";
 import { toast } from "~/components/ui/use-toast";
@@ -18,9 +16,6 @@ import { Dialog, DialogClose, DialogContent, DialogTrigger } from "~/components/
 import { Button } from "~/components/ui/button";
 import { DialogTitle } from "@radix-ui/react-dialog";
 import { CopyIcon, Download, ExpandIcon, ExternalLink, Images, PlayCircle, Star } from "lucide-react";
-import OptionTab from "~/components/layout/option-tab/option-tab";
-import MenuItemSwitchActivationSubmit from "~/domain/cardapio/components/menu-item-switch-activation.tsx/menu-item-switch-activation-submit";
-import { MenuItemSellingPriceVariation } from "@prisma/client";
 import { Badge } from "~/components/ui/badge";
 import formatDecimalPlaces from "~/utils/format-decimal-places";
 import formatMoneyString from "~/utils/format-money-string";
@@ -31,6 +26,7 @@ import { MoneyInput } from "~/components/money-input/MoneyInput";
 import toFixedNumber from "~/utils/to-fixed-number";
 import prismaClient from "~/lib/prisma/client.server";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "~/components/ui/tooltip";
+import { findAllNativeCardapioItems } from "~/domain/cardapio/cardapio-items-source.server";
 
 export const meta: MetaFunction = () => [
   { title: "Lista de sabores | Admin" },
@@ -39,8 +35,7 @@ export const meta: MetaFunction = () => [
 
 
 export const loader = async () => {
-
-  const cardapioItems = menuItemPrismaEntity.findAll()
+  const cardapioItems = findAllNativeCardapioItems()
 
   return defer({
     cardapioItems,
@@ -55,7 +50,26 @@ export async function action({ request }: LoaderFunctionArgs) {
   if (_action === "menu-item-visibility-change") {
     const id = values?.id as string
 
-    const [errItem, item] = await prismaIt(menuItemPrismaEntity.findById(id));
+    const [errItem, item] = await prismaIt(
+      prismaClient.item.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          name: true,
+          ItemSellingChannelItem: {
+            where: {
+              ItemSellingChannel: {
+                key: "cardapio",
+              },
+            },
+            select: {
+              id: true,
+              visible: true,
+            },
+          },
+        },
+      })
+    );
 
     if (errItem) {
       return badRequest(errItem)
@@ -65,15 +79,28 @@ export async function action({ request }: LoaderFunctionArgs) {
       return badRequest("Item não encontrado")
     }
 
-    const [err, result] = await tryit(menuItemPrismaEntity.update(id, {
-      visible: !item.visible
-    }))
+    const channelLink = item.ItemSellingChannelItem?.[0];
+
+    if (!channelLink) {
+      return badRequest('Item sem vinculo com o canal "cardapio"')
+    }
+
+    const [err] = await prismaIt(
+      prismaClient.itemSellingChannelItem.update({
+        where: {
+          id: channelLink.id,
+        },
+        data: {
+          visible: !channelLink.visible,
+        },
+      })
+    )
 
     if (err) {
       return badRequest(err)
     }
 
-    const returnedMessage = !item.visible === true ? `Sabor "${item.name}" visivel no cardápio` : `Sabor "${item.name}" não visivel no cardápio`;
+    const returnedMessage = !channelLink.visible === true ? `Sabor "${item.name}" visivel no cardápio` : `Sabor "${item.name}" não visivel no cardápio`;
 
     return ok(returnedMessage);
   }
@@ -81,7 +108,16 @@ export async function action({ request }: LoaderFunctionArgs) {
   if (_action === "menu-item-activation-change") {
     const id = values?.id as string
 
-    const [errItem, item] = await prismaIt(menuItemPrismaEntity.findById(id));
+    const [errItem, item] = await prismaIt(
+      prismaClient.item.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          name: true,
+          active: true,
+        },
+      })
+    );
 
     if (errItem) {
       return badRequest(errItem)
@@ -91,7 +127,14 @@ export async function action({ request }: LoaderFunctionArgs) {
       return badRequest("Item não encontrado")
     }
 
-    const [err, result] = await tryit(menuItemPrismaEntity.softDelete(id))
+    const [err] = await prismaIt(
+      prismaClient.item.update({
+        where: { id },
+        data: {
+          active: !item.active,
+        },
+      })
+    )
 
     if (err) {
       return badRequest(err)
@@ -103,22 +146,26 @@ export async function action({ request }: LoaderFunctionArgs) {
   }
 
   if (_action === "menu-item-selling-price-quick-update") {
-    const menuItemId = values?.menuItemId as string;
+    const itemId = values?.itemId as string;
 
-    if (!menuItemId) {
+    if (!itemId) {
       return badRequest("Item não encontrado");
     }
 
     const [errVariations, variations] = await prismaIt(
-      prismaClient.menuItemSellingPriceVariation.findMany({
+      prismaClient.itemSellingPriceVariation.findMany({
         where: {
-          menuItemId,
-          MenuItemSellingChannel: {
+          itemId,
+          ItemSellingChannel: {
             key: "cardapio",
           },
         },
         include: {
-          MenuItemSize: true,
+          ItemVariation: {
+            include: {
+              Variation: true,
+            },
+          },
         },
       })
     );
@@ -136,14 +183,14 @@ export async function action({ request }: LoaderFunctionArgs) {
 
     const updates = (variations || [])
       .map((variation) => {
-        const abbr = String(variation?.MenuItemSize?.nameAbbreviated || "").toUpperCase();
+        const abbr = getVariationAbbreviationFromCode(variation?.ItemVariation?.Variation?.code);
         const nextValue = nextValuesByAbbreviation[abbr as keyof typeof nextValuesByAbbreviation];
 
         if (nextValue === undefined || Number.isNaN(nextValue)) {
           return null;
         }
 
-        return prismaClient.menuItemSellingPriceVariation.update({
+        return prismaClient.itemSellingPriceVariation.update({
           where: {
             id: variation.id,
           },
@@ -460,7 +507,7 @@ function CardapioItem({ item, setVisible, visible, active, setActive, showExpand
           <div className="flex flex-col gap-1">
             <h2 className="text-xs uppercase font-semibold tracking-wide">
               <Link
-                to={`/admin/gerenciamento/cardapio/${item.id}/main`}
+                to={`/admin/items/${item.id}/venda/comercial`}
                 target="_blank"
                 rel="noreferrer"
                 className="hover:underline"
@@ -526,6 +573,8 @@ function CardapioItem({ item, setVisible, visible, active, setActive, showExpand
       <ul className="grid grid-cols-4 items-end mb-2">
         {
           item.MenuItemSellingPriceVariation.filter(spv => spv.priceAmount > 0).map((spv) => {
+            const variationAbbreviation = getVariationAbbreviation(spv);
+
             return (
               <li className="flex flex-col" key={spv.id}>
                 <button
@@ -533,7 +582,7 @@ function CardapioItem({ item, setVisible, visible, active, setActive, showExpand
                   onClick={() => setIsQuickPriceDialogOpen(true)}
                   className="text-xs text-left hover:underline"
                 >
-                  {spv.MenuItemSize.nameAbbreviated}: <span className="font-semibold font-mono">{formatMoneyString(spv.priceAmount)}</span>
+                  {variationAbbreviation}: <span className="font-semibold font-mono">{formatMoneyString(spv.priceAmount)}</span>
                 </button>
               </li>
             )
@@ -789,7 +838,7 @@ function QuickSellPriceDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const pricesByAbbreviation = item.MenuItemSellingPriceVariation.reduce<Record<string, number>>((acc, variation) => {
-    const abbreviation = String(variation?.MenuItemSize?.nameAbbreviated || "").toUpperCase();
+    const abbreviation = getVariationAbbreviation(variation);
     if (!abbreviation) return acc;
     acc[abbreviation] = Number(variation.priceAmount ?? 0);
     return acc;
@@ -814,7 +863,7 @@ function QuickSellPriceDialog({
 
         <Form method="post" className="mt-3 flex flex-col gap-4">
           <input type="hidden" name="_action" value="menu-item-selling-price-quick-update" />
-          <input type="hidden" name="menuItemId" value={item.id} />
+          <input type="hidden" name="itemId" value={item.id} />
 
           <div className="grid grid-cols-4 gap-3">
             {sizeFields.map((size) => (
@@ -926,10 +975,58 @@ function buildAssetFilename(itemName: string, asset: GalleryAsset) {
 
 function getProfitPercForItem(item: MenuItemWithAssociations) {
   const profitVariation = item.MenuItemSellingPriceVariation?.find(
-    (variation) => variation.MenuItemSize?.key === "pizza-medium"
+    (variation) => getVariationAbbreviation(variation) === "ME"
   );
 
   return profitVariation ? Number(profitVariation.profitActualPerc ?? 0) : null;
+}
+
+function getVariationAbbreviation(variation: {
+  MenuItemSize?: {
+    key?: string | null;
+    nameAbbreviated?: string | null;
+    nameShort?: string | null;
+    name?: string | null;
+  } | null;
+}) {
+  const rawValues = [
+    variation?.MenuItemSize?.key,
+    variation?.MenuItemSize?.nameAbbreviated,
+    variation?.MenuItemSize?.nameShort,
+    variation?.MenuItemSize?.name,
+  ]
+    .map((value) =>
+      String(value || "")
+        .trim()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+    )
+    .filter(Boolean);
+
+  if (rawValues.some((value) => ["in", "individual", "pizza-individual"].includes(value))) return "IN";
+  if (rawValues.some((value) => ["pe", "pequena", "pizza-small", "small"].includes(value))) return "PE";
+  if (rawValues.some((value) => ["me", "media", "pizza-medium", "medio"].includes(value))) return "ME";
+  if (rawValues.some((value) => ["fa", "familia", "pizza-bigger", "pizza-family", "family"].includes(value))) return "FA";
+
+  return String(variation?.MenuItemSize?.nameAbbreviated || variation?.MenuItemSize?.nameShort || variation?.MenuItemSize?.name || "")
+    .trim()
+    .toUpperCase();
+}
+
+function getVariationAbbreviationFromCode(value?: string | null) {
+  const normalized = String(value || "")
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+  if (["in", "individual", "pizza-individual"].includes(normalized)) return "IN";
+  if (["pe", "pequena", "pizza-small", "small"].includes(normalized)) return "PE";
+  if (["me", "media", "pizza-medium", "medio"].includes(normalized)) return "ME";
+  if (["fa", "familia", "pizza-bigger", "pizza-family", "family"].includes(normalized)) return "FA";
+
+  return normalized.toUpperCase();
 }
 
 function getInitialLetter(value?: string | null) {

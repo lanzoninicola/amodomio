@@ -13,13 +13,28 @@ import {
   AlertDialogTitle,
 } from "~/components/ui/alert-dialog";
 import { toast } from "~/components/ui/use-toast";
-import { calculateItemCostMetrics, getItemAverageCostWindowDays } from "~/domain/item/item-cost-metrics.server";
+import {
+  calculateItemCostAverageWindowMetrics,
+  calculateItemCostMetrics,
+  getItemAverageCostWindowDays,
+} from "~/domain/item/item-cost-metrics.server";
 import { recalculateItemCostHistory } from "~/domain/item/item-cost-recalculate.server";
 import { loadItemCostAuditForItem } from "~/domain/item/item-cost-audit.server";
 import { getAvailableItemUnits as getAvailableItemUnitsFromServer } from "~/domain/item/item-units.server";
 import { itemVariationPrismaEntity } from "~/domain/item/item-variation.prisma.entity.server";
 import { registerItemCostEvent } from "~/domain/costs/item-cost-event.server";
 import { supplierPrismaEntity } from "~/domain/supplier/supplier.prisma.entity.server";
+import {
+  DEFAULT_RECIPE_CHATGPT_PROJECT_URL,
+  RECIPE_CHATGPT_PROJECT_URL_SETTING_NAME,
+  RECIPE_CHATGPT_SETTINGS_CONTEXT,
+} from "~/domain/recipe/recipe-chatgpt-settings";
+import {
+  buildItemRecipeChatGptImportPreview,
+  type ExistingRecipeImportMode,
+  importItemRecipeFromChatGpt,
+  parseItemRecipeChatGptImportPayload,
+} from "~/domain/recipe/item-recipe-chatgpt.server";
 import prismaClient from "~/lib/prisma/client.server";
 import { badRequest, ok, serverError } from "~/utils/http-response.server";
 import { lastUrlSegment } from "~/utils/url";
@@ -131,7 +146,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
         })
         : Promise.resolve([]);
 
-    const [loadedItem, averageWindowDays, unitOptions, categories, ingredientRecipeUsage, suppliers] = await Promise.all([
+    const [loadedItem, averageWindowDays, unitOptions, categories, ingredientRecipeUsage, suppliers, recipeAssistantItems, chatGptProjectUrlSetting] = await Promise.all([
       db.item.findUnique({
         where: { id },
         include: {
@@ -145,6 +160,14 @@ export async function loader({ params }: LoaderFunctionArgs) {
           Recipe: {
             select: { id: true, name: true, createdAt: true },
             take: 5,
+          },
+          ItemSellingInfo: {
+            select: {
+              id: true,
+              ingredients: true,
+              longDescription: true,
+              notesPublic: true,
+            },
           },
           ItemCostSheet: {
             select: {
@@ -213,6 +236,25 @@ export async function loader({ params }: LoaderFunctionArgs) {
       }),
       ingredientRecipeUsageLookup,
       supplierPrismaEntity.findAll(),
+      db.item.findMany({
+        where: { active: true },
+        select: {
+          id: true,
+          name: true,
+          classification: true,
+          consumptionUm: true,
+        },
+        orderBy: [{ name: "asc" }],
+        take: 500,
+      }),
+      db.setting.findFirst({
+        where: {
+          context: RECIPE_CHATGPT_SETTINGS_CONTEXT,
+          name: RECIPE_CHATGPT_PROJECT_URL_SETTING_NAME,
+        },
+        orderBy: [{ createdAt: "desc" }],
+        select: { value: true },
+      }),
     ]);
 
     if (!loadedItem) return badRequest("Item não encontrado");
@@ -221,6 +263,14 @@ export async function loader({ params }: LoaderFunctionArgs) {
       include: {
         MenuItem: { select: { id: true, name: true }, take: 5 },
         Recipe: { select: { id: true, name: true, createdAt: true }, take: 5 },
+        ItemSellingInfo: {
+          select: {
+            id: true,
+            ingredients: true,
+            longDescription: true,
+            notesPublic: true,
+          },
+        },
         ItemCostSheet: {
           select: {
             id: true,
@@ -324,6 +374,13 @@ export async function loader({ params }: LoaderFunctionArgs) {
       history: historyForMetrics,
       averageWindowDays,
     });
+    const costAverageWindows = [30, 60, 90].map((windowDays) =>
+      calculateItemCostAverageWindowMetrics({
+        item,
+        history: historyForMetrics,
+        averageWindowDays: windowDays,
+      }),
+    );
     const latestPurchaseSupplierName = findLatestPurchaseSupplierName(primaryHistory);
     const costAuditHistory = primaryVariation?.id
       ? await loadItemCostAuditForItem(primaryVariation.id, 30)
@@ -340,12 +397,17 @@ export async function loader({ params }: LoaderFunctionArgs) {
         _costAuditHistory: costAuditHistory,
       },
       costMetrics,
+      costAverageWindows,
       averageWindowDays,
       unitOptions,
       categories,
       suppliers,
       restrictedUnits,
       linkedUnitCodes: Array.from(linkedUnitCodes),
+      recipeAssistantItems,
+      recipeAssistantChatGptProjectUrl:
+        String(chatGptProjectUrlSetting?.value || "").trim() ||
+        DEFAULT_RECIPE_CHATGPT_PROJECT_URL,
     });
   } catch (error) {
     return serverError(error);
@@ -427,6 +489,100 @@ export async function action({ request, params }: ActionFunctionArgs) {
         message: "Item atualizado com sucesso",
         missingVariations: !hasConfiguredVariations,
       });
+    }
+
+    if (_action === "item-recipe-chatgpt-preview") {
+      const chatGptResponse = String(formData.get("chatGptResponse") || "").trim();
+      const existingRecipeImportMode = String(formData.get("existingRecipeImportMode") || "replace_existing").trim() as ExistingRecipeImportMode;
+      if (!chatGptResponse) return badRequest("Cole a resposta do ChatGPT antes de pré-visualizar");
+
+      const item = await db.item.findUnique({
+        where: { id },
+        include: {
+          Recipe: {
+            select: { id: true, name: true },
+            take: 10,
+          },
+          ItemCostSheet: {
+            select: { id: true, baseItemCostSheetId: true },
+            take: 20,
+          },
+          ItemVariation: {
+            where: { deletedAt: null },
+            include: { Variation: true },
+            orderBy: [{ createdAt: "asc" }],
+          },
+        },
+      });
+      if (!item) return badRequest("Item não encontrado");
+
+      try {
+        const payload = parseItemRecipeChatGptImportPayload(chatGptResponse);
+        const { preview } = await buildItemRecipeChatGptImportPreview({
+          db,
+          item,
+          payload,
+          existingRecipeImportMode,
+        });
+
+        return ok({
+          message: "Pré-visualização gerada",
+          payload: preview,
+        });
+      } catch (error) {
+        return badRequest(
+          (error as Error)?.message || "Erro ao gerar pré-visualização da importação"
+        );
+      }
+    }
+
+    if (_action === "item-recipe-chatgpt-import") {
+      const chatGptResponse = String(formData.get("chatGptResponse") || "").trim();
+      const existingRecipeImportMode = String(formData.get("existingRecipeImportMode") || "replace_existing").trim() as ExistingRecipeImportMode;
+      if (!chatGptResponse) return badRequest("Cole a resposta do ChatGPT antes de importar");
+
+      const item = await db.item.findUnique({
+        where: { id },
+        include: {
+          Recipe: {
+            select: { id: true, name: true },
+            take: 10,
+          },
+          ItemCostSheet: {
+            select: { id: true, baseItemCostSheetId: true },
+            take: 20,
+          },
+          ItemVariation: {
+            where: { deletedAt: null },
+            include: { Variation: true },
+            orderBy: [{ createdAt: "asc" }],
+          },
+        },
+      });
+      if (!item) return badRequest("Item não encontrado");
+
+      try {
+        const payload = parseItemRecipeChatGptImportPayload(chatGptResponse);
+        if (payload.ingredients.length === 0) {
+          return badRequest("A resposta só contém ingredientes faltantes. Cadastre os itens e tente novamente.");
+        }
+
+        const result = await importItemRecipeFromChatGpt({
+          db,
+          item,
+          payload,
+          existingRecipeImportMode,
+        });
+
+        return ok({
+          message: "Receita e ficha técnica geradas com sucesso",
+          payload: result,
+        });
+      } catch (error) {
+        return badRequest(
+          (error as Error)?.message || "Erro ao importar receita do ChatGPT"
+        );
+      }
     }
 
     if (_action === "item-purchase-conversion-add") {
@@ -626,7 +782,19 @@ export type AdminItemOutletContext = {
   unitOptions: string[];
   categories: Array<{ id: string; name: string }>;
   suppliers: Array<{ id: string; name: string; cnpj?: string | null }>;
+  recipeAssistantItems: Array<{
+    id: string;
+    name: string;
+    classification?: string | null;
+    consumptionUm?: string | null;
+  }>;
+  recipeAssistantChatGptProjectUrl: string;
   costMetrics: any;
+  costAverageWindows: Array<{
+    averageWindowDays: number;
+    averageCostPerConsumptionUnit: number | null;
+    averageSamplesCount: number;
+  }>;
   averageWindowDays: number;
   restrictedUnits: Array<{ id: string; code: string; name: string; kind: string | null }>;
   linkedUnitCodes: string[];
@@ -641,6 +809,11 @@ export default function AdminItemDetailLayout() {
 
   const item = (loaderData?.payload as any)?.item;
   const costMetrics = (loaderData?.payload as any)?.costMetrics;
+  const costAverageWindows = ((loaderData?.payload as any)?.costAverageWindows || []) as Array<{
+    averageWindowDays: number;
+    averageCostPerConsumptionUnit: number | null;
+    averageSamplesCount: number;
+  }>;
   const averageWindowDays = Number((loaderData?.payload as any)?.averageWindowDays || 30);
   const unitOptions = ((loaderData?.payload as any)?.unitOptions || ITEM_UNIT_OPTIONS) as string[];
   const categories = ((loaderData?.payload as any)?.categories || []) as Array<{ id: string; name: string }>;
@@ -712,7 +885,10 @@ export default function AdminItemDetailLayout() {
             unitOptions,
             categories,
             suppliers,
+            recipeAssistantItems: ((loaderData?.payload as any)?.recipeAssistantItems || []),
+            recipeAssistantChatGptProjectUrl: String((loaderData?.payload as any)?.recipeAssistantChatGptProjectUrl || ""),
             costMetrics,
+            costAverageWindows,
             averageWindowDays,
             restrictedUnits: ((loaderData?.payload as any)?.restrictedUnits || []),
             linkedUnitCodes: ((loaderData?.payload as any)?.linkedUnitCodes || []),

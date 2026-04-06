@@ -1,25 +1,20 @@
-import { Await, Link, defer, useLoaderData, useLocation, useSearchParams } from "@remix-run/react";
+import { Await, defer, useLoaderData, useSearchParams } from "@remix-run/react";
 import React, { Suspense, useCallback, useEffect, useRef, useState } from "react";
-import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
+import { MenuItemWithAssociations } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { cn } from "~/lib/utils";
 import { CardapioItemActionBarVertical } from "~/domain/cardapio/components/cardapio-item-action-bar/cardapio-item-action-bar";
 import ItalyIngredientsStatement from "~/domain/cardapio/components/italy-ingredient-statement/italy-ingredient-statement";
-import { LayoutTemplate, LayoutList } from "lucide-react";
 import Loading from "~/components/loading/loading";
 import { LoaderFunctionArgs } from "@remix-run/node";
 import { tagPrismaEntity } from "~/domain/tags/tag.prisma.entity.server";
-import { Badge } from "~/components/ui/badge";
-import BadgeTag from "~/domain/tags/components/badge-tag";
 import { FiltersTags } from "~/domain/cardapio/components/filter-tags/filter-tags";
 import CardapioTabs from "~/domain/cardapio/components/cardapio-tabs/cardapio-tabs";
 import { getEngagementSettings } from "~/domain/cardapio/engagement-settings.server";
+import { findAllCardapioItems } from "~/domain/cardapio/cardapio-items-source.server";
 
-export async function loader({ request }: LoaderFunctionArgs) {
-    const env = process.env?.NODE_ENV
-    // const tagParam = getSearchParam({ request, paramName: 'tag' })
+export async function loader({}: LoaderFunctionArgs) {
 
-    //@ts-ignore
-    const items = menuItemPrismaEntity.findAll({
+    const items = findAllCardapioItems({
         where: {
             visible: true,
             active: true,

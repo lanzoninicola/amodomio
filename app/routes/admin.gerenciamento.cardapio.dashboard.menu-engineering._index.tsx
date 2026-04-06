@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { HelpCircle } from "lucide-react";
 import { menuItemSellingPriceHandler } from "~/domain/cardapio/menu-item-selling-price-handler.server";
 import { menuItemSizePrismaEntity } from "~/domain/cardapio/menu-item-size.entity.server";
-import { menuItemSellingChannelPrismaEntity } from "~/domain/cardapio/menu-item-selling-channel.entity.server";
+import { itemSellingChannelPrismaEntity } from "~/domain/cardapio/menu-item-selling-channel.entity.server";
 import prismaClient from "~/lib/prisma/client.server";
 import formatDecimalPlaces from "~/utils/format-decimal-places";
 import formatMoneyString from "~/utils/format-money-string";
@@ -74,7 +74,7 @@ const pad2 = (value: number) => String(value).padStart(2, "0");
 export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const sizes = await menuItemSizePrismaEntity.findAll();
-  const channels = await menuItemSellingChannelPrismaEntity.findAll();
+  const channels = await itemSellingChannelPrismaEntity.findAll();
   const imports = await prismaClient.menuEngineeringImport.findMany({
     select: { id: true, month: true, year: true, source: true },
     orderBy: [{ year: "desc" }, { month: "desc" }],

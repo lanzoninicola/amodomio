@@ -1,6 +1,8 @@
 import { menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { menuItemSellingPriceHandler } from "~/domain/cardapio/menu-item-selling-price-handler.server";
 
+// Compat layer: alguns painéis de impacto ainda calculam margem
+// sobre a projeção legada baseada em MenuItem.
 export type MenuItemMarginImpactRow = {
   menuItemId: string;
   menuItemName: string;

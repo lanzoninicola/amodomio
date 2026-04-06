@@ -1,6 +1,8 @@
 import { menuItemSizePrismaEntity } from "~/domain/cardapio/menu-item-size.entity.server";
 import { MenuItemCostVariationUtility } from "~/domain/cardapio/menu-item-cost-variation-utility.entity.server";
 
+// Compat layer: projeta custos nativos de Item para MenuItemCostVariation
+// enquanto consumidores legados ainda dependem dessa estrutura.
 export function normalizeVariationToSizeKey(value: string | null | undefined) {
   const normalized = String(value || "").trim().toLowerCase();
   if (!normalized) return null;

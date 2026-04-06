@@ -14,13 +14,14 @@ interface MenuItemListProps {
     items: MenuItemWithAssociations[]
     setItems: (items: MenuItemWithAssociations[]) => void
     dragEnable: boolean
+    readOnly?: boolean
 }
 
 export type OveredPoint = "none" | "top" | "bottom"
 
 
 
-export default function MenuItemList({ items, setItems, dragEnable }: MenuItemListProps) {
+export default function MenuItemList({ items, setItems, dragEnable, readOnly = false }: MenuItemListProps) {
 
     if (!items || items.length === 0) {
         return <NoRecordsFound text="Nenhum item encontrado" cnClassName="mt-12" />
@@ -75,7 +76,7 @@ export default function MenuItemList({ items, setItems, dragEnable }: MenuItemLi
                 >
                     <div className="flex gap-4 items-center w-full">
                         {dragEnable === true && <GripVertical className="cursor-grab" />}
-                        <MenuItemCard item={item} />
+                        <MenuItemCard item={item} readOnly={readOnly} />
                     </div>
 
                 </li>
@@ -83,4 +84,3 @@ export default function MenuItemList({ items, setItems, dragEnable }: MenuItemLi
         </ul>
     );
 }
-

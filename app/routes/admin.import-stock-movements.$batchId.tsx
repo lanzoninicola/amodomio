@@ -159,6 +159,33 @@ function str(value: FormDataEntryValue | null) {
   return String(value || '').trim();
 }
 
+function normalizeName(name: string): string {
+  return String(name || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, '')
+    .trim();
+}
+
+function tokenize(name: string): string[] {
+  return normalizeName(name).split(/\s+/).filter(Boolean);
+}
+
+function computeItemSimilarity(ingredientName: string, itemName: string): number {
+  const a = tokenize(ingredientName);
+  const b = tokenize(itemName);
+  if (a.length === 0 && b.length === 0) return 1;
+  if (a.length === 0 || b.length === 0) return 0;
+  const setB = new Set(b);
+  let intersection = 0;
+  for (const token of a) {
+    if (setB.has(token)) intersection++;
+  }
+  const union = new Set([...a, ...b]).size;
+  return intersection / union;
+}
+
 function normalizeItemUnit(value: unknown) {
   const normalized = String(value || '').trim().toUpperCase();
   return normalized || null;
@@ -316,12 +343,14 @@ export function ItemSystemMapperCell({
   batchId,
   unitOptions,
   costHint,
+  compact = false,
 }: {
   line: any;
   items: any[];
   batchId: string;
   unitOptions: string[];
   costHint?: { lastCostPerUnit: number | null; avgCostPerUnit: number | null } | null;
+  compact?: boolean;
 }) {
   const [itemPickerOpen, setItemPickerOpen] = useState(false);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -335,6 +364,12 @@ export function ItemSystemMapperCell({
   const createItemFetcher = useFetcher<typeof action>();
   const restoreScrollRef = useRef<number | null>(null);
   const selectedItem = items.find((item) => item.id === selectedItemId);
+  const ingredientName = line.ingredientName || '';
+  const sortedItems = [...items].sort((a, b) => {
+    const scoreA = computeItemSimilarity(ingredientName, a.name);
+    const scoreB = computeItemSimilarity(ingredientName, b.name);
+    return scoreB - scoreA;
+  });
   const isMappingItem =
     mapItemFetcher.state !== 'idle' &&
     mapItemFetcher.formData?.get('_action') === 'batch-map-item' &&
@@ -391,7 +426,11 @@ export function ItemSystemMapperCell({
                 <CommandInput placeholder="Buscar item do sistema..." />
                 <CommandList className="max-h-[45vh]">
                   <CommandEmpty>Nenhum item encontrado.</CommandEmpty>
-                  {items.map((item) => (
+                  {sortedItems.map((item) => {
+                    const score = computeItemSimilarity(ingredientName, item.name);
+                    const isHighMatch = score >= 0.5;
+                    const isMediumMatch = score >= 0.25 && score < 0.5;
+                    return (
                     <CommandItem
                       key={item.id}
                       value={`${item.name} ${item.classification || ''} ${item.purchaseUm || ''} ${item.consumptionUm || ''} ${item.id}`}
@@ -416,22 +455,35 @@ export function ItemSystemMapperCell({
                         <span className="truncate">
                           {item.name} [{item.classification || '-'}] ({getItemBaseUnit(item)})
                         </span>
-                        <Link
-                          to={`/admin/items/${item.id}/main`}
-                          className="shrink-0 rounded border border-slate-300 px-2 py-0.5 text-[11px] font-medium text-slate-700 hover:bg-slate-100"
-                          onMouseDown={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                          }}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                          }}
-                        >
-                          Abrir
-                        </Link>
+                        <div className="flex shrink-0 items-center gap-1">
+                          {isHighMatch && (
+                            <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
+                              sugerido
+                            </span>
+                          )}
+                          {isMediumMatch && (
+                            <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-600">
+                              similar
+                            </span>
+                          )}
+                          <Link
+                            to={`/admin/items/${item.id}/main`}
+                            className="rounded border border-slate-300 px-2 py-0.5 text-[11px] font-medium text-slate-700 hover:bg-slate-100"
+                            onMouseDown={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                            }}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                            }}
+                          >
+                            Abrir
+                          </Link>
+                        </div>
                       </div>
                     </CommandItem>
-                  ))}
+                    );
+                  })}
                 </CommandList>
               </Command>
             </PopoverContent>
@@ -441,7 +493,7 @@ export function ItemSystemMapperCell({
             todas iguais
           </label>
         </div>
-        <div className="flex items-center gap-3">
+        {!compact && <div className="flex items-center gap-3">
           <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
             <DialogTrigger asChild>
               <Button
@@ -553,8 +605,8 @@ export function ItemSystemMapperCell({
               <span className="text-[11px] text-slate-400">Movimentações estoque</span>
             </>
           )}
-        </div>
-        {costHint && (costHint.lastCostPerUnit != null || costHint.avgCostPerUnit != null) ? (
+        </div>}
+        {!compact && (costHint && (costHint.lastCostPerUnit != null || costHint.avgCostPerUnit != null) ? (
           <div className="text-[11px] text-slate-500">
             {costHint.lastCostPerUnit != null && <>último: {formatMoney(costHint.lastCostPerUnit)}</>}
             {costHint.avgCostPerUnit != null && (
@@ -563,7 +615,7 @@ export function ItemSystemMapperCell({
           </div>
         ) : (
           <div className="text-[11px] text-slate-500">{line.mappingSource || '-'}</div>
-        )}
+        ))}
       </mapItemFetcher.Form>
     </div>
   );
@@ -1164,7 +1216,13 @@ export default function AdminImportStockMovementsBatchDetailRoute() {
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-[28px] font-semibold tracking-tight text-slate-950">{selectedBatch.name}</h2>
               <Badge variant="outline" className={cn('rounded-full px-2.5 py-1 text-[11px] font-semibold', statusBadgeClass(String(selectedBatch.status)))}>
-                {selectedBatch.status}
+                {{
+                  validated: 'Aguardando importação',
+                  ready: 'Pronta',
+                  imported: 'Importado',
+                  partial: 'Parcial',
+                  archived: 'Arquivado',
+                }[String(selectedBatch.status)] ?? String(selectedBatch.status)}
               </Badge>
             </div>
             {selectedBatch.createdAt ? (

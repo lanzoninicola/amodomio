@@ -350,6 +350,12 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
           items: [],
           disabled: false,
         },
+        {
+          title: "Canais de venda",
+          href: "/admin/canais-venda",
+          items: [],
+          disabled: false,
+        },
 
         {
           title: "Opções",
@@ -492,7 +498,13 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
           title: "Usuários",
           href: "/admin/users",
           items: [],
-          disabled: true,
+          disabled: false,
+        },
+        {
+          title: "Sessões",
+          href: "/admin/sessions",
+          items: [],
+          disabled: false,
         },
         {
           title: "Importador de dados",

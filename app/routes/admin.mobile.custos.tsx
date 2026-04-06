@@ -1,9 +1,9 @@
 import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { Form, Link, useLoaderData, useNavigation, useSubmit } from "@remix-run/react";
 import { useRef } from "react";
-import { Search } from "lucide-react";
 import { CostTrendChart } from "~/components/item-cost-monitoring/cost-trend-chart";
 import { Badge } from "~/components/ui/badge";
+import { SearchableSelect, type SearchableSelectOption } from "~/components/ui/searchable-select";
 import { loadItemCostMonitoringPayload } from "~/domain/item/item-cost-monitoring.server";
 import { ok } from "~/utils/http-response.server";
 
@@ -65,34 +65,48 @@ export default function AdminMobileCustosPage() {
   const submit = useSubmit();
   const formRef = useRef<HTMLFormElement>(null);
   const items = payload.items || [];
+  const itemOptions = payload.itemOptions || [];
   const filters = payload.filters || { q: "", classification: "insumo" };
-  const averageWindowDays = Number(payload.averageWindowDays || 30);
   const chartWindowDays = Number(payload.chartWindowDays || 60);
   const isLoading = navigation.state !== "idle";
+  const mobileItemOptions: SearchableSelectOption[] = itemOptions.map((entry: any) => ({
+    value: entry.id,
+    label: entry.name,
+    searchText: [entry.name, entry.classification || "", entry.purchaseUm || "", entry.consumptionUm || ""].filter(Boolean).join(" "),
+  }));
+  const selectedOption = itemOptions.find(
+    (entry: any) => entry.name === filters.q && entry.classification === (filters.classification || "insumo"),
+  );
+  const selectedItemId = String(selectedOption?.id || "");
 
   return (
     <div className="space-y-4 pb-4">
       <Form method="get" className="" ref={formRef}>
-        <label className="block">
+        <div className="block">
           <span className="text-sm font-semibold text-slate-900">Buscar produto ou insumo</span>
           <input type="hidden" name="classification" value={filters.classification || "insumo"} />
-          <div className="mt-2 flex items-center gap-2 border-b border-slate-200 pb-3">
-            <input
-              type="search"
-              name="q"
-              defaultValue={filters.q}
-              placeholder="Ex.: muçarela, calabresa"
-              className="h-11 min-w-0 flex-1 rounded-xl border border-slate-300 bg-white px-4 text-sm outline-none transition focus:border-slate-900 placeholder:text-slate-400"
+          <input type="hidden" name="q" value={filters.q || ""} />
+          <div className="mt-2">
+            <SearchableSelect
+              value={selectedItemId}
+              onValueChange={(nextItemId) => {
+                if (!formRef.current) return;
+                const nextItem = itemOptions.find((entry: any) => entry.id === nextItemId);
+                if (!nextItem) return;
+                const formData = new FormData(formRef.current);
+                formData.set("q", nextItem.name);
+                formData.set("classification", nextItem.classification || "insumo");
+                submit(formData, { method: "get" });
+              }}
+              options={mobileItemOptions}
+              placeholder={isLoading ? "Buscando..." : "Selecionar produto ou insumo"}
+              searchPlaceholder="Buscar item..."
+              emptyText="Nenhum item encontrado."
+              triggerClassName="h-11 w-full max-w-none justify-between rounded-xl border-slate-300 px-3 text-sm"
+              contentClassName="w-[var(--radix-popover-trigger-width)] p-0"
             />
-            <button
-              type="submit"
-              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-900 text-white"
-              aria-label={isLoading ? "Buscando" : "Buscar"}
-            >
-              <Search className="h-4 w-4" />
-            </button>
           </div>
-        </label>
+        </div>
         <div className="mt-3 flex flex-wrap gap-2">
           {ITEM_CLASSIFICATIONS.map((classification) => {
             const isActive = (filters.classification || "insumo") === classification;
@@ -164,15 +178,31 @@ export default function AdminMobileCustosPage() {
             </div>
 
             <div>
-              <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Custo médio</div>
-              <div className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">
-                {item.averageCostPerConsumptionUnit != null ? fmtMoney(item.averageCostPerConsumptionUnit) : "-"}
-              </div>
-              <div className="mt-1 text-xs text-slate-500">
-                {item.consumptionUm || item.latestCost?.unit || "sem unidade"} • {averageWindowDays} dias
-              </div>
-              <div className="mt-1 text-[11px] text-slate-400">
-                {item.averageSamplesCount > 0 ? `${item.averageSamplesCount} registro(s)` : "Sem amostras"}
+              <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Custo médio
+                <span className="ml-1 text-[11px] font-normal normal-case tracking-normal text-slate-500">
+                  ({item.consumptionUm || item.latestCost?.unit || "sem unidade"})</span></div>
+              <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5">
+                <div className="space-y-0.5">
+                  {(item.averageCostWindows || []).map((windowMetric: any, index: number) => (
+                    <div
+                      key={`${item.id}-${windowMetric.averageWindowDays}`}
+                      className={index > 0 ? "border-t border-slate-200 pt-1.5" : ""}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-500">
+                          {windowMetric.averageWindowDays} D ({windowMetric.averageSamplesCount > 0
+                            ? `${windowMetric.averageSamplesCount} Rec`
+                            : "Sem amostras"})
+                        </div>
+                        <div className="shrink-0 text-[13px] font-semibold leading-none tracking-tight text-slate-950">
+                          {windowMetric.averageCostPerConsumptionUnit != null
+                            ? fmtMoney(windowMetric.averageCostPerConsumptionUnit)
+                            : "-"}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>

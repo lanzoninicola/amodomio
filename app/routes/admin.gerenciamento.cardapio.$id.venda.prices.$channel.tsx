@@ -78,7 +78,7 @@ export async function action({ request }: ActionFunctionArgs) {
   if (_action === "upsert-by-user-input") {
 
     const menuItemSellPriceVariationId = values?.menuItemSellPriceVariationId as string
-    const menuItemSellingChannelId = values?.menuItemSellingChannelId as string
+    const itemSellingChannelId = values?.itemSellingChannelId as string
     const menuItemSizeId = values?.menuItemSizeId as string
     const menuItemId = values?.menuItemId as string
     const priceAmount = toFixedNumber(values?.priceAmount, 2) || 0
@@ -114,7 +114,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
     const nextPrice: MenuItemSellingPriceVariationUpsertParams = {
       menuItemId,
-      menuItemSellingChannelId,
+      itemSellingChannelId,
       menuItemSizeId,
       priceAmount: priceAmount,
       priceExpectedAmount: sellingPriceExpectedAmount,
@@ -137,7 +137,7 @@ export async function action({ request }: ActionFunctionArgs) {
     const nextPriceAudit: MenuItemSellingPriceVariationAudit = {
       id: createUUID(),
       menuItemId,
-      menuItemSellingChannelId,
+      itemSellingChannelId,
       menuItemSizeId,
       doughCostAmount,
       packagingCostAmount,

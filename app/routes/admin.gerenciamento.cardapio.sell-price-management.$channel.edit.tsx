@@ -87,7 +87,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
   if (_action === "upsert-by-user-input") {
     const menuItemSellPriceVariationId = values?.menuItemSellPriceVariationId as string;
-    const menuItemSellingChannelId = values?.menuItemSellingChannelId as string;
+    const itemSellingChannelId = values?.itemSellingChannelId as string;
     const menuItemSizeId = values?.menuItemSizeId as string;
     const menuItemId = values?.menuItemId as string;
 
@@ -120,7 +120,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
     const nextPrice: MenuItemSellingPriceVariationUpsertParams = {
       menuItemId,
-      menuItemSellingChannelId,
+      itemSellingChannelId,
       menuItemSizeId,
       priceAmount,
       priceExpectedAmount: sellingPriceExpectedAmount,
@@ -141,7 +141,7 @@ export async function action({ request }: ActionFunctionArgs) {
     const nextPriceAudit: MenuItemSellingPriceVariationAudit = {
       id: createUUID(),
       menuItemId,
-      menuItemSellingChannelId,
+      itemSellingChannelId,
       menuItemSizeId,
       doughCostAmount,
       packagingCostAmount,
@@ -168,17 +168,17 @@ export async function action({ request }: ActionFunctionArgs) {
   if (_action === "recalculate-variation") {
     const menuItemId = values?.menuItemId as string;
     const menuItemSizeId = values?.menuItemSizeId as string;
-    const menuItemSellingChannelId = values?.menuItemSellingChannelId as string;
+    const itemSellingChannelId = values?.itemSellingChannelId as string;
     const updatedBy = (values?.updatedBy as string) || "";
 
-    if (!menuItemId || !menuItemSizeId || !menuItemSellingChannelId) {
+    if (!menuItemId || !menuItemSizeId || !itemSellingChannelId) {
       return badRequest("Dados incompletos para recalculo");
     }
 
     const [size, channel, sellingPriceConfig] = await Promise.all([
       prismaClient.menuItemSize.findUnique({ where: { id: menuItemSizeId } }),
       prismaClient.menuItemSellingChannel.findUnique({
-        where: { id: menuItemSellingChannelId },
+        where: { id: itemSellingChannelId },
       }),
       menuItemSellingPriceUtilityEntity.getSellingPriceConfig(),
     ]);
@@ -206,7 +206,7 @@ export async function action({ request }: ActionFunctionArgs) {
         where: {
           menuItemId,
           menuItemSizeId,
-          menuItemSellingChannelId,
+          itemSellingChannelId,
         },
       });
 
@@ -248,7 +248,7 @@ export async function action({ request }: ActionFunctionArgs) {
     const nextPriceAudit: MenuItemSellingPriceVariationAudit = {
       id: createUUID(),
       menuItemId,
-      menuItemSellingChannelId,
+      itemSellingChannelId,
       menuItemSizeId,
       doughCostAmount: computedSellingPriceBreakdown.doughCostAmount,
       packagingCostAmount: computedSellingPriceBreakdown.packagingCostAmount,
@@ -393,7 +393,7 @@ const EditablePriceCell = React.memo(function EditablePriceCellInner({
         {/* Hidden exigidos pelo action */}
         <input type="hidden" name="menuItemId" value={menuItem.menuItemId} />
         <input type="hidden" name="menuItemSellPriceVariationId" value={variation.menuItemSellPriceVariationId ?? ""} />
-        <input type="hidden" name="menuItemSellingChannelId" value={currentSellingChannelId} />
+        <input type="hidden" name="itemSellingChannelId" value={currentSellingChannelId} />
         <input type="hidden" name="menuItemSizeId" value={variation.sizeId ?? ""} />
         <input type="hidden" name="updatedBy" value={variation.updatedBy || userEmail || ""} />
 
@@ -728,13 +728,13 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
                   mi.sellPriceVariations.map((variation) => ({
                     menuItemId: mi.menuItemId,
                     menuItemSizeId: variation.sizeId,
-                    menuItemSellingChannelId: variation.channelId,
+                    itemSellingChannelId: variation.channelId,
                     menuItemName: mi.name,
                     sizeName: variation.sizeName,
                     profitNow: calculateProfitNow(variation),
                   }))
                 )
-                .filter((task) => Boolean(task.menuItemSellingChannelId)),
+                .filter((task) => Boolean(task.itemSellingChannelId)),
             [calculateProfitNow]
           );
 
@@ -777,8 +777,8 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
                 fd.set("_action", "recalculate-variation");
                 fd.set("menuItemId", task.menuItemId);
                 fd.set("menuItemSizeId", task.menuItemSizeId);
-                if (task.menuItemSellingChannelId) {
-                  fd.set("menuItemSellingChannelId", task.menuItemSellingChannelId);
+                if (task.itemSellingChannelId) {
+                  fd.set("itemSellingChannelId", task.itemSellingChannelId);
                 }
                 fd.set("updatedBy", user?.email || "");
                 try {
@@ -790,7 +790,7 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
                   updateLocalProfit(
                     task.menuItemId,
                     task.menuItemSizeId,
-                    task.menuItemSellingChannelId,
+                    task.itemSellingChannelId,
                     task.profitNow
                   );
                 } catch (err) {

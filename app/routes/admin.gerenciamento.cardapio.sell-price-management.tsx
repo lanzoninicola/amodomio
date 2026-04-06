@@ -5,7 +5,7 @@ import { c } from "node_modules/vite/dist/node/types.d-aGj9QkWt";
 import { NumericInput } from "~/components/numeric-input/numeric-input";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Separator } from "~/components/ui/separator";
-import { SellingChannelKey, menuItemSellingChannelPrismaEntity } from "~/domain/cardapio/menu-item-selling-channel.entity.server";
+import { SellingChannelKey, itemSellingChannelPrismaEntity } from "~/domain/cardapio/menu-item-selling-channel.entity.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { cn } from "~/lib/utils";
 import { badRequest, ok } from "~/utils/http-response.server";
@@ -13,13 +13,13 @@ import { lastUrlSegment } from "~/utils/url";
 import { json } from "@remix-run/node";
 import { Suspense, useState, useTransition } from "react";
 import Loading from "~/components/loading/loading";
-import { MenuItemSellingChannel } from "@prisma/client";
+import { ItemSellingChannel } from "@prisma/client";
 import SubmitButton from "~/components/primitives/submit-button/submit-button";
 
 
 export async function loader({ request }: LoaderFunctionArgs) {
 
-  const sellingChannel = menuItemSellingChannelPrismaEntity.findAll();
+  const sellingChannel = itemSellingChannelPrismaEntity.findAll();
 
   return defer(
     {
@@ -50,7 +50,7 @@ export const action: ActionFunction = async ({ request }) => {
     return json({ errors }, { status: 400 });
   }
 
-  const sellingChannelRecord = await menuItemSellingChannelPrismaEntity.findOneByKey(channelKey)
+  const sellingChannelRecord = await itemSellingChannelPrismaEntity.findOneByKey(channelKey)
 
   if (!sellingChannelRecord) {
     // create the record
@@ -58,7 +58,7 @@ export const action: ActionFunction = async ({ request }) => {
   }
 
   // Atualize o registro no banco de dados (exemplo: atualizando o registro com id 1)
-  const [err, record] = await prismaIt(menuItemSellingChannelPrismaEntity.update({
+  const [err, record] = await prismaIt(itemSellingChannelPrismaEntity.update({
     where: { id: sellingChannelRecord.id },
     data: {
       targetMarginPerc: Number(targetMarginPerc),
@@ -112,7 +112,7 @@ export default function AdminGerenciamentoCardapioSellPriceManagement() {
             {(sellingChannel) => {
               {
                 return sellingChannel.map(
-                  (channel: MenuItemSellingChannel) => {
+                  (channel: ItemSellingChannel) => {
                     return (
                       <div
                         key={channel?.id}

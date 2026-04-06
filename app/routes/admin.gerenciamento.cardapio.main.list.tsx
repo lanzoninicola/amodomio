@@ -1,11 +1,15 @@
-import { MenuItemGroup } from "@prisma/client";
+import { MenuItem, MenuItemGroup } from "@prisma/client";
 import { LoaderFunctionArgs } from "@remix-run/node";
 import { Await, defer, useActionData, useLoaderData } from "@remix-run/react";
 import { Suspense, useEffect, useState } from "react";
 import Loading from "~/components/loading/loading";
 import { Input } from "~/components/ui/input";
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { toast } from "~/components/ui/use-toast";
+import {
+    findAllCardapioItems,
+    getCardapioItemsSourceResolution,
+} from "~/domain/cardapio/cardapio-items-source.server";
 import MenuItemList from "~/domain/cardapio/components/menu-item-list/menu-item-list";
 import { menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import prismaClient from "~/lib/prisma/client.server";
@@ -18,8 +22,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
     // https://github.com/remix-run/remix/discussions/6149
 
-    // const categories = categoryPrismaEntity.findAll()
-    const listFlat = menuItemPrismaEntity.findAll({
+    const sourceResolution = await getCardapioItemsSourceResolution();
+
+    const listFlat = findAllCardapioItems({
+        where: {
+            visible: true,
+            active: true,
+            upcoming: false,
+        } as any,
         option: {
             sorted: true,
             direction: "asc"
@@ -46,7 +56,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     // const data = Promise.all([categories, listFlat, tags, sizeVariations]);
     const data = Promise.all([listFlat, menuItemGroups, menuItemCategories]);
 
-    return defer({ data });
+    return defer({ data, sourceResolution });
 }
 
 export async function action({ request }: LoaderFunctionArgs) {
@@ -167,7 +177,7 @@ export type MenuItemVisibilityFilterOption =
 
 export default function AdminGerenciamentoCardapioMainListLayout() {
 
-    const { data } = useLoaderData<typeof loader>();
+    const { data, sourceResolution } = useLoaderData<typeof loader>();
     const actionData = useActionData<typeof action>();
 
     if (actionData && actionData.status !== 200) {
@@ -199,6 +209,11 @@ export default function AdminGerenciamentoCardapioMainListLayout() {
                     const [currentFilter, setCurrentFilter] = useState<MenuItemVisibilityFilterOption | null>("all");
 
                     const [dragEnable, setDragEnabled] = useState(false)
+                    const isNativeSource = sourceResolution?.effectiveSource === "items";
+                    const sourceLabel = isNativeSource ? "Item" : "MenuItem";
+                    const visibilityRule = isNativeSource
+                        ? "canSell && active && channel(cardapio).visible && !upcoming && hasPublishedPrice(cardapio)"
+                        : "menuItem.visible && menuItem.active && !menuItem.upcoming";
 
                     // 🔥 Função que combina todos os filtros
                     const applyFilters = (
@@ -268,6 +283,14 @@ export default function AdminGerenciamentoCardapioMainListLayout() {
 
                     return (
                         <div className="flex flex-col">
+                            <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                                <span className="font-semibold">Source:</span>
+                                <span className="ml-1">{sourceLabel}</span>
+                                <span className="mx-2 text-slate-400">·</span>
+                                <span className="font-semibold">Regra:</span>
+                                <span className="ml-1 font-mono text-[12px]">{visibilityRule}</span>
+                            </div>
+
                             <div className="flex flex-col gap-4 md:grid md:grid-cols-8 md:gap-x-4 md:items-center">
 
                                 {/* Select de Grupo */}
@@ -281,7 +304,7 @@ export default function AdminGerenciamentoCardapioMainListLayout() {
                                         <SelectValue placeholder="Selecionar grupo..." />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="">Todos os grupos</SelectItem>
+                                        <SelectItem value="all-groups">Todos os grupos</SelectItem>
                                         {menuItemGroups.sort((a, b) => a.sortOrderIndex - b.sortOrderIndex).map(g => (
                                             <SelectItem key={g.id} value={JSON.stringify(g)}>
                                                 {g.name}
@@ -290,22 +313,27 @@ export default function AdminGerenciamentoCardapioMainListLayout() {
                                     </SelectContent>
                                 </Select>
 
-                                {/* Select de Visibilidade */}
-                                <Select
-                                    onValueChange={(value) => handleVisibilityChange(value as MenuItemVisibilityFilterOption)}
-                                    defaultValue={"all"}
-                                >
-                                    <SelectTrigger className="w-full md:col-span-2">
-                                        <SelectValue placeholder="Filtrar vendas" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">Todos</SelectItem>
-                                        <SelectItem value="active">Venda ativa</SelectItem>
-                                        <SelectItem value="lancamento-futuro">Lançamento futuro</SelectItem>
-                                        <SelectItem value="venda-pausada">Venda pausada</SelectItem>
-                                        <SelectItem value="inactive">Inativos</SelectItem>
-                                    </SelectContent>
-                                </Select>
+                                {!isNativeSource ? (
+                                    <Select
+                                        onValueChange={(value) => handleVisibilityChange(value as MenuItemVisibilityFilterOption)}
+                                        defaultValue={"all"}
+                                    >
+                                        <SelectTrigger className="w-full md:col-span-2">
+                                            <SelectValue placeholder="Filtrar vendas" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">Todos</SelectItem>
+                                            <SelectItem value="active">Venda ativa</SelectItem>
+                                            <SelectItem value="lancamento-futuro">Lançamento futuro</SelectItem>
+                                            <SelectItem value="venda-pausada">Venda pausada</SelectItem>
+                                            <SelectItem value="inactive">Inativos</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                ) : (
+                                    <div className="flex h-10 items-center rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-500 md:col-span-2">
+                                        Somente publicados
+                                    </div>
+                                )}
 
                                 {/* Campo de busca */}
                                 <div className="items-center col-span-5 md:col-span-3">
@@ -319,21 +347,24 @@ export default function AdminGerenciamentoCardapioMainListLayout() {
                                 </div>
 
                                 {/* Ordenamento */}
-                                <p className="text-sm cursor-pointer hover:underline text-muted-foreground leading-tight md:col-span-1"
-                                    onClick={() => setDragEnabled(!dragEnable)}
-                                >{dragEnable === true ? 'Desabilitar ordernamento' : 'Abilitar ordenamento'}</p>
+                                {!isNativeSource ? (
+                                    <p className="text-sm cursor-pointer hover:underline text-muted-foreground leading-tight md:col-span-1"
+                                        onClick={() => setDragEnabled(!dragEnable)}
+                                    >{dragEnable === true ? 'Desabilitar ordernamento' : 'Abilitar ordenamento'}</p>
+                                ) : (
+                                    <p className="text-sm text-muted-foreground leading-tight md:col-span-1">
+                                        Clique em um item para abrir venda
+                                    </p>
+                                )}
 
                             </div>
 
                             {/* Lista dos itens */}
                             <MenuItemList
-                                // @ts-ignore
                                 items={items}
-                                // @ts-ignore
-                                groups={menuItemGroups}
-                                // @ts-ignore
-                                categories={menuItemCategories}
+                                setItems={setItems}
                                 dragEnable={dragEnable}
+                                readOnly={isNativeSource}
                             />
                         </div>
                     );

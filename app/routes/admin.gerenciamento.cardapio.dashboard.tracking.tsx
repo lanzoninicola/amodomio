@@ -53,16 +53,16 @@ const calculateScore = (counts: InterestCounts) =>
   counts.share * 9;
 
 const buildCountMap = (
-  rows: { menuItemId: string; type: string; _count?: { _all?: number } | number }[]
+  rows: { itemId: string; type: string; _count?: { _all?: number } | number }[]
 ) => {
   const map = new Map<string, InterestCounts>();
 
   rows.forEach((row) => {
-    const existing = map.get(row.menuItemId) ?? { ...emptyCounts };
+    const existing = map.get(row.itemId) ?? { ...emptyCounts };
     if (row.type in existing) {
       existing[row.type as keyof InterestCounts] = getGroupCount(row);
     }
-    map.set(row.menuItemId, existing);
+    map.set(row.itemId, existing);
   });
 
   return map;
@@ -140,23 +140,23 @@ export async function loader({ request }: LoaderFunctionArgs) {
     sharesPrevious,
     sharesTotal,
   ] = await Promise.all([
-    prismaClient.menuItemInterestEvent.groupBy({
-      by: ["menuItemId", "type"],
+    prismaClient.itemInterestEvent.groupBy({
+      by: ["itemId", "type"],
       _count: { _all: true },
       where: { createdAt: { gte: currentMonth.start, lt: currentMonth.end } },
     }),
-    prismaClient.menuItemInterestEvent.groupBy({
-      by: ["menuItemId", "type"],
+    prismaClient.itemInterestEvent.groupBy({
+      by: ["itemId", "type"],
       _count: { _all: true },
       where: { createdAt: { gte: previousMonth.start, lt: previousMonth.end } },
     }),
-    prismaClient.menuItemInterestEvent.groupBy({
-      by: ["menuItemId", "type"],
+    prismaClient.itemInterestEvent.groupBy({
+      by: ["itemId", "type"],
       _count: { _all: true },
       ...(rangeStart ? { where: { createdAt: { gte: rangeStart } } } : {}),
     }),
-    prismaClient.menuItemLike.groupBy({
-      by: ["menuItemId"],
+    prismaClient.itemLike.groupBy({
+      by: ["itemId"],
       _sum: { amount: true },
       where: {
         createdAt: { gte: currentMonth.start, lt: currentMonth.end },
@@ -164,8 +164,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
         amount: { gt: 0, lte: 1 },
       },
     }),
-    prismaClient.menuItemLike.groupBy({
-      by: ["menuItemId"],
+    prismaClient.itemLike.groupBy({
+      by: ["itemId"],
       _sum: { amount: true },
       where: {
         createdAt: { gte: previousMonth.start, lt: previousMonth.end },
@@ -173,8 +173,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
         amount: { gt: 0, lte: 1 },
       },
     }),
-    prismaClient.menuItemLike.groupBy({
-      by: ["menuItemId"],
+    prismaClient.itemLike.groupBy({
+      by: ["itemId"],
       _sum: { amount: true },
       ...(rangeStart
         ? {
@@ -186,18 +186,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
           }
         : { where: { deletedAt: null, amount: { gt: 0, lte: 1 } } }),
     }),
-    prismaClient.menuItemShare.groupBy({
-      by: ["menuItemId"],
+    prismaClient.itemShare.groupBy({
+      by: ["itemId"],
       _count: { _all: true },
       where: { createdAt: { gte: currentMonth.start, lt: currentMonth.end } },
     }),
-    prismaClient.menuItemShare.groupBy({
-      by: ["menuItemId"],
+    prismaClient.itemShare.groupBy({
+      by: ["itemId"],
       _count: { _all: true },
       where: { createdAt: { gte: previousMonth.start, lt: previousMonth.end } },
     }),
-    prismaClient.menuItemShare.groupBy({
-      by: ["menuItemId"],
+    prismaClient.itemShare.groupBy({
+      by: ["itemId"],
       _count: { _all: true },
       ...(rangeStart ? { where: { createdAt: { gte: rangeStart } } } : {}),
     }),
@@ -207,28 +207,28 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const mapPrevious = buildCountMap(eventsPrevious);
   const mapTotal = buildCountMap(eventsTotal);
 
-  const menuItemIds = Array.from(
+  const itemIds = Array.from(
     new Set([
       ...mapCurrent.keys(),
       ...mapPrevious.keys(),
       ...mapTotal.keys(),
-      ...likesCurrent.map((row) => row.menuItemId).filter(Boolean),
-      ...sharesCurrent.map((row) => row.menuItemId).filter(Boolean),
-      ...likesPrevious.map((row) => row.menuItemId).filter(Boolean),
-      ...sharesPrevious.map((row) => row.menuItemId).filter(Boolean),
-      ...likesTotal.map((row) => row.menuItemId).filter(Boolean),
-      ...sharesTotal.map((row) => row.menuItemId).filter(Boolean),
+      ...likesCurrent.map((row) => row.itemId).filter(Boolean),
+      ...sharesCurrent.map((row) => row.itemId).filter(Boolean),
+      ...likesPrevious.map((row) => row.itemId).filter(Boolean),
+      ...sharesPrevious.map((row) => row.itemId).filter(Boolean),
+      ...likesTotal.map((row) => row.itemId).filter(Boolean),
+      ...sharesTotal.map((row) => row.itemId).filter(Boolean),
     ])
   ) as string[];
 
-  const items = await prismaClient.menuItem.findMany({
-    where: { id: { in: menuItemIds } },
+  const items = await prismaClient.item.findMany({
+    where: { id: { in: itemIds } },
     select: { id: true, name: true },
   });
 
   const itemsById = new Map(items.map((item) => [item.id, item.name]));
 
-  const interestItems: ItemInterest[] = menuItemIds
+  const interestItems: ItemInterest[] = itemIds
     .map((id) => ({
       id,
       name: itemsById.get(id) ?? "Item desconhecido",
@@ -259,27 +259,27 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const likesMap = new Map(
     likesCurrent.map((row) => [
-      row.menuItemId,
+      row.itemId,
       Number(row._sum?.amount) || 0,
     ])
   );
   const sharesMap = new Map(
-    sharesCurrent.map((row) => [row.menuItemId, getGroupCount(row)])
+    sharesCurrent.map((row) => [row.itemId, getGroupCount(row)])
   );
   const likesPrevMap = new Map(
     likesPrevious.map((row) => [
-      row.menuItemId,
+      row.itemId,
       Number(row._sum?.amount) || 0,
     ])
   );
   const likesTotalMap = new Map(
-    likesTotal.map((row) => [row.menuItemId, Number(row._sum?.amount) || 0])
+    likesTotal.map((row) => [row.itemId, Number(row._sum?.amount) || 0])
   );
   const sharesPrevMap = new Map(
-    sharesPrevious.map((row) => [row.menuItemId, getGroupCount(row)])
+    sharesPrevious.map((row) => [row.itemId, getGroupCount(row)])
   );
   const sharesTotalMap = new Map(
-    sharesTotal.map((row) => [row.menuItemId, getGroupCount(row)])
+    sharesTotal.map((row) => [row.itemId, getGroupCount(row)])
   );
 
   const engagementItems = interestItems

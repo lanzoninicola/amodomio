@@ -38,10 +38,18 @@ export default function AdminMobileLayout() {
       <div className="mx-auto w-full max-w-md px-4 pb-6 pt-4">
         <header className="mb-4">
           {isHome ? (
-            <>
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Admin Mobile</p>
-              <h1 className="text-xl font-bold text-slate-900">Atalhos da cozinha</h1>
-            </>
+            <div className="flex items-start justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Admin Mobile</p>
+                <h1 className="text-xl font-bold text-slate-900">Atalhos da cozinha</h1>
+              </div>
+              <Link
+                to="/admin"
+                className="inline-flex items-center rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700"
+              >
+                Voltar
+              </Link>
+            </div>
           ) : (
             <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2">
               <h1 className="text-sm font-semibold text-slate-900">{pageTitle}</h1>

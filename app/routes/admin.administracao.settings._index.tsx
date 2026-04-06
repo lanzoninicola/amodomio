@@ -16,6 +16,7 @@ import {
   LIKE_SETTING_NAME,
   SHARE_SETTING_NAME,
 } from "~/domain/cardapio/engagement-settings.server";
+import { ensureCardapioItemsSourceSetting } from "~/domain/cardapio/cardapio-items-source.server";
 import {
   DEFAULT_ITEM_COST_AVERAGE_WINDOW_DAYS,
   ITEM_COST_AVERAGE_WINDOW_DAYS_SETTING,
@@ -55,6 +56,8 @@ function str(value: FormDataEntryValue | null) {
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {
+  await ensureCardapioItemsSourceSetting();
+
   const url = new URL(request.url);
   const q = url.searchParams.get("q")?.trim() ?? "";
   const context = url.searchParams.get("context")?.trim() ?? "";

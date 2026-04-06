@@ -1,4 +1,5 @@
 import { Link, useOutletContext } from "@remix-run/react";
+import ItemRecipeChatGptAssistantPanel from "~/domain/recipe/components/item-recipe-chatgpt-assistant-panel";
 import type { AdminItemOutletContext } from "./admin.items.$id";
 
 function formatRecipeCreatedAt(value: string | Date | null | undefined) {
@@ -11,7 +12,7 @@ function formatRecipeCreatedAt(value: string | Date | null | undefined) {
 }
 
 export default function AdminItemRecipesTab() {
-  const { item } = useOutletContext<AdminItemOutletContext>();
+  const { item, recipeAssistantItems, recipeAssistantChatGptProjectUrl } = useOutletContext<AdminItemOutletContext>();
   const recipes = item.Recipe || [];
   const ingredientUsage = item._ingredientRecipeUsage || [];
 
@@ -90,6 +91,15 @@ export default function AdminItemRecipesTab() {
             )}
           </div>
         </div>
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <ItemRecipeChatGptAssistantPanel
+          item={item}
+          ingredientsCatalog={recipeAssistantItems}
+          externalUrl={recipeAssistantChatGptProjectUrl}
+          formAction=".."
+        />
       </div>
     </div>
   );

@@ -50,15 +50,16 @@ model Ingredient {
 }
 
 model Category {
-  id            String        @id @default(uuid())
-  name          String
-  sortOrder     Int           @map("sort_order")
-  type          String
-  createdAt     DateTime      @map("created_at")
-  updatedAt     DateTime      @default(now()) @updatedAt @map("updated_at")
-  Items         Item[]
-  SubCategories SubCategory[] @relation("CategorySubCategories")
-  MenuItems     MenuItem[]
+  id                        String                     @id @default(uuid())
+  name                      String
+  sortOrder                 Int                        @map("sort_order")
+  type                      String
+  createdAt                 DateTime                   @map("created_at")
+  updatedAt                 DateTime                   @default(now()) @updatedAt @map("updated_at")
+  Items                     Item[]
+  SubCategories             SubCategory[]              @relation("CategorySubCategories")
+  MenuItems                 MenuItem[]
+  ItemSellingInfo           ItemSellingInfo[]          @relation("ItemSellingInfoCategory")
 
   @@map("categories")
 }
@@ -191,11 +192,42 @@ model Item {
   CostImpactRunSource          CostImpactRun[]
   ItemPurchaseConversion       ItemPurchaseConversion[]
   ItemUnit                     ItemUnit[]
+  ItemSellingChannelItem       ItemSellingChannelItem[]
+  ItemSellingPriceVariation    ItemSellingPriceVariation[]
+  ItemSellingInfo              ItemSellingInfo?
+  ItemGalleryImage             ItemGalleryImage[]
+  ItemTag                      ItemTag[]
+  ItemLike                     ItemLike[]
+  ItemShare                    ItemShare[]
+  ItemInterestEvent            ItemInterestEvent[]
 
   @@index([categoryId], map: "items_category_id_idx")
   @@index([classification], map: "items_classification_idx")
   @@index([active, classification], map: "items_active_classification_idx")
   @@map("items")
+}
+
+model ItemSellingInfo {
+  id              String         @id @default(uuid())
+  itemId          String         @unique(map: "item_selling_info_item_id_unique") @map("item_id")
+  ingredients     String?        @map("ingredients")
+  longDescription String?        @map("long_description")
+  categoryId      String?        @map("category_id")
+  itemGroupId     String?        @map("item_group_id")
+  notesPublic     String?        @map("notes_public")
+  slug            String?        @map("slug")
+  upcoming        Boolean        @default(false) @map("upcoming")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @default(now()) @updatedAt @map("updated_at")
+
+  Item      Item       @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  Category  Category?  @relation("ItemSellingInfoCategory", fields: [categoryId], references: [id], onDelete: SetNull)
+  ItemGroup ItemGroup? @relation(fields: [itemGroupId], references: [id], onDelete: SetNull)
+
+  @@index([categoryId], map: "item_selling_info_category_id_idx")
+  @@index([itemGroupId], map: "item_selling_info_group_id_idx")
+  @@index([slug], map: "item_selling_info_slug_idx")
+  @@map("item_selling_info")
 }
 
 model ItemPurchaseConversion {
@@ -302,6 +334,7 @@ model ItemVariation {
   ItemCostVariationHistory        ItemCostVariationHistory[]
   ItemCostSheetVariationComponent ItemCostSheetVariationComponent[]
   StockMovement                   StockMovement[]
+  ItemSellingPriceVariation       ItemSellingPriceVariation[]
 
   @@unique([itemId, variationId], map: "item_variations_item_variation_unique")
   @@index([recipeId], map: "item_variations_recipe_id_idx")
@@ -479,6 +512,25 @@ model MenuItemGroup {
   @@map("menu_item_groups")
 }
 
+model ItemGroup {
+  id             String    @id @default(uuid())
+  key            String
+  name           String
+  description    String
+  /// sortOrder should be 1000 for the first group, 2000 for the second, etc
+  sortOrderIndex Int       @map("sort_order_index")
+  visible        Boolean   @default(true)
+  createdAt      DateTime  @map("created_at")
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+  deletedBy      String?   @map("deleted_by")
+  featured       Boolean   @default(false)
+
+  ItemSellingInfo ItemSellingInfo[]
+
+  @@map("item_groups")
+}
+
 model MenuItem {
   id                                 String                               @id @default(uuid())
   name                               String
@@ -550,7 +602,7 @@ model MenuItemGalleryImage {
   secureUrl        String?     @map("secure_url")
   slot             String?     @map("slot")
   assetId          String?     @map("asset_id")
-  mediaAssetId     String?     @map("media_asset_id")
+  mediaAssetId     String?     @db.Uuid @map("media_asset_id")
   mediaAsset       MediaAsset? @relation(fields: [mediaAssetId], references: [id])
   assetFolder      String?     @map("asset_folder")
   originalFileName String?     @map("original_file_name")
@@ -567,6 +619,35 @@ model MenuItemGalleryImage {
   updatedAt        DateTime    @default(now()) @updatedAt @map("updated_at")
 
   @@map("menu_item_gallery_images")
+}
+
+model ItemGalleryImage {
+  id               String      @id @default(uuid())
+  itemId           String      @map("item_id")
+  item             Item        @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  kind             String      @default("image") @map("kind")
+  secureUrl        String?     @map("secure_url")
+  slot             String?     @map("slot")
+  assetId          String?     @map("asset_id")
+  mediaAssetId     String?     @db.Uuid @map("media_asset_id")
+  mediaAsset       MediaAsset? @relation(fields: [mediaAssetId], references: [id])
+  assetFolder      String?     @map("asset_folder")
+  originalFileName String?     @map("original_file_name")
+  displayName      String?     @map("display_name")
+  height           Float?      @map("height")
+  width            Float?      @map("width")
+  thumbnailUrl     String?     @map("thumbnail_url")
+  format           String?     @map("format")
+  publicId         String?     @map("public_id")
+  isPrimary        Boolean     @default(false) @map("is_primary")
+  visible          Boolean     @default(true) @map("visible")
+  sortOrder        Int         @default(0) @map("sort_order")
+  createdAt        DateTime    @default(now()) @map("created_at")
+  updatedAt        DateTime    @default(now()) @updatedAt @map("updated_at")
+
+  @@index([itemId], map: "item_gallery_images_item_id_idx")
+  @@index([itemId, isPrimary], map: "item_gallery_images_item_primary_idx")
+  @@map("item_gallery_images")
 }
 
 /// to remove  DO NOT USE
@@ -611,8 +692,8 @@ model MenuItemSellingPriceVariation {
   menuItemId               String?                 @map("menu_item_id")
   MenuItemSize             MenuItemSize?           @relation(fields: [menuItemSizeId], references: [id])
   menuItemSizeId           String?                 @map("menu_item_size_id")
-  MenuItemSellingChannel   MenuItemSellingChannel? @relation(fields: [menuItemSellingChannelId], references: [id])
-  menuItemSellingChannelId String?                 @map("menu_item_selling_channel_id")
+  ItemSellingChannel       MenuItemSellingChannel? @relation(fields: [itemSellingChannelId], references: [id])
+  itemSellingChannelId     String?                 @map("menu_item_selling_channel_id")
   /// efetivo valor de venda publico do cardapio
   priceAmount              Float                   @map("price_amount")
   /// a percentagem do profito realizado com o efetivo valor de venda
@@ -638,8 +719,8 @@ model MenuItemSellingPriceVariationAudit {
   menuItemId                 String                 @map("menu_item_id")
   MenuItemSize               MenuItemSize           @relation(fields: [menuItemSizeId], references: [id])
   menuItemSizeId             String                 @map("menu_item_size_id")
-  MenuItemSellingChannel     MenuItemSellingChannel @relation(fields: [menuItemSellingChannelId], references: [id])
-  menuItemSellingChannelId   String                 @map("menu_item_selling_channel_id")
+  ItemSellingChannel         MenuItemSellingChannel @relation(fields: [itemSellingChannelId], references: [id])
+  itemSellingChannelId       String                 @map("menu_item_selling_channel_id")
   recipeCostAmount           Float                  @default(0) @map("recipe_cost_amount")
   packagingCostAmount        Float                  @default(0) @map("packaging_cost_amount")
   doughCostAmount            Float                  @default(0) @map("dough_cost_amount")
@@ -671,6 +752,68 @@ model MenuItemSellingChannel {
   CostImpactMenuItem                 CostImpactMenuItem[]
 
   @@map("menu_item_selling_channels")
+}
+
+model ItemSellingChannel {
+  id                        String                      @id @default(uuid())
+  key                       String                      @map("key")
+  name                      String
+  description               String?
+  feeAmount                 Float                       @default(0) @map("fee_amount")
+  taxPerc                   Float                       @default(0) @map("tax_perc")
+  onlinePaymentTaxPerc      Float                       @default(0) @map("online_payment_tax_perc")
+  targetMarginPerc          Float                       @default(0) @map("target_margin_perc")
+  isMarketplace             Boolean                     @default(false) @map("is_marketplace")
+  sortOrderIndex            Int                         @default(0) @map("sort_order_index")
+  ItemSellingChannelItem    ItemSellingChannelItem[]
+  ItemSellingPriceVariation          ItemSellingPriceVariation[]
+
+  @@map("item_selling_channels")
+}
+
+model ItemSellingChannelItem {
+  id                   String             @id @default(uuid())
+  itemId               String             @map("item_id")
+  itemSellingChannelId String             @map("item_selling_channel_id")
+  visible              Boolean            @default(false) @map("visible")
+  createdAt            DateTime           @default(now()) @map("created_at")
+  updatedAt            DateTime           @default(now()) @updatedAt @map("updated_at")
+
+  Item               Item               @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  ItemSellingChannel ItemSellingChannel @relation(fields: [itemSellingChannelId], references: [id], onDelete: Cascade)
+
+  @@unique([itemId, itemSellingChannelId], map: "item_selling_channel_items_item_channel_unique")
+  @@index([itemId], map: "item_selling_channel_items_item_id_idx")
+  @@index([itemSellingChannelId], map: "item_selling_channel_items_channel_id_idx")
+  @@map("item_selling_channel_items")
+}
+
+model ItemSellingPriceVariation {
+  id                       String                  @id @default(uuid())
+  itemId                   String                  @map("item_id")
+  itemVariationId          String                  @map("item_variation_id")
+  itemSellingChannelId     String                  @map("item_selling_channel_id")
+  priceAmount              Float                   @default(0) @map("price_amount")
+  profitActualPerc         Float                   @default(0) @map("profit_actual_perc")
+  priceExpectedAmount      Float                   @default(0) @map("price_expected_amount")
+  profitExpectedPerc       Float                   @default(0) @map("profit_expected_perc")
+  discountPercentage       Float                   @default(0) @map("discount_percentage")
+  published                Boolean                 @default(false) @map("published")
+  publishedAt              DateTime?               @map("published_at")
+  createdAt                DateTime                @default(now()) @map("created_at")
+  updatedAt                DateTime                @default(now()) @updatedAt @map("updated_at")
+  updatedBy                String?                 @map("updated_by")
+  previousPriceAmount      Float                   @default(0) @map("previous_price_amount")
+
+  Item                     Item                    @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  ItemVariation            ItemVariation           @relation(fields: [itemVariationId], references: [id], onDelete: Cascade)
+  ItemSellingChannel       ItemSellingChannel      @relation(fields: [itemSellingChannelId], references: [id], onDelete: Restrict)
+
+  @@unique([itemVariationId, itemSellingChannelId], map: "item_selling_prices_item_variation_channel_unique")
+  @@index([itemId], map: "item_selling_prices_item_id_idx")
+  @@index([itemSellingChannelId], map: "item_selling_prices_channel_id_idx")
+  @@index([published], map: "item_selling_prices_published_idx")
+  @@map("item_selling_prices")
 }
 
 model MenuItemCostVariation {
@@ -1027,6 +1170,20 @@ model MenuItemLike {
   @@map("menu_item_likes")
 }
 
+model ItemLike {
+  id        String    @id @default(uuid())
+  itemId    String?   @map("item_id")
+  Item      Item?     @relation(fields: [itemId], references: [id])
+  sessionId String?   @map("session_id")
+  Session   Session?  @relation(fields: [sessionId], references: [id])
+  amount    Float     @default(0) @map("amount")
+  createdAt DateTime  @map("created_at")
+  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  @@map("item_likes")
+}
+
 model MenuItemShare {
   id         String    @id @default(uuid())
   MenuItem   MenuItem? @relation(fields: [menuItemId], references: [id])
@@ -1037,6 +1194,18 @@ model MenuItemShare {
   updatedAt  DateTime  @default(now()) @updatedAt @map("updated_at")
 
   @@map("menu_item_shares")
+}
+
+model ItemShare {
+  id        String    @id @default(uuid())
+  itemId    String?   @map("item_id")
+  Item      Item?     @relation(fields: [itemId], references: [id])
+  sessionId String?   @map("session_id")
+  Session   Session?  @relation(fields: [sessionId], references: [id])
+  createdAt DateTime  @map("created_at")
+  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  @@map("item_shares")
 }
 
 model RateLimitBucket {
@@ -1065,6 +1234,19 @@ model MenuItemInterestEvent {
   @@map("menu_item_interest_events")
 }
 
+model ItemInterestEvent {
+  id        String   @id @default(uuid())
+  itemId    String   @map("item_id")
+  Item      Item     @relation(fields: [itemId], references: [id])
+  clientId  String?  @map("client_id")
+  type      String   @db.VarChar
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([itemId, type, createdAt])
+  @@index([clientId])
+  @@map("item_interest_events")
+}
+
 /// here we can manage: featured (recommended), vegetarian, kids, meat
 model MenuItemTag {
   id         String    @id @default(uuid())
@@ -1077,6 +1259,23 @@ model MenuItemTag {
   updatedAt  DateTime  @default(now()) @updatedAt @map("updated_at")
 
   @@map("menu_item_tags")
+}
+
+model ItemTag {
+  id        String    @id @default(uuid())
+  itemId    String    @map("item_id")
+  tagId     String    @map("tag_id")
+  deletedAt DateTime? @map("deleted_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  Item Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  Tag  Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([itemId, tagId], map: "item_tags_item_tag_unique")
+  @@index([itemId], map: "item_tags_item_id_idx")
+  @@index([tagId], map: "item_tags_tag_id_idx")
+  @@map("item_tags")
 }
 
 model AdminNavigationClick {
@@ -1104,6 +1303,7 @@ model Tag {
   createdAt      DateTime      @map("created_at")
   updatedAt      DateTime      @default(now()) @updatedAt @map("updated_at")
   MenuItemTag    MenuItemTag[]
+  ItemTag        ItemTag[]
 
   @@map("tags")
 }
@@ -1195,6 +1395,134 @@ model Setting {
   @@map("settings")
 }
 
+enum AdminUserRole {
+  user
+  admin
+  superAdmin @map("super-admin")
+}
+
+enum AdminUserProvisionSource {
+  manual
+  seed
+  whitelistMigration @map("whitelist-migration")
+}
+
+enum AccessAuditEventType {
+  loginSuccess @map("login-success")
+  loginFailure @map("login-failure")
+  logout
+  logoutAllDevices @map("logout-all-devices")
+  passwordResetRequested @map("password-reset-requested")
+  passwordResetSent @map("password-reset-sent")
+  passwordResetFailed @map("password-reset-failed")
+  sessionExpired @map("session-expired")
+  sessionRevoked @map("session-revoked")
+  sessionBlocked @map("session-blocked")
+}
+
+enum AccessAuditProvider {
+  google
+  password
+  system
+}
+
+enum AdminUserSessionStatus {
+  active
+  revoked
+  blocked
+  expired
+}
+
+model AdminUserAccess {
+  id                       String                      @id @default(uuid())
+  username                 String                      @unique
+  email                    String?                     @unique
+  name                     String?
+  mobilePhone              String?                     @map("mobile_phone")
+  avatarUrl                String?                     @map("avatar_url")
+  googleSub                String?                     @unique @map("google_sub")
+  roles                    AdminUserRole[]             @default([user])
+  isActive                 Boolean                     @default(true) @map("is_active")
+  allowGoogleLogin         Boolean                     @default(false) @map("allow_google_login")
+  allowPasswordLogin       Boolean                     @default(false) @map("allow_password_login")
+  passwordHash             String?                     @map("password_hash")
+  passwordUpdatedAt        DateTime?                   @map("password_updated_at")
+  temporaryPasswordHash    String?                     @map("temporary_password_hash")
+  temporaryPasswordExpiresAt DateTime?                 @map("temporary_password_expires_at")
+  temporaryPasswordSentAt  DateTime?                   @map("temporary_password_sent_at")
+  lastLoginAt              DateTime?                   @map("last_login_at")
+  lastGoogleLoginAt        DateTime?                   @map("last_google_login_at")
+  lastPasswordLoginAt      DateTime?                   @map("last_password_login_at")
+  source                   AdminUserProvisionSource    @default(manual)
+  createdAt                DateTime                    @default(now()) @map("created_at")
+  updatedAt                DateTime                    @default(now()) @updatedAt @map("updated_at")
+
+  AccessAudit       AdminAccessAudit[]      @relation("AccessAuditUser")
+  AuthoredAudit     AdminAccessAudit[]      @relation("AccessAuditActor")
+  AdminUserSession  AdminUserSession[]      @relation("AdminUserSessions")
+  RevokedSessions   AdminUserSession[]      @relation("AdminUserSessionRevoker")
+
+  @@index([isActive], map: "admin_user_access_is_active_idx")
+  @@index([allowGoogleLogin], map: "admin_user_access_allow_google_login_idx")
+  @@index([allowPasswordLogin], map: "admin_user_access_allow_password_login_idx")
+  @@map("admin_user_access")
+}
+
+model AdminUserSession {
+  id               String                 @id @default(uuid())
+  userId           String                 @map("user_id")
+  authProvider     AccessAuditProvider    @map("auth_provider")
+  sessionSecretHash String                @map("session_secret_hash")
+  status           AdminUserSessionStatus @default(active)
+  deviceLabel      String?                @map("device_label")
+  ipAddress        String?                @map("ip_address")
+  userAgent        String?                @map("user_agent")
+  lastActivityAt   DateTime               @default(now()) @map("last_activity_at")
+  idleExpiresAt    DateTime               @map("idle_expires_at")
+  absoluteExpiresAt DateTime              @map("absolute_expires_at")
+  revokedAt        DateTime?              @map("revoked_at")
+  revokedReason    String?                @map("revoked_reason")
+  revokedByUserId  String?                @map("revoked_by_user_id")
+  createdAt        DateTime               @default(now()) @map("created_at")
+  updatedAt        DateTime               @default(now()) @updatedAt @map("updated_at")
+
+  User       AdminUserAccess   @relation("AdminUserSessions", fields: [userId], references: [id], onDelete: Cascade)
+  RevokedBy  AdminUserAccess?  @relation("AdminUserSessionRevoker", fields: [revokedByUserId], references: [id], onDelete: SetNull)
+  AccessAudit AdminAccessAudit[]
+
+  @@index([userId, status], map: "admin_user_session_user_id_status_idx")
+  @@index([status, idleExpiresAt], map: "admin_user_session_status_idle_expires_at_idx")
+  @@index([absoluteExpiresAt], map: "admin_user_session_absolute_expires_at_idx")
+  @@map("admin_user_session")
+}
+
+model AdminAccessAudit {
+  id          String               @id @default(uuid())
+  userId      String?              @map("user_id")
+  actorUserId String?              @map("actor_user_id")
+  sessionId   String?              @map("session_id")
+  username    String?              @map("username")
+  email       String?              @map("email")
+  provider    AccessAuditProvider
+  eventType   AccessAuditEventType @map("event_type")
+  success     Boolean              @default(true)
+  sessionDeviceLabel String?       @map("session_device_label")
+  ipAddress   String?              @map("ip_address")
+  userAgent   String?              @map("user_agent")
+  details     Json?
+  createdAt   DateTime             @default(now()) @map("created_at")
+
+  User      AdminUserAccess?  @relation("AccessAuditUser", fields: [userId], references: [id], onDelete: SetNull)
+  ActorUser AdminUserAccess?  @relation("AccessAuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  Session   AdminUserSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt], map: "admin_access_audit_user_id_created_at_idx")
+  @@index([actorUserId, createdAt], map: "admin_access_audit_actor_user_id_created_at_idx")
+  @@index([sessionId, createdAt], map: "admin_access_audit_session_id_created_at_idx")
+  @@index([eventType, createdAt], map: "admin_access_audit_event_type_created_at_idx")
+  @@map("admin_access_audit")
+}
+
 model AiContextProfileVersion {
   id        String   @id @default(uuid())
   language  String
@@ -1244,6 +1572,8 @@ model Session {
   updatedAt     DateTime        @default(now()) @updatedAt @map("updated_at")
   MenuItemLike  MenuItemLike[]
   MenuItemShare MenuItemShare[]
+  ItemLike      ItemLike[]
+  ItemShare     ItemShare[]
   PostLike      PostLike[]
   PostShare     PostShare[]
 
@@ -2340,7 +2670,7 @@ model MediaFolder {
 }
 
 model MediaAsset {
-  id                    String                 @id @default(uuid())
+  id                    String                 @id @default(uuid()) @db.Uuid
   kind                  String
   url                   String
   folderPath            String                 @map("folder_path")
@@ -2350,6 +2680,7 @@ model MediaAsset {
   createdAt             DateTime               @default(now()) @map("created_at")
   updatedAt             DateTime               @default(now()) @updatedAt @map("updated_at")
   menuItemGalleryImages MenuItemGalleryImage[]
+  itemGalleryImages     ItemGalleryImage[]
 
   @@index([folderPath, createdAt], map: "media_assets_folder_path_created_at_idx")
   @@map("media_assets")

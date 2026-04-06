@@ -1,0 +1,7 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "app/routes/admin.atendimento.lista-sabores.tsx",
+    "app/domain/cardapio/cardapio-items-source.server.ts"
+  ]
+}

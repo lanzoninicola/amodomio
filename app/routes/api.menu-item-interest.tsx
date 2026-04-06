@@ -11,12 +11,14 @@ const MENU_ITEM_INTEREST_SETTING_NAME = "menu-item-interest-enabled";
 
 function normalizePayload(payload: unknown) {
   if (!payload || typeof payload !== "object") {
-    return { menuItemId: null, type: null, clientId: null };
+    return { menuItemId: null, itemId: null, sourceType: null, type: null, clientId: null };
   }
 
   const data = payload as Record<string, unknown>;
   return {
     menuItemId: typeof data.menuItemId === "string" ? data.menuItemId : null,
+    itemId: typeof data.itemId === "string" ? data.itemId : null,
+    sourceType: typeof data.sourceType === "string" ? data.sourceType : null,
     type: typeof data.type === "string" ? data.type : null,
     clientId: typeof data.clientId === "string" ? data.clientId : null,
   };
@@ -53,15 +55,17 @@ export async function action({ request }: ActionFunctionArgs) {
     payload = Object.fromEntries(formData);
   }
 
-  const { menuItemId, type, clientId } = normalizePayload(payload);
+  const { menuItemId, itemId, sourceType, type, clientId } = normalizePayload(payload);
+  const isNative = sourceType === "native";
 
-  if (!menuItemId || !type || !isAllowedMenuItemInterestType(type)) {
+  if ((!menuItemId && !itemId) || !type || !isAllowedMenuItemInterestType(type)) {
     return json({ error: "invalid_payload" }, { status: 400 });
   }
 
   try {
     await createMenuItemInterestEvent({
-      menuItemId,
+      menuItemId: isNative ? undefined : menuItemId || undefined,
+      itemId: isNative ? itemId || undefined : undefined,
       type,
       clientId,
     });

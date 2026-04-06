@@ -72,6 +72,17 @@ function SourceTypeBadge({ sourceType }: { sourceType: string | null | undefined
   );
 }
 
+function batchStatusLabel(status: string) {
+  switch (status) {
+    case 'validated': return 'Aguardando importação';
+    case 'ready':     return 'Pronta';
+    case 'imported':  return 'Importado';
+    case 'partial':   return 'Parcial';
+    case 'archived':  return 'Arquivado';
+    default:          return status;
+  }
+}
+
 function statusBadgeClass(status: string) {
   switch (status) {
     case 'validated':
@@ -334,7 +345,7 @@ export default function AdminImportStockMovementsIndexRoute() {
                     </TableCell>
                     <TableCell className="px-4 py-4">
                       <Badge variant="outline" className={statusBadgeClass(String(batch.status))}>
-                        {batch.status}
+                        {batchStatusLabel(String(batch.status))}
                       </Badge>
                     </TableCell>
                     <TableCell className="px-4 py-4 text-sm text-slate-600">

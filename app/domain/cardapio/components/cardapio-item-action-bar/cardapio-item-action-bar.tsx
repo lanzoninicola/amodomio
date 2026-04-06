@@ -17,6 +17,25 @@ interface CardapioItemActionBarProps {
     sharesEnabled?: boolean;
 }
 
+function getEngagementItemId(item: MenuItemWithAssociations) {
+    const compatItem = item as MenuItemWithAssociations & {
+        sourceType?: "legacy" | "native";
+        sourceItemId?: string | null;
+    };
+
+    return typeof compatItem.sourceItemId === "string" && compatItem.sourceItemId.trim()
+        ? compatItem.sourceItemId.trim()
+        : item.id;
+}
+
+function getEngagementSourceType(item: MenuItemWithAssociations) {
+    const compatItem = item as MenuItemWithAssociations & {
+        sourceType?: "legacy" | "native";
+    };
+
+    return compatItem.sourceType === "native" ? "native" : "legacy";
+}
+
 export function CardapioItemActionBarVertical({
     item,
     cnContainer,
@@ -32,6 +51,8 @@ export function CardapioItemActionBarVertical({
     const fetcher = useFetcher();
 
     const likingIt = () => {
+        const engagementItemId = getEngagementItemId(item)
+        if (!engagementItemId) return
         playTap()
 
         setLikeIt(true)
@@ -45,7 +66,8 @@ export function CardapioItemActionBarVertical({
         fetcher.submit(
             {
                 action: "menu-item-like-it",
-                itemId: item.id,
+                itemId: engagementItemId,
+                sourceType: getEngagementSourceType(item),
                 likesAmount: String(1),
                 clientId: clientId || "",
             },
@@ -54,6 +76,8 @@ export function CardapioItemActionBarVertical({
     };
 
     const shareIt = () => {
+        const engagementItemId = getEngagementItemId(item)
+        if (!engagementItemId) return
         playTap()
 
         if (!navigator?.share) {
@@ -72,7 +96,8 @@ export function CardapioItemActionBarVertical({
             fetcher.submit(
                 {
                     action: "menu-item-share-it",
-                    itemId: item.id,
+                    itemId: engagementItemId,
+                    sourceType: getEngagementSourceType(item),
                     clientId: clientId || "",
                 },
                 { method: "post", action: "/api/menu-item-share" }
@@ -155,6 +180,8 @@ export function CardapioItemActionBarHorizontal({
     const fetcher = useFetcher();
 
     const likingIt = () => {
+        const engagementItemId = getEngagementItemId(item)
+        if (!engagementItemId) return
 
         setLikeIt(true)
         setLikesAmount(likesAmount + 1)
@@ -167,7 +194,8 @@ export function CardapioItemActionBarHorizontal({
         fetcher.submit(
             {
                 action: "menu-item-like-it",
-                itemId: item.id,
+                itemId: engagementItemId,
+                sourceType: getEngagementSourceType(item),
                 likesAmount: String(1),
                 clientId: clientId || "",
             },
@@ -176,6 +204,8 @@ export function CardapioItemActionBarHorizontal({
     };
 
     const shareIt = () => {
+        const engagementItemId = getEngagementItemId(item)
+        if (!engagementItemId) return
         if (!navigator?.share) {
             console.log("Navegador não suporta o compartilhamento")
             return
@@ -192,7 +222,8 @@ export function CardapioItemActionBarHorizontal({
             fetcher.submit(
                 {
                     action: "menu-item-share-it",
-                    itemId: item.id,
+                    itemId: engagementItemId,
+                    sourceType: getEngagementSourceType(item),
                     clientId: clientId || "",
                 },
                 { method: "post", action: "/api/menu-item-share" }
@@ -254,6 +285,8 @@ export function ShareIt({ item, size, children, cnContainer }: { item: MenuItemW
     const fetcher = useFetcher();
 
     const shareIt = () => {
+        const engagementItemId = getEngagementItemId(item)
+        if (!engagementItemId) return
         if (!navigator?.share) {
             console.log("Navegador não suporta o compartilhamento")
             return
@@ -270,7 +303,8 @@ export function ShareIt({ item, size, children, cnContainer }: { item: MenuItemW
             fetcher.submit(
                 {
                     action: "menu-item-share-it",
-                    itemId: item.id,
+                    itemId: engagementItemId,
+                    sourceType: getEngagementSourceType(item),
                     clientId: clientId || "",
                 },
                 { method: "post", action: "/api/menu-item-share" }
@@ -315,6 +349,8 @@ export function LikeIt({
     const fetcher = useFetcher();
 
     const likingIt = () => {
+        const engagementItemId = getEngagementItemId(item)
+        if (!engagementItemId) return
 
         setLikeIt(true)
         setLikesAmount(likesAmount + 1)
@@ -327,7 +363,8 @@ export function LikeIt({
         fetcher.submit(
             {
                 action: "menu-item-like-it",
-                itemId: item.id,
+                itemId: engagementItemId,
+                sourceType: getEngagementSourceType(item),
                 likesAmount: String(1),
                 clientId: clientId || "",
             },

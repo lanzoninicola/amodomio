@@ -1,6 +1,6 @@
 import {
   MenuItemGroup,
-  MenuItemSellingChannel,
+  ItemSellingChannel,
   MenuItemSize,
 } from "@prisma/client";
 import prismaClient from "~/lib/prisma/client.server";
@@ -15,7 +15,7 @@ import {
   menuItemSizePrismaEntity,
 } from "./menu-item-size.entity.server";
 import { menuItemSellingPriceUtilityEntity } from "./menu-item-selling-price-utility.entity";
-import { menuItemSellingChannelPrismaEntity } from "./menu-item-selling-channel.entity.server";
+import { itemSellingChannelPrismaEntity } from "./menu-item-selling-channel.entity.server";
 import { PrismaEntityProps } from "~/lib/prisma/types.server";
 import { menuItemPrismaEntity } from "./menu-item.prisma.entity.server";
 import { redisGetJson, redisSetJson } from "~/lib/cache/redis.server";
@@ -25,7 +25,7 @@ interface MenuItemSellingPriceHandlerProps extends PrismaEntityProps {
   menuItemPrismaEntity: typeof menuItemPrismaEntity;
   menuItemSellingPriceUtility: typeof menuItemSellingPriceUtilityEntity;
   menuItemSize: typeof menuItemSizePrismaEntity;
-  menuItemSellingChannel: typeof menuItemSellingChannelPrismaEntity;
+  itemSellingChannel: typeof itemSellingChannelPrismaEntity;
 }
 
 type GroupedMenu = {
@@ -49,7 +49,7 @@ export class MenuItemSellingPriceHandler {
 
   menuItemSellingPriceUtility: typeof menuItemSellingPriceUtilityEntity;
 
-  menuItemSellingChannel: typeof menuItemSellingChannelPrismaEntity;
+  itemSellingChannel: typeof itemSellingChannelPrismaEntity;
 
   menuItemSize: typeof menuItemSizePrismaEntity;
 
@@ -58,7 +58,7 @@ export class MenuItemSellingPriceHandler {
     menuItemPrismaEntity,
     menuItemSellingPriceUtility,
     menuItemSize,
-    menuItemSellingChannel,
+    itemSellingChannel,
   }: MenuItemSellingPriceHandlerProps) {
     this.client = client;
 
@@ -66,7 +66,7 @@ export class MenuItemSellingPriceHandler {
     this.menuItemSellingPriceUtility = menuItemSellingPriceUtilityEntity;
 
     this.menuItemSize = menuItemSize;
-    this.menuItemSellingChannel = menuItemSellingChannel;
+    this.itemSellingChannel = itemSellingChannel;
   }
 
   async loadMany<T extends "default" | "grouped" | undefined = "default">(
@@ -120,7 +120,7 @@ export class MenuItemSellingPriceHandler {
       ),
       this.menuItemPrismaEntity.findManyWithCostVariations(),
       this.menuItemSize.findAll(),
-      this.menuItemSellingChannel.findAll(),
+      this.itemSellingChannel.findAll(),
       this.menuItemSellingPriceUtility.getSellingPriceConfig(),
     ]);
 
@@ -141,7 +141,7 @@ export class MenuItemSellingPriceHandler {
     const buildVariation = async (
       item: MenuItemWithSellPriceVariations,
       size: MenuItemSize,
-      channel: MenuItemSellingChannel
+      channel: ItemSellingChannel
     ): Promise<SellPriceVariation> => {
       const variation = item.sellPriceVariations?.find(
         (spv) => spv.sizeId === size.id && spv.channelId === channel.id
@@ -265,7 +265,7 @@ export class MenuItemSellingPriceHandler {
         this.menuItemPrismaEntity.findOneWithSellPriceVariations(menuItemId),
         this.menuItemPrismaEntity.findOneWithCostVariations(menuItemId),
         this.menuItemSize.findAll(),
-        this.menuItemSellingChannel.findAll(),
+        this.itemSellingChannel.findAll(),
         this.menuItemSellingPriceUtility.getSellingPriceConfig(),
       ]);
 
@@ -274,7 +274,7 @@ export class MenuItemSellingPriceHandler {
     const filterSizes = (size: MenuItemSize) =>
       !params?.sizeKey || size.key === params.sizeKey;
 
-    const filterChannels = (channel: MenuItemSellingChannel) =>
+    const filterChannels = (channel: ItemSellingChannel) =>
       !params?.channelKey || channel.key === params.channelKey;
 
     const costBySizeKey: Record<string, number> = {};
@@ -284,7 +284,7 @@ export class MenuItemSellingPriceHandler {
 
     const buildVariation = async (
       size: MenuItemSize,
-      channel: MenuItemSellingChannel
+      channel: ItemSellingChannel
     ): Promise<SellPriceVariation> => {
       const variation = item.sellPriceVariations?.find(
         (spv) => spv.sizeId === size.id && spv.channelId === channel.id
@@ -439,7 +439,7 @@ const menuItemSellingPriceHandler = new MenuItemSellingPriceHandler({
   menuItemPrismaEntity: menuItemPrismaEntity,
   menuItemSellingPriceUtility: menuItemSellingPriceUtilityEntity,
   menuItemSize: menuItemSizePrismaEntity,
-  menuItemSellingChannel: menuItemSellingChannelPrismaEntity,
+  itemSellingChannel: itemSellingChannelPrismaEntity,
 });
 
 export { menuItemSellingPriceHandler };

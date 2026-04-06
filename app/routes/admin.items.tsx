@@ -4,7 +4,7 @@ import Container from "~/components/layout/container/container";
 
 export default function AdminItemsOutlet() {
   return (
-    <Container fullWidth className="mt-12 px-4">
+    <Container fullWidth className=" px-4">
       <div className="flex flex-col gap-6">
         <section className="space-y-5 border-b border-slate-200/80 pb-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -47,10 +47,8 @@ export default function AdminItemsOutlet() {
           </div>
 
           <div className="space-y-1">
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-950">Itens</h1>
-            <p className="max-w-3xl text-sm text-slate-500">
-              Cadastro operacional de insumos, semiacabados, produtos finais e suas relações com custo, venda e compra.
-            </p>
+            <h1 className="text-xl font-semibold tracking-tight text-slate-950">Itens</h1>
+
           </div>
         </section>
 

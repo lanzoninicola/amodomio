@@ -2,11 +2,11 @@ import { json, type LoaderFunctionArgs } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
 import Papa from "papaparse";
 import { useMemo, useState } from "react";
-import type { MenuItemSellingChannel, MenuItemSize } from "@prisma/client";
+import type { ItemSellingChannel, MenuItemSize } from "@prisma/client";
 import type { MenuItemWithSellPriceVariations } from "~/domain/cardapio/menu-item.types";
 import { menuItemSellingPriceHandler } from "~/domain/cardapio/menu-item-selling-price-handler.server";
 import { menuItemSizePrismaEntity } from "~/domain/cardapio/menu-item-size.entity.server";
-import { menuItemSellingChannelPrismaEntity } from "~/domain/cardapio/menu-item-selling-channel.entity.server";
+import { itemSellingChannelPrismaEntity } from "~/domain/cardapio/menu-item-selling-channel.entity.server";
 import responseCSV from "~/domain/export-csv/functions/response-csv";
 import { badRequest } from "~/utils/http-response.server";
 import formatDecimalPlaces from "~/utils/format-decimal-places";
@@ -30,7 +30,7 @@ import {
 type LoaderData = {
   items: MenuItemWithSellPriceVariations[];
   sizes: MenuItemSize[];
-  channels: MenuItemSellingChannel[];
+  channels: ItemSellingChannel[];
 };
 
 type ExportRow = {
@@ -174,7 +174,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const [items, sizes, channels] = await Promise.all([
     menuItemSellingPriceHandler.loadMany({}),
     menuItemSizePrismaEntity.findAll(),
-    menuItemSellingChannelPrismaEntity.findAll(),
+    itemSellingChannelPrismaEntity.findAll(),
   ]);
 
   if (!channels.length) {

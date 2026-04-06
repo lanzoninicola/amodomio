@@ -1,4 +1,4 @@
-import { MenuItemTag, Tag } from "@prisma/client";
+import { Tag } from "@prisma/client";
 import { HamburgerMenuIcon } from "@radix-ui/react-icons";
 import { HeadersFunction, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { Link, Outlet, useLoaderData } from "@remix-run/react";
@@ -11,16 +11,14 @@ import WhatsAppIcon from "~/components/primitives/whatsapp/whatsapp-icon";
 import { Input } from "~/components/ui/input";
 import { Separator } from "~/components/ui/separator";
 import { toast } from "~/components/ui/use-toast";
-import { menuItemTagPrismaEntity } from "~/domain/cardapio/menu-item-tags.prisma.entity.server";
-import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
+import { MenuItemWithAssociations } from "~/domain/cardapio/menu-item.prisma.entity.server";
+import { findAllCardapioItems } from "~/domain/cardapio/cardapio-items-source.server";
 import BadgeTag from "~/domain/tags/components/badge-tag";
 import { tagPrismaEntity } from "~/domain/tags/tag.prisma.entity.server";
 import { WebsiteNavigationSidebar } from "~/domain/website-navigation/components/website-navigation-sidebar";
 import WEBSITE_LINKS from "~/domain/website-navigation/links/website-links";
 import PUBLIC_NAVIGATION_LINKS from "~/domain/website-navigation/links/public-navigation";
-import { prismaAll } from "~/lib/prisma/prisma-all.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
-import getSearchParam from "~/utils/get-search-param";
 import { badRequest, ok } from "~/utils/http-response.server";
 import { getEngagementSettings } from "~/domain/cardapio/engagement-settings.server";
 
@@ -62,13 +60,11 @@ export const meta: MetaFunction = ({ data }) => {
 
 
 
-export async function loader({ request }: LoaderFunctionArgs) {
-    const env = process.env?.NODE_ENV
+export async function loader({}: LoaderFunctionArgs) {
 
     // const tagParam = getSearchParam({ request, paramName: 'tag' })
 
-    //@ts-ignore
-    const itemsQuery = prismaIt(menuItemPrismaEntity.findAll({
+    const itemsQuery = prismaIt(findAllCardapioItems({
         where: {
             visible: true,
             active: true,
@@ -326,7 +322,7 @@ function CardapioSearch({ items, setShowSearch }: {
                                 >
                                     <div className="bg-center bg-cover bg-no-repeat w-8 h-8 rounded-lg col-span-1 "
                                         style={{
-                                            backgroundImage: `url(${item.MenuItemImage?.thumbnailUrl || "/images/cardapio-web-app/placeholder.png"})`,
+                                            backgroundImage: `url(${item.MenuItemImage?.thumbnailUrl || item.imageTransformedURL || "/images/cardapio-web-app/placeholder.png"})`,
                                         }}></div>
                                     <div className="flex flex-col col-span-7">
                                         <span className="font-neue text-[0.65rem] font-semibold leading-tight uppercase">{item.name}</span>

@@ -1,6 +1,7 @@
 import prismaClient from "~/lib/prisma/client.server";
 import { capitalizeSupplierName } from "~/domain/supplier/supplier.prisma.entity.server";
 import {
+  calculateItemCostAverageWindowMetrics,
   calculateItemCostMetrics,
   getItemAverageCostWindowDays,
   isItemCostExcludedFromMetrics,
@@ -96,12 +97,25 @@ export async function loadItemCostMonitoringPayload(request: Request) {
     : "insumo";
   const averageWindowDays = await getItemAverageCostWindowDays();
   const chartWindowDays = Math.max(averageWindowDays, 60);
+  const itemOptions = await db.item.findMany({
+    where: { active: true },
+    select: {
+      id: true,
+      name: true,
+      classification: true,
+      purchaseUm: true,
+      consumptionUm: true,
+    },
+    orderBy: [{ name: "asc" }],
+    take: 300,
+  });
 
   if (!q) {
     return {
       filters: { q: "", classification },
       averageWindowDays,
       chartWindowDays,
+      itemOptions,
       items: [],
     };
   }
@@ -154,6 +168,7 @@ export async function loadItemCostMonitoringPayload(request: Request) {
     filters: { q, classification },
     averageWindowDays,
     chartWindowDays,
+    itemOptions,
     items: items.map((item: any) => {
       const baseVariation = pickPrimaryItemVariation(item);
       const history = baseVariation?.ItemCostVariationHistory || [];
@@ -164,6 +179,13 @@ export async function loadItemCostMonitoringPayload(request: Request) {
         history: historyForMetrics,
         averageWindowDays,
       });
+      const averageCostWindows = [30, 60, 90].map((windowDays) =>
+        calculateItemCostAverageWindowMetrics({
+          item,
+          history: historyForMetrics,
+          averageWindowDays: windowDays,
+        }),
+      );
 
       const suppliersMap = new Map<string, CostRowLike>();
       for (const row of history) {
@@ -219,6 +241,7 @@ export async function loadItemCostMonitoringPayload(request: Request) {
           : null,
         averageCostPerConsumptionUnit: metrics.averageCostPerConsumptionUnit,
         averageSamplesCount: metrics.averageSamplesCount,
+        averageCostWindows,
         suppliers,
         trend,
       };

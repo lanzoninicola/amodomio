@@ -1,14 +1,13 @@
-import { LoaderFunctionArgs, MetaDescriptor, redirect } from "@remix-run/node";
-import { Await, Link, MetaFunction, defer, useLoaderData } from "@remix-run/react";
-import { Suspense, useEffect, useState } from "react";
-import Loading from "~/components/loading/loading";
+import { LoaderFunctionArgs, redirect } from "@remix-run/node";
+import { Await, Link, defer, useLoaderData } from "@remix-run/react";
+import { Suspense, useEffect } from "react";
 import { Button } from "~/components/ui/button";
 import { Separator } from "~/components/ui/separator";
 import { LikeIt, ShareIt } from "~/domain/cardapio/components/cardapio-item-action-bar/cardapio-item-action-bar";
+import { findCardapioItemBySlug } from "~/domain/cardapio/cardapio-items-source.server";
 import CardapioItemImageSingle from "~/domain/cardapio/components/cardapio-item-image-single/cardapio-item-image-single";
-import { CardapioItemPrice, CardapioItemPriceSelect } from "~/domain/cardapio/components/cardapio-item-price/cardapio-item-price";
+import { CardapioItemPrice } from "~/domain/cardapio/components/cardapio-item-price/cardapio-item-price";
 import ItalyIngredientsStatement from "~/domain/cardapio/components/italy-ingredient-statement/italy-ingredient-statement";
-import { menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { getEngagementSettings } from "~/domain/cardapio/engagement-settings.server";
 
@@ -18,7 +17,7 @@ function sanitizeMediaUrl(url?: string | null) {
   return /^https?:\/\/res\.cloudinary\.com\//i.test(normalized) ? "" : normalized;
 }
 
-export async function loader({ request, params }: LoaderFunctionArgs) {
+export async function loader({ params }: LoaderFunctionArgs) {
   const { slug } = params;
 
   if (!slug) {
@@ -26,7 +25,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   }
 
   // Aqui você pode buscar o item do cardápio pelo ID
-  const itemQuery = prismaIt(menuItemPrismaEntity.findBySlug(slug as string));
+  const itemQuery = prismaIt(findCardapioItemBySlug(slug as string));
   const engagementSettings = await getEngagementSettings();
 
   return defer({
@@ -63,8 +62,6 @@ export default function SingleCardapioItem() {
               ? "video"
               : "image";
           const ingredients = item.ingredients || "";
-
-          console.log({ price: item?.MenuItemSellingPriceVariation })
 
           useEffect(() => {
             document.title = item.name;

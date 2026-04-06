@@ -17,7 +17,7 @@ import { useIsMobile } from "~/components/ui/use-is-mobile";
 import { toast } from "~/components/ui/use-toast";
 import { authenticator } from "~/domain/auth/google.server";
 import {
-  getMenuItemAssetsApiEndpoints,
+  getItemAssetsApiEndpoints,
   parseMenuItemAssetsApiResponse,
   type MenuItemAssetDto,
 } from "~/domain/menu-item-assets/menu-item-assets.shared";
@@ -87,18 +87,32 @@ async function readErrorMessage(response: Response, fallback: string) {
 export async function loader({ request }: LoaderFunctionArgs) {
   await authenticator.isAuthenticated(request);
 
-  const items = await prismaClient.menuItem.findMany({
+  const items = await prismaClient.item.findMany({
     where: {
-      deletedAt: null,
       active: true,
+      canSell: true,
     },
-    orderBy: [{ sortOrderIndex: "asc" }, { name: "asc" }],
+    orderBy: [{ name: "asc" }],
     select: {
       id: true,
       name: true,
       active: true,
-      visible: true,
-      MenuItemGalleryImage: {
+      ItemSellingInfo: {
+        select: {
+          visible: true,
+        },
+      },
+      ItemSellingChannelItem: {
+        where: {
+          ItemSellingChannel: {
+            key: "cardapio",
+          },
+        },
+        select: {
+          visible: true,
+        },
+      },
+      ItemGalleryImage: {
         orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }, { createdAt: "asc" }],
         select: {
           id: true,
@@ -117,8 +131,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
     id: item.id,
     name: item.name,
     active: item.active,
-    visible: item.visible,
-    assets: item.MenuItemGalleryImage.filter((asset) => Boolean(asset.secureUrl)).map((asset) => ({
+    visible: item.ItemSellingChannelItem.some((row) => row.visible === true),
+    assets: item.ItemGalleryImage.filter((asset) => Boolean(asset.secureUrl)).map((asset) => ({
       id: asset.id,
       url: asset.secureUrl || "",
       kind: asset.kind === "video" ? "video" : "image",
@@ -189,7 +203,7 @@ export default function AdminCardapioAssetsBatchPage() {
     Boolean(unavailableAssetIdsByItem[itemId]?.[assetId]);
 
   const refreshItemAssets = async (itemId: string) => {
-    const endpoints = getMenuItemAssetsApiEndpoints(itemId);
+    const endpoints = getItemAssetsApiEndpoints(itemId);
     const response = await fetch(endpoints.list);
     if (!response.ok) throw new Error("Falha ao recarregar assets");
 
@@ -274,7 +288,7 @@ export default function AdminCardapioAssetsBatchPage() {
       formData.append("visible", "true");
       formData.append("isPrimary", pending.isPrimary ? "true" : "false");
 
-      const endpoints = getMenuItemAssetsApiEndpoints(itemId);
+      const endpoints = getItemAssetsApiEndpoints(itemId);
       const response = await fetch(endpoints.list, {
         method: "POST",
         body: formData,
@@ -310,7 +324,7 @@ export default function AdminCardapioAssetsBatchPage() {
 
   const setAssetAsPrimary = async (itemId: string, assetId: string) => {
     try {
-      const endpoints = getMenuItemAssetsApiEndpoints(itemId);
+      const endpoints = getItemAssetsApiEndpoints(itemId);
       setAssetLoading(assetId, true);
       const response = await fetch(endpoints.primary(assetId), {
         method: "PATCH",
@@ -335,7 +349,7 @@ export default function AdminCardapioAssetsBatchPage() {
 
   const deleteCurrentAsset = async (itemId: string, assetId: string) => {
     try {
-      const endpoints = getMenuItemAssetsApiEndpoints(itemId);
+      const endpoints = getItemAssetsApiEndpoints(itemId);
       setAssetLoading(assetId, true);
       const response = await fetch(endpoints.item(assetId), {
         method: "DELETE",
@@ -632,7 +646,7 @@ export default function AdminCardapioAssetsBatchPage() {
 
   return (
     <div className="grid gap-4 xl:grid-cols-12">
-      <section className="rounded-xl border p-4 xl:col-span-4">
+      <section className="xl:col-span-4">
         <div className="mb-3 flex items-center justify-between gap-2">
           <h1 className="text-sm font-semibold uppercase tracking-wider">
             Sabores

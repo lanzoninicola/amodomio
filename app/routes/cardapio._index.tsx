@@ -11,7 +11,6 @@ import React, {
 } from "react";
 import {
     MenuItemWithAssociations,
-    menuItemPrismaEntity
 } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { badRequest, ok } from "~/utils/http-response.server";
@@ -58,6 +57,10 @@ import SectionThreadHeader, {
 import { redisGetJson, redisSetJson } from "~/lib/cache/redis.server";
 import { CARDAPIO_INDEX_CACHE_KEY } from "~/domain/cardapio/cardapio-cache.server";
 import { notifyCardapioContingencyByWhatsapp } from "~/domain/cardapio/cardapio-contingency-alert.server";
+import {
+    findAllCardapioItemsGroupedByGroupLight,
+    getCardapioItemsSourceResolution
+} from "~/domain/cardapio/cardapio-items-source.server";
 import WEBSITE_LINKS from "~/domain/website-navigation/links/website-links";
 
 const INTEREST_ENDPOINT = "/api/menu-item-interest";
@@ -79,6 +82,25 @@ const SECTION_THREAD_PROFILE_BY_SECTION: Record<"chef" | "likes" | "reels", Thre
 function getCardapioItemHref(item: Pick<MenuItemWithAssociations, "id" | "slug">) {
     const identifier = item.slug?.trim() || item.id;
     return `/cardapio/${encodeURIComponent(identifier)}`;
+}
+
+function getCardapioInterestItemId(item: MenuItemWithAssociations) {
+    const compatItem = item as MenuItemWithAssociations & {
+        sourceType?: "legacy" | "native";
+        sourceItemId?: string | null;
+    };
+
+    return typeof compatItem.sourceItemId === "string" && compatItem.sourceItemId.trim()
+        ? compatItem.sourceItemId.trim()
+        : item.id;
+}
+
+function getCardapioInterestSourceType(item: MenuItemWithAssociations) {
+    const compatItem = item as MenuItemWithAssociations & {
+        sourceType?: "legacy" | "native";
+    };
+
+    return compatItem.sourceType === "native" ? "native" : "legacy";
 }
 
 export const headers: HeadersFunction = () => ({
@@ -151,9 +173,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
             });
         }
 
+        const cardapioItemsSource = await getCardapioItemsSourceResolution();
+
         // itens agrupados do cardápio
-        // @ts-ignore
-        const itemsPromise = menuItemPrismaEntity.findAllGroupedByGroupLight(
+        const itemsPromise = findAllCardapioItemsGroupedByGroupLight(
             {
                 where: {
                     visible: true,
@@ -215,6 +238,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
             postFeatured,
             reelUrls,
             reelsEnabled,
+            cardapioItemsSource,
             menuItemInterestEnabled,
             likesEnabled,
             sharesEnabled
@@ -964,8 +988,9 @@ function CardapioItemsGrid({
 
     if (!items?.length) return null;
 
-    const trackInterest = useCallback((type: "view_list" | "open_detail", menuItemId: string) => {
-        if (!interestTrackingEnabled) return;
+    const trackInterest = useCallback((type: "view_list" | "open_detail", item: MenuItemWithAssociations) => {
+        const interestItemId = getCardapioInterestItemId(item);
+        if (!interestTrackingEnabled || !interestItemId) return;
         const clientId = getOrCreateMenuItemInterestClientId();
 
         fetch(INTEREST_ENDPOINT, {
@@ -973,7 +998,7 @@ function CardapioItemsGrid({
             headers: {
                 "Content-Type": "application/json"
             },
-            body: JSON.stringify({ type, menuItemId, clientId }),
+            body: JSON.stringify({ type, itemId: interestItemId, sourceType: getCardapioInterestSourceType(item), clientId }),
             keepalive: true
         }).catch((error) => {
             console.warn("[cardapio] falha ao registrar interesse", error);
@@ -981,21 +1006,23 @@ function CardapioItemsGrid({
     }, [interestTrackingEnabled]);
 
     const trackViewOnce = useCallback(
-        (menuItemId: string) => {
+        (item: MenuItemWithAssociations) => {
+            const interestItemId = getCardapioInterestItemId(item);
             if (!interestTrackingEnabled) return;
-            if (trackedViewRef.current.has(menuItemId)) return;
-            trackedViewRef.current.add(menuItemId);
-            trackInterest("view_list", menuItemId);
+            if (!interestItemId || trackedViewRef.current.has(interestItemId)) return;
+            trackedViewRef.current.add(interestItemId);
+            trackInterest("view_list", item);
         },
         [interestTrackingEnabled, trackInterest]
     );
 
     const trackOpenDetailOnce = useCallback(
-        (menuItemId: string) => {
+        (item: MenuItemWithAssociations) => {
+            const interestItemId = getCardapioInterestItemId(item);
             if (!interestTrackingEnabled) return;
-            if (trackedOpenDetailRef.current.has(menuItemId)) return;
-            trackedOpenDetailRef.current.add(menuItemId);
-            trackInterest("open_detail", menuItemId);
+            if (!interestItemId || trackedOpenDetailRef.current.has(interestItemId)) return;
+            trackedOpenDetailRef.current.add(interestItemId);
+            trackInterest("open_detail", item);
         },
         [interestTrackingEnabled, trackInterest]
     );
@@ -1019,7 +1046,10 @@ function CardapioItemsGrid({
             const next = willExpand ? id : null;
 
             if (willExpand) {
-                trackOpenDetailOnce(id);
+                const selectedItem = items.find((item) => item.id === id);
+                if (selectedItem) {
+                    trackOpenDetailOnce(selectedItem);
+                }
                 requestAnimationFrame(() => {
                     requestAnimationFrame(() => scrollToItemTop(id));
                 });
@@ -1044,8 +1074,8 @@ function CardapioItemsGrid({
                         item={item}
                         isExpanded={expandedItemId === item.id}
                         onClick={() => onCardClick(item.id)}
-                        onOpenDetail={() => trackOpenDetailOnce(item.id)}
-                        onView={() => trackViewOnce(item.id)}
+                        onOpenDetail={() => trackOpenDetailOnce(item)}
+                        onView={() => trackViewOnce(item)}
                         isDesktop={isDesktop}
                         likesEnabled={likesEnabled}
                         sharesEnabled={sharesEnabled}

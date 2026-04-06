@@ -16,6 +16,33 @@ Este documento descreve as regras de negócio associadas aos flags de operação
 - Evite combinações incoerentes (ex.: item vendável sem custo definido).
 - Para custos, `canTransform` tende a indicar custo vindo de receita/ficha técnica; `canPurchase` tende a indicar custo vindo de compra.
 
+## Cardápio via `items` — regra atual de visibilidade
+
+No fluxo nativo do cardápio baseado em `Item`, a visibilidade pública nao depende mais de `ItemSellingInfo.visible`.
+
+Para um item aparecer no cardápio do canal `cardapio`, as condicoes atuais sao:
+
+- `item.canSell = true`
+- `item.active = true`
+- existe vinculo em `ItemSellingChannelItem` para o canal `cardapio`
+- `ItemSellingChannelItem.visible = true` nesse vinculo
+- `ItemSellingInfo.upcoming = false`
+- existe pelo menos um `ItemSellingPriceVariation` do canal `cardapio` com `published = true`
+
+Formula pratica:
+
+- `canSell && active && channel(cardapio).visible && !upcoming && hasPublishedPrice(cardapio)`
+
+Separacao de responsabilidades:
+
+- `ItemSellingChannelItem`: representa o vinculo do item com um canal e controla a visibilidade publica por canal.
+- `ItemSellingPriceVariation.published`: controla quais precos daquele canal estao publicados.
+- `ItemSellingInfo`: concentra dados comerciais gerais como `slug`, `ingredients`, `longDescription`, `notesPublic` e `upcoming`.
+
+Observacao:
+
+- Vincular o item ao canal nao implica exposicao publica imediata. O item pode estar vinculado ao canal, ter precos cadastrados e continuar oculto enquanto `ItemSellingChannelItem.visible = false`.
+
 ---
 
 ## Histórico de custos — `ItemCostVariationHistory`
