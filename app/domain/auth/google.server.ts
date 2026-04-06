@@ -1,80 +1,159 @@
-// https://www.npmjs.com/package/remix-auth-google
-
-import { createCookieSessionStorage } from "@remix-run/node";
+import { redirect } from "@remix-run/node";
 import { Authenticator } from "remix-auth";
 import { GoogleStrategy } from "remix-auth-google";
 import {
-  GOOGLE_AUTH_COOKIE_SECRET,
   GOOGLE_CALLBACK_URL,
   GOOGLE_CLIENT_ID,
   GOOGLE_CLIENT_SECRET,
 } from "./constants.server";
-import { LoggedUser } from "./types.server";
+import {
+  authenticatePasswordLogin,
+  authorizeGoogleUser,
+} from "./admin-user-access.server";
+import {
+  createAdminUserSession,
+  destroySessionCookie,
+  getAuthenticatedSessionFromRequest,
+  revokeCurrentAdminSession,
+  sessionStorage,
+} from "./admin-user-session.server";
+import type { AuthenticatedLoggedUser, AuthenticatedUserProfile } from "./types.server";
 
-const cookieSecret = GOOGLE_AUTH_COOKIE_SECRET || "AM0D0MI02O24";
-
-// Personalize this options for your usage.
-const cookieOptions = {
-  path: "/",
-  httpOnly: true,
-  sameSite: "lax" as const,
-  maxAge: 24 * 60 * 60 * 1000 * 30,
-  secrets: [cookieSecret],
-  secure: process.env.NODE_ENV !== "development",
+type AuthFlowOptions = {
+  successRedirect?: string;
+  failureRedirect?: string;
+  context?: unknown;
+  throwOnError?: boolean;
 };
 
-const sessionStorage = createCookieSessionStorage({
-  cookie: cookieOptions,
-});
-
-export const authenticator = new Authenticator<LoggedUser>(sessionStorage, {
+const baseAuthenticator = new Authenticator<AuthenticatedUserProfile>(sessionStorage, {
   throwOnError: true,
+  sessionKey: "oauth-user",
 });
 
-let googleStrategy = new GoogleStrategy(
+const googleStrategy = new GoogleStrategy(
   {
     clientID: GOOGLE_CLIENT_ID || "",
     clientSecret: GOOGLE_CLIENT_SECRET || "",
     callbackURL: GOOGLE_CALLBACK_URL || "",
   },
-  async ({ accessToken, refreshToken, extraParams, profile }) => {
-    // Get the user data from your DB or API using the tokens and profile
-    // return User.findOrCreate({ email: profile.emails[0].value });
-
-    // const profileDomain = profile._json.hd;
-
-    // if (profileDomain !== "limbersoftware.com.br") {
-    //   return null;
-    // }
-    const emailWhitelist = process.env.GOOGLE_AUTH_EMAIL_WHITELIST;
-    const emailWhitelistArray = emailWhitelist?.split(",");
-
-    console.log("google.server.ts", emailWhitelistArray);
-
-    const emailInbound = profile.emails[0].value;
-
+  async ({ profile }) => {
+    const emailInbound = profile.emails?.[0]?.value;
     if (!emailInbound) {
-      return null;
+      throw redirect("/login?_status=auth-failed");
     }
 
-    if (!emailWhitelist) {
-      return null;
-    }
-
-    if (emailWhitelistArray && !emailWhitelistArray.includes(emailInbound)) {
-      return false;
-    }
-
-    const user: LoggedUser = {
-      name: profile.displayName,
+    const user = await authorizeGoogleUser({
       email: emailInbound,
-      avatarURL: profile.photos[0].value,
-    };
+      name: profile.displayName || emailInbound,
+      avatarURL: profile.photos?.[0]?.value || null,
+      googleSub: profile.id,
+    });
 
-    console.log("google.server.ts", user);
+    if (!user) {
+      throw redirect("/login?_status=access-denied");
+    }
 
     return user;
   }
 );
 
-authenticator.use(googleStrategy);
+baseAuthenticator.use(googleStrategy);
+
+export const authenticator = {
+  authenticate(strategy: string, request: Request, options?: AuthFlowOptions) {
+    if (strategy === "google") {
+      return authenticateWithGoogle(request, options);
+    }
+
+    if (strategy === "password") {
+      return authenticateWithPassword(request, options);
+    }
+
+    throw new Error(`Unsupported strategy: ${strategy}`);
+  },
+  async isAuthenticated(
+    request: Request,
+    options?: {
+      successRedirect?: string;
+      failureRedirect?: string;
+      headers?: HeadersInit;
+    }
+  ): Promise<AuthenticatedLoggedUser> {
+    const currentSession = await getAuthenticatedSessionFromRequest(request);
+
+    if (currentSession.user) {
+      if (options?.successRedirect) {
+        throw redirect(options.successRedirect, { headers: options.headers });
+      }
+      return currentSession.user;
+    }
+
+    if (currentSession.destroyCookie) {
+      throw redirect(options?.failureRedirect || "/login?_status=session-expired", {
+        headers: {
+          "Set-Cookie": await destroySessionCookie(request),
+        },
+      });
+    }
+
+    if (options?.failureRedirect) {
+      throw redirect(options.failureRedirect, { headers: options.headers });
+    }
+
+    throw redirect("/login");
+  },
+  async logout(request: Request, options?: { redirectTo?: string }) {
+    const redirectTo = options?.redirectTo || "/login";
+    const setCookie = await revokeCurrentAdminSession({ request });
+
+    throw redirect(redirectTo, {
+      headers: {
+        "Set-Cookie": setCookie,
+      },
+    });
+  },
+};
+
+async function authenticateWithGoogle(request: Request, options?: AuthFlowOptions) {
+  const user = await baseAuthenticator.authenticate("google", request, options as any);
+  const { setCookie } = await createAdminUserSession({
+    request,
+    user,
+    authProvider: "google",
+  });
+
+  throw redirect(options?.successRedirect || "/admin", {
+    headers: {
+      "Set-Cookie": setCookie,
+    },
+  });
+}
+
+async function authenticateWithPassword(request: Request, options?: AuthFlowOptions) {
+  const formData = await request.formData();
+  const identifier = String(formData.get("identifier") || "");
+  const password = String(formData.get("password") || "");
+
+  const user = await authenticatePasswordLogin({
+    identifier,
+    password,
+    request,
+  });
+
+  if (!user) {
+    throw redirect(options?.failureRedirect || "/login?_status=password-failed");
+  }
+
+  const { setCookie } = await createAdminUserSession({
+    request,
+    user,
+    authProvider: "password",
+  });
+
+  throw redirect(options?.successRedirect || "/admin", {
+    headers: {
+      "Set-Cookie": setCookie,
+    },
+  });
+}
