@@ -1,4 +1,10 @@
+<<<<<<< Updated upstream
 import { createCookieSessionStorage, redirect } from "@remix-run/node";
+=======
+// https://www.npmjs.com/package/remix-auth-google
+
+import { createCookieSessionStorage } from "@remix-run/node";
+>>>>>>> Stashed changes
 import { Authenticator } from "remix-auth";
 import { GoogleStrategy } from "remix-auth-google";
 import {
@@ -7,6 +13,7 @@ import {
   GOOGLE_CLIENT_ID,
   GOOGLE_CLIENT_SECRET,
 } from "./constants.server";
+<<<<<<< Updated upstream
 import {
   authenticatePasswordLogin,
   authorizeGoogleUser,
@@ -39,16 +46,37 @@ const oauthSessionStorage = createCookieSessionStorage({
 });
 
 const baseAuthenticator = new Authenticator<AuthenticatedUserProfile>(oauthSessionStorage, {
-  throwOnError: true,
-  sessionKey: "oauth-user",
+=======
+import { LoggedUser } from "./types.server";
+
+const cookieSecret = GOOGLE_AUTH_COOKIE_SECRET || "AM0D0MI02O24";
+
+// Personalize this options for your usage.
+const cookieOptions = {
+  path: "/",
+  httpOnly: true,
+  sameSite: "lax" as const,
+  maxAge: 24 * 60 * 60 * 1000 * 30,
+  secrets: [cookieSecret],
+  secure: process.env.NODE_ENV !== "development",
+};
+
+const sessionStorage = createCookieSessionStorage({
+  cookie: cookieOptions,
 });
 
-const googleStrategy = new GoogleStrategy(
+export const authenticator = new Authenticator<LoggedUser>(sessionStorage, {
+>>>>>>> Stashed changes
+  throwOnError: true,
+});
+
+let googleStrategy = new GoogleStrategy(
   {
     clientID: GOOGLE_CLIENT_ID || "",
     clientSecret: GOOGLE_CLIENT_SECRET || "",
     callbackURL: GOOGLE_CALLBACK_URL || "",
   },
+<<<<<<< Updated upstream
   async ({ profile }) => {
     const emailInbound = profile.emails?.[0]?.value;
     console.info("[auth.google.callback] profile", {
@@ -88,64 +116,45 @@ const googleStrategy = new GoogleStrategy(
     return user;
   }
 );
+=======
+  async ({ accessToken, refreshToken, extraParams, profile }) => {
+    // Get the user data from your DB or API using the tokens and profile
+    // return User.findOrCreate({ email: profile.emails[0].value });
 
-baseAuthenticator.use(googleStrategy);
+    // const profileDomain = profile._json.hd;
 
-export const authenticator = {
-  authenticate(strategy: string, request: Request, options?: AuthFlowOptions) {
-    if (strategy === "google") {
-      return authenticateWithGoogle(request, options);
+    // if (profileDomain !== "limbersoftware.com.br") {
+    //   return null;
+    // }
+    const emailWhitelist = process.env.GOOGLE_AUTH_EMAIL_WHITELIST;
+    const emailWhitelistArray = emailWhitelist?.split(",");
+>>>>>>> Stashed changes
+
+    console.log("google.server.ts", emailWhitelistArray);
+
+    const emailInbound = profile.emails[0].value;
+
+    if (!emailInbound) {
+      return null;
     }
 
-    if (strategy === "password") {
-      return authenticateWithPassword(request, options);
+    if (!emailWhitelist) {
+      return null;
     }
 
-    throw new Error(`Unsupported strategy: ${strategy}`);
-  },
-  async isAuthenticated(
-    request: Request,
-    options?: {
-      successRedirect?: string;
-      failureRedirect?: string;
-      headers?: HeadersInit;
-    }
-  ): Promise<AuthenticatedLoggedUser> {
-    const currentSession = await getAuthenticatedSessionFromRequest(request);
-
-    if (currentSession.user) {
-      if (options?.successRedirect) {
-        throw redirect(options.successRedirect, { headers: options.headers });
-      }
-      return currentSession.user;
+    if (emailWhitelistArray && !emailWhitelistArray.includes(emailInbound)) {
+      return false;
     }
 
-    if (currentSession.destroyCookie) {
-      throw redirect(options?.failureRedirect || "/login?_status=session-expired", {
-        headers: {
-          "Set-Cookie": await destroySessionCookie(request),
-        },
-      });
-    }
+    const user: LoggedUser = {
+      name: profile.displayName,
+      email: emailInbound,
+      avatarURL: profile.photos[0].value,
+    };
 
-    if (options?.failureRedirect) {
-      throw redirect(options.failureRedirect, { headers: options.headers });
-    }
+    console.log("google.server.ts", user);
 
-    throw redirect("/login");
-  },
-  async logout(request: Request, options?: { redirectTo?: string }) {
-    const redirectTo = options?.redirectTo || "/login";
-    const setCookie = await revokeCurrentAdminSession({ request });
-
-    throw redirect(redirectTo, {
-      headers: {
-        "Set-Cookie": setCookie,
-      },
-    });
-  },
-};
-
+<<<<<<< Updated upstream
 async function authenticateWithGoogle(request: Request, options?: AuthFlowOptions) {
   const user = await baseAuthenticator.authenticate("google", request, options as any);
   const { setCookie } = await createAdminUserSession({
@@ -177,17 +186,10 @@ async function authenticateWithPassword(request: Request, options?: AuthFlowOpti
 
   if (!user) {
     throw redirect(options?.failureRedirect || "/login?_status=password-failed");
+=======
+    return user;
+>>>>>>> Stashed changes
   }
+);
 
-  const { setCookie } = await createAdminUserSession({
-    request,
-    user,
-    authProvider: "password",
-  });
-
-  throw redirect(options?.successRedirect || "/admin", {
-    headers: {
-      "Set-Cookie": setCookie,
-    },
-  });
-}
+authenticator.use(googleStrategy);
