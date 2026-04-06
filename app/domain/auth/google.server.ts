@@ -1,7 +1,8 @@
-import { redirect } from "@remix-run/node";
+import { createCookieSessionStorage, redirect } from "@remix-run/node";
 import { Authenticator } from "remix-auth";
 import { GoogleStrategy } from "remix-auth-google";
 import {
+  GOOGLE_AUTH_COOKIE_SECRET,
   GOOGLE_CALLBACK_URL,
   GOOGLE_CLIENT_ID,
   GOOGLE_CLIENT_SECRET,
@@ -15,7 +16,6 @@ import {
   destroySessionCookie,
   getAuthenticatedSessionFromRequest,
   revokeCurrentAdminSession,
-  sessionStorage,
 } from "./admin-user-session.server";
 import type { AuthenticatedLoggedUser, AuthenticatedUserProfile } from "./types.server";
 
@@ -26,7 +26,19 @@ type AuthFlowOptions = {
   throwOnError?: boolean;
 };
 
-const baseAuthenticator = new Authenticator<AuthenticatedUserProfile>(sessionStorage, {
+const oauthSessionStorage = createCookieSessionStorage({
+  cookie: {
+    name: "google_oauth_session",
+    path: "/",
+    httpOnly: true,
+    sameSite: "lax",
+    maxAge: 10 * 60,
+    secrets: [GOOGLE_AUTH_COOKIE_SECRET || "AM0D0MI02O24"],
+    secure: process.env.NODE_ENV === "production",
+  },
+});
+
+const baseAuthenticator = new Authenticator<AuthenticatedUserProfile>(oauthSessionStorage, {
   throwOnError: true,
   sessionKey: "oauth-user",
 });
@@ -39,7 +51,16 @@ const googleStrategy = new GoogleStrategy(
   },
   async ({ profile }) => {
     const emailInbound = profile.emails?.[0]?.value;
+    console.info("[auth.google.callback] profile", {
+      profileId: profile.id,
+      displayName: profile.displayName,
+      emails: profile.emails?.map((entry) => entry.value) || [],
+    });
+
     if (!emailInbound) {
+      console.warn("[auth.google.callback] denied-no-email", {
+        profileId: profile.id,
+      });
       throw redirect("/login?_status=auth-failed");
     }
 
@@ -51,8 +72,18 @@ const googleStrategy = new GoogleStrategy(
     });
 
     if (!user) {
+      console.warn("[auth.google.callback] denied-no-user", {
+        emailInbound,
+        profileId: profile.id,
+      });
       throw redirect("/login?_status=access-denied");
     }
+
+    console.info("[auth.google.callback] authorized", {
+      emailInbound,
+      userId: user.id,
+      username: user.username,
+    });
 
     return user;
   }
@@ -122,11 +153,14 @@ async function authenticateWithGoogle(request: Request, options?: AuthFlowOption
     user,
     authProvider: "google",
   });
+  const oauthSession = await oauthSessionStorage.getSession(request.headers.get("Cookie"));
+  const clearOauthCookie = await oauthSessionStorage.destroySession(oauthSession);
+  const headers = new Headers();
+  headers.append("Set-Cookie", setCookie);
+  headers.append("Set-Cookie", clearOauthCookie);
 
   throw redirect(options?.successRedirect || "/admin", {
-    headers: {
-      "Set-Cookie": setCookie,
-    },
+    headers,
   });
 }
 

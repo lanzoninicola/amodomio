@@ -24,12 +24,13 @@ const SESSION_ACTIVITY_REFRESH_MS = 5 * 60 * 1000;
 const cookieSecret = GOOGLE_AUTH_COOKIE_SECRET || "AM0D0MI02O24";
 
 const cookieOptions = {
+  name: "admin_session",
   path: "/",
   httpOnly: true,
   sameSite: "lax" as const,
   maxAge: Math.floor(SESSION_ABSOLUTE_TIMEOUT_MS / 1000),
   secrets: [cookieSecret],
-  secure: process.env.NODE_ENV !== "development",
+  secure: process.env.NODE_ENV === "production",
 };
 
 export const sessionStorage = createCookieSessionStorage({
@@ -68,6 +69,17 @@ export async function createAdminUserSession(params: {
   const setCookie = await sessionStorage.commitSession(cookieSession);
   const authenticatedUser = mapAuthenticatedSession(params.user, sessionRecord);
 
+  console.info("[auth.session.create]", {
+    sessionId: sessionRecord.id,
+    userId: params.user.id,
+    username: params.user.username,
+    authProvider: params.authProvider,
+    cookieName: "admin_session",
+    deviceLabel: sessionRecord.deviceLabel,
+    idleExpiresAt: sessionRecord.idleExpiresAt.toISOString(),
+    absoluteExpiresAt: sessionRecord.absoluteExpiresAt.toISOString(),
+  });
+
   await createAccessAudit({
     provider: params.authProvider,
     eventType: "loginSuccess",
@@ -95,12 +107,21 @@ export async function getAuthenticatedSessionFromRequest(request: Request): Prom
   const cookieSession = await sessionStorage.getSession(request.headers.get("Cookie"));
   const token = cookieSession.get(SESSION_COOKIE_KEY) as string | undefined;
 
+  console.info("[auth.session.read] inbound", {
+    path: new URL(request.url).pathname,
+    hasCookieHeader: Boolean(request.headers.get("Cookie")),
+    hasSessionToken: Boolean(token),
+  });
+
   if (!token) {
     return { user: null, session: null, destroyCookie: false };
   }
 
   const parsed = parseSessionToken(token);
   if (!parsed) {
+    console.warn("[auth.session.read] invalid-token-format", {
+      path: new URL(request.url).pathname,
+    });
     return { user: null, session: null, destroyCookie: true };
   }
 
@@ -110,14 +131,27 @@ export async function getAuthenticatedSessionFromRequest(request: Request): Prom
   });
 
   if (!session) {
+    console.warn("[auth.session.read] session-not-found", {
+      path: new URL(request.url).pathname,
+      sessionId: parsed.sessionId,
+    });
     return { user: null, session: null, destroyCookie: true };
   }
 
   if (session.sessionSecretHash !== hashSessionSecret(parsed.secret)) {
+    console.warn("[auth.session.read] session-secret-mismatch", {
+      path: new URL(request.url).pathname,
+      sessionId: parsed.sessionId,
+    });
     return { user: null, session: null, destroyCookie: true };
   }
 
   if (!session.User?.isActive) {
+    console.warn("[auth.session.read] inactive-user", {
+      path: new URL(request.url).pathname,
+      sessionId: session.id,
+      userId: session.userId,
+    });
     await expireOrRevokeSession({
       session,
       eventType: "sessionRevoked",
@@ -128,6 +162,11 @@ export async function getAuthenticatedSessionFromRequest(request: Request): Prom
   }
 
   if (session.status !== "active") {
+    console.warn("[auth.session.read] inactive-session-status", {
+      path: new URL(request.url).pathname,
+      sessionId: session.id,
+      status: session.status,
+    });
     return { user: null, session, destroyCookie: true };
   }
 
@@ -136,6 +175,12 @@ export async function getAuthenticatedSessionFromRequest(request: Request): Prom
     now > session.idleExpiresAt.getTime() ||
     now > session.absoluteExpiresAt.getTime()
   ) {
+    console.warn("[auth.session.read] expired", {
+      path: new URL(request.url).pathname,
+      sessionId: session.id,
+      idleExpiresAt: session.idleExpiresAt.toISOString(),
+      absoluteExpiresAt: session.absoluteExpiresAt.toISOString(),
+    });
     await expireOrRevokeSession({
       session,
       eventType: "sessionExpired",
@@ -166,6 +211,14 @@ export async function getAuthenticatedSessionFromRequest(request: Request): Prom
       : session;
 
   const userProfile = getAuthenticatedUserProfile(nextSession.User, nextSession.authProvider);
+
+  console.info("[auth.session.read] authorized", {
+    path: new URL(request.url).pathname,
+    sessionId: nextSession.id,
+    userId: nextSession.userId,
+    username: nextSession.User.username,
+    status: nextSession.status,
+  });
 
   return {
     user: mapAuthenticatedSession(userProfile, nextSession),
