@@ -34,18 +34,6 @@ export default function Login() {
             <AlertError message={message || "Falha na autenticação"} />
           )
         }
-
-<<<<<<< Updated upstream
-              <a href="/auth/google" className="block">
-                <Button type="button" variant="secondary" className="w-full">
-                  Acessar com Google
-                </Button>
-              </a>
-            </div>
-          </div>
-        </section>
-=======
->>>>>>> Stashed changes
       </div>
     </div>
   )

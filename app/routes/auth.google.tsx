@@ -8,12 +8,8 @@ function authenticate(request: Request) {
     })
 }
 
-<<<<<<< Updated upstream
 export let loader = ({ request }: LoaderFunctionArgs) => {
     return authenticate(request)
 }
 
 export let action = ({ request }: ActionFunctionArgs) => authenticate(request)
-=======
-}
->>>>>>> Stashed changes
