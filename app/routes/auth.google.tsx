@@ -6,7 +6,7 @@ export let loader = () => redirect('/login')
 export let action = ({ request }: ActionFunctionArgs) => {
     return authenticator.authenticate('google', request, {
         successRedirect: '/admin',
-        failureRedirect: "/login?_status=auth-failed"
+        failureRedirect: "/login?_status=access-denied"
     })
 
 }
