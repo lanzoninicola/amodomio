@@ -303,6 +303,12 @@ export async function authorizeGoogleUser(params: {
   const email = normalizeUserEmail(params.email);
   if (!email) return null;
 
+  console.info("[auth.google.authorize] inbound", {
+    email,
+    googleSub: params.googleSub || null,
+    whitelist: getLegacyWhitelistedEmails(),
+  });
+
   const existing = await prismaClient.adminUserAccess.findFirst({
     where: {
       OR: [
@@ -313,7 +319,21 @@ export async function authorizeGoogleUser(params: {
   });
 
   if (existing) {
+    console.info("[auth.google.authorize] existing-user", {
+      id: existing.id,
+      username: existing.username,
+      email: existing.email,
+      isActive: existing.isActive,
+      allowGoogleLogin: existing.allowGoogleLogin,
+      googleSub: existing.googleSub,
+    });
+
     if (!existing.isActive || !existing.allowGoogleLogin) {
+      console.warn("[auth.google.authorize] denied-existing-user", {
+        email,
+        reason: !existing.isActive ? "inactive-user" : "google-login-disabled",
+      });
+
       if (params.request) {
         await createAccessAudit({
           provider: "google",
@@ -346,6 +366,12 @@ export async function authorizeGoogleUser(params: {
   }
 
   if (!getLegacyWhitelistedEmails().includes(email)) {
+    console.warn("[auth.google.authorize] denied-whitelist", {
+      email,
+      whitelist: getLegacyWhitelistedEmails(),
+      reason: "not-authorized",
+    });
+
     if (params.request) {
       await createAccessAudit({
         provider: "google",
@@ -374,6 +400,12 @@ export async function authorizeGoogleUser(params: {
       lastLoginAt: new Date(),
       lastGoogleLoginAt: new Date(),
     } as any,
+  });
+
+  console.info("[auth.google.authorize] whitelist-migration-created", {
+    id: created.id,
+    username: created.username,
+    email: created.email,
   });
 
   return getAuthenticatedUserProfile(created, "google");

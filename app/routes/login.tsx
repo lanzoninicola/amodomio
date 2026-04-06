@@ -122,11 +122,11 @@ export default function Login() {
                 <Separator className="flex-1 bg-zinc-800" />
               </div>
 
-              <Form action="/auth/google" method="post">
-                <Button type="submit" variant="secondary" className="w-full">
+              <a href="/auth/google" className="block">
+                <Button type="button" variant="secondary" className="w-full">
                   Acessar com Google
                 </Button>
-              </Form>
+              </a>
             </div>
           </div>
         </section>
