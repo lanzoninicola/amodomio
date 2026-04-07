@@ -1,4 +1,3 @@
-import { itemVariationPrismaEntity } from "~/domain/item/item-variation.prisma.entity.server";
 import {
   calculateItemCostMetrics,
   getItemAverageCostWindowDays,
@@ -12,6 +11,51 @@ export type ItemCostSnapshot = {
   historyCount: number;
 };
 
+function hasAnyCostHistory(target: any) {
+  return Boolean(
+    target?.ItemCostVariation ||
+      (Array.isArray(target?.ItemCostVariationHistory) &&
+        target.ItemCostVariationHistory.length > 0)
+  );
+}
+
+function buildItemVariationInclude() {
+  return {
+    Item: {
+      select: {
+        id: true,
+        purchaseUm: true,
+        consumptionUm: true,
+        purchaseToConsumptionFactor: true,
+      },
+    },
+    ItemCostVariation: {
+      select: {
+        costAmount: true,
+        unit: true,
+        validFrom: true,
+        createdAt: true,
+        source: true,
+      },
+    },
+    ItemCostVariationHistory: {
+      select: {
+        costAmount: true,
+        unit: true,
+        validFrom: true,
+        createdAt: true,
+        source: true,
+        metadata: true,
+      },
+      orderBy: [{ validFrom: "desc" }, { createdAt: "desc" }],
+      take: 100,
+    },
+    Variation: {
+      select: { kind: true, code: true },
+    },
+  };
+}
+
 async function findTargetItemVariation(params: {
   db: any;
   itemId?: string | null;
@@ -23,37 +67,7 @@ async function findTargetItemVariation(params: {
   if (params.itemVariationId) {
     return await db.itemVariation.findUnique({
       where: { id: params.itemVariationId },
-      include: {
-        Item: {
-          select: {
-            id: true,
-            purchaseUm: true,
-            consumptionUm: true,
-            purchaseToConsumptionFactor: true,
-          },
-        },
-        ItemCostVariation: {
-          select: {
-            costAmount: true,
-            unit: true,
-            validFrom: true,
-            createdAt: true,
-            source: true,
-          },
-        },
-        ItemCostVariationHistory: {
-          select: {
-            costAmount: true,
-            unit: true,
-            validFrom: true,
-            createdAt: true,
-            source: true,
-            metadata: true,
-          },
-          orderBy: [{ validFrom: "desc" }, { createdAt: "desc" }],
-          take: 100,
-        },
-      },
+      include: buildItemVariationInclude(),
     });
   }
 
@@ -61,83 +75,24 @@ async function findTargetItemVariation(params: {
   if (!itemId) return null;
 
   if (params.variationId) {
-    const linked = await itemVariationPrismaEntity.linkToItem({
-      itemId,
-      variationId: params.variationId,
+    const exact = await db.itemVariation.findFirst({
+      where: { itemId, variationId: params.variationId, deletedAt: null },
+      include: buildItemVariationInclude(),
     });
+    if (hasAnyCostHistory(exact)) return exact;
 
-    return await db.itemVariation.findUnique({
-      where: { id: linked.id },
-      include: {
-        Item: {
-          select: {
-            id: true,
-            purchaseUm: true,
-            consumptionUm: true,
-            purchaseToConsumptionFactor: true,
-          },
-        },
-        ItemCostVariation: {
-          select: {
-            costAmount: true,
-            unit: true,
-            validFrom: true,
-            createdAt: true,
-            source: true,
-          },
-        },
-        ItemCostVariationHistory: {
-          select: {
-            costAmount: true,
-            unit: true,
-            validFrom: true,
-            createdAt: true,
-            source: true,
-            metadata: true,
-          },
-          orderBy: [{ validFrom: "desc" }, { createdAt: "desc" }],
-          take: 100,
-        },
-      },
+    const fallback = await db.itemVariation.findFirst({
+      where: { itemId, deletedAt: null },
+      include: buildItemVariationInclude(),
+      orderBy: [{ isReference: "desc" }, { createdAt: "asc" }],
     });
+    if (hasAnyCostHistory(fallback)) return fallback;
+    return exact || fallback;
   }
 
   return await db.itemVariation.findFirst({
     where: { itemId, deletedAt: null },
-    include: {
-      Item: {
-        select: {
-          id: true,
-          purchaseUm: true,
-          consumptionUm: true,
-          purchaseToConsumptionFactor: true,
-        },
-      },
-      ItemCostVariation: {
-        select: {
-          costAmount: true,
-          unit: true,
-          validFrom: true,
-          createdAt: true,
-          source: true,
-        },
-      },
-      ItemCostVariationHistory: {
-        select: {
-          costAmount: true,
-          unit: true,
-          validFrom: true,
-          createdAt: true,
-          source: true,
-          metadata: true,
-        },
-        orderBy: [{ validFrom: "desc" }, { createdAt: "desc" }],
-        take: 100,
-      },
-      Variation: {
-        select: { kind: true, code: true },
-      },
-    },
+    include: buildItemVariationInclude(),
     orderBy: [{ isReference: "desc" }, { createdAt: "asc" }],
   });
 }

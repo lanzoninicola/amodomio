@@ -5,7 +5,6 @@ import { Label } from "~/components/ui/label";
 import { Switch } from "~/components/ui/switch";
 import { Textarea } from "~/components/ui/textarea";
 import {
-  formatCompactMoney,
   formatMoney,
   variationLabel,
   type AdminItemCostSheetDetailOutletContext,
@@ -22,13 +21,21 @@ export default function AdminItemCostSheetDadosGeraisTab() {
     sheetReferenceCount,
     operationalCostCount,
     totalComponents,
-    totalSheetCost,
     detailPath,
   } = useOutletContext<AdminItemCostSheetDetailOutletContext>();
+  const isActive = variationSheets.some((sheet: any) => sheet.isActive);
 
   return (
     <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_280px]">
+
+
       <div className="space-y-8">
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">DADOS GERAIS</div>
+          <div className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-wide ${isActive ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-800"}`}>
+            {isActive ? "Ativa" : "Rascunho"}
+          </div>
+        </div>
         <Form method="post" action={detailPath} className="space-y-6 border-b border-slate-100 pb-6">
           <input type="hidden" name="itemCostSheetId" value={selectedSheet?.id} />
           <input type="hidden" name="redirectTo" value={`${detailPath}/dados-gerais`} />
@@ -77,16 +84,12 @@ export default function AdminItemCostSheetDadosGeraisTab() {
                 <Switch id="sheet-active" name="isActive" defaultChecked={variationSheets.some((sheet: any) => sheet.isActive)} />
               </div>
             </div>
-            <div className="grid gap-4 rounded-2xl border border-slate-200 p-4 sm:grid-cols-2">
+            <div className="rounded-2xl border border-slate-200 p-4">
               <div>
-                <div className="text-xs text-slate-400">Status atual</div>
+                <div className="text-xs text-slate-400">Status da ficha</div>
                 <div className="mt-1 text-sm font-medium text-slate-900">
-                  {variationSheets.some((sheet: any) => sheet.isActive) ? "Ativa" : "Rascunho"}
+                  {isActive ? "Ativa" : "Rascunho"}
                 </div>
-              </div>
-              <div>
-                <div className="text-xs text-slate-400">Custo consolidado</div>
-                <div className="mt-1 text-sm font-medium text-slate-900">{formatCompactMoney(totalSheetCost)}</div>
               </div>
             </div>
           </div>
@@ -137,13 +140,13 @@ export default function AdminItemCostSheetDadosGeraisTab() {
         </div>
       </div>
 
-      <aside className="rounded-[24px] border border-slate-200 bg-slate-50/70 p-5">
+      <aside className="">
         <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Resumo por variacao</div>
         <div className="mt-5 space-y-4">
           {variationSheets.map((sheet: any) => (
-            <div key={sheet.id} className="rounded-2xl border border-white bg-white px-4 py-3 shadow-sm shadow-slate-100/40">
+            <div key={sheet.id} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 shadow-sm shadow-slate-100/40">
               <div className="text-xs font-medium text-slate-400">{variationLabel(sheet)}</div>
-              <div className="mt-1 text-base font-semibold text-slate-950">
+              <div className="mt-1 text-base font-semibold text-slate-950 font-mono">
                 {formatMoney(Number(totalsByVariationId[String(sheet.itemVariationId)] || 0))}
               </div>
             </div>

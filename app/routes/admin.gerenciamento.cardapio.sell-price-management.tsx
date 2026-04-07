@@ -132,7 +132,7 @@ export default function AdminGerenciamentoCardapioSellPriceManagement() {
                             <span className="">Profito desejado</span>
                           </button>
                         </div>
-                        <div className="grid grid-cols-2 ">
+                        <div className="grid grid-cols-3 ">
                           <Link to={`/admin/gerenciamento/cardapio/sell-price-management/${channel.key}/list`}>
                             <p className="text-[11px] uppercase font-semibold tracking-wider text-center
                             hover:underline">Tabela preços</p>
@@ -140,6 +140,10 @@ export default function AdminGerenciamentoCardapioSellPriceManagement() {
                           <Link to={`/admin/gerenciamento/cardapio/sell-price-management/${channel.key}/edit`}>
                             <p className="text-[11px] uppercase font-semibold tracking-wider text-center
                             hover:underline">Editar preços</p>
+                          </Link>
+                          <Link to={`/admin/gerenciamento/cardapio/sell-price-management/${channel.key}/edit-items`}>
+                            <p className="text-[11px] uppercase font-semibold tracking-wider text-center
+                            hover:underline">Editar Item</p>
                           </Link>
                         </div>
 
@@ -190,5 +194,4 @@ export default function AdminGerenciamentoCardapioSellPriceManagement() {
     </div>
   )
 }
-
 

@@ -8,15 +8,6 @@ import {
   normalizeItemCostToConsumptionUnit,
 } from "~/domain/item/item-cost-metrics.server";
 
-const ITEM_CLASSIFICATIONS = [
-  "insumo",
-  "semi_acabado",
-  "produto_final",
-  "embalagem",
-  "servico",
-  "outro",
-] as const;
-
 type CostRowLike = {
   id?: string | null;
   costAmount?: number | null;
@@ -91,10 +82,7 @@ export async function loadItemCostMonitoringPayload(request: Request) {
   const db = prismaClient as any;
   const url = new URL(request.url);
   const q = String(url.searchParams.get("q") || "").trim();
-  const classificationParam = String(url.searchParams.get("classification") || "").trim();
-  const classification = ITEM_CLASSIFICATIONS.includes(classificationParam as (typeof ITEM_CLASSIFICATIONS)[number])
-    ? classificationParam
-    : "insumo";
+  const itemIds = url.searchParams.getAll("itemId").map((value) => String(value).trim()).filter(Boolean);
   const averageWindowDays = await getItemAverageCostWindowDays();
   const chartWindowDays = Math.max(averageWindowDays, 60);
   const itemOptions = await db.item.findMany({
@@ -110,9 +98,9 @@ export async function loadItemCostMonitoringPayload(request: Request) {
     take: 300,
   });
 
-  if (!q) {
+  if (itemIds.length === 0 && !q) {
     return {
-      filters: { q: "", classification },
+      filters: { q: "", itemIds: [] },
       averageWindowDays,
       chartWindowDays,
       itemOptions,
@@ -123,11 +111,14 @@ export async function loadItemCostMonitoringPayload(request: Request) {
   const items = await db.item.findMany({
     where: {
       active: true,
-      classification,
-      OR: [
-        { name: { contains: q, mode: "insensitive" } },
-        { description: { contains: q, mode: "insensitive" } },
-      ],
+      ...(itemIds.length > 0
+        ? { id: { in: itemIds } }
+        : {
+            OR: [
+              { name: { contains: q, mode: "insensitive" } },
+              { description: { contains: q, mode: "insensitive" } },
+            ],
+          }),
     },
     include: {
       ItemVariation: {
@@ -165,7 +156,7 @@ export async function loadItemCostMonitoringPayload(request: Request) {
   });
 
   return {
-    filters: { q, classification },
+    filters: { q, itemIds },
     averageWindowDays,
     chartWindowDays,
     itemOptions,

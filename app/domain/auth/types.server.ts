@@ -1,8 +1,11 @@
 export type LoggedUser =
   | {
+      id?: string;
+      username?: string;
       name: string;
       email: string;
       avatarURL: string;
+      roles?: string[];
     }
   | null
   | false;

@@ -1,4 +1,4 @@
-import type { AdminUserSessionStatus, AccessAuditEventType, AccessAuditProvider } from "@prisma/client";
+import type { UserSessionStatus, AuditEventType, AuditProvider } from "@prisma/client";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json, redirect } from "@remix-run/node";
 import { Form, useActionData, useLoaderData } from "@remix-run/react";
@@ -6,8 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { blockAdminSessionById, getCurrentSessionId, listAdminSessions, revokeAdminSessionById, revokeAllAdminSessionsForUser, revokeCurrentAdminSession } from "~/domain/auth/admin-user-session.server";
-import { hasAnyRole } from "~/domain/auth/admin-user-access.server";
+import { blockUserSessionById, getCurrentSessionId, listUserSessions, revokeAllUserSessionsForUser, revokeCurrentUserSession, revokeUserSessionById } from "~/domain/auth/user-session.server";
+import { hasAnyRole } from "~/domain/auth/user-access.server";
 import { authenticator } from "~/domain/auth/google.server";
 import prismaClient from "~/lib/prisma/client.server";
 
@@ -19,8 +19,8 @@ type ActionData = {
 type SessionRow = {
   id: string;
   userId: string;
-  authProvider: AccessAuditProvider;
-  status: AdminUserSessionStatus;
+  authProvider: AuditProvider;
+  status: UserSessionStatus;
   deviceLabel: string | null;
   ipAddress: string | null;
   userAgent: string | null;
@@ -30,7 +30,7 @@ type SessionRow = {
   createdAt: string;
   revokedAt: string | null;
   revokedReason: string | null;
-  User: {
+  user: {
     username: string;
     email: string | null;
     name: string | null;
@@ -39,8 +39,8 @@ type SessionRow = {
 
 type AuditRow = {
   id: string;
-  eventType: AccessAuditEventType;
-  provider: AccessAuditProvider;
+  eventType: AuditEventType;
+  provider: AuditProvider;
   success: boolean;
   sessionId: string | null;
   sessionDeviceLabel: string | null;
@@ -62,8 +62,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }
 
   const [sessions, audit] = await Promise.all([
-    listAdminSessions(),
-    prismaClient.adminAccessAudit.findMany({
+    listUserSessions(),
+    prismaClient.accessAudit.findMany({
       where: {
         eventType: {
           in: ["loginSuccess", "logout", "logoutAllDevices", "sessionExpired", "sessionRevoked", "sessionBlocked"],
@@ -99,7 +99,7 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     if (sessionId === getCurrentSessionId(currentUser)) {
-      const setCookie = await revokeCurrentAdminSession({
+      const setCookie = await revokeCurrentUserSession({
         request,
         actorUserId: currentUser.id,
       });
@@ -109,7 +109,7 @@ export async function action({ request }: ActionFunctionArgs) {
       });
     }
 
-    await revokeAdminSessionById({
+    await revokeUserSessionById({
       sessionId,
       actorUserId: currentUser.id,
       request,
@@ -124,7 +124,7 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     if (sessionId === getCurrentSessionId(currentUser)) {
-      const setCookie = await revokeCurrentAdminSession({
+      const setCookie = await revokeCurrentUserSession({
         request,
         actorUserId: currentUser.id,
       });
@@ -134,7 +134,7 @@ export async function action({ request }: ActionFunctionArgs) {
       });
     }
 
-    await blockAdminSessionById({
+    await blockUserSessionById({
       sessionId,
       actorUserId: currentUser.id,
       request,
@@ -151,7 +151,7 @@ export async function action({ request }: ActionFunctionArgs) {
     const includeCurrent = str(formData.get("includeCurrent")) === "1";
     const currentSessionId = getCurrentSessionId(currentUser);
 
-    await revokeAllAdminSessionsForUser({
+    await revokeAllUserSessionsForUser({
       userId,
       actorUserId: currentUser.id,
       request,
@@ -159,7 +159,7 @@ export async function action({ request }: ActionFunctionArgs) {
     });
 
     if (includeCurrent && userId === currentUser.id) {
-      const setCookie = await revokeCurrentAdminSession({
+      const setCookie = await revokeCurrentUserSession({
         request,
         actorUserId: currentUser.id,
       });
@@ -244,8 +244,8 @@ export default function AdminSessionsRoute() {
               {sessions.map((session) => (
                 <TableRow key={session.id}>
                   <TableCell>
-                    <div className="text-sm font-medium">{session.User.username}</div>
-                    <div className="text-xs text-muted-foreground">{session.User.email || "-"}</div>
+                    <div className="text-sm font-medium">{session.user.username}</div>
+                    <div className="text-xs text-muted-foreground">{session.user.email || "-"}</div>
                     {session.id === currentSessionId ? (
                       <Badge variant="secondary" className="mt-2">Atual</Badge>
                     ) : null}

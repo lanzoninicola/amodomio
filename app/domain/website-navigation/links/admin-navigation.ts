@@ -278,6 +278,12 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
               disabled: false,
             },
             {
+              title: "Preços de venda Item",
+              href: "/admin/gerenciamento/cardapio/sell-price-management/cardapio/edit-items",
+              items: [],
+              disabled: false,
+            },
+            {
               title: "DNA",
               href: "/admin/financeiro/dna",
               items: [],

@@ -1,30 +1,39 @@
 import { createHash, randomBytes } from "node:crypto";
 import type {
-  AccessAuditEventType,
-  AccessAuditProvider,
-  AdminUserAccess,
-  AdminUserSession,
-  AdminUserSessionStatus,
+  AuditEventType,
+  AuditProvider,
+  UserAccess,
+  UserSession,
+  UserSessionStatus,
 } from "@prisma/client";
 import { createCookieSessionStorage } from "@remix-run/node";
 import prismaClient from "~/lib/prisma/client.server";
 import {
-  GOOGLE_AUTH_COOKIE_SECRET,
+  AUTH_COOKIE_SECRET,
 } from "./constants.server";
-import { createAccessAudit, getAuthenticatedUserProfile } from "./admin-user-access.server";
+import { createAccessAudit, getAuthenticatedUserProfile } from "./user-access.server";
 import type { AuthenticatedLoggedUser, AuthenticatedUserProfile } from "./types.server";
 
-const SESSION_COOKIE_KEY = "admin_session_token";
+const SESSION_COOKIE_KEY = "user_session_token";
+const LEGACY_SESSION_COOKIE_KEY = "admin_session_token";
 const SESSION_IDLE_TIMEOUT_MS =
-  Number(process.env.ADMIN_SESSION_IDLE_TIMEOUT_MINUTES || 60 * 12) * 60 * 1000;
+  Number(
+    process.env.USER_SESSION_IDLE_TIMEOUT_MINUTES ||
+      process.env.ADMIN_SESSION_IDLE_TIMEOUT_MINUTES ||
+      60 * 12
+  ) * 60 * 1000;
 const SESSION_ABSOLUTE_TIMEOUT_MS =
-  Number(process.env.ADMIN_SESSION_ABSOLUTE_TIMEOUT_DAYS || 30) * 24 * 60 * 60 * 1000;
+  Number(
+    process.env.USER_SESSION_ABSOLUTE_TIMEOUT_DAYS ||
+      process.env.ADMIN_SESSION_ABSOLUTE_TIMEOUT_DAYS ||
+      30
+  ) * 24 * 60 * 60 * 1000;
 const SESSION_ACTIVITY_REFRESH_MS = 5 * 60 * 1000;
 
-const cookieSecret = GOOGLE_AUTH_COOKIE_SECRET || "AM0D0MI02O24";
+const cookieSecret = AUTH_COOKIE_SECRET || "AM0D0MI02O24";
 
 const cookieOptions = {
-  name: "admin_session",
+  name: "user_session",
   path: "/",
   httpOnly: true,
   sameSite: "lax" as const,
@@ -37,19 +46,19 @@ export const sessionStorage = createCookieSessionStorage({
   cookie: cookieOptions,
 });
 
-type SessionWithUser = AdminUserSession & {
-  User: AdminUserAccess;
+type SessionWithUser = UserSession & {
+  user: UserAccess;
 };
 
-export async function createAdminUserSession(params: {
+export async function createUserSession(params: {
   request: Request;
   user: AuthenticatedUserProfile;
-  authProvider: AccessAuditProvider;
+  authProvider: AuditProvider;
 }) {
   const secret = randomBytes(24).toString("hex");
   const now = new Date();
   const requestMeta = getRequestMeta(params.request);
-  const sessionRecord = await prismaClient.adminUserSession.create({
+  const sessionRecord = await prismaClient.userSession.create({
     data: {
       userId: params.user.id,
       authProvider: params.authProvider,
@@ -74,7 +83,7 @@ export async function createAdminUserSession(params: {
     userId: params.user.id,
     username: params.user.username,
     authProvider: params.authProvider,
-    cookieName: "admin_session",
+    cookieName: "user_session",
     deviceLabel: sessionRecord.deviceLabel,
     idleExpiresAt: sessionRecord.idleExpiresAt.toISOString(),
     absoluteExpiresAt: sessionRecord.absoluteExpiresAt.toISOString(),
@@ -105,7 +114,9 @@ export async function getAuthenticatedSessionFromRequest(request: Request): Prom
   destroyCookie: boolean;
 }> {
   const cookieSession = await sessionStorage.getSession(request.headers.get("Cookie"));
-  const token = cookieSession.get(SESSION_COOKIE_KEY) as string | undefined;
+  const token =
+    (cookieSession.get(SESSION_COOKIE_KEY) as string | undefined) ||
+    (cookieSession.get(LEGACY_SESSION_COOKIE_KEY) as string | undefined);
 
   console.info("[auth.session.read] inbound", {
     path: new URL(request.url).pathname,
@@ -125,9 +136,9 @@ export async function getAuthenticatedSessionFromRequest(request: Request): Prom
     return { user: null, session: null, destroyCookie: true };
   }
 
-  const session = await prismaClient.adminUserSession.findUnique({
+  const session = await prismaClient.userSession.findUnique({
     where: { id: parsed.sessionId },
-    include: { User: true },
+    include: { user: true },
   });
 
   if (!session) {
@@ -146,7 +157,7 @@ export async function getAuthenticatedSessionFromRequest(request: Request): Prom
     return { user: null, session: null, destroyCookie: true };
   }
 
-  if (!session.User?.isActive) {
+  if (!session.user?.isActive) {
     console.warn("[auth.session.read] inactive-user", {
       path: new URL(request.url).pathname,
       sessionId: session.id,
@@ -197,7 +208,7 @@ export async function getAuthenticatedSessionFromRequest(request: Request): Prom
 
   const nextSession =
     now - session.lastActivityAt.getTime() >= SESSION_ACTIVITY_REFRESH_MS
-      ? await prismaClient.adminUserSession.update({
+      ? await prismaClient.userSession.update({
           where: { id: session.id },
           data: {
             lastActivityAt: new Date(now),
@@ -206,17 +217,17 @@ export async function getAuthenticatedSessionFromRequest(request: Request): Prom
             userAgent: getRequestMeta(request).userAgent,
             deviceLabel: buildDeviceLabel(getRequestMeta(request).userAgent),
           },
-          include: { User: true },
+          include: { user: true },
         })
       : session;
 
-  const userProfile = getAuthenticatedUserProfile(nextSession.User, nextSession.authProvider);
+  const userProfile = getAuthenticatedUserProfile(nextSession.user, nextSession.authProvider);
 
   console.info("[auth.session.read] authorized", {
     path: new URL(request.url).pathname,
     sessionId: nextSession.id,
     userId: nextSession.userId,
-    username: nextSession.User.username,
+    username: nextSession.user.username,
     status: nextSession.status,
   });
 
@@ -233,7 +244,7 @@ export async function destroySessionCookie(request: Request) {
   return sessionStorage.destroySession(cookieSession);
 }
 
-export async function revokeCurrentAdminSession(params: {
+export async function revokeCurrentUserSession(params: {
   request: Request;
   actorUserId?: string | null;
 }) {
@@ -253,15 +264,15 @@ export async function revokeCurrentAdminSession(params: {
   return destroySessionCookie(params.request);
 }
 
-export async function revokeAdminSessionById(params: {
+export async function revokeUserSessionById(params: {
   sessionId: string;
   actorUserId: string;
   request: Request;
   reason?: string;
 }) {
-  const session = await prismaClient.adminUserSession.findUnique({
+  const session = await prismaClient.userSession.findUnique({
     where: { id: params.sessionId },
-    include: { User: true },
+    include: { user: true },
   });
 
   if (!session) return null;
@@ -280,15 +291,15 @@ export async function revokeAdminSessionById(params: {
   return session;
 }
 
-export async function blockAdminSessionById(params: {
+export async function blockUserSessionById(params: {
   sessionId: string;
   actorUserId: string;
   request: Request;
   reason?: string;
 }) {
-  const session = await prismaClient.adminUserSession.findUnique({
+  const session = await prismaClient.userSession.findUnique({
     where: { id: params.sessionId },
-    include: { User: true },
+    include: { user: true },
   });
 
   if (!session) return null;
@@ -307,26 +318,26 @@ export async function blockAdminSessionById(params: {
   return session;
 }
 
-export async function revokeAllAdminSessionsForUser(params: {
+export async function revokeAllUserSessionsForUser(params: {
   userId: string;
   actorUserId: string;
   request: Request;
   exceptSessionId?: string | null;
 }) {
-  const activeSessions = await prismaClient.adminUserSession.findMany({
+  const activeSessions = await prismaClient.userSession.findMany({
     where: {
       userId: params.userId,
       status: "active",
       ...(params.exceptSessionId ? { id: { not: params.exceptSessionId } } : {}),
     },
-    include: { User: true },
+    include: { user: true },
   });
 
   if (!activeSessions.length) {
     return { count: 0 };
   }
 
-  await prismaClient.adminUserSession.updateMany({
+  await prismaClient.userSession.updateMany({
     where: {
       id: { in: activeSessions.map((session) => session.id) },
     },
@@ -345,8 +356,8 @@ export async function revokeAllAdminSessionsForUser(params: {
       success: true,
       userId: session.userId,
       actorUserId: params.actorUserId,
-      username: session.User.username,
-      email: session.User.email,
+      username: session.user.username,
+      email: session.user.email,
       request: params.request,
       session,
       details: {
@@ -359,9 +370,9 @@ export async function revokeAllAdminSessionsForUser(params: {
   return { count: activeSessions.length };
 }
 
-export async function listAdminSessions() {
-  return prismaClient.adminUserSession.findMany({
-    include: { User: true },
+export async function listUserSessions() {
+  return prismaClient.userSession.findMany({
+    include: { user: true },
     orderBy: [{ lastActivityAt: "desc" }],
     take: 200,
   });
@@ -373,7 +384,7 @@ export function getCurrentSessionId(user: Pick<AuthenticatedLoggedUser, "session
 
 function mapAuthenticatedSession(
   user: AuthenticatedUserProfile,
-  session: AdminUserSession
+  session: UserSession
 ): AuthenticatedLoggedUser {
   return {
     ...user,
@@ -388,14 +399,14 @@ function mapAuthenticatedSession(
 
 async function expireOrRevokeSession(params: {
   session: SessionWithUser;
-  eventType: AccessAuditEventType;
+  eventType: AuditEventType;
   reason: string;
   request: Request;
   actorUserId?: string | null;
-  nextStatus?: AdminUserSessionStatus;
+  nextStatus?: UserSessionStatus;
 }) {
   const nextStatus = params.nextStatus || "revoked";
-  const updated = await prismaClient.adminUserSession.update({
+  const updated = await prismaClient.userSession.update({
     where: { id: params.session.id },
     data: {
       status: nextStatus,
@@ -411,8 +422,8 @@ async function expireOrRevokeSession(params: {
     success: true,
     userId: params.session.userId,
     actorUserId: params.actorUserId || null,
-    username: params.session.User.username,
-    email: params.session.User.email,
+    username: params.session.user.username,
+    email: params.session.user.email,
     request: params.request,
     session: updated,
     details: { reason: params.reason, status: nextStatus },

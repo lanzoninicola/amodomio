@@ -3,20 +3,30 @@ import { Link, Outlet, useActionData, useLoaderData, useLocation, useOutletConte
 import { Eye, Pencil } from "lucide-react";
 import { useEffect } from "react";
 import { toast } from "~/components/ui/use-toast";
+import type { ComputedSellingPriceBreakdown } from "~/domain/cardapio/menu-item-selling-price-utility.entity";
+import {
+  buildNativeSellingPriceUpsertPayload,
+  computeNativeItemSellingPriceBreakdown,
+  listSizeMapByKey,
+  pickLatestActiveSheet,
+  resolveVariationSizeKey,
+} from "~/domain/item/item-selling-price-calculation.server";
 import { itemSellingPriceVariationEntity } from "~/domain/item/item-selling-price-variation.entity.server";
+import { menuItemSellingPriceUtilityEntity } from "~/domain/cardapio/menu-item-selling-price-utility.entity";
 import prismaClient from "~/lib/prisma/client.server";
 import { badRequest, ok, serverError } from "~/utils/http-response.server";
 import { lastUrlSegment } from "~/utils/url";
 import type { AdminItemVendaOutletContext } from "./admin.items.$id.venda";
 
 function parseMoneyInput(value: FormDataEntryValue | null) {
-  const raw = String(value || "")
-    .trim()
-    .replace(/\s+/g, "")
-    .replace(/\./g, "")
-    .replace(",", ".");
+  const raw = String(value || "").trim().replace(/\s+/g, "");
+  if (!raw) return null;
 
-  const parsed = Number(raw);
+  const normalized = raw.includes(",")
+    ? raw.replace(/\./g, "").replace(",", ".")
+    : raw;
+
+  const parsed = Number(normalized);
   if (!Number.isFinite(parsed)) return null;
   return parsed;
 }
@@ -32,7 +42,16 @@ export async function loader({ params }: LoaderFunctionArgs) {
     if (!id) return badRequest("Item inválido");
 
     const db = prismaClient as any;
-    const [item, editableVariations, nativeRows, nativeModelAvailable] = await Promise.all([
+    const [
+      item,
+      editableVariations,
+      nativeRows,
+      nativeModelAvailable,
+      itemChannelRows,
+      activeSheets,
+      sizeMap,
+      sellingPriceConfig,
+    ] = await Promise.all([
       db.item.findUnique({
         where: { id },
         select: { id: true, name: true },
@@ -42,27 +61,120 @@ export async function loader({ params }: LoaderFunctionArgs) {
         select: {
           id: true,
           isReference: true,
-          Variation: {
-            select: {
-              id: true,
-              code: true,
-              name: true,
+            Variation: {
+              select: {
+                id: true,
+                code: true,
+                name: true,
+                sortOrderIndex: true,
+              },
             },
           },
-        },
-        orderBy: [{ createdAt: "asc" }],
+        orderBy: [{ isReference: "desc" }, { createdAt: "asc" }],
       }),
       itemSellingPriceVariationEntity.findManyByItemId(id),
       itemSellingPriceVariationEntity.isAvailable(),
+      db.itemSellingChannelItem.findMany({
+        where: { itemId: id },
+        select: {
+          visible: true,
+          ItemSellingChannel: true,
+        },
+      }),
+      db.itemCostSheet.findMany({
+        where: {
+          itemId: id,
+          isActive: true,
+        },
+        select: {
+          id: true,
+          name: true,
+          itemId: true,
+          itemVariationId: true,
+          costAmount: true,
+          updatedAt: true,
+          activatedAt: true,
+        },
+        orderBy: [{ activatedAt: "desc" }, { updatedAt: "desc" }],
+      }),
+      listSizeMapByKey(),
+      menuItemSellingPriceUtilityEntity.getSellingPriceConfig(),
     ]);
 
     if (!item) return badRequest("Item não encontrado");
 
+    const currentRowByKey = new Map(
+      (nativeRows || []).map((row: any) => [
+        `${row.itemVariationId}::${row.itemSellingChannelId}`,
+        row,
+      ])
+    );
+    const pricingRows = (itemChannelRows || []).flatMap((itemChannelRow: any) => {
+      const channel = itemChannelRow.ItemSellingChannel;
+      if (!channel?.id) return [];
+
+      return (editableVariations || []).map((itemVariation: any) => {
+        const activeSheet = pickLatestActiveSheet(
+          (activeSheets || []).filter(
+            (sheet: any) => String(sheet.itemVariationId || "") === String(itemVariation.id || "")
+          )
+        );
+        const sizeKey = resolveVariationSizeKey({
+          variationCode: itemVariation.Variation?.code,
+          variationName: itemVariation.Variation?.name,
+        });
+        const size = sizeKey ? sizeMap.get(sizeKey) || null : null;
+        const currentRow =
+          currentRowByKey.get(`${itemVariation.id}::${channel.id}`) || null;
+        const breakdown = computeNativeItemSellingPriceBreakdown({
+          channel,
+          itemCostAmount: Number(activeSheet?.costAmount || 0),
+          sellingPriceConfig,
+          size,
+        });
+
+        return {
+          itemVariationId: itemVariation.id,
+          itemSellingChannelId: channel.id,
+          itemSellingChannelKey: String(channel.key || "").toLowerCase(),
+          itemSellingChannelName: channel.name || String(channel.key || ""),
+          variationName:
+            itemVariation.Variation?.name ||
+            (itemVariation.isReference ? "Referencia" : "Sem variação"),
+          variationCode: itemVariation.Variation?.code || null,
+          isReference: Boolean(itemVariation.isReference),
+          currentRow: currentRow
+            ? {
+                id: currentRow.id,
+                priceAmount: Number(currentRow.priceAmount || 0),
+                previousPriceAmount: Number(currentRow.previousPriceAmount || 0),
+                priceExpectedAmount: Number(currentRow.priceExpectedAmount || 0),
+                profitActualPerc: Number(currentRow.profitActualPerc || 0),
+                profitExpectedPerc: Number(currentRow.profitExpectedPerc || 0),
+                published: Boolean(currentRow.published),
+                updatedBy: currentRow.updatedBy || null,
+              }
+            : null,
+          activeSheetId: activeSheet?.id || null,
+          activeSheetName: activeSheet?.name || null,
+          activeSheetCostAmount: Number(activeSheet?.costAmount || 0),
+          sizeKey,
+          computedSellingPriceBreakdown: breakdown,
+        };
+      });
+    });
+
     return ok({
       item,
-      editableVariations,
+      editableVariations: [...(editableVariations || [])].sort(
+        (a: any, b: any) =>
+          Number(Boolean(b?.isReference)) - Number(Boolean(a?.isReference)) ||
+          Number(a?.Variation?.sortOrderIndex || 0) - Number(b?.Variation?.sortOrderIndex || 0) ||
+          String(a?.Variation?.name || "").localeCompare(String(b?.Variation?.name || ""), "pt-BR")
+      ),
       nativeRows,
       nativeModelAvailable,
+      pricingRows,
     });
   } catch (error) {
     return serverError(error);
@@ -90,7 +202,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const itemSellingChannelId = String(formData.get("itemSellingChannelId") || "").trim();
     const updatedBy = String(formData.get("updatedBy") || "").trim() || null;
     const published = String(formData.get("published") || "") === "on";
-    const priceAmount = parseMoneyInput(formData.get("priceAmount"));
+    const intent = String(formData.get("_intent") || "").trim();
+    const priceAmount =
+      intent === "apply-recommended"
+        ? Number(formData.get("recommendedPriceAmount") || 0)
+        : parseMoneyInput(formData.get("priceAmount"));
 
     if (!itemVariationId) return badRequest("Variação inválida");
     if (!itemSellingChannelId) return badRequest("Canal inválido");
@@ -111,7 +227,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
       return badRequest("Este item não está habilitado para o canal selecionado.");
     }
 
-    await itemSellingPriceVariationEntity.upsert({
+    const { upsertInput } = await buildNativeSellingPriceUpsertPayload({
+      db,
       itemId,
       itemVariationId,
       itemSellingChannelId,
@@ -119,6 +236,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
       published,
       updatedBy,
     });
+
+    await itemSellingPriceVariationEntity.upsert(upsertInput);
 
     return ok("Preço nativo do item salvo.");
   } catch (error) {
@@ -142,8 +261,37 @@ export type AdminItemVendaPrecosOutletContext = AdminItemVendaOutletContext & {
     itemSellingChannelId: string;
     priceAmount: number;
     published: boolean;
+    previousPriceAmount?: number;
+    priceExpectedAmount?: number;
+    profitActualPerc?: number;
+    profitExpectedPerc?: number;
+    updatedBy?: string | null;
   }>;
   nativeModelAvailable: boolean;
+  pricingRows: Array<{
+    itemVariationId: string;
+    itemSellingChannelId: string;
+    itemSellingChannelKey: string;
+    itemSellingChannelName: string;
+    variationName: string;
+    variationCode: string | null;
+    isReference: boolean;
+    currentRow: {
+      id: string;
+      priceAmount: number;
+      previousPriceAmount: number;
+      priceExpectedAmount: number;
+      profitActualPerc: number;
+      profitExpectedPerc: number;
+      published: boolean;
+      updatedBy: string | null;
+    } | null;
+    activeSheetId: string | null;
+    activeSheetName: string | null;
+    activeSheetCostAmount: number;
+    sizeKey: string | null;
+    computedSellingPriceBreakdown: ComputedSellingPriceBreakdown;
+  }>;
 };
 
 export default function AdminItemVendaPrecosLayout() {
@@ -156,6 +304,7 @@ export default function AdminItemVendaPrecosLayout() {
     editableVariations?: AdminItemVendaPrecosOutletContext["editableVariations"];
     nativeRows?: AdminItemVendaPrecosOutletContext["nativeRows"];
     nativeModelAvailable?: boolean;
+    pricingRows?: AdminItemVendaPrecosOutletContext["pricingRows"];
   };
   const basePath = `/admin/items/${sellingContext.item.id}/venda/precos`;
 
@@ -174,6 +323,7 @@ export default function AdminItemVendaPrecosLayout() {
     editableVariations: payload.editableVariations || [],
     nativeRows: payload.nativeRows || [],
     nativeModelAvailable: payload.nativeModelAvailable ?? false,
+    pricingRows: payload.pricingRows || [],
   };
 
   return (

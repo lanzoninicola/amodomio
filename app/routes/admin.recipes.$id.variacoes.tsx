@@ -4,7 +4,14 @@ import { useState } from "react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "~/components/ui/tooltip";
 import { cn } from "~/lib/utils";
 import type { AdminRecipeOutletContext } from "./admin.recipes.$id";
-import { formatMoney, IngredientLossEditor, IngredientUnitEditor, InlineVariationCellEditor } from "./admin.recipes.$id";
+import { IngredientLossEditor, IngredientUnitEditor, InlineVariationCellEditor } from "./admin.recipes.$id";
+
+function formatMoneyCompact(value: number) {
+    return `R$ ${Number(value || 0).toLocaleString("pt-BR", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    })}`
+}
 
 export default function AdminRecipeVariacoesTab() {
     const { recipe, items, recipeLines, linkedVariations } = useOutletContext<AdminRecipeOutletContext>()
@@ -111,196 +118,216 @@ export default function AdminRecipeVariacoesTab() {
 
     return (
         <div className="space-y-4">
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                    <span className={`h-1.5 w-1.5 rounded-full ${(hasVariationPendingCells || hasVariationCostZero) ? "bg-amber-400" : "bg-emerald-400"}`} />
-                    <span className="text-sm text-slate-500">
-                        {(hasVariationPendingCells || hasVariationCostZero)
-                            ? "Células sem UM/QTD ou com custo 0"
-                            : "Todas as variações completas"}
-                    </span>
-                </div>
-                <div className="flex items-center gap-5">
-                    <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer select-none">
-                        <input
-                            type="checkbox"
-                            className="h-3.5 w-3.5 rounded border-slate-300"
-                            checked={showVariationLoss}
-                            onChange={(event) => setShowVariationLoss(event.target.checked)}
-                        />
-                        Perda por variação
-                    </label>
-                    <Form method="post" action=".." preventScrollReset>
-                        <input type="hidden" name="recipeId" value={recipe.id} />
-                        <input type="hidden" name="tab" value="variacoes" />
-                        <button type="submit" name="_action" value="recipe-lines-recalc" className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-900 transition-colors">
-                            <RefreshCw size={13} />
-                            Recalcular
-                        </button>
-                    </Form>
-                </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-x-1 gap-y-1 border-b border-slate-100 pb-4">
-                <span className="mr-2 text-[11px] uppercase tracking-widest text-slate-400">Colunas</span>
-                {columnToggleVariations.length === 0 ? (
-                    <span className="text-sm text-slate-400">Nenhuma variação disponível.</span>
-                ) : (
-                    columnToggleVariations.map((variation, idx) => {
-                        const visible = !hiddenVariationIds.includes(variation.itemVariationId)
-                        return (
-                            <span key={`toggle-${variation.itemVariationId}`} className="flex items-center gap-1">
-                                {idx > 0 && <span className="mx-1 text-slate-200">·</span>}
-                                <button
-                                    type="button"
-                                    onClick={() => toggleVariationColumn(variation.itemVariationId)}
-                                    className={cn(
-                                        "text-sm transition-colors",
-                                        visible ? "font-medium text-slate-900" : "text-slate-400 hover:text-slate-600"
-                                    )}
-                                >
-                                    {variation.variationName || "Variação"}
-                                    {variation.isReference && visible ? <span className="ml-1 text-slate-400">★</span> : null}
-                                </button>
+            <section className="">
+                <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 p-4">
+                    <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                            <span className={`h-1.5 w-1.5 rounded-full ${(hasVariationPendingCells || hasVariationCostZero) ? "bg-amber-400" : "bg-emerald-400"}`} />
+                            <span className="text-sm text-slate-500">
+                                {(hasVariationPendingCells || hasVariationCostZero)
+                                    ? "Células sem UM/QTD ou com custo 0"
+                                    : "Todas as variações completas"}
                             </span>
-                        )
-                    })
-                )}
-            </div>
-
-            <div className="overflow-x-auto">
-                <table className="min-w-full text-sm">
-                    <thead>
-                        <tr className="border-b-2 border-slate-100">
-                            <th className="px-3 pb-3 pt-1 text-left text-[11px] font-semibold uppercase tracking-widest text-slate-400">Ingrediente</th>
-                            <th className="w-24 px-3 pb-3 pt-1 text-left text-[11px] font-semibold uppercase tracking-widest text-slate-400">UM</th>
-                            <th className="w-32 px-3 pb-3 pt-1 text-left">
-                                <TooltipProvider>
-                                    <Tooltip>
-                                        <TooltipTrigger className="flex cursor-default items-center gap-1 text-[11px] font-semibold uppercase tracking-widest text-slate-400">
-                                            Perda
-                                            <AlertCircle size={11} className="text-slate-300" />
-                                        </TooltipTrigger>
-                                        <TooltipContent className="max-w-xs text-[12px]">
-                                            A perda (%) representa o que se perde no preparo (evaporação, redução etc). Exemplo: 20% de perda em 1 kg resulta em 1,250 kg bruto a comprar.
-                                        </TooltipContent>
-                                    </Tooltip>
-                                </TooltipProvider>
-                            </th>
-                            {effectiveVariationColumns.map((variation, index) => {
-                                const metric = variationMetrics[index]
-                                const missing = metric.filledQtyCells < requiredCellCount
-                                const hasZero = metric.zeroCostCells > 0
-                                return (
-                                    <th key={variation.itemVariationId} className={`min-w-[200px] px-3 pb-3 pt-1 text-left ${variation.isReference ? "bg-blue-50/30" : ""}`}>
-                                        <div className="flex items-center gap-1.5">
-                                            <span className="text-[11px] font-semibold uppercase tracking-widest text-slate-700">
-                                                {variation.variationName || "Base"}
-                                            </span>
-                                            {variation.isReference ? <span className="text-[11px] text-slate-400">★</span> : null}
-                                            {missing ? <span className="h-1.5 w-1.5 rounded-full bg-amber-400" title="Campos pendentes" /> : null}
-                                            {!missing && hasZero ? <span className="h-1.5 w-1.5 rounded-full bg-orange-400" title="Custo 0" /> : null}
-                                        </div>
-                                        <div className="mt-0.5 text-[11px] font-normal normal-case tracking-normal text-slate-400">
-                                            {formatMoney(metric.totalLast)} · {formatMoney(metric.totalAvg)}
-                                        </div>
-                                    </th>
-                                )
-                            })}
-                            <th className="w-8 px-3 pb-3 pt-1" />
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {compositionRows.length === 0 ? (
-                            <tr>
-                                <td colSpan={effectiveVariationColumns.length + 4} className="px-3 py-12 text-center text-sm text-slate-400">
-                                    Nenhum item na composição. Primeiro monte a base na página Composição.
-                                </td>
-                            </tr>
-                        ) : (
-                            compositionRowsWithUnit.map((row) => (
-                                <tr key={row.key} className="group border-t border-slate-100 align-top hover:bg-slate-50/40">
-                                    <td className="px-3 py-4 align-top">
-                                        <Link
-                                            to={`/admin/items/${row.itemId}/main`}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            className="block max-w-[220px] cursor-pointer truncate text-sm font-medium text-slate-900 underline-offset-2 hover:underline"
-                                            title={row.itemName}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Colunas</span>
+                            {columnToggleVariations.length === 0 ? (
+                                <span className="text-sm text-slate-400">Nenhuma variação disponível.</span>
+                            ) : (
+                                columnToggleVariations.map((variation) => {
+                                    const visible = !hiddenVariationIds.includes(variation.itemVariationId)
+                                    return (
+                                        <button
+                                            key={`toggle-${variation.itemVariationId}`}
+                                            type="button"
+                                            onClick={() => toggleVariationColumn(variation.itemVariationId)}
+                                            className={cn(
+                                                "rounded-full border px-2.5 py-1 text-xs transition-colors",
+                                                visible
+                                                    ? "border-slate-200 bg-slate-100 text-slate-900"
+                                                    : "border-transparent bg-white text-slate-400 hover:border-slate-200 hover:text-slate-600"
+                                            )}
                                         >
-                                            {row.itemName}
-                                        </Link>
-                                        <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-slate-400">
-                                            <span>{formatMoney(row.lastUnitCostAmount, 4)}</span>
-                                            <span className="text-slate-200">·</span>
-                                            <span>{formatMoney(row.avgUnitCostAmount, 4)} médio</span>
-                                        </div>
-                                    </td>
-                                    <td className="px-3 py-4 align-top">
-                                        <IngredientUnitEditor
-                                            recipeId={recipe.id}
-                                            section="variacoes"
-                                            recipeIngredientId={row.recipeIngredientId}
-                                            currentUnit={row.unit}
-                                            options={(() => {
-                                                const options = Array.from(new Set([
-                                                    String(row.itemConsumptionUm || "").trim().toUpperCase(),
-                                                    String(row.unit || "").trim().toUpperCase(),
-                                                ].filter(Boolean)))
-                                                return options.length > 0 ? options : ["UN"]
-                                            })()}
-                                        />
-                                    </td>
-                                    <td className="px-3 py-4 align-top">
-                                        <IngredientLossEditor
-                                            recipeId={recipe.id}
-                                            section="variacoes"
-                                            recipeIngredientId={row.recipeIngredientId}
-                                            defaultLossPct={Number(row.defaultLossPct || 0)}
-                                        />
-                                    </td>
-                                    {effectiveVariationColumns.map((variation) => {
-                                        const line = row.linesByVariation.get(String(variation.itemVariationId))
-                                        if (!line) {
-                                            return <td key={`${row.key}-${variation.itemVariationId}`} className={`px-3 py-4 align-top text-sm text-slate-300 ${variation.isReference ? "bg-blue-50/30" : ""}`}>—</td>
-                                        }
-                                        return (
-                                            <td key={`${row.key}-${variation.itemVariationId}`} className={`px-3 py-4 align-top ${variation.isReference ? "bg-blue-50/30" : ""}`}>
-                                                <InlineVariationCellEditor
-                                                    recipeId={recipe.id}
-                                                    section="variacoes"
-                                                    line={line}
-                                                    lineUnit={row.unit}
-                                                    showVariationLoss={showVariationLoss}
-                                                    globalLossPct={Number(row.defaultLossPct || 0)}
-                                                />
-                                            </td>
-                                        )
-                                    })}
-                                    <td className="px-3 py-4 align-top text-right">
-                                        <Form method="post" action=".." preventScrollReset className="inline">
-                                            <input type="hidden" name="recipeId" value={recipe.id} />
-                                            <input type="hidden" name="tab" value="variacoes" />
-                                            <input type="hidden" name="recipeIngredientId" value={row.recipeIngredientId || ""} />
-                                            <input type="hidden" name="recipeLineId" value={row.linesByVariation.values().next().value?.id || ""} />
-                                            <button
-                                                type="submit"
-                                                name="_action"
-                                                value="recipe-ingredient-delete"
-                                                className="flex h-7 w-7 items-center justify-center rounded text-slate-300 transition-colors hover:text-red-400"
-                                                title="Remover ingrediente"
-                                                aria-label="Remover ingrediente"
-                                            >
-                                                <Trash2 size={13} />
-                                            </button>
-                                        </Form>
+                                            {variation.variationName || "Variação"}
+                                            {variation.isReference ? <span className="ml-1 text-slate-400">★</span> : null}
+                                        </button>
+                                    )
+                                })
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-4">
+                        <label className="flex cursor-pointer select-none items-center gap-2 text-sm text-slate-600">
+                            <input
+                                type="checkbox"
+                                className="h-3.5 w-3.5 rounded border-slate-300"
+                                checked={showVariationLoss}
+                                onChange={(event) => setShowVariationLoss(event.target.checked)}
+                            />
+                            Perda por variação
+                        </label>
+                        <Form method="post" action=".." preventScrollReset>
+                            <input type="hidden" name="recipeId" value={recipe.id} />
+                            <input type="hidden" name="tab" value="variacoes" />
+                            <button
+                                type="submit"
+                                name="_action"
+                                value="recipe-lines-recalc"
+                                className="inline-flex items-center gap-1.5 text-sm text-slate-500 transition-colors hover:text-slate-900"
+                            >
+                                <RefreshCw size={13} />
+                                Recalcular
+                            </button>
+                        </Form>
+                    </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                    <table className="min-w-full border-separate border-spacing-0 text-sm">
+                        <thead>
+                            <tr>
+                                <th className="sticky left-0 z-10 bg-white px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-400">Ingrediente</th>
+                                <th className="w-24 bg-white px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-400">UM</th>
+                                <th className="w-32 bg-white px-3 py-3 text-left">
+                                    <TooltipProvider>
+                                        <Tooltip>
+                                            <TooltipTrigger className="flex cursor-default items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                                                Perda
+                                                <AlertCircle size={11} className="text-slate-300" />
+                                            </TooltipTrigger>
+                                            <TooltipContent className="max-w-xs text-[12px]">
+                                                A perda (%) representa o que se perde no preparo (evaporação, redução etc). Exemplo: 20% de perda em 1 kg resulta em 1,250 kg bruto a comprar.
+                                            </TooltipContent>
+                                        </Tooltip>
+                                    </TooltipProvider>
+                                </th>
+                                {effectiveVariationColumns.map((variation, index) => {
+                                    const metric = variationMetrics[index]
+                                    const missing = metric.filledQtyCells < requiredCellCount
+                                    const hasZero = metric.zeroCostCells > 0
+                                    return (
+                                        <th key={variation.itemVariationId} className={`min-w-[200px] px-3 py-3 text-left ${variation.isReference ? "bg-slate-50" : "bg-white"}`}>
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-700">
+                                                    {variation.variationName || "Base"}
+                                                </span>
+                                                {variation.isReference ? <span className="text-[11px] text-slate-400">★</span> : null}
+                                                {missing ? <span className="h-1.5 w-1.5 rounded-full bg-amber-400" title="Campos pendentes" /> : null}
+                                                {!missing && hasZero ? <span className="h-1.5 w-1.5 rounded-full bg-orange-400" title="Custo 0" /> : null}
+                                            </div>
+                                            <div className="mt-1 grid grid-cols-2 gap-x-2 gap-y-1 text-[11px] text-slate-400">
+                                                <span>Total</span>
+                                                <span className="text-right font-mono text-sm font-semibold text-slate-700">{formatMoneyCompact(metric.totalLast)}</span>
+                                                <span>Médio</span>
+                                                <span className="text-right font-mono text-sm font-semibold text-slate-700">{formatMoneyCompact(metric.totalAvg)}</span>
+                                            </div>
+                                        </th>
+                                    )
+                                })}
+                                <th className="w-8 bg-white px-3 py-3" />
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {compositionRows.length === 0 ? (
+                                <tr>
+                                    <td colSpan={effectiveVariationColumns.length + 4} className="px-4 py-12 text-center text-sm text-slate-400">
+                                        Nenhum item na composição. Primeiro monte a base na página Composição.
                                     </td>
                                 </tr>
-                            ))
-                        )}
-                    </tbody>
-                </table>
-            </div>
+                            ) : (
+                                compositionRowsWithUnit.map((row) => (
+                                    <tr key={row.key} className="align-top">
+                                        <td className="sticky left-0 border-t border-slate-100 bg-white px-4 py-4 align-top">
+                                            <Link
+                                                to={`/admin/items/${row.itemId}/main`}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className="block max-w-[220px] truncate text-sm font-medium text-slate-900 underline-offset-2 hover:underline"
+                                                title={row.itemName}
+                                            >
+                                                {row.itemName}
+                                            </Link>
+                                            <div className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-slate-400">
+                                                <span>Ultimo custo</span>
+                                                <span className="text-right font-mono text-[13px] font-semibold text-slate-700">{formatMoneyCompact(row.lastUnitCostAmount)}</span>
+                                                <span>Custo medio</span>
+                                                <span className="text-right font-mono text-[13px] font-semibold text-slate-700">{formatMoneyCompact(row.avgUnitCostAmount)}</span>
+                                            </div>
+                                        </td>
+                                        <td className="border-t border-slate-100 px-3 py-4 align-top">
+                                            <IngredientUnitEditor
+                                                recipeId={recipe.id}
+                                                section="variacoes"
+                                                recipeIngredientId={row.recipeIngredientId}
+                                                currentUnit={row.unit}
+                                                options={(() => {
+                                                    const options = Array.from(new Set([
+                                                        String(row.itemConsumptionUm || "").trim().toUpperCase(),
+                                                        String(row.unit || "").trim().toUpperCase(),
+                                                    ].filter(Boolean)))
+                                                    return options.length > 0 ? options : ["UN"]
+                                                })()}
+                                            />
+                                        </td>
+                                        <td className="border-t border-slate-100 px-3 py-4 align-top">
+                                            <IngredientLossEditor
+                                                recipeId={recipe.id}
+                                                section="variacoes"
+                                                recipeIngredientId={row.recipeIngredientId}
+                                                defaultLossPct={Number(row.defaultLossPct || 0)}
+                                            />
+                                        </td>
+                                        {effectiveVariationColumns.map((variation) => {
+                                            const line = row.linesByVariation.get(String(variation.itemVariationId))
+                                            if (!line) {
+                                                return (
+                                                    <td
+                                                        key={`${row.key}-${variation.itemVariationId}`}
+                                                        className={`border-t border-slate-100 px-3 py-4 align-top text-sm text-slate-300 ${variation.isReference ? "bg-slate-50" : ""}`}
+                                                    >
+                                                        —
+                                                    </td>
+                                                )
+                                            }
+                                            return (
+                                                <td key={`${row.key}-${variation.itemVariationId}`} className={`border-t border-slate-100 px-3 py-4 align-top ${variation.isReference ? "bg-slate-50" : ""}`}>
+                                                    <InlineVariationCellEditor
+                                                        recipeId={recipe.id}
+                                                        section="variacoes"
+                                                        line={line}
+                                                        lineUnit={row.unit}
+                                                        showVariationLoss={showVariationLoss}
+                                                        globalLossPct={Number(row.defaultLossPct || 0)}
+                                                    />
+                                                </td>
+                                            )
+                                        })}
+                                        <td className="border-t border-slate-100 px-3 py-4 align-top text-right">
+                                            <Form method="post" action=".." preventScrollReset className="inline">
+                                                <input type="hidden" name="recipeId" value={recipe.id} />
+                                                <input type="hidden" name="tab" value="variacoes" />
+                                                <input type="hidden" name="recipeIngredientId" value={row.recipeIngredientId || ""} />
+                                                <input type="hidden" name="recipeLineId" value={row.linesByVariation.values().next().value?.id || ""} />
+                                                <button
+                                                    type="submit"
+                                                    name="_action"
+                                                    value="recipe-ingredient-delete"
+                                                    className="flex h-7 w-7 items-center justify-center rounded text-slate-300 transition-colors hover:bg-slate-100 hover:text-red-400"
+                                                    title="Remover ingrediente"
+                                                    aria-label="Remover ingrediente"
+                                                >
+                                                    <Trash2 size={13} />
+                                                </button>
+                                            </Form>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
         </div>
     )
 }

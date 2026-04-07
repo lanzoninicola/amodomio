@@ -4,14 +4,20 @@ import { createCookieSessionStorage } from "@remix-run/node";
 import { Authenticator } from "remix-auth";
 import { GoogleStrategy } from "remix-auth-google";
 import {
-  GOOGLE_AUTH_COOKIE_SECRET,
+  AUTH_COOKIE_SECRET,
   GOOGLE_CALLBACK_URL,
   GOOGLE_CLIENT_ID,
   GOOGLE_CLIENT_SECRET,
 } from "./constants.server";
 import { LoggedUser } from "./types.server";
+import prismaClient from "~/lib/prisma/client.server";
 
-const cookieSecret = GOOGLE_AUTH_COOKIE_SECRET || "AM0D0MI02O24";
+function normalizeUserEmail(email?: string | null) {
+  const value = String(email || "").trim().toLowerCase();
+  return value || null;
+}
+
+const cookieSecret = AUTH_COOKIE_SECRET || "AM0D0MI02O24";
 
 const cookieOptions = {
   path: "/",
@@ -37,32 +43,55 @@ let googleStrategy = new GoogleStrategy(
     callbackURL: GOOGLE_CALLBACK_URL || "",
   },
   async ({ profile }) => {
-    const emailWhitelist = process.env.GOOGLE_AUTH_EMAIL_WHITELIST;
-    const emailWhitelistArray = emailWhitelist?.split(",");
+    const emailWhitelistArray = String(process.env.GOOGLE_AUTH_EMAIL_WHITELIST || "")
+      .split(",")
+      .map((email) => normalizeUserEmail(email))
+      .filter((email): email is string => Boolean(email));
 
-    console.log("google.server.ts", emailWhitelistArray);
-
-    const emailInbound = profile.emails[0].value;
+    const emailInbound = normalizeUserEmail(profile.emails?.[0]?.value);
 
     if (!emailInbound) {
       return null;
     }
 
-    if (!emailWhitelist) {
+    if (!emailWhitelistArray.length) {
       return null;
     }
 
-    if (emailWhitelistArray && !emailWhitelistArray.includes(emailInbound)) {
+    if (!emailWhitelistArray.includes(emailInbound)) {
       return false;
     }
 
-    const user: LoggedUser = {
-      name: profile.displayName,
-      email: emailInbound,
-      avatarURL: profile.photos[0].value,
-    };
+    const systemUser = await prismaClient.userAccess.findFirst({
+      where: {
+        email: emailInbound,
+        isActive: true,
+      },
+      select: {
+        id: true,
+        username: true,
+        name: true,
+        email: true,
+        avatarUrl: true,
+        roles: true,
+      },
+    });
 
-    console.log("google.server.ts", user);
+    const user: LoggedUser = systemUser
+      ? {
+          id: systemUser.id,
+          username: systemUser.username,
+          name: systemUser.name || profile.displayName,
+          email: systemUser.email || emailInbound,
+          avatarURL: systemUser.avatarUrl || profile.photos?.[0]?.value || "",
+          roles: systemUser.roles,
+        }
+      : {
+          name: profile.displayName,
+          email: emailInbound,
+          avatarURL: profile.photos?.[0]?.value || "",
+          roles: [],
+        };
 
     return user;
   }

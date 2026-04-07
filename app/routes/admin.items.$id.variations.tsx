@@ -10,6 +10,7 @@ type VariationOption = {
   kind: string;
   code: string;
   name: string;
+  sortOrderIndex: number;
 };
 
 type LinkedVariation = {
@@ -34,8 +35,8 @@ export async function loader({ params }: LoaderFunctionArgs) {
         where: {
           deletedAt: null,
         },
-        select: { id: true, kind: true, code: true, name: true },
-        orderBy: [{ kind: "asc" }, { name: "asc" }],
+        select: { id: true, kind: true, code: true, name: true, sortOrderIndex: true },
+        orderBy: [{ kind: "asc" }, { sortOrderIndex: "asc" }, { name: "asc" }],
       }),
       db.itemVariation.findMany({
         where: { itemId: id, deletedAt: null },
@@ -123,7 +124,7 @@ export default function AdminItemVariationsTab() {
                       <div className="min-w-0">
                         <div className="truncate text-sm font-medium text-slate-900">{variation.name}</div>
                         <div className="text-xs text-slate-500">
-                          {variation.kind} • {variation.code}
+                          {variation.kind} • {variation.code} • sort {Number(variation.sortOrderIndex || 0)}
                         </div>
                       </div>
                       <input
@@ -155,9 +156,9 @@ export default function AdminItemVariationsTab() {
                   >
                     <div className="min-w-0">
                       <div className="truncate text-sm font-medium text-slate-900">{variation.name}</div>
-                      <div className="text-xs text-slate-500">
-                        {variation.kind} • {variation.code}
-                      </div>
+                        <div className="text-xs text-slate-500">
+                          {variation.kind} • {variation.code} • sort {Number(variation.sortOrderIndex || 0)}
+                        </div>
                     </div>
                     <div className="flex items-center gap-2 text-xs text-slate-700">
                       <input

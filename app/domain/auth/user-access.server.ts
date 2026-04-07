@@ -1,8 +1,8 @@
 import type {
-  AccessAuditProvider,
-  AdminUserAccess,
-  AdminUserRole,
-  AdminUserSession,
+  AuditProvider,
+  UserAccess,
+  UserRole,
+  UserSession,
 } from "@prisma/client";
 import prismaClient from "~/lib/prisma/client.server";
 import { sendTextMessage } from "~/domain/z-api/zapi.service.server";
@@ -11,7 +11,7 @@ import { generateTemporaryPassword, hashPassword, verifyPassword } from "./passw
 import type { AuthenticatedUserProfile } from "./types.server";
 
 const TEMPORARY_PASSWORD_WINDOW_MS = 30 * 60 * 1000;
-const ROLE_INHERITANCE: Record<AdminUserRole, AdminUserRole[]> = {
+const ROLE_INHERITANCE: Record<UserRole, UserRole[]> = {
   user: ["user"],
   admin: ["admin", "user"],
   superAdmin: ["superAdmin", "admin", "user"],
@@ -37,7 +37,7 @@ export function getLegacyWhitelistedEmails() {
 export async function getAuthenticatedUserFromId(userId?: string | null) {
   if (!userId) return null;
 
-  const user = await prismaClient.adminUserAccess.findUnique({
+  const user = await prismaClient.userAccess.findUnique({
     where: { id: userId },
   });
 
@@ -46,23 +46,23 @@ export async function getAuthenticatedUserFromId(userId?: string | null) {
   return getAuthenticatedUserProfile(user, "system");
 }
 
-export function normalizeAdminUserRoles(roles?: AdminUserRole[] | null) {
-  const normalized = Array.from(new Set((roles || []).filter(Boolean))) as AdminUserRole[];
+export function normalizeUserRoles(roles?: UserRole[] | null) {
+  const normalized = Array.from(new Set((roles || []).filter(Boolean))) as UserRole[];
 
   return normalized.length ? normalized : ["user"];
 }
 
-export function getEffectiveRoles(user: { roles: AdminUserRole[] }) {
+export function getEffectiveRoles(user: { roles: UserRole[] }) {
   return Array.from(
     new Set(
-      normalizeAdminUserRoles(user.roles).flatMap((role) => ROLE_INHERITANCE[role] || [role])
+      normalizeUserRoles(user.roles).flatMap((role) => ROLE_INHERITANCE[role] || [role])
     )
   );
 }
 
 export function hasAnyRole(
-  user: { roles: AdminUserRole[] },
-  roles: AdminUserRole[]
+  user: { roles: UserRole[] },
+  roles: UserRole[]
 ) {
   const effectiveRoles = getEffectiveRoles(user);
   return roles.some((role) => effectiveRoles.includes(role));
@@ -86,7 +86,7 @@ export async function authenticatePasswordLogin(params: {
     return null;
   }
 
-  const user = await prismaClient.adminUserAccess.findFirst({
+  const user = await prismaClient.userAccess.findFirst({
     where: { OR: whereClauses as any },
   });
 
@@ -138,7 +138,7 @@ export async function authenticatePasswordLogin(params: {
     return null;
   }
 
-  const nextData: Partial<AdminUserAccess> & Record<string, any> = {
+  const nextData: Partial<UserAccess> & Record<string, any> = {
     lastLoginAt: new Date(),
     lastPasswordLoginAt: new Date(),
   };
@@ -151,7 +151,7 @@ export async function authenticatePasswordLogin(params: {
     nextData.temporaryPasswordSentAt = null;
   }
 
-  const updated = await prismaClient.adminUserAccess.update({
+  const updated = await prismaClient.userAccess.update({
     where: { id: user.id },
     data: nextData,
   });
@@ -171,7 +171,7 @@ export async function issueTemporaryPassword(params: {
     };
   }
 
-  const user = await prismaClient.adminUserAccess.findUnique({
+  const user = await prismaClient.userAccess.findUnique({
     where: { username },
   });
 
@@ -236,7 +236,7 @@ export async function issueTemporaryPassword(params: {
   const expiresAt = new Date(Date.now() + TEMPORARY_PASSWORD_WINDOW_MS);
   const temporaryPasswordHash = await hashPassword(temporaryPassword);
 
-  const updated = await prismaClient.adminUserAccess.update({
+  const updated = await prismaClient.userAccess.update({
     where: { id: user.id },
     data: {
       temporaryPasswordHash,
@@ -309,7 +309,7 @@ export async function authorizeGoogleUser(params: {
     whitelist: getLegacyWhitelistedEmails(),
   });
 
-  const existing = await prismaClient.adminUserAccess.findFirst({
+  const existing = await prismaClient.userAccess.findFirst({
     where: {
       OR: [
         { email },
@@ -350,7 +350,7 @@ export async function authorizeGoogleUser(params: {
       return null;
     }
 
-    const updated = await prismaClient.adminUserAccess.update({
+    const updated = await prismaClient.userAccess.update({
       where: { id: existing.id },
       data: {
         email,
@@ -385,7 +385,7 @@ export async function authorizeGoogleUser(params: {
     return null;
   }
 
-  const created = await prismaClient.adminUserAccess.create({
+  const created = await prismaClient.userAccess.create({
     data: {
       username: await buildAvailableUsernameFromEmail(email),
       email,
@@ -417,7 +417,7 @@ export async function createOrUpdateManagedUser(params: {
   email?: string | null;
   name?: string | null;
   mobilePhone?: string | null;
-  roles?: AdminUserRole[];
+  roles?: UserRole[];
   isActive: boolean;
   allowGoogleLogin: boolean;
   allowPasswordLogin: boolean;
@@ -438,7 +438,7 @@ export async function createOrUpdateManagedUser(params: {
     email,
     name: String(params.name || "").trim() || null,
     mobilePhone,
-    roles: normalizeAdminUserRoles(params.roles),
+    roles: normalizeUserRoles(params.roles),
     isActive: params.isActive,
     allowGoogleLogin: params.allowGoogleLogin,
     allowPasswordLogin: params.allowPasswordLogin,
@@ -455,20 +455,20 @@ export async function createOrUpdateManagedUser(params: {
   }
 
   if (params.id) {
-    return prismaClient.adminUserAccess.update({
+    return prismaClient.userAccess.update({
       where: { id: params.id },
       data: data as any,
     });
   }
 
-  return prismaClient.adminUserAccess.create({
+  return prismaClient.userAccess.create({
     data: data as any,
   });
 }
 
 export function getAuthenticatedUserProfile(
-  user: AdminUserAccess & { roles: AdminUserRole[] },
-  authProvider: AccessAuditProvider
+  user: UserAccess & { roles: UserRole[] },
+  authProvider: AuditProvider
 ): AuthenticatedUserProfile {
   return {
     id: user.id,
@@ -477,14 +477,14 @@ export function getAuthenticatedUserProfile(
     email: user.email || "",
     avatarURL: user.avatarUrl || "",
     mobilePhone: user.mobilePhone || null,
-    roles: normalizeAdminUserRoles(user.roles),
+    roles: normalizeUserRoles(user.roles),
     provisionSource: user.source,
     authProvider,
   };
 }
 
 export async function createAccessAudit(params: {
-  provider: AccessAuditProvider;
+  provider: AuditProvider;
   eventType:
     | "loginSuccess"
     | "loginFailure"
@@ -497,10 +497,10 @@ export async function createAccessAudit(params: {
     | "sessionRevoked"
     | "sessionBlocked";
   success: boolean;
-  user?: AdminUserAccess | null;
+  user?: UserAccess | null;
   userId?: string | null;
   actorUserId?: string | null;
-  session?: AdminUserSession | null;
+  session?: UserSession | null;
   username?: string | null;
   email?: string | null;
   request?: Request;
@@ -508,7 +508,7 @@ export async function createAccessAudit(params: {
 }) {
   const requestMeta = params.request ? getRequestMeta(params.request) : null;
 
-  await prismaClient.adminAccessAudit.create({
+  await prismaClient.accessAudit.create({
     data: {
       userId: params.user?.id || params.userId || null,
       actorUserId: params.actorUserId || null,
@@ -541,7 +541,7 @@ async function buildAvailableUsernameFromEmail(email: string) {
   let counter = 1;
 
   while (true) {
-    const exists = await prismaClient.adminUserAccess.findUnique({
+    const exists = await prismaClient.userAccess.findUnique({
       where: { username: candidate },
       select: { id: true },
     });

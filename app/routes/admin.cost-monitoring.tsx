@@ -1,7 +1,9 @@
 import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { Form, Link, useLoaderData, useNavigation } from "@remix-run/react";
+import { useEffect, useState } from "react";
 import { Search } from "lucide-react";
 import { CostTrendChart } from "~/components/item-cost-monitoring/cost-trend-chart";
+import { SearchableMultiSelect } from "~/components/ui/searchable-multi-select";
 import { loadItemCostMonitoringPayload } from "~/domain/item/item-cost-monitoring.server";
 import { ok } from "~/utils/http-response.server";
 
@@ -53,10 +55,27 @@ export default function AdminCostMonitoringRoute() {
   const payload = data.payload as any;
   const navigation = useNavigation();
   const items = payload.items || [];
-  const filters = payload.filters || { q: "" };
+  const filters = payload.filters || { q: "", itemIds: [] };
+  const itemOptions = (payload.itemOptions || []).map((item: any) => ({
+    value: String(item.id || ""),
+    label: String(item.name || ""),
+    searchText: [
+      item.name,
+      item.classification,
+      item.purchaseUm,
+      item.consumptionUm,
+    ]
+      .filter(Boolean)
+      .join(" "),
+  }));
   const averageWindowDays = Number(payload.averageWindowDays || 30);
   const chartWindowDays = Number(payload.chartWindowDays || 60);
   const isLoading = navigation.state !== "idle";
+  const [selectedItemIds, setSelectedItemIds] = useState<string[]>(Array.isArray(filters.itemIds) ? filters.itemIds : []);
+
+  useEffect(() => {
+    setSelectedItemIds(Array.isArray(filters.itemIds) ? filters.itemIds : []);
+  }, [filters.itemIds]);
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8">
@@ -88,18 +107,25 @@ export default function AdminCostMonitoringRoute() {
       </div>
 
       <Form method="get" className="border-b border-slate-200 pb-4">
+        {selectedItemIds.map((itemId) => (
+          <input key={itemId} type="hidden" name="itemId" value={itemId} />
+        ))}
         <label className="block">
           <span className="text-sm font-medium text-slate-700">Produto ou insumo</span>
           <div className="mt-2 flex items-center gap-2">
-            <input
-              type="search"
-              name="q"
-              defaultValue={filters.q}
-              placeholder="Ex.: muçarela, tomate, calabresa"
-              className="h-11 min-w-0 flex-1 rounded-xl border border-slate-300 bg-white px-4 text-sm outline-none transition focus:border-slate-900 placeholder:text-slate-400"
+            <SearchableMultiSelect
+              values={selectedItemIds}
+              onValuesChange={setSelectedItemIds}
+              options={itemOptions}
+              placeholder="Selecione um ou mais itens"
+              searchPlaceholder="Digite para buscar itens..."
+              emptyText="Nenhum item encontrado."
+              triggerClassName="min-w-0 flex-1 max-w-none"
+              contentClassName="w-[var(--radix-popover-trigger-width)]"
             />
             <button
               type="submit"
+              disabled={selectedItemIds.length === 0}
               className="inline-flex h-10 items-center gap-2 rounded-full bg-slate-950 px-4 text-sm font-medium text-white"
             >
               <Search className="h-4 w-4" />
@@ -109,15 +135,15 @@ export default function AdminCostMonitoringRoute() {
         </label>
       </Form>
 
-      {!filters.q ? (
+      {selectedItemIds.length === 0 ? (
         <section className="py-8 text-center text-sm text-slate-600">
-          Digite um nome para consultar último custo, custo médio, fornecedores recentes e andamento do custo.
+          Selecione um ou mais itens para consultar último custo, custo médio, fornecedores recentes e andamento do custo.
         </section>
       ) : null}
 
-      {filters.q && items.length === 0 ? (
+      {selectedItemIds.length > 0 && items.length === 0 ? (
         <section className="py-8 text-center text-sm text-slate-600">
-          Nenhum item ativo encontrado para <span className="font-semibold text-slate-900">{filters.q}</span>.
+          Nenhum item ativo encontrado para a seleção informada.
         </section>
       ) : null}
 

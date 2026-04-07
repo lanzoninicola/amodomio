@@ -316,7 +316,10 @@ async function buildRecipeChatGptImportPreview(params: {
 }
 
 export function formatMoney(value: number, decimals: number = 2) {
-  return `R$ ${formatDecimalPlaces(Number(value || 0), decimals)}`;
+  return `R$ ${Number(value || 0).toLocaleString("pt-BR", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  })}`;
 }
 
 export const RECIPE_SECTIONS = ["cadastro", "composicao", "variacoes"] as const;
@@ -1267,10 +1270,10 @@ export function InlineVariationCellEditor({
             title={hasPendingChanges() ? "Alterações pendentes" : "Salvo"}
           />
         </div>
-        <div className="space-y-0.5 text-[11px] text-slate-400">
+        <div className="space-y-1 text-[11px] text-slate-400">
           <div className="flex items-center justify-between gap-3">
             <span>Qtd bruta</span>
-            <span className="font-medium text-slate-600">
+            <span className="font-medium text-xs text-slate-600">
               {formatDecimalPlaces(Number(grossQty || 0), 4)}
             </span>
           </div>
@@ -1278,19 +1281,19 @@ export function InlineVariationCellEditor({
             <span>Custo total</span>
             <span
               className={cn(
-                "font-medium",
+                "font-mono text-sm font-semibold",
                 Number(line.lastTotalCostAmount || 0) <= 0
                   ? "text-slate-400"
                   : "text-slate-600"
               )}
             >
-              {formatMoney(Number(line.lastTotalCostAmount || 0), 4)}
+              {formatMoney(Number(line.lastTotalCostAmount || 0), 2)}
             </span>
           </div>
           <div className="flex items-center justify-between gap-3">
             <span>Custo médio</span>
-            <span className="font-medium text-slate-600">
-              {formatMoney(Number(line.avgTotalCostAmount || 0), 4)}
+            <span className="font-mono text-sm font-semibold text-slate-600">
+              {formatMoney(Number(line.avgTotalCostAmount || 0), 2)}
             </span>
           </div>
         </div>

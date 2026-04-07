@@ -40,10 +40,8 @@ export default function ItemCostSheetsOutlet() {
           </div>
 
           <div className="space-y-1">
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-950">Fichas de custo</h1>
-            <p className="max-w-3xl text-sm text-slate-500">
-              Índice das fichas vinculadas a itens, seguindo a lógica de variações definida no item vinculado.
-            </p>
+            <h1 className="text-xl font-semibold tracking-tight text-slate-950">Fichas de custo</h1>
+
           </div>
         </section>
 

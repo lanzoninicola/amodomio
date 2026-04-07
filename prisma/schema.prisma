@@ -298,13 +298,15 @@ model MeasurementUnitConversion {
 }
 
 model Variation {
-  id        String    @id @default(uuid())
-  kind      String
-  code      String
-  name      String
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at")
-  deletedAt DateTime? @map("deleted_at")
+  id                    String    @id @default(uuid())
+  kind                  String
+  code                  String
+  name                  String
+  sortOrderIndex        Int       @default(0) @map("sort_order_index")
+  additionalInformation String?   @map("additional_information")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @default(now()) @updatedAt @map("updated_at")
+  deletedAt             DateTime? @map("deleted_at")
 
   ItemVariation ItemVariation[]
   Recipe        Recipe[]
@@ -1395,19 +1397,19 @@ model Setting {
   @@map("settings")
 }
 
-enum AdminUserRole {
+enum UserRole {
   user
   admin
   superAdmin @map("super-admin")
 }
 
-enum AdminUserProvisionSource {
+enum UserProvisionSource {
   manual
   seed
   whitelistMigration @map("whitelist-migration")
 }
 
-enum AccessAuditEventType {
+enum AuditEventType {
   loginSuccess @map("login-success")
   loginFailure @map("login-failure")
   logout
@@ -1420,107 +1422,107 @@ enum AccessAuditEventType {
   sessionBlocked @map("session-blocked")
 }
 
-enum AccessAuditProvider {
+enum AuditProvider {
   google
   password
   system
 }
 
-enum AdminUserSessionStatus {
+enum UserSessionStatus {
   active
   revoked
   blocked
   expired
 }
 
-model AdminUserAccess {
-  id                       String                      @id @default(uuid())
-  username                 String                      @unique
-  email                    String?                     @unique
+model UserAccess {
+  id                       String                @id @default(uuid())
+  username                 String                @unique
+  email                    String?               @unique
   name                     String?
-  mobilePhone              String?                     @map("mobile_phone")
-  avatarUrl                String?                     @map("avatar_url")
-  googleSub                String?                     @unique @map("google_sub")
-  roles                    AdminUserRole[]             @default([user])
-  isActive                 Boolean                     @default(true) @map("is_active")
-  allowGoogleLogin         Boolean                     @default(false) @map("allow_google_login")
-  allowPasswordLogin       Boolean                     @default(false) @map("allow_password_login")
-  passwordHash             String?                     @map("password_hash")
-  passwordUpdatedAt        DateTime?                   @map("password_updated_at")
-  temporaryPasswordHash    String?                     @map("temporary_password_hash")
-  temporaryPasswordExpiresAt DateTime?                 @map("temporary_password_expires_at")
-  temporaryPasswordSentAt  DateTime?                   @map("temporary_password_sent_at")
-  lastLoginAt              DateTime?                   @map("last_login_at")
-  lastGoogleLoginAt        DateTime?                   @map("last_google_login_at")
-  lastPasswordLoginAt      DateTime?                   @map("last_password_login_at")
-  source                   AdminUserProvisionSource    @default(manual)
-  createdAt                DateTime                    @default(now()) @map("created_at")
-  updatedAt                DateTime                    @default(now()) @updatedAt @map("updated_at")
+  mobilePhone              String?               @map("mobile_phone")
+  avatarUrl                String?               @map("avatar_url")
+  googleSub                String?               @unique @map("google_sub")
+  roles                    UserRole[]            @default([user])
+  isActive                 Boolean               @default(true) @map("is_active")
+  allowGoogleLogin         Boolean               @default(false) @map("allow_google_login")
+  allowPasswordLogin       Boolean               @default(false) @map("allow_password_login")
+  passwordHash             String?               @map("password_hash")
+  passwordUpdatedAt        DateTime?             @map("password_updated_at")
+  temporaryPasswordHash    String?               @map("temporary_password_hash")
+  temporaryPasswordExpiresAt DateTime?           @map("temporary_password_expires_at")
+  temporaryPasswordSentAt  DateTime?             @map("temporary_password_sent_at")
+  lastLoginAt              DateTime?             @map("last_login_at")
+  lastGoogleLoginAt        DateTime?             @map("last_google_login_at")
+  lastPasswordLoginAt      DateTime?             @map("last_password_login_at")
+  source                   UserProvisionSource   @default(manual)
+  createdAt                DateTime              @default(now()) @map("created_at")
+  updatedAt                DateTime              @default(now()) @updatedAt @map("updated_at")
 
-  AccessAudit       AdminAccessAudit[]      @relation("AccessAuditUser")
-  AuthoredAudit     AdminAccessAudit[]      @relation("AccessAuditActor")
-  AdminUserSession  AdminUserSession[]      @relation("AdminUserSessions")
-  RevokedSessions   AdminUserSession[]      @relation("AdminUserSessionRevoker")
+  accessAudit      AccessAudit[] @relation("AccessAuditUser")
+  authoredAudit    AccessAudit[] @relation("AccessAuditActor")
+  userSessions     UserSession[] @relation("UserSessions")
+  revokedSessions  UserSession[] @relation("UserSessionRevoker")
 
-  @@index([isActive], map: "admin_user_access_is_active_idx")
-  @@index([allowGoogleLogin], map: "admin_user_access_allow_google_login_idx")
-  @@index([allowPasswordLogin], map: "admin_user_access_allow_password_login_idx")
-  @@map("admin_user_access")
+  @@index([isActive], map: "user_access_is_active_idx")
+  @@index([allowGoogleLogin], map: "user_access_allow_google_login_idx")
+  @@index([allowPasswordLogin], map: "user_access_allow_password_login_idx")
+  @@map("user_access")
 }
 
-model AdminUserSession {
-  id               String                 @id @default(uuid())
-  userId           String                 @map("user_id")
-  authProvider     AccessAuditProvider    @map("auth_provider")
-  sessionSecretHash String                @map("session_secret_hash")
-  status           AdminUserSessionStatus @default(active)
-  deviceLabel      String?                @map("device_label")
-  ipAddress        String?                @map("ip_address")
-  userAgent        String?                @map("user_agent")
-  lastActivityAt   DateTime               @default(now()) @map("last_activity_at")
-  idleExpiresAt    DateTime               @map("idle_expires_at")
-  absoluteExpiresAt DateTime              @map("absolute_expires_at")
-  revokedAt        DateTime?              @map("revoked_at")
-  revokedReason    String?                @map("revoked_reason")
-  revokedByUserId  String?                @map("revoked_by_user_id")
-  createdAt        DateTime               @default(now()) @map("created_at")
-  updatedAt        DateTime               @default(now()) @updatedAt @map("updated_at")
+model UserSession {
+  id                String            @id @default(uuid())
+  userId            String            @map("user_id")
+  authProvider      AuditProvider     @map("auth_provider")
+  sessionSecretHash String            @map("session_secret_hash")
+  status            UserSessionStatus @default(active)
+  deviceLabel       String?           @map("device_label")
+  ipAddress         String?           @map("ip_address")
+  userAgent         String?           @map("user_agent")
+  lastActivityAt    DateTime          @default(now()) @map("last_activity_at")
+  idleExpiresAt     DateTime          @map("idle_expires_at")
+  absoluteExpiresAt DateTime          @map("absolute_expires_at")
+  revokedAt         DateTime?         @map("revoked_at")
+  revokedReason     String?           @map("revoked_reason")
+  revokedByUserId   String?           @map("revoked_by_user_id")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @default(now()) @updatedAt @map("updated_at")
 
-  User       AdminUserAccess   @relation("AdminUserSessions", fields: [userId], references: [id], onDelete: Cascade)
-  RevokedBy  AdminUserAccess?  @relation("AdminUserSessionRevoker", fields: [revokedByUserId], references: [id], onDelete: SetNull)
-  AccessAudit AdminAccessAudit[]
+  user        UserAccess   @relation("UserSessions", fields: [userId], references: [id], onDelete: Cascade)
+  revokedBy   UserAccess?  @relation("UserSessionRevoker", fields: [revokedByUserId], references: [id], onDelete: SetNull)
+  accessAudit AccessAudit[]
 
-  @@index([userId, status], map: "admin_user_session_user_id_status_idx")
-  @@index([status, idleExpiresAt], map: "admin_user_session_status_idle_expires_at_idx")
-  @@index([absoluteExpiresAt], map: "admin_user_session_absolute_expires_at_idx")
-  @@map("admin_user_session")
+  @@index([userId, status], map: "user_session_user_id_status_idx")
+  @@index([status, idleExpiresAt], map: "user_session_status_idle_expires_at_idx")
+  @@index([absoluteExpiresAt], map: "user_session_absolute_expires_at_idx")
+  @@map("user_session")
 }
 
-model AdminAccessAudit {
-  id          String               @id @default(uuid())
-  userId      String?              @map("user_id")
-  actorUserId String?              @map("actor_user_id")
-  sessionId   String?              @map("session_id")
-  username    String?              @map("username")
-  email       String?              @map("email")
-  provider    AccessAuditProvider
-  eventType   AccessAuditEventType @map("event_type")
-  success     Boolean              @default(true)
-  sessionDeviceLabel String?       @map("session_device_label")
-  ipAddress   String?              @map("ip_address")
-  userAgent   String?              @map("user_agent")
+model AccessAudit {
+  id                 String         @id @default(uuid())
+  userId             String?        @map("user_id")
+  actorUserId        String?        @map("actor_user_id")
+  sessionId          String?        @map("session_id")
+  username           String?        @map("username")
+  email              String?        @map("email")
+  provider           AuditProvider
+  eventType          AuditEventType @map("event_type")
+  success            Boolean        @default(true)
+  sessionDeviceLabel String?        @map("session_device_label")
+  ipAddress          String?        @map("ip_address")
+  userAgent          String?        @map("user_agent")
   details     Json?
-  createdAt   DateTime             @default(now()) @map("created_at")
+  createdAt          DateTime       @default(now()) @map("created_at")
 
-  User      AdminUserAccess?  @relation("AccessAuditUser", fields: [userId], references: [id], onDelete: SetNull)
-  ActorUser AdminUserAccess?  @relation("AccessAuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
-  Session   AdminUserSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  user      UserAccess?  @relation("AccessAuditUser", fields: [userId], references: [id], onDelete: SetNull)
+  actorUser UserAccess?  @relation("AccessAuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  session   UserSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
 
-  @@index([userId, createdAt], map: "admin_access_audit_user_id_created_at_idx")
-  @@index([actorUserId, createdAt], map: "admin_access_audit_actor_user_id_created_at_idx")
-  @@index([sessionId, createdAt], map: "admin_access_audit_session_id_created_at_idx")
-  @@index([eventType, createdAt], map: "admin_access_audit_event_type_created_at_idx")
-  @@map("admin_access_audit")
+  @@index([userId, createdAt], map: "access_audit_user_id_created_at_idx")
+  @@index([actorUserId, createdAt], map: "access_audit_actor_user_id_created_at_idx")
+  @@index([sessionId, createdAt], map: "access_audit_session_id_created_at_idx")
+  @@index([eventType, createdAt], map: "access_audit_event_type_created_at_idx")
+  @@map("access_audit")
 }
 
 model AiContextProfileVersion {

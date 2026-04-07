@@ -106,6 +106,7 @@ export async function loadItemSellingOverview(params: {
                 id: true,
                 code: true,
                 name: true,
+                sortOrderIndex: true,
               },
             },
           },
@@ -201,6 +202,7 @@ export async function loadItemSellingOverview(params: {
                     id: true,
                     code: true,
                     name: true,
+                    sortOrderIndex: true,
                   },
                 },
               },
@@ -301,7 +303,9 @@ export async function loadItemSellingOverview(params: {
       key: itemVariation.Variation?.code || null,
       name: itemVariation.Variation?.name || "Sem variacao",
       fullName: itemVariation.Variation?.name || "Sem variacao",
-      sortOrderIndex: itemVariation.isReference ? -1 : 0,
+      sortOrderIndex: itemVariation.isReference
+        ? -1
+        : Number(itemVariation.Variation?.sortOrderIndex || 0),
       channels: {},
     });
   }
@@ -316,7 +320,9 @@ export async function loadItemSellingOverview(params: {
         key: itemVariation.Variation?.code || null,
         name: itemVariation.Variation?.name || "Sem variacao",
         fullName: itemVariation.Variation?.name || "Sem variacao",
-        sortOrderIndex: itemVariation.isReference ? -1 : 0,
+        sortOrderIndex: itemVariation.isReference
+          ? -1
+          : Number(itemVariation.Variation?.sortOrderIndex || 0),
         channels: {},
       });
     }

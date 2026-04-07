@@ -27,6 +27,7 @@ function buildItemRecipeChatGptPrompt(params: {
     variationId: variation.variationId || null,
     variationName: variation?.Variation?.name || "Base",
     variationCode: variation?.Variation?.code || null,
+    additionalInformation: variation?.Variation?.additionalInformation || null,
     isReference: Boolean(variation?.isReference),
   }));
 
@@ -79,6 +80,7 @@ function buildItemRecipeChatGptPrompt(params: {
     "As quantidades devem representar o consumo sugerido por variacao.",
     "Se faltar componente estrutural de pizza, seja opinativo e complete a formulacao com bom senso tecnico.",
     "Considere explicitamente massa, molho, queijo base e cobertura principal do sabor.",
+    "Molho de tomate e muçarela devem seguir a base fixa por tamanho definida abaixo, salvo impossibilidade tecnica clara no catalogo.",
     "Considere perdas por tamanho quando fizer sentido, principalmente em ingredientes de cobertura.",
     "Para pizzas, a quantidade de molho e queijo pode variar por tamanho, mantendo proporcionalidade tecnica.",
     "Quando a lista comercial citar ingredientes agregados ou ambiguos, mapeie para os insumos e semiacabados mais adequados do catalogo.",
@@ -120,6 +122,33 @@ function buildItemRecipeChatGptPrompt(params: {
     "VARIACOES_DO_ITEM",
     JSON.stringify(itemVariations, null, 2),
     "",
+    "BASE_FIXA_POR_TAMANHO_PARA_MOLHO_E_MUCARELA",
+    JSON.stringify({
+      instruction: "Use estas quantidades como base obrigatoria para molho de tomate e muçarela nas variacoes de tamanho da pizza.",
+      sizeRules: {
+        medio: {
+          molhoDeTomateG: 200,
+          mucarelaG: 150,
+        },
+        familia: {
+          rule: "x2 tamanho medio",
+          molhoDeTomateG: 400,
+          mucarelaG: 300,
+        },
+        pequena: {
+          rule: "0.5 tamanho medio",
+          molhoDeTomateG: 100,
+          mucarelaG: 75,
+        },
+        individual: {
+          rule: "0.5 tamanho pequena",
+          molhoDeTomateG: 50,
+          mucarelaG: 37.5,
+        },
+      },
+      matchingRule: "Associe cada variacao pelo nome, codigo ou additionalInformation quando indicarem medio, familia, pequena ou individual.",
+    }, null, 2),
+    "",
     "CATALOGO_DE_INGREDIENTES_PERMITIDOS",
     JSON.stringify(allowedIngredients, null, 2),
     "",
@@ -132,6 +161,7 @@ function buildItemRecipeChatGptPrompt(params: {
       pizzaGuidance: [
         "identificar a base da pizza e seus componentes estruturais",
         "usar a lista comercial do sabor como referencia principal para a cobertura",
+        "respeitar a base fixa de molho de tomate e muçarela por tamanho",
         "sugerir quantidades coerentes por tamanho",
         "aplicar defaultLossPct coerente para itens com perda tipica de manipulacao",
       ],

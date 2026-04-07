@@ -277,10 +277,11 @@ async function getItemCostSheetDeletionGuard(
   };
 }
 
-export async function loader({ params }: LoaderFunctionArgs) {
+export async function loader({ request, params }: LoaderFunctionArgs) {
   try {
     const itemCostSheetId = String(params.id || "").trim();
     if (!itemCostSheetId) return badRequest("Ficha de custo inválida");
+    const pathname = new URL(request.url).pathname;
 
     const db = prismaClient as any;
     const currentSheet = await db.itemCostSheet.findUnique({
@@ -293,6 +294,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
     if (!currentSheet) return badRequest("Ficha de custo não encontrada");
     const rootSheetId = currentSheet.baseItemCostSheetId || currentSheet.id;
+    const isCostsTabRequest = pathname.endsWith("/custos");
 
     const [recipeSheets, recipes, referenceSheets, recipeSheetDependencyAgg, unitOptions, activeItemVariationIds] = await Promise.all([
       db.itemCostSheet.findMany({
@@ -302,24 +304,28 @@ export async function loader({ params }: LoaderFunctionArgs) {
         },
         orderBy: [{ createdAt: "asc" }],
       }),
-      db.recipe.findMany({
-        where: {},
-        select: {
-          id: true,
-          name: true,
-          type: true,
-          variationId: true,
-          Variation: { select: { id: true, name: true, kind: true } },
-        },
-        orderBy: [{ updatedAt: "desc" }],
-        take: 300,
-      }),
-      db.itemCostSheet.findMany({
-        where: { isActive: true, baseItemCostSheetId: null },
-        select: { id: true, name: true, itemId: true, costAmount: true },
-        orderBy: [{ updatedAt: "desc" }],
-        take: 300,
-      }),
+      isCostsTabRequest
+        ? db.recipe.findMany({
+          where: {},
+          select: {
+            id: true,
+            name: true,
+            type: true,
+            variationId: true,
+            Variation: { select: { id: true, name: true, kind: true } },
+          },
+          orderBy: [{ updatedAt: "desc" }],
+          take: 300,
+        })
+        : Promise.resolve([]),
+      isCostsTabRequest
+        ? db.itemCostSheet.findMany({
+          where: { isActive: true, baseItemCostSheetId: null },
+          select: { id: true, name: true, itemId: true, costAmount: true },
+          orderBy: [{ updatedAt: "desc" }],
+          take: 300,
+        })
+        : Promise.resolve([]),
       db.itemCostSheetComponent.groupBy({
         by: ["refId"],
         where: { type: "recipeSheet", refId: { not: null } },
@@ -334,21 +340,34 @@ export async function loader({ params }: LoaderFunctionArgs) {
       activeVariationIdSet.size === 0 || activeVariationIdSet.has(String(sheet.itemVariationId || ""))
     );
 
-    const recipeOptions = await Promise.all(
-      recipes.map(async (recipe: any) => {
-        const lines = await listRecipeCompositionLines(db, recipe.id);
-        const lastTotal = lines.reduce((acc, line) => acc + Number(line.lastTotalCostAmount || 0), 0);
-        const avgTotal = lines.reduce((acc, line) => acc + Number(line.avgTotalCostAmount || 0), 0);
-        return {
-          id: recipe.id,
-          name: recipe.name,
-          type: recipe.type,
-          variationLabel: recipe.Variation?.name || null,
-          lastTotal,
-          avgTotal,
-        };
-      })
-    );
+    const recipeOptions = isCostsTabRequest
+      ? await Promise.all(
+        recipes.map(async (recipe: any) => {
+          try {
+            const lines = await listRecipeCompositionLines(db, recipe.id);
+            const lastTotal = lines.reduce((acc, line) => acc + Number(line.lastTotalCostAmount || 0), 0);
+            const avgTotal = lines.reduce((acc, line) => acc + Number(line.avgTotalCostAmount || 0), 0);
+            return {
+              id: recipe.id,
+              name: recipe.name,
+              type: recipe.type,
+              variationLabel: recipe.Variation?.name || null,
+              lastTotal,
+              avgTotal,
+            };
+          } catch {
+            return {
+              id: recipe.id,
+              name: recipe.name,
+              type: recipe.type,
+              variationLabel: recipe.Variation?.name || null,
+              lastTotal: 0,
+              avgTotal: 0,
+            };
+          }
+        })
+      )
+      : [];
 
     const recipeSheetDependencyCountById = Object.fromEntries(
       (recipeSheetDependencyAgg || [])
@@ -810,8 +829,8 @@ export function formatMoney(value: number) {
   return new Intl.NumberFormat("pt-BR", {
     style: "currency",
     currency: "BRL",
-    minimumFractionDigits: 4,
-    maximumFractionDigits: 4,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   }).format(Number(value || 0));
 }
 
