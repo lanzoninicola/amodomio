@@ -259,13 +259,12 @@ export default function AdminImportStockMovementsIndexRoute() {
           <Table className="min-w-[980px]">
             <TableHeader className="bg-slate-50/70">
               <TableRow className="hover:bg-slate-50/70">
+                <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Status</TableHead>
                 <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Lote</TableHead>
-                <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Arquivo</TableHead>
                 <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Total</TableHead>
                 <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Importadas</TableHead>
                 <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Importar</TableHead>
                 <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Fornecedor</TableHead>
-                <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Status</TableHead>
                 <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Criado em</TableHead>
                 <TableHead className="h-10 px-4 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Ações</TableHead>
               </TableRow>
@@ -275,6 +274,11 @@ export default function AdminImportStockMovementsIndexRoute() {
                 const summary = summaryFromAny(batch.summary);
                 return (
                   <TableRow key={batch.id} className="border-slate-100 align-top hover:bg-slate-50/40">
+                    <TableCell className="px-4 py-4">
+                      <Badge variant="outline" className={statusBadgeClass(String(batch.status))}>
+                        {batchStatusLabel(String(batch.status))}
+                      </Badge>
+                    </TableCell>
                     <TableCell className="px-4 py-4">
                       <div className="flex min-w-0 flex-col gap-1.5">
                         <Link
@@ -296,30 +300,22 @@ export default function AdminImportStockMovementsIndexRoute() {
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell className="px-4 py-4">
-                      <div className="min-w-[210px] space-y-1">
-                        <div className="line-clamp-2 text-sm font-medium leading-5 text-slate-800">
-                          {batch.originalFileName || '-'}
-                        </div>
-                        <div className="text-xs text-slate-500">Aba: {batch.worksheetName || '-'}</div>
+                    <TableCell className="px-4 py-4 text-center">
+                      <div className="flex flex-col items-center gap-0.5">
+                        <span className="text-sm font-semibold text-slate-900">{summary.total}</span>
+                        <span className="text-[11px] uppercase tracking-wide text-slate-400">linhas</span>
                       </div>
                     </TableCell>
-                    <TableCell className="px-4 py-4">
-                      <div className="min-w-[68px] rounded-xl bg-slate-50 px-3 py-2 text-center">
-                        <div className="text-lg font-semibold leading-none text-slate-950">{summary.total}</div>
-                        <div className="mt-1 text-[11px] uppercase tracking-wide text-slate-500">linhas</div>
+                    <TableCell className="px-4 py-4 text-center">
+                      <div className="flex flex-col items-center gap-0.5">
+                        <span className="text-sm font-semibold text-slate-900">{summary.imported}</span>
+                        <span className="text-[11px] uppercase tracking-wide text-slate-400">importadas</span>
                       </div>
                     </TableCell>
-                    <TableCell className="px-4 py-4">
-                      <div className="min-w-[68px] rounded-xl bg-slate-50 px-3 py-2 text-center">
-                        <div className="text-lg font-semibold leading-none text-slate-950">{summary.imported}</div>
-                        <div className="mt-1 text-[11px] uppercase tracking-wide text-slate-500">importadas</div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="px-4 py-4">
-                      <div className="min-w-[88px] rounded-xl bg-emerald-50 px-3 py-2 text-center">
-                        <div className="text-lg font-semibold leading-none text-emerald-800">{summary.readyToImport}</div>
-                        <div className="mt-1 text-[11px] uppercase tracking-wide text-emerald-700">prontas</div>
+                    <TableCell className="px-4 py-4 text-center">
+                      <div className="flex flex-col items-center gap-0.5">
+                        <span className="text-sm font-semibold text-emerald-700">{summary.readyToImport}</span>
+                        <span className="text-[11px] uppercase tracking-wide text-emerald-600">prontas</span>
                       </div>
                     </TableCell>
                     <TableCell className="px-4 py-4">
@@ -342,11 +338,6 @@ export default function AdminImportStockMovementsIndexRoute() {
                           </div>
                         )}
                       </div>
-                    </TableCell>
-                    <TableCell className="px-4 py-4">
-                      <Badge variant="outline" className={statusBadgeClass(String(batch.status))}>
-                        {batchStatusLabel(String(batch.status))}
-                      </Badge>
                     </TableCell>
                     <TableCell className="px-4 py-4 text-sm text-slate-600">
                       <div className="min-w-[120px] leading-5">{formatDate(batch.createdAt)}</div>
