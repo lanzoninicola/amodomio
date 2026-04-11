@@ -229,12 +229,6 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
               disabled: false,
             },
             {
-              title: "Importação de movimentações",
-              href: "/admin/import-stock-movements",
-              items: [],
-              disabled: false,
-            },
-            {
               title: "Conciliação de fornecedor",
               href: "/admin/supplier-reconciliation",
               items: [],
@@ -304,6 +298,19 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
             {
               title: "Frete por Fornecedor",
               href: "/admin/estoque/relatorio/frete-fornecedor",
+              items: [],
+              disabled: false,
+            },
+          ],
+          disabled: false,
+        },
+        {
+          title: "Ferramentas",
+          href: "",
+          items: [
+            {
+              title: "Importação de movimentações",
+              href: "/admin/import-stock-movements",
               items: [],
               disabled: false,
             },
