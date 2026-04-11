@@ -27,12 +27,22 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const db = prismaClient as any;
     const url = new URL(request.url);
     const returnTo = safeReturnTo(url.searchParams.get("returnTo"));
+    const requestedItemIds = Array.from(
+      new Set(
+        url.searchParams
+          .getAll("itemId")
+          .map((value) => String(value || "").trim())
+          .filter(Boolean)
+      )
+    );
     const items = await db.item.findMany({
       where: { active: true },
       select: { id: true, name: true, classification: true },
       orderBy: [{ classification: "asc" }, { name: "asc" }],
     });
-    return ok({ items, returnTo });
+    const itemIdsSet = new Set(items.map((item: { id: string }) => item.id));
+    const preselectedItemIds = requestedItemIds.filter((itemId) => itemIdsSet.has(itemId));
+    return ok({ items, returnTo, preselectedItemIds });
   } catch (error) {
     return serverError(error);
   }
@@ -92,10 +102,11 @@ export default function AdminUnidadesConsumoNew() {
   const items: Array<{ id: string; name: string; classification: string | null }> =
     ((loaderData?.payload as any)?.items || []);
   const returnTo: string | null = (loaderData?.payload as any)?.returnTo ?? null;
+  const preselectedItemIds: string[] = ((loaderData?.payload as any)?.preselectedItemIds || []) as string[];
   const [kind, setKind] = useState("custom");
-  const [scope, setScope] = useState("global");
+  const [scope, setScope] = useState(preselectedItemIds.length > 0 ? "restricted" : "global");
   const [search, setSearch] = useState("");
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [selectedIds, setSelectedIds] = useState<string[]>(preselectedItemIds);
 
   const filteredItems = useMemo(() => {
     const q = search.trim().toLowerCase();

@@ -6,6 +6,7 @@ import {
 } from "@remix-run/node";
 import { useActionData, useLoaderData } from "@remix-run/react";
 import RecipeForm from "~/domain/recipe/components/recipe-form/recipe-form";
+import { ensureItemCostSheetForRecipe } from "~/domain/recipe/recipe-item-cost-sheet.server";
 import { recipeEntity } from "~/domain/recipe/recipe.entity.server";
 import prismaClient from "~/lib/prisma/client.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
@@ -84,6 +85,17 @@ export async function action({ request }: ActionFunctionArgs) {
           variationId: null,
         },
       });
+
+      if (String(values.createItemCostSheet || "").trim().toLowerCase() === "yes") {
+        await ensureItemCostSheetForRecipe({
+          db,
+          item,
+          recipe: {
+            id: data.id,
+            name: data.name,
+          },
+        });
+      }
     } catch (_error) {
       // best effort: keep old flow working even if `items` or `recipes.item_id` migration is pending
     }
@@ -142,6 +154,7 @@ export default function AdminRecipesNew() {
         title="Nova receita"
         actionName="recipe-create"
         items={items}
+        createCostSheetOption={{ enabled: true, defaultChecked: false }}
       />
     </section>
   );

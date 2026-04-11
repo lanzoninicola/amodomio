@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { blockUserSessionById, getCurrentSessionId, listUserSessions, revokeAllUserSessionsForUser, revokeCurrentUserSession, revokeUserSessionById } from "~/domain/auth/user-session.server";
+import { blockUserSessionById, listUserSessions, revokeAllUserSessionsForUser, revokeCurrentUserSession, revokeUserSessionById } from "~/domain/auth/user-session.server";
 import { hasAnyRole } from "~/domain/auth/user-access.server";
 import { authenticator } from "~/domain/auth/google.server";
 import prismaClient from "~/lib/prisma/client.server";
@@ -52,6 +52,10 @@ export const meta: MetaFunction = () => [{ title: "Sessoes ativas" }];
 
 function str(value: FormDataEntryValue | null) {
   return String(value || "").trim();
+}
+
+function getCurrentSessionId(user: { sessionId: string }) {
+  return user.sessionId;
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {

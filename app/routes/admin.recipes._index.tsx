@@ -45,11 +45,9 @@ import {
   PaginationItem,
   PaginationLink,
 } from "~/components/ui/pagination";
-import { listRecipeCompositionLines } from "~/domain/recipe/recipe-composition.server";
 
 type RecipeWithMeta = Recipe & {
   Item: { name: string } | null;
-  RecipeLine: { lastTotalCostAmount: number }[];
 };
 type FilterItem = {
   id: string;
@@ -128,17 +126,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }
 
   const [items, recipesRaw] = result;
-  const recipes: RecipeWithMeta[] = await Promise.all(
-    (recipesRaw || []).map(async (recipe: RecipeWithMeta) => {
-      const lines = await listRecipeCompositionLines(db, recipe.id);
-      return {
-        ...recipe,
-        RecipeLine: lines.map((line) => ({
-          lastTotalCostAmount: Number(line.lastTotalCostAmount || 0),
-        })),
-      };
-    })
-  );
+  const recipes: RecipeWithMeta[] = recipesRaw || [];
 
   return ok({
     recipes,
@@ -495,10 +483,6 @@ interface RecipeItemProps {
 }
 
 function RecipeRow({ item }: RecipeItemProps) {
-  const hasZeroCost = item.RecipeLine?.some(
-    (l) => Number(l.lastTotalCostAmount) <= 0
-  );
-
   return (
     <TableRow className="border-slate-100 hover:bg-slate-50/50">
       <TableCell className="px-4 py-3">
@@ -530,14 +514,6 @@ function RecipeRow({ item }: RecipeItemProps) {
       <TableCell className="px-4 py-3">
         <div className="flex items-center gap-2">
           <RecipeBadge item={item} />
-          {hasZeroCost && (
-            <span
-              className="text-[10px] px-1.5 py-0.5 rounded-full border border-amber-300 text-amber-700 bg-amber-50 shrink-0"
-              title="Ingredientes com custo total zero"
-            >
-              CUSTO 0
-            </span>
-          )}
         </div>
       </TableCell>
       <TableCell className="px-4 py-3">

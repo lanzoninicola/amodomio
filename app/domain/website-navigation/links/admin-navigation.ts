@@ -179,12 +179,6 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
               disabled: false,
             },
             {
-              title: "Movimentações de estoque",
-              href: "/admin/stock-movements",
-              items: [],
-              disabled: false,
-            },
-            {
               title: "Histórico global de custos",
               href: "/admin/global-cost-history",
               items: [],
@@ -200,12 +194,6 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
             {
               title: "Itens",
               href: "/admin/items",
-              items: [],
-              disabled: false,
-            },
-            {
-              title: "Receitas",
-              href: "/admin/recipes",
               items: [],
               disabled: false,
             },
@@ -295,6 +283,36 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
       ],
     },
     {
+      title: "Estoque",
+      items: [
+        {
+          title: "Movimentações de estoque",
+          href: "/admin/stock-movements",
+          items: [],
+          disabled: false,
+        },
+        {
+          title: "Relatorios",
+          href: "",
+          items: [
+            {
+              title: "Por Fornecedor",
+              href: "/admin/estoque/relatorio/por-fornecedor",
+              items: [],
+              disabled: false,
+            },
+            {
+              title: "Frete por Fornecedor",
+              href: "/admin/estoque/relatorio/frete-fornecedor",
+              items: [],
+              disabled: false,
+            },
+          ],
+          disabled: false,
+        },
+      ],
+    },
+    {
       title: "Produção",
       items: [
         {
@@ -306,6 +324,12 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
         {
           title: "Programação Diaria",
           href: "/admin/producao/programacao-diaria",
+          items: [],
+          disabled: false,
+        },
+        {
+          title: "Receitas",
+          href: "/admin/recipes",
           items: [],
           disabled: false,
         },

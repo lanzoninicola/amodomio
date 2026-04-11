@@ -14,6 +14,28 @@ const COST_REFERENCE_TYPE_LINE = 'stock-movement-import-line';
 const COST_REFERENCE_TYPE_MOVEMENT = 'stock-movement';
 const COST_DISCREPANCY_THRESHOLD = 0.3;
 
+const UNIT_ALIASES: Record<string, string> = {
+  UNIDADE: 'UN',
+  UNID: 'UN',
+  UND: 'UN',
+  PC: 'UN',
+  PCA: 'UN',
+  PECA: 'UN',
+  LITRO: 'L',
+  LT: 'L',
+  GRAMA: 'G',
+  GR: 'G',
+  GRS: 'G',
+  QUILOGRAMA: 'KG',
+  QUILO: 'KG',
+  MILILITRO: 'ML',
+  MILILITROS: 'ML',
+};
+
+function resolveUnitAlias(unit: string): string {
+  return UNIT_ALIASES[unit.toUpperCase()] ?? unit;
+}
+
 export type BatchSummary = {
   total: number;
   ready: number;
@@ -80,7 +102,7 @@ function movementMetadataBase(params: {
     direction: 'entry',
     movementType: 'import',
     sourceSystem: SOURCE_SYSTEM,
-    sourceType: SOURCE_TYPE,
+    sourceType: ALIAS_SOURCE_TYPE,
     ingredientName: params.line?.ingredientName || null,
     invoiceNumber: params.line?.invoiceNumber || null,
     supplierId: params.line?.supplierId || null,
@@ -735,9 +757,12 @@ function resolveReadyStatusWithCostReview(params: {
 }
 
 async function resolveConversionForLine(line: any, item: any) {
-  const movementUnit = str(line.movementUnit || line.unitEntry || line.unitConsumption).toUpperCase() || null;
+  const movementUnit = resolveUnitAlias(str(line.movementUnit || line.unitEntry || line.unitConsumption).toUpperCase()) || null;
   const targetUnit = resolveTargetUnit(item);
-  const costAmount = Number(line.costAmount ?? NaN);
+  let costAmount = Number(line.costAmount ?? NaN);
+  if ((!Number.isFinite(costAmount) || costAmount <= 0) && Number(line.costTotalAmount) > 0 && Number(line.qtyEntry) > 0) {
+    costAmount = Number(line.costTotalAmount) / Number(line.qtyEntry);
+  }
 
   if (!Number.isFinite(costAmount) || costAmount <= 0) {
     return { status: 'invalid', errorCode: 'invalid_cost', errorMessage: 'Custo inválido' } as const;
@@ -1343,6 +1368,7 @@ export async function createStockMovementImportBatchFromVisionPayload(params: {
   invoiceNumber?: string | null;
   supplierName?: string | null;
   supplierCnpj?: string | null;
+  freightAmount?: number | null;
   lines: Array<{
     rowNumber?: number | null;
     movementAt?: Date | null;
@@ -1491,6 +1517,10 @@ export async function createStockMovementImportBatchFromVisionPayload(params: {
     return line;
   });
 
+  const freightAmount = Number.isFinite(Number(params.freightAmount)) && Number(params.freightAmount) > 0
+    ? Number(params.freightAmount)
+    : null;
+
   const summary = summarizeLines(finalLines);
   const db = prismaClient as any;
   const periodDates = finalLines
@@ -1513,6 +1543,7 @@ export async function createStockMovementImportBatchFromVisionPayload(params: {
       periodStart,
       periodEnd,
       uploadedBy: params.uploadedBy || null,
+      freightAmount,
       notes: str(params.notes) || 'Lote criado a partir de resposta estruturada do ChatGPT com foto de cupom ou documento fiscal.',
       summary,
       Lines: {

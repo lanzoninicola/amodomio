@@ -1,17 +1,10 @@
 import { Form, Link, useOutletContext } from "@remix-run/react";
-import { AlertCircle, RefreshCw, Trash2 } from "lucide-react";
+import { AlertCircle, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "~/components/ui/tooltip";
 import { cn } from "~/lib/utils";
 import type { AdminRecipeOutletContext } from "./admin.recipes.$id";
 import { IngredientLossEditor, IngredientUnitEditor, InlineVariationCellEditor } from "./admin.recipes.$id";
-
-function formatMoneyCompact(value: number) {
-    return `R$ ${Number(value || 0).toLocaleString("pt-BR", {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-    })}`
-}
 
 export default function AdminRecipeVariacoesTab() {
     const { recipe, items, recipeLines, linkedVariations } = useOutletContext<AdminRecipeOutletContext>()
@@ -72,40 +65,26 @@ export default function AdminRecipeVariacoesTab() {
             unit: resolvedUnit,
             itemConsumptionUm,
             defaultLossPct,
-            lastUnitCostAmount: Number(firstLine?.lastUnitCostAmount || 0),
-            avgUnitCostAmount: Number(firstLine?.avgUnitCostAmount || 0),
         }
     })
 
     const variationMetrics = effectiveVariationColumns.map((variation) => {
-        let totalLast = 0
-        let totalAvg = 0
         let filledQtyCells = 0
-        let zeroCostCells = 0
         for (const row of compositionRowsWithUnit) {
             const line = row.linesByVariation.get(String(variation.itemVariationId))
             if (!line) continue
-            totalLast += Number(line.lastTotalCostAmount || 0)
-            totalAvg += Number(line.avgTotalCostAmount || 0)
             if (String(line.unit || "").trim() && Number(line.quantity || 0) > 0) {
                 filledQtyCells += 1
-            }
-            if (Number(line.lastTotalCostAmount || 0) <= 0 && Number(line.quantity || 0) > 0) {
-                zeroCostCells += 1
             }
         }
         return {
             itemVariationId: variation.itemVariationId,
             filledQtyCells,
-            zeroCostCells,
-            totalLast,
-            totalAvg,
         }
     })
 
     const requiredCellCount = compositionRowsWithUnit.length
     const hasVariationPendingCells = variationMetrics.some((metric) => metric.filledQtyCells < requiredCellCount)
-    const hasVariationCostZero = variationMetrics.some((metric) => metric.zeroCostCells > 0)
 
     const toggleVariationColumn = (itemVariationId: string) => {
         if (baseVariationIds.includes(itemVariationId)) return
@@ -122,10 +101,10 @@ export default function AdminRecipeVariacoesTab() {
                 <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 p-4">
                     <div className="space-y-2">
                         <div className="flex items-center gap-2">
-                            <span className={`h-1.5 w-1.5 rounded-full ${(hasVariationPendingCells || hasVariationCostZero) ? "bg-amber-400" : "bg-emerald-400"}`} />
+                            <span className={`h-1.5 w-1.5 rounded-full ${hasVariationPendingCells ? "bg-amber-400" : "bg-emerald-400"}`} />
                             <span className="text-sm text-slate-500">
-                                {(hasVariationPendingCells || hasVariationCostZero)
-                                    ? "Células sem UM/QTD ou com custo 0"
+                                {hasVariationPendingCells
+                                    ? "Células sem UM ou quantidade"
                                     : "Todas as variações completas"}
                             </span>
                         </div>
@@ -167,19 +146,6 @@ export default function AdminRecipeVariacoesTab() {
                             />
                             Perda por variação
                         </label>
-                        <Form method="post" action=".." preventScrollReset>
-                            <input type="hidden" name="recipeId" value={recipe.id} />
-                            <input type="hidden" name="tab" value="variacoes" />
-                            <button
-                                type="submit"
-                                name="_action"
-                                value="recipe-lines-recalc"
-                                className="inline-flex items-center gap-1.5 text-sm text-slate-500 transition-colors hover:text-slate-900"
-                            >
-                                <RefreshCw size={13} />
-                                Recalcular
-                            </button>
-                        </Form>
                     </div>
                 </div>
 
@@ -205,7 +171,6 @@ export default function AdminRecipeVariacoesTab() {
                                 {effectiveVariationColumns.map((variation, index) => {
                                     const metric = variationMetrics[index]
                                     const missing = metric.filledQtyCells < requiredCellCount
-                                    const hasZero = metric.zeroCostCells > 0
                                     return (
                                         <th key={variation.itemVariationId} className={`min-w-[200px] px-3 py-3 text-left ${variation.isReference ? "bg-slate-50" : "bg-white"}`}>
                                             <div className="flex items-center gap-1.5">
@@ -214,13 +179,6 @@ export default function AdminRecipeVariacoesTab() {
                                                 </span>
                                                 {variation.isReference ? <span className="text-[11px] text-slate-400">★</span> : null}
                                                 {missing ? <span className="h-1.5 w-1.5 rounded-full bg-amber-400" title="Campos pendentes" /> : null}
-                                                {!missing && hasZero ? <span className="h-1.5 w-1.5 rounded-full bg-orange-400" title="Custo 0" /> : null}
-                                            </div>
-                                            <div className="mt-1 grid grid-cols-2 gap-x-2 gap-y-1 text-[11px] text-slate-400">
-                                                <span>Total</span>
-                                                <span className="text-right font-mono text-sm font-semibold text-slate-700">{formatMoneyCompact(metric.totalLast)}</span>
-                                                <span>Médio</span>
-                                                <span className="text-right font-mono text-sm font-semibold text-slate-700">{formatMoneyCompact(metric.totalAvg)}</span>
                                             </div>
                                         </th>
                                     )
@@ -248,12 +206,6 @@ export default function AdminRecipeVariacoesTab() {
                                             >
                                                 {row.itemName}
                                             </Link>
-                                            <div className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-slate-400">
-                                                <span>Ultimo custo</span>
-                                                <span className="text-right font-mono text-[13px] font-semibold text-slate-700">{formatMoneyCompact(row.lastUnitCostAmount)}</span>
-                                                <span>Custo medio</span>
-                                                <span className="text-right font-mono text-[13px] font-semibold text-slate-700">{formatMoneyCompact(row.avgUnitCostAmount)}</span>
-                                            </div>
                                         </td>
                                         <td className="border-t border-slate-100 px-3 py-4 align-top">
                                             <IngredientUnitEditor

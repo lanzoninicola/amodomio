@@ -3,11 +3,8 @@ import {
   resolveRecipeLineCosts,
 } from "~/domain/costs/recipe-cost-recalc.server";
 import {
-  calcItemCostSheetTotalCostAmount,
-  recalcItemCostSheetTotals,
-  roundItemCostSheetMoney,
-} from "~/domain/costs/item-cost-sheet-recalc.server";
-import { itemVariationPrismaEntity } from "~/domain/item/item-variation.prisma.entity.server";
+  ensureItemCostSheetForRecipe as ensureItemCostSheetForRecipeLink,
+} from "~/domain/recipe/recipe-item-cost-sheet.server";
 import {
   createRecipeCompositionIngredientSkeleton,
   deleteRecipeCompositionLine,
@@ -194,28 +191,6 @@ async function ensureSingleItemRecipeGroup(db: any, itemId: string) {
 
 export type ExistingRecipeImportMode = "merge_existing" | "replace_existing";
 
-async function ensureSingleItemCostSheetGroup(db: any, itemId: string) {
-  const sheets = await db.itemCostSheet.findMany({
-    where: { itemId },
-    select: { id: true, baseItemCostSheetId: true, itemVariationId: true, name: true, createdAt: true },
-    orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-  });
-
-  const rootIds = Array.from(
-    new Set(
-      sheets
-        .map((sheet: any) => String(sheet.baseItemCostSheetId || sheet.id || "").trim())
-        .filter(Boolean)
-    )
-  );
-
-  if (rootIds.length > 1) {
-    throw new Error("Este item já possui mais de uma ficha técnica. Use o módulo de fichas para escolher manualmente.");
-  }
-
-  return rootIds[0] || null;
-}
-
 async function ensureRecipeForItem(params: {
   db: any;
   item: any;
@@ -265,100 +240,13 @@ async function ensureItemCostSheetForRecipe(params: {
   recipe: any;
 }) {
   const { db, item, recipe } = params;
-  const rootSheetId = await ensureSingleItemCostSheetGroup(db, item.id);
-
-  let resolvedRootSheetId = rootSheetId;
-  if (!resolvedRootSheetId) {
-    const itemVariations = await itemVariationPrismaEntity.findManyByItemId(item.id);
-    const primaryVariation = await itemVariationPrismaEntity.findPrimaryVariationForItem(item.id, { ensureBaseIfMissing: true });
-    const targetVariations = itemVariations.length > 0 ? itemVariations : primaryVariation ? [primaryVariation] : [];
-    if (targetVariations.length === 0) {
-      throw new Error("Nenhuma variação disponível para criar a ficha técnica");
-    }
-
-    const primaryTargetVariation =
-      targetVariations.find((variation: any) => variation.id === primaryVariation?.id) ||
-      targetVariations[0];
-
-    const latestVersions = await db.itemCostSheet.findMany({
-      where: { itemId: item.id, itemVariationId: { in: targetVariations.map((variation: any) => variation.id) } },
-      select: { version: true },
-      orderBy: [{ version: "desc" }],
-    });
-    const nextVersion = Number(
-      latestVersions.reduce((max: number, row: any) => Math.max(max, Number(row?.version || 0)), 0) + 1
-    );
-
-    resolvedRootSheetId = crypto.randomUUID();
-    const orderedVariations = [
-      primaryTargetVariation,
-      ...targetVariations.filter((variation: any) => variation.id !== primaryTargetVariation?.id),
-    ].filter(Boolean);
-
-    for (const itemVariation of orderedVariations) {
-      const isRoot = itemVariation.id === primaryTargetVariation.id;
-      await db.itemCostSheet.create({
-        data: {
-          id: isRoot ? resolvedRootSheetId : crypto.randomUUID(),
-          itemId: item.id,
-          itemVariationId: itemVariation.id,
-          name: `Ficha tecnica ${item.name}`,
-          description: `Ficha tecnica gerada a partir da receita ${recipe.name}`,
-          version: nextVersion,
-          status: "draft",
-          isActive: false,
-          baseItemCostSheetId: isRoot ? null : resolvedRootSheetId,
-        },
-      });
-    }
-  }
-
-  const groupSheets = await db.itemCostSheet.findMany({
-    where: { OR: [{ id: resolvedRootSheetId }, { baseItemCostSheetId: resolvedRootSheetId }] },
-    select: { id: true, itemVariationId: true },
-    orderBy: [{ createdAt: "asc" }],
+  const result = await ensureItemCostSheetForRecipeLink({
+    db,
+    item,
+    recipe,
+    componentNotes: "Componente gerado automaticamente pelo assistente de receita",
   });
-  const targetItemVariationIds = groupSheets
-    .map((sheet: any) => String(sheet.itemVariationId || ""))
-    .filter(Boolean);
-
-  const existingComponent = await db.itemCostSheetComponent.findFirst({
-    where: {
-      itemCostSheetId: resolvedRootSheetId,
-      type: "recipe",
-      refId: recipe.id,
-    },
-    select: { id: true },
-  });
-
-  if (!existingComponent) {
-    await db.itemCostSheetComponent.create({
-      data: {
-        itemCostSheetId: resolvedRootSheetId,
-        type: "recipe",
-        refId: recipe.id,
-        name: recipe.name,
-        notes: "Componente gerado automaticamente pelo assistente de receita",
-        sortOrderIndex: Number(
-          await db.itemCostSheetComponent.count({ where: { itemCostSheetId: resolvedRootSheetId } })
-        ),
-        ItemCostSheetVariationComponent: {
-          create: targetItemVariationIds.map((itemVariationId: string) => ({
-            itemVariationId,
-            unit: "receita",
-            quantity: 1,
-            unitCostAmount: 0,
-            wastePerc: 0,
-            totalCostAmount: calcItemCostSheetTotalCostAmount(0, 1, 0),
-          })),
-        },
-      },
-    });
-  }
-
-  await recalcItemCostSheetTotals(db, resolvedRootSheetId);
-
-  return resolvedRootSheetId;
+  return result.rootSheetId;
 }
 
 export async function buildItemRecipeChatGptImportPreview(params: {

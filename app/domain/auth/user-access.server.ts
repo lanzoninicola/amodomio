@@ -9,13 +9,9 @@ import { sendTextMessage } from "~/domain/z-api/zapi.service.server";
 import { normalizePhone } from "~/domain/z-api/zapi.service";
 import { generateTemporaryPassword, hashPassword, verifyPassword } from "./password.server";
 import type { AuthenticatedUserProfile } from "./types.server";
+import { getEffectiveRoles, normalizeUserRoles } from "./user-access";
 
 const TEMPORARY_PASSWORD_WINDOW_MS = 30 * 60 * 1000;
-const ROLE_INHERITANCE: Record<UserRole, UserRole[]> = {
-  user: ["user"],
-  admin: ["admin", "user"],
-  superAdmin: ["superAdmin", "admin", "user"],
-};
 
 export function normalizeUserEmail(email?: string | null) {
   const value = String(email || "").trim().toLowerCase();
@@ -44,20 +40,6 @@ export async function getAuthenticatedUserFromId(userId?: string | null) {
   if (!user || !user.isActive) return null;
 
   return getAuthenticatedUserProfile(user, "system");
-}
-
-export function normalizeUserRoles(roles?: UserRole[] | null) {
-  const normalized = Array.from(new Set((roles || []).filter(Boolean))) as UserRole[];
-
-  return normalized.length ? normalized : ["user"];
-}
-
-export function getEffectiveRoles(user: { roles: UserRole[] }) {
-  return Array.from(
-    new Set(
-      normalizeUserRoles(user.roles).flatMap((role) => ROLE_INHERITANCE[role] || [role])
-    )
-  );
 }
 
 export function hasAnyRole(

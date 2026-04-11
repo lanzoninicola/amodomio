@@ -70,6 +70,69 @@ function parsePage(raw: string | null) {
   return Math.max(1, Math.floor(parsed));
 }
 
+function buildBaseItemWhere(params: {
+  q: string;
+  categoryId: string;
+  status: string;
+}) {
+  const where: any = { AND: [] as any[] };
+
+  if (params.status === "active") where.active = true;
+  if (params.status === "inactive") where.active = false;
+
+  if (params.q) {
+    where.AND.push({
+      OR: [
+        { name: { contains: params.q, mode: "insensitive" } },
+        { description: { contains: params.q, mode: "insensitive" } },
+      ],
+    });
+  }
+
+  if (params.categoryId) {
+    where.categoryId = params.categoryId;
+  }
+
+  if (where.AND.length === 0) {
+    delete where.AND;
+  }
+
+  return where;
+}
+
+function buildClassificationWhere(baseWhere: any, classification: string) {
+  const where: any = {
+    ...baseWhere,
+    AND: Array.isArray(baseWhere?.AND) ? [...baseWhere.AND] : [],
+  };
+
+  if (PRIMARY_ITEM_CLASSIFICATIONS.includes(classification as (typeof PRIMARY_ITEM_CLASSIFICATIONS)[number])) {
+    where.classification = classification;
+  } else if (classification === "outros") {
+    where.AND.push({
+      OR: [
+        { classification: null },
+        { classification: "" },
+        { classification: { notIn: [...PRIMARY_ITEM_CLASSIFICATIONS] } },
+      ],
+    });
+  }
+
+  if (where.AND.length === 0) {
+    delete where.AND;
+  }
+
+  return where;
+}
+
+function getClassificationTabValue(classification?: string | null) {
+  if (!classification || classification === "" || !PRIMARY_ITEM_CLASSIFICATIONS.includes(classification as (typeof PRIMARY_ITEM_CLASSIFICATIONS)[number])) {
+    return "outros" as const;
+  }
+
+  return classification as (typeof ITEM_CLASSIFICATION_TABS)[number];
+}
+
 function buildPageHref(params: {
   q: string;
   categoryId: string;
@@ -150,40 +213,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const requestedPage = parsePage(url.searchParams.get("page"));
     const averageWindowDays = await getItemAverageCostWindowDays();
 
-    const where: any = { AND: [] as any[] };
-    if (status === "active") where.active = true;
-    if (status === "inactive") where.active = false;
+    const baseWhere = buildBaseItemWhere({ q, categoryId, status });
+    const where = buildClassificationWhere(baseWhere, classification);
 
-    if (q) {
-      where.AND.push({
-        OR: [
-          { name: { contains: q, mode: "insensitive" } },
-          { description: { contains: q, mode: "insensitive" } },
-        ],
-      });
-    }
-
-    if (PRIMARY_ITEM_CLASSIFICATIONS.includes(classification as (typeof PRIMARY_ITEM_CLASSIFICATIONS)[number])) {
-      where.classification = classification;
-    } else if (classification === "outros") {
-      where.AND.push({
-        OR: [
-          { classification: null },
-          { classification: "" },
-          { classification: { notIn: [...PRIMARY_ITEM_CLASSIFICATIONS] } },
-        ],
-      });
-    }
-
-    if (categoryId) {
-      where.categoryId = categoryId;
-    }
-
-    if (where.AND.length === 0) {
-      delete where.AND;
-    }
-
-    const [totalItems, menuItemsLinked, categories] = await Promise.all([
+    const [totalItems, menuItemsLinked, categories, classificationRows] = await Promise.all([
       db.item.count({ where }),
       db.menuItem.count({
         where: {
@@ -197,7 +230,24 @@ export async function loader({ request }: LoaderFunctionArgs) {
         select: { id: true, name: true },
         orderBy: [{ name: "asc" }],
       }),
+      db.item.findMany({
+        where: baseWhere,
+        select: { classification: true },
+      }),
     ]);
+
+    const classificationCounts = ITEM_CLASSIFICATION_TABS.reduce(
+      (acc, tabValue) => {
+        acc[tabValue] = 0;
+        return acc;
+      },
+      {} as Record<(typeof ITEM_CLASSIFICATION_TABS)[number], number>,
+    );
+
+    for (const row of classificationRows) {
+      const tabValue = getClassificationTabValue(row.classification);
+      classificationCounts[tabValue] += 1;
+    }
 
     const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
     const page = Math.min(requestedPage, totalPages);
@@ -330,6 +380,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         classification,
         status,
       },
+      classificationCounts,
       categories,
       pagination: {
         page,
@@ -505,6 +556,12 @@ export default function AdminItemsIndex() {
   const items = payload.items || [];
   const stats = payload.stats || { totalItems: 0, menuItemsLinked: 0 };
   const filters = payload.filters || { q: "", categoryId: "", classification: "insumo", status: "active" };
+  const classificationCounts = payload.classificationCounts || {
+    insumo: 0,
+    semi_acabado: 0,
+    produto_final: 0,
+    outros: 0,
+  };
   const categories = payload.categories || [];
   const categoryNameById = new Map<string, string>(categories.map((category: any) => [category.id, category.name]));
   const pagination = payload.pagination || { page: 1, pageSize: PAGE_SIZE, totalItems: 0, totalPages: 1 };
@@ -722,9 +779,10 @@ export default function AdminItemsIndex() {
                 >
                   <span className="inline-flex items-center gap-1.5">
                     <span className={`h-2 w-2 rounded-full ${color.dot} ${isActive ? "" : "opacity-50"}`} />
-                    <span className={isActive ? "font-semibold" : "font-medium"}>{formatClassificationTabLabel(tabValue)}</span>
+                    <span className={isActive ? "font-semibold" : "font-medium"}>
+                      {formatClassificationTabLabel(tabValue)} ({classificationCounts[tabValue] || 0})
+                    </span>
                   </span>
-                  {isActive && <span className="pl-3.5 text-xs font-normal text-slate-500">{pagination.totalItems}</span>}
                 </Link>
               );
             })}

@@ -25,6 +25,7 @@ import {
 import { toast } from "~/components/ui/use-toast";
 import { DecimalInput } from "~/components/inputs/inputs";
 import { recipeEntity } from "~/domain/recipe/recipe.entity.server";
+import { ensureItemCostSheetForRecipe } from "~/domain/recipe/recipe-item-cost-sheet.server";
 import {
   DEFAULT_RECIPE_CHATGPT_PROJECT_URL,
   RECIPE_CHATGPT_PROJECT_URL_SETTING_NAME,
@@ -313,13 +314,6 @@ async function buildRecipeChatGptImportPreview(params: {
       },
     },
   };
-}
-
-export function formatMoney(value: number, decimals: number = 2) {
-  return `R$ ${Number(value || 0).toLocaleString("pt-BR", {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  })}`;
 }
 
 export const RECIPE_SECTIONS = ["cadastro", "composicao", "variacoes"] as const;
@@ -965,6 +959,8 @@ export async function action({ request }: ActionFunctionArgs) {
       return badRequest(err);
     }
 
+    let ensuredItem: any = null;
+
     try {
       const db = prismaClient as any;
       const explicitItemId = String(values.linkedItemId || "").trim();
@@ -989,6 +985,7 @@ export async function action({ request }: ActionFunctionArgs) {
           });
           if (explicitItem) {
             itemId = explicitItem.id;
+            ensuredItem = explicitItem;
             await db.recipe.update({
               where: { id: updatedRecipe.id },
               data: {
@@ -1024,6 +1021,7 @@ export async function action({ request }: ActionFunctionArgs) {
           }
 
           itemId = item.id;
+          ensuredItem = item;
 
           await db.recipe.update({
             where: { id: updatedRecipe.id },
@@ -1038,6 +1036,13 @@ export async function action({ request }: ActionFunctionArgs) {
           await db.recipe.update({
             where: { id: updatedRecipe.id },
             data: { variationId: null },
+          });
+        }
+
+        if (!ensuredItem && itemId) {
+          ensuredItem = await db.item.findUnique({
+            where: { id: itemId },
+            select: { id: true, name: true },
           });
         }
 
@@ -1111,6 +1116,20 @@ export async function action({ request }: ActionFunctionArgs) {
               });
             }
           }
+        }
+
+        if (
+          ensuredItem &&
+          String(values.createItemCostSheet || "").trim().toLowerCase() === "yes"
+        ) {
+          await ensureItemCostSheetForRecipe({
+            db,
+            item: ensuredItem,
+            recipe: {
+              id: updatedRecipe.id,
+              name: updatedRecipe.name,
+            },
+          });
         }
       }
     } catch (_error) {
@@ -1275,25 +1294,6 @@ export function InlineVariationCellEditor({
             <span>Qtd bruta</span>
             <span className="font-medium text-xs text-slate-600">
               {formatDecimalPlaces(Number(grossQty || 0), 4)}
-            </span>
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <span>Custo total</span>
-            <span
-              className={cn(
-                "font-mono text-sm font-semibold",
-                Number(line.lastTotalCostAmount || 0) <= 0
-                  ? "text-slate-400"
-                  : "text-slate-600"
-              )}
-            >
-              {formatMoney(Number(line.lastTotalCostAmount || 0), 2)}
-            </span>
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <span>Custo médio</span>
-            <span className="font-mono text-sm font-semibold text-slate-600">
-              {formatMoney(Number(line.avgTotalCostAmount || 0), 2)}
             </span>
           </div>
         </div>
@@ -1482,15 +1482,16 @@ export default function AdminRecipeDetailLayout() {
   const linkedVariations = (loaderData?.payload?.linkedVariations ||
     []) as AdminRecipeOutletContext["linkedVariations"];
   const linkedItem = items.find((item) => item.id === recipe?.itemId);
-  const recipeLineCount = recipeLines.length;
-  const avgCompositionCost = recipeLines.reduce(
-    (acc, line) => acc + Number(line.avgTotalCostAmount || 0),
-    0
-  );
-  const lastCompositionCost = recipeLines.reduce(
-    (acc, line) => acc + Number(line.lastTotalCostAmount || 0),
-    0
-  );
+  const referenceVariation =
+    linkedVariations.find((variation) => variation.isReference) ||
+    linkedVariations[0] ||
+    null;
+  const summaryLines = referenceVariation
+    ? recipeLines.filter(
+      (line) => String(line.ItemVariation?.id || "") === referenceVariation.itemVariationId
+    )
+    : recipeLines;
+  const recipeLineCount = summaryLines.length;
   const lastSegment = lastUrlSegment(location.pathname);
   const activeTab =
     lastSegment === "composition-builder"
@@ -1556,22 +1557,6 @@ export default function AdminRecipeDetailLayout() {
             </div>
             <div className="text-sm font-medium text-slate-900">
               {recipeLineCount}
-            </div>
-          </div>
-          <div className="space-y-1">
-            <div className="text-xs font-medium text-slate-400">
-              Custo médio
-            </div>
-            <div className="text-sm font-medium text-slate-900">
-              {formatMoney(avgCompositionCost, 2)}
-            </div>
-          </div>
-          <div className="space-y-1">
-            <div className="text-xs font-medium text-slate-400">
-              Último custo
-            </div>
-            <div className="text-sm font-medium text-slate-900">
-              {formatMoney(lastCompositionCost, 2)}
             </div>
           </div>
         </div>

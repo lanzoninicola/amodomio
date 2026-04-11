@@ -91,6 +91,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
  *   {
  *     "fornecedor": "NOME DO FORNECEDOR",
  *     "numero_nfe": "1234",
+ *     "valor_frete": 12.50,
  *     "items": [
  *       { "nome": "Pistache", "unidade_entrada": "UM", "quantidade": "0,1080", "valor_total": "29,1600" }
  *     ],
@@ -114,6 +115,7 @@ export async function action({ request }: ActionFunctionArgs) {
   let body: {
     fornecedor?: unknown;
     numero_nfe?: unknown;
+    valor_frete?: unknown;
     items?: unknown;
     exportado_em?: unknown;
   };
@@ -127,6 +129,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const fornecedor = typeof body.fornecedor === "string" ? body.fornecedor.trim() : null;
   const numeroNfe = typeof body.numero_nfe === "string" ? body.numero_nfe.trim() : null;
   const exportadoEm = typeof body.exportado_em === "string" ? body.exportado_em.trim() : null;
+  const valorFrete = typeof body.valor_frete === "number" ? body.valor_frete : null;
   const items = Array.isArray(body.items) ? body.items : null;
 
   if (!fornecedor) {
@@ -194,6 +197,7 @@ export async function action({ request }: ActionFunctionArgs) {
       uploadedBy: "extensao-nfe",
       originalFileName: `nfe-${numeroNfe}`,
       notes: `Importado via extensão de navegador. NFe ${numeroNfe}.`,
+      freightAmount: valorFrete,
       lines,
     });
     batchId = result.batchId;

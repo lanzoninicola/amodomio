@@ -1,6 +1,7 @@
 import { Form, Link, useFetcher, useLocation, useOutletContext, useParams, useRevalidator } from '@remix-run/react';
-import { EyeOff, Eye, Loader2, Pencil, RotateCcw, AlignJustify, Layers, X, Check, LayoutGrid, FileText, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { EyeOff, Eye, Loader2, Pencil, RotateCcw, AlignJustify, Layers, X, Check, LayoutGrid, FileText, AlertTriangle, CheckCircle2, Download } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { TwoLevelLineRow } from '~/components/admin/import-stock-two-level-row';
 import { DecimalInput } from '~/components/inputs/inputs';
 import { PendingConversionForm } from '~/components/admin/import-stock-conversion-form';
@@ -548,16 +549,16 @@ function LineStatusBadge({ line, batchId }: { line: any; batchId: string }) {
 
 function CardHeaderStatus({ status }: { status: string }) {
   const config: Record<string, { label: string; className: string }> = {
-    ready:                { label: 'Pronta para importar', className: 'bg-emerald-500 text-white' },
-    imported:             { label: 'Importado',            className: 'border border-blue-200 bg-blue-50 text-blue-700' },
-    pending_mapping:      { label: 'Ação necessária',      className: 'bg-red-500 text-white' },
-    pending_supplier:     { label: 'Pend. fornecedor',     className: 'bg-amber-500 text-white' },
-    pending_conversion:   { label: 'Ação necessária',      className: 'bg-amber-500 text-white' },
-    pending_cost_review:  { label: 'Revisar custo',        className: 'bg-amber-500 text-white' },
-    skipped_duplicate:    { label: 'Duplicado',            className: 'border border-amber-400 bg-amber-50 text-amber-700' },
-    ignored:              { label: 'Ignorado',             className: 'border border-slate-300 bg-slate-100 text-slate-600' },
-    invalid:              { label: 'Inválido',             className: 'border border-red-300 bg-red-50 text-red-600' },
-    error:                { label: 'Erro',                 className: 'bg-red-500 text-white' },
+    ready: { label: 'Pronta para importar', className: 'bg-emerald-500 text-white' },
+    imported: { label: 'Importado', className: 'border border-blue-200 bg-blue-50 text-blue-700' },
+    pending_mapping: { label: 'Pend. vínculo', className: 'bg-red-500 text-white' },
+    pending_supplier: { label: 'Pend. fornecedor', className: 'bg-amber-500 text-white' },
+    pending_conversion: { label: 'Pend. conversão', className: 'bg-amber-500 text-white' },
+    pending_cost_review: { label: 'Revisar custo', className: 'bg-amber-500 text-white' },
+    skipped_duplicate: { label: 'Duplicado', className: 'border border-amber-400 bg-amber-50 text-amber-700' },
+    ignored: { label: 'Ignorado', className: 'border border-slate-300 bg-slate-100 text-slate-600' },
+    invalid: { label: 'Inválido', className: 'border border-red-300 bg-red-50 text-red-600' },
+    error: { label: 'Erro', className: 'bg-red-500 text-white' },
   };
   const { label, className } = config[status] || { label: status, className: 'border border-slate-200 bg-white text-slate-600' };
   return (
@@ -762,14 +763,14 @@ function LineCard({
           {line.status === 'ignored' ? (
             <div className="text-sm text-slate-400">Linha ignorada manualmente.</div>
 
-          /* ── FORNECEDOR PENDENTE ── */
+            /* ── FORNECEDOR PENDENTE ── */
           ) : line.status === 'pending_supplier' ? (
             <div className="min-w-0 flex-1">
               <div className="mb-1 text-[10px] font-black uppercase tracking-widest text-amber-600">Fornecedor não vinculado</div>
               <div className="text-sm text-slate-500">Concilie o fornecedor para continuar a importação.</div>
             </div>
 
-          /* ── DUPLICADO ── */
+            /* ── DUPLICADO ── */
           ) : line.status === 'skipped_duplicate' ? (
             <div className="w-80 shrink-0">
               <div className="mb-1.5 text-[10px] font-black uppercase tracking-widest text-amber-600">Vínculo local</div>
@@ -778,7 +779,7 @@ function LineCard({
               </div>
             </div>
 
-          /* ── PENDENTE MAPEAMENTO / INVÁLIDO sem item / ERRO sem item ── */
+            /* ── PENDENTE MAPEAMENTO / INVÁLIDO sem item / ERRO sem item ── */
           ) : (line.status === 'pending_mapping' || (line.status === 'invalid' && !line.mappedItemId) || (line.status === 'error' && !line.mappedItemId)) ? (
             <>
               <div className="min-w-[280px] flex-1">
@@ -799,7 +800,7 @@ function LineCard({
               </div>
             </>
 
-          /* ── READY / IMPORTED / PENDING_COST_REVIEW / INVALID+item / ERROR+item / PENDING_CONVERSION ── */
+            /* ── READY / IMPORTED / PENDING_COST_REVIEW / INVALID+item / ERROR+item / PENDING_CONVERSION ── */
           ) : (
             <>
               <div className="min-w-[220px] flex-1">
@@ -983,7 +984,7 @@ export function AdminImportStockMovementsBatchLinesRoute({
   forcedStatus?: string | null;
   layout?: ImportStockLinesLayout;
 }) {
-  const { lines, items, selectedBatch, unitOptions, itemUnitOptionsByItemId, measurementConversions, itemCostHints } =
+  const { lines, items, selectedBatch, unitOptions, itemUnitOptionsByItemId, measurementConversions, itemCostHints, summary, isImportingBatch } =
     useOutletContext<AdminImportStockMovementsBatchOutletContext>();
   const { batchId } = useParams<{ batchId: string }>();
   const location = useLocation();
@@ -995,6 +996,7 @@ export function AdminImportStockMovementsBatchLinesRoute({
   const [showFilters, setShowFilters] = useState(false);
 
   const normalizedForcedStatus = String(forcedStatus || '').trim();
+  const isPendingCombinedTab = normalizedForcedStatus === 'pending';
 
   const availableSuppliers = useMemo(
     () =>
@@ -1012,7 +1014,9 @@ export function AdminImportStockMovementsBatchLinesRoute({
 
   const filteredLines = useMemo(() => {
     return lines.filter((line) => {
-      if (normalizedForcedStatus && String(line.status || '') !== normalizedForcedStatus) return false;
+      if (isPendingCombinedTab) {
+        if (!['pending_mapping', 'pending_conversion'].includes(String(line.status || ''))) return false;
+      } else if (normalizedForcedStatus && String(line.status || '') !== normalizedForcedStatus) return false;
       if (supplierFilter !== 'all' && String(line.supplierName || '') !== supplierFilter) return false;
       if (ingredientFilter.trim()) {
         const needle = ingredientFilter.trim().toLowerCase();
@@ -1025,9 +1029,22 @@ export function AdminImportStockMovementsBatchLinesRoute({
 
   const basePath = `/admin/import-stock-movements/${batchId}`;
 
+  const pendingTotal = (summary?.pendingMapping || 0) + (summary?.pendingConversion || 0) + (summary?.pendingSupplier || 0) + (summary?.pendingCostReview || 0);
+  const importDisabledReason = isImportingBatch
+    ? 'Importação em andamento...'
+    : (summary?.readyToImport || 0) <= 0
+      ? [
+        (summary?.pendingMapping || 0) > 0 && `${summary.pendingMapping} vínculo(s) pendente(s)`,
+        (summary?.pendingConversion || 0) > 0 && `${summary.pendingConversion} conversão(ões) pendente(s)`,
+        (summary?.pendingSupplier || 0) > 0 && `${summary.pendingSupplier} fornecedor(es) pendente(s)`,
+        (summary?.pendingCostReview || 0) > 0 && `${summary.pendingCostReview} revisão(ões) de custo`,
+        (summary?.error || 0) > 0 && `${summary.error} erro(s)`,
+      ].filter(Boolean).join(' • ') || 'Nenhuma linha para importar'
+      : null;
+
   return (
     <TooltipProvider>
-      <div className="bg-white">
+      <div className="bg-white pb-16">
         <Dialog open={statusGuideOpen} onOpenChange={setStatusGuideOpen}>
           <DialogContent className="max-w-4xl rounded-2xl">
             <DialogHeader>
@@ -1422,6 +1439,125 @@ export function AdminImportStockMovementsBatchLinesRoute({
           </div>
         )}
       </div>
+
+      {/* Fixed bottom bar — rendered via portal so SidebarProvider transforms don't break position:fixed */}
+      {typeof document !== 'undefined' && createPortal(
+        <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-slate-300 bg-slate-100">
+          <div className="mx-auto flex max-w-screen-2xl items-center justify-between gap-4 px-4 py-3">
+
+            {/* Left: layout tabs — hidden from bar, kept for reference */}
+            <div className="hidden items-center rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+              <Link
+                to={`${basePath}/flat`}
+                className={cn(
+                  'flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition',
+                  layout === 'flat' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700',
+                )}
+              >
+                <AlignJustify className="h-3.5 w-3.5" />
+                Simples
+              </Link>
+              <Link
+                to={`${basePath}/two-level`}
+                className={cn(
+                  'flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition',
+                  layout === 'two-level' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700',
+                )}
+              >
+                <Layers className="h-3.5 w-3.5" />
+                Comparativo
+              </Link>
+              <Link
+                to={`${basePath}/cards`}
+                className={cn(
+                  'flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition',
+                  layout === 'cards' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700',
+                )}
+              >
+                <LayoutGrid className="h-3.5 w-3.5" />
+                Cards
+              </Link>
+            </div>
+
+            {/* Center: minimal stats */}
+            <div className="flex items-center gap-2 text-xs">
+              {(summary?.readyToImport || 0) > 0 && (
+                <span className="flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 font-medium text-emerald-700">
+                  <CheckCircle2 className="h-3 w-3" />
+                  {summary.readyToImport} pronta(s)
+                </span>
+              )}
+              {(summary?.pendingMapping || 0) > 0 && (
+                <span className="flex items-center gap-1 rounded-full border border-amber-300 bg-amber-100 px-2.5 py-1 font-semibold text-amber-800">
+                  <AlertTriangle className="h-3 w-3" />
+                  {summary.pendingMapping} s/ vínculo
+                </span>
+              )}
+              {(summary?.pendingConversion || 0) > 0 && (
+                <span className="flex items-center gap-1 rounded-full border border-amber-300 bg-amber-100 px-2.5 py-1 font-semibold text-amber-800">
+                  <AlertTriangle className="h-3 w-3" />
+                  {summary.pendingConversion} s/ conversão
+                </span>
+              )}
+              {(summary?.pendingSupplier || 0) > 0 && (
+                <span className="flex items-center gap-1 rounded-full border border-amber-300 bg-amber-100 px-2.5 py-1 font-semibold text-amber-800">
+                  <AlertTriangle className="h-3 w-3" />
+                  {summary.pendingSupplier} s/ fornecedor
+                </span>
+              )}
+              {(summary?.pendingCostReview || 0) > 0 && (
+                <span className="flex items-center gap-1 rounded-full border border-amber-300 bg-amber-100 px-2.5 py-1 font-semibold text-amber-800">
+                  <AlertTriangle className="h-3 w-3" />
+                  {summary.pendingCostReview} rev. custo
+                </span>
+              )}
+              {(summary?.error || 0) > 0 && (
+                <span className="flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2.5 py-1 font-medium text-red-700">
+                  <AlertTriangle className="h-3 w-3" />
+                  {summary.error} erro(s)
+                </span>
+              )}
+              <span className="text-slate-400">{lines.length} total</span>
+            </div>
+
+            {/* Right: retry + import buttons */}
+            <div className="flex flex-col items-end gap-0.5">
+              <div className="flex items-center gap-2">
+                {(summary?.error || 0) > 0 && (
+                  <Form method="post" action={`/admin/import-stock-movements/${batchId}`}>
+                    <input type="hidden" name="_action" value="batch-retry-errors" />
+                    <input type="hidden" name="batchId" value={selectedBatch.id} />
+                    <button
+                      type="submit"
+                      disabled={isImportingBatch}
+                      className="flex items-center gap-2 rounded-lg border border-orange-300 bg-orange-50 px-4 py-2 text-sm font-semibold text-orange-700 transition hover:bg-orange-100 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <RotateCcw className="h-4 w-4" />
+                      Retentar ({summary.error})
+                    </button>
+                  </Form>
+                )}
+                <Form method="post" action={`/admin/import-stock-movements/${batchId}`}>
+                  <input type="hidden" name="_action" value="batch-import" />
+                  <input type="hidden" name="batchId" value={selectedBatch.id} />
+                  <button
+                    type="submit"
+                    disabled={(summary?.readyToImport || 0) <= 0 || isImportingBatch}
+                    className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {isImportingBatch ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                    Importar {(summary?.readyToImport || 0) > 0 ? `(${summary.readyToImport})` : ''}
+                  </button>
+                </Form>
+              </div>
+              {importDisabledReason && (
+                <span className="text-[11px] text-slate-400">{importDisabledReason}</span>
+              )}
+            </div>
+
+          </div>
+        </div>
+        , document.body)}
     </TooltipProvider>
   );
 }

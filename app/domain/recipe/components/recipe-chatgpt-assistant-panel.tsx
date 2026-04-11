@@ -2,6 +2,7 @@ import { useFetcher, useOutletContext } from "@remix-run/react";
 import { useEffect, useState } from "react";
 import GptAssistantPanel from "~/components/gpt-assistant-panel";
 import type { AdminRecipeOutletContext } from "~/routes/admin.recipes.$id";
+import MissingIngredientsPreview, { extractMissingIngredientsPreview } from "./missing-ingredients-preview";
 
 export type RecipeChatGptAssistantContext = {
     recipe: AdminRecipeOutletContext["recipe"]
@@ -140,46 +141,7 @@ function buildRecipeChatGptPrompt(params: {
     ].join("\n")
 }
 
-function extractJsonPayloadFromText(value: string) {
-    const raw = String(value || "").trim()
-    if (!raw) return ""
 
-    const fencedMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/i)
-    if (fencedMatch?.[1]) {
-        return fencedMatch[1].trim()
-    }
-
-    const firstBraceIndex = raw.indexOf("{")
-    const lastBraceIndex = raw.lastIndexOf("}")
-    if (firstBraceIndex >= 0 && lastBraceIndex > firstBraceIndex) {
-        return raw.slice(firstBraceIndex, lastBraceIndex + 1).trim()
-    }
-
-    return raw
-}
-
-function extractMissingIngredientsPreview(value: string): Array<{
-    name: string
-    unit: string | null
-    notes: string | null
-}> {
-    const jsonPayload = extractJsonPayloadFromText(value)
-    if (!jsonPayload) return []
-
-    try {
-        const parsed = JSON.parse(jsonPayload)
-        const missingIngredients = Array.isArray(parsed?.missingIngredients) ? parsed.missingIngredients : []
-        return missingIngredients
-            .map((ingredient) => ({
-                name: String(ingredient?.name || "").trim(),
-                unit: String(ingredient?.unit || "").trim().toUpperCase() || null,
-                notes: String(ingredient?.notes || "").trim() || null,
-            }))
-            .filter((ingredient) => ingredient.name)
-    } catch (_error) {
-        return []
-    }
-}
 
 export default function RecipeChatGptAssistantPanel(props: RecipeChatGptAssistantPanelProps) {
     const outletContext = useOutletContext<AdminRecipeOutletContext | undefined>()
@@ -299,23 +261,7 @@ export default function RecipeChatGptAssistantPanel(props: RecipeChatGptAssistan
             )}
             copyToastTitle="Prompt copiado"
             copyToastContent="Cole o prompt no projeto Receitas Builder."
-            responseMetaContent={pastedMissingIngredients.length > 0 ? (
-                <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">
-                        Ingredientes ainda não cadastrados detectados na resposta
-                    </p>
-                    <div className="space-y-2">
-                        {pastedMissingIngredients.map((ingredient, index) => (
-                            <div key={`${ingredient.name}-${index}`} className="rounded-md border border-amber-200 bg-white/70 px-3 py-2 text-sm text-amber-950">
-                                <div className="font-medium">{ingredient.name}</div>
-                                <div className="text-xs text-amber-800">
-                                    {ingredient.unit || "UM não informada"}{ingredient.notes ? ` · ${ingredient.notes}` : ""}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            ) : null}
+            responseMetaContent={<MissingIngredientsPreview ingredients={pastedMissingIngredients} />}
             afterResponseContent={
                 <>
                     {previewFetcher.data?.status && previewFetcher.data.status >= 400 ? (

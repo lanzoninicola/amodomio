@@ -15,7 +15,7 @@ export function calcItemCostSheetTotalCostAmount(
   return roundItemCostSheetMoney(baseAmount * wasteFactor);
 }
 
-export async function getRecipeCostSheetSnapshot(
+export async function getRecipeCompositionCostSnapshot(
   db: any,
   recipeId: string,
   itemVariationId?: string | null
@@ -45,9 +45,11 @@ export async function getRecipeCostSheetSnapshot(
     lastTotal,
     avgTotal,
     unitCostAmount: avgTotal,
-    note: `snapshot receita: ultimo=${lastTotal.toFixed(4)} medio=${avgTotal.toFixed(4)}`,
+    note: `calculado pela composicao da receita: ultimo=${lastTotal.toFixed(4)} medio=${avgTotal.toFixed(4)}`,
   };
 }
+
+export const getRecipeCostSheetSnapshot = getRecipeCompositionCostSnapshot;
 
 export async function getItemCostSheetSnapshot(
   db: any,
@@ -138,7 +140,7 @@ export async function recalcItemCostSheetTotals(db: any, itemCostSheetId: string
     for (const value of values) {
       try {
         if (component.type === "recipe") {
-          const snapshot = await getRecipeCostSheetSnapshot(
+          const snapshot = await getRecipeCompositionCostSnapshot(
             db,
             component.refId,
             value.itemVariationId

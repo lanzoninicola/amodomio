@@ -1,5 +1,5 @@
 import { Link, Outlet, useLocation } from "@remix-run/react";
-import { CalendarDays, Camera, Images, Package, Pizza, ReceiptText, Search, Store } from "lucide-react";
+import { CalendarDays, Camera, Images, Package, Pizza, ReceiptText, Search, ShoppingCart, Store } from "lucide-react";
 
 export default function AdminMobileLayout() {
   const { pathname } = useLocation();
@@ -13,6 +13,7 @@ export default function AdminMobileLayout() {
   const isStockPhotoEntry = pathname.startsWith("/admin/mobile/entrada-estoque-foto");
   const isImportStockMovementsBatch = pathname.startsWith("/admin/mobile/import-stock-movements");
   const isImportStockSupplierReconciliation = pathname.includes("/supplier-reconciliation");
+  const isPedidoFornecedor = pathname.startsWith("/admin/mobile/pedido-fornecedor");
   const pageTitle = isEstoque
     ? "Estoque de massa"
     : isProgramacao
@@ -31,6 +32,8 @@ export default function AdminMobileLayout() {
           ? "Custos por fornecedor"
         : isCosts
           ? "Consulta de custos"
+        : isPedidoFornecedor
+          ? "Pedido por fornecedor"
         : "Atalhos";
 
   return (
@@ -166,6 +169,19 @@ export default function AdminMobileLayout() {
               <span>
                 <span className="block text-sm font-semibold text-slate-900">Importação de estoque</span>
                 <span className="block text-xs text-slate-600">Abrir lote e resolver pendências no celular</span>
+              </span>
+            </Link>
+
+            <Link
+              to="/admin/mobile/pedido-fornecedor"
+              className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+            >
+              <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-green-100 text-green-700">
+                <ShoppingCart className="h-5 w-5" />
+              </span>
+              <span>
+                <span className="block text-sm font-semibold text-slate-900">Pedido por fornecedor</span>
+                <span className="block text-xs text-slate-600">Ver itens e anotar quantidades do pedido</span>
               </span>
             </Link>
           </main>

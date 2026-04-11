@@ -19,7 +19,7 @@ export default function AdminItemRecipesTab() {
 
   return (
     <div className="space-y-4 md:grid md:grid-cols-2 gap-4" >
-      <div className="flex flex-col space-y-6 ">
+      <div className="flex flex-col space-y-6">
         <div className="">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -58,14 +58,14 @@ export default function AdminItemRecipesTab() {
 
         <Separator />
 
-        <div className="flex items-center justify-between gap-3">
-          <div className="">
+        <div className="flex items-center justify-between gap-3 w-full">
+          <div className="flex flex-col w-full">
             <div>
               <h2 className="text-sm font-semibold  ">Uso como ingrediente</h2>
               <p className="text-sm text-slate-600">{ingredientUsage.length} receita(s)</p>
             </div>
 
-            <div className="mt-4 space-y-2">
+            <div className="mt-4 space-y-2 w-full">
               {ingredientUsage.length === 0 ? (
                 <p className="text-sm text-slate-500">Este item não está sendo usado como ingrediente em receitas.</p>
               ) : (
@@ -74,8 +74,8 @@ export default function AdminItemRecipesTab() {
                   const createdAtLabel = formatRecipeCreatedAt(recipe?.createdAt);
 
                   return (
-                    <div key={usage.id} className="rounded-lg border border-slate-100 p-3">
-                      <div className="flex items-center justify-between gap-2">
+                    <div key={usage.id} className="rounded-lg border border-slate-100 p-3 w-full">
+                      <div className="flex items-center justify-between gap-2 w-full">
                         <div>
                           <div className="font-medium text-slate-900">{recipe?.name || "Receita"}</div>
                           <div className="text-xs text-slate-500">

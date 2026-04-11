@@ -1,7 +1,7 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from '@remix-run/node';
 import { redirect } from '@remix-run/node';
 import { Form, Link, NavLink, Outlet, useActionData, useFetcher, useLoaderData, useNavigation, useRevalidator } from '@remix-run/react';
-import { Archive, BarChart2, Check, ChevronsUpDown, Download, Info, Loader2, RotateCcw, Smartphone, Trash2, Users } from 'lucide-react';
+import { Archive, BarChart2, Check, ChevronsUpDown, Download, Info, Loader2, RotateCcw, Smartphone, Trash2, Truck, Users } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import {
   AlertDialog,
@@ -23,6 +23,7 @@ import { Label } from '~/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '~/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~/components/ui/select';
 import { Separator } from '~/components/ui/separator';
+import { toast } from '~/components/ui/use-toast';
 import { authenticator } from '~/domain/auth/google.server';
 import { itemPrismaEntity } from '~/domain/item/item.prisma.entity.server';
 import { getAvailableItemUnits } from '~/domain/item/item-units.server';
@@ -621,6 +622,64 @@ export function ItemSystemMapperCell({
   );
 }
 
+function FreightEditButton({ batchId, freightAmount }: { batchId: string; freightAmount: number | null }) {
+  const fetcher = useFetcher<any>();
+  const [open, setOpen] = useState(false);
+  const [value, setValue] = useState(freightAmount != null ? String(freightAmount).replace('.', ',') : '');
+  const isSaving = fetcher.state !== 'idle';
+
+  useEffect(() => {
+    if (fetcher.state === 'idle' && fetcher.data?.payload?.updatedFreight) {
+      setOpen(false);
+    }
+  }, [fetcher.state, fetcher.data]);
+
+  const BRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+  const displayValue = freightAmount != null && freightAmount > 0 ? BRL.format(freightAmount) : null;
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <button
+          className="flex flex-col items-center justify-center gap-1 px-4 py-2.5 text-slate-600 hover:bg-slate-50 transition min-w-[64px]"
+          title={displayValue ? `Frete: ${displayValue}` : 'Sem frete'}
+        >
+          <Truck className={`h-4 w-4 ${displayValue ? 'text-emerald-600' : ''}`} />
+          <span className={`text-[11px] font-medium ${displayValue ? 'text-emerald-700' : ''}`}>
+            {displayValue ?? 'Frete'}
+          </span>
+        </button>
+      </DialogTrigger>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Valor do frete</DialogTitle>
+        </DialogHeader>
+        <fetcher.Form method="post" className="space-y-4">
+          <input type="hidden" name="_action" value="batch-update-freight" />
+          <input type="hidden" name="batchId" value={batchId} />
+          <div className="space-y-1.5">
+            <Label htmlFor="freightAmount">Frete (R$)</Label>
+            <Input
+              id="freightAmount"
+              name="freightAmount"
+              type="text"
+              inputMode="decimal"
+              placeholder="0,00"
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              autoFocus
+            />
+            <p className="text-[11px] text-slate-400">Deixe em branco ou zero para remover o frete.</p>
+          </div>
+          <Button type="submit" className="w-full" disabled={isSaving}>
+            {isSaving ? 'Salvando...' : 'Salvar'}
+          </Button>
+        </fetcher.Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export async function loader({ params }: LoaderFunctionArgs) {
   try {
     const batchId = String(params.batchId || '').trim();
@@ -1049,6 +1108,17 @@ export async function action({ request, params }: ActionFunctionArgs) {
       return redirect('/admin/import-stock-movements');
     }
 
+    if (_action === 'batch-update-freight') {
+      const raw = str(formData.get('freightAmount')).replace(',', '.');
+      const value = parseFloat(raw);
+      const freightAmount = Number.isFinite(value) && value >= 0 ? value : null;
+      await db.stockMovementImportBatch.update({
+        where: { id: batchId },
+        data: { freightAmount: freightAmount === 0 ? null : freightAmount },
+      });
+      return ok({ updatedFreight: true });
+    }
+
     return badRequest('Ação inválida');
   } catch (error) {
     return serverError(error);
@@ -1119,7 +1189,18 @@ export default function AdminImportStockMovementsBatchDetailRoute() {
     },
     {} as Record<string, number>,
   );
-  const availableStatusTabs = LINE_STATUS_NAV.filter((item) => Number(statusCounts[item.status] || 0) > 0);
+  const pendingCount = (statusCounts['pending_mapping'] || 0) + (statusCounts['pending_conversion'] || 0);
+  const availableStatusTabs = LINE_STATUS_NAV
+    .filter((item) => item.status !== 'pending_mapping' && item.status !== 'pending_conversion')
+    .filter((item) => Number(statusCounts[item.status] || 0) > 0)
+    .reduce<Array<{ status: string; label: string; count: number }>>((acc, item) => {
+      acc.push({ status: item.status, label: item.label, count: statusCounts[item.status] || 0 });
+      return acc;
+    }, []);
+  if (pendingCount > 0) {
+    const insertIdx = availableStatusTabs.findIndex((t) => t.status === 'pending_supplier');
+    availableStatusTabs.splice(insertIdx >= 0 ? insertIdx : 0, 0, { status: 'pending', label: 'Pendente', count: pendingCount });
+  }
   const tabClass = ({ isActive }: { isActive: boolean }) =>
     `border-b-2 pb-3 font-medium transition ${
       isActive
@@ -1147,6 +1228,23 @@ export default function AdminImportStockMovementsBatchDetailRoute() {
     if (!importStepFetcher.data) return;
     revalidator.revalidate();
   }, [importStepFetcher.state, importStepFetcher.data, revalidator]);
+
+  const prevIsImportingRef = useRef(false);
+  useEffect(() => {
+    if (prevIsImportingRef.current && !isImportingBatch) {
+      const status = batchImportStatus;
+      if (status === 'imported') {
+        toast({ title: 'Importação concluída', description: 'Todas as linhas foram importadas com sucesso.' });
+      } else if (status === 'partial') {
+        toast({ title: 'Importação parcial', description: 'Algumas linhas foram importadas, outras tiveram erros.', variant: 'destructive' });
+      } else if (status === 'error') {
+        toast({ title: 'Erro na importação', description: 'Ocorreu um erro durante a importação.', variant: 'destructive' });
+      } else {
+        toast({ title: 'Importação finalizada', description: `Status: ${status}` });
+      }
+    }
+    prevIsImportingRef.current = isImportingBatch;
+  }, [isImportingBatch, batchImportStatus]);
 
   if (!selectedBatch) {
     return (
@@ -1388,6 +1486,10 @@ export default function AdminImportStockMovementsBatchDetailRoute() {
                   </div>
                 </DialogContent>
               </Dialog>
+
+              <Separator orientation="vertical" className="h-auto self-stretch" />
+
+              <FreightEditButton batchId={String(selectedBatch.id)} freightAmount={selectedBatch.freightAmount ?? null} />
             </div>
 
             {/* Grupo 3: Mobile */}
@@ -1422,7 +1524,7 @@ export default function AdminImportStockMovementsBatchDetailRoute() {
 
             {availableStatusTabs.map((item) => (
               <NavLink key={item.status} to={`status/${item.status}`} className={tabClass}>
-                {item.label} ({statusCounts[item.status] || 0})
+                {item.label} ({item.count})
               </NavLink>
             ))}
 

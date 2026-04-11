@@ -1,8 +1,9 @@
 import { Form, Link, useOutletContext } from "@remix-run/react";
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MoneyInput } from "~/components/money-input/MoneyInput";
 import { NumericInput } from "~/components/numeric-input/numeric-input";
 import { Button } from "~/components/ui/button";
+import { SearchableSelect, type SearchableSelectOption } from "~/components/ui/searchable-select";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import {
   SheetTypeLabel,
@@ -16,7 +17,6 @@ export default function AdminItemCostSheetCustosTab() {
     selectedSheet,
     variationSheets,
     compositionRows,
-    deletionGuard,
     totalsByVariationId,
     detailPath,
     unitOptions,
@@ -25,10 +25,32 @@ export default function AdminItemCostSheetCustosTab() {
     referenceSheetOptions,
   } =
     useOutletContext<AdminItemCostSheetDetailOutletContext>();
+  const [selectedRecipeId, setSelectedRecipeId] = useState("");
+  const [selectedReferenceSheetId, setSelectedReferenceSheetId] = useState("");
   const defaultManualUnit = unitOptions.includes("UN") ? "UN" : unitOptions[0] || "";
   const defaultLaborUnit = unitOptions.includes("H") ? "H" : defaultManualUnit;
   const availableReferenceSheets = referenceSheetOptions.filter((sheet) => sheet.id !== rootSheetId);
   const isActive = variationSheets.some((sheet: any) => sheet.isActive);
+  const recipeSelectOptions = useMemo<SearchableSelectOption[]>(
+    () =>
+      recipeOptions.map((recipe) => ({
+        value: recipe.id,
+        label: `${recipe.name}${recipe.variationLabel ? ` (${recipe.variationLabel})` : ""}`,
+        searchText: [recipe.name, recipe.variationLabel || "", recipe.type || ""]
+          .filter(Boolean)
+          .join(" "),
+      })),
+    [recipeOptions]
+  );
+  const referenceSheetSelectOptions = useMemo<SearchableSelectOption[]>(
+    () =>
+      availableReferenceSheets.map((sheet) => ({
+        value: sheet.id,
+        label: sheet.name,
+        searchText: [sheet.name, Number(sheet.costAmount || 0).toFixed(2)].filter(Boolean).join(" "),
+      })),
+    [availableReferenceSheets]
+  );
 
   useEffect(() => {
     function handleSaveShortcut(event: KeyboardEvent) {
@@ -85,20 +107,12 @@ export default function AdminItemCostSheetCustosTab() {
               name="_action"
               value="item-cost-sheet-delete"
               className="rounded-full border-red-200 bg-white text-red-700 hover:bg-red-50 hover:text-red-800"
-              disabled={!deletionGuard.canDelete}
             >
               Eliminar ficha
             </Button>
           </Form>
         </div>
       </div>
-
-
-      {!deletionGuard.canDelete && deletionGuard.reason ? (
-        <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-          {deletionGuard.reason}
-        </div>
-      ) : null}
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[0.85fr_0.85fr_1.15fr_1.15fr]">
         <Form method="post" action={detailPath} className="space-y-3 rounded-[24px] border border-slate-200 bg-slate-50/60 p-5">
@@ -112,18 +126,28 @@ export default function AdminItemCostSheetCustosTab() {
           </div>
           <div>
             <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="recipeId">Receita</label>
-            <Select name="recipeId" required>
-              <SelectTrigger id="recipeId" className="h-10 rounded-lg border-slate-200 bg-white">
-                <SelectValue placeholder="Selecionar receita" />
-              </SelectTrigger>
-              <SelectContent>
-                {recipeOptions.map((recipe) => (
-                  <SelectItem key={recipe.id} value={recipe.id}>
-                    {recipe.name}{recipe.variationLabel ? ` (${recipe.variationLabel})` : ""} • med R$ {recipe.avgTotal.toFixed(2)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <input type="hidden" name="recipeId" value={selectedRecipeId} />
+            <SearchableSelect
+              value={selectedRecipeId}
+              onValueChange={setSelectedRecipeId}
+              options={recipeSelectOptions}
+              placeholder="Selecionar receita"
+              searchPlaceholder="Buscar receita..."
+              emptyText="Nenhuma receita encontrada."
+              triggerClassName="h-10 w-full max-w-none justify-between rounded-lg border-slate-200 px-3 text-sm"
+              contentClassName="w-[var(--radix-popover-trigger-width)] p-0"
+              renderOption={(option) => {
+                const recipe = recipeOptions.find((entry) => entry.id === option.value);
+                if (!recipe) return option.label;
+
+                return (
+                  <div className="flex min-w-0 flex-col">
+                    <span className="truncate text-sm text-slate-900">{option.label}</span>
+                    <span className="text-xs text-slate-500">Componente de produção</span>
+                  </div>
+                );
+              }}
+            />
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
@@ -136,7 +160,14 @@ export default function AdminItemCostSheetCustosTab() {
             </div>
           </div>
           <div className="flex justify-end">
-            <Button type="submit" variant="outline" name="_action" value="item-cost-sheet-line-add-recipe" className="rounded-full border-slate-200 bg-white text-slate-700 hover:bg-slate-100">
+            <Button
+              type="submit"
+              variant="outline"
+              name="_action"
+              value="item-cost-sheet-line-add-recipe"
+              className="rounded-full border-slate-200 bg-white text-slate-700 hover:bg-slate-100"
+              disabled={!selectedRecipeId}
+            >
               Adicionar
             </Button>
           </div>
@@ -151,18 +182,28 @@ export default function AdminItemCostSheetCustosTab() {
           </div>
           <div>
             <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="refRecipeSheetId">Ficha</label>
-            <Select name="refRecipeSheetId" required>
-              <SelectTrigger id="refRecipeSheetId" className="h-10 rounded-lg border-slate-200 bg-white">
-                <SelectValue placeholder="Selecionar ficha" />
-              </SelectTrigger>
-              <SelectContent>
-                {availableReferenceSheets.map((sheet) => (
-                  <SelectItem key={sheet.id} value={sheet.id}>
-                    {sheet.name} • R$ {Number(sheet.costAmount || 0).toFixed(2)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <input type="hidden" name="refRecipeSheetId" value={selectedReferenceSheetId} />
+            <SearchableSelect
+              value={selectedReferenceSheetId}
+              onValueChange={setSelectedReferenceSheetId}
+              options={referenceSheetSelectOptions}
+              placeholder="Selecionar ficha"
+              searchPlaceholder="Buscar ficha..."
+              emptyText="Nenhuma ficha encontrada."
+              triggerClassName="h-10 w-full max-w-none justify-between rounded-lg border-slate-200 px-3 text-sm"
+              contentClassName="w-[var(--radix-popover-trigger-width)] p-0"
+              renderOption={(option) => {
+                const sheet = availableReferenceSheets.find((entry) => entry.id === option.value);
+                if (!sheet) return option.label;
+
+                return (
+                  <div className="flex min-w-0 flex-col">
+                    <span className="truncate text-sm text-slate-900">{option.label}</span>
+                    <span className="text-xs text-slate-500">R$ {Number(sheet.costAmount || 0).toFixed(2)}</span>
+                  </div>
+                );
+              }}
+            />
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
@@ -175,7 +216,14 @@ export default function AdminItemCostSheetCustosTab() {
             </div>
           </div>
           <div className="flex justify-end">
-            <Button type="submit" variant="outline" name="_action" value="item-cost-sheet-line-add-sheet" className="rounded-full border-slate-200 bg-white text-slate-700 hover:bg-slate-100">
+            <Button
+              type="submit"
+              variant="outline"
+              name="_action"
+              value="item-cost-sheet-line-add-sheet"
+              className="rounded-full border-slate-200 bg-white text-slate-700 hover:bg-slate-100"
+              disabled={!selectedReferenceSheetId}
+            >
               Adicionar
             </Button>
           </div>
@@ -288,8 +336,7 @@ export default function AdminItemCostSheetCustosTab() {
           <table className="min-w-full border-separate border-spacing-0 text-sm">
             <thead className="bg-white">
               <tr>
-                <th className="sticky left-0 z-20 bg-white px-3 py-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Tipo</th>
-                <th className="sticky left-[88px] z-20 bg-white px-3 py-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Componente</th>
+                <th className="sticky left-0 z-20 bg-white px-3 py-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Componente</th>
                 {variationSheets.map((sheet: any) => (
                   <th key={sheet.id} className="min-w-[292px] px-3 py-4 text-left text-xs font-semibold ">
                     <div className="text-[15px] font-semibold text-slate-700">{variationLabel(sheet)}</div>
@@ -304,7 +351,7 @@ export default function AdminItemCostSheetCustosTab() {
             <tbody>
               {compositionRows.length === 0 ? (
                 <tr>
-                  <td colSpan={variationSheets.length + 3} className="px-3 py-6 text-center text-slate-500">Nenhum componente na ficha.</td>
+                  <td colSpan={variationSheets.length + 2} className="px-3 py-6 text-center text-slate-500">Nenhum componente na ficha.</td>
                 </tr>
               ) : (
                 compositionRows.map((line) => {
@@ -313,16 +360,14 @@ export default function AdminItemCostSheetCustosTab() {
 
                   return (
                     <tr key={line.id}>
-                      <td className="sticky left-0 z-10 border-t border-slate-100 bg-white px-3 py-4 align-top">
-                        <div className="pt-1">
-                          <SheetTypeLabel type={line.type} />
-                        </div>
-                      </td>
-                      <td className="sticky left-[88px] z-10 min-w-[280px] border-t border-slate-100 bg-white px-3 py-4 align-top">
+                      <td className="sticky left-0 z-10 min-w-[280px] border-t border-slate-100 bg-white px-3 py-4 align-top">
                         <Form id={lineFormId} method="post" action={detailPath} className="space-y-2">
                           <input type="hidden" name="itemCostSheetId" value={selectedSheet?.id} />
                           <input type="hidden" name="lineId" value={line.id} />
                           <input type="hidden" name="redirectTo" value={`${detailPath}/custos`} />
+                          <div className="pb-1">
+                            <SheetTypeLabel type={line.type} />
+                          </div>
                           <div className="space-y-1">
                             <label className="block text-[11px] font-semibold uppercase tracking-wide text-slate-500">Nome</label>
                             <input

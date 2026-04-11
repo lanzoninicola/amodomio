@@ -4,7 +4,15 @@
 
 Página de gerenciamento de receitas em formato de **grid database** (estilo Airtable/Baserow), acessível em `/admin/recipes/worksheet`.
 
-Permite visualizar, editar e gerenciar receitas e seus ingredientes (RecipeLines) em uma única tela, com edição inline por célula — sem necessidade de navegar para o detalhe de cada receita. O objetivo é simular a operatividade de um worksheet de Google Sheets para usuários com menos experiência.
+Permite visualizar, editar e gerenciar receitas e seus ingredientes (RecipeLines) em uma única tela, com edição inline por célula, sem necessidade de navegar para o detalhe de cada receita. O objetivo é simular a operatividade de um worksheet de Google Sheets para usuários com menos experiência.
+
+O worksheet pertence ao domínio de produção:
+
+- mostra a estrutura técnica da receita
+- permite editar ingrediente, variação, UM e quantidade
+- não mostra totais monetários, custo unitário ou indicadores operacionais de custo
+
+Os snapshots de custo continuam existindo no backend para consumo da ficha técnica, mas não fazem mais parte da leitura operacional do worksheet.
 
 ---
 
@@ -109,10 +117,10 @@ return parts.join(" • ")
 |---|---|
 | `recipe-update` | Atualiza `name`, `itemId` e/ou `variationId` de uma receita |
 | `recipe-create` | Cria nova receita com `name`, `itemId`, `variationId` opcionais |
-| `recipe-line-update` | Atualiza `unit` + `quantity` + recalcula `lastTotalCostAmount` / `avgTotalCostAmount` |
-| `recipe-line-item-update` | Troca o `itemId` de uma linha existente e recalcula custo snapshot |
+| `recipe-line-update` | Atualiza `unit` + `quantity`; o backend mantém os snapshots derivados necessários |
+| `recipe-line-item-update` | Troca o `itemId` de uma linha existente e recompõe os snapshots derivados necessários |
 | `recipe-line-delete` | Remove `RecipeLine` por ID |
-| `recipe-line-add` | Cria nova `RecipeLine` com custo snapshot do `ItemCostVariation` atual |
+| `recipe-line-add` | Cria nova `RecipeLine` com os metadados técnicos da linha |
 
 ### recipe-update
 
@@ -141,35 +149,11 @@ await db.recipe.create({
 })
 ```
 
-### recipe-line-update
+### Observação importante sobre custo
 
-```ts
-// Recalcula totais com base no custo atual do ItemCostVariation
-const lastUnitCost = line.ItemVariation?.ItemCostVariation?.costAmount ?? line.lastUnitCostAmount
-await db.recipeLine.update({
-    where: { id: lineId },
-    data: { unit, quantity, lastTotalCostAmount: lastUnitCost * quantity, ... }
-})
-```
-
-### recipe-line-item-update
-
-```ts
-// Troca o ingrediente de uma linha existente, preservando unit e quantity
-const itemVariation = await db.itemVariation.findFirst({ where: { itemId, deletedAt: null } })
-await db.recipeLine.update({
-    where: { id: lineId },
-    data: { itemId, itemVariationId, lastUnitCostAmount, avgUnitCostAmount, lastTotalCostAmount, avgTotalCostAmount },
-})
-```
-
-### recipe-line-add
-
-```ts
-// Usa a primeira ItemVariation ativa do item como snapshot de custo
-const itemVariation = await db.itemVariation.findFirst({ where: { itemId, deletedAt: null } })
-await db.recipeLine.create({ data: { recipeId, itemId, itemVariationId, unit, quantity, ... } })
-```
+- O backend ainda persiste snapshots derivados por linha para que a ficha técnica consiga calcular o custo a partir da composição da receita.
+- Esses snapshots não são mais parte da leitura operacional do worksheet.
+- O usuário não deve usar o worksheet para validar custo de produção ou custo de venda.
 
 ---
 
@@ -178,7 +162,7 @@ await db.recipeLine.create({ data: { recipeId, itemId, itemVariationId, unit, qu
 ```
 RecipeWorksheet              ← página principal, toolbar compacta, grid, resize state
   └─ RecipeGroup             ← grupo por receita (collapsível)
-       ├─ RecipeHeaderRow    ← linha-header da receita (nome, item, variante, nome calc, total)
+       ├─ RecipeHeaderRow    ← linha-header da receita (nome, item, nome calc)
        ├─ RecipeLineRow      ← linha de ingrediente (edição inline com DecimalInput)
        ├─ AddingRow          ← linha nova inline (combobox + UM + DecimalInput)
        └─ CreatingRecipeRow  ← linha verde para criar nova receita (item-first)
@@ -202,13 +186,11 @@ RecipeWorksheet              ← página principal, toolbar compacta, grid, resi
 
 ### RecipeHeaderRow
 
-- Exibe e edita metadados da receita (name, itemId, variationId)
+- Exibe e edita metadados da receita
 - **Nome**: click-to-edit → `<input>` com `autoFocus`; Enter/blur salva; Esc reverte
 - **Item Vinculado**: Popover + Command combobox; permite remover vínculo via opção "Remover vínculo"
   - Cada opção exibe: nome (truncado) + classificação + UM à direita (`flex justify-between`)
-- **Variante**: `<select>` nativo com todas as variações ativas
 - **Nome Calculado**: campo somente-leitura derivado via `calcNome()` — `Item.name • Variation.name`
-- **Total**: soma de `lastTotalCostAmount` de todas as RecipeLines
 - **Link**: ícone `ExternalLink` para `/admin/recipes/:id`
 
 ### RecipeLineRow
@@ -217,11 +199,10 @@ RecipeWorksheet              ← página principal, toolbar compacta, grid, resi
 - Estado local: `unit`, `defaultQty`, `currentQty`
   - `defaultQty` controla o reset do `DecimalInput` via seu `useEffect([defaultValue])`
   - `currentQty` rastreia o valor live via `onValueChange`
-- `isDirty`: detecta mudança não salva → fundo âmbar + total em laranja
+- `isDirty`: detecta mudança não salva → fundo âmbar
 - **Ingrediente**: Popover + Command combobox — clicando no nome abre a busca; ao selecionar novo item chama `recipe-line-item-update` via `itemFetcher` (fetcher separado do de qty/unit)
 - **Save:** `onBlur` ou `Enter` no `<td>` (bubbling) via `fetcher.submit()` → `recipe-line-update`
 - **Cancel:** `Escape` reverte — reseta `defaultQty` (triggering reset do `DecimalInput`) e `currentQty`
-- Total otimista: `currentQty * lastUnitCostAmount` recalculado localmente
 - Botão deletar: visível no hover da linha (ícone `Trash2`)
 
 ```tsx
@@ -290,25 +271,18 @@ setTimeout(() => qtyContainerRef.current
 
 Inspirado no layout de database grid do [Baserow](https://baserow.io) / [Airtable](https://airtable.com).
 
-### Layout de colunas — duplo significado
+### Layout de colunas
 
-A tabela usa 8 colunas fixas que têm significados diferentes nas linhas de cabeçalho de receita e nas linhas de ingrediente:
+A tabela usa colunas fixas de estrutura de produção. As colunas monetárias foram removidas do worksheet:
 
-| Col | Largura padrão | Mínima | Linha receita (header) | Linha ingrediente |
-|-----|---------------|--------|------------------------|-------------------|
-| 1 | 36px | 36px | expand/collapse | `#` row number |
-| 2 | 240px | 80px | Nome Receita (editável) | Ingrediente (combobox) |
-| 3 | 160px | 80px | Item Vinculado (combobox) | Variação Ing. (read-only) |
-| 4 | 96px | 60px | Variante (select) | UM (select) |
-| 5 | 106px | 60px | Nome Calculado (read-only) | Quantidade (DecimalInput) |
-| 6 | 112px | 80px | — | Custo Un. (read-only) |
-| 7 | 112px | 80px | Total (read-only) | Total (otimista) |
-| 8 | 36px | 36px | Link externo | Botão delete (hover) |
-
-```ts
-const DEFAULT_COL_WIDTHS = [36, 240, 160, 96, 106, 112, 112, 36]
-const MIN_COL_WIDTHS     = [36,  80,  80, 60,  60,  80,  80, 36]
-```
+| Col | Linha receita (header) | Linha ingrediente |
+|-----|------------------------|-------------------|
+| 1 | expand/collapse | `#` row number |
+| 2 | Nome Receita (editável) | Ingrediente (combobox) |
+| 3 | Item Vinculado (combobox) | Variação Ing. (read-only) |
+| 4 | Nome calculado / contexto | UM |
+| 5 | ações inline | Quantidade |
+| 6 | Link externo | Botão delete |
 
 ### Redimensionamento de colunas
 
@@ -373,7 +347,6 @@ const INPUT_BASE        = "w-full h-full px-2 bg-transparent border-0 outline-no
 2. Editar e pressionar `Enter` ou clicar fora → salva via `useFetcher`
 3. `Esc` → reverte ao valor salvo
 4. Clicar em **Item Vinculado** → combobox abre para busca/seleção (busca por nome, classificação ou UM)
-5. Clicar em **Variante** → select nativo para escolher a variação
 
 ### Criar nova receita
 
@@ -399,7 +372,7 @@ const INPUT_BASE        = "w-full h-full px-2 bg-transparent border-0 outline-no
 **Trocar o ingrediente:**
 1. Clicar na célula do nome do ingrediente → combobox abre com busca
 2. Buscar e selecionar o novo ingrediente → salva imediatamente via `recipe-line-item-update`
-3. A quantidade e UM são preservadas; custo snapshot é atualizado com a `ItemVariation` ativa do novo item
+3. A quantidade e UM são preservadas; os snapshots internos necessários são recompostos no backend
 
 **Editar UM ou Quantidade:**
 1. Clicar na célula **UM** ou **Quantidade**
@@ -421,8 +394,8 @@ const INPUT_BASE        = "w-full h-full px-2 bg-transparent border-0 outline-no
 |---|---|
 | **Variação do ingrediente** não editável | Apenas no detalhe da receita (`/admin/recipes/:id`); ao trocar o item, a primeira `ItemVariation` ativa é usada como snapshot |
 | **Reordenação** não implementada | Drag-and-drop de `sortOrderIndex` não suportado |
-| **Custo médio** não exibido | Apenas `lastUnitCostAmount` é mostrado; custo médio está no detalhe |
-| **Recalcular custos** | Snapshot de custo é feito no momento da criação; recalc manual está no detalhe |
+| **Custos monetários** não exibidos | O worksheet é uma tela de produção; custo operacional pertence à ficha técnica |
+| **Recalcular custos** | Não é ação do worksheet; a ficha técnica calcula o custo a partir da composição da receita |
 | **Virtualização** não implementada | Pode ser lento com centenas de receitas/linhas |
 | **Larguras não persistidas** | `colWidths` é estado React local — resetado ao recarregar a página |
 | **Delete de receita** | Não disponível no worksheet; usar o detalhe da receita |

@@ -14,11 +14,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { authenticator } from "~/domain/auth/google.server";
 import {
   createOrUpdateManagedUser,
-  getEffectiveRoles,
   getLegacyWhitelistedEmails,
   hasAnyRole,
-  normalizeUserRoles,
 } from "~/domain/auth/user-access.server";
+import { getEffectiveRoles, normalizeUserRoles } from "~/domain/auth/user-access";
 import prismaClient from "~/lib/prisma/client.server";
 
 const ROLE_OPTIONS: Array<{ value: UserRole; label: string; description: string }> = [

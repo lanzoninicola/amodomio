@@ -2,8 +2,8 @@ import { ActionFunctionArgs, LoaderFunctionArgs, redirect } from "@remix-run/nod
 import { Link, Outlet, useActionData, useLoaderData, useLocation } from "@remix-run/react";
 import {
   calcItemCostSheetTotalCostAmount,
+  getRecipeCompositionCostSnapshot,
   getItemCostSheetSnapshot,
-  getRecipeCostSheetSnapshot,
   recalcItemCostSheetTotals,
   roundItemCostSheetMoney,
 } from "~/domain/costs/item-cost-sheet-recalc.server";
@@ -341,32 +341,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     );
 
     const recipeOptions = isCostsTabRequest
-      ? await Promise.all(
-        recipes.map(async (recipe: any) => {
-          try {
-            const lines = await listRecipeCompositionLines(db, recipe.id);
-            const lastTotal = lines.reduce((acc, line) => acc + Number(line.lastTotalCostAmount || 0), 0);
-            const avgTotal = lines.reduce((acc, line) => acc + Number(line.avgTotalCostAmount || 0), 0);
-            return {
-              id: recipe.id,
-              name: recipe.name,
-              type: recipe.type,
-              variationLabel: recipe.Variation?.name || null,
-              lastTotal,
-              avgTotal,
-            };
-          } catch {
-            return {
-              id: recipe.id,
-              name: recipe.name,
-              type: recipe.type,
-              variationLabel: recipe.Variation?.name || null,
-              lastTotal: 0,
-              avgTotal: 0,
-            };
-          }
-        })
-      )
+      ? recipes.map((recipe: any) => ({
+        id: recipe.id,
+        name: recipe.name,
+        type: recipe.type,
+        variationLabel: recipe.Variation?.name || null,
+      }))
       : [];
 
     const recipeSheetDependencyCountById = Object.fromEntries(
@@ -470,10 +450,14 @@ export async function action({ request, params }: ActionFunctionArgs) {
       if (!(quantity > 0)) return badRequest("Informe uma quantidade válida");
       if (itemCostSheetId !== currentSheet.id) return badRequest("Ficha de custo divergente");
 
-      const snapshot = await getRecipeCostSheetSnapshot(db, recipeId);
+      const snapshot = await getRecipeCompositionCostSnapshot(db, recipeId);
       const variationEntries = await Promise.all(
         targetItemVariationIds.map(async (targetItemVariationId) => {
-          const perVariationSnapshot = await getRecipeCostSheetSnapshot(db, recipeId, targetItemVariationId);
+          const perVariationSnapshot = await getRecipeCompositionCostSnapshot(
+            db,
+            recipeId,
+            targetItemVariationId
+          );
           return {
             itemVariationId: targetItemVariationId,
             unit: "receita",
@@ -858,8 +842,6 @@ export type AdminItemCostSheetDetailOutletContext = {
     name: string;
     type: string;
     variationLabel?: string | null;
-    lastTotal: number;
-    avgTotal: number;
   }>;
   referenceSheetOptions: Array<{
     id: string;
@@ -901,8 +883,6 @@ export default function AdminItemCostSheetDetail() {
     name: string;
     type: string;
     variationLabel?: string | null;
-    lastTotal: number;
-    avgTotal: number;
   }>;
   const referenceSheetOptions = (payload.referenceSheetOptions || []) as Array<{
     id: string;

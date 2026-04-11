@@ -23,6 +23,11 @@ interface RecipeFormProps {
     requireItemRemapConfirmation?: boolean;
     hiddenFields?: Array<{ name: string; value: string }>;
     formAction?: string;
+    createCostSheetOption?: {
+        enabled: boolean;
+        defaultChecked?: boolean;
+        helperText?: string;
+    };
 }
 
 function buildRecipeName(itemName?: string) {
@@ -30,7 +35,16 @@ function buildRecipeName(itemName?: string) {
     return `Receita ${itemName}`;
 }
 
-export default function RecipeForm({ recipe, actionName, items = [], title, requireItemRemapConfirmation = false, hiddenFields = [], formAction }: RecipeFormProps) {
+export default function RecipeForm({
+    recipe,
+    actionName,
+    items = [],
+    title,
+    requireItemRemapConfirmation = false,
+    hiddenFields = [],
+    formAction,
+    createCostSheetOption,
+}: RecipeFormProps) {
     const isCreate = actionName === "recipe-create";
     const initialLinkedItemId = String(recipe?.itemId || "");
     const [name, setName] = useState(recipe?.name || "");
@@ -38,6 +52,9 @@ export default function RecipeForm({ recipe, actionName, items = [], title, requ
     const [linkedItemId, setLinkedItemId] = useState(recipe?.itemId || "");
     const [itemComboboxOpen, setItemComboboxOpen] = useState(false);
     const [confirmItemRemap, setConfirmItemRemap] = useState(false);
+    const [createCostSheetOnSave, setCreateCostSheetOnSave] = useState(
+        Boolean(createCostSheetOption?.defaultChecked)
+    );
 
     const selectedItem = useMemo(
         () => items.find((item) => item.id === linkedItemId) || null,
@@ -83,10 +100,15 @@ export default function RecipeForm({ recipe, actionName, items = [], title, requ
         }
     }, [hasItemChanged]);
 
+    useEffect(() => {
+        setCreateCostSheetOnSave(Boolean(createCostSheetOption?.defaultChecked));
+    }, [createCostSheetOption?.defaultChecked]);
+
     return (
         <Form method="post" action={formAction}>
             <input type="hidden" name="recipeId" value={recipe?.id} />
             <input type="hidden" name="confirmItemRemap" value={confirmItemRemap ? "yes" : "no"} />
+            <input type="hidden" name="createItemCostSheet" value={createCostSheetOnSave ? "yes" : "no"} />
             {hiddenFields.map((field) => (
                 <input key={field.name} type="hidden" name={field.name} value={field.value} />
             ))}
@@ -188,7 +210,7 @@ export default function RecipeForm({ recipe, actionName, items = [], title, requ
                                     {requireItemRemapConfirmation && hasItemChanged ? (
                                         <div className="mt-2 rounded-md border border-amber-300 bg-amber-50 p-2">
                                             <p className="text-xs font-semibold text-amber-900">
-                                                Trocar o item apaga os dados por variação (UM, quantidade e custos) e exige remapeamento.
+                                                Trocar o item apaga os dados por variação (UM e quantidade) e exige remapeamento.
                                             </p>
                                             <label className="mt-1 inline-flex items-center gap-2 text-xs text-amber-900">
                                                 <input
@@ -203,6 +225,28 @@ export default function RecipeForm({ recipe, actionName, items = [], title, requ
                                     ) : null}
                                 </div>
                             </Fieldset>
+                            {createCostSheetOption?.enabled ? (
+                                <Fieldset className="grid-cols-3">
+                                    <Label htmlFor="createItemCostSheet">Ficha técnica</Label>
+                                    <div className="col-span-2 space-y-1">
+                                        <label className="inline-flex items-start gap-2 text-sm text-slate-700">
+                                            <input
+                                                id="createItemCostSheet"
+                                                type="checkbox"
+                                                checked={createCostSheetOnSave}
+                                                onChange={(event) => setCreateCostSheetOnSave(event.target.checked)}
+                                                className="mt-0.5 h-4 w-4 rounded border-slate-300"
+                                            />
+                                            <span>
+                                                Criar ou garantir ficha técnica com esta receita na composição.
+                                            </span>
+                                        </label>
+                                        <p className="text-xs text-muted-foreground">
+                                            {createCostSheetOption.helperText || "A ficha técnica ficará responsável pelo custo operacional; a receita continua sendo apenas a estrutura de produção."}
+                                        </p>
+                                    </div>
+                                </Fieldset>
+                            ) : null}
                         </div>
                     </div>
 

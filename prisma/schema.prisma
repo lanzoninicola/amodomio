@@ -2462,6 +2462,7 @@ model StockMovementImportBatch {
   uploadedBy              String?   @map("uploaded_by")
   appliedAt               DateTime? @map("applied_at")
   rolledBackAt            DateTime? @map("rolled_back_at")
+  freightAmount           Float?    @map("freight_amount")
   summary                 Json?
   notes                   String?   @db.Text
   createdAt               DateTime  @default(now()) @map("created_at")

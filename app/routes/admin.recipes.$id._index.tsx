@@ -14,6 +14,7 @@ export default function AdminRecipeCadastroTab() {
                 actionName="recipe-update"
                 items={items}
                 requireItemRemapConfirmation
+                createCostSheetOption={{ enabled: true, defaultChecked: false }}
                 hiddenFields={[{ name: "tab", value: "cadastro" }]}
                 formAction=".."
             />

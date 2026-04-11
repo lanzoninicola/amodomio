@@ -338,14 +338,15 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
     if (!item) return badRequest("Item não encontrado");
 
-    // Load all restricted units and which ones are linked to this item
-    const restrictedUnits = typeof db.measurementUnit?.findMany === "function"
+    // Load all units plus the restricted subset used by purchases UI
+    const measurementUnits = typeof db.measurementUnit?.findMany === "function"
       ? await db.measurementUnit.findMany({
-          where: { active: true, scope: "restricted" },
-          select: { id: true, code: true, name: true, kind: true },
+          where: { active: true },
+          select: { id: true, code: true, name: true, kind: true, scope: true },
           orderBy: [{ code: "asc" }],
         })
       : [];
+    const restrictedUnits = measurementUnits.filter((unit: any) => unit.scope === "restricted");
     const linkedUnitCodes = new Set<string>(
       (item.ItemUnit ?? []).map((u: any) => u.unitCode)
     );
@@ -402,6 +403,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
       unitOptions,
       categories,
       suppliers,
+      measurementUnits,
       restrictedUnits,
       linkedUnitCodes: Array.from(linkedUnitCodes),
       recipeAssistantItems,
@@ -796,6 +798,7 @@ export type AdminItemOutletContext = {
     averageSamplesCount: number;
   }>;
   averageWindowDays: number;
+  measurementUnits: Array<{ id: string; code: string; name: string; kind: string | null; scope: string | null }>;
   restrictedUnits: Array<{ id: string; code: string; name: string; kind: string | null }>;
   linkedUnitCodes: string[];
 };
@@ -890,6 +893,7 @@ export default function AdminItemDetailLayout() {
             costMetrics,
             costAverageWindows,
             averageWindowDays,
+            measurementUnits: ((loaderData?.payload as any)?.measurementUnits || []),
             restrictedUnits: ((loaderData?.payload as any)?.restrictedUnits || []),
             linkedUnitCodes: ((loaderData?.payload as any)?.linkedUnitCodes || []),
           }}
