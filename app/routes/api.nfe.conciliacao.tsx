@@ -181,8 +181,7 @@ export async function action({ request }: ActionFunctionArgs) {
   });
 
   if (existingBatch) {
-    const origin = new URL(request.url).origin;
-    const url = `${origin}/admin/import-stock-movements/${existingBatch.id}`;
+    const url = `/admin/import-stock-movements/${existingBatch.id}`;
     return json({ success: true, url, message: "Lote já existente para esta NF-e." });
   }
 
@@ -206,8 +205,7 @@ export async function action({ request }: ActionFunctionArgs) {
     return json({ error: "internal_error", message: "Erro ao criar lote de importação." }, { status: 500 });
   }
 
-  const origin = new URL(request.url).origin;
-  const url = `${origin}/admin/import-stock-movements/${batchId}`;
+  const url = `/admin/import-stock-movements/${batchId}`;
 
   return json({ success: true, url, message: "Lote importacao criado." });
 }
