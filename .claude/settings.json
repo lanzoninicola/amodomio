@@ -5,7 +5,20 @@
       "Bash(ls -la /home/lanzo/Documents/Coding/amodomio/app/routes/admin.async-jobs*)",
       "Read(//home/lanzo/Documents/Coding/amodomio/**)",
       "Bash(PGPASSWORD=cglCDH3gxCOaaheFGBw psql -h 69.62.91.94 -p 55433 -U zzeeuuss -d amodomio -c \"SELECT href, title, pinned, \"\"groupTitle\"\" FROM admin_navigation_click WHERE title ILIKE ''%programa%'' OR title ILIKE ''%produ%'' LIMIT 10;\")",
-      "Read(//home/lanzo/.nvm/**)"
+      "Read(//home/lanzo/.nvm/**)",
+      "Bash(git commit -m ':*)",
+      "Bash(npx --node-options='' prisma migrate dev --name add-unique-href-admin-navigation-click)",
+      "Bash(nvm --version)",
+      "Bash(nvm use:*)",
+      "Read(//usr/local/bin/**)",
+      "Read(//home/lanzo/.local/share/**)",
+      "Bash(grep -v \"^$\")",
+      "Bash(psql \"postgresql://zzeeuuzz:cglCDH3gxCOaaheFGBw@69.62.91.94:55433/amodomio\" -c \"ALTER TABLE admin_navigation_clicks ADD CONSTRAINT admin_navigation_clicks_href_key UNIQUE \\(href\\);\")",
+      "Bash(psql \"postgresql://zzeeuuss:cglCDH3gxCOaaheFGBw@69.62.91.94:55433/amodomio\" -c \"ALTER TABLE admin_navigation_clicks ADD CONSTRAINT admin_navigation_clicks_href_key UNIQUE \\(href\\);\")",
+      "Bash(psql postgresql://zzeeuuss:cglCDH3gxCOaaheFGBw@69.62.91.94:55433/amodomio -c ':*)",
+      "Bash(psql \"postgresql://zzeeuuss:cglCDH3gxCOaaheFGBw@69.62.91.94:55433/amodomio\" -c \"INSERT INTO _prisma_migrations \\(id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count\\) VALUES \\(gen_random_uuid\\(\\), 'manual', NOW\\(\\), '20260800000000_add_unique_href_admin_navigation_click', NULL, NULL, NOW\\(\\), 1\\);\")",
+      "Bash(psql \"postgresql://zzeeuuss:cglCDH3gxCOaaheFGBw@69.62.91.94:55433/amodomio\" -c \"ALTER TABLE admin_navigation_clicks DROP CONSTRAINT IF EXISTS admin_navigation_clicks_href_key;\")",
+      "Bash(psql \"postgresql://zzeeuuss:cglCDH3gxCOaaheFGBw@69.62.91.94:55433/amodomio\" -c \"INSERT INTO _prisma_migrations \\(id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count\\) VALUES \\(gen_random_uuid\\(\\), 'manual', NOW\\(\\), '20260800000001_remove_unique_href_admin_navigation_click', NULL, NULL, NOW\\(\\), 1\\);\")"
     ]
   }
 }

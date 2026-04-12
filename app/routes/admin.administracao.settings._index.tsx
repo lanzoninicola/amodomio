@@ -29,6 +29,12 @@ import {
   RECIPE_CHATGPT_SETTINGS_CONTEXT,
 } from "~/domain/recipe/recipe-chatgpt-settings";
 import {
+  DEFAULT_DOUGH_STOCK_WHATSAPP_TEMPLATE,
+  DOUGH_STOCK_WHATSAPP_CONTEXT,
+  DOUGH_STOCK_WHATSAPP_RECIPIENTS_SETTING,
+  DOUGH_STOCK_WHATSAPP_TEMPLATE_SETTING,
+} from "~/domain/kds/dough-stock.server";
+import {
   DEFAULT_STOCK_PHOTO_CHATGPT_PROMPT_TEMPLATE,
   DEFAULT_STOCK_PHOTO_CHATGPT_RETURN_URL,
   STOCK_PHOTO_CHATGPT_PROMPT_SETTING_NAME,
@@ -84,6 +90,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
     sharesSetting,
     reelsEnabledSetting,
     itemCostAverageWindowSetting,
+    doughStockWhatsappRecipientsSetting,
+    doughStockWhatsappTemplateSetting,
     recipeChatGptProjectUrlSetting,
     stockPhotoChatGptPromptSetting,
     stockPhotoChatGptReturnUrlSetting,
@@ -104,6 +112,20 @@ export async function loader({ request }: LoaderFunctionArgs) {
       where: {
         context: ITEM_COST_SETTINGS_CONTEXT,
         name: ITEM_COST_AVERAGE_WINDOW_DAYS_SETTING,
+      },
+      orderBy: [{ createdAt: "desc" }],
+    }),
+    prismaClient.setting.findFirst({
+      where: {
+        context: DOUGH_STOCK_WHATSAPP_CONTEXT,
+        name: DOUGH_STOCK_WHATSAPP_RECIPIENTS_SETTING,
+      },
+      orderBy: [{ createdAt: "desc" }],
+    }),
+    prismaClient.setting.findFirst({
+      where: {
+        context: DOUGH_STOCK_WHATSAPP_CONTEXT,
+        name: DOUGH_STOCK_WHATSAPP_TEMPLATE_SETTING,
       },
       orderBy: [{ createdAt: "desc" }],
     }),
@@ -173,6 +195,30 @@ export async function loader({ request }: LoaderFunctionArgs) {
         name: ITEM_COST_AVERAGE_WINDOW_DAYS_SETTING,
         type: "int",
         value: String(DEFAULT_ITEM_COST_AVERAGE_WINDOW_DAYS),
+        createdAt: new Date(),
+      },
+    });
+  }
+
+  if (!doughStockWhatsappRecipientsSetting) {
+    await prismaClient.setting.create({
+      data: {
+        context: DOUGH_STOCK_WHATSAPP_CONTEXT,
+        name: DOUGH_STOCK_WHATSAPP_RECIPIENTS_SETTING,
+        type: "string",
+        value: "",
+        createdAt: new Date(),
+      },
+    });
+  }
+
+  if (!doughStockWhatsappTemplateSetting) {
+    await prismaClient.setting.create({
+      data: {
+        context: DOUGH_STOCK_WHATSAPP_CONTEXT,
+        name: DOUGH_STOCK_WHATSAPP_TEMPLATE_SETTING,
+        type: "string",
+        value: DEFAULT_DOUGH_STOCK_WHATSAPP_TEMPLATE,
         createdAt: new Date(),
       },
     });
