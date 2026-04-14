@@ -20,7 +20,7 @@ import { ArrowRight } from "lucide-react";
 import Logo from "./components/primitives/logo/logo";
 import MicrosoftClarityScriptTag from "./components/primitives/ms-clarity/ms-clarity-script";
 import WEBSITE_LINKS from "./domain/website-navigation/links/website-links";
-import { useEffect, useState } from "react";
+import { getErrorMessage, isDatabaseConnectivityError } from "./lib/errors/connectivity";
 
 export const meta: MetaFunction = () => {
   return [
@@ -170,19 +170,9 @@ export function ErrorBoundary() {
   const location = useLocation();
   const pathname = location?.pathname || "";
   const shouldRedirectCardapio = pathname.startsWith("/cardapio");
+  const isDbUnavailable = isDatabaseConnectivityError(error);
+  const shouldForceCardapioRedirect = shouldRedirectCardapio && !isDbUnavailable;
   const cardapioFallbackHref = WEBSITE_LINKS.saiposCardapio.href;
-  const redirectDelaySeconds = 3;
-  const [secondsLeft, setSecondsLeft] = useState(redirectDelaySeconds);
-
-  useEffect(() => {
-    if (!shouldRedirectCardapio || typeof window === "undefined") return;
-
-    const intervalId = window.setInterval(() => {
-      setSecondsLeft((current) => (current > 1 ? current - 1 : 1));
-    }, 1000);
-
-    return () => window.clearInterval(intervalId);
-  }, [shouldRedirectCardapio]);
 
   const primaryAction = (() => {
     if (pathname.startsWith("/admin")) return { href: "/admin", label: "Voltar para o painel" };
@@ -196,17 +186,17 @@ export function ErrorBoundary() {
     <html>
       <head>
         <title>Oops!</title>
-        {shouldRedirectCardapio ? (
-          <meta httpEquiv="refresh" content={`${redirectDelaySeconds};url=${cardapioFallbackHref}`} />
+        {shouldForceCardapioRedirect ? (
+          <meta httpEquiv="refresh" content={`0;url=${cardapioFallbackHref}`} />
         ) : null}
         <Meta />
         <Links />
       </head>
       <body>
-        {shouldRedirectCardapio ? (
+        {shouldForceCardapioRedirect ? (
           <script
             dangerouslySetInnerHTML={{
-              __html: `window.setTimeout(function () { window.location.replace(${JSON.stringify(cardapioFallbackHref)}); }, ${redirectDelaySeconds * 1000});`,
+              __html: `window.location.replace(${JSON.stringify(cardapioFallbackHref)});`,
             }}
           />
         ) : null}
@@ -223,30 +213,40 @@ export function ErrorBoundary() {
               <div className="space-y-6">
                 <p className="text-xs font-semibold uppercase tracking-[0.25em] text-amber-600">Algo saiu do forno errado</p>
                 <div className="space-y-3">
-                  <h1 className="text-4xl font-semibold leading-tight md:text-5xl">Desculpe, tivemos um imprevisto.</h1>
+                  <h1 className="text-4xl font-semibold leading-tight md:text-5xl">
+                    {isDbUnavailable ? "Banco temporariamente indisponível." : "Desculpe, tivemos um imprevisto."}
+                  </h1>
                   <p className="text-lg text-slate-600 md:max-w-xl">
-                    Ocorreu um erro no cardápio digital. Estamos redirecionando você automaticamente para finalizar seu pedido.
+                    {isDbUnavailable
+                      ? "A aplicação não conseguiu alcançar o banco de dados agora. Tente recarregar a rota atual em instantes."
+                      : "Ocorreu um erro no cardápio digital. Estamos redirecionando você imediatamente para finalizar seu pedido."}
                   </p>
-                  {shouldRedirectCardapio ? (
+                  {isDbUnavailable ? (
+                    <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 md:max-w-xl">
+                      {getErrorMessage(error) || "Falha de conectividade com a base de dados."}
+                    </p>
+                  ) : null}
+                  {shouldForceCardapioRedirect ? (
                     <p className="text-sm font-semibold text-slate-800">
-                      Redirecionando em {secondsLeft}...
+                      Caso isso não aconteça, use o botão abaixo.
                     </p>
                   ) : null}
                 </div>
 
                 <div className="flex flex-wrap gap-3">
                   <Link
-                    to={primaryAction.href}
+                    to={isDbUnavailable ? `${pathname}${location.search}` : primaryAction.href}
+                    reloadDocument={isDbUnavailable}
                     className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold uppercase tracking-wide text-white shadow-md transition hover:-translate-y-0.5 hover:shadow-lg"
                   >
-                    <span>{primaryAction.label}</span>
+                    <span>{isDbUnavailable ? "Tentar novamente" : primaryAction.label}</span>
                     <ArrowRight className="h-4 w-4" />
                   </Link>
                   <Link
-                    to={shouldRedirectCardapio ? cardapioFallbackHref : "/cardapio"}
+                    to={shouldForceCardapioRedirect ? cardapioFallbackHref : "/cardapio"}
                     className="inline-flex items-center gap-2 rounded-full border border-slate-300 px-5 py-3 text-sm font-semibold uppercase tracking-wide text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
                   >
-                    <span>{shouldRedirectCardapio ? "Ir para finalizar o pedido" : "Ver cardápio digital"}</span>
+                    <span>{shouldForceCardapioRedirect ? "Ir para finalizar o pedido" : "Ver cardápio digital"}</span>
                   </Link>
                 </div>
               </div>

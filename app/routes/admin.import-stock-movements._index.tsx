@@ -46,17 +46,17 @@ function summaryFromAny(summary: any) {
 const SOURCE_TYPE_LABELS: Record<string, { label: string; className: string; icon: React.ReactNode }> = {
   file_upload: {
     label: 'Arquivo',
-    className: 'border-violet-200 bg-violet-50 text-violet-700',
+    className: 'border-slate-200 bg-slate-100 text-slate-500',
     icon: <FileSpreadsheet className="h-3 w-3" />,
   },
   photo_vision: {
     label: 'Foto',
-    className: 'border-sky-200 bg-sky-50 text-sky-700',
+    className: 'border-slate-200 bg-slate-100 text-slate-500',
     icon: <Image className="h-3 w-3" />,
   },
   rest_api: {
     label: 'API',
-    className: 'border-orange-200 bg-orange-50 text-orange-700',
+    className: 'border-slate-200 bg-slate-100 text-slate-500',
     icon: <Globe className="h-3 w-3" />,
   },
 };
@@ -94,6 +94,8 @@ function statusBadgeClass(status: string) {
       return 'border-amber-200 bg-amber-50 text-amber-700';
     case 'archived':
       return 'border-slate-200 bg-slate-100 text-slate-700';
+    case 'draft':
+      return 'border-orange-200 bg-orange-50 text-orange-700';
     default:
       return 'border-slate-200 bg-white text-slate-700';
   }
@@ -288,7 +290,7 @@ export default function AdminImportStockMovementsIndexRoute() {
                           {batch.name}
                         </Link>
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="rounded-full bg-slate-100 px-2.5 py-1 font-mono text-[11px] text-slate-600">
+                          <span className="font-mono text-[11px] text-slate-400">
                             {batch.id}
                           </span>
                           <SourceTypeBadge sourceType={batch.sourceType} />
@@ -314,8 +316,8 @@ export default function AdminImportStockMovementsIndexRoute() {
                     </TableCell>
                     <TableCell className="px-4 py-4 text-center">
                       <div className="flex flex-col items-center gap-0.5">
-                        <span className="text-sm font-semibold text-emerald-700">{summary.readyToImport}</span>
-                        <span className="text-[11px] uppercase tracking-wide text-emerald-600">prontas</span>
+                        <span className="text-sm font-bold text-slate-900">{summary.readyToImport}</span>
+                        <span className="text-[11px] uppercase tracking-wide text-slate-400">prontas</span>
                       </div>
                     </TableCell>
                     <TableCell className="px-4 py-4">
@@ -332,7 +334,7 @@ export default function AdminImportStockMovementsIndexRoute() {
                             </Button>
                           </div>
                         ) : (
-                          <div className="inline-flex h-8 items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 text-[11px] font-semibold text-emerald-700">
+                          <div className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700">
                             <CheckCircle2 className="h-3.5 w-3.5" />
                             Conciliado
                           </div>

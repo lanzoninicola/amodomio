@@ -16,7 +16,6 @@ import {
   LIKE_SETTING_NAME,
   SHARE_SETTING_NAME,
 } from "~/domain/cardapio/engagement-settings.server";
-import { ensureCardapioItemsSourceSetting } from "~/domain/cardapio/cardapio-items-source.server";
 import {
   DEFAULT_ITEM_COST_AVERAGE_WINDOW_DAYS,
   ITEM_COST_AVERAGE_WINDOW_DAYS_SETTING,
@@ -41,6 +40,13 @@ import {
   STOCK_PHOTO_CHATGPT_RETURN_URL_SETTING_NAME,
   STOCK_PHOTO_CHATGPT_SETTINGS_CONTEXT,
 } from "~/domain/stock-movement/stock-photo-chatgpt-settings";
+import {
+  COST_REVIEW_NOTIFICATION_CONTEXT,
+  COST_REVIEW_WHATSAPP_ENABLED_SETTING,
+  COST_REVIEW_WHATSAPP_PHONE_SETTING,
+  DEFAULT_COST_REVIEW_WHATSAPP_ENABLED,
+  DEFAULT_COST_REVIEW_WHATSAPP_PHONE,
+} from "~/domain/stock-movement/cost-review-notification-settings";
 
 const SETTING_TYPES = ["string", "boolean", "float", "int", "json"] as const;
 const REELS_SETTINGS_CONTEXT = "cardapio";
@@ -62,8 +68,6 @@ function str(value: FormDataEntryValue | null) {
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  await ensureCardapioItemsSourceSetting();
-
   const url = new URL(request.url);
   const q = url.searchParams.get("q")?.trim() ?? "";
   const context = url.searchParams.get("context")?.trim() ?? "";
@@ -95,6 +99,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
     recipeChatGptProjectUrlSetting,
     stockPhotoChatGptPromptSetting,
     stockPhotoChatGptReturnUrlSetting,
+    costReviewWhatsappEnabledSetting,
+    costReviewWhatsappPhoneSetting,
   ] = await Promise.all([
     prismaClient.setting.findFirst({
       where: { context: ENGAGEMENT_SETTINGS_CONTEXT, name: LIKE_SETTING_NAME },
@@ -148,6 +154,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
         context: STOCK_PHOTO_CHATGPT_SETTINGS_CONTEXT,
         name: STOCK_PHOTO_CHATGPT_RETURN_URL_SETTING_NAME,
       },
+      orderBy: [{ createdAt: "desc" }],
+    }),
+    prismaClient.setting.findFirst({
+      where: { context: COST_REVIEW_NOTIFICATION_CONTEXT, name: COST_REVIEW_WHATSAPP_ENABLED_SETTING },
+      orderBy: [{ createdAt: "desc" }],
+    }),
+    prismaClient.setting.findFirst({
+      where: { context: COST_REVIEW_NOTIFICATION_CONTEXT, name: COST_REVIEW_WHATSAPP_PHONE_SETTING },
       orderBy: [{ createdAt: "desc" }],
     }),
   ]);
@@ -255,6 +269,30 @@ export async function loader({ request }: LoaderFunctionArgs) {
         name: STOCK_PHOTO_CHATGPT_RETURN_URL_SETTING_NAME,
         type: "string",
         value: DEFAULT_STOCK_PHOTO_CHATGPT_RETURN_URL,
+        createdAt: new Date(),
+      },
+    });
+  }
+
+  if (!costReviewWhatsappEnabledSetting) {
+    await prismaClient.setting.create({
+      data: {
+        context: COST_REVIEW_NOTIFICATION_CONTEXT,
+        name: COST_REVIEW_WHATSAPP_ENABLED_SETTING,
+        type: "boolean",
+        value: DEFAULT_COST_REVIEW_WHATSAPP_ENABLED,
+        createdAt: new Date(),
+      },
+    });
+  }
+
+  if (!costReviewWhatsappPhoneSetting) {
+    await prismaClient.setting.create({
+      data: {
+        context: COST_REVIEW_NOTIFICATION_CONTEXT,
+        name: COST_REVIEW_WHATSAPP_PHONE_SETTING,
+        type: "string",
+        value: DEFAULT_COST_REVIEW_WHATSAPP_PHONE,
         createdAt: new Date(),
       },
     });

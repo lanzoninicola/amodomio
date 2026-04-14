@@ -1,7 +1,7 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from '@remix-run/node';
 import { redirect } from '@remix-run/node';
 import { Form, Link, NavLink, Outlet, useActionData, useFetcher, useLoaderData, useNavigation, useRevalidator } from '@remix-run/react';
-import { Archive, BarChart2, Check, ChevronsUpDown, Download, Info, Loader2, RotateCcw, Smartphone, Trash2, Truck, Users } from 'lucide-react';
+import { AlertTriangle, Archive, BarChart2, Check, ChevronsUpDown, Download, Info, Loader2, RotateCcw, Smartphone, Trash2, Truck, Users } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import {
   AlertDialog,
@@ -16,7 +16,7 @@ import {
 } from '~/components/ui/alert-dialog';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
-import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '~/components/ui/command';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from '~/components/ui/command';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '~/components/ui/dialog';
 import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
@@ -43,6 +43,7 @@ import {
   startStockMovementImportBatch,
   updateStockMovementImportBatchLineEditableFields,
 } from '~/domain/stock-movement/stock-movement-import.server';
+import { DecimalInput } from '~/components/inputs/inputs';
 import { cn } from '~/lib/utils';
 import { badRequest, ok, serverError } from '~/utils/http-response.server';
 
@@ -54,6 +55,21 @@ const ITEM_CLASSIFICATIONS = [
   'servico',
   'outro',
 ] as const;
+
+const CLASSIFICATION_BADGE: Record<string, { label: string; className: string }> = {
+  insumo: { label: 'insumo', className: 'bg-blue-100 text-blue-700' },
+  semi_acabado: { label: 'semi-acab.', className: 'bg-violet-100 text-violet-700' },
+  produto_final: { label: 'prod. final', className: 'bg-emerald-100 text-emerald-700' },
+  embalagem: { label: 'embalagem', className: 'bg-amber-100 text-amber-700' },
+  servico: { label: 'serviço', className: 'bg-cyan-100 text-cyan-700' },
+  outro: { label: 'outro', className: 'bg-slate-100 text-slate-600' },
+};
+
+function ClassificationBadge({ value }: { value: string | null | undefined }) {
+  const badge = CLASSIFICATION_BADGE[value || ''];
+  if (!badge) return <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500">{value || '-'}</span>;
+  return <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${badge.className}`}>{badge.label}</span>;
+}
 
 function resolveLatestCostHint(params: {
   currentRows: any[];
@@ -343,6 +359,7 @@ export function ItemSystemMapperCell({
   items,
   batchId,
   unitOptions,
+  categories = [],
   costHint,
   compact = false,
 }: {
@@ -350,6 +367,7 @@ export function ItemSystemMapperCell({
   items: any[];
   batchId: string;
   unitOptions: string[];
+  categories?: Array<{ id: string; name: string }>;
   costHint?: { lastCostPerUnit: number | null; avgCostPerUnit: number | null } | null;
   compact?: boolean;
 }) {
@@ -357,13 +375,21 @@ export function ItemSystemMapperCell({
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState(String(line.mappedItemId || ''));
   const [classification, setClassification] = useState<(typeof ITEM_CLASSIFICATIONS)[number]>('insumo');
+  const [categoryId, setCategoryId] = useState('__EMPTY__');
   const [consumptionUm, setConsumptionUm] = useState(() => {
     const normalizedUnit = normalizeItemUnit(line.movementUnit);
     return normalizedUnit && unitOptions.includes(normalizedUnit) ? normalizedUnit : '__EMPTY__';
   });
   const mapItemFetcher = useFetcher<typeof action>();
   const createItemFetcher = useFetcher<typeof action>();
+  const createUmFetcher = useFetcher<typeof action>();
+  const approveCostFetcher = useFetcher<any>();
+  const [createUmDialogOpen, setCreateUmDialogOpen] = useState(false);
+  const [umKind, setUmKind] = useState('custom');
+  const [umCode, setUmCode] = useState('');
+  const [umFactor, setUmFactor] = useState<number>(0);
   const restoreScrollRef = useRef<number | null>(null);
+  const commandListRef = useRef<HTMLDivElement>(null);
   const selectedItem = items.find((item) => item.id === selectedItemId);
   const ingredientName = line.ingredientName || '';
   const sortedItems = [...items].sort((a, b) => {
@@ -398,6 +424,15 @@ export function ItemSystemMapperCell({
     }
   }, [createItemFetcher.state, createItemFetcher.data]);
 
+  useEffect(() => {
+    if (createUmFetcher.state !== 'idle') return;
+    if ((createUmFetcher.data as any)?.status !== 200) return;
+    setCreateUmDialogOpen(false);
+    setUmKind('custom');
+    setUmCode('');
+    setUmFactor(0);
+  }, [createUmFetcher.state, createUmFetcher.data]);
+
   return (
     <div className="space-y-1">
       <mapItemFetcher.Form method="post" action={`/admin/import-stock-movements/${batchId}`} className="space-y-1">
@@ -424,65 +459,83 @@ export function ItemSystemMapperCell({
             </PopoverTrigger>
             <PopoverContent className="w-[420px] p-0" align="start">
               <Command>
-                <CommandInput placeholder="Buscar item do sistema..." />
-                <CommandList className="max-h-[45vh]">
+                <CommandInput
+                  placeholder="Buscar item do sistema..."
+                  onValueChange={() => {
+                    if (commandListRef.current) commandListRef.current.scrollTop = 0;
+                  }}
+                />
+                <CommandList ref={commandListRef} className="max-h-[45vh]">
                   <CommandEmpty>Nenhum item encontrado.</CommandEmpty>
-                  {sortedItems.map((item) => {
-                    const score = computeItemSimilarity(ingredientName, item.name);
-                    const isHighMatch = score >= 0.5;
-                    const isMediumMatch = score >= 0.25 && score < 0.5;
+                  {ITEM_CLASSIFICATIONS.map((classification, idx) => {
+                    const groupItems = sortedItems.filter((item) => (item.classification || 'outro') === classification);
+                    if (groupItems.length === 0) return null;
+                    const badge = CLASSIFICATION_BADGE[classification];
                     return (
-                    <CommandItem
-                      key={item.id}
-                      value={`${item.name} ${item.classification || ''} ${item.purchaseUm || ''} ${item.consumptionUm || ''} ${item.id}`}
-                      onSelect={() => {
-                        setSelectedItemId(item.id);
-                        setItemPickerOpen(false);
-                        mapItemFetcher.submit(
-                          {
-                            _action: 'batch-map-item',
-                            batchId,
-                            lineId: line.id,
-                            ingredientNameNormalized: line.ingredientNameNormalized || '',
-                            itemId: item.id,
-                            saveAlias: 'on',
-                          },
-                          { method: 'post', action: `/admin/import-stock-movements/${batchId}` },
-                        );
-                      }}
-                    >
-                      <Check className={cn('mr-2 h-4 w-4', selectedItemId === item.id ? 'opacity-100' : 'opacity-0')} />
-                      <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
-                        <span className="truncate">
-                          {item.name} [{item.classification || '-'}] ({getItemBaseUnit(item)})
-                        </span>
-                        <div className="flex shrink-0 items-center gap-1">
-                          {isHighMatch && (
-                            <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
-                              sugerido
-                            </span>
-                          )}
-                          {isMediumMatch && (
-                            <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-600">
-                              similar
-                            </span>
-                          )}
-                          <Link
-                            to={`/admin/items/${item.id}/main`}
-                            className="rounded border border-slate-300 px-2 py-0.5 text-[11px] font-medium text-slate-700 hover:bg-slate-100"
-                            onMouseDown={(event) => {
-                              event.preventDefault();
-                              event.stopPropagation();
-                            }}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                            }}
-                          >
-                            Abrir
-                          </Link>
-                        </div>
+                      <div key={classification}>
+                        {idx > 0 && <CommandSeparator />}
+                        <CommandGroup heading={badge?.label ?? classification}>
+                          {groupItems.map((item) => {
+                            const score = computeItemSimilarity(ingredientName, item.name);
+                            const isHighMatch = score >= 0.5;
+                            const isMediumMatch = score >= 0.25 && score < 0.5;
+                            return (
+                              <CommandItem
+                                key={item.id}
+                                value={`${item.name} ${item.classification || ''} ${item.purchaseUm || ''} ${item.consumptionUm || ''}`}
+                                onSelect={() => {
+                                  setSelectedItemId(item.id);
+                                  setItemPickerOpen(false);
+                                  mapItemFetcher.submit(
+                                    {
+                                      _action: 'batch-map-item',
+                                      batchId,
+                                      lineId: line.id,
+                                      ingredientNameNormalized: line.ingredientNameNormalized || '',
+                                      itemId: item.id,
+                                      saveAlias: 'on',
+                                    },
+                                    { method: 'post', action: `/admin/import-stock-movements/${batchId}` },
+                                  );
+                                }}
+                              >
+                                <Check className={cn('mr-2 h-4 w-4', selectedItemId === item.id ? 'opacity-100' : 'opacity-0')} />
+                                <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
+                                  <span className="truncate">
+                                    {item.name} ({getItemBaseUnit(item)})
+                                  </span>
+                                  <div className="flex shrink-0 items-center gap-1">
+                                    <ClassificationBadge value={item.classification} />
+                                    {isHighMatch && (
+                                      <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
+                                        sugerido
+                                      </span>
+                                    )}
+                                    {isMediumMatch && (
+                                      <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-600">
+                                        similar
+                                      </span>
+                                    )}
+                                    <Link
+                                      to={`/admin/items/${item.id}/main`}
+                                      className="rounded border border-slate-300 px-2 py-0.5 text-[11px] font-medium text-slate-700 hover:bg-slate-100"
+                                      onMouseDown={(event) => {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                      }}
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                      }}
+                                    >
+                                      Abrir
+                                    </Link>
+                                  </div>
+                                </div>
+                              </CommandItem>
+                            );
+                          })}
+                        </CommandGroup>
                       </div>
-                    </CommandItem>
                     );
                   })}
                 </CommandList>
@@ -529,6 +582,7 @@ export function ItemSystemMapperCell({
                 <input type="hidden" name="ingredientNameNormalized" value={line.ingredientNameNormalized || ''} />
                 <input type="hidden" name="consumptionUm" value={consumptionUm === '__EMPTY__' ? '' : consumptionUm} />
                 <input type="hidden" name="classification" value={classification} />
+                <input type="hidden" name="categoryId" value={categoryId === '__EMPTY__' ? '' : categoryId} />
                 <div className="space-y-1">
                   <Label htmlFor={`itemName-${line.id}`}>Nome do item</Label>
                   <Input
@@ -559,6 +613,24 @@ export function ItemSystemMapperCell({
                     </SelectContent>
                   </Select>
                 </div>
+                {categories.length > 0 && (
+                  <div className="space-y-1">
+                    <Label htmlFor={`categoryId-${line.id}`}>Categoria</Label>
+                    <Select value={categoryId} onValueChange={setCategoryId} disabled={isCreatingItem}>
+                      <SelectTrigger id={`categoryId-${line.id}`} className="h-9">
+                        <SelectValue placeholder="Sem categoria" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__EMPTY__">Sem categoria</SelectItem>
+                        {categories.map((cat) => (
+                          <SelectItem key={cat.id} value={cat.id}>
+                            {cat.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 <div className="space-y-1">
                   <Label htmlFor={`consumptionUm-${line.id}`}>Unidade de medida</Label>
                   <Select value={consumptionUm} onValueChange={setConsumptionUm} disabled={isCreatingItem}>
@@ -591,6 +663,132 @@ export function ItemSystemMapperCell({
               >
                 Editar item
               </Link>
+              <Dialog open={createUmDialogOpen} onOpenChange={setCreateUmDialogOpen}>
+                <DialogTrigger asChild>
+                  <button
+                    type="button"
+                    className="text-[11px] font-medium text-slate-600 underline underline-offset-2 hover:text-slate-900"
+                  >
+                    Criar UM
+                  </button>
+                </DialogTrigger>
+                <DialogContent
+                  className="max-w-md"
+                  onCloseAutoFocus={(event) => { event.preventDefault(); }}
+                >
+                  <DialogHeader>
+                    <DialogTitle>Criar unidade de medida</DialogTitle>
+                  </DialogHeader>
+                  {selectedItem?.ItemPurchaseConversion?.length > 0 && (
+                    <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
+                      <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-slate-400">
+                        Conversões já configuradas
+                      </p>
+                      <div className="space-y-0.5">
+                        {selectedItem.ItemPurchaseConversion.map((c: { purchaseUm: string; factor: number }) => (
+                          <div key={c.purchaseUm} className="flex items-center justify-between gap-2 text-[11px] text-slate-500">
+                            <span className="font-medium text-slate-600">{c.purchaseUm}</span>
+                            <span className="font-mono tabular-nums">
+                              = {Number(c.factor).toLocaleString('pt-BR', { maximumFractionDigits: 4 })} {selectedItem.consumptionUm}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {(createUmFetcher.data as any)?.status >= 400 && (
+                    <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                      {(createUmFetcher.data as any)?.message}
+                    </div>
+                  )}
+                  {selectedItem && !selectedItem.consumptionUm && (
+                    <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                      Defina a unidade de consumo do item antes de criar uma UM.
+                    </div>
+                  )}
+                  <createUmFetcher.Form
+                    method="post"
+                    action={`/admin/import-stock-movements/${batchId}`}
+                    className="space-y-3"
+                    preventScrollReset
+                  >
+                    <input type="hidden" name="_action" value="batch-create-um-and-conversion" />
+                    <input type="hidden" name="batchId" value={batchId} />
+                    <input type="hidden" name="itemId" value={selectedItemId} />
+                    <input type="hidden" name="kind" value={umKind} />
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <Label htmlFor={`um-code-${line.id}`}>Código</Label>
+                        <Input
+                          id={`um-code-${line.id}`}
+                          name="code"
+                          placeholder="ex: CX12"
+                          required
+                          className="h-9 uppercase"
+                          style={{ textTransform: 'uppercase' }}
+                          value={umCode}
+                          onChange={(e) => setUmCode(e.target.value.toUpperCase())}
+                          disabled={createUmFetcher.state !== 'idle'}
+                        />
+                        <p className="text-[10px] text-slate-400">Maiúsculas, números e _</p>
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor={`um-name-${line.id}`}>Nome</Label>
+                        <Input
+                          id={`um-name-${line.id}`}
+                          name="name"
+                          placeholder="ex: Caixa 12 un"
+                          required
+                          className="h-9"
+                          disabled={createUmFetcher.state !== 'idle'}
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <Label>Tipo</Label>
+                        <Select value={umKind} onValueChange={setUmKind} disabled={createUmFetcher.state !== 'idle'}>
+                          <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {['weight', 'volume', 'count', 'custom'].map((k) => (
+                              <SelectItem key={k} value={k}>{k}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1">
+                        <Label>
+                          Fator (1 {umCode || 'UM'} = ? {selectedItem?.consumptionUm || '?'})
+                        </Label>
+                        <DecimalInput
+                          name="factor"
+                          fractionDigits={4}
+                          placeholder="0,0000"
+                          className="h-9 w-full font-mono tabular-nums"
+                          disabled={createUmFetcher.state !== 'idle'}
+                          onValueChange={setUmFactor}
+                        />
+                      </div>
+                    </div>
+                    {umCode && umFactor > 0 && selectedItem?.consumptionUm && (
+                      <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                        1 <span className="font-medium text-slate-800">{umCode}</span> equivale a{' '}
+                        <span className="font-mono font-medium text-slate-800 tabular-nums">
+                          {umFactor.toLocaleString('pt-BR', { maximumFractionDigits: 4 })}
+                        </span>{' '}
+                        <span className="font-medium text-slate-800">{selectedItem.consumptionUm}</span>.
+                      </div>
+                    )}
+                    <Button
+                      type="submit"
+                      className="w-full bg-slate-900 hover:bg-slate-700"
+                      disabled={createUmFetcher.state !== 'idle' || !selectedItem?.consumptionUm}
+                    >
+                      {createUmFetcher.state !== 'idle' ? 'Salvando...' : 'Salvar'}
+                    </Button>
+                  </createUmFetcher.Form>
+                </DialogContent>
+              </Dialog>
               <Link
                 to={`/admin/stock-movements?itemId=${encodeURIComponent(selectedItemId)}`}
                 target="_blank"
@@ -603,6 +801,7 @@ export function ItemSystemMapperCell({
           ) : (
             <>
               <span className="text-[11px] text-slate-400">Editar item</span>
+              <span className="text-[11px] text-slate-400">Criar UM</span>
               <span className="text-[11px] text-slate-400">Movimentações estoque</span>
             </>
           )}
@@ -618,6 +817,22 @@ export function ItemSystemMapperCell({
           <div className="text-[11px] text-slate-500">{line.mappingSource || '-'}</div>
         ))}
       </mapItemFetcher.Form>
+      {!compact && line.status === 'pending_cost_review' && (
+        <approveCostFetcher.Form method="post" action={`/admin/import-stock-movements/${batchId}`} preventScrollReset>
+          <input type="hidden" name="_action" value="batch-approve-cost-review" />
+          <input type="hidden" name="lineId" value={line.id} />
+          <button
+            type="submit"
+            disabled={approveCostFetcher.state !== 'idle'}
+            className="mt-1 flex w-full items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-left transition hover:border-amber-300 hover:bg-amber-100 disabled:opacity-60"
+          >
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+            <span className="flex-1 text-[11px] font-medium text-amber-800">
+              {approveCostFetcher.state !== 'idle' ? 'Aprovando...' : 'Custo acima do histórico — clique para aprovar'}
+            </span>
+          </button>
+        </approveCostFetcher.Form>
+      )}
     </div>
   );
 }
@@ -696,20 +911,20 @@ export async function loader({ params }: LoaderFunctionArgs) {
       }),
       typeof db.supplier?.findMany === 'function'
         ? db.supplier.findMany({
-            select: { id: true, name: true, cnpj: true },
-            orderBy: [{ name: 'asc' }],
-            take: 2000,
-          })
+          select: { id: true, name: true, cnpj: true },
+          orderBy: [{ name: 'asc' }],
+          take: 2000,
+        })
         : Promise.resolve([]),
       typeof db.measurementUnitConversion?.findMany === 'function'
         ? db.measurementUnitConversion.findMany({
-            where: { active: true },
-            select: {
-              factor: true,
-              FromUnit: { select: { code: true } },
-              ToUnit: { select: { code: true } },
-            },
-          })
+          where: { active: true },
+          select: {
+            factor: true,
+            FromUnit: { select: { code: true } },
+            ToUnit: { select: { code: true } },
+          },
+        })
         : Promise.resolve([]),
     ]);
     if (!selected) return badRequest('Lote não encontrado');
@@ -1072,6 +1287,48 @@ export async function action({ request, params }: ActionFunctionArgs) {
       return ok({ createdItemId: created.id });
     }
 
+    if (_action === 'batch-create-um-and-conversion') {
+      const itemId = str(formData.get('itemId'));
+      const code = str(formData.get('code')).toUpperCase();
+      const name = str(formData.get('name'));
+      const kind = str(formData.get('kind')) || 'custom';
+      const factorRaw = str(formData.get('factor'));
+      const factor = factorRaw ? Number(factorRaw) : null;
+
+      if (!itemId) return badRequest('Item inválido');
+      if (!code) return badRequest('Informe o código da UM');
+      if (!/^[A-Z0-9_]+$/.test(code)) return badRequest('Código inválido. Use letras maiúsculas, números e _');
+      if (!name) return badRequest('Informe o nome da UM');
+      if (!(['weight', 'volume', 'count', 'custom'] as string[]).includes(kind)) return badRequest('Tipo inválido');
+      if (!(Number.isFinite(factor) && (factor as number) > 0)) return badRequest('Informe um fator maior que zero');
+
+      const targetItem = await db.item.findUnique({
+        where: { id: itemId },
+        select: { id: true, consumptionUm: true },
+      });
+      if (!targetItem) return badRequest('Item não encontrado');
+      if (!targetItem.consumptionUm) return badRequest('Defina primeiro a unidade de consumo do item (aba Principal)');
+
+      const existingUnit = await db.measurementUnit.findFirst({ where: { code } });
+      const unit = existingUnit ?? await db.measurementUnit.create({
+        data: { code, name, kind, scope: 'restricted', active: true },
+      });
+
+      await db.itemUnit.upsert({
+        where: { itemId_unitCode: { itemId, unitCode: unit.code } },
+        create: { id: crypto.randomUUID(), itemId, unitCode: unit.code },
+        update: {},
+      });
+
+      await db.itemPurchaseConversion.upsert({
+        where: { itemId_purchaseUm: { itemId, purchaseUm: unit.code } },
+        create: { id: crypto.randomUUID(), itemId, purchaseUm: unit.code, factor },
+        update: { factor },
+      });
+
+      return ok({ message: `Conversão ${unit.code} configurada com sucesso.` });
+    }
+
     if (_action === 'batch-import') {
       await startStockMovementImportBatch({ batchId, actor });
       return redirect(redirectToCurrentPath(request, `/admin/import-stock-movements/${batchId}`));
@@ -1135,6 +1392,7 @@ export type AdminImportStockMovementsBatchOutletContext = {
   itemUnitOptionsByItemId: Record<string, string[]>;
   measurementConversions: Array<{ fromUnit: string; toUnit: string; factor: number }>;
   suppliers: any[];
+  categories: Array<{ id: string; name: string }>;
   itemCostHints: Record<string, { lastCostPerUnit: number | null; avgCostPerUnit: number | null }>;
   summary: ReturnType<typeof summaryFromAny>;
   isImportingBatch: boolean;
@@ -1202,10 +1460,9 @@ export default function AdminImportStockMovementsBatchDetailRoute() {
     availableStatusTabs.splice(insertIdx >= 0 ? insertIdx : 0, 0, { status: 'pending', label: 'Pendente', count: pendingCount });
   }
   const tabClass = ({ isActive }: { isActive: boolean }) =>
-    `border-b-2 pb-3 font-medium transition ${
-      isActive
-        ? 'border-slate-950 text-slate-950'
-        : 'border-transparent text-slate-400 hover:text-slate-700'
+    `border-b-2 pb-3 font-medium transition ${isActive
+      ? 'border-slate-950 text-slate-950'
+      : 'border-transparent text-slate-400 hover:text-slate-700'
     }`;
 
   useEffect(() => {
@@ -1254,6 +1511,7 @@ export default function AdminImportStockMovementsBatchDetailRoute() {
     );
   }
 
+  const categories = (((loaderData as any)?.payload?.categories || []) as Array<{ id: string; name: string }>);
   const outletContext: AdminImportStockMovementsBatchOutletContext = {
     selected,
     selectedBatch,
@@ -1264,6 +1522,7 @@ export default function AdminImportStockMovementsBatchDetailRoute() {
     itemUnitOptionsByItemId,
     measurementConversions,
     suppliers,
+    categories,
     itemCostHints,
     summary,
     isImportingBatch,

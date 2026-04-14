@@ -1166,10 +1166,14 @@ export function InlineVariationCellEditor({
   const [lineLossPct, setLineLossPct] = useState(
     Number(line.lossPct ?? line.defaultLossPct ?? 0)
   );
+  const [saveStatus, setSaveStatus] = useState<
+    "idle" | "pending" | "saving" | "saved" | "error"
+  >("idle");
   const [defaultQty, setDefaultQty] = useState(Number(line.quantity || 0));
   const [defaultLossPct, setDefaultLossPct] = useState(
     Number(line.lossPct ?? line.defaultLossPct ?? 0)
   );
+  const hasSubmittedRef = useRef(false);
   const baselineRef = useRef({
     quantity: Number(line.quantity || 0),
     lossPct: Number(line.lossPct ?? line.defaultLossPct ?? 0),
@@ -1186,6 +1190,7 @@ export function InlineVariationCellEditor({
       quantity: Number(line.quantity || 0),
       lossPct: Number(line.lossPct ?? line.defaultLossPct ?? 0),
     };
+    setSaveStatus("idle");
   }, [line.id, line.quantity, line.lossPct, line.defaultLossPct]);
 
   useEffect(() => {
@@ -1212,11 +1217,29 @@ export function InlineVariationCellEditor({
     return Math.abs(nextQuantity - baselineRef.current.quantity) > 0.0000001;
   }
 
+  const hasPending = hasPendingChanges();
+
+  useEffect(() => {
+    if (fetcher.state !== "idle") {
+      hasSubmittedRef.current = true;
+      setSaveStatus("saving");
+      return;
+    }
+
+    if (!hasSubmittedRef.current) return;
+    hasSubmittedRef.current = false;
+
+    const fetcherStatus = Number((fetcher.data as any)?.status || 200);
+    setSaveStatus(fetcherStatus >= 400 ? "error" : "saved");
+  }, [fetcher.state, fetcher.data]);
+
   function submitAutoUpdate() {
     if (!formRef.current) return;
-    if (!hasPendingChanges()) return;
+    if (!hasPending) return;
     const formData = new FormData(formRef.current);
     formData.set("_action", "recipe-line-update");
+    hasSubmittedRef.current = true;
+    setSaveStatus("saving");
     fetcher.submit(formData, {
       method: "post",
       action: "..",
@@ -1232,6 +1255,16 @@ export function InlineVariationCellEditor({
     safeLossPct > 0
       ? Number(lineQuantity || 0) / (1 - safeLossPct / 100)
       : Number(lineQuantity || 0);
+  const saveMessage =
+    saveStatus === "saving"
+      ? "Salvando valor..."
+      : saveStatus === "saved"
+        ? "Valor salvo."
+        : saveStatus === "error"
+          ? String((fetcher.data as any)?.message || "Erro ao salvar.")
+          : hasPending
+            ? "Alteração pendente."
+            : "Sem alterações pendentes.";
 
   return (
     <fetcher.Form
@@ -1268,7 +1301,10 @@ export function InlineVariationCellEditor({
             name="lineQuantity"
             defaultValue={defaultQty}
             fractionDigits={3}
-            onValueChange={setLineQuantity}
+            onValueChange={(value) => {
+              setLineQuantity(value);
+              setSaveStatus("pending");
+            }}
             className="w-24 h-8 border-b border-slate-200 bg-transparent px-1 py-0 text-sm text-right outline-none focus:border-slate-700 transition-colors"
           />
           {showVariationLoss ? (
@@ -1277,19 +1313,37 @@ export function InlineVariationCellEditor({
                 name="lineLossPct"
                 defaultValue={defaultLossPct}
                 fractionDigits={3}
-                onValueChange={setLineLossPct}
+                onValueChange={(value) => {
+                  setLineLossPct(value);
+                  setSaveStatus("pending");
+                }}
                 className="w-16 h-8 border-b border-slate-200 bg-transparent px-1 py-0 text-sm text-right outline-none focus:border-slate-700 transition-colors"
               />
               <span className="text-[11px] text-slate-400">%</span>
             </div>
           ) : null}
           <span
-            className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${hasPendingChanges() ? "bg-amber-400" : "bg-emerald-400"
+            className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${hasPending ? "bg-amber-400" : "bg-emerald-400"
               }`}
-            title={hasPendingChanges() ? "Alterações pendentes" : "Salvo"}
+            title={hasPending ? "Alterações pendentes" : "Salvo"}
           />
         </div>
         <div className="space-y-1 text-[11px] text-slate-400">
+          <div
+            className={cn(
+              "text-[11px]",
+              saveStatus === "error"
+                ? "text-red-500"
+                : saveStatus === "saving"
+                  ? "text-amber-600"
+                  : saveStatus === "saved"
+                    ? "text-emerald-600"
+                    : "text-slate-400"
+            )}
+            aria-live="polite"
+          >
+            {saveMessage}
+          </div>
           <div className="flex items-center justify-between gap-3">
             <span>Qtd bruta</span>
             <span className="font-medium text-xs text-slate-600">

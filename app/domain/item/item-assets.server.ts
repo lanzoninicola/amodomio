@@ -40,9 +40,94 @@ function toAssetDTO(asset: {
   };
 }
 
+async function migrateLegacyMenuItemAssetsToItem(itemId: string) {
+  const db = prismaClient as any;
+
+  const migrated = await db.$transaction(async (tx: any) => {
+    const existingCount = await tx.itemGalleryImage.count({
+      where: { itemId },
+    });
+    if (existingCount > 0) return false;
+
+    const linkedMenuItems = await tx.menuItem.findMany({
+      where: { itemId },
+      select: { id: true },
+      orderBy: [{ createdAt: "asc" }],
+    });
+    if (linkedMenuItems.length === 0) return false;
+
+    const legacyAssets = await tx.menuItemGalleryImage.findMany({
+      where: {
+        menuItemId: {
+          in: linkedMenuItems.map((row: { id: string }) => row.id),
+        },
+      },
+      orderBy: [
+        { isPrimary: "desc" },
+        { sortOrder: "asc" },
+        { createdAt: "asc" },
+      ],
+      select: {
+        kind: true,
+        secureUrl: true,
+        slot: true,
+        assetId: true,
+        mediaAssetId: true,
+        assetFolder: true,
+        originalFileName: true,
+        displayName: true,
+        format: true,
+        width: true,
+        height: true,
+        thumbnailUrl: true,
+        publicId: true,
+        visible: true,
+        isPrimary: true,
+        sortOrder: true,
+        createdAt: true,
+      },
+    });
+    if (legacyAssets.length === 0) return false;
+
+    let primaryAssigned = false;
+    for (const asset of legacyAssets) {
+      const shouldBePrimary = asset.isPrimary && !primaryAssigned;
+      await tx.itemGalleryImage.create({
+        data: {
+          itemId,
+          kind: asset.kind === "video" ? "video" : "image",
+          secureUrl: asset.secureUrl,
+          slot: shouldBePrimary ? "cover" : asset.slot || "gallery",
+          assetId: asset.assetId,
+          mediaAssetId: asset.mediaAssetId,
+          assetFolder: asset.assetFolder,
+          originalFileName: asset.originalFileName,
+          displayName: asset.displayName,
+          format: asset.format,
+          width: asset.width,
+          height: asset.height,
+          thumbnailUrl: asset.thumbnailUrl,
+          publicId: asset.publicId,
+          visible: asset.visible,
+          isPrimary: shouldBePrimary,
+          sortOrder: asset.sortOrder,
+          createdAt: asset.createdAt,
+        },
+      });
+      if (shouldBePrimary) primaryAssigned = true;
+    }
+
+    return true;
+  });
+
+  if (migrated) {
+    await invalidateCardapioIndexCache();
+  }
+}
+
 export async function listItemAssetsAdmin(itemId: string): Promise<ItemAssetsListDTO> {
   const db = prismaClient as any;
-  const images = await db.itemGalleryImage.findMany({
+  let images = await db.itemGalleryImage.findMany({
     where: { itemId },
     orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }, { createdAt: "asc" }],
     select: {
@@ -56,6 +141,24 @@ export async function listItemAssetsAdmin(itemId: string): Promise<ItemAssetsLis
       createdAt: true,
     },
   });
+
+  if (images.length === 0) {
+    await migrateLegacyMenuItemAssetsToItem(itemId);
+    images = await db.itemGalleryImage.findMany({
+      where: { itemId },
+      orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }, { createdAt: "asc" }],
+      select: {
+        id: true,
+        secureUrl: true,
+        kind: true,
+        slot: true,
+        visible: true,
+        isPrimary: true,
+        sortOrder: true,
+        createdAt: true,
+      },
+    });
+  }
 
   const mapped = images.map(toAssetDTO);
   const primary = mapped.find((image) => image.isPrimary) || null;

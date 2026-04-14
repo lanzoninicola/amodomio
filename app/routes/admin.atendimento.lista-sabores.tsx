@@ -26,7 +26,7 @@ import { MoneyInput } from "~/components/money-input/MoneyInput";
 import toFixedNumber from "~/utils/to-fixed-number";
 import prismaClient from "~/lib/prisma/client.server";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "~/components/ui/tooltip";
-import { findAllNativeCardapioItems } from "~/domain/cardapio/cardapio-items-source.server";
+import { findAllCardapioItems } from "~/domain/cardapio/cardapio-items-source.server";
 
 export const meta: MetaFunction = () => [
   { title: "Lista de sabores | Admin" },
@@ -35,7 +35,7 @@ export const meta: MetaFunction = () => [
 
 
 export const loader = async () => {
-  const cardapioItems = findAllNativeCardapioItems()
+  const cardapioItems = findAllCardapioItems()
 
   return defer({
     cardapioItems,

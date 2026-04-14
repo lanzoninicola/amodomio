@@ -52,6 +52,7 @@ const ITEM_UNIT_OPTIONS = ["UN", "L", "ML", "KG", "G"];
 
 const itemNavigation = [
   { name: "Principal", href: "main" },
+  { name: "Galeria", href: "galeria" },
   { name: "Variações", href: "variations" },
   { name: "Venda", href: "venda" },
   { name: "Custos", href: "costs" },

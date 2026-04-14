@@ -544,13 +544,13 @@ export default function AdminStockMovementsRoute() {
                       </TableCell>
                       <TableCell className="px-3 py-3 text-xs text-slate-700">
                         <div className="font-medium text-slate-900">
-                          {formatMoney(row.newCostAmount)} / {row.newCostUnit || row.movementUnit || '-'}
+                          {formatMoney(row.newCostAtImport)} / {row.newCostUnitAtImport || row.movementUnit || '-'}
                         </div>
                         <div className="text-slate-500">
                           total NF: {formatMoney(row.Line?.costTotalAmount)}
                         </div>
                         <div className="text-slate-400">
-                          antes: {formatMoney(row.previousCostAmount)} / {row.previousCostUnit || '-'}
+                          antes: {formatMoney(row.lastCostAtImport)} / {row.lastCostUnitAtImport || '-'}
                         </div>
                       </TableCell>
                       <TableCell className="px-3 py-3 text-xs text-slate-700">

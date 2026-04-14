@@ -126,7 +126,7 @@ export default function AdminItemPurchasesTab() {
                         <Form method="post" action="..">
                           <input type="hidden" name="_action" value="item-purchase-conversion-delete" />
                           <input type="hidden" name="conversionId" value={conv.id} />
-                          <Button type="submit" variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-red-500">
+                          <Button type="submit" variant="ghost" size="icon" className="h-7 w-7 text-slate-400 text-red-500">
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         </Form>
@@ -164,7 +164,7 @@ export default function AdminItemPurchasesTab() {
                           <input type="hidden" name="purchaseUm" value={iu.unitCode} />
                           <DecimalInput name="factor" fractionDigits={4} placeholder="0,0000" className="w-28 h-7 text-sm font-mono tabular-nums" />
                           <Button type="submit" size="sm" variant="outline" className="h-7 border-violet-300 text-violet-700 hover:bg-violet-100 text-xs px-2">
-                            Definir
+                            Salvar
                           </Button>
                         </Form>
                       ) : (

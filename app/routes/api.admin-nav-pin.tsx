@@ -17,25 +17,72 @@ export async function action({ request }: ActionFunctionArgs) {
   const pinned = pinnedRaw === "true" || pinnedRaw === "1" || pinnedRaw === "on";
   const now = new Date();
 
-  const result = await prismaClient.adminNavigationClick.upsert({
-    where: { href },
-    create: {
+  if (pinned) {
+    const existingPinned = await prismaClient.adminNavigationClick.findFirst({
+      where: {
+        href,
+        pinned: true,
+      },
+      orderBy: [{ updatedAt: "desc" }],
+    });
+
+    const result = existingPinned
+      ? await prismaClient.adminNavigationClick.update({
+          where: { id: existingPinned.id },
+          data: {
+            title,
+            groupTitle: groupTitle || null,
+            pinned: true,
+            updatedAt: now,
+          },
+        })
+      : await prismaClient.adminNavigationClick.create({
+          data: {
+            href,
+            title,
+            groupTitle: groupTitle || null,
+            pinned: true,
+            count: 0,
+            lastClickedAt: now,
+            createdAt: now,
+            updatedAt: now,
+          },
+        });
+
+    return ok({ href: result.href, pinned: result.pinned, requestId });
+  }
+
+  const existingUnpinned = await prismaClient.adminNavigationClick.findFirst({
+    where: {
       href,
-      title,
-      groupTitle: groupTitle || null,
-      pinned,
-      count: 0,
-      lastClickedAt: now,
-      createdAt: now,
-      updatedAt: now,
+      pinned: false,
     },
-    update: {
-      title,
-      groupTitle: groupTitle || null,
-      pinned,
-      updatedAt: now,
-    },
+    orderBy: [{ updatedAt: "desc" }],
   });
 
-  return ok({ href: result.href, pinned: result.pinned, requestId });
+  await prismaClient.$transaction(async (tx) => {
+    if (!existingUnpinned) {
+      await tx.adminNavigationClick.create({
+        data: {
+          href,
+          title,
+          groupTitle: groupTitle || null,
+          pinned: false,
+          count: 0,
+          lastClickedAt: now,
+          createdAt: now,
+          updatedAt: now,
+        },
+      });
+    }
+
+    await tx.adminNavigationClick.deleteMany({
+      where: {
+        href,
+        pinned: true,
+      },
+    });
+  });
+
+  return ok({ href, pinned: false, requestId });
 }

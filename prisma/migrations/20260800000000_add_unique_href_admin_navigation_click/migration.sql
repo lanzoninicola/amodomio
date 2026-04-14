@@ -1,2 +1,3 @@
--- AlterTable
-ALTER TABLE "admin_navigation_clicks" ADD CONSTRAINT "admin_navigation_clicks_href_key" UNIQUE ("href");
+-- No-op.
+-- href is intentionally not unique because the same destination can exist
+-- both as a pinned shortcut and as a regular navigation entry.

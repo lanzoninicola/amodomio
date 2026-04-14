@@ -1,5 +1,5 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
-import { Form, useActionData, useNavigation } from "@remix-run/react";
+import { Form, Link, useActionData, useNavigation } from "@remix-run/react";
 import { useEffect, useState } from "react";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -13,6 +13,7 @@ import type {
   BulkRecalculateResult,
   ScanFilters,
 } from "~/domain/item/item-cost-recalculate.server";
+import { ChevronLeft } from "lucide-react";
 
 // ─── action ───────────────────────────────────────────────────────────────────
 
@@ -82,9 +83,8 @@ function StatBox({
         {label}
       </p>
       <p
-        className={`mt-1 text-2xl font-bold tabular-nums ${
-          highlight ? "text-amber-600" : "text-slate-900"
-        }`}
+        className={`mt-1 text-2xl font-bold tabular-nums ${highlight ? "text-amber-600" : "text-slate-900"
+          }`}
       >
         {value}
       </p>
@@ -566,14 +566,20 @@ export default function RecalculateCostsRootPage() {
   const filters = payload?.filters ?? {};
 
   return (
-    <div className="w-full space-y-8 px-4 py-8">
+    <div className="w-full space-y-8">
       {/* Back link */}
-      <a
-        href="/admin"
-        className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 hover:underline"
-      >
-        &larr; Admin
-      </a>
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <Link
+          to="/admin"
+          className="inline-flex items-center gap-1.5 font-semibold text-slate-700 transition hover:text-slate-950"
+        >
+          <span className="flex size-5 items-center justify-center rounded-full border border-slate-200 text-slate-500">
+            <ChevronLeft size={12} />
+          </span>
+          voltar
+        </Link>
+
+      </div>
 
       {/* Header */}
       <div>
@@ -584,9 +590,7 @@ export default function RecalculateCostsRootPage() {
           Recalculo de Custos
         </h1>
         <p className="mt-2 text-sm text-slate-600">
-          Corrige entradas de historico de custo gravadas com unidade de compra
-          antes de a configuracao de conversao estar completa. Filtre por nome
-          ou unidade para processar um subconjunto de insumos.
+          Recalcula o historico de custo de um item e atualiza o ultimo custo.
         </p>
         <p className="mt-1 text-xs text-slate-500">
           Apenas entradas vinculadas a movimentos de estoque (

@@ -91,6 +91,7 @@ function EditableTwoLevelRow({
   itemCostHints,
   selectedBatchId,
   unitOptions,
+  categories,
   itemUnitOptionsByItemId,
   measurementConversions,
   location,
@@ -103,6 +104,7 @@ function EditableTwoLevelRow({
   itemCostHints: Record<string, { lastCostPerUnit: number | null; avgCostPerUnit: number | null }>;
   selectedBatchId: string;
   unitOptions: string[];
+  categories: Array<{ id: string; name: string }>;
   itemUnitOptionsByItemId: Record<string, string[]>;
   measurementConversions: Array<{ fromUnit: string; toUnit: string; factor: number }>;
   location: { pathname: string; search: string };
@@ -281,6 +283,7 @@ function EditableTwoLevelRow({
                 items={items}
                 batchId={selectedBatchId}
                 unitOptions={unitOptions}
+                categories={categories}
                 costHint={hint}
               />
             )}
@@ -574,6 +577,7 @@ function LineCard({
   itemCostHints,
   batchId,
   unitOptions,
+  categories,
   itemUnitOptionsByItemId,
   measurementConversions,
   location,
@@ -586,6 +590,7 @@ function LineCard({
   itemCostHints: Record<string, { lastCostPerUnit: number | null; avgCostPerUnit: number | null }>;
   batchId: string;
   unitOptions: string[];
+  categories: Array<{ id: string; name: string }>;
   itemUnitOptionsByItemId: Record<string, string[]>;
   measurementConversions: Array<{ fromUnit: string; toUnit: string; factor: number }>;
   location: { pathname: string; search: string };
@@ -784,7 +789,7 @@ function LineCard({
             <>
               <div className="min-w-[280px] flex-1">
                 <div className="mb-1.5 text-[10px] font-black uppercase tracking-widest text-red-500">Produto não vinculado</div>
-                <ItemSystemMapperCell line={line} items={items} batchId={batchId} unitOptions={unitOptions} costHint={hint} />
+                <ItemSystemMapperCell line={line} items={items} batchId={batchId} unitOptions={unitOptions} categories={categories} costHint={hint} />
               </div>
               <div className="w-20 shrink-0 opacity-40 grayscale">
                 <div className="mb-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">UM</div>
@@ -805,7 +810,7 @@ function LineCard({
             <>
               <div className="min-w-[220px] flex-1">
                 <div className="mb-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">Vincular produto</div>
-                <ItemSystemMapperCell line={line} items={items} batchId={batchId} unitOptions={unitOptions} costHint={hint} />
+                <ItemSystemMapperCell line={line} items={items} batchId={batchId} unitOptions={unitOptions} categories={categories} costHint={hint} />
                 {!isEditing && (line.status === 'invalid' || line.status === 'error') && line.errorMessage ? (
                   <div className="mt-1 text-[11px] font-medium text-red-500">{line.errorMessage}</div>
                 ) : null}
@@ -882,10 +887,7 @@ function LineCard({
                 )}
               </div>
 
-              {/* Hint pending_cost_review */}
-              {line.status === 'pending_cost_review' && !isEditing ? (
-                <div className="self-end"><LineStatusBadge line={line} batchId={batchId} /></div>
-              ) : null}
+
             </>
           )}
         </div>
@@ -984,7 +986,7 @@ export function AdminImportStockMovementsBatchLinesRoute({
   forcedStatus?: string | null;
   layout?: ImportStockLinesLayout;
 }) {
-  const { lines, items, selectedBatch, unitOptions, itemUnitOptionsByItemId, measurementConversions, itemCostHints, summary, isImportingBatch } =
+  const { lines, items, selectedBatch, unitOptions, itemUnitOptionsByItemId, measurementConversions, itemCostHints, summary, isImportingBatch, categories } =
     useOutletContext<AdminImportStockMovementsBatchOutletContext>();
   const { batchId } = useParams<{ batchId: string }>();
   const location = useLocation();
@@ -1232,6 +1234,7 @@ export function AdminImportStockMovementsBatchLinesRoute({
                   itemCostHints={itemCostHints}
                   batchId={selectedBatch.id}
                   unitOptions={unitOptions}
+                  categories={categories}
                   itemUnitOptionsByItemId={itemUnitOptionsByItemId}
                   measurementConversions={measurementConversions}
                   location={location}
@@ -1332,6 +1335,7 @@ export function AdminImportStockMovementsBatchLinesRoute({
                               items={items}
                               batchId={selectedBatch.id}
                               unitOptions={unitOptions}
+                              categories={categories}
                               costHint={hint}
                             />
                           )}
@@ -1425,6 +1429,7 @@ export function AdminImportStockMovementsBatchLinesRoute({
                       itemCostHints={itemCostHints}
                       selectedBatchId={selectedBatch.id}
                       unitOptions={unitOptions}
+                      categories={categories}
                       itemUnitOptionsByItemId={itemUnitOptionsByItemId}
                       measurementConversions={measurementConversions}
                       location={location}

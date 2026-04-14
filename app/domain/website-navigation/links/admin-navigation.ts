@@ -160,8 +160,64 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
       ],
     },
     {
+      title: "Vendas",
+      items: [
+        {
+          title: "Itens vendidos",
+          href: "/admin/vendas/itens-vendidos",
+          items: [],
+          disabled: false,
+        },
+        {
+          title: "Comercial",
+          href: "",
+          items: [
+            {
+              title: "Preços de venda",
+              href: "/admin/gerenciamento/cardapio/sell-price-management",
+              items: [],
+              disabled: false,
+            },
+            {
+              title: "Preços de venda Item",
+              href: "/admin/gerenciamento/cardapio/sell-price-management/cardapio/edit-items",
+              items: [],
+              disabled: false,
+            },
+            {
+              title: "DNA",
+              href: "/admin/vendas/dna",
+              items: [],
+              disabled: false,
+            },
+          ],
+          disabled: false,
+        },
+
+        {
+          title: "Ferramentas",
+          href: "",
+          items: [
+            {
+              title: "Publicados sem ficha",
+              href: "/admin/vendas/publicados-sem-ficha",
+              items: [],
+              disabled: false,
+            },
+          ],
+          disabled: false,
+        },
+      ],
+    },
+    {
       title: "Custos e Margem",
       items: [
+        {
+          title: "Fichas de custo",
+          href: "/admin/item-cost-sheets",
+          items: [],
+          disabled: false,
+        },
         {
           title: "Monitoramento",
           href: "",
@@ -192,26 +248,8 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
           href: "",
           items: [
             {
-              title: "Itens",
-              href: "/admin/items",
-              items: [],
-              disabled: false,
-            },
-            {
-              title: "Fichas de custo",
-              href: "/admin/item-cost-sheets",
-              items: [],
-              disabled: false,
-            },
-            {
               title: "Fornecedores",
               href: "/admin/suppliers",
-              items: [],
-              disabled: false,
-            },
-            {
-              title: "Aliases de Importação",
-              href: "/admin/item-import-aliases",
               items: [],
               disabled: false,
             },
@@ -223,7 +261,13 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
           href: "",
           items: [
             {
-              title: "Recalcular custos",
+              title: "Recalcular fichas técnicas",
+              href: "/admin/item-cost-sheets/recalculate",
+              items: [],
+              disabled: false,
+            },
+            {
+              title: "Recalcular custos itens",
               href: "/admin/recalculate-costs",
               items: [],
               disabled: false,
@@ -253,24 +297,6 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
               items: [],
               disabled: false,
             },
-            {
-              title: "Preços de venda",
-              href: "/admin/gerenciamento/cardapio/sell-price-management",
-              items: [],
-              disabled: false,
-            },
-            {
-              title: "Preços de venda Item",
-              href: "/admin/gerenciamento/cardapio/sell-price-management/cardapio/edit-items",
-              items: [],
-              disabled: false,
-            },
-            {
-              title: "DNA",
-              href: "/admin/financeiro/dna",
-              items: [],
-              disabled: false,
-            },
           ],
           disabled: false,
         },
@@ -279,6 +305,12 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
     {
       title: "Estoque",
       items: [
+        {
+          title: "Itens",
+          href: "/admin/items",
+          items: [],
+          disabled: false,
+        },
         {
           title: "Movimentações de estoque",
           href: "/admin/stock-movements",
@@ -301,6 +333,12 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
               items: [],
               disabled: false,
             },
+            {
+              title: "Aprovações de custo",
+              href: "/admin/import-stock-movements/cost-review-approvals",
+              items: [],
+              disabled: false,
+            },
           ],
           disabled: false,
         },
@@ -311,6 +349,12 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
             {
               title: "Importação de movimentações",
               href: "/admin/import-stock-movements",
+              items: [],
+              disabled: false,
+            },
+            {
+              title: "Aliases de Importação",
+              href: "/admin/item-import-aliases",
               items: [],
               disabled: false,
             },
@@ -338,6 +382,19 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
           title: "Receitas",
           href: "/admin/recipes",
           items: [],
+          disabled: false,
+        },
+        {
+          title: "Ferramentas",
+          href: "",
+          items: [
+            {
+              title: "Publicados sem receita",
+              href: "/admin/producao/publicados-sem-receita",
+              items: [],
+              disabled: false,
+            },
+          ],
           disabled: false,
         },
       ],

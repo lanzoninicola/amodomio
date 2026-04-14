@@ -1,8 +1,7 @@
-import { LoaderFunctionArgs } from "@remix-run/node";
-import { redirect } from "@remix-run/react";
+import type { LoaderFunctionArgs } from "@remix-run/node";
+import { redirect } from "@remix-run/node";
 
 
 export async function loader({ request }: LoaderFunctionArgs) {
-
-  return redirect("/admin/financeiro/dna?redirectFrom=admin/gerenciamento/cardapio/sell-price-management")
+  return redirect("/admin/vendas/dna?redirectFrom=admin/gerenciamento/cardapio/sell-price-management")
 }

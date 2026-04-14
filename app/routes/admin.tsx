@@ -14,6 +14,7 @@ import { AlertTriangle, Copy, Loader2, MessageSquareReply, X, ChevronUp } from "
 import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "~/components/ui/use-toast";
+import { getErrorMessage, isDatabaseConnectivityError } from "~/lib/errors/connectivity";
 
 
 export interface AdminOutletContext {
@@ -126,6 +127,7 @@ export const loader: LoaderFunction = async ({ request }: LoaderFunctionArgs) =>
                 LIMIT 15
             `,
             prismaClient.adminNavigationClick.findMany({
+                where: { pinned: false },
                 orderBy: [{ count: "desc" }, { lastClickedAt: "desc" }],
                 take: 8,
             }).catch((error) => {
@@ -556,7 +558,9 @@ export default function AdminOutlet() {
 
 export function ErrorBoundary() {
     const error = useRouteError();
+    const location = useLocation();
     const [showDetails, setShowDetails] = useState(false);
+    const isDbUnavailable = isDatabaseConnectivityError(error);
 
     const errorDetails = (() => {
         if (error instanceof Error) {
@@ -595,14 +599,30 @@ export function ErrorBoundary() {
         <div className="min-h-screen bg-slate-50 text-slate-900 p-6 md:p-10">
             <div className="mx-auto max-w-2xl rounded-xl border bg-white p-6 md:p-8 shadow-sm space-y-4">
                 <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">Admin</p>
-                <h1 className="text-2xl md:text-3xl font-semibold">Ocorreu um erro no painel administrativo</h1>
+                <h1 className="text-2xl md:text-3xl font-semibold">
+                    {isDbUnavailable ? "Banco temporariamente indisponível" : "Ocorreu um erro no painel administrativo"}
+                </h1>
                 <p className="text-sm md:text-base text-slate-600">
-                    Atualize a página ou volte para o painel. Se o problema continuar, acione o suporte interno.
+                    {isDbUnavailable
+                        ? "Não foi possível conectar ao banco de dados nesta tentativa. Você pode recarregar a rota atual sem cair em uma tela técnica."
+                        : "Atualize a página ou volte para o painel. Se o problema continuar, acione o suporte interno."}
                 </p>
+                {isDbUnavailable ? (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                        {getErrorMessage(error) || "Falha de conectividade com a base de dados."}
+                    </div>
+                ) : null}
                 <div className="flex flex-wrap items-center gap-2">
                     <Link
-                        to="/admin"
+                        to={location.pathname + location.search}
+                        reloadDocument
                         className="inline-flex items-center rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
+                    >
+                        Tentar novamente
+                    </Link>
+                    <Link
+                        to="/admin"
+                        className="inline-flex items-center rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700"
                     >
                         Voltar ao painel
                     </Link>

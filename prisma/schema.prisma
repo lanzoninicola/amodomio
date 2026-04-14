@@ -2469,8 +2469,9 @@ model StockMovementImportBatch {
   updatedAt               DateTime  @default(now()) @updatedAt @map("updated_at")
   archivedAt              DateTime? @map("archived_at")
 
-  Lines          StockMovementImportBatchLine[]
-  StockMovements StockMovement[]
+  Lines               StockMovementImportBatchLine[]
+  StockMovements      StockMovement[]
+  CostReviewApprovals StockMovementCostReviewApproval[]
 
   @@index([status, createdAt], map: "stock_movement_import_batches_status_created_at_idx")
   @@map("stock_movement_import_batches")
@@ -2537,6 +2538,30 @@ model StockMovementImportBatchLine {
   @@map("stock_movement_import_batch_lines")
 }
 
+model StockMovementCostReviewApproval {
+  id                   String   @id @default(uuid())
+  batchId              String   @map("batch_id")
+  lineId               String   @map("line_id")
+  approvedBy           String?  @map("approved_by")
+  approvedAt           DateTime @map("approved_at")
+  ingredientName       String   @map("ingredient_name")
+  mappedItemId         String?  @map("mapped_item_id")
+  mappedItemName       String?  @map("mapped_item_name")
+  targetUnit           String?  @map("target_unit")
+  costAmount           Float?   @map("cost_amount")
+  convertedCostAmount  Float?   @map("converted_cost_amount")
+  lastCostPerUnit      Float?   @map("last_cost_per_unit")
+  avgCostPerUnit       Float?   @map("avg_cost_per_unit")
+  notifiedWhatsapp     Boolean  @default(false) @map("notified_whatsapp")
+  createdAt            DateTime @default(now()) @map("created_at")
+
+  Batch StockMovementImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@index([batchId], map: "stock_movement_cost_review_approvals_batch_idx")
+  @@index([approvedAt], map: "stock_movement_cost_review_approvals_approved_at_idx")
+  @@map("stock_movement_cost_review_approvals")
+}
+
 model StockMovement {
   id                      String    @id @default(uuid())
   direction               String    @default("entry")
@@ -2551,10 +2576,11 @@ model StockMovement {
   quantityAmount          Float?    @map("quantity_amount")
   quantityUnit            String?   @map("quantity_unit")
   previousCostVariationId String?   @map("previous_cost_variation_id")
-  previousCostAmount      Float?    @map("previous_cost_amount")
-  previousCostUnit        String?   @map("previous_cost_unit")
-  newCostAmount           Float     @map("new_cost_amount")
-  newCostUnit             String?   @map("new_cost_unit")
+  lastCostAtImport        Float?    @map("last_cost_at_import")
+  lastCostUnitAtImport    String?   @map("last_cost_unit_at_import")
+  avgCostAtImport         Float?    @map("avg_cost_at_import")
+  newCostAtImport         Float     @map("new_cost_at_import")
+  newCostUnitAtImport     String?   @map("new_cost_unit_at_import")
   movementUnit            String?   @map("movement_unit")
   conversionSource        String?   @map("conversion_source")
   conversionFactorUsed    Float?    @map("conversion_factor_used")

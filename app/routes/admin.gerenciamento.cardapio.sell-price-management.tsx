@@ -1,6 +1,6 @@
 import { ActionFunction, LoaderFunctionArgs } from "@remix-run/node";
 import { Await, Form, Link, Outlet, defer, useActionData, useLoaderData, useLocation } from "@remix-run/react";
-import { ArrowUp, Option, Settings, Terminal } from "lucide-react";
+import { AlertTriangle, ArrowUp, Option, Settings, Terminal } from "lucide-react";
 import { c } from "node_modules/vite/dist/node/types.d-aGj9QkWt";
 import { NumericInput } from "~/components/numeric-input/numeric-input";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
@@ -91,10 +91,14 @@ export default function AdminGerenciamentoCardapioSellPriceManagement() {
       <div className="flex justify-between items-center mb-2">
         <h2 >Gerenciamento Preços de Vendas Itens</h2>
 
-        <div>
-
-
-          <Link to="/admin/gerenciamento/cardapio/dna"
+        <div className="flex items-center gap-4">
+          <Link to="/admin/vendas/publicados-sem-ficha"
+            className="flex gap-2 items-center hover:underline hover:cursor-pointer"
+          >
+            <AlertTriangle size={20} />
+            <span className="text-[12px] uppercase tracking-wider">Publicados sem ficha</span>
+          </Link>
+          <Link to="/admin/vendas/dna"
             className="flex gap-2 items-center hover:underline hover:cursor-pointer"
           >
             <Settings size={20} />
@@ -194,4 +198,3 @@ export default function AdminGerenciamentoCardapioSellPriceManagement() {
     </div>
   )
 }
-

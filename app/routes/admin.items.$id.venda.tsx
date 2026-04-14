@@ -1,6 +1,6 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { Link, Outlet, useLoaderData, useLocation } from "@remix-run/react";
-import { FileText, Images, Store, Tags } from "lucide-react";
+import { FileText, Store, Tags } from "lucide-react";
 import { loadItemSellingOverview } from "~/domain/item/item-selling-overview.server";
 import { badRequest, ok, serverError } from "~/utils/http-response.server";
 import { lastUrlSegment } from "~/utils/url";
@@ -9,7 +9,6 @@ const vendaNavigation = [
   { name: "Comercial", href: "comercial", icon: FileText },
   { name: "Canais", href: "canais", icon: Store },
   { name: "Precos", href: "precos", icon: Tags },
-  { name: "Galeria", href: "galeria", icon: Images },
   { name: "Tags", href: "tags", icon: Tags },
 ];
 

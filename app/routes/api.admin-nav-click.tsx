@@ -15,7 +15,11 @@ export async function action({ request }: ActionFunctionArgs) {
   const now = new Date();
 
   const existing = await prismaClient.adminNavigationClick.findFirst({
-    where: { href },
+    where: {
+      href,
+      pinned: false,
+    },
+    orderBy: [{ updatedAt: "desc" }],
   });
 
   if (existing) {

@@ -3,25 +3,10 @@ import {
   MenuItemEntityFindAllOptions,
   MenuItemEntityFindAllParams,
   MenuItemWithAssociations,
-  menuItemPrismaEntity,
 } from "./menu-item.prisma.entity.server";
 
-export const CARDAPIO_ITEMS_SOURCE_SETTING_CONTEXT = "cardapio";
-export const CARDAPIO_ITEMS_SOURCE_SETTING_NAME = "items.source";
-export const CARDAPIO_ITEMS_SOURCE_SETTING_TYPE = "string";
-export const CARDAPIO_ITEMS_SOURCE_DEFAULT = "menu_items";
-export const CARDAPIO_ITEMS_SOURCE_VALUES = ["menu_items", "items"] as const;
-
-export type CardapioItemsSource = (typeof CARDAPIO_ITEMS_SOURCE_VALUES)[number];
-
-export type CardapioItemsSourceResolution = {
-  configuredSource: CardapioItemsSource;
-  effectiveSource: CardapioItemsSource;
-  fallbackReason: "configured" | "default" | "items_source_not_implemented";
-};
-
 type CardapioCompatItem = MenuItemWithAssociations & {
-  sourceType?: "legacy" | "native";
+  sourceType?: "native";
   sourceItemId?: string;
 };
 
@@ -42,12 +27,6 @@ type CompatMediaAsset = {
   createdAt?: Date | null;
   updatedAt?: Date | null;
 };
-
-function normalizeCardapioItemsSource(value?: string | null): CardapioItemsSource {
-  const normalized = String(value || "").trim().toLowerCase();
-  if (normalized === "items") return "items";
-  return "menu_items";
-}
 
 function normalizeText(value?: string | null) {
   return typeof value === "string" ? value.trim() : "";
@@ -131,25 +110,15 @@ function mapCompatGalleryAssets(assets?: CompatMediaAsset[] | null) {
 
 function resolveCompatMedia(input: {
   galleryAssets?: CompatMediaAsset[] | null;
-  fallbackImage?: { secureUrl?: string | null; thumbnailUrl?: string | null } | null;
 }) {
-  const featured = getFeaturedMedia(input.galleryAssets);
-  const imageAsset = getPrimaryImageMedia(input.galleryAssets);
-  const mediaUrl =
-    normalizePublicMediaUrl(featured?.secureUrl) || normalizePublicMediaUrl(input.fallbackImage?.secureUrl);
-  const imageUrl =
-    normalizePublicMediaUrl(imageAsset?.secureUrl) ||
-    normalizePublicMediaUrl(input.fallbackImage?.secureUrl) ||
-    mediaUrl;
-  const placeholderUrl =
-    normalizePublicMediaUrl(imageAsset?.thumbnailUrl) ||
-    normalizePublicMediaUrl(input.fallbackImage?.thumbnailUrl);
+  const galleryAssets = input.galleryAssets;
+  const featured = getFeaturedMedia(galleryAssets);
+  const imageAsset = getPrimaryImageMedia(galleryAssets);
+  const mediaUrl = normalizePublicMediaUrl(featured?.secureUrl);
+  const imageUrl = normalizePublicMediaUrl(imageAsset?.secureUrl) || mediaUrl;
+  const placeholderUrl = normalizePublicMediaUrl(imageAsset?.thumbnailUrl);
 
-  return {
-    mediaUrl,
-    imageUrl,
-    placeholderUrl,
-  };
+  return { mediaUrl, imageUrl, placeholderUrl };
 }
 
 function resolveSortOrderIndex(row: NativeCardapioRow["ItemVariation"][number], fallbackIndex: number) {
@@ -158,7 +127,7 @@ function resolveSortOrderIndex(row: NativeCardapioRow["ItemVariation"][number], 
   return fallbackIndex + 1;
 }
 
-function buildCompatPriceRowsFromNative(item: NativeCardapioRow) {
+function buildCompatPriceRows(item: NativeCardapioRow) {
   return (item.ItemSellingPriceVariation || [])
     .map((row: any, index: number) => {
       const label = row.ItemVariation?.Variation?.name || "Sem variacao";
@@ -181,11 +150,7 @@ function buildCompatPriceRowsFromNative(item: NativeCardapioRow) {
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
         updatedBy: row.updatedBy || null,
-        ItemSellingChannel: row.ItemSellingChannel
-          ? {
-              ...row.ItemSellingChannel,
-            }
-          : null,
+        ItemSellingChannel: row.ItemSellingChannel ? { ...row.ItemSellingChannel } : null,
         MenuItemSize: {
           id: row.ItemVariation?.id || row.id,
           key: code,
@@ -215,22 +180,7 @@ function buildCompatPriceRowsFromNative(item: NativeCardapioRow) {
     );
 }
 
-function buildCompatPriceRowsFromLegacy(item: NativeCardapioRow) {
-  return (item.MenuItem || [])
-    .flatMap((legacyRow: any) =>
-      (legacyRow.MenuItemSellingPriceVariation || []).map((row: any) => ({
-        ...row,
-        menuItemId: legacyRow.id,
-      }))
-    )
-    .sort(
-      (a: any, b: any) =>
-        Number(a.MenuItemSize?.sortOrderIndex || 0) - Number(b.MenuItemSize?.sortOrderIndex || 0) ||
-        Number(a.priceAmount || 0) - Number(b.priceAmount || 0)
-    );
-}
-
-function buildLegacyPriceVariations(
+function buildPriceVariations(
   sellingPrices: Array<{
     id: string;
     priceAmount: number;
@@ -296,8 +246,6 @@ function sortCompatMenuItems(records: CardapioCompatItem[], params: MenuItemEnti
 }
 
 function toCompatCardapioItem(item: NativeCardapioRow): CardapioCompatItem {
-  const legacyRows = item.MenuItem || [];
-  const primaryLegacy = legacyRows[0] || null;
   const sellingInfo = item.ItemSellingInfo;
   const category = sellingInfo?.Category || { id: "", name: "Sem categoria", type: "menu" };
   const group = sellingInfo?.ItemGroup || {
@@ -309,34 +257,21 @@ function toCompatCardapioItem(item: NativeCardapioRow): CardapioCompatItem {
   };
 
   const allTags = uniqueById<CompatTagModel>(
-    (
-      item.ItemTag?.length
-        ? item.ItemTag.map((tagRow: any) => tagRow.Tag)
-        : legacyRows.flatMap((row: any) => (row.tags || []).map((tagRow: any) => tagRow.Tag))
-    ).filter((tag: any) => Boolean(tag?.id))
+    (item.ItemTag || []).map((tagRow: any) => tagRow.Tag).filter((tag: any) => Boolean(tag?.id))
   );
   const publicTags = allTags.filter((tag) => tag.public === true);
-  const nativeGalleryAssets = mapCompatGalleryAssets(item.ItemGalleryImage as CompatMediaAsset[] | null | undefined);
-  const legacyGalleryAssets = mapCompatGalleryAssets(
-    primaryLegacy?.MenuItemGalleryImage as CompatMediaAsset[] | null | undefined
-  );
-  const compatGalleryAssets = nativeGalleryAssets.length > 0 ? nativeGalleryAssets : legacyGalleryAssets;
-  const media = resolveCompatMedia({
-    galleryAssets: compatGalleryAssets,
-    fallbackImage: primaryLegacy?.MenuItemImage || null,
-  });
+  const galleryAssets = mapCompatGalleryAssets(item.ItemGalleryImage as CompatMediaAsset[] | null | undefined);
+  const media = resolveCompatMedia({ galleryAssets });
   const compatMenuItemImage =
     media.imageUrl || media.placeholderUrl
       ? {
           secureUrl: media.imageUrl || null,
           thumbnailUrl: media.placeholderUrl || media.imageUrl || null,
         }
-      : primaryLegacy?.MenuItemImage || null;
-  const nativePrices = buildCompatPriceRowsFromNative(item);
-  const sellingPrices = nativePrices;
+      : null;
+  const sellingPrices = buildCompatPriceRows(item);
 
-  const id = item.id;
-  const hasPublishedNativePrice = nativePrices.some((row: any) => Boolean(row.showOnCardapio));
+  const hasPublishedNativePrice = sellingPrices.some((row: any) => Boolean(row.showOnCardapio));
   const cardapioChannelVisible =
     (item.ItemSellingChannelItem || []).some((row: any) => row?.visible === true) || false;
   const nativeUpcoming = Boolean(sellingInfo?.upcoming);
@@ -347,24 +282,13 @@ function toCompatCardapioItem(item: NativeCardapioRow): CardapioCompatItem {
     cardapioChannelVisible &&
     !nativeUpcoming &&
     hasPublishedNativePrice;
-  const upcoming = nativeUpcoming;
-  const description = normalizeText(item.description);
-  const longDescription = normalizeText(sellingInfo?.longDescription) || null;
-  const ingredients = normalizeText(sellingInfo?.ingredients);
-  const notesPublic = normalizeText(sellingInfo?.notesPublic) || null;
-  const likesAmount = item.ItemLike?.length
-    ? Number(item.ItemLike.length)
-    : legacyRows.reduce((sum: number, row: any) => sum + Number(row.MenuItemLike?.length || 0), 0);
-  const sharesAmount = Number(item._count?.ItemShare || 0) > 0
-    ? Number(item._count?.ItemShare || 0)
-    : legacyRows.reduce((sum: number, row: any) => sum + Number(row._count?.MenuItemShare || 0), 0);
 
   return {
-    id,
+    id: item.id,
     name: item.name,
-    description,
-    longDescription,
-    ingredients,
+    description: normalizeText(item.description),
+    longDescription: normalizeText(sellingInfo?.longDescription) || null,
+    ingredients: normalizeText(sellingInfo?.ingredients),
     categoryId: category.id || "",
     Category: category as any,
     itemId: item.id,
@@ -372,7 +296,7 @@ function toCompatCardapioItem(item: NativeCardapioRow): CardapioCompatItem {
     basePriceAmount: Number(sellingPrices[0]?.priceAmount || 0),
     visible,
     active,
-    upcoming,
+    upcoming: nativeUpcoming,
     mogoId: "",
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
@@ -386,22 +310,22 @@ function toCompatCardapioItem(item: NativeCardapioRow): CardapioCompatItem {
     MenuItemLike: [] as any,
     MenuItemShare: [] as any,
     MenuItemInterestEvent: [] as any,
-    imageId: compatGalleryAssets[0]?.id || null,
+    imageId: galleryAssets[0]?.id || null,
     MenuItemImage: compatMenuItemImage as any,
     MenuItemNote: [] as any,
     MenuItemSellingPriceVariation: sellingPrices as any,
     MenuItemCostVariation: [] as any,
-    priceVariations: buildLegacyPriceVariations(sellingPrices as any) as any,
+    priceVariations: buildPriceVariations(sellingPrices as any) as any,
     MenuItemGroup: group as any,
     menuItemGroupId: group?.id || null,
     MenuItemSellingPriceVariationAudit: [] as any,
-    MenuItemGalleryImage: compatGalleryAssets as any,
+    MenuItemGalleryImage: galleryAssets as any,
     CostImpactMenuItem: [] as any,
     sortOrderIndex: 0,
-    notesPublic,
+    notesPublic: normalizeText(sellingInfo?.notesPublic) || null,
     slug: normalizeText(sellingInfo?.slug) || item.id,
-    likes: { amount: likesAmount },
-    shares: { amount: sharesAmount },
+    likes: { amount: Number(item.ItemLike?.length || 0) },
+    shares: { amount: Number(item._count?.ItemShare || 0) },
     imageTransformedURL: media.imageUrl,
     imagePlaceholderURL: media.placeholderUrl,
     meta: buildMetaFromTags(allTags),
@@ -464,39 +388,21 @@ async function listNativeCardapioItems(
           categoryId: true,
           itemGroupId: true,
           Category: {
-            select: {
-              id: true,
-              name: true,
-              type: true,
-            },
+            select: { id: true, name: true, type: true },
           },
           ItemGroup: {
-            select: {
-              id: true,
-              key: true,
-              name: true,
-              description: true,
-              sortOrderIndex: true,
-            },
+            select: { id: true, key: true, name: true, description: true, sortOrderIndex: true },
           },
         },
       },
       ItemSellingChannelItem: {
         where: {
-          ItemSellingChannel: {
-            key: sellingChannelKey,
-          },
+          ItemSellingChannel: { key: sellingChannelKey },
         },
-        select: {
-          id: true,
-          visible: true,
-          itemSellingChannelId: true,
-        },
+        select: { id: true, visible: true, itemSellingChannelId: true },
       },
       ItemGalleryImage: {
-        where: {
-          visible: true,
-        },
+        where: { visible: true },
         orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }, { createdAt: "asc" }],
         select: {
           id: true,
@@ -511,33 +417,18 @@ async function listNativeCardapioItems(
         },
       },
       ItemTag: {
-        where: {
-          deletedAt: null,
-        },
+        where: { deletedAt: null },
         select: {
           id: true,
-          Tag: {
-            select: {
-              id: true,
-              name: true,
-              public: true,
-            },
-          },
+          Tag: { select: { id: true, name: true, public: true } },
         },
       },
       ItemLike: {
-        where: {
-          deletedAt: null,
-          amount: { gt: 0, lte: 1 },
-        },
-        select: {
-          id: true,
-        },
+        where: { deletedAt: null, amount: { gt: 0, lte: 1 } },
+        select: { id: true },
       },
       _count: {
-        select: {
-          ItemShare: true,
-        },
+        select: { ItemShare: true },
       },
       ItemVariation: {
         where: { deletedAt: null },
@@ -545,20 +436,12 @@ async function listNativeCardapioItems(
         select: {
           id: true,
           isReference: true,
-          Variation: {
-            select: {
-              id: true,
-              code: true,
-              name: true,
-            },
-          },
+          Variation: { select: { id: true, code: true, name: true } },
         },
       },
       ItemSellingPriceVariation: {
         where: {
-          ItemSellingChannel: {
-            key: sellingChannelKey,
-          },
+          ItemSellingChannel: { key: sellingChannelKey },
         },
         orderBy: [{ updatedAt: "desc" }],
         select: {
@@ -578,152 +461,11 @@ async function listNativeCardapioItems(
             select: {
               id: true,
               isReference: true,
-              Variation: {
-                select: {
-                  id: true,
-                  code: true,
-                  name: true,
-                },
-              },
+              Variation: { select: { id: true, code: true, name: true } },
             },
           },
           ItemSellingChannel: {
-            select: {
-              id: true,
-              key: true,
-              name: true,
-            },
-          },
-        },
-      },
-      MenuItem: {
-        where: {
-          deletedAt: null,
-        },
-        orderBy: [{ sortOrderIndex: "asc" }, { name: "asc" }],
-        select: {
-          id: true,
-          name: true,
-          description: true,
-          longDescription: true,
-          ingredients: true,
-          notesPublic: true,
-          categoryId: true,
-          menuItemGroupId: true,
-          visible: true,
-          active: true,
-          upcoming: true,
-          mogoId: true,
-          createdAt: true,
-          updatedAt: true,
-          sortOrderIndex: true,
-          slug: true,
-          imageId: true,
-          Category: {
-            select: {
-              id: true,
-              name: true,
-              type: true,
-            },
-          },
-          MenuItemGroup: {
-            select: {
-              id: true,
-              key: true,
-              name: true,
-              description: true,
-              sortOrderIndex: true,
-            },
-          },
-          tags: {
-            select: {
-              Tag: {
-                select: {
-                  id: true,
-                  name: true,
-                  public: true,
-                },
-              },
-            },
-          },
-          MenuItemLike: {
-            where: {
-              deletedAt: null,
-              amount: { gt: 0, lte: 1 },
-            },
-            select: {
-              id: true,
-            },
-          },
-          _count: {
-            select: {
-              MenuItemShare: true,
-            },
-          },
-          MenuItemImage: {
-            select: {
-              secureUrl: true,
-              thumbnailUrl: true,
-            },
-          },
-          MenuItemGalleryImage: {
-            where: {
-              visible: true,
-            },
-            orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }, { createdAt: "asc" }],
-            select: {
-              id: true,
-              kind: true,
-              secureUrl: true,
-              thumbnailUrl: true,
-              isPrimary: true,
-              visible: true,
-              sortOrder: true,
-              createdAt: true,
-              updatedAt: true,
-            },
-          },
-          MenuItemSellingPriceVariation: {
-            where: {
-              ItemSellingChannel: {
-                key: sellingChannelKey,
-              },
-            },
-            orderBy: [{ priceAmount: "asc" }],
-            select: {
-              id: true,
-              menuItemId: true,
-              menuItemSizeId: true,
-              itemSellingChannelId: true,
-              priceAmount: true,
-              profitActualPerc: true,
-              priceExpectedAmount: true,
-              profitExpectedPerc: true,
-              discountPercentage: true,
-              showOnCardapio: true,
-              showOnCardapioAt: true,
-              createdAt: true,
-              updatedAt: true,
-              updatedBy: true,
-              previousPriceAmount: true,
-              ItemSellingChannel: {
-                select: {
-                  id: true,
-                  key: true,
-                  name: true,
-                },
-              },
-              MenuItemSize: {
-                select: {
-                  id: true,
-                  key: true,
-                  name: true,
-                  nameShort: true,
-                  nameAbbreviated: true,
-                  sortOrderIndex: true,
-                },
-              },
-            },
+            select: { id: true, key: true, name: true },
           },
         },
       },
@@ -731,7 +473,7 @@ async function listNativeCardapioItems(
   });
 }
 
-async function findAllCardapioItemsFromItemsSource(
+async function findAllCardapioItemsFromSource(
   params: MenuItemEntityFindAllParams = {},
   options: MenuItemEntityFindAllOptions = {}
 ) {
@@ -741,11 +483,18 @@ async function findAllCardapioItemsFromItemsSource(
   return sortCompatMenuItems(filtered, params);
 }
 
-async function findAllCardapioItemsGroupedByGroupLightFromItemsSource(
+export async function findAllCardapioItems(
+  params: MenuItemEntityFindAllParams = {},
+  options: MenuItemEntityFindAllOptions = {}
+): Promise<MenuItemWithAssociations[]> {
+  return (await findAllCardapioItemsFromSource(params, options)) as MenuItemWithAssociations[];
+}
+
+export async function findAllCardapioItemsGroupedByGroupLight(
   params: MenuItemEntityFindAllParams = {},
   options: MenuItemEntityFindAllOptions = {}
 ) {
-  const allItems = await findAllCardapioItemsFromItemsSource(params, options);
+  const allItems = await findAllCardapioItemsFromSource(params, options);
   const direction = params.option?.direction === "desc" ? -1 : 1;
 
   const grouped = allItems.reduce(
@@ -793,7 +542,7 @@ async function findAllCardapioItemsGroupedByGroupLightFromItemsSource(
     }));
 }
 
-async function findCardapioItemBySlugFromItemsSource(slug: string) {
+export async function findCardapioItemBySlug(slug: string) {
   const normalizedSlug = normalizeText(slug);
   if (!normalizedSlug) return null;
 
@@ -802,129 +551,14 @@ async function findCardapioItemBySlugFromItemsSource(slug: string) {
     where: {
       OR: [
         { id: normalizedSlug },
-        {
-          ItemSellingInfo: {
-            is: {
-              slug: normalizedSlug,
-            },
-          },
-        },
-        {
-          MenuItem: {
-            some: {
-              deletedAt: null,
-              OR: [{ slug: normalizedSlug }, { id: normalizedSlug }],
-            },
-          },
-        },
+        { ItemSellingInfo: { is: { slug: normalizedSlug } } },
       ],
     },
-    select: {
-      id: true,
-    },
+    select: { id: true },
   });
 
   if (!item) return null;
 
-  const rows = await listNativeCardapioItems(
-    {
-      where: {
-        itemId: item.id,
-      } as any,
-    },
-    {}
-  );
-
+  const rows = await listNativeCardapioItems({ where: { itemId: item.id } as any }, {});
   return rows.length ? toCompatCardapioItem(rows[0]) : null;
-}
-
-export async function ensureCardapioItemsSourceSetting() {
-  const existing = await prismaClient.setting.findFirst({
-    where: {
-      context: CARDAPIO_ITEMS_SOURCE_SETTING_CONTEXT,
-      name: CARDAPIO_ITEMS_SOURCE_SETTING_NAME,
-    },
-    orderBy: [{ createdAt: "desc" }],
-  });
-
-  if (existing) return existing;
-
-  return await prismaClient.setting.create({
-    data: {
-      context: CARDAPIO_ITEMS_SOURCE_SETTING_CONTEXT,
-      name: CARDAPIO_ITEMS_SOURCE_SETTING_NAME,
-      type: CARDAPIO_ITEMS_SOURCE_SETTING_TYPE,
-      value: CARDAPIO_ITEMS_SOURCE_DEFAULT,
-      createdAt: new Date(),
-    },
-  });
-}
-
-export async function getCardapioItemsSourceResolution(): Promise<CardapioItemsSourceResolution> {
-  const setting = await prismaClient.setting.findFirst({
-    where: {
-      context: CARDAPIO_ITEMS_SOURCE_SETTING_CONTEXT,
-      name: CARDAPIO_ITEMS_SOURCE_SETTING_NAME,
-    },
-    orderBy: [{ createdAt: "desc" }],
-  });
-
-  const configuredSource = normalizeCardapioItemsSource(setting?.value);
-
-  if (!setting?.value) {
-    return {
-      configuredSource,
-      effectiveSource: "menu_items",
-      fallbackReason: "default",
-    };
-  }
-
-  return {
-    configuredSource,
-    effectiveSource: configuredSource,
-    fallbackReason: "configured",
-  };
-}
-
-export async function findAllCardapioItems(
-  params: MenuItemEntityFindAllParams = {},
-  options: MenuItemEntityFindAllOptions = {}
-): Promise<MenuItemWithAssociations[]> {
-  const resolution = await getCardapioItemsSourceResolution();
-
-  if (resolution.effectiveSource === "items") {
-    return (await findAllCardapioItemsFromItemsSource(params, options)) as MenuItemWithAssociations[];
-  }
-
-  return (await menuItemPrismaEntity.findAll(params, options as any)) as MenuItemWithAssociations[];
-}
-
-export async function findAllNativeCardapioItems(
-  params: MenuItemEntityFindAllParams = {},
-  options: MenuItemEntityFindAllOptions = {}
-): Promise<MenuItemWithAssociations[]> {
-  return (await findAllCardapioItemsFromItemsSource(params, options)) as MenuItemWithAssociations[];
-}
-
-export async function findAllCardapioItemsGroupedByGroupLight(
-  params: MenuItemEntityFindAllParams = {},
-  options: MenuItemEntityFindAllOptions = {}
-) {
-  const resolution = await getCardapioItemsSourceResolution();
-
-  if (resolution.effectiveSource === "items") {
-    return await findAllCardapioItemsGroupedByGroupLightFromItemsSource(params, options);
-  }
-
-  return await menuItemPrismaEntity.findAllGroupedByGroupLight(params, options as any);
-}
-
-export async function findCardapioItemBySlug(slug: string) {
-  const resolution = await getCardapioItemsSourceResolution();
-
-  if (resolution.effectiveSource === "items") {
-    return await findCardapioItemBySlugFromItemsSource(slug);
-  }
-
-  return await menuItemPrismaEntity.findBySlug(slug);
 }

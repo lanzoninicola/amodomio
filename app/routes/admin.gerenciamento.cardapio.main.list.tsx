@@ -6,10 +6,7 @@ import Loading from "~/components/loading/loading";
 import { Input } from "~/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { toast } from "~/components/ui/use-toast";
-import {
-    findAllCardapioItems,
-    getCardapioItemsSourceResolution,
-} from "~/domain/cardapio/cardapio-items-source.server";
+import { findAllCardapioItems } from "~/domain/cardapio/cardapio-items-source.server";
 import MenuItemList from "~/domain/cardapio/components/menu-item-list/menu-item-list";
 import { menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import prismaClient from "~/lib/prisma/client.server";
@@ -21,8 +18,6 @@ import tryit from "~/utils/try-it";
 export async function loader({ request }: LoaderFunctionArgs) {
 
     // https://github.com/remix-run/remix/discussions/6149
-
-    const sourceResolution = await getCardapioItemsSourceResolution();
 
     const listFlat = findAllCardapioItems({
         where: {
@@ -56,7 +51,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     // const data = Promise.all([categories, listFlat, tags, sizeVariations]);
     const data = Promise.all([listFlat, menuItemGroups, menuItemCategories]);
 
-    return defer({ data, sourceResolution });
+    return defer({ data });
 }
 
 export async function action({ request }: LoaderFunctionArgs) {
@@ -177,7 +172,7 @@ export type MenuItemVisibilityFilterOption =
 
 export default function AdminGerenciamentoCardapioMainListLayout() {
 
-    const { data, sourceResolution } = useLoaderData<typeof loader>();
+    const { data } = useLoaderData<typeof loader>();
     const actionData = useActionData<typeof action>();
 
     if (actionData && actionData.status !== 200) {
@@ -209,11 +204,8 @@ export default function AdminGerenciamentoCardapioMainListLayout() {
                     const [currentFilter, setCurrentFilter] = useState<MenuItemVisibilityFilterOption | null>("all");
 
                     const [dragEnable, setDragEnabled] = useState(false)
-                    const isNativeSource = sourceResolution?.effectiveSource === "items";
-                    const sourceLabel = isNativeSource ? "Item" : "MenuItem";
-                    const visibilityRule = isNativeSource
-                        ? "canSell && active && channel(cardapio).visible && !upcoming && hasPublishedPrice(cardapio)"
-                        : "menuItem.visible && menuItem.active && !menuItem.upcoming";
+                    const sourceLabel = "Item";
+                    const visibilityRule = "canSell && active && channel(cardapio).visible && !upcoming && hasPublishedPrice(cardapio)";
 
                     // 🔥 Função que combina todos os filtros
                     const applyFilters = (

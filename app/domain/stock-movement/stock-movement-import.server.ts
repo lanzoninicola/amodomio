@@ -591,7 +591,7 @@ function resolveLatestCostHint(params: {
 
 async function getCurrentCostHintsByItemIds(itemIds: string[]) {
   const normalizedIds = Array.from(new Set(itemIds.map((id) => str(id)).filter(Boolean)));
-  if (normalizedIds.length === 0) return {} as Record<string, { lastCostPerUnit: number | null }>;
+  if (normalizedIds.length === 0) return {} as Record<string, { lastCostPerUnit: number | null; avgCostPerUnit: number | null }>;
 
   const db = prismaClient as any;
   const itemVariationSelect = {
@@ -611,6 +611,8 @@ async function getCurrentCostHintsByItemIds(itemIds: string[]) {
       },
     },
   };
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
   const [costRows, historyRows] = await Promise.all([
     db.itemCostVariation.findMany({
       where: { ItemVariation: { itemId: { in: normalizedIds }, deletedAt: null } },
@@ -618,7 +620,10 @@ async function getCurrentCostHintsByItemIds(itemIds: string[]) {
       orderBy: [{ validFrom: 'desc' }, { createdAt: 'desc' }],
     }),
     db.itemCostVariationHistory.findMany({
-      where: { ItemVariation: { itemId: { in: normalizedIds }, deletedAt: null } },
+      where: {
+        ItemVariation: { itemId: { in: normalizedIds }, deletedAt: null },
+        OR: [{ validFrom: { gte: thirtyDaysAgo } }, { createdAt: { gte: thirtyDaysAgo } }],
+      },
       select: {
         costAmount: true,
         unit: true,
@@ -629,10 +634,11 @@ async function getCurrentCostHintsByItemIds(itemIds: string[]) {
         ItemVariation: { select: itemVariationSelect },
       },
       orderBy: [{ validFrom: 'desc' }, { createdAt: 'desc' }],
+      take: 500,
     }),
   ]);
 
-  const itemCostHints: Record<string, { lastCostPerUnit: number | null }> = {};
+  const itemCostHints: Record<string, { lastCostPerUnit: number | null; avgCostPerUnit: number | null }> = {};
   const currentRowsByItemId = new Map<string, any[]>();
   for (const row of costRows as any[]) {
     const itemId = str(row?.ItemVariation?.itemId);
@@ -650,11 +656,19 @@ async function getCurrentCostHintsByItemIds(itemIds: string[]) {
   }
 
   for (const itemId of normalizedIds) {
+    const histEntries = historyRowsByItemId.get(itemId) || [];
+    const item = (histEntries[0] as any)?.ItemVariation?.Item || {};
+    const normalized = histEntries
+      .filter((e: any) => !isItemCostExcludedFromMetrics(e))
+      .map((e: any) => normalizeItemCostToConsumptionUnit({ costAmount: e.costAmount, unit: e.unit, source: e.source }, item))
+      .filter((v): v is number => Number.isFinite(v as number) && (v as number) > 0);
+    const avg = normalized.length > 0 ? normalized.reduce((a: number, b: number) => a + b, 0) / normalized.length : null;
     itemCostHints[itemId] = {
       lastCostPerUnit: resolveLatestCostHint({
         currentRows: currentRowsByItemId.get(itemId) || [],
-        historyRows: historyRowsByItemId.get(itemId) || [],
+        historyRows: histEntries,
       }),
+      avgCostPerUnit: avg,
     };
   }
 
@@ -701,7 +715,7 @@ function resolveReadyStatusWithCostReview(params: {
   mappedItemId?: string | null;
   convertedCostAmount?: number | null;
   targetUnit?: string | null;
-  costHintsByItemId: Record<string, { lastCostPerUnit: number | null }>;
+  costHintsByItemId: Record<string, { lastCostPerUnit: number | null; avgCostPerUnit: number | null }>;
 }) {
   if (params.status !== 'ready') {
     return {
@@ -871,7 +885,7 @@ async function resolveConversionForLine(line: any, item: any) {
 async function classifyLine(
   line: any,
   lookup: Awaited<ReturnType<typeof loadItemsAndAliases>>,
-  costHintsByItemId: Record<string, { lastCostPerUnit: number | null }>,
+  costHintsByItemId: Record<string, { lastCostPerUnit: number | null; avgCostPerUnit: number | null }>,
 ) {
   if (!isSupportedStockEntryReason(line.motivo)) {
     return {
@@ -2066,10 +2080,10 @@ export async function updateStockMovementImportBatchLineEditableFields(params: {
       id: true,
       itemId: true,
       previousCostVariationId: true,
-      previousCostAmount: true,
-      previousCostUnit: true,
-      newCostAmount: true,
-      newCostUnit: true,
+      lastCostAtImport: true,
+      lastCostUnitAtImport: true,
+      newCostAtImport: true,
+      newCostUnitAtImport: true,
       movementUnit: true,
       conversionSource: true,
       conversionFactorUsed: true,
@@ -2314,11 +2328,11 @@ export async function updateStockMovementImportBatchLineEditableFields(params: {
           str(params.movementUnit).toUpperCase() ||
           activeMovement.quantityUnit ||
           null,
-        newCostAmount: Number((conversion as any).convertedCostAmount ?? activeMovement.newCostAmount),
-        newCostUnit: (conversion as any).targetUnit ?? activeMovement.newCostUnit,
+        newCostAtImport: Number((conversion as any).convertedCostAmount ?? activeMovement.newCostAtImport),
+        newCostUnitAtImport: (conversion as any).targetUnit ?? activeMovement.newCostUnitAtImport,
         previousCostVariationId: activeMovement.previousCostVariationId || null,
-        previousCostAmount: activeMovement.previousCostAmount ?? null,
-        previousCostUnit: activeMovement.previousCostUnit ?? null,
+        lastCostAtImport: activeMovement.lastCostAtImport ?? null,
+        lastCostUnitAtImport: activeMovement.lastCostUnitAtImport ?? null,
         movementUnit: str(params.movementUnit).toUpperCase() || null,
         conversionSource: (conversion as any).conversionSource ?? null,
         conversionFactorUsed: (conversion as any).conversionFactorUsed ?? null,
@@ -2541,12 +2555,14 @@ export async function approveBatchLineCostReview(params: {
   if (line.appliedAt) throw new Error('Linha já importada não pode ser reclassificada');
   if (str(line.status) !== 'pending_cost_review') throw new Error('Linha não está pendente de revisão de custo');
 
+  const approvedAt = new Date();
+
   const metadata =
     typeof line.metadata === 'object' && line.metadata && !Array.isArray(line.metadata)
       ? { ...(line.metadata as Record<string, unknown>) }
       : {};
   metadata.costReviewApproval = {
-    approvedAt: new Date().toISOString(),
+    approvedAt: approvedAt.toISOString(),
     approvedBy: str(params.actor) || null,
     mappedItemId: line.mappedItemId || null,
     movementUnit: line.movementUnit || null,
@@ -2555,6 +2571,19 @@ export async function approveBatchLineCostReview(params: {
     convertedCostAmount: line.convertedCostAmount ?? null,
     manualConversionFactor: line.manualConversionFactor ?? null,
   };
+
+  // Fetch cost hints for audit record
+  let lastCostPerUnit: number | null = null;
+  if (line.mappedItemId) {
+    const hints = await getCurrentCostHintsByItemIds([line.mappedItemId]);
+    lastCostPerUnit = hints[line.mappedItemId]?.lastCostPerUnit ?? null;
+  }
+
+  // Fetch batch name for WhatsApp message
+  const batch = await db.stockMovementImportBatch.findUnique({
+    where: { id: params.batchId },
+    select: { name: true },
+  });
 
   await db.stockMovementImportBatchLine.update({
     where: { id: params.lineId },
@@ -2566,7 +2595,97 @@ export async function approveBatchLineCostReview(params: {
     },
   });
 
+  // Write audit record
+  await db.stockMovementCostReviewApproval.create({
+    data: {
+      batchId: params.batchId,
+      lineId: params.lineId,
+      approvedBy: str(params.actor) || null,
+      approvedAt,
+      ingredientName: line.ingredientName || '',
+      mappedItemId: line.mappedItemId || null,
+      mappedItemName: line.mappedItemName || null,
+      targetUnit: line.targetUnit || null,
+      costAmount: line.costAmount ?? null,
+      convertedCostAmount: line.convertedCostAmount ?? null,
+      lastCostPerUnit,
+      notifiedWhatsapp: false,
+    },
+  });
+
+  // Send WhatsApp notification if enabled
+  await sendCostReviewApprovalNotification({
+    batchId: params.batchId,
+    batchName: batch?.name || params.batchId,
+    lineId: params.lineId,
+    ingredientName: line.ingredientName || '',
+    mappedItemName: line.mappedItemName || null,
+    convertedCostAmount: line.convertedCostAmount ?? null,
+    lastCostPerUnit,
+    targetUnit: line.targetUnit || null,
+    approvedBy: str(params.actor) || null,
+  });
+
   await recomputeBatchLines(params.batchId);
+}
+
+async function sendCostReviewApprovalNotification(params: {
+  batchId: string;
+  batchName: string;
+  lineId: string;
+  ingredientName: string;
+  mappedItemName: string | null;
+  convertedCostAmount: number | null;
+  lastCostPerUnit: number | null;
+  targetUnit: string | null;
+  approvedBy: string | null;
+}) {
+  try {
+    const {
+      COST_REVIEW_NOTIFICATION_CONTEXT,
+      COST_REVIEW_WHATSAPP_ENABLED_SETTING,
+      COST_REVIEW_WHATSAPP_PHONE_SETTING,
+    } = await import('~/domain/stock-movement/cost-review-notification-settings');
+    const { sendTextMessage } = await import('~/domain/z-api/zapi.service.server');
+
+    const settings = await prismaClient.setting.findMany({
+      where: {
+        context: COST_REVIEW_NOTIFICATION_CONTEXT,
+        name: { in: [COST_REVIEW_WHATSAPP_ENABLED_SETTING, COST_REVIEW_WHATSAPP_PHONE_SETTING] },
+      },
+    });
+    const settingsMap = Object.fromEntries(settings.map((s) => [s.name, s.value]));
+
+    const enabled = settingsMap[COST_REVIEW_WHATSAPP_ENABLED_SETTING] === 'true';
+    if (!enabled) return;
+
+    const phone = str(settingsMap[COST_REVIEW_WHATSAPP_PHONE_SETTING]);
+    if (!phone) return;
+
+    const fmt = (v: number | null) =>
+      v != null
+        ? v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+        : '-';
+
+    const lines = [
+      `✅ *Aprovação de custo*`,
+      ``,
+      `*Item:* ${params.mappedItemName || params.ingredientName}`,
+      `*Custo aprovado:* ${fmt(params.convertedCostAmount)}${params.targetUnit ? `/${params.targetUnit}` : ''}`,
+      `*Último custo:* ${fmt(params.lastCostPerUnit)}`,
+      `*Lote:* ${params.batchName}`,
+      params.approvedBy ? `*Aprovado por:* ${params.approvedBy}` : null,
+    ].filter(Boolean).join('\n');
+
+    await sendTextMessage({ phone, message: lines }, { timeoutMs: 8_000 });
+
+    await (prismaClient as any).stockMovementCostReviewApproval.updateMany({
+      where: { lineId: params.lineId, notifiedWhatsapp: false },
+      data: { notifiedWhatsapp: true },
+    });
+  } catch (err) {
+    console.error('[sendCostReviewApprovalNotification] failed silently:', err);
+  }
 }
 
 async function getBatchReadyLines(batchId: string) {
@@ -2617,6 +2736,9 @@ async function importSingleStockMovementImportBatchLine(params: { batchId: strin
     return { imported: 0, errors: 1, processed: 1 };
   }
 
+  const costHintsAtImport = await getCurrentCostHintsByItemIds([item.id]);
+  const avgCostAtImport = costHintsAtImport[item.id]?.avgCostPerUnit ?? null;
+
   const baseVar = await itemVariationPrismaEntity.findPrimaryVariationForItem(item.id, {
     ensureBaseIfMissing: true,
   });
@@ -2656,10 +2778,11 @@ async function importSingleStockMovementImportBatchLine(params: { batchId: strin
         quantityAmount: line.qtyEntry ?? line.qtyConsumption ?? null,
         quantityUnit: line.unitEntry || line.unitConsumption || line.movementUnit || null,
         previousCostVariationId: currentCost?.id || null,
-        previousCostAmount: currentCost?.costAmount ?? null,
-        previousCostUnit: currentCost?.unit ?? null,
-        newCostAmount: nextCost,
-        newCostUnit: line.targetUnit || line.movementUnit || null,
+        lastCostAtImport: currentCost?.costAmount ?? null,
+        lastCostUnitAtImport: currentCost?.unit ?? null,
+        avgCostAtImport: avgCostAtImport,
+        newCostAtImport: nextCost,
+        newCostUnitAtImport: line.targetUnit || line.movementUnit || null,
         movementUnit: line.movementUnit || null,
         conversionSource: line.conversionSource || null,
         conversionFactorUsed: line.conversionFactorUsed ?? null,
@@ -2919,8 +3042,8 @@ export async function rollbackStockMovementImportBatch(params: { batchId: string
       id: true,
       importLineId: true,
       itemVariationId: true,
-      previousCostAmount: true,
-      previousCostUnit: true,
+      lastCostAtImport: true,
+      lastCostUnitAtImport: true,
       metadata: true,
     },
   });
@@ -2967,12 +3090,12 @@ async function deleteImportedStockMovements(params: {
         continue;
       }
 
-      const previousAmount = Number(movement.previousCostAmount ?? NaN);
+      const previousAmount = Number(movement.lastCostAtImport ?? NaN);
       if (canRestorePreviousCost && Number.isFinite(previousAmount) && previousAmount >= 0) {
         await itemCostVariationPrismaEntity.setCurrentCost({
           itemVariationId: movement.itemVariationId,
           costAmount: previousAmount,
-          unit: movement.previousCostUnit || null,
+          unit: movement.lastCostUnitAtImport || null,
           source: 'import',
           referenceType: 'stock-movement-delete',
           referenceId: movement.id,
@@ -3011,7 +3134,7 @@ async function deleteImportedStockMovements(params: {
               costAmountBefore: Number(current?.costAmount || 0),
               costAmountAfter: previousAmount,
               unitBefore: current?.unit ?? null,
-              unitAfter: movement.previousCostUnit || null,
+              unitAfter: movement.lastCostUnitAtImport || null,
               sourceBefore: current?.source ?? null,
               sourceAfter: 'import',
               validFromBefore: current?.validFrom || rollbackHistoryEntry.validFrom,
@@ -3152,8 +3275,8 @@ export async function rollbackStockMovementImportBatchLine(params: {
       id: true,
       importLineId: true,
       itemVariationId: true,
-      previousCostAmount: true,
-      previousCostUnit: true,
+      lastCostAtImport: true,
+      lastCostUnitAtImport: true,
       metadata: true,
     },
   });
@@ -3202,8 +3325,8 @@ export async function deleteStockMovementImportBatch(batchId: string) {
       id: true,
       importLineId: true,
       itemVariationId: true,
-      previousCostAmount: true,
-      previousCostUnit: true,
+      lastCostAtImport: true,
+      lastCostUnitAtImport: true,
       metadata: true,
     },
   });
@@ -3283,10 +3406,10 @@ export async function getStockMovementImportBatchView(batchId: string) {
         itemId: true,
         quantityAmount: true,
         quantityUnit: true,
-        previousCostAmount: true,
-        previousCostUnit: true,
-        newCostAmount: true,
-        newCostUnit: true,
+        lastCostAtImport: true,
+        lastCostUnitAtImport: true,
+        newCostAtImport: true,
+        newCostUnitAtImport: true,
         appliedAt: true,
         deletedAt: true,
         ImportBatch: {
@@ -3458,10 +3581,10 @@ export async function listStockMovementImportMovements(params: {
         itemId: true,
         quantityAmount: true,
         quantityUnit: true,
-        previousCostAmount: true,
-        previousCostUnit: true,
-        newCostAmount: true,
-        newCostUnit: true,
+        lastCostAtImport: true,
+        lastCostUnitAtImport: true,
+        newCostAtImport: true,
+        newCostUnitAtImport: true,
         movementUnit: true,
         conversionSource: true,
         conversionFactorUsed: true,

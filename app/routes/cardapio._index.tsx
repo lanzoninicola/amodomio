@@ -9,9 +9,7 @@ import React, {
     useEffect,
     Suspense
 } from "react";
-import {
-    MenuItemWithAssociations,
-} from "~/domain/cardapio/menu-item.prisma.entity.server";
+import { MenuItemWithAssociations } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { badRequest, ok } from "~/utils/http-response.server";
 import ItalyIngredientsStatement from "~/domain/cardapio/components/italy-ingredient-statement/italy-ingredient-statement";
@@ -57,10 +55,7 @@ import SectionThreadHeader, {
 import { redisGetJson, redisSetJson } from "~/lib/cache/redis.server";
 import { CARDAPIO_INDEX_CACHE_KEY } from "~/domain/cardapio/cardapio-cache.server";
 import { notifyCardapioContingencyByWhatsapp } from "~/domain/cardapio/cardapio-contingency-alert.server";
-import {
-    findAllCardapioItemsGroupedByGroupLight,
-    getCardapioItemsSourceResolution
-} from "~/domain/cardapio/cardapio-items-source.server";
+import { findAllCardapioItemsGroupedByGroupLight } from "~/domain/cardapio/cardapio-items-source.server";
 import WEBSITE_LINKS from "~/domain/website-navigation/links/website-links";
 
 const INTEREST_ENDPOINT = "/api/menu-item-interest";
@@ -85,22 +80,7 @@ function getCardapioItemHref(item: Pick<MenuItemWithAssociations, "id" | "slug">
 }
 
 function getCardapioInterestItemId(item: MenuItemWithAssociations) {
-    const compatItem = item as MenuItemWithAssociations & {
-        sourceType?: "legacy" | "native";
-        sourceItemId?: string | null;
-    };
-
-    return typeof compatItem.sourceItemId === "string" && compatItem.sourceItemId.trim()
-        ? compatItem.sourceItemId.trim()
-        : item.id;
-}
-
-function getCardapioInterestSourceType(item: MenuItemWithAssociations) {
-    const compatItem = item as MenuItemWithAssociations & {
-        sourceType?: "legacy" | "native";
-    };
-
-    return compatItem.sourceType === "native" ? "native" : "legacy";
+    return item.id;
 }
 
 export const headers: HeadersFunction = () => ({
@@ -173,8 +153,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
             });
         }
 
-        const cardapioItemsSource = await getCardapioItemsSourceResolution();
-
         // itens agrupados do cardápio
         const itemsPromise = findAllCardapioItemsGroupedByGroupLight(
             {
@@ -238,7 +216,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
             postFeatured,
             reelUrls,
             reelsEnabled,
-            cardapioItemsSource,
             menuItemInterestEnabled,
             likesEnabled,
             sharesEnabled
@@ -998,7 +975,7 @@ function CardapioItemsGrid({
             headers: {
                 "Content-Type": "application/json"
             },
-            body: JSON.stringify({ type, itemId: interestItemId, sourceType: getCardapioInterestSourceType(item), clientId }),
+            body: JSON.stringify({ type, itemId: interestItemId, sourceType: "native", clientId }),
             keepalive: true
         }).catch((error) => {
             console.warn("[cardapio] falha ao registrar interesse", error);
