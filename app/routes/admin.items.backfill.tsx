@@ -3,7 +3,6 @@ import { Form, useActionData, useLoaderData } from "@remix-run/react";
 import { Button } from "~/components/ui/button";
 import { toast } from "~/components/ui/use-toast";
 import { runBackfillLegacySellingInfoToItems } from "~/domain/item/item-selling-info-backfill.server";
-import { runBackfillLegacySellingPricesToItems } from "~/domain/item/item-selling-price-backfill.server";
 import prismaClient from "~/lib/prisma/client.server";
 import { ok, serverError } from "~/utils/http-response.server";
 
@@ -143,11 +142,10 @@ export async function loader({}: LoaderFunctionArgs) {
     const nativeSellingInfoCount =
       typeof db.itemSellingInfo?.count === "function" ? await db.itemSellingInfo.count() : null;
 
-    const [totalMenuItems, totalItems, linkedMenuItems, legacySellingPrices] = await Promise.all([
+    const [totalMenuItems, totalItems, linkedMenuItems] = await Promise.all([
       db.menuItem.count(),
       db.item.count(),
       db.menuItem.count({ where: { itemId: { not: null } } }),
-      db.menuItemSellingPriceVariation.count(),
     ]);
 
     return ok({
@@ -155,7 +153,6 @@ export async function loader({}: LoaderFunctionArgs) {
         totalMenuItems,
         totalItems,
         linkedMenuItems,
-        legacySellingPrices,
         nativeSellingPrices: nativeSellingPricesCount,
         nativeSellingInfo: nativeSellingInfoCount,
       },
@@ -171,9 +168,7 @@ export async function action({ request }: ActionFunctionArgs) {
     const actionName = String(formData.get("_action") || "menu-items-backfill");
 
     const result =
-      actionName === "selling-prices-backfill"
-        ? await runBackfillLegacySellingPricesToItems()
-        : actionName === "selling-info-backfill"
+      actionName === "selling-info-backfill"
           ? await runBackfillLegacySellingInfoToItems()
           : await runBackfillMenuItemsToItems();
 
@@ -215,7 +210,6 @@ export default function AdminItemsBackfillPage() {
           <div>Total MenuItems: {stats.totalMenuItems ?? 0}</div>
           <div>Total Items: {stats.totalItems ?? 0}</div>
           <div>MenuItems vinculados: {stats.linkedMenuItems ?? 0}</div>
-          <div>Preços legados de venda: {stats.legacySellingPrices ?? 0}</div>
           <div>Preços nativos de venda: {stats.nativeSellingPrices ?? "indisponível"}</div>
           <div>Infos nativas de venda: {stats.nativeSellingInfo ?? "indisponível"}</div>
         </div>
@@ -235,17 +229,10 @@ export default function AdminItemsBackfillPage() {
         </Button>
       </Form>
 
-      <Form method="post" className="rounded-xl border border-slate-200 bg-white p-4">
-        <input type="hidden" name="_action" value="selling-prices-backfill" />
-        <Button type="submit" className="bg-slate-900 hover:bg-slate-700">
-          Executar backfill preços de venda e canais
-        </Button>
-      </Form>
-
       {actionData?.payload ? (
         <pre className="overflow-auto rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs">
           {JSON.stringify(actionData.payload, null, 2)}
-        </pre>
+          </pre>
       ) : null}
     </div>
   );

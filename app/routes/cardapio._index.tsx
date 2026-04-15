@@ -9,7 +9,6 @@ import React, {
     useEffect,
     Suspense
 } from "react";
-import { MenuItemWithAssociations } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { badRequest, ok } from "~/utils/http-response.server";
 import ItalyIngredientsStatement from "~/domain/cardapio/components/italy-ingredient-statement/italy-ingredient-statement";
@@ -58,6 +57,10 @@ import { notifyCardapioContingencyByWhatsapp } from "~/domain/cardapio/cardapio-
 import { findAllCardapioItemsGroupedByGroupLight } from "~/domain/cardapio/cardapio-items-source.server";
 import WEBSITE_LINKS from "~/domain/website-navigation/links/website-links";
 
+type CardapioItem = Awaited<
+    ReturnType<typeof findAllCardapioItemsGroupedByGroupLight>
+>[number]["items"][number];
+
 const INTEREST_ENDPOINT = "/api/menu-item-interest";
 const REELS_SETTING_KEY = "reel.urls";
 const REELS_ENABLED_SETTING_NAME = "reels.enabled";
@@ -74,12 +77,12 @@ const SECTION_THREAD_PROFILE_BY_SECTION: Record<"chef" | "likes" | "reels", Thre
     reels: THREAD_PROFILE_MOCKS["chef.nicola"],
 };
 
-function getCardapioItemHref(item: Pick<MenuItemWithAssociations, "id" | "slug">) {
+function getCardapioItemHref(item: Pick<CardapioItem, "id" | "slug">) {
     const identifier = item.slug?.trim() || item.id;
     return `/cardapio/${encodeURIComponent(identifier)}`;
 }
 
-function getCardapioInterestItemId(item: MenuItemWithAssociations) {
+function getCardapioInterestItemId(item: CardapioItem) {
     return item.id;
 }
 
@@ -391,9 +394,9 @@ export default function CardapioWebIndex() {
                         {(items) => {
                             const flatItems = isGrouped(items)
                                 ? (items as GroupedItems[]).flatMap((g) => g.menuItems)
-                                : (items as MenuItemWithAssociations[]);
+                                : (items as CardapioItem[]);
 
-                            const topMarginItems = [...(flatItems as MenuItemWithAssociations[])]
+                            const topMarginItems = [...(flatItems as CardapioItem[])]
                                 .sort(
                                     (a, b) =>
                                         getItemMarginPerc(b) - getItemMarginPerc(a)
@@ -402,8 +405,8 @@ export default function CardapioWebIndex() {
 
                             const chefSuggestionGroups = buildRandomGroups(topMarginItems, 4);
 
-                            const getLikesAmount = (item: MenuItem | MenuItemWithAssociations) =>
-                                (item as MenuItemWithAssociations)?.likes?.amount ?? 0;
+                            const getLikesAmount = (item: MenuItem | CardapioItem) =>
+                                (item as CardapioItem)?.likes?.amount ?? 0;
 
                             const topLikedItems = likesEnabled
                                 ? [...flatItems]
@@ -842,14 +845,14 @@ const CardapioItemList = ({
     likesEnabled,
     sharesEnabled
 }: {
-    allItems: MenuItemWithAssociations[];
+    allItems: CardapioItem[];
     likesEnabled: boolean;
     sharesEnabled: boolean;
 }) => {
     const [searchParams] = useSearchParams();
     const currentFilterTag = searchParams.get("tag");
 
-    const [items, setItems] = useState<MenuItemWithAssociations[]>([]);
+    const [items, setItems] = useState<CardapioItem[]>([]);
     const [hasMore, setHasMore] = useState(true);
     const [isLoading, setIsLoading] = useState(false);
     const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -942,7 +945,7 @@ function CardapioItemsGrid({
     likesEnabled,
     sharesEnabled
 }: {
-    items: MenuItemWithAssociations[];
+    items: CardapioItem[];
     interestTrackingEnabled: boolean;
     likesEnabled: boolean;
     sharesEnabled: boolean;
@@ -965,7 +968,7 @@ function CardapioItemsGrid({
 
     if (!items?.length) return null;
 
-    const trackInterest = useCallback((type: "view_list" | "open_detail", item: MenuItemWithAssociations) => {
+    const trackInterest = useCallback((type: "view_list" | "open_detail", item: CardapioItem) => {
         const interestItemId = getCardapioInterestItemId(item);
         if (!interestTrackingEnabled || !interestItemId) return;
         const clientId = getOrCreateMenuItemInterestClientId();
@@ -983,7 +986,7 @@ function CardapioItemsGrid({
     }, [interestTrackingEnabled]);
 
     const trackViewOnce = useCallback(
-        (item: MenuItemWithAssociations) => {
+        (item: CardapioItem) => {
             const interestItemId = getCardapioInterestItemId(item);
             if (!interestTrackingEnabled) return;
             if (!interestItemId || trackedViewRef.current.has(interestItemId)) return;
@@ -994,7 +997,7 @@ function CardapioItemsGrid({
     );
 
     const trackOpenDetailOnce = useCallback(
-        (item: MenuItemWithAssociations) => {
+        (item: CardapioItem) => {
             const interestItemId = getCardapioInterestItemId(item);
             if (!interestTrackingEnabled) return;
             if (!interestItemId || trackedOpenDetailRef.current.has(interestItemId)) return;
@@ -1076,7 +1079,7 @@ function CardapioGridItem({
     likesEnabled,
     sharesEnabled
 }: {
-    item: MenuItemWithAssociations;
+    item: CardapioItem;
     isExpanded: boolean;
     onClick: () => void;
     onOpenDetail?: () => void;
@@ -1377,7 +1380,7 @@ function CardapioGridItem({
 // CARD DE LISTA COMPLETA (full image)
 // ======================================================
 interface CardapioItemFullImageProps {
-    item: MenuItemWithAssociations;
+    item: CardapioItem;
     likesEnabled: boolean;
     sharesEnabled: boolean;
 }
@@ -1484,7 +1487,7 @@ function isGrouped(items: MenuItem[] | GroupedItems[]): items is GroupedItems[] 
     return Array.isArray(items) && items.length > 0 && "menuItems" in (items[0] as any);
 }
 
-function getItemMarginPerc(item: MenuItemWithAssociations) {
+function getItemMarginPerc(item: CardapioItem) {
     const variations = item.MenuItemSellingPriceVariation ?? [];
     const visibleVariations = variations.filter((v) => v.showOnCardapio);
     const source = visibleVariations.length > 0 ? visibleVariations : variations;
@@ -1741,7 +1744,7 @@ function ReelsCarousel({ urls }: { urls: string[] }) {
 type ChefSuggestionsCarouselProps = {
     title?: string;
     subtitle?: string;
-    groups: MenuItemWithAssociations[][];
+    groups: CardapioItem[][];
     carouselDelay?: number;
     headerProfile?: ThreadSectionProfile;
 };

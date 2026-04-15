@@ -174,13 +174,13 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
           items: [
             {
               title: "Preços de venda",
-              href: "/admin/gerenciamento/cardapio/sell-price-management",
+              href: "/admin/gerenciamento/cardapio/sell-price-management/cardapio/edit-items",
               items: [],
               disabled: false,
             },
             {
-              title: "Preços de venda Item",
-              href: "/admin/gerenciamento/cardapio/sell-price-management/cardapio/edit-items",
+              title: "Revisão de preços",
+              href: "/admin/vendas/revisao-precos",
               items: [],
               disabled: false,
             },
