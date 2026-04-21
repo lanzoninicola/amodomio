@@ -42,7 +42,10 @@ export function NativeItemSellingPriceCard(props: {
   const dnaPerc = Number(breakdown.dnaPercentage || 0);
   const dnaValor = (actualPrice * dnaPerc) / 100;
   const custoComDna = custoTotal + dnaValor;
-  const lucroValor = actualPrice - custoComDna;
+  const channelTaxPerc = Number(breakdown.channel?.taxPerc || 0);
+  const isMarketplace = Boolean(breakdown.channel?.isMarketplace);
+  const taxaCanal = isMarketplace ? (actualPrice * channelTaxPerc) / 100 : 0;
+  const lucroValor = actualPrice - custoComDna - taxaCanal;
   const lucroPerc = actualPrice > 0 ? (lucroValor / actualPrice) * 100 : 0;
   const recommendedPrice = Number(
     breakdown.minimumPrice?.priceAmount?.withProfit || 0

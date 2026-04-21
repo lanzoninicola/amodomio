@@ -1,8 +1,16 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { Form, Link, useLoaderData, useNavigation } from "@remix-run/react";
+import { useState } from "react";
 import { ok, serverError } from "~/utils/http-response.server";
 import prismaClient from "~/lib/prisma/client.server";
 import { cn } from "~/lib/utils";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
 
 type MarginBand = "negative" | "0-5" | "5-10" | "10-15" | "above-15" | "no-data";
 
@@ -123,6 +131,7 @@ export default function AdminVendasFaixasLucroPage() {
   const navigation = useNavigation();
   const { channels = [], variations = [], items = [], filters } = payload;
   const isLoading = navigation.state !== "idle";
+  const [variation, setVariation] = useState(filters?.variation || "__all__");
 
   return (
     <div className="flex w-full flex-col gap-6">
@@ -156,21 +165,23 @@ export default function AdminVendasFaixasLucroPage() {
 
       {/* Filter */}
       <Form method="get" className="flex items-end gap-3">
-        <label className="flex flex-col gap-1 text-sm">
+        <input type="hidden" name="variation" value={variation} />
+        <div className="flex flex-col gap-1 text-sm">
           <span className="text-slate-600">Tamanho</span>
-          <select
-            name="variation"
-            defaultValue={filters?.variation || "__all__"}
-            className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-slate-400"
-          >
-            <option value="__all__">Todos os tamanhos</option>
-            {variations.map((v) => (
-              <option key={v.id} value={v.code}>
-                {v.name}
-              </option>
-            ))}
-          </select>
-        </label>
+          <Select value={variation} onValueChange={setVariation}>
+            <SelectTrigger className="h-9 w-48 rounded-xl border-slate-200 bg-white">
+              <SelectValue placeholder="Todos os tamanhos" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">Todos os tamanhos</SelectItem>
+              {variations.map((v) => (
+                <SelectItem key={v.id} value={v.code}>
+                  {v.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
         <button
           type="submit"
           className="h-9 inline-flex items-center rounded-xl bg-slate-950 px-4 text-sm font-medium text-white"

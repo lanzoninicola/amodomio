@@ -169,6 +169,12 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
           disabled: false,
         },
         {
+          title: "Canais de venda",
+          href: "/admin/canais-venda",
+          items: [],
+          disabled: false,
+        },
+        {
           title: "Comercial",
           href: "",
           items: [
@@ -440,12 +446,6 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
         {
           title: "Unidades de consumo",
           href: "/admin/unidades-consumo",
-          items: [],
-          disabled: false,
-        },
-        {
-          title: "Canais de venda",
-          href: "/admin/canais-venda",
           items: [],
           disabled: false,
         },

@@ -1,5 +1,5 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
-import { useActionData, useLoaderData } from "@remix-run/react";
+import { Link, useActionData, useLoaderData } from "@remix-run/react";
 import { useEffect, useMemo, useState } from "react";
 import { NativeItemSellingPriceCard } from "~/components/admin/native-item-selling-price-card";
 import { Input } from "~/components/ui/input";
@@ -397,7 +397,11 @@ export default function AdminGerenciamentoCardapioSellPriceManagementItemsEdit()
             <section key={row.id}>
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <h3 className="text-sm font-semibold text-slate-950">{row.name}</h3>
+                  <h3 className="text-sm font-semibold text-slate-950">
+                    <Link to={`/admin/items/${row.id}`} className="hover:underline" target="_blank" rel="noopener noreferrer">
+                      {row.name}
+                    </Link>
+                  </h3>
                   <div className="text-xs text-slate-500">{row.id}</div>
                 </div>
                 <div className="flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-wide">
