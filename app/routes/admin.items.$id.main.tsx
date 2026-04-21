@@ -1,6 +1,16 @@
 import { Form, Link, useOutletContext } from "@remix-run/react";
 import type { ReactNode } from "react";
 import { useRef, useState } from "react";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "~/components/ui/alert-dialog";
 import { Button } from "~/components/ui/button";
 import useSaveShortcut from "~/hooks/use-save-shortcut.hook";
 import { Input } from "~/components/ui/input";
@@ -16,6 +26,7 @@ export default function AdminItemMainTab() {
   const [categoryIdValue, setCategoryIdValue] = useState(item.categoryId || "__EMPTY__");
   const [consumptionUmValue, setConsumptionUmValue] = useState(item.consumptionUm || "__EMPTY__");
   const [recipeVariationPolicyValue, setRecipeVariationPolicyValue] = useState(item.recipeVariationPolicy || "auto");
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const formRef = useRef<HTMLFormElement | null>(null);
 
   useSaveShortcut({
@@ -186,6 +197,30 @@ export default function AdminItemMainTab() {
                 Criar item
               </Link>
             </Button>
+            <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+              <AlertDialogTrigger asChild>
+                <Button type="button" variant="destructive">
+                  Eliminar item
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Eliminar item?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Esta ação remove <strong>{item.name}</strong>. Se a eliminação for permitida, você será redirecionado para a lista completa de itens.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <Form method="post" action="..">
+                    <input type="hidden" name="_action" value="item-delete" />
+                    <Button type="submit" variant="destructive">
+                      Confirmar eliminação
+                    </Button>
+                  </Form>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
         </div>
       </Form>

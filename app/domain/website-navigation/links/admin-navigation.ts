@@ -213,6 +213,12 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
       title: "Custos e Margem",
       items: [
         {
+          title: "Fornecedores",
+          href: "/admin/suppliers",
+          items: [],
+          disabled: false,
+        },
+        {
           title: "Fichas de custo",
           href: "/admin/item-cost-sheets",
           items: [],
@@ -244,25 +250,12 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
           disabled: false,
         },
         {
-          title: "Estrutura de custo",
-          href: "",
-          items: [
-            {
-              title: "Fornecedores",
-              href: "/admin/suppliers",
-              items: [],
-              disabled: false,
-            },
-          ],
-          disabled: false,
-        },
-        {
           title: "Ferramentas",
           href: "",
           items: [
             {
               title: "Recalcular fichas técnicas",
-              href: "/admin/item-cost-sheets/recalculate",
+              href: "/admin/recalculate-item-cost-sheets",
               items: [],
               disabled: false,
             },
@@ -273,14 +266,8 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
               disabled: false,
             },
             {
-              title: "Conciliação de fornecedor",
-              href: "/admin/supplier-reconciliation",
-              items: [],
-              disabled: false,
-            },
-            {
-              title: "Backfill fichas de custo",
-              href: "/admin/item-cost-sheets/backfill",
+              title: "Adicionar receita em lote",
+              href: "/admin/item-cost-sheets/add-recipe-batch",
               items: [],
               disabled: false,
             },
@@ -355,6 +342,12 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
             {
               title: "Aliases de Importação",
               href: "/admin/item-import-aliases",
+              items: [],
+              disabled: false,
+            },
+            {
+              title: "Conciliação de fornecedor",
+              href: "/admin/supplier-reconciliation",
               items: [],
               disabled: false,
             },

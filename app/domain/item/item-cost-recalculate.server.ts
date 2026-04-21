@@ -130,6 +130,7 @@ export async function scanItemsForRecalculation(): Promise<ScanResult> {
 // ─── filtered scan ───────────────────────────────────────────────────────────
 
 export type ScanFilters = {
+  itemId?: string;          // filter by exact item id
   search?: string;          // filter by item name (case-insensitive contains)
   consumptionUm?: string;   // filter by exact consumptionUm value
   onlyWithIssues?: boolean; // if true, only return items where recalculableEntries > 0
@@ -141,7 +142,9 @@ export async function scanItemsForRecalculationFiltered(
   const db = prismaClient as any;
 
   const itemWhere: Record<string, any> = { active: true, classification: "insumo" };
-  if (filters.search) {
+  if (filters.itemId) {
+    itemWhere.id = filters.itemId;
+  } else if (filters.search) {
     itemWhere.name = { contains: filters.search, mode: "insensitive" };
   }
   if (filters.consumptionUm) {

@@ -1,6 +1,7 @@
 import { useOutletContext } from "@remix-run/react";
 import RecipeForm from "~/domain/recipe/components/recipe-form/recipe-form";
 import type { AdminRecipeOutletContext } from "./admin.recipes.$id";
+export { action } from "./admin.recipes.$id";
 
 export default function AdminRecipeCadastroTab() {
     const { recipe, items } = useOutletContext<AdminRecipeOutletContext>()
@@ -14,9 +15,9 @@ export default function AdminRecipeCadastroTab() {
                 actionName="recipe-update"
                 items={items}
                 requireItemRemapConfirmation
-                createCostSheetOption={{ enabled: true, defaultChecked: false }}
+                createCostSheetOption={{ enabled: true }}
                 hiddenFields={[{ name: "tab", value: "cadastro" }]}
-                formAction=".."
+                formAction="."
             />
         </div>
     )

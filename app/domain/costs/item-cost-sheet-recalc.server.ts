@@ -1,5 +1,6 @@
 import { listRecipeCompositionLines } from "~/domain/recipe/recipe-composition.server";
 import { registerItemCostEvent } from "~/domain/costs/item-cost-event.server";
+import { buildRecipeLineCostSnapshot, resolveRecipeLineCosts } from "~/domain/costs/recipe-cost-recalc.server";
 
 export function roundItemCostSheetMoney(value: number) {
   return Number(Number(value || 0).toFixed(6));
@@ -26,19 +27,31 @@ export async function getRecipeCompositionCostSnapshot(
   });
   if (!recipe) throw new Error("Receita não encontrada");
 
-  const lines = (await listRecipeCompositionLines(db, recipeId)).filter(
-    (line) =>
-      !itemVariationId ||
-      String(line.ItemVariation?.id || "") === String(itemVariationId)
-  );
-  const lastTotal = lines.reduce(
-    (acc, line) => acc + Number(line.lastTotalCostAmount || 0),
-    0
-  );
-  const avgTotal = lines.reduce(
-    (acc, line) => acc + Number(line.avgTotalCostAmount || 0),
-    0
-  );
+  const allLines = await listRecipeCompositionLines(db, recipeId);
+
+  let lines = allLines;
+  if (itemVariationId) {
+    const ownerVariation = await db.itemVariation.findUnique({
+      where: { id: itemVariationId },
+      select: { variationId: true },
+    });
+    const variationId = ownerVariation?.variationId;
+    lines = variationId
+      ? allLines.filter((line) => String(line.ItemVariation?.variationId || "") === String(variationId))
+      : allLines;
+  }
+
+  let lastTotal = 0;
+  let avgTotal = 0;
+
+  for (const line of lines) {
+    const variationId = line.ItemVariation?.variationId || null;
+    const effectiveLossPct = Number(line.lossPct ?? line.defaultLossPct ?? 0);
+    const costInfo = await resolveRecipeLineCosts(db, line.itemId, variationId);
+    const snap = buildRecipeLineCostSnapshot(costInfo, Number(line.quantity || 0), effectiveLossPct);
+    lastTotal += snap.lastTotalCostAmount;
+    avgTotal += snap.avgTotalCostAmount;
+  }
 
   return {
     recipe,
@@ -130,7 +143,6 @@ export async function recalcItemCostSheetTotals(db: any, itemCostSheetId: string
     },
     orderBy: [{ sortOrderIndex: "asc" }, { createdAt: "asc" }],
   });
-
   for (const component of components) {
     const values = Array.isArray(component.ItemCostSheetVariationComponent)
       ? component.ItemCostSheetVariationComponent
@@ -229,6 +241,7 @@ async function publishActiveItemCostSheetSnapshots(db: any, rootSheetId: string)
     where: {
       isActive: true,
       OR: [{ id: rootSheetId }, { baseItemCostSheetId: rootSheetId }],
+      ItemVariation: { deletedAt: null },
     },
     select: {
       id: true,

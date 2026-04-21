@@ -2,6 +2,8 @@ import prismaClient from "~/lib/prisma/client.server";
 import { recalcItemCostSheetTotals } from "~/domain/costs/item-cost-sheet-recalc.server";
 
 export interface ItemCostSheetBulkScanFilters {
+  rootSheetId?: string;
+  itemId?: string;
   search?: string;
   onlyActive?: boolean;
   onlyWithComponents?: boolean;
@@ -64,6 +66,8 @@ export async function scanItemCostSheetsForBulkRecalculation(
   filters: ItemCostSheetBulkScanFilters = {}
 ): Promise<ItemCostSheetBulkScanResult> {
   const db = prismaClient as any;
+  const rootSheetId = String(filters.rootSheetId || "").trim();
+  const itemId = String(filters.itemId || "").trim();
   const search = String(filters.search || "").trim();
   const onlyActive = Boolean(filters.onlyActive);
   const onlyWithComponents = Boolean(filters.onlyWithComponents);
@@ -71,8 +75,10 @@ export async function scanItemCostSheetsForBulkRecalculation(
   const roots = await db.itemCostSheet.findMany({
     where: {
       baseItemCostSheetId: null,
+      ...(rootSheetId ? { id: rootSheetId } : {}),
+      ...(!rootSheetId && itemId ? { itemId } : {}),
       ...(onlyActive ? { isActive: true } : {}),
-      ...(search
+      ...(!rootSheetId && !itemId && search
         ? {
             OR: [
               { name: { contains: search, mode: "insensitive" } },
@@ -130,8 +136,8 @@ export async function scanItemCostSheetsForBulkRecalculation(
 
   const variationCountByRootId = new Map<string, number>();
   for (const row of allSheets) {
-    const rootSheetId = String(row.baseItemCostSheetId || row.id || "");
-    if (!rootSheetId) continue;
+    if (!row.baseItemCostSheetId) continue;
+    const rootSheetId = String(row.baseItemCostSheetId);
     variationCountByRootId.set(
       rootSheetId,
       Number(variationCountByRootId.get(rootSheetId) || 0) + 1

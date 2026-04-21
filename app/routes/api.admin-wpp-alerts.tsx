@@ -2,29 +2,22 @@ import type { ActionFunctionArgs } from "@remix-run/node";
 import { badRequest, ok } from "~/utils/http-response.server";
 import prismaClient from "~/lib/prisma/client.server";
 import { logCrmWhatsappSentEventByPhone } from "~/domain/crm/crm-whatsapp-events.server";
+import {
+  getWhatsappNoResponseQuickReplyMessage,
+  isWhatsappNoResponseEnabled,
+} from "~/domain/crm/whatsapp-no-response-settings.server";
 import { normalize_phone_e164_br } from "~/domain/crm/normalize-phone.server";
 import { normalizePhone } from "~/domain/z-api/zapi.service";
 import { sendTextMessage } from "~/domain/z-api/zapi.service.server";
-import { settingPrismaEntity } from "~/domain/setting/setting.prisma.entity.server";
 import { authenticator } from "~/domain/auth/google.server";
-
-const CONTEXT = "whatsapp-no-response";
-const LEGACY_CONTEXT = "admin-wpp-alert-panel";
-const QUICK_REPLY_SETTING_NAME = "quick-reply-message";
-const QUICK_REPLY_DEFAULT =
-  "Recebemos sua mensagem e vamos te responder em instantes. Obrigado pela paciencia.";
-
-async function getQuickReplyMessage() {
-  const existing =
-    await settingPrismaEntity.findByContextAndName(CONTEXT, QUICK_REPLY_SETTING_NAME) ||
-    await settingPrismaEntity.findByContextAndName(LEGACY_CONTEXT, QUICK_REPLY_SETTING_NAME);
-  const value = existing?.value?.trim();
-  return value || QUICK_REPLY_DEFAULT;
-}
 
 export async function action({ request }: ActionFunctionArgs) {
   const user = await authenticator.isAuthenticated(request);
   if (!user) return badRequest("Não autorizado");
+
+  if (!(await isWhatsappNoResponseEnabled())) {
+    return badRequest("Alerta desabilitado");
+  }
 
   const formData = await request.formData();
   const intent = String(formData.get("_intent") ?? "").trim();
@@ -69,7 +62,7 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   if (intent === "quick-reply") {
-    const message = await getQuickReplyMessage();
+    const message = await getWhatsappNoResponseQuickReplyMessage();
     const response = await sendTextMessage(
       { phone: normalizedPhone, message },
       { timeoutMs: 10_000 }

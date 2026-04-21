@@ -98,7 +98,7 @@ export default function AdminRecipeVariacoesTab() {
     return (
         <div className="space-y-4">
             <section className="">
-                <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 py-4">
                     <div className="space-y-2">
                         <div className="flex items-center gap-2">
                             <span className={`h-1.5 w-1.5 rounded-full ${hasVariationPendingCells ? "bg-amber-400" : "bg-emerald-400"}`} />

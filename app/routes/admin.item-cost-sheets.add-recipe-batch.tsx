@@ -339,6 +339,109 @@ async function ensureLatestSheetGroupForItem(params: {
   };
 }
 
+async function addFixedRecipeToSaborPizzaSheets(recipeId: string) {
+  const db = prismaClient as any;
+
+  const recipe = await db.recipe.findUnique({
+    where: { id: recipeId },
+    select: { id: true, name: true },
+  });
+  if (!recipe) return { ok: false as const, reason: `Receita '${recipeId}' não encontrada` };
+
+  const category = await findTargetCategory(db);
+  if (!category) return { ok: false as const, reason: `Categoria '${TARGET_CATEGORY_NAME}' não encontrada` };
+
+  const items = await db.item.findMany({
+    where: { categoryId: category.id },
+    select: { id: true, name: true },
+    orderBy: [{ name: "asc" }],
+  });
+
+  const summary = {
+    recipeName: recipe.name,
+    categoryName: category.name,
+    totalItems: items.length,
+    sheetsProcessed: 0,
+    recipeRefsAdded: 0,
+    skippedAlreadyPresent: 0,
+    errors: 0,
+    errorItems: [] as string[],
+  };
+
+  for (const item of items) {
+    try {
+      const rootSheets = await db.itemCostSheet.findMany({
+        where: { itemId: item.id, baseItemCostSheetId: null },
+        select: { id: true, itemVariationId: true },
+      });
+
+      for (const rootSheet of rootSheets) {
+        const allSheets = await db.itemCostSheet.findMany({
+          where: { OR: [{ id: rootSheet.id }, { baseItemCostSheetId: rootSheet.id }] },
+          select: { id: true, itemVariationId: true },
+        });
+        const targetItemVariationIds = allSheets
+          .map((s: any) => String(s.itemVariationId || ""))
+          .filter(Boolean);
+
+        const existing = supportsComponentModel(db)
+          ? await db.itemCostSheetComponent.findFirst({
+              where: { itemCostSheetId: rootSheet.id, type: "recipe", refId: recipeId },
+              select: { id: true },
+            })
+          : await db.itemCostSheetLine.findFirst({
+              where: { itemCostSheetId: rootSheet.id, type: "recipe", refId: recipeId },
+              select: { id: true },
+            });
+
+        if (existing) {
+          summary.skippedAlreadyPresent += 1;
+          continue;
+        }
+
+        const snapshot = await getRecipeCostSheetSnapshot(db, recipeId);
+        const variationEntries = await Promise.all(
+          targetItemVariationIds.map(async (targetItemVariationId: string) => {
+            const perVarSnap = await getRecipeCostSheetSnapshot(db, recipeId, targetItemVariationId);
+            return {
+              itemVariationId: targetItemVariationId,
+              unit: "receita",
+              quantity: 1,
+              unitCostAmount: roundItemCostSheetMoney(perVarSnap.unitCostAmount),
+              wastePerc: 0,
+            };
+          })
+        );
+
+        await createItemCostSheetRow({
+          db,
+          itemCostSheetId: rootSheet.id,
+          itemVariationId: String(rootSheet.itemVariationId || ""),
+          targetItemVariationIds,
+          variationEntries,
+          type: "recipe",
+          refId: recipeId,
+          name: snapshot.recipe.name,
+          unit: "receita",
+          quantity: 1,
+          unitCostAmount: roundItemCostSheetMoney(snapshot.unitCostAmount),
+          wastePerc: 0,
+          notes: snapshot.note,
+        });
+
+        await recalcItemCostSheetTotals(db, rootSheet.id);
+        summary.recipeRefsAdded += 1;
+        summary.sheetsProcessed += 1;
+      }
+    } catch (error) {
+      summary.errors += 1;
+      summary.errorItems.push(`${item.name}: ${error instanceof Error ? error.message : "erro desconhecido"}`);
+    }
+  }
+
+  return { ok: true as const, ...summary };
+}
+
 async function runPizzaFlavorCostSheetBackfill() {
   const db = prismaClient as any;
   const category = await findTargetCategory(db);
@@ -509,8 +612,19 @@ export async function loader({}: LoaderFunctionArgs) {
   }
 }
 
-export async function action({}: ActionFunctionArgs) {
+export async function action({ request }: ActionFunctionArgs) {
   try {
+    const formData = await request.formData();
+    const _action = String(formData.get("_action") || "backfill");
+
+    if (_action === "add-fixed-recipe") {
+      const recipeId = String(formData.get("recipeId") || "").trim();
+      if (!recipeId) return serverError("recipeId obrigatório");
+      const result = await addFixedRecipeToSaborPizzaSheets(recipeId);
+      if (!result.ok) return serverError(result.reason);
+      return ok(result);
+    }
+
     const result = await runPizzaFlavorCostSheetBackfill();
     if (!result.ok) {
       return serverError(result.reason || "Não foi possível executar o backfill");
@@ -565,6 +679,29 @@ export default function AdminItemCostSheetsBackfillPage() {
           Executar backfill
         </Button>
       </Form>
+
+      <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <h2 className="text-base font-semibold text-slate-900">Adicionar receita fixa a todas as fichas</h2>
+        <p className="mt-1 text-sm text-slate-600">
+          Adiciona uma receita específica em todas as fichas de custo de itens da categoria <code>sabor pizza</code>. Fichas que já possuem a receita são puladas.
+        </p>
+        <Form method="post" className="mt-3 flex flex-col gap-3">
+          <input type="hidden" name="_action" value="add-fixed-recipe" />
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-slate-600">ID da Receita</label>
+            <input
+              name="recipeId"
+              defaultValue="5dd0d89d-0356-4f1c-b632-1dcc5b25a877"
+              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-400"
+            />
+          </div>
+          <div>
+            <Button type="submit" className="bg-amber-900 hover:bg-amber-800">
+              Adicionar receita a todas as fichas
+            </Button>
+          </div>
+        </Form>
+      </div>
 
       {actionData?.payload ? (
         <pre className="overflow-auto rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs">

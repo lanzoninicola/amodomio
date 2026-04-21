@@ -1,9 +1,8 @@
 import { Recipe } from "@prisma/client";
 import { useEffect, useMemo, useState, type ChangeEvent } from "react";
-import { Check, ChevronsUpDown } from "lucide-react";
+import { Check, ChevronsUpDown, SaveIcon } from "lucide-react";
 import { Form, Link } from "@remix-run/react";
 import InputItem from "~/components/primitives/form/input-item/input-item";
-import SaveItemButton from "~/components/primitives/table-list/action-buttons/save-item-button/save-item-button";
 import { Button } from "~/components/ui/button";
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList, CommandSeparator } from "~/components/ui/command";
 import Fieldset from "~/components/ui/fieldset";
@@ -25,7 +24,6 @@ interface RecipeFormProps {
     formAction?: string;
     createCostSheetOption?: {
         enabled: boolean;
-        defaultChecked?: boolean;
         helperText?: string;
     };
 }
@@ -52,9 +50,6 @@ export default function RecipeForm({
     const [linkedItemId, setLinkedItemId] = useState(recipe?.itemId || "");
     const [itemComboboxOpen, setItemComboboxOpen] = useState(false);
     const [confirmItemRemap, setConfirmItemRemap] = useState(false);
-    const [createCostSheetOnSave, setCreateCostSheetOnSave] = useState(
-        Boolean(createCostSheetOption?.defaultChecked)
-    );
 
     const selectedItem = useMemo(
         () => items.find((item) => item.id === linkedItemId) || null,
@@ -100,15 +95,12 @@ export default function RecipeForm({
         }
     }, [hasItemChanged]);
 
-    useEffect(() => {
-        setCreateCostSheetOnSave(Boolean(createCostSheetOption?.defaultChecked));
-    }, [createCostSheetOption?.defaultChecked]);
 
     return (
         <Form method="post" action={formAction}>
             <input type="hidden" name="recipeId" value={recipe?.id} />
+            <input type="hidden" name="_action" value={actionName} />
             <input type="hidden" name="confirmItemRemap" value={confirmItemRemap ? "yes" : "no"} />
-            <input type="hidden" name="createItemCostSheet" value={createCostSheetOnSave ? "yes" : "no"} />
             {hiddenFields.map((field) => (
                 <input key={field.name} type="hidden" name={field.name} value={field.value} />
             ))}
@@ -117,13 +109,29 @@ export default function RecipeForm({
                     {title ? (
                         <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
                     ) : null}
-                    <SaveItemButton
-                        actionName={actionName}
-                        label="Salvar"
-                        labelClassName="uppercase font-semibold tracking-wider text-xs"
-                        variant={"outline"}
-                        disabled={requireItemRemapConfirmation && hasItemChanged && !confirmItemRemap}
-                    />
+                    <div className="flex items-center gap-2">
+                        {createCostSheetOption?.enabled ? (
+                            <Button
+                                type="submit"
+                                name="createItemCostSheet"
+                                value="yes"
+                                variant="outline"
+                                size="sm"
+                                className="text-xs uppercase font-semibold tracking-wider"
+                                disabled={requireItemRemapConfirmation && hasItemChanged && !confirmItemRemap}
+                            >
+                                Vincular ficha técnica
+                            </Button>
+                        ) : null}
+                        <Button
+                            type="submit"
+                            size="sm"
+                            disabled={requireItemRemapConfirmation && hasItemChanged && !confirmItemRemap}
+                        >
+                            <SaveIcon size={16} />
+                            <span className="pl-2 text-xs uppercase font-semibold tracking-wider">Salvar</span>
+                        </Button>
+                    </div>
                 </div>
                 <div className="flex flex-col gap-4">
                     <div className="border rounded-md p-4">
@@ -225,28 +233,6 @@ export default function RecipeForm({
                                     ) : null}
                                 </div>
                             </Fieldset>
-                            {createCostSheetOption?.enabled ? (
-                                <Fieldset className="grid-cols-3">
-                                    <Label htmlFor="createItemCostSheet">Ficha técnica</Label>
-                                    <div className="col-span-2 space-y-1">
-                                        <label className="inline-flex items-start gap-2 text-sm text-slate-700">
-                                            <input
-                                                id="createItemCostSheet"
-                                                type="checkbox"
-                                                checked={createCostSheetOnSave}
-                                                onChange={(event) => setCreateCostSheetOnSave(event.target.checked)}
-                                                className="mt-0.5 h-4 w-4 rounded border-slate-300"
-                                            />
-                                            <span>
-                                                Criar ou garantir ficha técnica com esta receita na composição.
-                                            </span>
-                                        </label>
-                                        <p className="text-xs text-muted-foreground">
-                                            {createCostSheetOption.helperText || "A ficha técnica ficará responsável pelo custo operacional; a receita continua sendo apenas a estrutura de produção."}
-                                        </p>
-                                    </div>
-                                </Fieldset>
-                            ) : null}
                         </div>
                     </div>
 

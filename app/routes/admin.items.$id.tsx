@@ -1,3 +1,4 @@
+import { redirect } from "@remix-run/node";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { Link, Outlet, useActionData, useLoaderData, useLocation, useNavigate } from "@remix-run/react";
 import { useEffect, useState } from "react";
@@ -23,6 +24,10 @@ import { loadItemCostAuditForItem } from "~/domain/item/item-cost-audit.server";
 import { getAvailableItemUnits as getAvailableItemUnitsFromServer } from "~/domain/item/item-units.server";
 import { itemVariationPrismaEntity } from "~/domain/item/item-variation.prisma.entity.server";
 import { registerItemCostEvent } from "~/domain/costs/item-cost-event.server";
+import {
+  deleteManualItemCostEntry,
+  updateManualItemCostEntry,
+} from "~/domain/costs/item-cost-manual-entry.server";
 import { supplierPrismaEntity } from "~/domain/supplier/supplier.prisma.entity.server";
 import {
   DEFAULT_RECIPE_CHATGPT_PROJECT_URL,
@@ -69,6 +74,14 @@ function toBool(value: FormDataEntryValue | null) {
 function normalizeUnit(value: FormDataEntryValue | string | null | undefined) {
   const normalized = String(value || "").trim().toUpperCase();
   return normalized || null;
+}
+
+function parseDateTimeInput(value: FormDataEntryValue | null) {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed;
 }
 
 const RECIPE_VARIATION_POLICY_OPTIONS = ["auto", "hide", "show"] as const;
@@ -494,6 +507,62 @@ export async function action({ request, params }: ActionFunctionArgs) {
       });
     }
 
+    if (_action === "item-delete") {
+      const stockMovementLookup =
+        typeof db.stockMovement?.findFirst === "function"
+          ? db.stockMovement.findFirst({
+            where: { itemId: id, deletedAt: null },
+            select: { id: true },
+          })
+          : typeof db.stockMovementImportBatchLine?.findFirst === "function"
+            ? db.stockMovementImportBatchLine.findFirst({
+              where: { mappedItemId: id, appliedAt: { not: null }, rolledBackAt: null },
+              select: { id: true },
+            })
+            : Promise.resolve(null);
+      const recipeUsageLookup =
+        typeof db.recipeIngredient?.findFirst === "function"
+          ? db.recipeIngredient.findFirst({
+            where: { ingredientItemId: id },
+            select: { id: true },
+          })
+          : typeof db.recipeLine?.findFirst === "function"
+            ? db.recipeLine.findFirst({
+              where: { itemId: id },
+              select: { id: true },
+            })
+            : Promise.resolve(null);
+
+      const [
+        stockMovement,
+        recipeLine,
+        recipe,
+        menuItem,
+        itemCostSheet,
+      ] = await Promise.all([
+        stockMovementLookup,
+        recipeUsageLookup,
+        db.recipe.findFirst({ where: { itemId: id }, select: { id: true } }),
+        db.menuItem.findFirst({ where: { itemId: id }, select: { id: true } }),
+        db.itemCostSheet.findFirst({ where: { itemId: id }, select: { id: true } }),
+      ]);
+
+      const reasons: string[] = [];
+      if (stockMovement) reasons.push("existem movimentações de estoque");
+      if (recipeLine) reasons.push("está sendo usado como ingrediente em receitas");
+      if (recipe) reasons.push("está vinculado a uma receita");
+      if (menuItem) reasons.push("está vinculado ao cardápio");
+      if (itemCostSheet) reasons.push("possui fichas de custo");
+
+      if (reasons.length > 0) {
+        return badRequest(`Não é possível eliminar o item porque ${reasons.join(", ")}.`);
+      }
+
+      await db.item.delete({ where: { id } });
+
+      return redirect("/admin/items");
+    }
+
     if (_action === "item-recipe-chatgpt-preview") {
       const chatGptResponse = String(formData.get("chatGptResponse") || "").trim();
       const existingRecipeImportMode = String(formData.get("existingRecipeImportMode") || "replace_existing").trim() as ExistingRecipeImportMode;
@@ -682,6 +751,53 @@ export async function action({ request, params }: ActionFunctionArgs) {
       }
 
       return ok("Custo registrado com sucesso");
+    }
+
+    if (_action === "item-cost-manual-update") {
+      const historyId = String(formData.get("historyId") || "").trim();
+      const costAmount = Number(formData.get("costAmount") || 0);
+      const unit = String(formData.get("unit") || "").trim();
+      const source = String(formData.get("source") || "manual").trim();
+      const supplierName = String(formData.get("supplierName") || "").trim();
+      const notes = String(formData.get("notes") || "").trim();
+      const validFrom = parseDateTimeInput(formData.get("validFrom"));
+
+      if (!historyId) return badRequest("Levantamento manual inválido");
+      if (!(costAmount > 0)) return badRequest("Informe um custo maior que zero");
+      if (!validFrom) return badRequest("Informe uma data válida");
+
+      await updateManualItemCostEntry({
+        itemId: id,
+        historyId,
+        costAmount,
+        unit,
+        source,
+        supplierName,
+        notes,
+        validFrom,
+      });
+
+      return ok({
+        action: "item-cost-manual-update",
+        historyId,
+        message: "Levantamento manual atualizado com sucesso",
+      });
+    }
+
+    if (_action === "item-cost-manual-delete") {
+      const historyId = String(formData.get("historyId") || "").trim();
+      if (!historyId) return badRequest("Levantamento manual inválido");
+
+      await deleteManualItemCostEntry({
+        itemId: id,
+        historyId,
+      });
+
+      return ok({
+        action: "item-cost-manual-delete",
+        historyId,
+        message: "Levantamento manual eliminado com sucesso",
+      });
     }
 
     if (_action === "supplier-quick-create") {

@@ -307,6 +307,31 @@ async function loadItemsAndAliases() {
   };
 }
 
+const FUZZY_ALIAS_THRESHOLD = 0.6;
+
+function tokenizeForSimilarity(name: string): string[] {
+  return String(name || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+function computeAliasSimilarity(a: string, b: string): number {
+  const tokA = tokenizeForSimilarity(a);
+  const tokB = tokenizeForSimilarity(b);
+  if (tokA.length === 0 && tokB.length === 0) return 1;
+  if (tokA.length === 0 || tokB.length === 0) return 0;
+  const setB = new Set(tokB);
+  let intersection = 0;
+  for (const t of tokA) if (setB.has(t)) intersection++;
+  const union = new Set([...tokA, ...tokB]).size;
+  return intersection / union;
+}
+
 function chooseAutoMapping(ingredientName: string, lookup: Awaited<ReturnType<typeof loadItemsAndAliases>>) {
   const normalized = normalizeName(ingredientName);
   const exact = lookup.itemsByNormalized.get(normalized);
@@ -318,6 +343,21 @@ function chooseAutoMapping(ingredientName: string, lookup: Awaited<ReturnType<ty
   if (alias) {
     const item = lookup.itemsById.get(alias.itemId);
     if (item) return { item, source: 'alias' };
+  }
+
+  // Fuzzy alias fallback: find the saved alias with highest token similarity
+  let bestScore = 0;
+  let bestAlias: any = null;
+  for (const [, a] of lookup.aliasByNormalized) {
+    const score = computeAliasSimilarity(ingredientName, a.aliasName || a.aliasNormalized);
+    if (score > bestScore) {
+      bestScore = score;
+      bestAlias = a;
+    }
+  }
+  if (bestScore >= FUZZY_ALIAS_THRESHOLD && bestAlias) {
+    const item = lookup.itemsById.get(bestAlias.itemId);
+    if (item) return { item, source: 'alias_fuzzy' };
   }
 
   return { item: null, source: null };
@@ -2019,10 +2059,43 @@ export async function mapBatchLinesToItem(params: {
           active: true,
         },
       });
+
+      // Propagate the new alias to all other active batches that still have
+      // pending_mapping lines for the same ingredient name.
+      const otherBatches = await db.stockMovementImportBatchLine.findMany({
+        where: {
+          ingredientNameNormalized: aliasLine.ingredientNameNormalized,
+          status: 'pending_mapping',
+          appliedAt: null,
+          batchId: { not: params.batchId },
+        },
+        select: { batchId: true },
+        distinct: ['batchId'],
+      });
+      for (const row of otherBatches as Array<{ batchId: string }>) {
+        await recomputeBatchLines(row.batchId);
+      }
     }
   }
 
   await recomputeBatchLines(params.batchId);
+}
+
+export async function reapplyAliasesToAllPendingBatches() {
+  const db = prismaClient as any;
+  const batches = await db.stockMovementImportBatchLine.findMany({
+    where: {
+      status: { in: ['pending_mapping', 'invalid', 'error'] },
+      mappedItemId: null,
+      appliedAt: null,
+    },
+    select: { batchId: true },
+    distinct: ['batchId'],
+  });
+  for (const row of batches as Array<{ batchId: string }>) {
+    await recomputeBatchLines(row.batchId);
+  }
+  return batches.length;
 }
 
 export async function setBatchLineManualConversion(params: {

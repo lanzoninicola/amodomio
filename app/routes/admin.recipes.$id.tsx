@@ -22,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select";
+import { Button } from "~/components/ui/button";
 import { toast } from "~/components/ui/use-toast";
 import { DecimalInput } from "~/components/inputs/inputs";
 import { recipeEntity } from "~/domain/recipe/recipe.entity.server";
@@ -1447,26 +1448,30 @@ export function IngredientLossEditor({
           <span className="text-[11px] text-slate-400">%</span>
         </div>
         <div className="flex items-center gap-1">
-          <button
+          <Button
             type="submit"
             name="applyToLines"
             value="no"
-            className="h-6 w-6 flex items-center justify-center rounded text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition-colors"
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6"
             title="Salvar perda padrão"
             aria-label="Salvar perda padrão"
           >
             <Check size={11} />
-          </button>
-          <button
+          </Button>
+          <Button
             type="submit"
             name="applyToLines"
             value="yes"
-            className="h-6 w-6 flex items-center justify-center rounded text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition-colors"
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6"
             title="Aplicar para todas as variações"
             aria-label="Aplicar para todas as variações"
           >
             <RefreshCw size={11} />
-          </button>
+          </Button>
         </div>
       </div>
     </Form>
@@ -1572,7 +1577,7 @@ export default function AdminRecipeDetailLayout() {
   }
 
   return (
-    <div className="min-h-[calc(100vh-8rem)] space-y-6 bg-white p-4 pb-20 md:pb-24">
+    <div className="min-h-[calc(100vh-8rem)] space-y-6 bg-white pb-20 md:pb-24">
 
 
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">

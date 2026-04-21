@@ -1,5 +1,6 @@
 import { Form, Link, useOutletContext } from "@remix-run/react";
 import { useEffect, useMemo, useState } from "react";
+import { DecimalInput } from "~/components/decimal-input/decimal-input";
 import { MoneyInput } from "~/components/money-input/MoneyInput";
 import { NumericInput } from "~/components/numeric-input/numeric-input";
 import { Button } from "~/components/ui/button";
@@ -356,6 +357,7 @@ export default function AdminItemCostSheetCustosTab() {
               ) : (
                 compositionRows.map((line) => {
                   const refLocked = line.type === "recipe" || line.type === "recipeSheet";
+                  const recipeHref = line.type === "recipe" && line.refId ? `/admin/recipes/${line.refId}` : null;
                   const lineFormId = `line-form-${line.id}`;
 
                   return (
@@ -370,12 +372,27 @@ export default function AdminItemCostSheetCustosTab() {
                           </div>
                           <div className="space-y-1">
                             <label className="block text-[11px] font-semibold uppercase tracking-wide text-slate-500">Nome</label>
-                            <input
-                              name="name"
-                              defaultValue={line.name}
-                              readOnly={refLocked}
-                              className={`h-9 w-full rounded-lg border px-3 text-sm ${refLocked ? "border-slate-100 bg-slate-50 text-slate-500" : "border-slate-200 bg-white"}`}
-                            />
+                            {recipeHref ? (
+                              <>
+                                <input type="hidden" name="name" value={line.name} />
+                                <Link
+                                  to={recipeHref}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="flex h-9 w-full items-center rounded-lg border border-slate-100 bg-slate-50 px-3 text-sm text-slate-700 transition hover:border-blue-200 hover:text-blue-700 hover:underline"
+                                  title="Abrir receita em nova aba"
+                                >
+                                  <span className="truncate">{line.name}</span>
+                                </Link>
+                              </>
+                            ) : (
+                              <input
+                                name="name"
+                                defaultValue={line.name}
+                                readOnly={refLocked}
+                                className={`h-9 w-full rounded-lg border px-3 text-sm ${refLocked ? "border-slate-100 bg-slate-50 text-slate-500" : "border-slate-200 bg-white"}`}
+                              />
+                            )}
                           </div>
                         <div className="space-y-1">
                           <label className="block text-[11px] font-semibold uppercase tracking-wide text-slate-500">Observacao</label>
@@ -450,10 +467,10 @@ export default function AdminItemCostSheetCustosTab() {
                                 <div className="space-y-1">
                                   <label className="block text-[11px] font-semibold uppercase tracking-wide text-slate-500">Total</label>
                                   <NumericInput
-                                    defaultValue={Number(value?.totalCostAmount || 0)}
+                                    defaultValue={Number(value?.totalCostAmount || 0).toFixed(2)}
                                     decimalScale={2}
                                     readOnly
-                                    className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs font-semibold text-right text-slate-700"
+                                    className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-sm font-semibold text-right text-slate-700"
                                   />
                                 </div>
                               </div>

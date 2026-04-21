@@ -1,6 +1,6 @@
 import { Form, Link, useFetcher, useLocation, useOutletContext, useParams, useRevalidator } from '@remix-run/react';
 import { EyeOff, Eye, Loader2, Pencil, RotateCcw, AlignJustify, Layers, X, Check, LayoutGrid, FileText, AlertTriangle, CheckCircle2, Download } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { TwoLevelLineRow } from '~/components/admin/import-stock-two-level-row';
 import { DecimalInput } from '~/components/inputs/inputs';
@@ -114,6 +114,7 @@ function EditableTwoLevelRow({
 }) {
   const fetcher = useFetcher<any>();
   const revalidator = useRevalidator();
+  const hasSubmittedRef = useRef(false);
   const [movementUnitDraft, setMovementUnitDraft] = useState(
     String(line.movementUnit || line.unitEntry || '').toUpperCase(),
   );
@@ -124,9 +125,11 @@ function EditableTwoLevelRow({
   );
 
   useEffect(() => {
+    if (!hasSubmittedRef.current) return;
     if (fetcher.state !== 'idle') return;
     if (fetcher.data?.status !== 200) return;
     if (fetcher.data?.payload?.updatedLineId !== line.id) return;
+    hasSubmittedRef.current = false;
     onStopEditing();
     revalidator.revalidate();
   }, [fetcher.state, fetcher.data, line.id, revalidator, onStopEditing]);
@@ -191,6 +194,7 @@ function EditableTwoLevelRow({
   }, [derivedCostAmount, manualConversionFactorDraft, measurementConversions, movementUnitDraft, selectedItem]);
 
   function handleSave() {
+    hasSubmittedRef.current = true;
     const fd = new FormData();
     fd.set('_action', 'batch-edit-line');
     fd.set('batchId', selectedBatchId);
@@ -285,6 +289,7 @@ function EditableTwoLevelRow({
                 unitOptions={unitOptions}
                 categories={categories}
                 costHint={hint}
+                onItemSelected={onStartEditing}
               />
             )}
           </TableCell>
@@ -600,6 +605,7 @@ function LineCard({
 }) {
   const fetcher = useFetcher<any>();
   const revalidator = useRevalidator();
+  const hasSubmittedRef = useRef(false);
 
   const [movementUnitDraft, setMovementUnitDraft] = useState(
     String(line.movementUnit || line.unitEntry || '').toUpperCase(),
@@ -611,9 +617,11 @@ function LineCard({
   );
 
   useEffect(() => {
+    if (!hasSubmittedRef.current) return;
     if (fetcher.state !== 'idle') return;
     if (fetcher.data?.status !== 200) return;
     if (fetcher.data?.payload?.updatedLineId !== line.id) return;
+    hasSubmittedRef.current = false;
     onStopEditing();
     revalidator.revalidate();
   }, [fetcher.state, fetcher.data, line.id, revalidator, onStopEditing]);
@@ -674,6 +682,7 @@ function LineCard({
   }, [derivedCostAmount, manualConversionFactorDraft, measurementConversions, movementUnitDraft, selectedItem]);
 
   function handleSave() {
+    hasSubmittedRef.current = true;
     const fd = new FormData();
     fd.set('_action', 'batch-edit-line');
     fd.set('batchId', batchId);
@@ -713,27 +722,31 @@ function LineCard({
     : line.targetUnit;
   const canFullEdit = !!line.mappedItemId && !['pending_mapping', 'pending_supplier', 'skipped_duplicate', 'ignored'].includes(line.status);
 
-  const isOk = line.status === 'ready' || line.status === 'imported';
+  const isReady = line.status === 'ready';
+  const isImported = line.status === 'imported';
+  const isOk = isReady || isImported;
   const isError = line.status === 'error' || line.status === 'invalid';
   const isPending = ['pending_mapping', 'pending_supplier', 'pending_conversion', 'pending_cost_review'].includes(line.status);
   const isDuplicate = line.status === 'skipped_duplicate';
 
-  const borderClass = isError ? 'border-red-200' : isPending ? 'border-amber-200' : isDuplicate ? 'border-amber-200' : isOk ? 'border-emerald-200' : 'border-slate-200';
-  const headerClass = isError ? 'border-red-100 bg-red-50/40' : isPending ? 'border-amber-100 bg-amber-50/30' : isDuplicate ? 'border-amber-100 bg-amber-50/30' : isOk ? 'border-emerald-100 bg-emerald-50/40' : 'border-slate-200 bg-slate-50';
-  const iconBgClass = isError ? 'bg-red-100' : isPending ? 'bg-amber-50' : isDuplicate ? 'bg-amber-50' : isOk ? 'bg-emerald-100' : 'bg-slate-100';
+  const borderClass = isError ? 'border-red-200' : isPending ? 'border-amber-200' : isDuplicate ? 'border-amber-200' : isImported ? 'border-blue-200' : isReady ? 'border-emerald-200' : 'border-slate-200';
+  const headerClass = isError ? 'border-red-100 bg-red-50/40' : isPending ? 'border-amber-100 bg-amber-50/30' : isDuplicate ? 'border-amber-100 bg-amber-50/30' : isImported ? 'border-blue-100 bg-blue-50/40' : isReady ? 'border-emerald-100 bg-emerald-50/40' : 'border-slate-200 bg-slate-50';
+  const iconBgClass = isError ? 'bg-red-100' : isPending ? 'bg-amber-50' : isDuplicate ? 'bg-amber-50' : isImported ? 'bg-blue-100' : isReady ? 'bg-emerald-100' : 'bg-slate-100';
 
   return (
     <div className={cn('overflow-hidden rounded-xl border bg-white', borderClass)}>
       {/* Seção da nota (XML) */}
       <div className={cn('flex items-start gap-3 border-b px-4 py-3', headerClass)}>
         <div className={cn('mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg', iconBgClass)}>
-          {isOk
-            ? <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-            : isError
-              ? <AlertTriangle className="h-4 w-4 text-red-500" />
-              : isPending
-                ? <AlertTriangle className="h-4 w-4 text-amber-500" />
-                : <FileText className="h-4 w-4 text-slate-400" />
+          {isImported
+            ? <CheckCircle2 className="h-4 w-4 text-blue-500" />
+            : isReady
+              ? <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+              : isError
+                ? <AlertTriangle className="h-4 w-4 text-red-500" />
+                : isPending
+                  ? <AlertTriangle className="h-4 w-4 text-amber-500" />
+                  : <FileText className="h-4 w-4 text-slate-400" />
           }
         </div>
         <div className="min-w-0 flex-1">
@@ -789,7 +802,7 @@ function LineCard({
             <>
               <div className="min-w-[280px] flex-1">
                 <div className="mb-1.5 text-[10px] font-black uppercase tracking-widest text-red-500">Produto não vinculado</div>
-                <ItemSystemMapperCell line={line} items={items} batchId={batchId} unitOptions={unitOptions} categories={categories} costHint={hint} />
+                <ItemSystemMapperCell line={line} items={items} batchId={batchId} unitOptions={unitOptions} categories={categories} costHint={hint} onItemSelected={onStartEditing} />
               </div>
               <div className="w-20 shrink-0 opacity-40 grayscale">
                 <div className="mb-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">UM</div>
@@ -810,7 +823,7 @@ function LineCard({
             <>
               <div className="min-w-[220px] flex-1">
                 <div className="mb-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">Vincular produto</div>
-                <ItemSystemMapperCell line={line} items={items} batchId={batchId} unitOptions={unitOptions} categories={categories} costHint={hint} />
+                <ItemSystemMapperCell line={line} items={items} batchId={batchId} unitOptions={unitOptions} categories={categories} costHint={hint} onItemSelected={onStartEditing} />
                 {!isEditing && (line.status === 'invalid' || line.status === 'error') && line.errorMessage ? (
                   <div className="mt-1 text-[11px] font-medium text-red-500">{line.errorMessage}</div>
                 ) : null}

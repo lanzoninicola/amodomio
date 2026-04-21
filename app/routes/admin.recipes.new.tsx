@@ -154,7 +154,7 @@ export default function AdminRecipesNew() {
         title="Nova receita"
         actionName="recipe-create"
         items={items}
-        createCostSheetOption={{ enabled: true, defaultChecked: false }}
+        createCostSheetOption={{ enabled: true }}
       />
     </section>
   );

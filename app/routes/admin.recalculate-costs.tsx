@@ -1,8 +1,18 @@
-import type { ActionFunctionArgs } from "@remix-run/node";
-import { Form, Link, useActionData, useNavigation } from "@remix-run/react";
-import { useEffect, useState } from "react";
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
+import { Form, Link, useActionData, useLoaderData, useNavigation } from "@remix-run/react";
+import { useEffect, useMemo, useState } from "react";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "~/components/ui/dialog";
+import { SearchableSelect } from "~/components/ui/searchable-select";
+import prismaClient from "~/lib/prisma/client.server";
 import { ok, serverError } from "~/utils/http-response.server";
 import {
   scanItemsForRecalculationFiltered,
@@ -15,6 +25,32 @@ import type {
 } from "~/domain/item/item-cost-recalculate.server";
 import { ChevronLeft } from "lucide-react";
 
+type LoaderData = {
+  itemOptions: Array<{
+    id: string;
+    name: string;
+    purchaseUm: string | null;
+    consumptionUm: string | null;
+  }>;
+};
+
+export async function loader({ request: _request }: LoaderFunctionArgs) {
+  const db = prismaClient as any;
+  const itemOptions = await db.item.findMany({
+    where: { active: true, classification: "insumo" },
+    select: {
+      id: true,
+      name: true,
+      purchaseUm: true,
+      consumptionUm: true,
+    },
+    orderBy: [{ name: "asc" }],
+    take: 300,
+  });
+
+  return ok<LoaderData>({ itemOptions });
+}
+
 // ─── action ───────────────────────────────────────────────────────────────────
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -23,13 +59,17 @@ export async function action({ request }: ActionFunctionArgs) {
     const _action = String(formData.get("_action") || "");
 
     if (_action === "scan") {
+      const itemId = String(formData.get("itemId") || "").trim() || undefined;
       const search = String(formData.get("search") || "").trim() || undefined;
       const consumptionUm =
         String(formData.get("consumptionUm") || "").trim() || undefined;
       const onlyWithIssues = formData.get("onlyWithIssues") === "on";
+      const selectedItemName =
+        String(formData.get("selectedItemName") || "").trim() || undefined;
 
       const filters: ScanFilters = {
-        search,
+        itemId,
+        search: itemId ? undefined : search,
         consumptionUm,
         onlyWithIssues: onlyWithIssues || undefined,
       };
@@ -38,7 +78,13 @@ export async function action({ request }: ActionFunctionArgs) {
       return ok({
         phase: "scanned",
         scan: result,
-        filters: { search, consumptionUm, onlyWithIssues },
+        filters: {
+          itemId,
+          selectedItemName,
+          search: itemId ? undefined : search,
+          consumptionUm,
+          onlyWithIssues,
+        },
       });
     }
 
@@ -92,49 +138,94 @@ function StatBox({
   );
 }
 
+function RecalculateCostsHowItWorks() {
+  return (
+    <div className="space-y-4 text-sm text-slate-600">
+      <ol className="list-decimal space-y-1.5 pl-4">
+        <li>
+          <strong>Verificar</strong> — analisa os insumos ativos, com filtros
+          opcionais, e identifica entradas cujo custo normalizado pela
+          configuração atual difere do valor armazenado.
+        </li>
+        <li>
+          <strong>Selecionar</strong> — escolha quais itens devem ser
+          recalculados. Itens com problemas são pré-selecionados.
+        </li>
+        <li>
+          <strong>Aplicar</strong> — atualiza os valores de custo e sincroniza
+          o custo atual. Somente itens selecionados são processados.
+        </li>
+      </ol>
+
+      <p className="text-xs text-slate-500">
+        Apenas entradas vinculadas a movimentos de estoque (
+        <code className="rounded bg-slate-100 px-1 font-mono">
+          referenceType = "stock-movement"
+        </code>
+        ) são processadas. Registros manuais não são modificados.
+      </p>
+    </div>
+  );
+}
+
 // ─── idle phase ───────────────────────────────────────────────────────────────
 
-function IdlePanel({ submitting }: { submitting: boolean }) {
+function IdlePanel({
+  submitting,
+  itemOptions,
+  initialItemId,
+}: {
+  submitting: boolean;
+  itemOptions: Array<{
+    value: string;
+    label: string;
+    searchText: string;
+  }>;
+  initialItemId?: string;
+}) {
+  const [selectedItemId, setSelectedItemId] = useState("");
+
+  const selectedItem = useMemo(
+    () => itemOptions.find((option) => option.value === selectedItemId) ?? null,
+    [itemOptions, selectedItemId]
+  );
+
+  useEffect(() => {
+    setSelectedItemId(initialItemId ?? "");
+  }, [initialItemId]);
+
   return (
     <div className="space-y-6">
-      <div className="rounded-lg border border-slate-200 bg-slate-50 p-6 space-y-3">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-500">
-          Como funciona
-        </p>
-        <ol className="list-decimal pl-4 space-y-1.5 text-sm text-slate-600">
-          <li>
-            <strong>Verificar</strong> — analisa os insumos ativos (com filtros
-            opcionais) e identifica entradas cujo custo normalizado pela
-            configuração atual difere do valor armazenado.
-          </li>
-          <li>
-            <strong>Selecionar</strong> — escolha quais itens devem ser
-            recalculados. Itens com problemas são pré-selecionados.
-          </li>
-          <li>
-            <strong>Aplicar</strong> — atualiza os valores de custo e sincroniza
-            o custo atual. Somente itens selecionados são processados.
-          </li>
-        </ol>
-      </div>
-
       <Form method="post" className="space-y-4">
         <input type="hidden" name="_action" value="scan" />
+        <input type="hidden" name="itemId" value={selectedItemId} />
+        <input
+          type="hidden"
+          name="selectedItemName"
+          value={selectedItem?.label ?? ""}
+        />
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="flex flex-col gap-1">
-            <label
-              htmlFor="search"
-              className="text-[11px] font-semibold uppercase tracking-wide text-slate-500"
-            >
+            <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
               Nome do insumo
             </label>
-            <input
-              id="search"
-              name="search"
-              type="text"
-              placeholder="Filtrar por nome do insumo"
-              className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-300"
+            <SearchableSelect
+              value={selectedItemId}
+              onValueChange={setSelectedItemId}
+              options={[
+                {
+                  value: "",
+                  label: "Todos os insumos",
+                  searchText: "todos limpar",
+                },
+                ...itemOptions,
+              ]}
+              placeholder="Selecionar insumo"
+              searchPlaceholder="Buscar item do sistema..."
+              emptyText="Nenhum item encontrado."
+              triggerClassName="h-10 w-full max-w-none justify-between px-3 text-sm text-slate-900"
+              contentClassName="w-[var(--radix-popover-trigger-width)] min-w-[320px]"
             />
           </div>
 
@@ -181,7 +272,13 @@ function ScannedPanel({
   submitting,
 }: {
   scan: ScanResult;
-  filters: { search?: string; consumptionUm?: string; onlyWithIssues?: boolean };
+  filters: {
+    itemId?: string;
+    selectedItemName?: string;
+    search?: string;
+    consumptionUm?: string;
+    onlyWithIssues?: boolean;
+  };
   submitting: boolean;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -221,7 +318,10 @@ function ScannedPanel({
   const clearSelection = () => setSelected(new Set());
 
   const activeFilters = [
-    filters.search ? `Nome: "${filters.search}"` : null,
+    filters.selectedItemName ? `Item: "${filters.selectedItemName}"` : null,
+    !filters.selectedItemName && filters.search
+      ? `Nome: "${filters.search}"`
+      : null,
     filters.consumptionUm ? `Unidade: "${filters.consumptionUm}"` : null,
     filters.onlyWithIssues ? "Apenas com problemas" : null,
   ].filter(Boolean);
@@ -555,6 +655,7 @@ function DonePanel({ bulk }: { bulk: BulkRecalculateResult }) {
 // ─── page ─────────────────────────────────────────────────────────────────────
 
 export default function RecalculateCostsRootPage() {
+  const loaderData = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const submitting = navigation.state === "submitting";
@@ -564,6 +665,13 @@ export default function RecalculateCostsRootPage() {
   const scan: ScanResult | null = payload?.scan ?? null;
   const bulk: BulkRecalculateResult | null = payload?.bulk ?? null;
   const filters = payload?.filters ?? {};
+  const itemOptions = (loaderData.payload?.itemOptions || []).map((item: any) => ({
+    value: String(item.id || ""),
+    label: String(item.name || ""),
+    searchText: [item.name, item.purchaseUm, item.consumptionUm]
+      .filter(Boolean)
+      .join(" "),
+  }));
 
   return (
     <div className="w-full space-y-8">
@@ -582,26 +690,56 @@ export default function RecalculateCostsRootPage() {
       </div>
 
       {/* Header */}
-      <div>
-        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">
-          Ferramentas
-        </p>
-        <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">
-          Recalculo de Custos
-        </h1>
-        <p className="mt-2 text-sm text-slate-600">
-          Recalcula o historico de custo de um item e atualiza o ultimo custo.
-        </p>
-        <p className="mt-1 text-xs text-slate-500">
-          Apenas entradas vinculadas a movimentos de estoque (
-          <code className="rounded bg-slate-100 px-1 font-mono">
-            referenceType = "stock-movement"
-          </code>
-          ) sao processadas. Registros manuais nao sao modificados.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">
+            Ferramentas
+          </p>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">
+            Recalculo de Custos
+          </h1>
+          <p className="mt-2 text-sm text-slate-600">
+            Recalcula o historico de custo de um item e atualiza o ultimo
+            custo.
+          </p>
+          <p className="mt-1 text-xs text-slate-500">
+            Apenas entradas vinculadas a movimentos de estoque (
+            <code className="rounded bg-slate-100 px-1 font-mono">
+              referenceType = "stock-movement"
+            </code>
+            ) sao processadas. Registros manuais nao sao modificados.
+          </p>
+        </div>
+
+        <Dialog>
+          <DialogTrigger asChild>
+            <button
+              type="button"
+              className="pt-5 text-sm font-medium text-blue-600 transition hover:text-blue-700 hover:underline"
+            >
+              Como funciona
+            </button>
+          </DialogTrigger>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Como funciona o recalculo de custos</DialogTitle>
+              <DialogDescription>
+                Este atalho tira a explicação do corpo da tela e deixa a página
+                livre para a operação principal.
+              </DialogDescription>
+            </DialogHeader>
+            <RecalculateCostsHowItWorks />
+          </DialogContent>
+        </Dialog>
       </div>
 
-      {phase === "idle" && <IdlePanel submitting={submitting} />}
+      {phase === "idle" && (
+        <IdlePanel
+          submitting={submitting}
+          itemOptions={itemOptions}
+          initialItemId={filters.itemId}
+        />
+      )}
 
       {phase === "scanned" && scan && (
         <>

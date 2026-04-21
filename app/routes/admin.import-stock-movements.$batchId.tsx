@@ -23,6 +23,7 @@ import { Label } from '~/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '~/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~/components/ui/select';
 import { Separator } from '~/components/ui/separator';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '~/components/ui/table';
 import { toast } from '~/components/ui/use-toast';
 import { authenticator } from '~/domain/auth/google.server';
 import { itemPrismaEntity } from '~/domain/item/item.prisma.entity.server';
@@ -42,6 +43,7 @@ import {
   setBatchLineManualConversion,
   startStockMovementImportBatch,
   updateStockMovementImportBatchLineEditableFields,
+  reapplyAliasesToAllPendingBatches,
 } from '~/domain/stock-movement/stock-movement-import.server';
 import { DecimalInput } from '~/components/inputs/inputs';
 import { cn } from '~/lib/utils';
@@ -362,6 +364,7 @@ export function ItemSystemMapperCell({
   categories = [],
   costHint,
   compact = false,
+  onItemSelected,
 }: {
   line: any;
   items: any[];
@@ -370,6 +373,7 @@ export function ItemSystemMapperCell({
   categories?: Array<{ id: string; name: string }>;
   costHint?: { lastCostPerUnit: number | null; avgCostPerUnit: number | null } | null;
   compact?: boolean;
+  onItemSelected?: () => void;
 }) {
   const [itemPickerOpen, setItemPickerOpen] = useState(false);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -385,6 +389,7 @@ export function ItemSystemMapperCell({
   const createUmFetcher = useFetcher<typeof action>();
   const approveCostFetcher = useFetcher<any>();
   const [createUmDialogOpen, setCreateUmDialogOpen] = useState(false);
+  const [umTabelaDialogOpen, setUmTabelaDialogOpen] = useState(false);
   const [umKind, setUmKind] = useState('custom');
   const [umCode, setUmCode] = useState('');
   const [umFactor, setUmFactor] = useState<number>(0);
@@ -486,6 +491,7 @@ export function ItemSystemMapperCell({
                                 onSelect={() => {
                                   setSelectedItemId(item.id);
                                   setItemPickerOpen(false);
+                                  onItemSelected?.();
                                   mapItemFetcher.submit(
                                     {
                                       _action: 'batch-map-item',
@@ -495,7 +501,7 @@ export function ItemSystemMapperCell({
                                       itemId: item.id,
                                       saveAlias: 'on',
                                     },
-                                    { method: 'post', action: `/admin/import-stock-movements/${batchId}` },
+                                    { method: 'post', action: `/admin/import-stock-movements/${batchId}`, preventScrollReset: true },
                                   );
                                 }}
                               >
@@ -789,6 +795,81 @@ export function ItemSystemMapperCell({
                   </createUmFetcher.Form>
                 </DialogContent>
               </Dialog>
+              <Dialog open={umTabelaDialogOpen} onOpenChange={setUmTabelaDialogOpen}>
+                <DialogTrigger asChild>
+                  <button
+                    type="button"
+                    className="text-[11px] font-medium text-slate-600 underline underline-offset-2 hover:text-slate-900"
+                  >
+                    Tabela UMs
+                  </button>
+                </DialogTrigger>
+                <DialogContent
+                  className="max-w-lg"
+                  onCloseAutoFocus={(event) => { event.preventDefault(); }}
+                >
+                  <DialogHeader>
+                    <DialogTitle>Conversões de UM — {selectedItem?.name}</DialogTitle>
+                  </DialogHeader>
+                  <div className="overflow-auto rounded-xl border border-slate-200">
+                    <Table>
+                      <TableHeader className="bg-slate-50/90">
+                        <TableRow className="hover:bg-slate-50/90">
+                          <TableHead className="px-3 py-2 text-xs">UM de compra</TableHead>
+                          <TableHead className="px-3 py-2 text-right text-xs">Fator</TableHead>
+                          <TableHead className="px-3 py-2 text-xs">UM base</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {selectedItem?.consumptionUm && (
+                          <TableRow className="border-slate-100 bg-emerald-50/40">
+                            <TableCell className="px-3 py-2 text-xs font-semibold text-emerald-700">{selectedItem.consumptionUm}</TableCell>
+                            <TableCell className="px-3 py-2 text-right text-xs font-mono text-slate-500">1</TableCell>
+                            <TableCell className="px-3 py-2 text-xs text-slate-500">base</TableCell>
+                          </TableRow>
+                        )}
+                        {selectedItem?.purchaseUm && selectedItem.purchaseUm !== selectedItem.consumptionUm && (
+                          <TableRow className="border-slate-100">
+                            <TableCell className="px-3 py-2 text-xs font-medium text-slate-700">{selectedItem.purchaseUm}</TableCell>
+                            <TableCell className="px-3 py-2 text-right font-mono text-xs tabular-nums text-slate-700">
+                              {selectedItem.purchaseToConsumptionFactor
+                                ? Number(selectedItem.purchaseToConsumptionFactor).toLocaleString('pt-BR', { maximumFractionDigits: 4 })
+                                : '-'}
+                            </TableCell>
+                            <TableCell className="px-3 py-2 text-xs text-slate-500">{selectedItem.consumptionUm || '-'}</TableCell>
+                          </TableRow>
+                        )}
+                        {(selectedItem?.ItemPurchaseConversion ?? []).map((c: { purchaseUm: string; factor: number }) => (
+                          <TableRow key={c.purchaseUm} className="border-slate-100">
+                            <TableCell className="px-3 py-2 text-xs font-medium text-slate-700">{c.purchaseUm}</TableCell>
+                            <TableCell className="px-3 py-2 text-right font-mono text-xs tabular-nums text-slate-700">
+                              {Number(c.factor).toLocaleString('pt-BR', { maximumFractionDigits: 4 })}
+                            </TableCell>
+                            <TableCell className="px-3 py-2 text-xs text-slate-500">{selectedItem?.consumptionUm || '-'}</TableCell>
+                          </TableRow>
+                        ))}
+                        {!selectedItem?.consumptionUm && (selectedItem?.ItemPurchaseConversion ?? []).length === 0 && (
+                          <TableRow>
+                            <TableCell colSpan={3} className="px-3 py-4 text-center text-xs text-slate-400">
+                              Nenhuma conversão configurada.
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                  <div className="flex justify-end">
+                    <Link
+                      to={`/admin/items/${selectedItemId}/main`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[11px] font-medium text-slate-600 underline underline-offset-2 hover:text-slate-900"
+                    >
+                      Gerenciar no item
+                    </Link>
+                  </div>
+                </DialogContent>
+              </Dialog>
               <Link
                 to={`/admin/stock-movements?itemId=${encodeURIComponent(selectedItemId)}`}
                 target="_blank"
@@ -802,6 +883,7 @@ export function ItemSystemMapperCell({
             <>
               <span className="text-[11px] text-slate-400">Editar item</span>
               <span className="text-[11px] text-slate-400">Criar UM</span>
+              <span className="text-[11px] text-slate-400">Tabela UMs</span>
               <span className="text-[11px] text-slate-400">Movimentações estoque</span>
             </>
           )}
@@ -1236,6 +1318,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
       return redirect(redirectToCurrentPath(request, `/admin/import-stock-movements/${batchId}`));
     }
 
+    if (_action === 'reapply-aliases-all-batches') {
+      const count = await reapplyAliasesToAllPendingBatches();
+      return redirect(redirectToCurrentPath(request, `/admin/import-stock-movements/${batchId}`));
+    }
+
     if (_action === 'batch-create-and-map-item') {
       const lineId = str(formData.get('lineId'));
       const ingredientNameNormalized = str(formData.get('ingredientNameNormalized')) || null;
@@ -1486,22 +1573,19 @@ export default function AdminImportStockMovementsBatchDetailRoute() {
     revalidator.revalidate();
   }, [importStepFetcher.state, importStepFetcher.data, revalidator]);
 
-  const prevIsImportingRef = useRef(false);
+  const prevBatchImportStatusRef = useRef(batchImportStatus);
   useEffect(() => {
-    if (prevIsImportingRef.current && !isImportingBatch) {
-      const status = batchImportStatus;
-      if (status === 'imported') {
+    if (prevBatchImportStatusRef.current === 'importing' && batchImportStatus !== 'importing') {
+      if (batchImportStatus === 'imported') {
         toast({ title: 'Importação concluída', description: 'Todas as linhas foram importadas com sucesso.' });
-      } else if (status === 'partial') {
+      } else if (batchImportStatus === 'partial') {
         toast({ title: 'Importação parcial', description: 'Algumas linhas foram importadas, outras tiveram erros.', variant: 'destructive' });
-      } else if (status === 'error') {
+      } else if (batchImportStatus === 'error') {
         toast({ title: 'Erro na importação', description: 'Ocorreu um erro durante a importação.', variant: 'destructive' });
-      } else {
-        toast({ title: 'Importação finalizada', description: `Status: ${status}` });
       }
     }
-    prevIsImportingRef.current = isImportingBatch;
-  }, [isImportingBatch, batchImportStatus]);
+    prevBatchImportStatusRef.current = batchImportStatus;
+  }, [batchImportStatus]);
 
   if (!selectedBatch) {
     return (
@@ -1749,6 +1833,22 @@ export default function AdminImportStockMovementsBatchDetailRoute() {
               <Separator orientation="vertical" className="h-auto self-stretch" />
 
               <FreightEditButton batchId={String(selectedBatch.id)} freightAmount={selectedBatch.freightAmount ?? null} />
+
+              <Separator orientation="vertical" className="h-auto self-stretch" />
+
+              <Form method="post">
+                <input type="hidden" name="_action" value="reapply-aliases-all-batches" />
+                <input type="hidden" name="batchId" value={selectedBatch.id} />
+                <button
+                  type="submit"
+                  disabled={isImportingBatch}
+                  title="Reaplicar vínculos salvos a todos os lotes com linhas pendentes"
+                  className="flex flex-col items-center justify-center gap-1 px-4 py-2.5 text-slate-600 hover:bg-slate-50 transition min-w-[64px] disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  <span className="text-[11px] font-medium">Vínculos</span>
+                </button>
+              </Form>
             </div>
 
             {/* Grupo 3: Mobile */}

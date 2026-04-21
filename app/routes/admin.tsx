@@ -6,6 +6,7 @@ import { authenticator } from "~/domain/auth/google.server";
 import { LoggedUser } from "~/domain/auth/types.server";
 import ADMIN_NAVIGATION_LINKS from "~/domain/website-navigation/links/admin-navigation";
 import { AdminSidebar } from "~/domain/website-navigation/components/admin-sidebar";
+import { isWhatsappNoResponseEnabled } from "~/domain/crm/whatsapp-no-response-settings.server";
 import prismaClient from "~/lib/prisma/client.server";
 import { ok } from "~/utils/http-response.server";
 import { lastUrlSegment } from "~/utils/url";
@@ -86,6 +87,7 @@ export const loader: LoaderFunction = async ({ request }: LoaderFunctionArgs) =>
     }
 
     const slug = lastUrlSegment(request.url)
+    const whatsappNoResponseEnabled = isMobileRoute ? false : await isWhatsappNoResponseEnabled();
 
     const [pinnedNav, pendingReplyAlerts, topNavItems] = isMobileRoute
         ? [[], [], []]
@@ -96,36 +98,38 @@ export const loader: LoaderFunction = async ({ request }: LoaderFunctionArgs) =>
                 orderBy: [{ lastClickedAt: "desc" }],
                 take: 50,
             }),
-            prismaClient.$queryRaw<Array<{
-                customer_id: string;
-                phone_e164: string;
-                name: string | null;
-                seconds_waiting: number;
-                message_preview: string | null;
-            }>>`
-                WITH last_event_today AS (
-                    SELECT DISTINCT ON (e.customer_id)
-                        e.customer_id,
-                        e.event_type,
-                        e.created_at,
-                        NULLIF(TRIM(COALESCE(e.payload ->> 'messageText', '')), '') AS message_preview
-                    FROM crm_customer_event e
-                    WHERE (e.created_at AT TIME ZONE 'America/Sao_Paulo')::date = (now() AT TIME ZONE 'America/Sao_Paulo')::date
-                    ORDER BY e.customer_id, e.created_at DESC, e.id DESC
-                )
-                SELECT
-                    c.id AS customer_id,
-                    c.phone_e164,
-                    c.name,
-                    EXTRACT(EPOCH FROM (now() - le.created_at))::INT AS seconds_waiting,
-                    le.message_preview
-                FROM last_event_today le
-                INNER JOIN crm_customer c ON c.id = le.customer_id
-                WHERE le.event_type = 'WHATSAPP_SENT'
-                  AND EXTRACT(EPOCH FROM (now() - le.created_at))::INT >= ${DEFAULT_REPLY_WAIT_SECONDS}
-                ORDER BY le.created_at ASC
-                LIMIT 15
-            `,
+            whatsappNoResponseEnabled
+                ? prismaClient.$queryRaw<Array<{
+                    customer_id: string;
+                    phone_e164: string;
+                    name: string | null;
+                    seconds_waiting: number;
+                    message_preview: string | null;
+                }>>`
+                    WITH last_event_today AS (
+                        SELECT DISTINCT ON (e.customer_id)
+                            e.customer_id,
+                            e.event_type,
+                            e.created_at,
+                            NULLIF(TRIM(COALESCE(e.payload ->> 'messageText', '')), '') AS message_preview
+                        FROM crm_customer_event e
+                        WHERE (e.created_at AT TIME ZONE 'America/Sao_Paulo')::date = (now() AT TIME ZONE 'America/Sao_Paulo')::date
+                        ORDER BY e.customer_id, e.created_at DESC, e.id DESC
+                    )
+                    SELECT
+                        c.id AS customer_id,
+                        c.phone_e164,
+                        c.name,
+                        EXTRACT(EPOCH FROM (now() - le.created_at))::INT AS seconds_waiting,
+                        le.message_preview
+                    FROM last_event_today le
+                    INNER JOIN crm_customer c ON c.id = le.customer_id
+                    WHERE le.event_type = 'WHATSAPP_SENT'
+                      AND EXTRACT(EPOCH FROM (now() - le.created_at))::INT >= ${DEFAULT_REPLY_WAIT_SECONDS}
+                    ORDER BY le.created_at ASC
+                    LIMIT 15
+                `
+                : Promise.resolve([]),
             prismaClient.adminNavigationClick.findMany({
                 where: { pinned: false },
                 orderBy: [{ count: "desc" }, { lastClickedAt: "desc" }],
@@ -152,6 +156,7 @@ export const loader: LoaderFunction = async ({ request }: LoaderFunctionArgs) =>
             groupTitle: item.groupTitle ?? null,
             pinned: item.pinned ?? false,
         })),
+        whatsappNoResponseEnabled,
         pendingReplyAlerts: pendingReplyAlerts.map((row) => ({
             customerId: row.customer_id,
             phoneE164: row.phone_e164,
@@ -178,6 +183,7 @@ export default function AdminOutlet() {
     const pinnedNavHrefs = loaderData?.payload?.pinnedNavHrefs ?? [];
     const pinnedNavItems = loaderData?.payload?.pinnedNavItems ?? [];
     const topNavItems = loaderData?.payload?.topNavItems ?? [];
+    const whatsappNoResponseEnabled = loaderData?.payload?.whatsappNoResponseEnabled ?? true;
     const pendingReplyAlerts = (loaderData?.payload?.pendingReplyAlerts ?? []) as PendingReplyAlert[];
     const [isAlertsPanelOpen, setIsAlertsPanelOpen] = useState(false);
     const [panelPosition, setPanelPosition] = useState<{ x: number; y: number } | null>(null);
@@ -328,7 +334,7 @@ export default function AdminOutlet() {
             <RouteProgressBar />
             <AdminSidebar navigationLinks={ADMIN_NAVIGATION_LINKS} pinnedHrefs={pinnedNavHrefs} pinnedItems={pinnedNavItems} />
             <SidebarTrigger className="hidden md:flex" />
-            {pendingReplyAlerts.length > 0 && isAlertsPanelOpen ? (
+            {whatsappNoResponseEnabled && pendingReplyAlerts.length > 0 && isAlertsPanelOpen ? (
                 <aside
                     ref={panelRef}
                     className={[
@@ -513,7 +519,7 @@ export default function AdminOutlet() {
                 </aside>
             ) : null}
             <div className="flex flex-col w-screen">
-                {pendingReplyAlerts.length > 0 ? (
+                {whatsappNoResponseEnabled && pendingReplyAlerts.length > 0 ? (
                     <>
                         <div className="fixed right-0 top-0 z-[70] flex h-6 w-fit items-center justify-end border-b border-red-300 bg-red-50/95 px-3 text-red-900 shadow-sm md:h-7 md:px-4">
                             <div className="flex items-center gap-2">

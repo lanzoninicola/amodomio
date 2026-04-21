@@ -35,8 +35,6 @@ export function NativeItemSellingPriceCard(props: {
 }) {
   const actualPrice = Number(props.currentRow?.priceAmount || 0);
   const previousPrice = Number(props.currentRow?.previousPriceAmount || 0);
-  const lucroPerc = Number(props.currentRow?.profitActualPerc || 0);
-  const lucroValor = (actualPrice * lucroPerc) / 100;
   const breakdown = props.computedSellingPriceBreakdown;
   const custoFT = Number(breakdown.custoFichaTecnica || 0);
   const custoDesperdicio = Number(breakdown.wasteCost || 0);
@@ -45,6 +43,8 @@ export function NativeItemSellingPriceCard(props: {
   const dnaPerc = Number(breakdown.dnaPercentage || 0);
   const dnaValor = (actualPrice * dnaPerc) / 100;
   const custoComDna = custoTotal + dnaValor;
+  const lucroValor = actualPrice - custoComDna;
+  const lucroPerc = actualPrice > 0 ? (lucroValor / actualPrice) * 100 : 0;
   const recommendedPrice = Number(
     breakdown.minimumPrice?.priceAmount?.withProfit || 0
   );
@@ -109,7 +109,7 @@ export function NativeItemSellingPriceCard(props: {
           Publicado no canal
         </label>
 
-        <div className="text-[11px] text-slate-500">
+        <div className={`text-[11px] ${lucroPerc < 0 ? "text-red-400" : lucroPerc < targetMarginPerc ? "text-orange-400" : "text-slate-500"}`}>
           Lucro atual: <span className="font-mono">{formatDecimalPlaces(lucroPerc)}% | R$ {formatDecimalPlaces(lucroValor)}</span>
         </div>
 
