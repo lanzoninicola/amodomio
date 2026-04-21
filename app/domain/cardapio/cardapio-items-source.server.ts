@@ -145,8 +145,8 @@ function buildCompatPriceRows(item: NativeCardapioRow) {
         profitExpectedPerc: Number(row.profitExpectedPerc || 0),
         discountPercentage: Number(row.discountPercentage || 0),
         previousPriceAmount: Number(row.previousPriceAmount || 0),
-        showOnCardapio: Boolean(row.published),
-        showOnCardapioAt: row.publishedAt || row.updatedAt || null,
+        showOnCardapio: true,
+        showOnCardapioAt: row.updatedAt || null,
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
         updatedBy: row.updatedBy || null,
@@ -271,7 +271,6 @@ function toCompatCardapioItem(item: NativeCardapioRow): CardapioCompatItem {
       : null;
   const sellingPrices = buildCompatPriceRows(item);
 
-  const hasPublishedNativePrice = sellingPrices.some((row: any) => Boolean(row.showOnCardapio));
   const cardapioChannelVisible =
     (item.ItemSellingChannelItem || []).some((row: any) => row?.visible === true) || false;
   const nativeUpcoming = Boolean(sellingInfo?.upcoming);
@@ -280,8 +279,7 @@ function toCompatCardapioItem(item: NativeCardapioRow): CardapioCompatItem {
     Boolean(item.canSell) &&
     Boolean(item.active) &&
     cardapioChannelVisible &&
-    !nativeUpcoming &&
-    hasPublishedNativePrice;
+    !nativeUpcoming;
 
   return {
     id: item.id,
@@ -452,8 +450,6 @@ async function listNativeCardapioItems(
           profitExpectedPerc: true,
           discountPercentage: true,
           previousPriceAmount: true,
-          published: true,
-          publishedAt: true,
           createdAt: true,
           updatedAt: true,
           updatedBy: true,

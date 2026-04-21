@@ -396,6 +396,7 @@ export default function AdminGerenciamentoCardapioSellPriceManagementSingleChann
                   initialItems={menuItemsWithSellPriceVariations}
                   groups={groups}
                   categories={categories}
+                  sizes={sizes}
                   onItemsChange={(filtered) => setItems(filtered)}
                   cnContainer="col-span-6 md:col-span-6"
                 />

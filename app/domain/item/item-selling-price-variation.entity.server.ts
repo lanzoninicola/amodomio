@@ -10,7 +10,6 @@ type UpsertItemSellingPriceInput = {
   profitActualPerc?: number;
   profitExpectedPerc?: number;
   discountPercentage?: number;
-  published?: boolean;
   updatedBy?: string | null;
 };
 
@@ -71,8 +70,6 @@ class ItemSellingPriceVariationEntity {
           profitActualPerc: Number(input.profitActualPerc || 0),
           profitExpectedPerc: Number(input.profitExpectedPerc || 0),
           discountPercentage: Number(input.discountPercentage || 0),
-          published: Boolean(input.published),
-          publishedAt: input.published ? new Date() : null,
           updatedBy: input.updatedBy || null,
         },
       });
@@ -89,8 +86,6 @@ class ItemSellingPriceVariationEntity {
         profitActualPerc: Number(input.profitActualPerc || 0),
         profitExpectedPerc: Number(input.profitExpectedPerc || 0),
         discountPercentage: Number(input.discountPercentage || 0),
-        published: Boolean(input.published),
-        publishedAt: input.published ? new Date() : null,
         updatedBy: input.updatedBy || null,
       },
     });

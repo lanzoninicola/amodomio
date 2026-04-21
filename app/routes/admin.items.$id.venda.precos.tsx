@@ -151,7 +151,6 @@ export async function loader({ params }: LoaderFunctionArgs) {
                 priceExpectedAmount: Number(currentRow.priceExpectedAmount || 0),
                 profitActualPerc: Number(currentRow.profitActualPerc || 0),
                 profitExpectedPerc: Number(currentRow.profitExpectedPerc || 0),
-                published: Boolean(currentRow.published),
                 updatedBy: currentRow.updatedBy || null,
               }
             : null,
@@ -201,7 +200,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const itemVariationId = String(formData.get("itemVariationId") || "").trim();
     const itemSellingChannelId = String(formData.get("itemSellingChannelId") || "").trim();
     const updatedBy = String(formData.get("updatedBy") || "").trim() || null;
-    const published = String(formData.get("published") || "") === "on";
     const intent = String(formData.get("_intent") || "").trim();
     const priceAmount =
       intent === "apply-recommended"
@@ -233,7 +231,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
       itemVariationId,
       itemSellingChannelId,
       priceAmount,
-      published,
       updatedBy,
     });
 
@@ -260,7 +257,6 @@ export type AdminItemVendaPrecosOutletContext = AdminItemVendaOutletContext & {
     itemVariationId: string;
     itemSellingChannelId: string;
     priceAmount: number;
-    published: boolean;
     previousPriceAmount?: number;
     priceExpectedAmount?: number;
     profitActualPerc?: number;
@@ -283,7 +279,6 @@ export type AdminItemVendaPrecosOutletContext = AdminItemVendaOutletContext & {
       priceExpectedAmount: number;
       profitActualPerc: number;
       profitExpectedPerc: number;
-      published: boolean;
       updatedBy: string | null;
     } | null;
     activeSheetId: string | null;

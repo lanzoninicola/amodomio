@@ -1,5 +1,5 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
-import { Form, Link, useActionData, useOutletContext } from "@remix-run/react";
+import { Form, useActionData, useOutletContext } from "@remix-run/react";
 import { Switch } from "~/components/ui/switch";
 import type { AdminItemVendaOutletContext } from "./admin.items.$id.venda";
 import prismaClient from "~/lib/prisma/client.server";
@@ -121,7 +121,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
 export default function AdminItemVendaCanaisRoute() {
   const actionData = useActionData<typeof action>();
-  const { channels, legacyPublications } = useOutletContext<AdminItemVendaOutletContext>();
+  const { channels } = useOutletContext<AdminItemVendaOutletContext>();
   const enabledChannels = channels.filter((channel) => channel.enabledForItem);
 
   return (
@@ -300,53 +300,6 @@ export default function AdminItemVendaCanaisRoute() {
         ))}
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Bridge legada</h2>
-            <p className="text-sm text-slate-600">
-              {legacyPublications.length} vínculo(s) legados ainda existem para este item, mas não dirigem mais a matriz nativa.
-            </p>
-          </div>
-          <Link to="../precos" className="text-sm underline">
-            Ver matriz de preços
-          </Link>
-        </div>
-
-        <div className="mt-4 space-y-2">
-          {legacyPublications.length === 0 ? (
-            <p className="text-sm text-slate-500">Nenhum vínculo legado encontrado para este item.</p>
-          ) : (
-            legacyPublications.map((publication) => (
-              <div key={publication.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-100 p-3">
-                <div>
-                  <div className="font-medium text-slate-900">{publication.name}</div>
-                  <div className="text-xs text-slate-500">{publication.id}</div>
-                  <div className="mt-1 flex flex-wrap gap-1">
-                    {publication.publishedChannelKeys.length === 0 ? (
-                      <span className="text-[11px] text-slate-400">Sem canal com preço publicado</span>
-                    ) : (
-                      publication.publishedChannelKeys.map((channelKey) => (
-                        <span key={channelKey} className="rounded-full bg-slate-100 px-2 py-1 text-[11px] uppercase tracking-wide text-slate-600">
-                          {channelKey}
-                        </span>
-                      ))
-                    )}
-                  </div>
-                </div>
-                <div className="flex gap-2 text-[11px] font-semibold uppercase tracking-wide">
-                  <span className={`rounded-full px-2 py-1 ${publication.active ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
-                    {publication.active ? "Ativo" : "Inativo"}
-                  </span>
-                  <span className={`rounded-full px-2 py-1 ${publication.visible ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-600"}`}>
-                    {publication.visible ? "Visível" : "Oculto"}
-                  </span>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
     </div>
   );
 }

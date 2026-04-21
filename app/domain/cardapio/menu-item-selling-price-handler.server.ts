@@ -383,7 +383,6 @@ export class MenuItemSellingPriceHandler {
 
     const base = `${itemName} (${sizeName} - ${channelName})`;
 
-    // excluir os tamanhos "Fatia"
     if (sizeName === "Fatia") {
       return warnings;
     }

@@ -104,7 +104,6 @@ export async function buildNativeSellingPriceUpsertPayload(params: {
   itemVariationId: string;
   itemSellingChannelId: string;
   priceAmount: number;
-  published: boolean;
   updatedBy?: string | null;
 }) {
   const [variation, channel, activeSheets, sellingPriceConfig, sizeMap] = await Promise.all([
@@ -191,7 +190,6 @@ export async function buildNativeSellingPriceUpsertPayload(params: {
       itemVariationId: params.itemVariationId,
       itemSellingChannelId: params.itemSellingChannelId,
       priceAmount: Number(params.priceAmount || 0),
-      published: Boolean(params.published),
       updatedBy: params.updatedBy || null,
       priceExpectedAmount:
         computedSellingPriceBreakdown.minimumPrice.priceAmount.withProfit,

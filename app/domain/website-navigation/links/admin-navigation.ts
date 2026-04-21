@@ -185,20 +185,8 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
               disabled: false,
             },
             {
-              title: "Comparação canais",
-              href: "/admin/vendas/channels-sell-price",
-              items: [],
-              disabled: false,
-            },
-            {
-              title: "Revisão de preços",
-              href: "/admin/vendas/revisao-precos",
-              items: [],
-              disabled: false,
-            },
-            {
-              title: "Faixas de lucro",
-              href: "/admin/vendas/faixas-lucro",
+              title: "Preços de venda (Novo)",
+              href: "/admin/vendas/sell-price-management",
               items: [],
               disabled: false,
             },

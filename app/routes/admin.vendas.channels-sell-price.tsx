@@ -1,9 +1,11 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { Form, Link, useActionData, useLoaderData } from "@remix-run/react";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { MoneyInput } from "~/components/money-input/MoneyInput";
 import { Separator } from "~/components/ui/separator";
+import { Switch } from "~/components/ui/switch";
 import { Input } from "~/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { toast } from "~/components/ui/use-toast";
 import { authenticator } from "~/domain/auth/google.server";
 import { menuItemSellingPriceUtilityEntity } from "~/domain/cardapio/menu-item-selling-price-utility.entity";
@@ -115,7 +117,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
             priceAmount: true,
             previousPriceAmount: true,
             profitActualPerc: true,
-            published: true,
             updatedBy: true,
           },
         },
@@ -192,7 +193,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
                     priceAmount: Number(currentRow.priceAmount || 0),
                     previousPriceAmount: Number(currentRow.previousPriceAmount || 0),
                     profitActualPerc: Number(currentRow.profitActualPerc || 0),
-                    published: Boolean(currentRow.published),
                     updatedBy: currentRow.updatedBy || null,
                   }
                 : null,
@@ -207,6 +207,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
             variationCode: variation.Variation?.code || null,
             activeSheetId: activeSheet?.id || null,
             activeSheetName: activeSheet?.name || null,
+            activeSheetUpdatedAt: activeSheet?.updatedAt ? new Date(activeSheet.updatedAt).toISOString() : null,
             channelData,
           };
         });
@@ -252,7 +253,6 @@ export async function action({ request }: ActionFunctionArgs) {
     const itemVariationId = String(formData.get("itemVariationId") || "").trim();
     const itemSellingChannelId = String(formData.get("itemSellingChannelId") || "").trim();
     const updatedBy = String(formData.get("updatedBy") || "").trim() || null;
-    const published = String(formData.get("published") || "") === "on";
     const priceAmount = parseMoneyInput(formData.get("priceAmount"));
 
     if (!itemId) return badRequest("Item inválido");
@@ -279,7 +279,6 @@ export async function action({ request }: ActionFunctionArgs) {
       itemVariationId,
       itemSellingChannelId,
       priceAmount,
-      published,
       updatedBy,
     });
 
@@ -301,7 +300,6 @@ type ChannelData = {
     priceAmount: number;
     previousPriceAmount: number;
     profitActualPerc: number;
-    published: boolean;
     updatedBy: string | null;
   } | null;
   computedBreakdown: ComputedSellingPriceBreakdown;
@@ -318,6 +316,8 @@ function ChannelPriceCell({
   channelData: ChannelData;
   userEmail: string | null;
 }) {
+  const formRef = useRef<HTMLFormElement>(null);
+
   if (!channelData.channelLinked) {
     return (
       <td className="border-r border-slate-100 px-2 py-2 text-center text-[10px] text-slate-300 align-middle">
@@ -339,11 +339,14 @@ function ChannelPriceCell({
   const dnaPerc = Number(channelData.computedBreakdown.dnaPercentage || 0);
   const dnaValor = (priceAmount * dnaPerc) / 100;
   const custoComDna = custoTotal + dnaValor;
+  const isMarketplace = Boolean(channelData.computedBreakdown.channel?.isMarketplace);
+  const taxPerc = Number(channelData.computedBreakdown.channel?.taxPerc || 0);
+  const taxaCanal = isMarketplace ? (priceAmount * taxPerc) / 100 : 0;
   const previousPrice = Number(channelData.currentRow?.previousPriceAmount || 0);
 
   return (
-    <td className={`border-r border-slate-100 px-2 py-2 align-top min-w-[210px] ${lucroPerc < 0 ? "bg-red-50" : ""}`}>
-      <Form method="post" className="space-y-2">
+    <td className={`border-r border-slate-100 px-2 py-2 align-top min-w-[210px] ${lucroPerc < 0 ? "bg-red-50" : lucroPerc <= 5 ? "bg-orange-50" : ""}`}>
+      <Form method="post" className="space-y-2" ref={formRef}>
         <input type="hidden" name="_action" value="upsert-native-price" />
         <input type="hidden" name="itemId" value={itemId} />
         <input type="hidden" name="itemVariationId" value={itemVariationId} />
@@ -355,35 +358,35 @@ function ChannelPriceCell({
         />
         <input type="hidden" name="recommendedPriceAmount" value={recommendedPrice} />
 
-        <div className="flex gap-1 items-center">
-          <MoneyInput
-            name="priceAmount"
-            defaultValue={priceAmount}
-            className="h-7 text-xs font-mono w-24"
-          />
-          <button
-            type="submit"
-            className="h-7 rounded border border-slate-200 px-2 text-[10px] font-semibold uppercase tracking-wide text-slate-700 hover:bg-slate-50 whitespace-nowrap"
-          >
-            Salvar
-          </button>
+        <div className="grid grid-cols-2 gap-2 items-start">
+          <div className="flex flex-col justify-center">
+            <span className="text-[9px] uppercase tracking-wide text-slate-400">PV anterior</span>
+            <span className="font-mono text-xs text-slate-600">R$ {formatDecimalPlaces(previousPrice)}</span>
+          </div>
+          <div className="flex gap-1 items-center justify-end">
+            <MoneyInput
+              name="priceAmount"
+              defaultValue={priceAmount}
+              className="h-7 text-xs font-mono w-24"
+            />
+            <button
+              type="submit"
+              className="h-7 rounded border border-slate-200 px-2 text-[10px] font-semibold uppercase tracking-wide text-slate-700 hover:bg-slate-50 whitespace-nowrap"
+            >
+              Salvar
+            </button>
+          </div>
         </div>
-
-        <label className="flex items-center gap-1 text-[10px] text-slate-500 cursor-pointer">
-          <input
-            type="checkbox"
-            name="published"
-            defaultChecked={Boolean(channelData.currentRow?.published)}
-            className="w-3 h-3"
-          />
-          Publicado
-        </label>
 
         <Separator />
 
         {lucroPerc < 0 ? (
           <div className="rounded-md bg-red-600 px-2 py-1 text-[11px] font-semibold text-white">
             Lucro negativo: <span className="font-mono">{formatDecimalPlaces(lucroPerc)}% | R$ {formatDecimalPlaces(lucroValor)}</span>
+          </div>
+        ) : lucroPerc <= 5 ? (
+          <div className="rounded-md bg-orange-500 px-2 py-1 text-[11px] font-semibold text-white">
+            Lucro baixo: <span className="font-mono">{formatDecimalPlaces(lucroPerc)}% | R$ {formatDecimalPlaces(lucroValor)}</span>
           </div>
         ) : (
           <div className={`text-[11px] ${lucroPerc < targetMarginPerc ? "text-orange-400" : "text-slate-500"}`}>
@@ -412,9 +415,21 @@ function ChannelPriceCell({
           <span className="text-right font-mono">R$ {formatDecimalPlaces(dnaValor)}</span>
           <span className="text-slate-500">Custo base + DNA</span>
           <span className="text-right font-mono">R$ {formatDecimalPlaces(custoComDna)}</span>
-          <span className="text-slate-500">Anterior</span>
-          <span className="text-right font-mono">R$ {formatDecimalPlaces(previousPrice)}</span>
+          {isMarketplace && (
+            <>
+              <span className="text-slate-500">{`Taxa canal (${formatDecimalPlaces(taxPerc)}%)`}</span>
+              <span className="text-right font-mono">R$ {formatDecimalPlaces(taxaCanal)}</span>
+            </>
+          )}
         </div>
+
+        <Separator />
+
+        <div className="flex items-center justify-between text-[11px]">
+          <span className="font-medium text-slate-700">Custo operacional</span>
+          <span className="font-mono font-semibold text-slate-900">R$ {formatDecimalPlaces(custoComDna + taxaCanal)}</span>
+        </div>
+
       </Form>
     </td>
   );
@@ -424,6 +439,7 @@ export default function AdminGerenciamentoCardapioSellPriceManagementAllChannels
   const loaderData = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const [search, setSearch] = useState("");
+  const [variationFilter, setVariationFilter] = useState<string | null>(null);
 
   const hasLoaderError = Boolean(loaderData?.status && loaderData.status >= 400);
   const payload = (loaderData?.payload || {}) as {
@@ -450,6 +466,7 @@ export default function AdminGerenciamentoCardapioSellPriceManagementAllChannels
         variationCode: string | null;
         activeSheetId: string | null;
         activeSheetName: string | null;
+        activeSheetUpdatedAt: string | null;
         channelData: ChannelData[];
       }>;
     }>;
@@ -466,16 +483,34 @@ export default function AdminGerenciamentoCardapioSellPriceManagementAllChannels
 
   const channels = payload.channels || [];
 
+  const allVariationNames = useMemo(() => {
+    const names = new Set<string>();
+    for (const row of payload.rows || []) {
+      for (const v of row.variations) {
+        if (v.variationName) names.add(v.variationName);
+      }
+    }
+    return [...names].sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }, [payload.rows]);
+
   const filteredRows = useMemo(() => {
     const source = payload.rows || [];
     const q = search.trim().toLowerCase();
-    if (!q) return source;
-    return source.filter(
-      (row) =>
-        row.name.toLowerCase().includes(q) ||
-        row.variations.some((v) => v.variationName.toLowerCase().includes(q))
-    );
-  }, [payload.rows, search]);
+    return source
+      .filter(
+        (row) =>
+          !q ||
+          row.name.toLowerCase().includes(q) ||
+          row.variations.some((v) => v.variationName.toLowerCase().includes(q))
+      )
+      .map((row) => ({
+        ...row,
+        variations: variationFilter
+          ? row.variations.filter((v) => v.variationName === variationFilter)
+          : row.variations,
+      }))
+      .filter((row) => row.variations.length > 0);
+  }, [payload.rows, search, variationFilter]);
 
   if (hasLoaderError) {
     return (
@@ -504,7 +539,23 @@ export default function AdminGerenciamentoCardapioSellPriceManagementAllChannels
             Todos os canais lado a lado. Salve preços individualmente por célula.
           </p>
         </div>
-        <div className="w-full max-w-xs">
+        <div className="flex gap-2 w-full max-w-sm">
+          <Select
+            value={variationFilter ?? ""}
+            onValueChange={(v) => setVariationFilter(v || null)}
+          >
+            <SelectTrigger className="w-36 bg-white">
+              <SelectValue placeholder="Variação" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">Todas</SelectItem>
+              {allVariationNames.map((name) => (
+                <SelectItem key={name} value={name}>
+                  {name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -595,9 +646,25 @@ export default function AdminGerenciamentoCardapioSellPriceManagementAllChannels
                         {variation.isReference
                           ? `${variation.variationName} · ref`
                           : variation.variationName}
-                        {variation.activeSheetName ? (
+                        {variation.activeSheetId ? (
                           <div className="text-[10px] text-slate-400 truncate max-w-[120px]">
-                            {variation.activeSheetName}
+                            <Link
+                              to={`/admin/item-cost-sheets/${variation.activeSheetId}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="hover:underline hover:text-slate-600"
+                            >
+                              {variation.activeSheetName}
+                            </Link>
+                            {variation.activeSheetUpdatedAt && (() => {
+                              const days = Math.floor((Date.now() - new Date(variation.activeSheetUpdatedAt).getTime()) / 86_400_000);
+                              const date = new Date(variation.activeSheetUpdatedAt).toLocaleDateString("pt-BR");
+                              return (
+                                <div className="text-[9px] text-slate-400">
+                                  {date} · {days === 0 ? "hoje" : `${days}d atrás`}
+                                </div>
+                              );
+                            })()}
                           </div>
                         ) : (
                           <div className="text-[10px] text-amber-500">Sem ficha</div>
