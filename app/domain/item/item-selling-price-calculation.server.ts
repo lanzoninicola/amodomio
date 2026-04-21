@@ -28,9 +28,9 @@ export function computeNativeItemSellingPriceBreakdown(params: {
 }): ComputedSellingPriceBreakdown {
   const custoFichaTecnica = Number(params.itemCostAmount || 0);
   const wasteFactor = 1 + Number(params.sellingPriceConfig.wastePercentage || 0) / 100;
-  const doughCostAmount = Number(params.size?.pizzaDoughCostAmount || 0);
+  const doughCostAmount = 0;
   const packagingCostAmount = 0;
-  const itemTotalCost = custoFichaTecnica * wasteFactor + doughCostAmount + packagingCostAmount;
+  const itemTotalCost = custoFichaTecnica * wasteFactor + packagingCostAmount;
   const targetProfitPerc = Number(params.channel?.targetMarginPerc || 0);
 
   let price = menuItemSellingPriceUtilityEntity.calculateSellingPrice(

@@ -38,8 +38,7 @@ export function NativeItemSellingPriceCard(props: {
   const breakdown = props.computedSellingPriceBreakdown;
   const custoFT = Number(breakdown.custoFichaTecnica || 0);
   const custoDesperdicio = Number(breakdown.wasteCost || 0);
-  const custoMassa = Number(breakdown.doughCostAmount || 0);
-  const custoTotal = custoFT + custoDesperdicio + custoMassa;
+  const custoTotal = custoFT + custoDesperdicio;
   const dnaPerc = Number(breakdown.dnaPercentage || 0);
   const dnaValor = (actualPrice * dnaPerc) / 100;
   const custoComDna = custoTotal + dnaValor;
@@ -57,7 +56,7 @@ export function NativeItemSellingPriceCard(props: {
   const hasActiveSheet = custoFT > 0 || Boolean(props.activeSheetName);
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-3">
+    <div className={`rounded-lg border p-3 ${lucroPerc < 0 ? "border-red-400 bg-red-50" : "border-slate-200 bg-white"}`}>
       <div className="mb-2 flex items-center justify-between gap-2">
         <div>
           <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -109,9 +108,15 @@ export function NativeItemSellingPriceCard(props: {
           Publicado no canal
         </label>
 
-        <div className={`text-[11px] ${lucroPerc < 0 ? "text-red-400" : lucroPerc < targetMarginPerc ? "text-orange-400" : "text-slate-500"}`}>
-          Lucro atual: <span className="font-mono">{formatDecimalPlaces(lucroPerc)}% | R$ {formatDecimalPlaces(lucroValor)}</span>
-        </div>
+        {lucroPerc < 0 ? (
+          <div className="rounded-md bg-red-600 px-2 py-1.5 text-[11px] font-semibold text-white">
+            Lucro negativo: <span className="font-mono">{formatDecimalPlaces(lucroPerc)}% | R$ {formatDecimalPlaces(lucroValor)}</span>
+          </div>
+        ) : (
+          <div className={`text-[11px] ${lucroPerc < targetMarginPerc ? "text-orange-400" : "text-slate-500"}`}>
+            Lucro atual: <span className="font-mono">{formatDecimalPlaces(lucroPerc)}% | R$ {formatDecimalPlaces(lucroValor)}</span>
+          </div>
+        )}
 
         <Separator />
 
@@ -170,7 +175,6 @@ export function NativeItemSellingPriceCard(props: {
                 </span>
                 <span className="font-mono text-right">{formatDecimalPlaces(custoFT)}</span>
                 {detailRow("Desperdício", custoDesperdicio)}
-                {detailRow("Custo Massa", custoMassa)}
               </div>
 
               <Separator className="my-2" />

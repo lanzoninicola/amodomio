@@ -185,6 +185,12 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
               disabled: false,
             },
             {
+              title: "Faixas de lucro",
+              href: "/admin/vendas/faixas-lucro",
+              items: [],
+              disabled: false,
+            },
+            {
               title: "DNA",
               href: "/admin/vendas/dna",
               items: [],

@@ -1,3 +1,4 @@
+// deprecated
 import { ActionFunctionArgs, LoaderFunctionArgs, redirect } from "@remix-run/node";
 
 function buildRedirectPath(channelKey?: string | null) {
