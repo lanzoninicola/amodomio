@@ -109,7 +109,7 @@ export default function AdminGerenciamentoCardapioSellPriceManagement() {
       </div>
 
 
-      <div className="grid grid-cols-3 gap-x-2 items-center">
+<div className="grid grid-cols-3 gap-x-2 items-center">
 
         <Suspense fallback={<Loading />}>
           <Await resolve={sellingChannel}>

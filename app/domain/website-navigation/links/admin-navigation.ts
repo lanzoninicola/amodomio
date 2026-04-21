@@ -185,6 +185,12 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
               disabled: false,
             },
             {
+              title: "Comparação canais",
+              href: "/admin/vendas/channels-sell-price",
+              items: [],
+              disabled: false,
+            },
+            {
               title: "Revisão de preços",
               href: "/admin/vendas/revisao-precos",
               items: [],
