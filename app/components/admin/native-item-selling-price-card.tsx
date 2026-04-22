@@ -24,7 +24,6 @@ export function NativeItemSellingPriceCard(props: {
   currentRow?: {
     priceAmount?: number | null;
     previousPriceAmount?: number | null;
-    profitActualPerc?: number | null;
     published?: boolean | null;
     updatedBy?: string | null;
   } | null;

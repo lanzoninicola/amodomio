@@ -117,7 +117,10 @@ export const action: ActionFunction = async ({ request }) => {
         const descriptionRaw = formData.get("description");
         const description = descriptionRaw == null ? null : String(descriptionRaw).trim() || null;
 
-        const settings = await prismaClient.dnaEmpresaSettings.findFirst();
+        const settings = await prismaClient.dnaEmpresaSettings.findFirst({
+            where: { isSnapshot: false },
+            orderBy: { createdAt: "desc" },
+        });
         if (!settings) {
             return badRequest<ActionData>({ errors: { dnaPerc: "Configuração DNA não encontrada para snapshot" } });
         }

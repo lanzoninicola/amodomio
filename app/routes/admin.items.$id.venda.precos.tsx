@@ -149,7 +149,6 @@ export async function loader({ params }: LoaderFunctionArgs) {
                 priceAmount: Number(currentRow.priceAmount || 0),
                 previousPriceAmount: Number(currentRow.previousPriceAmount || 0),
                 priceExpectedAmount: Number(currentRow.priceExpectedAmount || 0),
-                profitActualPerc: Number(currentRow.profitActualPerc || 0),
                 profitExpectedPerc: Number(currentRow.profitExpectedPerc || 0),
                 updatedBy: currentRow.updatedBy || null,
               }
@@ -259,7 +258,6 @@ export type AdminItemVendaPrecosOutletContext = AdminItemVendaOutletContext & {
     priceAmount: number;
     previousPriceAmount?: number;
     priceExpectedAmount?: number;
-    profitActualPerc?: number;
     profitExpectedPerc?: number;
     updatedBy?: string | null;
   }>;
@@ -277,7 +275,6 @@ export type AdminItemVendaPrecosOutletContext = AdminItemVendaOutletContext & {
       priceAmount: number;
       previousPriceAmount: number;
       priceExpectedAmount: number;
-      profitActualPerc: number;
       profitExpectedPerc: number;
       updatedBy: string | null;
     } | null;

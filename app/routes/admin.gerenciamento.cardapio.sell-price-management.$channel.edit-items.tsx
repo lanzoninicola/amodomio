@@ -130,7 +130,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
             priceAmount: true,
             previousPriceAmount: true,
             priceExpectedAmount: true,
-            profitActualPerc: true,
             profitExpectedPerc: true,
             updatedBy: true,
           },
@@ -205,7 +204,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
                 priceAmount: Number(currentRow.priceAmount || 0),
                 previousPriceAmount: Number(currentRow.previousPriceAmount || 0),
                 priceExpectedAmount: Number(currentRow.priceExpectedAmount || 0),
-                profitActualPerc: Number(currentRow.profitActualPerc || 0),
                 profitExpectedPerc: Number(currentRow.profitExpectedPerc || 0),
                 updatedBy: currentRow.updatedBy || null,
               }
@@ -320,7 +318,6 @@ export default function AdminGerenciamentoCardapioSellPriceManagementItemsEdit()
           priceAmount: number;
           previousPriceAmount: number;
           priceExpectedAmount: number;
-          profitActualPerc: number;
           profitExpectedPerc: number;
           updatedBy: string | null;
         } | null;

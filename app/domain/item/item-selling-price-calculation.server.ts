@@ -169,18 +169,6 @@ export async function buildNativeSellingPriceUpsertPayload(params: {
     size,
   });
 
-  const profitActualPerc =
-    menuItemSellingPriceUtilityEntity.calculateProfitPercFromSellingPrice(
-      Number(params.priceAmount || 0),
-      {
-        fichaTecnicaCostAmount: computedSellingPriceBreakdown.custoFichaTecnica,
-        packagingCostAmount: 0,
-        doughCostAmount: computedSellingPriceBreakdown.doughCostAmount,
-        wasteCostAmount: computedSellingPriceBreakdown.wasteCost,
-      },
-      computedSellingPriceBreakdown.dnaPercentage ?? 0
-    );
-
   return {
     activeSheet,
     sizeKey,
@@ -193,7 +181,6 @@ export async function buildNativeSellingPriceUpsertPayload(params: {
       updatedBy: params.updatedBy || null,
       priceExpectedAmount:
         computedSellingPriceBreakdown.minimumPrice.priceAmount.withProfit,
-      profitActualPerc,
       profitExpectedPerc:
         computedSellingPriceBreakdown.channel.targetMarginPerc,
       discountPercentage: 0,

@@ -88,7 +88,10 @@ class MenuItemSellingPriceUtilityEntity {
   }
 
   async getSellingPriceConfig(): Promise<SellingPriceConfig> {
-    const dnaSettings = await this.client.dnaEmpresaSettings.findFirst();
+    const dnaSettings = await this.client.dnaEmpresaSettings.findFirst({
+      where: { isSnapshot: false },
+      orderBy: { createdAt: "desc" },
+    });
 
     return {
       dnaPercentage: dnaSettings?.dnaPerc ?? 0,

@@ -7,7 +7,6 @@ type UpsertItemSellingPriceInput = {
   itemSellingChannelId: string;
   priceAmount: number;
   priceExpectedAmount?: number;
-  profitActualPerc?: number;
   profitExpectedPerc?: number;
   discountPercentage?: number;
   updatedBy?: string | null;
@@ -67,7 +66,6 @@ class ItemSellingPriceVariationEntity {
           priceAmount,
           previousPriceAmount: Number(existing.priceAmount || 0),
           priceExpectedAmount: Number(input.priceExpectedAmount || 0),
-          profitActualPerc: Number(input.profitActualPerc || 0),
           profitExpectedPerc: Number(input.profitExpectedPerc || 0),
           discountPercentage: Number(input.discountPercentage || 0),
           updatedBy: input.updatedBy || null,
@@ -83,7 +81,6 @@ class ItemSellingPriceVariationEntity {
         priceAmount,
         previousPriceAmount: 0,
         priceExpectedAmount: Number(input.priceExpectedAmount || 0),
-        profitActualPerc: Number(input.profitActualPerc || 0),
         profitExpectedPerc: Number(input.profitExpectedPerc || 0),
         discountPercentage: Number(input.discountPercentage || 0),
         updatedBy: input.updatedBy || null,

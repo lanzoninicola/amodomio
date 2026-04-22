@@ -796,7 +796,6 @@ model ItemSellingPriceVariation {
   itemVariationId          String                  @map("item_variation_id")
   itemSellingChannelId     String                  @map("item_selling_channel_id")
   priceAmount              Float                   @default(0) @map("price_amount")
-  profitActualPerc         Float                   @default(0) @map("profit_actual_perc")
   priceExpectedAmount      Float                   @default(0) @map("price_expected_amount")
   profitExpectedPerc       Float                   @default(0) @map("profit_expected_perc")
   discountPercentage       Float                   @default(0) @map("discount_percentage")

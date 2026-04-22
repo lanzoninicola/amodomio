@@ -140,7 +140,7 @@ function buildCompatPriceRows(item: NativeCardapioRow) {
         menuItemSizeId: row.ItemVariation?.id || row.id,
         itemSellingChannelId: row.ItemSellingChannel?.id || null,
         priceAmount: Number(row.priceAmount || 0),
-        profitActualPerc: Number(row.profitActualPerc || 0),
+        profitActualPerc: 0,
         priceExpectedAmount: Number(row.priceExpectedAmount || 0),
         profitExpectedPerc: Number(row.profitExpectedPerc || 0),
         discountPercentage: Number(row.discountPercentage || 0),
@@ -445,7 +445,6 @@ async function listNativeCardapioItems(
         select: {
           id: true,
           priceAmount: true,
-          profitActualPerc: true,
           priceExpectedAmount: true,
           profitExpectedPerc: true,
           discountPercentage: true,
