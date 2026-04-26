@@ -86,6 +86,14 @@ type ItemRow = {
   channels: Record<string, { perc: number | null; band: MarginBand }>;
 };
 
+type ProfitStats = {
+  averageProfitPerc: number | null;
+  riskCount: number;
+  measuredItemCount: number;
+  topAboveAverage: Array<{ itemId: string; name: string; profitPerc: number }>;
+  topBelowAverage: Array<{ itemId: string; name: string; profitPerc: number }>;
+};
+
 const ALL_VARIATIONS_VALUE = "__all__";
 const DEFAULT_MEDIUM_VARIATION_CODES = new Set([
   "pizza-medium",
@@ -123,6 +131,46 @@ function normalizeSearchText(value: string | null | undefined) {
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
+}
+
+function buildProfitStats(items: ItemRow[]): ProfitStats {
+  const itemMargins = items
+    .map((item) => {
+      const margins = Object.values(item.channels)
+        .map((channel) => channel.perc)
+        .filter((perc): perc is number => perc !== null);
+      if (margins.length === 0) return null;
+      return {
+        itemId: item.itemId,
+        name: item.name,
+        profitPerc: Math.min(...margins),
+      };
+    })
+    .filter((item): item is { itemId: string; name: string; profitPerc: number } => item !== null);
+
+  const averageProfitPerc = itemMargins.length
+    ? itemMargins.reduce((sum, item) => sum + item.profitPerc, 0) / itemMargins.length
+    : null;
+
+  return {
+    averageProfitPerc,
+    riskCount: itemMargins.filter((item) => item.profitPerc < 5).length,
+    measuredItemCount: itemMargins.length,
+    topAboveAverage:
+      averageProfitPerc === null
+        ? []
+        : itemMargins
+            .filter((item) => item.profitPerc > averageProfitPerc)
+            .sort((a, b) => b.profitPerc - a.profitPerc)
+            .slice(0, 5),
+    topBelowAverage:
+      averageProfitPerc === null
+        ? []
+        : itemMargins
+            .filter((item) => item.profitPerc < averageProfitPerc)
+            .sort((a, b) => a.profitPerc - b.profitPerc)
+            .slice(0, 5),
+  };
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -299,11 +347,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
         ),
       }))
       .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+    const stats = buildProfitStats(items);
 
     return ok({
       channels,
       variations,
       items,
+      stats,
       filters: {
         variation: variationCode || ALL_VARIATIONS_VALUE,
         item: itemQuery,
@@ -320,12 +370,22 @@ export default function AdminVendasFaixasLucroPage() {
     channels: Channel[];
     variations: Array<{ id: string; code: string; name: string }>;
     items: ItemRow[];
+    stats: ProfitStats;
     filters: { variation: string; item: string };
   };
   const navigation = useNavigation();
-  const { channels = [], variations = [], items = [], filters } = payload;
+  const { channels = [], variations = [], items = [], filters, stats } = payload;
   const isLoading = navigation.state !== "idle";
   const [variation, setVariation] = useState(filters?.variation || ALL_VARIATIONS_VALUE);
+  const profitStats = stats || {
+    averageProfitPerc: null,
+    riskCount: 0,
+    measuredItemCount: 0,
+    topAboveAverage: [],
+    topBelowAverage: [],
+  };
+  const formatProfitPerc = (value: number | null) =>
+    value === null ? "–" : `${Number(value).toFixed(1)}%`;
 
   return (
     <div className="flex w-full flex-col gap-6">
@@ -393,6 +453,46 @@ export default function AdminVendasFaixasLucroPage() {
           {isLoading ? "..." : "Filtrar"}
         </button>
       </Form>
+
+      <section className="grid gap-3 lg:grid-cols-[minmax(180px,0.8fr)_minmax(180px,0.8fr)_minmax(260px,1fr)_minmax(260px,1fr)]">
+        <div className="rounded-lg border border-slate-200 bg-white p-4">
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Lucro médio
+          </div>
+          <div className="mt-2 font-mono text-3xl font-semibold tracking-normal text-slate-950">
+            {formatProfitPerc(profitStats.averageProfitPerc)}
+          </div>
+          <div className="mt-1 text-xs text-slate-500">
+            {profitStats.measuredItemCount} sabores medidos
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-slate-200 bg-white p-4">
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Sabores em risco
+          </div>
+          <div className="mt-2 font-mono text-3xl font-semibold tracking-normal text-red-700">
+            {profitStats.riskCount}
+          </div>
+          <div className="mt-1 text-xs text-slate-500">
+            Pior margem abaixo de 5%
+          </div>
+        </div>
+
+        <ProfitRankingCard
+          title="Acima da média"
+          rows={profitStats.topAboveAverage}
+          tone="positive"
+          formatProfitPerc={formatProfitPerc}
+        />
+
+        <ProfitRankingCard
+          title="Abaixo da média"
+          rows={profitStats.topBelowAverage}
+          tone="negative"
+          formatProfitPerc={formatProfitPerc}
+        />
+      </section>
 
       {/* Matrix */}
       <div className="overflow-x-auto ">
@@ -474,6 +574,53 @@ export default function AdminVendasFaixasLucroPage() {
       <p className="text-xs text-slate-400">
         {items.length} sabores · {channels.length} canais
       </p>
+    </div>
+  );
+}
+
+function ProfitRankingCard({
+  title,
+  rows,
+  tone,
+  formatProfitPerc,
+}: {
+  title: string;
+  rows: Array<{ itemId: string; name: string; profitPerc: number }>;
+  tone: "positive" | "negative";
+  formatProfitPerc: (value: number | null) => string;
+}) {
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-4">
+      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+        {title}
+      </div>
+      <div className="mt-3 flex flex-col gap-2">
+        {rows.length === 0 ? (
+          <div className="py-5 text-sm text-slate-400">Sem dados</div>
+        ) : (
+          rows.map((row, index) => (
+            <div
+              key={row.itemId}
+              className="grid grid-cols-[1.5rem_minmax(0,1fr)_4rem] items-center gap-2 text-sm"
+            >
+              <span className="font-mono text-xs text-slate-400">
+                {index + 1}
+              </span>
+              <span className="truncate font-medium text-slate-700">
+                {row.name}
+              </span>
+              <span
+                className={cn(
+                  "text-right font-mono font-semibold tracking-normal",
+                  tone === "positive" ? "text-emerald-700" : "text-red-700"
+                )}
+              >
+                {formatProfitPerc(row.profitPerc)}
+              </span>
+            </div>
+          ))
+        )}
+      </div>
     </div>
   );
 }

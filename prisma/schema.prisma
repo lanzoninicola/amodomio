@@ -373,10 +373,6 @@ model RecipeVariationIngredient {
   unit                String   @db.VarChar
   quantity            Float    @default(0)
   lossPct             Float?   @map("loss_pct")
-  lastUnitCostAmount  Float    @default(0) @map("last_unit_cost_amount")
-  avgUnitCostAmount   Float    @default(0) @map("avg_unit_cost_amount")
-  lastTotalCostAmount Float    @default(0) @map("last_total_cost_amount")
-  avgTotalCostAmount  Float    @default(0) @map("avg_total_cost_amount")
   createdAt           DateTime @default(now()) @map("created_at")
   updatedAt           DateTime @default(now()) @updatedAt @map("updated_at")
 

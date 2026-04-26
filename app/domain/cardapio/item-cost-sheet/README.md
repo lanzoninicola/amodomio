@@ -8,6 +8,7 @@ Evitar duplicação de dados entre cadastro técnico de produção e aplicação
 
 - `Recipe`: base técnica reutilizável de preparo interno.
   - representa composição, UM, quantidade, perda e organização de produção
+  - não persiste custo
   - não é a UI operacional de custo
 - `ItemCostSheet`: aplicação de custo por item+variação.
   - responde quanto de `ficha de custo`/`recipe` entra no item final
@@ -25,6 +26,7 @@ Evitar duplicação de dados entre cadastro técnico de produção e aplicação
 8. Mudança de custos em fichas referenciadas deve refletir no cálculo da ficha consumidora (recalcular).
 9. Custo usado na precificação de venda deve vir da `ItemCostSheet` ativa (fonte operacional).
 10. `Recipe` não é fonte final de custo de venda; é apoio técnico de produção/processo.
+11. Quando a ficha possui linha do tipo `recipe`, o custo dessa linha deve ser calculado em tempo de recálculo da ficha a partir da composição atual da receita e do custo atual dos insumos.
 
 ## Regra de ouro
 
@@ -45,6 +47,7 @@ Evitar duplicação de dados entre cadastro técnico de produção e aplicação
   - `Recipe`: conhecimento técnico de produção
   - `ItemCostSheet`: decisão econômica/comercial de custo
 - O erro clássico é deixar as duas entidades armazenarem custo final em paralelo.
+- `Recipe` pode participar do calculo da ficha sem armazenar custo nela mesma.
 - A arquitetura deve forçar referência (`refId`) para reduzir divergência e retrabalho.
 - Se houver conflito entre valor digitado e referência, prevalece a referência para consistência sistêmica.
 
@@ -72,7 +75,7 @@ Esta seção existe para orientar agentes de IA que precisem ler, editar, valida
 - `ItemCostSheet` responde: "quanto custa operacionalmente/comercialmente?"
 - O usuário pode montar e revisar a produção em `Recipe` sem enxergar totais monetários.
 - Quando a receita precisa participar da precificação, ela entra na ficha como uma referência do tipo `recipe`.
-- O custo dessa linha referenciada deve ser derivado da composição atual da receita, nunca de valor digitado manualmente na UI da receita.
+- O custo dessa linha referenciada deve ser derivado da composição atual da receita e do custo atual dos insumos, nunca de valor persistido ou digitado manualmente na UI da receita.
 
 ### Modelo mental
 

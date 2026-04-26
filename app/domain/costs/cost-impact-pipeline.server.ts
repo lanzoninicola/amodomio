@@ -1,7 +1,6 @@
 import { listMenuItemMarginImpactRows } from "~/domain/costs/menu-item-margin-impact.server";
 import { syncMenuItemCostsForItems } from "~/domain/costs/menu-item-cost-sync.server";
 import { recalcItemCostSheetTotals } from "~/domain/costs/item-cost-sheet-recalc.server";
-import { recalcRecipeCosts } from "~/domain/costs/recipe-cost-recalc.server";
 import { buildCostImpactGraphForItem } from "~/domain/costs/cost-impact-graph.server";
 
 export type CostImpactPipelineResult = {
@@ -22,10 +21,6 @@ export async function runCostImpactPipelineForItemChange(params: {
   updatedBy?: string | null;
 }): Promise<CostImpactPipelineResult> {
   const graph = await buildCostImpactGraphForItem(params.db, params.itemId);
-
-  for (const recipeId of graph.affectedRecipeIds) {
-    await recalcRecipeCosts(params.db, recipeId);
-  }
 
   for (const itemCostSheetId of graph.affectedItemCostSheetIds) {
     await recalcItemCostSheetTotals(params.db, itemCostSheetId);

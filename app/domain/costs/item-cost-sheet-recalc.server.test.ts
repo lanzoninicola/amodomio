@@ -2,8 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   listRecipeCompositionLines: vi.fn(),
-  resolveRecipeLineCosts: vi.fn(),
-  buildRecipeLineCostSnapshot: vi.fn(),
+  resolveItemCostSnapshot: vi.fn(),
   registerItemCostEvent: vi.fn(),
 }));
 
@@ -11,9 +10,8 @@ vi.mock("~/domain/recipe/recipe-composition.server", () => ({
   listRecipeCompositionLines: mocks.listRecipeCompositionLines,
 }));
 
-vi.mock("~/domain/costs/recipe-cost-recalc.server", () => ({
-  resolveRecipeLineCosts: mocks.resolveRecipeLineCosts,
-  buildRecipeLineCostSnapshot: mocks.buildRecipeLineCostSnapshot,
+vi.mock("~/domain/costs/item-cost-snapshot.server", () => ({
+  resolveItemCostSnapshot: mocks.resolveItemCostSnapshot,
 }));
 
 vi.mock("~/domain/costs/item-cost-event.server", () => ({
@@ -88,10 +86,9 @@ describe("recalcItemCostSheetTotals", () => {
     vi.resetAllMocks();
 
     mocks.listRecipeCompositionLines.mockResolvedValue([]);
-    mocks.resolveRecipeLineCosts.mockResolvedValue({});
-    mocks.buildRecipeLineCostSnapshot.mockReturnValue({
-      lastTotalCostAmount: 0,
-      avgTotalCostAmount: 0,
+    mocks.resolveItemCostSnapshot.mockResolvedValue({
+      lastUnitCostAmount: 0,
+      avgUnitCostAmount: 0,
     });
     mocks.registerItemCostEvent.mockResolvedValue(undefined);
 

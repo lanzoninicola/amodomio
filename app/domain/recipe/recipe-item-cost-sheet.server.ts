@@ -1,17 +1,3 @@
-import { recalcItemCostSheetTotals } from "~/domain/costs/item-cost-sheet-recalc.server";
-import { itemVariationPrismaEntity } from "~/domain/item/item-variation.prisma.entity.server";
-import createUUID from "~/utils/uuid";
-
-function calcItemCostSheetTotalCostAmount(
-  unitCostAmount: number,
-  quantity: number,
-  wastePerc: number
-) {
-  const baseAmount = Number(unitCostAmount || 0) * Number(quantity || 0);
-  const wasteFactor = 1 + Number(wastePerc || 0) / 100;
-  return Number(Number(baseAmount * wasteFactor).toFixed(6));
-}
-
 export async function ensureSingleItemCostSheetGroup(db: any, itemId: string) {
   const sheets = await db.itemCostSheet.findMany({
     where: { itemId },
@@ -175,4 +161,17 @@ export async function ensureItemCostSheetForRecipe(params: {
   await recalcItemCostSheetTotals(db, rootSheetId);
 
   return { rootSheetId };
+}
+import { recalcItemCostSheetTotals } from "~/domain/costs/item-cost-sheet-recalc.server";
+import { itemVariationPrismaEntity } from "~/domain/item/item-variation.prisma.entity.server";
+import createUUID from "~/utils/uuid";
+
+function calcItemCostSheetTotalCostAmount(
+  unitCostAmount: number,
+  quantity: number,
+  wastePerc: number
+) {
+  const baseAmount = Number(unitCostAmount || 0) * Number(quantity || 0);
+  const wasteFactor = 1 + Number(wastePerc || 0) / 100;
+  return Number(Number(baseAmount * wasteFactor).toFixed(6));
 }

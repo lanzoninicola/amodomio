@@ -89,31 +89,6 @@ async function getUnitOptions(db: any): Promise<string[]> {
     }
 }
 
-async function resolveLineCostSnapshot(db: any, itemId: string, variationId?: string | null) {
-    const baseWhere: Record<string, any> = { itemId, deletedAt: null }
-    if (variationId) baseWhere.variationId = variationId
-
-    let itemVariation = await db.itemVariation.findFirst({
-        where: baseWhere,
-        include: { ItemCostVariation: true },
-        orderBy: [{ createdAt: "asc" }],
-    })
-
-    if (!itemVariation && variationId) {
-        itemVariation = await db.itemVariation.findFirst({
-            where: { itemId, deletedAt: null },
-            include: { ItemCostVariation: true },
-            orderBy: [{ createdAt: "asc" }],
-        })
-    }
-
-    const lastUnitCostAmount = Number(itemVariation?.ItemCostVariation?.costAmount ?? 0)
-    return {
-        lastUnitCostAmount,
-        avgUnitCostAmount: lastUnitCostAmount,
-    }
-}
-
 // Label exibida nos comboboxes de item: "Nome (Classificação) · UM"
 function itemLabel(item: WorksheetItem): string {
     const parts = [item.name]
@@ -263,19 +238,12 @@ export async function action({ request }: ActionFunctionArgs) {
         const line = lines.find((current) => current.id === lineId)
         if (!line) return badRequest("Linha não encontrada")
 
-        const cost = await resolveLineCostSnapshot(db, line.itemId, line.ItemVariation?.variationId || null)
         const [err] = await tryit(updateRecipeCompositionLine({
             db,
             lineId,
             recipeId,
             unit,
             quantity,
-            snapshot: {
-                lastUnitCostAmount: Number(cost.lastUnitCostAmount || 0),
-                avgUnitCostAmount: Number(cost.avgUnitCostAmount || 0),
-                lastTotalCostAmount: Number(((cost.lastUnitCostAmount || 0) * quantity).toFixed(6)),
-                avgTotalCostAmount: Number(((cost.avgUnitCostAmount || 0) * quantity).toFixed(6)),
-            },
         }))
         if (err) return badRequest("Erro ao atualizar linha")
         return ok({ message: "Linha atualizada" })
@@ -302,19 +270,12 @@ export async function action({ request }: ActionFunctionArgs) {
         if (!unit) return badRequest("Informe a unidade")
         if (!Number.isFinite(quantity) || quantity <= 0) return badRequest("Informe uma quantidade válida")
 
-        const cost = await resolveLineCostSnapshot(db, itemId, null)
         const [err] = await tryit(createRecipeCompositionLine({
             db,
             recipeId,
             itemId,
             unit,
             quantity,
-            snapshot: {
-                lastUnitCostAmount: Number(cost.lastUnitCostAmount || 0),
-                avgUnitCostAmount: Number(cost.avgUnitCostAmount || 0),
-                lastTotalCostAmount: Number(((cost.lastUnitCostAmount || 0) * quantity).toFixed(6)),
-                avgTotalCostAmount: Number(((cost.avgUnitCostAmount || 0) * quantity).toFixed(6)),
-            },
         }))
         if (err) return badRequest("Erro ao adicionar ingrediente: " + err.message)
         return ok({ message: "Ingrediente adicionado" })
@@ -337,8 +298,6 @@ export async function action({ request }: ActionFunctionArgs) {
         const grossQty = normalizedLoss > 0
             ? Number((qty / (1 - normalizedLoss / 100)).toFixed(6))
             : qty
-        const cost = await resolveLineCostSnapshot(db, itemId, line.ItemVariation?.variationId || null)
-
         const [err] = await tryit(updateRecipeCompositionLineItem({
             db,
             lineId,
@@ -346,12 +305,6 @@ export async function action({ request }: ActionFunctionArgs) {
             itemId,
             quantity: qty,
             unit: line.unit,
-            snapshot: {
-                lastUnitCostAmount: Number(cost.lastUnitCostAmount || 0),
-                avgUnitCostAmount: Number(cost.avgUnitCostAmount || 0),
-                lastTotalCostAmount: Number(((cost.lastUnitCostAmount || 0) * grossQty).toFixed(6)),
-                avgTotalCostAmount: Number(((cost.avgUnitCostAmount || 0) * grossQty).toFixed(6)),
-            },
         }))
         if (err) return badRequest("Erro ao atualizar ingrediente")
         return ok({ message: "Ingrediente atualizado" })
@@ -373,19 +326,6 @@ export async function action({ request }: ActionFunctionArgs) {
             recipeId,
             lineId,
             variationIds,
-            resolveCostByVariationId: async (variationId, itemId, quantity, lossPct) => {
-                const normalizedLoss = Math.min(99.9999, Math.max(0, Number(lossPct || 0)))
-                const grossQty = normalizedLoss > 0
-                    ? Number((quantity / (1 - normalizedLoss / 100)).toFixed(6))
-                    : quantity
-                const cost = await resolveLineCostSnapshot(db, itemId, variationId)
-                return {
-                    lastUnitCostAmount: Number(cost.lastUnitCostAmount || 0),
-                    avgUnitCostAmount: Number(cost.avgUnitCostAmount || 0),
-                    lastTotalCostAmount: Number(((cost.lastUnitCostAmount || 0) * grossQty).toFixed(6)),
-                    avgTotalCostAmount: Number(((cost.avgUnitCostAmount || 0) * grossQty).toFixed(6)),
-                }
-            },
         }))
         if (err) return badRequest("Erro ao aplicar variações")
         return ok({ message: "Variações atualizadas" })

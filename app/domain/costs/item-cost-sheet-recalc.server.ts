@@ -1,6 +1,6 @@
-import { listRecipeCompositionLines } from "~/domain/recipe/recipe-composition.server";
+import { resolveItemCostSnapshot } from "~/domain/costs/item-cost-snapshot.server";
 import { registerItemCostEvent } from "~/domain/costs/item-cost-event.server";
-import { buildRecipeLineCostSnapshot, resolveRecipeLineCosts } from "~/domain/costs/recipe-cost-recalc.server";
+import { listRecipeCompositionLines } from "~/domain/recipe/recipe-composition.server";
 
 export function roundItemCostSheetMoney(value: number) {
   return Number(Number(value || 0).toFixed(6));
@@ -37,7 +37,10 @@ export async function getRecipeCompositionCostSnapshot(
     });
     const variationId = ownerVariation?.variationId;
     lines = variationId
-      ? allLines.filter((line) => String(line.ItemVariation?.variationId || "") === String(variationId))
+      ? allLines.filter(
+          (line) =>
+            String(line.ItemVariation?.variationId || "") === String(variationId)
+        )
       : allLines;
   }
 
@@ -47,10 +50,25 @@ export async function getRecipeCompositionCostSnapshot(
   for (const line of lines) {
     const variationId = line.ItemVariation?.variationId || null;
     const effectiveLossPct = Number(line.lossPct ?? line.defaultLossPct ?? 0);
-    const costInfo = await resolveRecipeLineCosts(db, line.itemId, variationId);
-    const snap = buildRecipeLineCostSnapshot(costInfo, Number(line.quantity || 0), effectiveLossPct);
-    lastTotal += snap.lastTotalCostAmount;
-    avgTotal += snap.avgTotalCostAmount;
+    const costInfo = await resolveItemCostSnapshot({
+      db,
+      itemId: line.itemId,
+      variationId,
+    });
+    const safeLossPct = Math.min(99.9999, Math.max(0, effectiveLossPct));
+    const grossQuantity =
+      safeLossPct > 0
+        ? Number(
+            (Number(line.quantity || 0) / (1 - safeLossPct / 100)).toFixed(6)
+          )
+        : Number(line.quantity || 0);
+
+    lastTotal += Number(
+      ((Number(costInfo.lastUnitCostAmount || 0) || 0) * grossQuantity).toFixed(6)
+    );
+    avgTotal += Number(
+      ((Number(costInfo.avgUnitCostAmount || 0) || 0) * grossQuantity).toFixed(6)
+    );
   }
 
   return {

@@ -1,17 +1,13 @@
 import {
-  buildRecipeLineCostSnapshot,
-  resolveRecipeLineCosts,
-} from "~/domain/costs/recipe-cost-recalc.server";
-import {
-  ensureItemCostSheetForRecipe as ensureItemCostSheetForRecipeLink,
-} from "~/domain/recipe/recipe-item-cost-sheet.server";
-import {
   createRecipeCompositionIngredientSkeleton,
   deleteRecipeCompositionLine,
   listRecipeCompositionLines,
   updateRecipeCompositionIngredientDefaultLoss,
   updateRecipeCompositionLine,
 } from "~/domain/recipe/recipe-composition.server";
+import {
+  ensureItemCostSheetForRecipe as ensureItemCostSheetForRecipeLink,
+} from "~/domain/recipe/recipe-item-cost-sheet.server";
 
 function parseDecimalInput(value: unknown): number | null {
   const normalized = String(value ?? "").trim();
@@ -417,13 +413,6 @@ export async function importItemRecipeFromChatGpt(params: {
         throw new Error(`Linha não encontrada para item ${ingredient.itemId} na variação ${itemVariationId}`);
       }
 
-      const variationId = line.ItemVariation?.variationId || null;
-      const snapshot = buildRecipeLineCostSnapshot(
-        await resolveRecipeLineCosts(db, ingredient.itemId, variationId),
-        quantity,
-        ingredient.defaultLossPct
-      );
-
       await updateRecipeCompositionLine({
         db,
         lineId: line.id,
@@ -431,7 +420,6 @@ export async function importItemRecipeFromChatGpt(params: {
         unit: ingredient.unit,
         quantity,
         lossPct: ingredient.defaultLossPct,
-        snapshot,
       });
     }
   }

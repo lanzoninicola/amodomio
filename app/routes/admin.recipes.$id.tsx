@@ -33,11 +33,6 @@ import {
   RECIPE_CHATGPT_SETTINGS_CONTEXT,
 } from "~/domain/recipe/recipe-chatgpt-settings";
 import {
-  buildRecipeLineCostSnapshot,
-  recalcRecipeCosts,
-  resolveRecipeLineCosts,
-} from "~/domain/costs/recipe-cost-recalc.server";
-import {
   applyRecipeCompositionLineToVariations,
   createRecipeCompositionIngredientSkeleton,
   deleteRecipeCompositionLine,
@@ -572,13 +567,6 @@ export async function action({ request }: ActionFunctionArgs) {
             );
           }
 
-          const variationId = line.ItemVariation?.variationId || null;
-          const snapshot = buildRecipeLineCostSnapshot(
-            await resolveRecipeLineCosts(db, ingredient.itemId, variationId),
-            quantity,
-            ingredient.defaultLossPct
-          );
-
           await updateRecipeCompositionLine({
             db,
             lineId: line.id,
@@ -586,7 +574,6 @@ export async function action({ request }: ActionFunctionArgs) {
             unit: ingredient.unit,
             quantity,
             lossPct: ingredient.defaultLossPct,
-            snapshot,
           });
         }
       }
@@ -712,19 +699,8 @@ export async function action({ request }: ActionFunctionArgs) {
         return badRequest("Linha da receita não encontrada");
       }
 
-      const variationId = line.ItemVariation?.variationId || null;
       const effectiveLossPct =
         requestedLossPct ?? Number(line.lossPct ?? line.defaultLossPct ?? 0);
-      const costInfo = await resolveRecipeLineCosts(
-        db,
-        line.itemId,
-        variationId
-      );
-      const snapshot = buildRecipeLineCostSnapshot(
-        costInfo,
-        quantity,
-        effectiveLossPct
-      );
 
       await updateRecipeCompositionLine({
         db,
@@ -733,28 +709,12 @@ export async function action({ request }: ActionFunctionArgs) {
         unit,
         quantity,
         lossPct: effectiveLossPct,
-        snapshot,
       });
 
       return buildRecipeSectionRedirect(recipeId, currentSection);
     } catch (error) {
       return badRequest(
         (error as Error)?.message || "Erro ao atualizar item da composição"
-      );
-    }
-  }
-
-  if (_action === "recipe-lines-recalc") {
-    const recipeId = String(values.recipeId || "").trim();
-    if (!recipeId) return badRequest("Receita inválida");
-
-    try {
-      const db = prismaClient as any;
-      await recalcRecipeCosts(db, recipeId);
-      return buildRecipeSectionRedirect(recipeId, currentSection);
-    } catch (error) {
-      return badRequest(
-        (error as Error)?.message || "Erro ao recalcular custos da composição"
       );
     }
   }
@@ -786,19 +746,6 @@ export async function action({ request }: ActionFunctionArgs) {
         recipeId,
         lineId: recipeLineId,
         variationIds,
-        resolveCostByVariationId: async (
-          variationId,
-          itemId,
-          quantity,
-          lossPct
-        ) => {
-          const costInfo = await resolveRecipeLineCosts(
-            db,
-            itemId,
-            variationId
-          );
-          return buildRecipeLineCostSnapshot(costInfo, quantity, lossPct);
-        },
       });
 
       return buildRecipeSectionRedirect(recipeId, currentSection);
@@ -827,19 +774,8 @@ export async function action({ request }: ActionFunctionArgs) {
         (line) => String(line.recipeIngredientId || "") === recipeIngredientId
       );
       for (const line of targetLines) {
-        const variationId = line.ItemVariation?.variationId || null;
         const effectiveLossPct = Number(
           line.lossPct ?? line.defaultLossPct ?? 0
-        );
-        const costInfo = await resolveRecipeLineCosts(
-          db,
-          line.itemId,
-          variationId
-        );
-        const snapshot = buildRecipeLineCostSnapshot(
-          costInfo,
-          Number(line.quantity || 0),
-          effectiveLossPct
         );
         await updateRecipeCompositionLine({
           db,
@@ -848,7 +784,6 @@ export async function action({ request }: ActionFunctionArgs) {
           unit,
           quantity: Number(line.quantity || 0),
           lossPct: effectiveLossPct,
-          snapshot,
         });
       }
       return buildRecipeSectionRedirect(recipeId, currentSection);
@@ -889,20 +824,9 @@ export async function action({ request }: ActionFunctionArgs) {
         (line) => String(line.recipeIngredientId || "") === recipeIngredientId
       );
       for (const line of targetLines) {
-        const variationId = line.ItemVariation?.variationId || null;
         const effectiveLossPct = applyToLines
           ? requestedLossPct
           : Number(line.lossPct ?? requestedLossPct);
-        const costInfo = await resolveRecipeLineCosts(
-          db,
-          line.itemId,
-          variationId
-        );
-        const snapshot = buildRecipeLineCostSnapshot(
-          costInfo,
-          Number(line.quantity || 0),
-          effectiveLossPct
-        );
         await updateRecipeCompositionLine({
           db,
           lineId: line.id,
@@ -910,7 +834,6 @@ export async function action({ request }: ActionFunctionArgs) {
           unit: line.unit,
           quantity: Number(line.quantity || 0),
           lossPct: applyToLines ? effectiveLossPct : line.lossPct,
-          snapshot,
         });
       }
 
@@ -1104,10 +1027,6 @@ export async function action({ request }: ActionFunctionArgs) {
                   unit: "UN",
                   quantity: 0,
                   lossPct: null,
-                  lastUnitCostAmount: 0,
-                  avgUnitCostAmount: 0,
-                  lastTotalCostAmount: 0,
-                  avgTotalCostAmount: 0,
                 }))
             );
             if (data.length > 0) {
@@ -1132,6 +1051,7 @@ export async function action({ request }: ActionFunctionArgs) {
             },
           });
         }
+
       }
     } catch (_error) {
       // best effort: preserve legacy behavior when migrations are pending
