@@ -1,6 +1,130 @@
-import { useOutletContext } from "@remix-run/react";
+import { useFetcher, useOutletContext } from "@remix-run/react";
+import { useEffect } from "react";
 import { NativeItemSellingPriceCard } from "~/components/admin/native-item-selling-price-card";
+import { Button } from "~/components/ui/button";
+import { toast } from "~/components/ui/use-toast";
 import type { AdminItemVendaPrecosOutletContext } from "./admin.items.$id.venda.precos";
+
+function ChannelPriceRow(props: {
+  channel: AdminItemVendaPrecosOutletContext["channels"][number];
+  itemId: string;
+  editableVariations: AdminItemVendaPrecosOutletContext["editableVariations"];
+  pricingRowByKey: Map<string, AdminItemVendaPrecosOutletContext["pricingRows"][number]>;
+  dnaHelpUrl: string | null;
+  profitPriceHelpUrl: string | null;
+}) {
+  const fetcher = useFetcher<any>();
+  const formId = `channel-prices-form-${props.channel.id}`;
+
+  useEffect(() => {
+    if (fetcher.state !== "idle" || !fetcher.data) return;
+
+    if (fetcher.data?.status === 200) {
+      toast({ title: "Ok", description: fetcher.data.message });
+      return;
+    }
+
+    if (fetcher.data?.status && fetcher.data.status >= 400) {
+      toast({
+        title: "Erro",
+        description: fetcher.data.message,
+        variant: "destructive",
+      });
+    }
+  }, [fetcher.data, fetcher.state]);
+
+  return (
+    <tr>
+      <td className="sticky left-0 border-t border-slate-100 bg-white px-3 py-3 align-top">
+        {props.channel.id ? (
+          <fetcher.Form id={formId} method="post" action=".." className="space-y-2">
+            <input type="hidden" name="_action" value="upsert-native-price-batch" />
+            <input type="hidden" name="itemId" value={props.itemId} />
+            <input type="hidden" name="itemSellingChannelId" value={props.channel.id} />
+          </fetcher.Form>
+        ) : null}
+        <div className="font-medium text-slate-900">{props.channel.name}</div>
+        <div className="text-xs text-slate-500">{props.channel.key}</div>
+        {props.channel.id ? (
+          <div className="mt-3 flex flex-col gap-2">
+            <Button
+              type="submit"
+              form={formId}
+              size="sm"
+              className="justify-start text-[12px] font-semibold uppercase w-max"
+              disabled={fetcher.state !== "idle"}
+            >
+              Salvar
+            </Button>
+            {props.channel.key !== "cardapio" ? (
+              <Button
+                type="submit"
+                form={formId}
+                name="_intent"
+                value="copy-cardapio-and-save"
+                variant="secondary"
+                size="sm"
+                className="justify-start text-[11px] uppercase tracking-wide text-blue-700"
+                disabled={fetcher.state !== "idle"}
+              >
+                Copiar preços do cardápio
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
+      </td>
+      {props.editableVariations.map((itemVariation) => {
+        const pricingRow = props.channel.id
+          ? props.pricingRowByKey.get(`${itemVariation.id}::${props.channel.id}`)
+          : null;
+
+        return (
+          <td
+            key={itemVariation.id}
+            className="border-t border-slate-100 px-3 py-3 align-top"
+          >
+            {!props.channel.id || !pricingRow ? (
+              <div className="rounded-lg border border-dashed border-slate-200 px-3 py-3 text-xs text-slate-400">
+                Canal sem cadastro no banco.
+              </div>
+            ) : (
+              <>
+                <input
+                  type="hidden"
+                  form={formId}
+                  name="itemVariationIds"
+                  value={itemVariation.id}
+                />
+                <NativeItemSellingPriceCard
+                  formId={formId}
+                  itemId={props.itemId}
+                  itemVariationId={itemVariation.id}
+                  itemSellingChannelId={props.channel.id}
+                  variationLabel={
+                    pricingRow.isReference
+                      ? `${pricingRow.variationName} · referência`
+                      : pricingRow.variationName
+                  }
+                  channelLabel={props.channel.name}
+                  currentRow={pricingRow.currentRow}
+                  computedSellingPriceBreakdown={pricingRow.computedSellingPriceBreakdown}
+                  activeSheetId={pricingRow.activeSheetId}
+                  activeSheetName={pricingRow.activeSheetName}
+                  dnaHelpUrl={props.dnaHelpUrl}
+                  profitPriceHelpUrl={props.profitPriceHelpUrl}
+                  priceInputName={`priceAmount:${itemVariation.id}`}
+                  showSingleSubmitButton={false}
+                  showPublishedToggle={false}
+                  recommendedPriceMode="display"
+                />
+              </>
+            )}
+          </td>
+        );
+      })}
+    </tr>
+  );
+}
 
 export default function AdminItemVendaPrecosEditarRoute() {
   const {
@@ -11,8 +135,7 @@ export default function AdminItemVendaPrecosEditarRoute() {
     item,
     dnaHelpUrl,
     profitPriceHelpUrl,
-  } =
-    useOutletContext<AdminItemVendaPrecosOutletContext>();
+  } = useOutletContext<AdminItemVendaPrecosOutletContext>();
   const enabledChannels = channels.filter((channel) => channel.enabledForItem);
 
   const pricingRowByKey = new Map(
@@ -29,11 +152,10 @@ export default function AdminItemVendaPrecosEditarRoute() {
           </div>
         </div>
         <div
-          className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-wide ${
-            nativeModelAvailable
-              ? "bg-emerald-100 text-emerald-700"
-              : "bg-amber-100 text-amber-800"
-          }`}
+          className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-wide ${nativeModelAvailable
+            ? "bg-emerald-100 text-emerald-700"
+            : "bg-amber-100 text-amber-800"
+            }`}
         >
           {nativeModelAvailable ? "Disponível" : "Indisponível"}
         </div>
@@ -74,49 +196,15 @@ export default function AdminItemVendaPrecosEditarRoute() {
             </thead>
             <tbody>
               {enabledChannels.map((channel) => (
-                <tr key={channel.key}>
-                  <td className="sticky left-0 border-t border-slate-100 bg-white px-3 py-3 align-top">
-                    <div className="font-medium text-slate-900">{channel.name}</div>
-                    <div className="text-xs text-slate-500">{channel.key}</div>
-                  </td>
-                  {editableVariations.map((itemVariation) => {
-                    const pricingRow = channel.id
-                      ? pricingRowByKey.get(`${itemVariation.id}::${channel.id}`)
-                      : null;
-
-                    return (
-                      <td
-                        key={itemVariation.id}
-                        className="border-t border-slate-100 px-3 py-3 align-top"
-                      >
-                        {!channel.id || !pricingRow ? (
-                          <div className="rounded-lg border border-dashed border-slate-200 px-3 py-3 text-xs text-slate-400">
-                            Canal sem cadastro no banco.
-                          </div>
-                        ) : (
-                          <NativeItemSellingPriceCard
-                            action=".."
-                            itemId={item.id}
-                            itemVariationId={itemVariation.id}
-                            itemSellingChannelId={channel.id}
-                            variationLabel={
-                              pricingRow.isReference
-                                ? `${pricingRow.variationName} · referência`
-                                : pricingRow.variationName
-                            }
-                            channelLabel={channel.name}
-                            currentRow={pricingRow.currentRow}
-                            computedSellingPriceBreakdown={pricingRow.computedSellingPriceBreakdown}
-                            activeSheetId={pricingRow.activeSheetId}
-                            activeSheetName={pricingRow.activeSheetName}
-                            dnaHelpUrl={dnaHelpUrl}
-                            profitPriceHelpUrl={profitPriceHelpUrl}
-                          />
-                        )}
-                      </td>
-                    );
-                  })}
-                </tr>
+                <ChannelPriceRow
+                  key={channel.key}
+                  channel={channel}
+                  itemId={item.id}
+                  editableVariations={editableVariations}
+                  pricingRowByKey={pricingRowByKey}
+                  dnaHelpUrl={dnaHelpUrl}
+                  profitPriceHelpUrl={profitPriceHelpUrl}
+                />
               ))}
             </tbody>
           </table>

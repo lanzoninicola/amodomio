@@ -140,44 +140,45 @@ function normalizeSearchText(value: string | null | undefined) {
     .replace(/[\u0300-\u036f]/g, "");
 }
 
-function buildProfitStats(items: ItemRow[]): ProfitStats {
-  const itemMargins = items
-    .map((item) => {
-      const margins = Object.values(item.channels)
-        .map((channel) => channel.perc)
-        .filter((perc): perc is number => perc !== null);
-      if (margins.length === 0) return null;
-      return {
-        itemId: item.itemId,
-        name: item.name,
-        profitPerc: Math.min(...margins),
-      };
-    })
-    .filter((item): item is { itemId: string; name: string; profitPerc: number } => item !== null);
+function buildProfitStatsByChannel(
+  items: ItemRow[],
+  channels: Channel[]
+): Record<string, ProfitStats> {
+  const result: Record<string, ProfitStats> = {};
+  for (const channel of channels) {
+    const margins = items
+      .map((item) => {
+        const ch = item.channels[channel.id];
+        if (!ch || ch.perc === null) return null;
+        return { itemId: item.itemId, name: item.name, profitPerc: ch.perc };
+      })
+      .filter((x): x is { itemId: string; name: string; profitPerc: number } => x !== null);
 
-  const averageProfitPerc = itemMargins.length
-    ? itemMargins.reduce((sum, item) => sum + item.profitPerc, 0) / itemMargins.length
-    : null;
+    const avg = margins.length
+      ? margins.reduce((s, x) => s + x.profitPerc, 0) / margins.length
+      : null;
 
-  return {
-    averageProfitPerc,
-    riskCount: itemMargins.filter((item) => item.profitPerc < 5).length,
-    measuredItemCount: itemMargins.length,
-    topAboveAverage:
-      averageProfitPerc === null
-        ? []
-        : itemMargins
-            .filter((item) => item.profitPerc > averageProfitPerc)
-            .sort((a, b) => b.profitPerc - a.profitPerc)
-            .slice(0, 5),
-    topBelowAverage:
-      averageProfitPerc === null
-        ? []
-        : itemMargins
-            .filter((item) => item.profitPerc < averageProfitPerc)
-            .sort((a, b) => a.profitPerc - b.profitPerc)
-            .slice(0, 5),
-  };
+    result[channel.id] = {
+      averageProfitPerc: avg,
+      riskCount: margins.filter((x) => x.profitPerc < 5).length,
+      measuredItemCount: margins.length,
+      topAboveAverage:
+        avg === null
+          ? []
+          : margins
+              .filter((x) => x.profitPerc > avg)
+              .sort((a, b) => b.profitPerc - a.profitPerc)
+              .slice(0, 5),
+      topBelowAverage:
+        avg === null
+          ? []
+          : margins
+              .filter((x) => x.profitPerc < avg)
+              .sort((a, b) => a.profitPerc - b.profitPerc)
+              .slice(0, 5),
+    };
+  }
+  return result;
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -364,13 +365,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
         ),
       }))
       .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
-    const stats = buildProfitStats(items);
+    const statsByChannel = buildProfitStatsByChannel(items, channels);
 
     return ok({
       channels,
       variations,
       items,
-      stats,
+      statsByChannel,
       filters: {
         variation: variationCode || ALL_VARIATIONS_VALUE,
         item: itemQuery,
@@ -381,26 +382,30 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }
 }
 
+const EMPTY_STATS: ProfitStats = {
+  averageProfitPerc: null,
+  riskCount: 0,
+  measuredItemCount: 0,
+  topAboveAverage: [],
+  topBelowAverage: [],
+};
+
 export default function AdminVendasFaixasLucroPage() {
   const data = useLoaderData<typeof loader>();
   const payload = (data?.payload || {}) as {
     channels: Channel[];
     variations: Array<{ id: string; code: string; name: string }>;
     items: ItemRow[];
-    stats: ProfitStats;
+    statsByChannel: Record<string, ProfitStats>;
     filters: { variation: string; item: string };
   };
   const navigation = useNavigation();
-  const { channels = [], variations = [], items = [], filters, stats } = payload;
+  const { channels = [], variations = [], items = [], filters, statsByChannel = {} } = payload;
   const isLoading = navigation.state !== "idle";
   const [variation, setVariation] = useState(filters?.variation || ALL_VARIATIONS_VALUE);
-  const profitStats = stats || {
-    averageProfitPerc: null,
-    riskCount: 0,
-    measuredItemCount: 0,
-    topAboveAverage: [],
-    topBelowAverage: [],
-  };
+  const [selectedChannelId, setSelectedChannelId] = useState<string>(() => channels[0]?.id ?? "");
+  const activeChannelId = selectedChannelId || channels[0]?.id || "";
+  const profitStats = statsByChannel[activeChannelId] ?? EMPTY_STATS;
   const formatProfitPerc = (value: number | null) =>
     value === null ? "–" : `${Number(value).toFixed(1)}%`;
 
@@ -470,6 +475,25 @@ export default function AdminVendasFaixasLucroPage() {
           {isLoading ? "..." : "Filtrar"}
         </button>
       </Form>
+
+      {/* Channel tabs for stats */}
+      <div className="flex flex-wrap gap-1 border-b border-slate-200">
+        {channels.map((ch) => (
+          <button
+            key={ch.id}
+            type="button"
+            onClick={() => setSelectedChannelId(ch.id)}
+            className={cn(
+              "px-4 py-2 text-sm font-medium transition-colors",
+              activeChannelId === ch.id
+                ? "border-b-2 border-slate-950 text-slate-950"
+                : "text-slate-500 hover:text-slate-800"
+            )}
+          >
+            {ch.name}
+          </button>
+        ))}
+      </div>
 
       <section className="grid gap-3 lg:grid-cols-[minmax(180px,0.8fr)_minmax(180px,0.8fr)_minmax(260px,1fr)_minmax(260px,1fr)]">
         <div className="rounded-lg border border-slate-200 bg-white p-4">

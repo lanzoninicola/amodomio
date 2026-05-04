@@ -96,6 +96,14 @@ export default function DnaEmpresaForm({
     onAnyFieldChange?.();
   }, [fieldHistory, onAnyFieldChange]);
 
+  const faturamentoBrutoAmount = Number(formValues.faturamentoBrutoAmount ?? 0);
+  const custoFixoAmount = Number(formValues.custoFixoAmount ?? 0);
+  const taxaCartaoPerc = Number(formValues.taxaCartaoPerc ?? 0);
+  const impostoPerc = Number(formValues.impostoPerc ?? 0);
+  const investimentoPerc = Number(formValues.investimentoPerc ?? 0);
+  const wastePerc = Number(formValues.wastePerc ?? 0);
+  const custoFixoPerc = faturamentoBrutoAmount > 0 ? (custoFixoAmount / faturamentoBrutoAmount) * 100 : 0;
+
   return (
     <div className={"mx-auto w-full max-w-3xl " + (className ?? "")}>
       <div className="space-y-3">
@@ -134,7 +142,6 @@ export default function DnaEmpresaForm({
             </Label>
             <Field error={errors?.faturamentoBrutoAmount}>
               <DecimalInput
-                key={`faturamentoBrutoAmount-${formValues.faturamentoBrutoAmount ?? 0}`}
                 name="faturamentoBrutoAmount"
                 defaultValue={formValues.faturamentoBrutoAmount ?? 0}
                 fractionDigits={2}
@@ -152,7 +159,6 @@ export default function DnaEmpresaForm({
             </Label>
             <Field error={errors?.custoFixoAmount}>
               <DecimalInput
-                key={`custoFixoAmount-${formValues.custoFixoAmount ?? 0}`}
                 name="custoFixoAmount"
                 defaultValue={formValues.custoFixoAmount ?? 0}
                 fractionDigits={2}
@@ -175,7 +181,6 @@ export default function DnaEmpresaForm({
             </Label>
             <Field error={errors?.taxaCartaoPerc}>
               <DecimalInput
-                key={`taxaCartaoPerc-${formValues.taxaCartaoPerc ?? 0}`}
                 name="taxaCartaoPerc"
                 defaultValue={formValues.taxaCartaoPerc ?? 0}
                 fractionDigits={2}
@@ -193,7 +198,6 @@ export default function DnaEmpresaForm({
             </Label>
             <Field error={errors?.impostoPerc}>
               <DecimalInput
-                key={`impostoPerc-${formValues.impostoPerc ?? 0}`}
                 name="impostoPerc"
                 defaultValue={formValues.impostoPerc ?? 0}
                 fractionDigits={2}
@@ -211,7 +215,6 @@ export default function DnaEmpresaForm({
             </Label>
             <Field error={errors?.investimentoPerc}>
               <DecimalInput
-                key={`investimentoPerc-${formValues.investimentoPerc ?? 0}`}
                 name="investimentoPerc"
                 defaultValue={formValues.investimentoPerc ?? 0}
                 fractionDigits={2}
@@ -229,7 +232,6 @@ export default function DnaEmpresaForm({
             </Label>
             <Field error={errors?.wastePerc}>
               <DecimalInput
-                key={`wastePerc-${formValues.wastePerc ?? 0}`}
                 name="wastePerc"
                 defaultValue={formValues.wastePerc ?? 0}
                 fractionDigits={2}
@@ -254,7 +256,6 @@ export default function DnaEmpresaForm({
             </Label>
             <Field error={errors?.dnaPerc}>
               <DecimalInput
-                key={`dnaPerc-${formValues.dnaPerc ?? 0}`}
                 name="dnaPerc"
                 defaultValue={formValues.dnaPerc ?? 0}
                 fractionDigits={2}
@@ -265,6 +266,14 @@ export default function DnaEmpresaForm({
               />
             </Field>
           </Row>
+          <div className="space-y-1 px-3">
+            <p className="text-xs text-muted-foreground">
+              Fórmula: DNA (%) = ((Custos Fixos / Faturamento Bruto) x 100) + Taxa de Cartão + Impostos + Investimentos + Waste
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Aplicação atual: {formatPercent(custoFixoPerc)} + {formatPercent(taxaCartaoPerc)} + {formatPercent(impostoPerc)} + {formatPercent(investimentoPerc)} + {formatPercent(wastePerc)}
+            </p>
+          </div>
         </FieldBlock>
       </div>
 
@@ -282,7 +291,6 @@ export default function DnaEmpresaForm({
             </Label>
             <Field error={errors?.custoVariavelPerc}>
               <DecimalInput
-                key={`custoVariavelPerc-${formValues.custoVariavelPerc ?? 0}`}
                 name="custoVariavelPerc"
                 defaultValue={formValues.custoVariavelPerc ?? 0}
                 fractionDigits={2}
@@ -383,5 +391,10 @@ function formatHistoryValue(value: number | null | undefined, kind: DnaFieldHist
     }).format(value);
   }
 
+  return `${value.toFixed(2)}%`;
+}
+
+function formatPercent(value: number) {
+  if (!Number.isFinite(value)) return "0.00%";
   return `${value.toFixed(2)}%`;
 }

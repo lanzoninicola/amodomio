@@ -1101,95 +1101,94 @@ export default function AdminFinanceiroFechamentoMensal() {
           </div>
         )}
 
-        <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 md:p-6">
-          <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/60 px-4 py-3">
-            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div className="space-y-1">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">FECHAMENTO MENSAL</p>
-                <div className="flex flex-wrap items-baseline gap-2">
-                  <span className="text-2xl font-semibold">{currentPeriodLabel}</span>
-                  <span className="rounded-full bg-background px-2 py-1 text-xs font-medium text-muted-foreground">
-                    Selecione mês/ano e clique em carregar dados
-                  </span>
-                </div>
+
+        <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="space-y-1">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">FECHAMENTO MENSAL</p>
+              <div className="flex flex-wrap items-baseline gap-2">
+                <span className="text-2xl font-semibold">{currentPeriodLabel}</span>
+                <span className="rounded-full bg-background px-2 py-1 text-xs font-medium text-muted-foreground">
+                  Selecione mês/ano e clique em carregar dados
+                </span>
               </div>
-              {currentDefaults && (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
-                  <div className="rounded-lg border bg-background/70 px-3 py-2">
-                    <p className="text-xs text-muted-foreground">Último fechamento</p>
-                    <p className="font-semibold">{lastClosingLabel}</p>
-                  </div>
-                  <div className="rounded-lg border bg-background/70 px-3 py-2">
-                    <p className="text-xs text-muted-foreground">Receita líquida</p>
-                    <p className="font-mono font-semibold">{formatMoneyString(receitaLiquidaPreview, 2)}</p>
-                  </div>
-                  <div className="rounded-lg border bg-background/70 px-3 py-2">
-                    <p className="text-xs text-muted-foreground">Ponto de equilíbrio</p>
-                    <p className="font-mono font-semibold">{formatMoneyString(currentDefaults.pontoEquilibrioAmount, 2)}</p>
-                  </div>
-                </div>
-              )}
             </div>
-            <div className="flex flex-col gap-3">
-              <div className="grid grid-cols-1 md:grid-cols-8 gap-3 items-end">
-                <div className="flex flex-col gap-1 col-span-2">
-                  <Label>Mês</Label>
-                  <Select
-                    value={String(selectedReferenceMonth)}
-                    onValueChange={(value) => setSelectedReferenceMonth(Number(value))}
-                  >
-                    <SelectTrigger className="h-11 border-slate-200 bg-white px-3 text-sm shadow-none">
-                      <SelectValue placeholder="Selecione o mês" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {MONTH_OPTIONS.map((m) => (
-                        <SelectItem key={m.value} value={String(m.value)}>
-                          {m.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+            {currentDefaults && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+                <div className="rounded-lg border bg-background/70 px-3 py-2">
+                  <p className="text-xs text-muted-foreground">Último fechamento</p>
+                  <p className="font-semibold">{lastClosingLabel}</p>
                 </div>
-                <div className="flex flex-col gap-1 col-span-1">
-                  <Label>Ano</Label>
-                  <input
-                    type="number"
-                    className="h-11 rounded-md border border-slate-200 bg-white px-3 text-sm shadow-none transition focus-visible:border-slate-400 focus-visible:ring-2 focus-visible:ring-slate-200"
-                    value={selectedReferenceYear}
-                    onChange={(e) => setSelectedReferenceYear(Number(e.target.value))}
-                    min={2020}
-                  />
+                <div className="rounded-lg border bg-background/70 px-3 py-2">
+                  <p className="text-xs text-muted-foreground">Receita líquida</p>
+                  <p className="font-mono font-semibold">{formatMoneyString(receitaLiquidaPreview, 2)}</p>
                 </div>
-                <div className="flex flex-col gap-1 col-span-2">
-                  <div className="text-xs font-medium text-slate-600 opacity-0">Carregar</div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handleLoadPeriod}
-                    disabled={!hasPendingPeriodChange || isSwitchingPeriod}
-                    className="h-11 w-full gap-2 border-slate-200 bg-white text-slate-900 hover:bg-slate-100 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
-                  >
-                    {isSwitchingPeriod && <Loader2 className="h-4 w-4 animate-spin" />}
-                    {isSwitchingPeriod ? "Carregando..." : "Carregar dados"}
-                  </Button>
+                <div className="rounded-lg border bg-background/70 px-3 py-2">
+                  <p className="text-xs text-muted-foreground">Ponto de equilíbrio</p>
+                  <p className="font-mono font-semibold">{formatMoneyString(currentDefaults.pontoEquilibrioAmount, 2)}</p>
                 </div>
               </div>
-              <Badge variant="secondary" className={`flex w-fit items-center justify-center gap-2 rounded-full px-3 py-2 text-xs font-medium md:justify-start ${loadToneClass}`}>
-                {isLoadingData && <Loader2 className="h-4 w-4 animate-spin" />}
-                {loadStatusMeta[loadStatus].label}
-              </Badge>
-              <div className="flex justify-end">
-                <Button asChild variant="outline" size="sm">
-                  <Link to="/admin/financeiro/fechamento-mensal/visualizar">
-                    Ver visão anual de fechamentos
-                  </Link>
+            )}
+          </div>
+          <div className="flex flex-col gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-8 gap-3 items-end">
+              <div className="flex flex-col gap-1 col-span-2">
+                <Label>Mês</Label>
+                <Select
+                  value={String(selectedReferenceMonth)}
+                  onValueChange={(value) => setSelectedReferenceMonth(Number(value))}
+                >
+                  <SelectTrigger className="h-11 border-slate-200 bg-white px-3 text-sm shadow-none">
+                    <SelectValue placeholder="Selecione o mês" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MONTH_OPTIONS.map((m) => (
+                      <SelectItem key={m.value} value={String(m.value)}>
+                        {m.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex flex-col gap-1 col-span-1">
+                <Label>Ano</Label>
+                <input
+                  type="number"
+                  className="h-11 rounded-md border border-slate-200 bg-white px-3 text-sm shadow-none transition focus-visible:border-slate-400 focus-visible:ring-2 focus-visible:ring-slate-200"
+                  value={selectedReferenceYear}
+                  onChange={(e) => setSelectedReferenceYear(Number(e.target.value))}
+                  min={2020}
+                />
+              </div>
+              <div className="flex flex-col gap-1 col-span-2">
+                <div className="text-xs font-medium text-slate-600 opacity-0">Carregar</div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleLoadPeriod}
+                  disabled={!hasPendingPeriodChange || isSwitchingPeriod}
+                  className="h-11 w-full gap-2 border-slate-200 bg-white text-slate-900 hover:bg-slate-100 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
+                >
+                  {isSwitchingPeriod && <Loader2 className="h-4 w-4 animate-spin" />}
+                  {isSwitchingPeriod ? "Carregando..." : "Carregar dados"}
                 </Button>
               </div>
             </div>
-
+            <Badge variant="secondary" className={`flex w-fit items-center justify-center gap-2 rounded-full px-3 py-2 text-xs font-medium md:justify-start ${loadToneClass}`}>
+              {isLoadingData && <Loader2 className="h-4 w-4 animate-spin" />}
+              {loadStatusMeta[loadStatus].label}
+            </Badge>
+            <div className="flex justify-end">
+              <Button asChild variant="outline" size="sm">
+                <Link to="/admin/financeiro/fechamento-mensal/visualizar">
+                  Ver visão anual de fechamentos
+                </Link>
+              </Button>
+            </div>
           </div>
 
         </div>
+
 
         {/* Top Summary Bar - KPIs Principais */}
         {!isZenMode ? (

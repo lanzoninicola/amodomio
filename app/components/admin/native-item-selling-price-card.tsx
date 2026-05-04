@@ -18,6 +18,7 @@ function detailRow(label: string, value: number) {
 
 export function NativeItemSellingPriceCard(props: {
   action?: string;
+  formId?: string;
   itemId: string;
   itemVariationId: string;
   itemSellingChannelId: string;
@@ -35,6 +36,10 @@ export function NativeItemSellingPriceCard(props: {
   updatedBy?: string | null;
   dnaHelpUrl?: string | null;
   profitPriceHelpUrl?: string | null;
+  priceInputName?: string;
+  showSingleSubmitButton?: boolean;
+  showPublishedToggle?: boolean;
+  recommendedPriceMode?: "submit" | "display";
 }) {
   const actualPrice = Number(props.currentRow?.priceAmount || 0);
   const previousPrice = Number(props.currentRow?.previousPriceAmount || 0);
@@ -65,51 +70,42 @@ export function NativeItemSellingPriceCard(props: {
     breakdown.channel?.targetMarginPerc || 0
   );
   const hasActiveSheet = custoFT > 0 || Boolean(props.activeSheetName);
+  const inputName = props.priceInputName || "priceAmount";
+  const showSingleSubmitButton = props.showSingleSubmitButton ?? true;
+  const showPublishedToggle = props.showPublishedToggle ?? true;
+  const recommendedPriceMode = props.recommendedPriceMode || "submit";
 
-  return (
-    <div className={`rounded-lg border p-3 ${lucroPerc < 0 ? "border-red-400 bg-red-50" : "border-slate-200 bg-white"}`}>
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <div>
-          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-            {props.variationLabel}
-          </div>
-          {props.channelLabel ? (
-            <div className="text-[11px] text-slate-400">{props.channelLabel}</div>
-          ) : null}
-        </div>
-        <div className="rounded bg-slate-100 px-2 py-1 font-mono text-xs text-slate-900">
-          R$ {formatDecimalPlaces(actualPrice)}
-        </div>
-      </div>
-
-      {!hasActiveSheet ? (
-        <div className="mb-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-800">
-          Sem ficha técnica ativa vinculada para esta variação.
-        </div>
+  const content = (
+    <div className="space-y-2">
+      {showSingleSubmitButton ? (
+        <>
+          <input type="hidden" name="_action" value="upsert-native-price" />
+          <input type="hidden" name="itemId" value={props.itemId} />
+          <input type="hidden" name="itemVariationId" value={props.itemVariationId} />
+          <input type="hidden" name="itemSellingChannelId" value={props.itemSellingChannelId} />
+          <input type="hidden" name="updatedBy" value={props.updatedBy || props.currentRow?.updatedBy || ""} />
+          <input type="hidden" name="recommendedPriceAmount" value={recommendedPrice} />
+        </>
       ) : null}
 
-      <Form method="post" action={props.action} className="space-y-2">
-        <input type="hidden" name="_action" value="upsert-native-price" />
-        <input type="hidden" name="itemId" value={props.itemId} />
-        <input type="hidden" name="itemVariationId" value={props.itemVariationId} />
-        <input type="hidden" name="itemSellingChannelId" value={props.itemSellingChannelId} />
-        <input type="hidden" name="updatedBy" value={props.updatedBy || props.currentRow?.updatedBy || ""} />
-        <input type="hidden" name="recommendedPriceAmount" value={recommendedPrice} />
-
-        <div className="grid grid-cols-[1fr_auto] gap-2">
-          <MoneyInput
-            name="priceAmount"
-            defaultValue={actualPrice}
-            className="h-10 font-mono"
-          />
+      <div className="grid grid-cols-[1fr_auto] gap-2">
+        <MoneyInput
+          name={inputName}
+          form={props.formId}
+          defaultValue={actualPrice}
+          className="h-10 w-full font-mono"
+        />
+        {showSingleSubmitButton ? (
           <button
             type="submit"
             className="h-10 rounded border border-slate-200 px-3 text-[11px] font-semibold uppercase tracking-wide text-slate-800 transition hover:bg-slate-50"
           >
             Salvar
           </button>
-        </div>
+        ) : null}
+      </div>
 
+      {showPublishedToggle ? (
         <label className="flex items-center gap-2 text-xs text-slate-700">
           <input
             type="checkbox"
@@ -118,25 +114,27 @@ export function NativeItemSellingPriceCard(props: {
           />
           Publicado no canal
         </label>
+      ) : null}
 
-        {lucroPerc < 0 ? (
-          <div className="rounded-md bg-red-600 px-2 py-1.5 text-[11px] font-semibold text-white">
-            Lucro negativo: <span className="font-mono">{formatDecimalPlaces(lucroPerc)}% | R$ {formatDecimalPlaces(lucroValor)}</span>
-          </div>
-        ) : (
-          <div className={`text-[11px] ${lucroPerc < targetMarginPerc ? "text-orange-400" : "text-slate-500"}`}>
-            Lucro atual: <span className="font-mono">{formatDecimalPlaces(lucroPerc)}% | R$ {formatDecimalPlaces(lucroValor)}</span>
-          </div>
-        )}
+      {lucroPerc < 0 ? (
+        <div className="rounded-md bg-red-600 px-2 py-1.5 text-[11px] font-semibold text-white">
+          Lucro negativo: <span className="font-mono">{formatDecimalPlaces(lucroPerc)}% | R$ {formatDecimalPlaces(lucroValor)}</span>
+        </div>
+      ) : (
+        <div className={`text-[11px] ${lucroPerc < targetMarginPerc ? "text-orange-400" : "text-slate-500"}`}>
+          Lucro atual: <span className="font-mono">{formatDecimalPlaces(lucroPerc)}% | R$ {formatDecimalPlaces(lucroValor)}</span>
+        </div>
+      )}
 
-        <Separator />
+      <Separator />
 
-        <div className="flex items-center justify-between text-[11px]">
-          <DnaHelpLink
-            label={`PV com lucro ${targetMarginPerc}%`}
-            url={props.profitPriceHelpUrl}
-            className="text-slate-500"
-          />
+      <div className="flex items-center justify-between text-[11px]">
+        <DnaHelpLink
+          label={`PV com lucro ${targetMarginPerc}%`}
+          url={props.profitPriceHelpUrl}
+          className="text-slate-500"
+        />
+        {recommendedPriceMode === "submit" ? (
           <button
             type="submit"
             name="_intent"
@@ -145,9 +143,19 @@ export function NativeItemSellingPriceCard(props: {
           >
             R$ {formatDecimalPlaces(recommendedPrice)}
           </button>
-        </div>
+        ) : (
+          <span className="rounded bg-slate-100 px-2 py-1 font-mono text-slate-900">
+            R$ {formatDecimalPlaces(recommendedPrice)}
+          </span>
+        )}
+      </div>
 
-        <Separator />
+      {!hasActiveSheet ? (
+        <div className="mb-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-800">
+          Sem ficha técnica ativa vinculada para esta variação.
+        </div>
+      ) : null}
+      <Separator />
 
         <div className="flex items-center justify-between text-[11px]">
           <span className="text-slate-500">Mínimo (Break-even):</span>
@@ -235,7 +243,32 @@ export function NativeItemSellingPriceCard(props: {
           <span className="text-slate-500">Anterior</span>
           <span className="text-right font-mono">R$ {formatDecimalPlaces(previousPrice)}</span>
         </div>
-      </Form>
+    </div>
+  );
+
+  return (
+    <div className={`rounded-lg border p-3 ${lucroPerc < 0 ? "border-red-400 bg-red-50" : "border-slate-200 bg-white"}`}>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            {props.variationLabel}
+          </div>
+          {props.channelLabel ? (
+            <div className="text-[11px] text-slate-400">{props.channelLabel}</div>
+          ) : null}
+        </div>
+        <div className="rounded bg-slate-100 px-2 py-1 font-mono text-xs text-slate-900">
+          R$ {formatDecimalPlaces(actualPrice)}
+        </div>
+      </div>
+
+      {showSingleSubmitButton ? (
+        <Form method="post" action={props.action} className="space-y-2">
+          {content}
+        </Form>
+      ) : (
+        content
+      )}
     </div>
   );
 }

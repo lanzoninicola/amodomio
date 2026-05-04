@@ -1,13 +1,12 @@
-import { LoaderFunctionArgs, defer, type ActionFunction, type MetaFunction } from "@remix-run/node";
-import { useActionData, Form, Await, useLoaderData, Link } from "@remix-run/react";
-import { Suspense, useState, useTransition } from "react";
+import { LoaderFunctionArgs, json, type ActionFunction, type MetaFunction } from "@remix-run/node";
+import { useActionData, Form, useLoaderData, Link } from "@remix-run/react";
+import { useState, useTransition } from "react";
 import type { FinancialMonthlyClose } from "@prisma/client";
 
 import SubmitButton from "~/components/primitives/submit-button/submit-button";
 import prismaClient from "~/lib/prisma/client.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { badRequest, ok } from "~/utils/http-response.server";
-import Loading from "~/components/loading/loading";
 import { Separator } from "~/components/ui/separator";
 import toFixedNumber from "~/utils/to-fixed-number";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
@@ -22,6 +21,56 @@ import { calcMonthlyCloseTotals } from "~/domain/finance/calc-monthly-close-tota
 export const meta: MetaFunction = () => [
     { title: "DNA da Empresa | Admin" },
 ];
+
+type DnaSettingsRecord = {
+    id: string;
+    description: string | null;
+    faturamentoBrutoAmount: number;
+    custoFixoAmount: number;
+    custoFixoPerc: number;
+    taxaCartaoPerc: number;
+    impostoPerc: number;
+    dnaPerc: number;
+    wastePerc: number;
+    custoVariavelAmount: number;
+    custoVariavelPerc: number;
+    isSnapshot: boolean;
+    createdAt: Date;
+    investimentoPerc?: number;
+};
+
+function buildDnaSettingsSelect(hasInvestimentoPerc: boolean) {
+    return {
+        id: true,
+        description: true,
+        faturamentoBrutoAmount: true,
+        custoFixoAmount: true,
+        custoFixoPerc: true,
+        taxaCartaoPerc: true,
+        impostoPerc: true,
+        dnaPerc: true,
+        wastePerc: true,
+        custoVariavelAmount: true,
+        custoVariavelPerc: true,
+        isSnapshot: true,
+        createdAt: true,
+        ...(hasInvestimentoPerc ? { investimentoPerc: true } : {}),
+    } as const;
+}
+
+async function hasInvestimentoPercColumn() {
+    const result = await prismaClient.$queryRaw<Array<{ exists: boolean }>>`
+        SELECT EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'dna_empresa_settings'
+              AND column_name = 'investimento_perc'
+        ) AS "exists"
+    `;
+
+    return Boolean(result?.[0]?.exists);
+}
 
 function average(values: number[], size: number) {
     const slice = values.slice(0, size);
@@ -107,18 +156,80 @@ function buildFieldHistory(closes: FinancialMonthlyClose[]): DnaFieldHistory {
     };
 }
 
+function resolveDefaultDnaValues(
+    currentSettings: any | null | undefined,
+    fieldHistory: DnaFieldHistory,
+    latestSnapshot?: DnaSettingsRecord | null
+) {
+    const fallbackSettings = currentSettings ?? latestSnapshot ?? null;
+    const faturamentoBrutoAmount =
+        fallbackSettings?.faturamentoBrutoAmount ??
+        fieldHistory.faturamentoBrutoAmount?.avg6 ??
+        fieldHistory.faturamentoBrutoAmount?.avg3 ??
+        fieldHistory.faturamentoBrutoAmount?.latest ??
+        0;
+    const custoFixoAmount =
+        fallbackSettings?.custoFixoAmount ??
+        fieldHistory.custoFixoAmount?.avg6 ??
+        fieldHistory.custoFixoAmount?.avg3 ??
+        fieldHistory.custoFixoAmount?.latest ??
+        0;
+    const taxaCartaoPerc =
+        fallbackSettings?.taxaCartaoPerc ??
+        fieldHistory.taxaCartaoPerc?.avg6 ??
+        fieldHistory.taxaCartaoPerc?.avg3 ??
+        fieldHistory.taxaCartaoPerc?.latest ??
+        0;
+    const impostoPerc =
+        fallbackSettings?.impostoPerc ??
+        fieldHistory.impostoPerc?.avg6 ??
+        fieldHistory.impostoPerc?.avg3 ??
+        fieldHistory.impostoPerc?.latest ??
+        0;
+    const investimentoPerc = (fallbackSettings as any)?.investimentoPerc ?? 0;
+    const wastePerc = fallbackSettings?.wastePerc ?? 0;
+    const custoVariavelPerc =
+        fallbackSettings?.custoVariavelPerc ??
+        fieldHistory.custoVariavelPerc?.avg6 ??
+        fieldHistory.custoVariavelPerc?.avg3 ??
+        fieldHistory.custoVariavelPerc?.latest ??
+        0;
+    const custoFixoPerc = faturamentoBrutoAmount > 0 ? (custoFixoAmount / faturamentoBrutoAmount) * 100 : 0;
+    const dnaPerc =
+        toFixedNumber(custoFixoPerc) +
+        toFixedNumber(taxaCartaoPerc) +
+        toFixedNumber(impostoPerc) +
+        toFixedNumber(investimentoPerc) +
+        toFixedNumber(wastePerc);
+
+    return {
+        faturamentoBrutoAmount,
+        custoFixoAmount,
+        taxaCartaoPerc,
+        impostoPerc,
+        investimentoPerc,
+        wastePerc,
+        custoVariavelPerc,
+        dnaPerc,
+    } as const;
+}
+
 export async function loader({ request }: LoaderFunctionArgs) {
-    const dnaEmpresaSettings = prismaIt(
+    const hasInvestimentoPerc = await hasInvestimentoPercColumn();
+    const dnaSettingsSelect = buildDnaSettingsSelect(hasInvestimentoPerc);
+    const dnaEmpresaSettings = await prismaIt(
         prismaClient.dnaEmpresaSettings.findFirst({
             where: { isSnapshot: false },
             orderBy: { createdAt: "desc" },
+            select: dnaSettingsSelect,
         })
     );
-    const dnaEmpresaSnapshots = prismaIt(
+    const dnaEmpresaSnapshots = await prismaIt(
         prismaClient.dnaEmpresaSettings.findMany({
             where: { isSnapshot: true },
             orderBy: { createdAt: "desc" },
             take: 15,
+            select: dnaSettingsSelect,
         })
     );
     const monthlyCloseRepo = (prismaClient as any).financialMonthlyClose;
@@ -135,7 +246,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const redirectFrom = getSearchParam({ request, paramName: "redirectFrom" });
     const fieldHistory = buildFieldHistory(monthlyCloses);
 
-    return defer({ dnaEmpresaSettings, dnaEmpresaSnapshots, redirectFrom, fieldHistory });
+    return json({ dnaEmpresaSettings, dnaEmpresaSnapshots, redirectFrom, fieldHistory, hasInvestimentoPerc });
 }
 
 type ActionData = {
@@ -156,6 +267,7 @@ type ActionData = {
 export const action: ActionFunction = async ({ request }) => {
     const formData = await request.formData();
     const actionName = formData.get("actionName")?.toString();
+    const hasInvestimentoPerc = await hasInvestimentoPercColumn();
 
     if (actionName === "dna-empresa-update") {
         const faturamentoBrutoAmount = Number(formData.get("faturamentoBrutoAmount") ?? 0);
@@ -203,11 +315,11 @@ export const action: ActionFunction = async ({ request }) => {
                     custoFixoPerc: custoFixoPerc,
                     taxaCartaoPerc,
                     impostoPerc,
-                    investimentoPerc,
                     wastePerc,
                     custoVariavelPerc,
                     dnaPerc,
                     isSnapshot: false,
+                    ...(hasInvestimentoPerc ? { investimentoPerc } : {}),
                 },
             }),
         ]);
@@ -238,11 +350,11 @@ export const action: ActionFunction = async ({ request }) => {
                 custoFixoPerc: Number(settings.custoFixoPerc ?? 0),
                 taxaCartaoPerc: Number(settings.taxaCartaoPerc ?? 0),
                 impostoPerc: Number(settings.impostoPerc ?? 0),
-                investimentoPerc: Number((settings as any).investimentoPerc ?? 0),
                 dnaPerc: Number(settings.dnaPerc ?? 0),
                 wastePerc: Number(settings.wastePerc ?? 0),
                 custoVariavelAmount: Number((settings as any).custoVariavelAmount ?? 0),
                 custoVariavelPerc: Number((settings as any).custoVariavelPerc ?? 0),
+                ...(hasInvestimentoPerc ? { investimentoPerc: Number((settings as any).investimentoPerc ?? 0) } : {}),
             },
         });
 
@@ -254,23 +366,31 @@ export const action: ActionFunction = async ({ request }) => {
 
 export default function AdminVendasDna() {
     const actionData = useActionData<ActionData>();
-    const { dnaEmpresaSettings, dnaEmpresaSnapshots, redirectFrom, fieldHistory } = useLoaderData<typeof loader>();
+    const { dnaEmpresaSettings, dnaEmpresaSnapshots, redirectFrom, fieldHistory, hasInvestimentoPerc } = useLoaderData<typeof loader>();
     const [isFormTouched, setIsFormTouched] = useState(false);
     const [isPending, startTransition] = useTransition();
+    const currentSettings = dnaEmpresaSettings?.[1] ?? null;
+    const snapshots = dnaEmpresaSnapshots?.[1] ?? [];
+    const latestSnapshot = snapshots[0] ?? null;
+    const values = resolveDefaultDnaValues(currentSettings, fieldHistory, latestSnapshot);
+    const lastCalculatedAt = currentSettings?.createdAt
+        ? new Date(currentSettings.createdAt).toLocaleString("pt-BR")
+        : null;
+    const staleThreshold = new Date();
+    staleThreshold.setMonth(staleThreshold.getMonth() - 2);
+    const isCalculationOlderThanTwoMonths = currentSettings?.createdAt
+        ? new Date(currentSettings.createdAt) < staleThreshold
+        : false;
 
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <h2 className="text-xl font-semibold">DNA da Empresa</h2>
-                <Suspense fallback={<Loading cnContainer="h-24" />}>
-                    <Await resolve={redirectFrom}>
-                        {(rf) => rf ? (
-                            <Link to={`/${rf}`}>
-                                <p className="text-xs underline uppercase tracking-widest">Voltar</p>
-                            </Link>
-                        ) : null}
-                    </Await>
-                </Suspense>
+                {redirectFrom ? (
+                    <Link to={`/${redirectFrom}`}>
+                        <p className="text-xs underline uppercase tracking-widest">Voltar</p>
+                    </Link>
+                ) : null}
             </div>
             <p className="text-sm text-muted-foreground">Ajuste os parâmetros e salve para atualizar o DNA (%).</p>
 
@@ -278,81 +398,61 @@ export default function AdminVendasDna() {
 
             <Form method="post" className="space-y-6" onSubmit={() => startTransition(() => { })}>
                 <input type="hidden" name="actionName" value="dna-empresa-update" />
+                <div className="space-y-6">
+                    {lastCalculatedAt ? (
+                        <p className="text-sm text-muted-foreground">
+                            Calculado em <span className="font-medium text-foreground">{lastCalculatedAt}</span>
+                        </p>
+                    ) : null}
 
-                <Suspense fallback={<Loading cnContainer="h-24" />}>
-                    <Await resolve={dnaEmpresaSettings} errorElement={<div className="text-red-600">Erro ao carregar</div>}>
-                        {(settings) => {
-                            const currentSettings = settings[1];
-                            const values = {
-                                faturamentoBrutoAmount: currentSettings?.faturamentoBrutoAmount ?? 0,
-                                custoFixoAmount: currentSettings?.custoFixoAmount ?? 0,
-                                taxaCartaoPerc: currentSettings?.taxaCartaoPerc ?? 0,
-                                impostoPerc: currentSettings?.impostoPerc ?? 0,
-                                investimentoPerc: (currentSettings as any)?.investimentoPerc ?? 0,
-                                wastePerc: currentSettings?.wastePerc ?? 0,
-                                custoVariavelPerc: currentSettings?.custoVariavelPerc ?? 0,
-                                dnaPerc: currentSettings?.dnaPerc ?? 0,
-                            } as const;
-                            const lastCalculatedAt = currentSettings?.createdAt
-                                ? new Date(currentSettings.createdAt).toLocaleString("pt-BR")
-                                : null;
-                            const staleThreshold = new Date();
-                            staleThreshold.setMonth(staleThreshold.getMonth() - 2);
-                            const isCalculationOlderThanTwoMonths = currentSettings?.createdAt
-                                ? new Date(currentSettings.createdAt) < staleThreshold
-                                : false;
+                    {isCalculationOlderThanTwoMonths ? (
+                        <Alert variant="default" className="border-amber-300">
+                            <TriangleAlert className="h-4 w-4" />
+                            <AlertTitle>Cálculo do DNA desatualizado</AlertTitle>
+                            <AlertDescription>
+                                O último cálculo foi feito há mais de 2 meses. Revise os valores e clique em <strong>Salvar</strong> para recalcular.
+                            </AlertDescription>
+                        </Alert>
+                    ) : null}
 
-                            return (
-                                <div className="space-y-6">
-                                    {lastCalculatedAt ? (
-                                        <p className="text-sm text-muted-foreground">
-                                            Calculado em <span className="font-medium text-foreground">{lastCalculatedAt}</span>
-                                        </p>
-                                    ) : null}
+                    {dnaEmpresaSettings?.[0] ? (
+                        <Alert variant="default" className="border-amber-300">
+                            <TriangleAlert className="h-4 w-4" />
+                            <AlertTitle>Configuração atual indisponível</AlertTitle>
+                            <AlertDescription>
+                                A tela usou o histórico mensal e o snapshot mais recente como fallback.
+                            </AlertDescription>
+                        </Alert>
+                    ) : null}
 
-                                    {isCalculationOlderThanTwoMonths ? (
-                                        <Alert variant="default" className="border-amber-300">
-                                            <TriangleAlert className="h-4 w-4" />
-                                            <AlertTitle>Cálculo do DNA desatualizado</AlertTitle>
-                                            <AlertDescription>
-                                                O último cálculo foi feito há mais de 2 meses. Revise os valores e clique em <strong>Salvar</strong> para recalcular.
-                                            </AlertDescription>
-                                        </Alert>
-                                    ) : null}
+                    <DnaEmpresaForm
+                        defaultValues={values}
+                        errors={actionData?.errors}
+                        onAnyFieldChange={() => setIsFormTouched(true)}
+                        readOnlyCalculated
+                        fieldHistory={fieldHistory}
+                    />
 
-                                    <DnaEmpresaForm
-                                        defaultValues={values}
-                                        errors={actionData?.errors}
-                                        onAnyFieldChange={() => setIsFormTouched(true)}
-                                        readOnlyCalculated
-                                        fieldHistory={fieldHistory}
-                                    />
+                    {isFormTouched && (
+                        <Alert variant="default" className="border-amber-300">
+                            <TriangleAlert className="h-4 w-4" />
+                            <AlertTitle>Você alterou valores</AlertTitle>
+                            <AlertDescription>
+                                Clique em <strong>Salvar</strong> para recalcular e persistir o DNA.
+                            </AlertDescription>
+                        </Alert>
+                    )}
 
-                                    {isFormTouched && (
-                                        <Alert variant="default" className="border-amber-300">
-                                            <TriangleAlert className="h-4 w-4" />
-                                            <AlertTitle>Você alterou valores</AlertTitle>
-                                            <AlertDescription>
-                                                Clique em <strong>Salvar</strong> para recalcular e persistir o DNA.
-                                            </AlertDescription>
-                                        </Alert>
-                                    )}
+                    <div className="flex items-center justify-between">
+                        <SnapshotDialog />
 
-                                    <div className="flex items-center justify-between">
-                                        {/* Botão de Snapshot */}
-                                        <SnapshotDialog />
-
-                                        <div className="flex justify-end">
-                                            <SubmitButton disabled={isPending} actionName="dna-empresa-update">
-                                                {isPending ? "Salvando..." : "Salvar"}
-                                            </SubmitButton>
-                                        </div>
-                                    </div>
-                                </div>
-                            );
-                        }}
-                    </Await>
-                </Suspense>
+                        <div className="flex justify-end">
+                            <SubmitButton disabled={isPending} actionName="dna-empresa-update">
+                                {isPending ? "Salvando..." : "Salvar"}
+                            </SubmitButton>
+                        </div>
+                    </div>
+                </div>
             </Form>
 
             <Separator />
@@ -360,33 +460,31 @@ export default function AdminVendasDna() {
             {/* Lista de snapshots */}
             <section className="space-y-3">
                 <h3 className="font-semibold">Snapshots recentes</h3>
-                <Suspense fallback={<Loading cnContainer="h-20" />}>
-                    <Await resolve={dnaEmpresaSnapshots} errorElement={<div className="text-red-600">Erro ao carregar snapshots</div>}>
-                        {(snapTuple) => {
-                            const snaps = snapTuple?.[1] ?? [];
-                            if (!snaps.length) return <p className="text-sm text-muted-foreground">Nenhum snapshot ainda.</p>;
-                            return (
-                                <ul className="divide-y rounded-md border">
-                                    {snaps.map((s: any) => (
-                                        <li key={s.id} className="grid grid-cols-1 md:grid-cols-12 gap-2 p-3 text-sm">
-                                            <span className="md:col-span-3 font-medium">{s.description ?? "-"}</span>
-                                            <span className="opacity-80">Fatur.: {Number(s.faturamentoBrutoAmount ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
-                                            <span className="opacity-80">C.Fixo: {Number(s.custoFixoAmount ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
-                                            <span className="opacity-80">C.Fixo%: {Number(s.custoFixoPerc ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</span>
-                                            <span className="opacity-80">Cartão: {Number(s.taxaCartaoPerc ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</span>
-                                            <span className="opacity-80">Impostos: {Number(s.impostoPerc ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</span>
-                                            <span className="opacity-80">Invest.: {Number((s as any).investimentoPerc ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</span>
-                                            <span className="opacity-80">Waste: {Number(s.wastePerc ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</span>
-                                            <span className="opacity-80">Variáveis: {Number(s.custoVariavelPerc ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</span>
-                                            <span className="opacity-80 font-medium">DNA: {Number(s.dnaPerc ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</span>
-                                            <span className="md:col-start-12 md:text-right opacity-70">{new Date(s.createdAt).toLocaleString("pt-BR")}</span>
-                                        </li>
-                                    ))}
-                                </ul>
-                            );
-                        }}
-                    </Await>
-                </Suspense>
+                {dnaEmpresaSnapshots?.[0] ? (
+                    <p className="text-sm text-red-600">Erro ao carregar snapshots.</p>
+                ) : !snapshots.length ? (
+                    <p className="text-sm text-muted-foreground">Nenhum snapshot ainda.</p>
+                ) : (
+                    <ul className="divide-y rounded-md border">
+                        {snapshots.map((s: any) => (
+                            <li key={s.id} className="grid grid-cols-1 md:grid-cols-12 gap-2 p-3 text-sm">
+                                <span className="md:col-span-3 font-medium">{s.description ?? "-"}</span>
+                                <span className="opacity-80">Fatur.: {Number(s.faturamentoBrutoAmount ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
+                                <span className="opacity-80">C.Fixo: {Number(s.custoFixoAmount ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
+                                <span className="opacity-80">C.Fixo%: {Number(s.custoFixoPerc ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</span>
+                                <span className="opacity-80">Cartão: {Number(s.taxaCartaoPerc ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</span>
+                                <span className="opacity-80">Impostos: {Number(s.impostoPerc ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</span>
+                                {hasInvestimentoPerc ? (
+                                    <span className="opacity-80">Invest.: {Number((s as any).investimentoPerc ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</span>
+                                ) : null}
+                                <span className="opacity-80">Waste: {Number(s.wastePerc ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</span>
+                                <span className="opacity-80">Variáveis: {Number(s.custoVariavelPerc ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</span>
+                                <span className="opacity-80 font-medium">DNA: {Number(s.dnaPerc ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</span>
+                                <span className="md:col-start-12 md:text-right opacity-70">{new Date(s.createdAt).toLocaleString("pt-BR")}</span>
+                            </li>
+                        ))}
+                    </ul>
+                )}
             </section>
         </div>
     );

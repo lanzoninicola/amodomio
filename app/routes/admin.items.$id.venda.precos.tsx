@@ -32,6 +32,16 @@ function parseMoneyInput(value: FormDataEntryValue | null) {
   return parsed;
 }
 
+function uniqueStrings(values: FormDataEntryValue[]) {
+  return Array.from(
+    new Set(
+      values
+        .map((value) => String(value || "").trim())
+        .filter(Boolean)
+    )
+  );
+}
+
 const pricesNavigation = [
   { name: "Visualizar", href: "visualizar", icon: Eye },
   { name: "Editar", href: "editar", icon: Pencil },
@@ -194,7 +204,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const formData = await request.formData();
     const actionName = String(formData.get("_action") || "");
 
-    if (actionName !== "upsert-native-price") {
+    if (
+      actionName !== "upsert-native-price" &&
+      actionName !== "upsert-native-price-batch"
+    ) {
       return badRequest("Ação inválida");
     }
 
@@ -203,18 +216,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
       return badRequest("Modelo nativo de venda ainda não disponível no Prisma Client desta execução.");
     }
 
-    const itemVariationId = String(formData.get("itemVariationId") || "").trim();
     const itemSellingChannelId = String(formData.get("itemSellingChannelId") || "").trim();
     const updatedBy = String(formData.get("updatedBy") || "").trim() || null;
     const intent = String(formData.get("_intent") || "").trim();
-    const priceAmount =
-      intent === "apply-recommended"
-        ? Number(formData.get("recommendedPriceAmount") || 0)
-        : parseMoneyInput(formData.get("priceAmount"));
-
-    if (!itemVariationId) return badRequest("Variação inválida");
     if (!itemSellingChannelId) return badRequest("Canal inválido");
-    if (priceAmount == null) return badRequest("Preço inválido");
 
     const db = prismaClient as any;
     const itemChannel = await db.itemSellingChannelItem.findFirst({
@@ -231,18 +236,121 @@ export async function action({ request, params }: ActionFunctionArgs) {
       return badRequest("Este item não está habilitado para o canal selecionado.");
     }
 
-    const { upsertInput } = await buildNativeSellingPriceUpsertPayload({
-      db,
-      itemId,
-      itemVariationId,
-      itemSellingChannelId,
-      priceAmount,
-      updatedBy,
+    if (actionName === "upsert-native-price") {
+      const itemVariationId = String(formData.get("itemVariationId") || "").trim();
+      const priceAmount =
+        intent === "apply-recommended"
+          ? Number(formData.get("recommendedPriceAmount") || 0)
+          : parseMoneyInput(formData.get("priceAmount"));
+
+      if (!itemVariationId) return badRequest("Variação inválida");
+      if (priceAmount == null) return badRequest("Preço inválido");
+
+      const { upsertInput } = await buildNativeSellingPriceUpsertPayload({
+        db,
+        itemId,
+        itemVariationId,
+        itemSellingChannelId,
+        priceAmount,
+        updatedBy,
+      });
+
+      await itemSellingPriceVariationEntity.upsert(upsertInput);
+
+      return ok("Preço nativo do item salvo.");
+    }
+
+    const itemVariationIds = uniqueStrings(formData.getAll("itemVariationIds"));
+    if (itemVariationIds.length === 0) {
+      return badRequest("Nenhuma variação informada.");
+    }
+
+    const validVariations = await db.itemVariation.findMany({
+      where: {
+        itemId,
+        deletedAt: null,
+        id: { in: itemVariationIds },
+      },
+      select: { id: true },
     });
+    const validVariationIds = new Set(
+      (validVariations || []).map((row: { id: string }) => String(row.id || ""))
+    );
 
-    await itemSellingPriceVariationEntity.upsert(upsertInput);
+    if (validVariationIds.size !== itemVariationIds.length) {
+      return badRequest("Há variações inválidas para este item.");
+    }
 
-    return ok("Preço nativo do item salvo.");
+    if (intent === "copy-cardapio-and-save") {
+      const cardapioChannel = await db.itemSellingChannel.findFirst({
+        where: { key: "cardapio" },
+        select: { id: true, name: true },
+      });
+
+      if (!cardapioChannel?.id) {
+        return badRequest("Canal cardápio não encontrado.");
+      }
+
+      if (String(cardapioChannel.id) === String(itemSellingChannelId)) {
+        return badRequest("A duplicação do cardápio só se aplica aos outros canais.");
+      }
+
+      const sourceRows = await db.itemSellingPriceVariation.findMany({
+        where: {
+          itemId,
+          itemSellingChannelId: cardapioChannel.id,
+          itemVariationId: { in: itemVariationIds },
+        },
+        select: {
+          itemVariationId: true,
+          priceAmount: true,
+        },
+      });
+
+      if ((sourceRows || []).length === 0) {
+        return badRequest("O cardápio ainda não tem preços salvos para duplicar.");
+      }
+
+      for (const sourceRow of sourceRows) {
+        const { upsertInput } = await buildNativeSellingPriceUpsertPayload({
+          db,
+          itemId,
+          itemVariationId: String(sourceRow.itemVariationId || ""),
+          itemSellingChannelId,
+          priceAmount: Number(sourceRow.priceAmount || 0),
+          updatedBy,
+        });
+
+        await itemSellingPriceVariationEntity.upsert(upsertInput);
+      }
+
+      return ok(`Valores do cardápio duplicados e salvos para ${sourceRows.length} tamanho(s).`);
+    }
+
+    let savedCount = 0;
+    for (const itemVariationId of itemVariationIds) {
+      const priceAmount = parseMoneyInput(
+        formData.get(`priceAmount:${itemVariationId}`)
+      );
+
+      if (priceAmount == null) {
+        return badRequest("Preço inválido em uma das variações.");
+      }
+
+      const { upsertInput } = await buildNativeSellingPriceUpsertPayload({
+        db,
+        itemId,
+        itemVariationId,
+        itemSellingChannelId,
+        priceAmount,
+        updatedBy,
+      });
+
+      await itemSellingPriceVariationEntity.upsert(upsertInput);
+      savedCount += 1;
+    }
+
+    return ok(`Preços salvos para ${savedCount} tamanho(s) do canal.`);
   } catch (error) {
     return serverError(error);
   }
