@@ -1,9 +1,8 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
-import { Form, Link, useActionData, useLoaderData } from "@remix-run/react";
+import { Form, Link, useActionData, useLoaderData, useSearchParams } from "@remix-run/react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { MoneyInput } from "~/components/money-input/MoneyInput";
 import { Separator } from "~/components/ui/separator";
-import { Switch } from "~/components/ui/switch";
 import { Input } from "~/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { toast } from "~/components/ui/use-toast";
@@ -18,10 +17,12 @@ import {
 } from "~/domain/item/item-selling-price-calculation.server";
 import { calculateSellingPriceProfit } from "~/domain/item/item-selling-price-review";
 import { itemSellingPriceVariationEntity } from "~/domain/item/item-selling-price-variation.entity.server";
+import { settingPrismaEntity } from "~/domain/setting/setting.prisma.entity.server";
 import prismaClient from "~/lib/prisma/client.server";
 import { badRequest, ok, serverError } from "~/utils/http-response.server";
 import formatDecimalPlaces from "~/utils/format-decimal-places";
 import type { ComputedSellingPriceBreakdown } from "~/domain/cardapio/menu-item-selling-price-utility.entity";
+import { DnaHelpLink } from "~/components/admin/dna-help-link";
 
 export const meta: MetaFunction = () => [
   { title: "Vendas | Preços por canal" },
@@ -41,11 +42,20 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const db = prismaClient as any;
     const nativeModelAvailable = await itemSellingPriceVariationEntity.isAvailable();
 
-    const [channels, user, sizeMap, sellingPriceConfig] = await Promise.all([
+    const [
+      channels,
+      user,
+      sizeMap,
+      sellingPriceConfig,
+      dnaHelpSetting,
+      profitPriceHelpSetting,
+    ] = await Promise.all([
       db.itemSellingChannel.findMany({ orderBy: [{ sortOrderIndex: "asc" }] }),
       authenticator.isAuthenticated(request),
       listSizeMapByKey(),
       menuItemSellingPriceUtilityEntity.getSellingPriceConfig(),
+      settingPrismaEntity.findByContextAndName("sell-price-management", "dnaHelpUrl"),
+      settingPrismaEntity.findByContextAndName("sell-price-management", "profitPriceHelpUrl"),
     ]);
 
     const channelIds = (channels || []).map((c: any) => String(c.id || ""));
@@ -77,6 +87,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
         })),
         userEmail: user ? user.email : null,
         nativeModelAvailable,
+        dnaHelpUrl: String(dnaHelpSetting?.value || "").trim() || null,
+        profitPriceHelpUrl: String(profitPriceHelpSetting?.value || "").trim() || null,
         rows: [],
       });
     }
@@ -221,6 +233,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
       })),
       userEmail: user ? user.email : null,
       nativeModelAvailable,
+      dnaHelpUrl: String(dnaHelpSetting?.value || "").trim() || null,
+      profitPriceHelpUrl: String(profitPriceHelpSetting?.value || "").trim() || null,
       rows,
     });
   } catch (error) {
@@ -297,11 +311,17 @@ function ChannelPriceCell({
   itemVariationId,
   channelData,
   userEmail,
+  isTargetChannel = false,
+  dnaHelpUrl,
+  profitPriceHelpUrl,
 }: {
   itemId: string;
   itemVariationId: string;
   channelData: ChannelData;
   userEmail: string | null;
+  isTargetChannel?: boolean;
+  dnaHelpUrl?: string | null;
+  profitPriceHelpUrl?: string | null;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -334,7 +354,17 @@ function ChannelPriceCell({
   const previousPrice = Number(channelData.currentRow?.previousPriceAmount || 0);
 
   return (
-    <td className={`border-r border-slate-100 px-2 py-2 align-top min-w-[210px] ${lucroPerc < 0 ? "bg-red-50" : lucroPerc <= 5 ? "bg-orange-50" : ""}`}>
+    <td
+      className={`border-r border-slate-100 px-2 py-2 align-top min-w-[210px] ${
+        isTargetChannel
+          ? "bg-sky-100"
+          : lucroPerc < 0
+            ? "bg-red-50"
+            : lucroPerc <= 5
+              ? "bg-orange-50"
+              : ""
+      }`}
+    >
       <Form method="post" className="space-y-2" ref={formRef}>
         <input type="hidden" name="_action" value="upsert-native-price" />
         <input type="hidden" name="itemId" value={itemId} />
@@ -386,7 +416,11 @@ function ChannelPriceCell({
         <Separator />
 
         <div className="flex items-center justify-between text-[11px]">
-          <span className="text-slate-500">{`PV com lucro ${targetMarginPerc}%`}</span>
+          <DnaHelpLink
+            label={`PV com lucro ${targetMarginPerc}%`}
+            url={profitPriceHelpUrl}
+            className="text-slate-500"
+          />
           <button
             type="submit"
             name="_intent"
@@ -400,7 +434,11 @@ function ChannelPriceCell({
         <Separator />
 
         <div className="grid grid-cols-2 gap-y-1 text-[11px]">
-          <span className="text-slate-500">{`DNA (${formatDecimalPlaces(dnaPerc)}%)`}</span>
+          <DnaHelpLink
+            label={`DNA (${formatDecimalPlaces(dnaPerc)}%)`}
+            url={dnaHelpUrl}
+            className="text-slate-500"
+          />
           <span className="text-right font-mono">R$ {formatDecimalPlaces(dnaValor)}</span>
           <span className="text-slate-500">Custo base + DNA</span>
           <span className="text-right font-mono">R$ {formatDecimalPlaces(custoComDna)}</span>
@@ -427,6 +465,10 @@ function ChannelPriceCell({
 export default function AdminGerenciamentoCardapioSellPriceManagementAllChannels() {
   const loaderData = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
+  const [searchParams] = useSearchParams();
+  const targetItemId = searchParams.get("itemId");
+  const targetVariationId = searchParams.get("variationId");
+  const targetChannelId = searchParams.get("channelId");
   const [search, setSearch] = useState("");
   const [variationFilter, setVariationFilter] = useState<string | null>(null);
 
@@ -442,6 +484,8 @@ export default function AdminGerenciamentoCardapioSellPriceManagementAllChannels
     }>;
     userEmail?: string | null;
     nativeModelAvailable?: boolean;
+    dnaHelpUrl?: string | null;
+    profitPriceHelpUrl?: string | null;
     rows?: Array<{
       id: string;
       name: string;
@@ -469,6 +513,13 @@ export default function AdminGerenciamentoCardapioSellPriceManagementAllChannels
       toast({ title: "Erro", description: actionData.message, variant: "destructive" });
     }
   }, [actionData]);
+
+  useEffect(() => {
+    if (!targetItemId || !targetVariationId) return;
+    const row = document.getElementById(`price-row-${targetItemId}-${targetVariationId}`);
+    if (!row) return;
+    row.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [targetItemId, targetVariationId]);
 
   const channels = payload.channels || [];
 
@@ -628,7 +679,13 @@ export default function AdminGerenciamentoCardapioSellPriceManagementAllChannels
                   return (
                     <tr
                       key={variation.id}
-                      className="border-b border-slate-100 hover:bg-slate-50/50"
+                      id={`price-row-${row.id}-${variation.id}`}
+                      className={[
+                        "border-b border-slate-100 hover:bg-slate-50/50 scroll-mt-24",
+                        targetItemId === row.id && targetVariationId === variation.id
+                          ? "bg-sky-50 ring-1 ring-inset ring-sky-200"
+                          : "",
+                      ].join(" ")}
                     >
 
                       <td className="px-3 py-2 align-top border-r border-slate-200 text-xs text-slate-700 whitespace-nowrap">
@@ -675,6 +732,13 @@ export default function AdminGerenciamentoCardapioSellPriceManagementAllChannels
                           itemVariationId={variation.id}
                           channelData={cd}
                           userEmail={payload.userEmail || null}
+                          dnaHelpUrl={payload.dnaHelpUrl || null}
+                          profitPriceHelpUrl={payload.profitPriceHelpUrl || null}
+                          isTargetChannel={
+                            targetItemId === row.id &&
+                            targetVariationId === variation.id &&
+                            targetChannelId === cd.channelId
+                          }
                         />
                       ))}
                     </tr>

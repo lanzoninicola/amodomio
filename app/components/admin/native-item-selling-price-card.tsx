@@ -3,6 +3,8 @@ import { Dialog, DialogContent, DialogTrigger } from "~/components/ui/dialog";
 import { Separator } from "~/components/ui/separator";
 import { MoneyInput } from "~/components/money-input/MoneyInput";
 import type { ComputedSellingPriceBreakdown } from "~/domain/cardapio/menu-item-selling-price-utility.entity";
+import { DnaHelpLink } from "~/components/admin/dna-help-link";
+import { calculateBreakEvenComposition } from "~/domain/item/item-selling-price-review";
 import formatDecimalPlaces from "~/utils/format-decimal-places";
 
 function detailRow(label: string, value: number) {
@@ -31,13 +33,18 @@ export function NativeItemSellingPriceCard(props: {
   activeSheetId?: string | null;
   activeSheetName?: string | null;
   updatedBy?: string | null;
+  dnaHelpUrl?: string | null;
+  profitPriceHelpUrl?: string | null;
 }) {
   const actualPrice = Number(props.currentRow?.priceAmount || 0);
   const previousPrice = Number(props.currentRow?.previousPriceAmount || 0);
   const breakdown = props.computedSellingPriceBreakdown;
   const custoFT = Number(breakdown.custoFichaTecnica || 0);
   const custoDesperdicio = Number(breakdown.wasteCost || 0);
-  const custoTotal = custoFT + custoDesperdicio;
+  const custoMassa = Number(breakdown.doughCostAmount || 0);
+  const custoEmbalagem = Number(breakdown.packagingCostAmount || 0);
+  const breakEvenComposition = calculateBreakEvenComposition({ breakdown });
+  const custoTotal = breakEvenComposition.baseCostAmount;
   const dnaPerc = Number(breakdown.dnaPercentage || 0);
   const dnaValor = (actualPrice * dnaPerc) / 100;
   const custoComDna = custoTotal + dnaValor;
@@ -52,6 +59,8 @@ export function NativeItemSellingPriceCard(props: {
   const breakEvenPrice = Number(
     breakdown.minimumPrice?.priceAmount?.breakEven || 0
   );
+  const dnaBreakEvenValue = breakEvenComposition.dnaAmount;
+  const custoComDnaBreakEven = breakEvenComposition.totalAmount;
   const targetMarginPerc = Number(
     breakdown.channel?.targetMarginPerc || 0
   );
@@ -123,7 +132,11 @@ export function NativeItemSellingPriceCard(props: {
         <Separator />
 
         <div className="flex items-center justify-between text-[11px]">
-          <span className="text-slate-500">{`PV com lucro ${targetMarginPerc}%`}</span>
+          <DnaHelpLink
+            label={`PV com lucro ${targetMarginPerc}%`}
+            url={props.profitPriceHelpUrl}
+            className="text-slate-500"
+          />
           <button
             type="submit"
             name="_intent"
@@ -177,6 +190,8 @@ export function NativeItemSellingPriceCard(props: {
                 </span>
                 <span className="font-mono text-right">{formatDecimalPlaces(custoFT)}</span>
                 {detailRow("Desperdício", custoDesperdicio)}
+                {detailRow("Custo Massa", custoMassa)}
+                {detailRow("Custo Embalagem", custoEmbalagem)}
               </div>
 
               <Separator className="my-2" />
@@ -188,8 +203,12 @@ export function NativeItemSellingPriceCard(props: {
               <Separator className="my-2" />
 
               <div className="grid grid-cols-2 gap-y-1 text-[12px]">
-                {detailRow(`DNA (${formatDecimalPlaces(dnaPerc)}%)`, dnaValor)}
-                {detailRow("Custo base + DNA", custoComDna)}
+                <DnaHelpLink
+                  label={`DNA (${formatDecimalPlaces(dnaPerc)}%)`}
+                  url={props.dnaHelpUrl}
+                />
+                <span className="font-mono text-right">{formatDecimalPlaces(dnaBreakEvenValue)}</span>
+                {detailRow("Custo base + DNA", custoComDnaBreakEven)}
               </div>
 
               <Separator className="my-2" />
@@ -205,10 +224,14 @@ export function NativeItemSellingPriceCard(props: {
         </Dialog>
 
         <div className="grid grid-cols-2 gap-y-1 text-[11px]">
-          <span className="text-slate-500">{`DNA (${formatDecimalPlaces(dnaPerc)}%)`}</span>
-          <span className="text-right font-mono">R$ {formatDecimalPlaces(dnaValor)}</span>
+          <DnaHelpLink
+            label={`DNA (${formatDecimalPlaces(dnaPerc)}%)`}
+            url={props.dnaHelpUrl}
+            className="text-slate-500"
+          />
+          <span className="text-right font-mono">R$ {formatDecimalPlaces(dnaBreakEvenValue)}</span>
           <span className="text-slate-500">Custo base + DNA</span>
-          <span className="text-right font-mono">R$ {formatDecimalPlaces(custoComDna)}</span>
+          <span className="text-right font-mono">R$ {formatDecimalPlaces(custoComDnaBreakEven)}</span>
           <span className="text-slate-500">Anterior</span>
           <span className="text-right font-mono">R$ {formatDecimalPlaces(previousPrice)}</span>
         </div>

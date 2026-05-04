@@ -1,12 +1,13 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { Form, Link, useActionData, useLoaderData } from "@remix-run/react";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowUpDown, Eye, ListFilter, Search, SlidersHorizontal, XCircle } from "lucide-react";
+import { AlertTriangle, ArrowUpDown, Eye, ListFilter, Search, SlidersHorizontal, XCircle } from "lucide-react";
 import { DeleteItemButton } from "~/components/primitives/table-list";
 import NoRecordsFound from "~/components/primitives/no-records-found/no-records-found";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "~/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~/components/ui/table";
 import { toast } from "~/components/ui/use-toast";
@@ -34,6 +35,7 @@ interface ItemCostSheetListItem {
   activeChannels: ItemCostSheetChannelSummary[];
   referenceVariationName: string | null;
   referenceVariationCostAmount: number;
+  hasZeroIngredient: boolean;
 }
 
 type ItemCategoryOption = {
@@ -222,6 +224,90 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 }
 
+async function detectSheetsWithZeroIngredient(db: any, rootSheetIds: string[]): Promise<Set<string>> {
+  if (rootSheetIds.length === 0) return new Set();
+
+  const recipeComponents = await db.itemCostSheetComponent.findMany({
+    where: { itemCostSheetId: { in: rootSheetIds }, type: "recipe", refId: { not: null } },
+    select: { itemCostSheetId: true, refId: true },
+  });
+  if (recipeComponents.length === 0) return new Set();
+
+  const sheetsByRecipeId = new Map<string, Set<string>>();
+  for (const comp of recipeComponents) {
+    const recipeId = String(comp.refId || "").trim();
+    if (!recipeId) continue;
+    if (!sheetsByRecipeId.has(recipeId)) sheetsByRecipeId.set(recipeId, new Set());
+    sheetsByRecipeId.get(recipeId)!.add(String(comp.itemCostSheetId));
+  }
+
+  const recipeIds = Array.from(sheetsByRecipeId.keys());
+  const ingredientsByRecipe = new Map<string, Set<string>>();
+
+  if (typeof db?.recipeIngredient?.findMany === "function") {
+    const rows = await db.recipeIngredient.findMany({
+      where: { recipeId: { in: recipeIds } },
+      select: { recipeId: true, ingredientItemId: true },
+    });
+    for (const row of rows) {
+      if (!ingredientsByRecipe.has(row.recipeId)) ingredientsByRecipe.set(row.recipeId, new Set());
+      ingredientsByRecipe.get(row.recipeId)!.add(row.ingredientItemId);
+    }
+  }
+
+  if (typeof db?.recipeLine?.findMany === "function") {
+    const rows = await db.recipeLine.findMany({
+      where: { recipeId: { in: recipeIds } },
+      select: { recipeId: true, itemId: true },
+    });
+    for (const row of rows) {
+      if (!ingredientsByRecipe.has(row.recipeId)) ingredientsByRecipe.set(row.recipeId, new Set());
+      ingredientsByRecipe.get(row.recipeId)!.add(row.itemId);
+    }
+  }
+
+  const allIngredientItemIds = Array.from(new Set([...ingredientsByRecipe.values()].flatMap((s) => [...s])));
+  if (allIngredientItemIds.length === 0) return new Set();
+
+  const itemVariations = await db.itemVariation.findMany({
+    where: { itemId: { in: allIngredientItemIds }, deletedAt: null },
+    select: { id: true, itemId: true },
+  });
+  if (itemVariations.length === 0) return new Set();
+
+  const allVariationIds = itemVariations.map((iv: any) => String(iv.id));
+  const variationsWithCost = await db.itemCostVariation.findMany({
+    where: { itemVariationId: { in: allVariationIds }, costAmount: { gt: 0 } },
+    select: { itemVariationId: true },
+  });
+  const variationIdsWithCost = new Set(variationsWithCost.map((v: any) => String(v.itemVariationId)));
+
+  const itemHasCost = new Map<string, boolean>();
+  for (const iv of itemVariations) {
+    const itemId = String(iv.itemId);
+    if (variationIdsWithCost.has(String(iv.id))) {
+      itemHasCost.set(itemId, true);
+    } else if (!itemHasCost.has(itemId)) {
+      itemHasCost.set(itemId, false);
+    }
+  }
+
+  const itemIdsWithZeroCost = new Set<string>(
+    [...itemHasCost.entries()].filter(([, hasCost]) => !hasCost).map(([id]) => id)
+  );
+  if (itemIdsWithZeroCost.size === 0) return new Set();
+
+  const sheetsWithZeroIngredient = new Set<string>();
+  for (const [recipeId, ingredientItemIds] of ingredientsByRecipe.entries()) {
+    if ([...ingredientItemIds].some((itemId) => itemIdsWithZeroCost.has(itemId))) {
+      for (const sheetId of sheetsByRecipeId.get(recipeId) || []) {
+        sheetsWithZeroIngredient.add(sheetId);
+      }
+    }
+  }
+  return sheetsWithZeroIngredient;
+}
+
 export async function loader({ request }: LoaderFunctionArgs) {
   const [err, result] = await tryit(
     Promise.all([
@@ -262,7 +348,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
                 },
               },
               ItemSellingPriceVariation: {
-                where: { published: true },
                 select: {
                   itemSellingChannelId: true,
                   ItemSellingChannel: {
@@ -316,7 +401,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
     groupedByItem.get(key)?.push(row);
   }
 
-  const recipeSheets: ItemCostSheetListItem[] = Array.from(groupedByItem.values()).map((itemSheets) => {
+  const rootSheetIds = Array.from(groupedByItem.keys());
+  const sheetsWithZeroIngredient = await detectSheetsWithZeroIngredient(prismaClient as any, rootSheetIds);
+
+  const recipeSheets: ItemCostSheetListItem[] = Array.from(groupedByItem.entries()).map(([groupKey, itemSheets]) => {
     const primarySheet =
       itemSheets.find((sheet: any) => !sheet.baseItemCostSheetId) ||
       itemSheets.find((sheet: any) => sheet.ItemVariation?.isReference && sheet.ItemVariation?.Variation?.code !== "base") ||
@@ -375,6 +463,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       activeChannels: Array.from(enabledVisibleChannelMap.values()),
       referenceVariationName: referenceSheet?.ItemVariation?.Variation?.name || null,
       referenceVariationCostAmount: Number(referenceSheet?.costAmount || 0),
+      hasZeroIngredient: sheetsWithZeroIngredient.has(groupKey),
     };
   });
 
@@ -408,6 +497,7 @@ export default function AdminItemCostSheetsIndex() {
   const [categoryFilterValue, setCategoryFilterValue] = useState("__all__");
   const [activeChannelTab, setActiveChannelTab] = useState("__initial__");
   const [selectedSheetIds, setSelectedSheetIds] = useState<string[]>([]);
+  const [alertModalSheet, setAlertModalSheet] = useState<ItemCostSheetListItem | null>(null);
 
   useEffect(() => {
     if (!actionData?.status) return;
@@ -446,11 +536,21 @@ export default function AdminItemCostSheetsIndex() {
     activeChannelTab === "__initial__" ? visibleChannelTabs[0]?.key || "__others__" : activeChannelTab;
 
   useEffect(() => {
-    if (activeChannelTab === "__others__" || visibleChannelTabs.some((tab) => tab.key === activeChannelTab)) return;
+    if (
+      activeChannelTab === "__others__" ||
+      activeChannelTab === "__inactive__" ||
+      visibleChannelTabs.some((tab) => tab.key === activeChannelTab)
+    ) {
+      return;
+    }
     setActiveChannelTab(visibleChannelTabs[0]?.key || "__others__");
   }, [activeChannelTab, visibleChannelTabs]);
 
   const filtered = useMemo(() => {
+    if (resolvedActiveChannelTab === "__inactive__") {
+      return baseFiltered.filter((sheet) => !sheet.isActive);
+    }
+
     if (resolvedActiveChannelTab === "__others__") {
       return baseFiltered.filter((sheet) => sheet.activeChannels.length === 0);
     }
@@ -464,6 +564,10 @@ export default function AdminItemCostSheetsIndex() {
     () => baseFiltered.filter((sheet) => sheet.activeChannels.length === 0).length,
     [baseFiltered]
   );
+  const inactiveSheetsCount = useMemo(
+    () => baseFiltered.filter((sheet) => !sheet.isActive).length,
+    [baseFiltered]
+  );
 
   useEffect(() => {
     setSelectedSheetIds((current) => current.filter((id) => filtered.some((sheet) => sheet.id === id)));
@@ -475,6 +579,12 @@ export default function AdminItemCostSheetsIndex() {
     filteredSheetIds.every((id) => selectedSheetIds.includes(id));
   const selectedCount = selectedSheetIds.length;
   const activeTabMeta = channelTabs.find((channel) => channel.key === resolvedActiveChannelTab) || null;
+  const activeScopeLabel =
+    resolvedActiveChannelTab === "__inactive__"
+      ? "Inativas"
+      : resolvedActiveChannelTab === "__others__"
+        ? "Outras"
+        : activeTabMeta?.name || "Sem canal";
 
   function toggleSheetSelection(sheetId: string, checked: boolean) {
     setSelectedSheetIds((current) => {
@@ -493,6 +603,7 @@ export default function AdminItemCostSheetsIndex() {
   }
 
   return (
+    <>
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-500">
         <span>{recipeSheets.length} ficha(s)</span>
@@ -501,9 +612,7 @@ export default function AdminItemCostSheetsIndex() {
         <span>·</span>
         <span>{baseFiltered.length} após filtros</span>
         <span>·</span>
-        <span>
-          Canal: {resolvedActiveChannelTab === "__others__" ? "Outras" : activeTabMeta?.name || "Sem canal"}
-        </span>
+        <span>Canal: {activeScopeLabel}</span>
       </div>
 
       <section className="space-y-4">
@@ -606,6 +715,20 @@ export default function AdminItemCostSheetsIndex() {
                 Outras ({otherSheetsCount})
               </span>
             </button>
+            <button
+              type="button"
+              onClick={() => setActiveChannelTab("__inactive__")}
+              className={`relative flex flex-col items-start px-4 py-3 text-sm transition-colors ${
+                resolvedActiveChannelTab === "__inactive__"
+                  ? "border-b-2 border-slate-900 text-slate-900"
+                  : "text-slate-400 hover:text-slate-600"
+              }`}
+            >
+              <span className={`inline-flex items-center gap-1.5 ${resolvedActiveChannelTab === "__inactive__" ? "font-semibold" : "font-medium"}`}>
+                <span className={`h-2 w-2 rounded-full bg-slate-400 ${resolvedActiveChannelTab === "__inactive__" ? "" : "opacity-50"}`} />
+                Inativas ({inactiveSheetsCount})
+              </span>
+            </button>
           </div>
             <button type="button" className="mb-2 rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600" title="Colunas">
               <SlidersHorizontal className="h-4 w-4" />
@@ -645,6 +768,7 @@ export default function AdminItemCostSheetsIndex() {
                 <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Item</TableHead>
                 <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Canal comercial</TableHead>
                 <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Custo ref.</TableHead>
+                <TableHead className="h-10 w-10 px-2 text-xs font-semibold uppercase tracking-wide text-slate-500" />
                 <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Variações</TableHead>
                 <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Ativa</TableHead>
                 <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Atualizado</TableHead>
@@ -703,6 +827,17 @@ export default function AdminItemCostSheetsIndex() {
                       </div>
                     </div>
                   </TableCell>
+                  <TableCell className="w-10 px-2 py-3">
+                    {(sheet.referenceVariationCostAmount === 0 || sheet.hasZeroIngredient) ? (
+                      <button
+                        type="button"
+                        onClick={() => setAlertModalSheet(sheet)}
+                        className="flex h-7 w-7 items-center justify-center rounded-full text-amber-500 transition hover:bg-amber-50"
+                      >
+                        <AlertTriangle className="h-4 w-4" />
+                      </button>
+                    ) : null}
+                  </TableCell>
                   <TableCell className="px-4 py-3">
                     <Badge variant="outline" className={sheet.isComplete ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}>
                       {sheet.createdVariationCount}/{sheet.linkedVariationCount} tamanhos
@@ -746,5 +881,41 @@ export default function AdminItemCostSheetsIndex() {
         </div>
       )}
     </div>
+
+    <Dialog open={Boolean(alertModalSheet)} onOpenChange={(open) => { if (!open) setAlertModalSheet(null); }}>
+      <DialogContent className="max-w-md rounded-2xl p-0">
+        <DialogHeader className="border-b border-slate-200 px-6 py-5">
+          <DialogTitle className="text-base font-semibold text-slate-950">
+            Alertas da ficha
+          </DialogTitle>
+          <p className="mt-1 text-sm text-slate-500">{alertModalSheet?.name}</p>
+        </DialogHeader>
+        <div className="space-y-3 px-6 py-5">
+          {alertModalSheet?.referenceVariationCostAmount === 0 ? (
+            <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+              <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-500" />
+              <div>
+                <div className="text-sm font-semibold text-amber-800">Custo de referência zero</div>
+                <div className="mt-0.5 text-xs text-amber-700">
+                  A variação <span className="font-medium">{alertModalSheet.referenceVariationName || "de referência"}</span> tem custo R$ 0,00. Verifique os componentes e recalcule.
+                </div>
+              </div>
+            </div>
+          ) : null}
+          {alertModalSheet?.hasZeroIngredient ? (
+            <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+              <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-500" />
+              <div>
+                <div className="text-sm font-semibold text-amber-800">Ingrediente sem custo</div>
+                <div className="mt-0.5 text-xs text-amber-700">
+                  Um ou mais ingredientes nas receitas desta ficha têm custo zero. Abra a ficha e verifique o detalhamento dos custos.
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

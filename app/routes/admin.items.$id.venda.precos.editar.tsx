@@ -3,7 +3,15 @@ import { NativeItemSellingPriceCard } from "~/components/admin/native-item-selli
 import type { AdminItemVendaPrecosOutletContext } from "./admin.items.$id.venda.precos";
 
 export default function AdminItemVendaPrecosEditarRoute() {
-  const { channels, editableVariations, pricingRows, nativeModelAvailable, item } =
+  const {
+    channels,
+    editableVariations,
+    pricingRows,
+    nativeModelAvailable,
+    item,
+    dnaHelpUrl,
+    profitPriceHelpUrl,
+  } =
     useOutletContext<AdminItemVendaPrecosOutletContext>();
   const enabledChannels = channels.filter((channel) => channel.enabledForItem);
 
@@ -101,6 +109,8 @@ export default function AdminItemVendaPrecosEditarRoute() {
                             computedSellingPriceBreakdown={pricingRow.computedSellingPriceBreakdown}
                             activeSheetId={pricingRow.activeSheetId}
                             activeSheetName={pricingRow.activeSheetName}
+                            dnaHelpUrl={dnaHelpUrl}
+                            profitPriceHelpUrl={profitPriceHelpUrl}
                           />
                         )}
                       </td>

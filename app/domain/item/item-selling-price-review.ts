@@ -50,6 +50,30 @@ export function calculateSellingPriceProfit(params: {
   };
 }
 
+export function calculateBreakEvenComposition(params: {
+  breakdown: ComputedSellingPriceBreakdown;
+}) {
+  const breakdown = params.breakdown;
+  const baseCostAmount =
+    Number(breakdown.custoFichaTecnica || 0) +
+    Number(breakdown.wasteCost || 0) +
+    Number(breakdown.packagingCostAmount || 0) +
+    Number(breakdown.doughCostAmount || 0);
+  const breakEvenPrice = Number(
+    breakdown.minimumPrice?.priceAmount?.breakEven || 0
+  );
+  const dnaPerc = Number(breakdown.dnaPercentage || 0);
+  const dnaAmount = Math.max(0, breakEvenPrice - baseCostAmount);
+
+  return {
+    baseCostAmount: Number(baseCostAmount.toFixed(2)),
+    breakEvenPrice: Number(breakEvenPrice.toFixed(2)),
+    dnaPerc,
+    dnaAmount: Number(dnaAmount.toFixed(2)),
+    totalAmount: Number((baseCostAmount + dnaAmount).toFixed(2)),
+  };
+}
+
 export function resolveSellingPriceReviewStatus(params: {
   hasActiveSheet: boolean;
   priceGapAmount: number | null;

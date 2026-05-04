@@ -272,8 +272,8 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
               disabled: false,
             },
             {
-              title: "Adicionar receita em lote",
-              href: "/admin/item-cost-sheets/add-recipe-batch",
+              title: "Editar fichas em lote",
+              href: "/admin/item-cost-sheets-batch",
               items: [],
               disabled: false,
             },

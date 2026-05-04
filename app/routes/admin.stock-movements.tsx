@@ -1,6 +1,6 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from '@remix-run/node';
 import { Form, Link, useLoaderData, useNavigation, useSearchParams } from '@remix-run/react';
-import { ArrowLeftRight, Eye, PlusCircle } from 'lucide-react';
+import { ArrowLeftRight, ChevronLeft, Eye, PlusCircle } from 'lucide-react';
 import { Separator } from '~/components/ui/separator';
 import { getItemBaseUnit } from '~/components/admin/stock-movement-editor';
 import Container from '~/components/layout/container/container';
@@ -386,13 +386,13 @@ export default function AdminStockMovementsRoute() {
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex flex-wrap items-center gap-2 text-sm">
               <Link
-                to="/admin"
+                to="/admin/stock-movements"
                 className="inline-flex items-center gap-1.5 font-semibold text-slate-700 transition hover:text-slate-950"
               >
                 <span className="flex size-5 items-center justify-center rounded-full border border-slate-200 text-slate-500">
-                  <ArrowLeftRight size={12} />
+                  <ChevronLeft size={12} />
                 </span>
-                estoque
+                voltar
               </Link>
               <span className="text-slate-300">/</span>
               <span className="font-medium text-slate-900">movimentações</span>

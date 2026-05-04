@@ -1,5 +1,5 @@
 import { Form, Link, useOutletContext } from "@remix-run/react";
-import { Sparkles, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Sparkles, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
@@ -52,6 +52,8 @@ export default function AdminRecipeComposicaoTab() {
             recipeIngredientId: line.recipeIngredientId || null,
             itemName: line.Item?.name || "-",
             itemId: line.itemId,
+            recipeLineId: line.id,
+            sortOrderIndex: Number(line.sortOrderIndex || 0),
         }
         acc.set(key, current)
         return acc
@@ -60,18 +62,26 @@ export default function AdminRecipeComposicaoTab() {
         recipeIngredientId: string | null
         itemName: string
         itemId: string
+        recipeLineId: string
+        sortOrderIndex: number
     }>())
 
-    const baseIngredients = Array.from(groupedLines.values()).map((row: {
+    const baseIngredients = Array.from(groupedLines.values())
+        .sort((a, b) => a.sortOrderIndex - b.sortOrderIndex || a.itemName.localeCompare(b.itemName, "pt-BR"))
+        .map((row: {
         key: string
         recipeIngredientId: string | null
         itemName: string
         itemId: string
+        recipeLineId: string
+        sortOrderIndex: number
     }, idx) => ({
-        sortOrderIndex: idx + 1,
+        displayOrder: idx + 1,
+        sortOrderIndex: row.sortOrderIndex,
         recipeIngredientId: row.recipeIngredientId,
         itemId: row.itemId,
         itemName: row.itemName,
+        recipeLineId: row.recipeLineId,
     }))
 
     const selectedBaseIngredientIds = new Set(baseIngredients.map((ingredient) => ingredient.itemId))
@@ -287,9 +297,9 @@ export default function AdminRecipeComposicaoTab() {
                                     </td>
                                 </tr>
                             ) : (
-                                baseIngredients.map((ingredient) => (
+                                baseIngredients.map((ingredient, index) => (
                                     <tr key={ingredient.recipeIngredientId || ingredient.itemId} className="border-t border-slate-100">
-                                        <td className="px-4 py-3 text-slate-500">{ingredient.sortOrderIndex}</td>
+                                        <td className="px-4 py-3 text-slate-500">{ingredient.displayOrder}</td>
                                         <td className="px-4 py-3 font-medium text-slate-900">
                                             <Link
                                                 to={`/admin/items/${ingredient.itemId}/main`}
@@ -303,21 +313,59 @@ export default function AdminRecipeComposicaoTab() {
                                         </td>
                                         <td className="px-4 py-3 text-xs text-slate-500">Nota / obrigatório / substituível (em breve)</td>
                                         <td className="px-4 py-3 text-right">
-                                            <Form method="post" action=".." preventScrollReset className="inline">
-                                                <input type="hidden" name="recipeId" value={recipe.id} />
-                                                <input type="hidden" name="tab" value="composicao" />
-                                                <input type="hidden" name="recipeIngredientId" value={ingredient.recipeIngredientId || ""} />
-                                                <button
-                                                    type="submit"
-                                                    name="_action"
-                                                    value="recipe-ingredient-delete"
-                                                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-600 hover:bg-slate-100"
-                                                    title="Remover ingrediente"
-                                                    aria-label="Remover ingrediente"
-                                                >
-                                                    <Trash2 size={13} />
-                                                </button>
-                                            </Form>
+                                            <div className="flex items-center justify-end gap-1">
+                                                <Form method="post" action=".." preventScrollReset className="inline">
+                                                    <input type="hidden" name="recipeId" value={recipe.id} />
+                                                    <input type="hidden" name="tab" value="composicao" />
+                                                    <input type="hidden" name="recipeIngredientId" value={ingredient.recipeIngredientId || ""} />
+                                                    <input type="hidden" name="recipeLineId" value={ingredient.recipeLineId} />
+                                                    <input type="hidden" name="direction" value="up" />
+                                                    <button
+                                                        type="submit"
+                                                        name="_action"
+                                                        value="recipe-ingredient-move"
+                                                        className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+                                                        title="Mover para cima"
+                                                        aria-label="Mover para cima"
+                                                        disabled={index === 0}
+                                                    >
+                                                        <ArrowUp size={13} />
+                                                    </button>
+                                                </Form>
+                                                <Form method="post" action=".." preventScrollReset className="inline">
+                                                    <input type="hidden" name="recipeId" value={recipe.id} />
+                                                    <input type="hidden" name="tab" value="composicao" />
+                                                    <input type="hidden" name="recipeIngredientId" value={ingredient.recipeIngredientId || ""} />
+                                                    <input type="hidden" name="recipeLineId" value={ingredient.recipeLineId} />
+                                                    <input type="hidden" name="direction" value="down" />
+                                                    <button
+                                                        type="submit"
+                                                        name="_action"
+                                                        value="recipe-ingredient-move"
+                                                        className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+                                                        title="Mover para baixo"
+                                                        aria-label="Mover para baixo"
+                                                        disabled={index === baseIngredients.length - 1}
+                                                    >
+                                                        <ArrowDown size={13} />
+                                                    </button>
+                                                </Form>
+                                                <Form method="post" action=".." preventScrollReset className="inline">
+                                                    <input type="hidden" name="recipeId" value={recipe.id} />
+                                                    <input type="hidden" name="tab" value="composicao" />
+                                                    <input type="hidden" name="recipeIngredientId" value={ingredient.recipeIngredientId || ""} />
+                                                    <button
+                                                        type="submit"
+                                                        name="_action"
+                                                        value="recipe-ingredient-delete"
+                                                        className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-600 hover:bg-slate-100"
+                                                        title="Remover ingrediente"
+                                                        aria-label="Remover ingrediente"
+                                                    >
+                                                        <Trash2 size={13} />
+                                                    </button>
+                                                </Form>
+                                            </div>
                                         </td>
                                     </tr>
                                 ))

@@ -83,10 +83,14 @@ function flattenSearchItems(
 }
 
 
+const normalizeStr = (s: string) =>
+    s.toLowerCase().normalize("NFD").replace(/\p{M}/gu, "");
+
 export function AdminHeader({ urlSegment, slug, topNavItems = [] }: AdminHeaderProps) {
     const [openingStatus, setOpeningStatus] = useState<StoreOpeningStatusResponse | null>(null)
     const [isLoading, setIsLoading] = useState(false)
     const [openSearch, setOpenSearch] = useState(false)
+    const [searchQuery, setSearchQuery] = useState("")
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
     const navigate = useNavigate();
     const navClickFetcher = useFetcher();
@@ -106,6 +110,30 @@ export function AdminHeader({ urlSegment, slug, topNavItems = [] }: AdminHeaderP
             return acc;
         }, {});
     }, []);
+
+    const filteredSearchItems = useMemo(() => {
+        const q = normalizeStr(searchQuery.trim());
+        if (!q) return null;
+
+        const scoreItem = (item: SearchNavItem): number => {
+            const title = normalizeStr(item.title);
+            const ctx = normalizeStr(item.contextLabel ?? "");
+            const group = normalizeStr(item.groupTitle);
+            if (title === q) return 100;
+            if (title.startsWith(q)) return 90;
+            if (title.includes(q)) return 80;
+            if (ctx.includes(q) || group.includes(q)) return 50;
+            if (item.href.toLowerCase().includes(q)) return 20;
+            return 0;
+        };
+
+        const all = Object.values(searchItemsByGroup).flat();
+        return all
+            .map((item) => ({ item, score: scoreItem(item) }))
+            .filter((x) => x.score > 0)
+            .sort((a, b) => b.score - a.score)
+            .map((x) => x.item);
+    }, [searchQuery, searchItemsByGroup]);
 
     const statusDot = openingStatus?.isOpen ? "bg-emerald-500" : "bg-red-500"
     const isManual = openingStatus?.override && openingStatus.override !== "auto"
@@ -177,6 +205,10 @@ export function AdminHeader({ urlSegment, slug, topNavItems = [] }: AdminHeaderP
             window.removeEventListener("admin:open-nav-search", onOpenNavSearch);
         };
     }, []);
+
+    useEffect(() => {
+        if (!openSearch) setSearchQuery("");
+    }, [openSearch]);
 
 
     return (
@@ -320,6 +352,7 @@ export function AdminHeader({ urlSegment, slug, topNavItems = [] }: AdminHeaderP
                 <CommandDialog
                     open={openSearch}
                     onOpenChange={setOpenSearch}
+                    shouldFilter={false}
                     title="Buscar no admin"
                     description="Encontre páginas do menu de administração"
                     className="max-w-2xl overflow-hidden border border-slate-200 bg-white/95 p-0 shadow-[0_30px_90px_rgba(15,23,42,0.20)] backdrop-blur-2xl [&_[data-slot=command-input-wrapper]]:mx-2 [&_[data-slot=command-input-wrapper]]:mt-2 [&_[data-slot=command-input-wrapper]]:rounded-lg [&_[data-slot=command-input-wrapper]]:border-b-0 [&_[data-slot=command-input-wrapper]]:border [&_[data-slot=command-input-wrapper]]:border-slate-200 [&_[data-slot=command-input-wrapper]]:bg-slate-50/80 [&_[data-slot=command-input-wrapper]]:px-3 [&_[data-slot=command-input-wrapper]]:focus-within:ring-2 [&_[data-slot=command-input-wrapper]]:focus-within:ring-slate-300 [&_[data-slot=command-input-wrapper]]:focus-within:ring-offset-2 [&_[data-slot=command-input-wrapper]]:focus-within:ring-offset-white"
@@ -327,42 +360,80 @@ export function AdminHeader({ urlSegment, slug, topNavItems = [] }: AdminHeaderP
                     <CommandInput
                         placeholder="Buscar item de menu..."
                         className="h-12 text-sm"
+                        onValueChange={setSearchQuery}
                     />
                     <CommandList className="max-h-[56vh]">
-                        <CommandEmpty>Nenhum item encontrado.</CommandEmpty>
-                        {Object.entries(searchItemsByGroup).map(([groupTitle, items]) => (
-                            <CommandGroup key={groupTitle} heading={groupTitle}>
-                                {items.map((item) => (
-                                    <CommandItem
-                                        key={`${item.groupTitle}-${item.href}`}
-                                        value={`${item.title} ${item.contextLabel ?? ""} ${item.href}`}
-                                        onSelect={() => {
-                                            setOpenSearch(false);
-                                            trackNavClick({
-                                                href: item.href,
-                                                title: item.title,
-                                                groupTitle: item.groupTitle,
-                                            });
-                                            navigate(item.href);
-                                        }}
-                                        className="rounded-md px-3 py-2"
-                                    >
-                                        <div className="flex w-full min-w-0 items-center gap-3">
-                                            <Search size={14} className="text-slate-400" />
-                                            <div className="min-w-0 flex-1">
-                                                <p className="truncate font-medium text-slate-900">{item.title}</p>
-                                                {item.contextLabel ? (
-                                                    <p className="truncate text-xs text-muted-foreground">{item.contextLabel}</p>
-                                                ) : null}
+                        {filteredSearchItems !== null ? (
+                            filteredSearchItems.length === 0 ? (
+                                <CommandEmpty>Nenhum item encontrado.</CommandEmpty>
+                            ) : (
+                                <CommandGroup>
+                                    {filteredSearchItems.map((item) => (
+                                        <CommandItem
+                                            key={`search-${item.groupTitle}-${item.href}`}
+                                            value={item.href}
+                                            onSelect={() => {
+                                                setOpenSearch(false);
+                                                trackNavClick({
+                                                    href: item.href,
+                                                    title: item.title,
+                                                    groupTitle: item.groupTitle,
+                                                });
+                                                navigate(item.href);
+                                            }}
+                                            className="rounded-md px-3 py-2"
+                                        >
+                                            <div className="flex w-full min-w-0 items-center gap-3">
+                                                <Search size={14} className="text-slate-400" />
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="truncate font-medium text-slate-900">{item.title}</p>
+                                                    <p className="truncate text-xs text-muted-foreground">
+                                                        {item.contextLabel ? `${item.contextLabel} · ` : ""}{item.groupTitle}
+                                                    </p>
+                                                </div>
+                                                <CommandShortcut className="max-w-[180px] truncate text-[10px] uppercase tracking-[0.14em]">
+                                                    {item.href}
+                                                </CommandShortcut>
                                             </div>
-                                            <CommandShortcut className="max-w-[180px] truncate text-[10px] uppercase tracking-[0.14em]">
-                                                {item.href}
-                                            </CommandShortcut>
-                                        </div>
-                                    </CommandItem>
-                                ))}
-                            </CommandGroup>
-                        ))}
+                                        </CommandItem>
+                                    ))}
+                                </CommandGroup>
+                            )
+                        ) : (
+                            Object.entries(searchItemsByGroup).map(([groupTitle, items]) => (
+                                <CommandGroup key={groupTitle} heading={groupTitle}>
+                                    {items.map((item) => (
+                                        <CommandItem
+                                            key={`${item.groupTitle}-${item.href}`}
+                                            value={item.href}
+                                            onSelect={() => {
+                                                setOpenSearch(false);
+                                                trackNavClick({
+                                                    href: item.href,
+                                                    title: item.title,
+                                                    groupTitle: item.groupTitle,
+                                                });
+                                                navigate(item.href);
+                                            }}
+                                            className="rounded-md px-3 py-2"
+                                        >
+                                            <div className="flex w-full min-w-0 items-center gap-3">
+                                                <Search size={14} className="text-slate-400" />
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="truncate font-medium text-slate-900">{item.title}</p>
+                                                    {item.contextLabel ? (
+                                                        <p className="truncate text-xs text-muted-foreground">{item.contextLabel}</p>
+                                                    ) : null}
+                                                </div>
+                                                <CommandShortcut className="max-w-[180px] truncate text-[10px] uppercase tracking-[0.14em]">
+                                                    {item.href}
+                                                </CommandShortcut>
+                                            </div>
+                                        </CommandItem>
+                                    ))}
+                                </CommandGroup>
+                            ))
+                        )}
                     </CommandList>
                 </CommandDialog>
             </header>

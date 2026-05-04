@@ -83,7 +83,14 @@ type Channel = { id: string; key: string; name: string };
 type ItemRow = {
   itemId: string;
   name: string;
-  channels: Record<string, { perc: number | null; band: MarginBand }>;
+  channels: Record<
+    string,
+    {
+      perc: number | null;
+      band: MarginBand;
+      itemVariationId: string | null;
+    }
+  >;
 };
 
 type ProfitStats = {
@@ -293,7 +300,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
     }
 
     // pivot: item × channel → min (worst) margin
-    const pivotMap = new Map<string, Map<string, number | null>>();
+    const pivotMap = new Map<
+      string,
+      Map<string, { perc: number | null; itemVariationId: string | null }>
+    >();
     const itemNames = new Map<string, string>();
 
     for (const row of rows) {
@@ -329,9 +339,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
       const chMap = pivotMap.get(itemId)!;
       const existing = chMap.get(channelId);
       if (existing === undefined) {
-        chMap.set(channelId, perc);
-      } else if (perc !== null && (existing === null || perc < existing)) {
-        chMap.set(channelId, perc);
+        chMap.set(channelId, { perc, itemVariationId: itemVariationId || null });
+      } else if (
+        perc !== null &&
+        (existing.perc === null || perc < existing.perc)
+      ) {
+        chMap.set(channelId, { perc, itemVariationId: itemVariationId || null });
       }
     }
 
@@ -340,9 +353,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
         itemId,
         name: itemNames.get(itemId) || itemId,
         channels: Object.fromEntries(
-          Array.from(chMap.entries()).map(([chId, perc]) => [
+          Array.from(chMap.entries()).map(([chId, entry]) => [
             chId,
-            { perc, band: getSellingPriceMarginBand(perc) },
+            {
+              perc: entry.perc,
+              band: getSellingPriceMarginBand(entry.perc),
+              itemVariationId: entry.itemVariationId,
+            },
           ])
         ),
       }))
@@ -543,10 +560,18 @@ export default function AdminVendasFaixasLucroPage() {
                     const band = entry?.band ?? "no-data";
                     const perc = entry?.perc ?? null;
                     const cfg = BAND_CONFIG[band];
+                    const targetVariationId = entry?.itemVariationId || null;
+                    const targetUrl = targetVariationId
+                      ? `/admin/vendas/sell-price-management/precos-por-canal?itemId=${encodeURIComponent(
+                          item.itemId
+                        )}&variationId=${encodeURIComponent(targetVariationId)}&channelId=${encodeURIComponent(ch.id)}`
+                      : "/admin/vendas/sell-price-management/precos-por-canal";
                     return (
                       <td key={ch.id} className="px-4 py-3.5 text-center align-middle">
                         <Link
-                          to={`/admin/gerenciamento/cardapio/sell-price-management/${ch.key}/edit-items`}
+                          to={targetUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
                           title={`Editar preços — ${ch.name}`}
                           className={cn(
                             "mx-auto flex h-14 w-full max-w-[150px] flex-col items-center justify-center rounded-md border",

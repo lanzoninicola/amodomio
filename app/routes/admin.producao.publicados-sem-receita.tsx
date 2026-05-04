@@ -55,7 +55,6 @@ export async function loader({}: LoaderFunctionArgs) {
     const trackedChannelKeys = ["cardapio", "ecommerce"];
     const publishedRows = await db.itemSellingPriceVariation.findMany({
       where: {
-        published: true,
         ItemSellingChannel: {
           key: { in: trackedChannelKeys },
         },
@@ -66,7 +65,6 @@ export async function loader({}: LoaderFunctionArgs) {
         itemVariationId: true,
         itemSellingChannelId: true,
         priceAmount: true,
-        publishedAt: true,
         updatedAt: true,
         updatedBy: true,
         ItemSellingChannel: {
@@ -167,7 +165,7 @@ export async function loader({}: LoaderFunctionArgs) {
           channelKey: String(row.ItemSellingChannel?.key || "").trim().toLowerCase(),
           channelName: row.ItemSellingChannel?.name || String(row.ItemSellingChannel?.key || "").toUpperCase(),
           visibleForChannel,
-          publishedAt: row.publishedAt ? new Date(row.publishedAt).toISOString() : null,
+          publishedAt: null,
           updatedAt: row.updatedAt ? new Date(row.updatedAt).toISOString() : null,
           updatedBy: row.updatedBy || null,
           priceAmount: Number(row.priceAmount || 0),

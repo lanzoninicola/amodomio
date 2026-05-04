@@ -1,6 +1,9 @@
+import type { MetaFunction } from "@remix-run/node";
 import { Link, Outlet } from "@remix-run/react";
 import { ChevronLeft, PlusCircle } from "lucide-react";
 import Container from "~/components/layout/container/container";
+
+export const meta: MetaFunction = () => [{ title: "Fichas de custo" }];
 
 export default function ItemCostSheetsOutlet() {
   return (
@@ -24,10 +27,10 @@ export default function ItemCostSheetsOutlet() {
 
             <div className="flex flex-wrap items-center gap-2">
               <Link
-                to="backfill"
+                to="/admin/item-cost-sheets-batch"
                 className="inline-flex h-9 items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
               >
-                Backfill sabores
+                Edição em lote
               </Link>
               <Link
                 to="new"

@@ -50,6 +50,12 @@ function MetricCard({
   );
 }
 
+function getAverageWindow(item: any, windowDays: number) {
+  return (item.averageCostWindows || []).find(
+    (windowMetric: any) => Number(windowMetric?.averageWindowDays || 0) === windowDays,
+  );
+}
+
 export default function AdminCostMonitoringRoute() {
   const data = useLoaderData<typeof loader>();
   const payload = data.payload as any;
@@ -68,7 +74,6 @@ export default function AdminCostMonitoringRoute() {
       .filter(Boolean)
       .join(" "),
   }));
-  const averageWindowDays = Number(payload.averageWindowDays || 30);
   const chartWindowDays = Number(payload.chartWindowDays || 60);
   const isLoading = navigation.state !== "idle";
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>(Array.isArray(filters.itemIds) ? filters.itemIds : []);
@@ -82,7 +87,7 @@ export default function AdminCostMonitoringRoute() {
       <div className="flex flex-col gap-2">
         <h1 className="text-2xl font-semibold tracking-tight text-slate-950">Consulta de custo</h1>
         <p className="max-w-3xl text-sm text-slate-500">
-          Busque um produto ou insumo para ver o último custo, custo médio, leitura por fornecedor e a evolução recente do custo.
+          Busque um produto ou insumo para ver o último custo, os custos médios de 30, 60 e 90 dias, leitura por fornecedor e a evolução recente do custo.
         </p>
         <div className="flex flex-wrap gap-3 pt-1 text-sm text-slate-500">
           <Link
@@ -137,7 +142,7 @@ export default function AdminCostMonitoringRoute() {
 
       {selectedItemIds.length === 0 ? (
         <section className="py-8 text-center text-sm text-slate-600">
-          Selecione um ou mais itens para consultar último custo, custo médio, fornecedores recentes e andamento do custo.
+          Selecione um ou mais itens para consultar último custo, médias de 30, 60 e 90 dias, fornecedores recentes e andamento do custo.
         </section>
       ) : null}
 
@@ -148,13 +153,18 @@ export default function AdminCostMonitoringRoute() {
       ) : null}
 
       <div className="space-y-5">
-        {items.map((item: any) => (
-          <article key={item.id} className="border-t border-slate-200 pt-5 first:border-t-0 first:pt-0">
+        {items.map((item: any) => {
+          const average30d = getAverageWindow(item, 30);
+          const average60d = getAverageWindow(item, 60);
+          const average90d = getAverageWindow(item, 90);
+
+          return (
+            <article key={item.id} className="border-t border-slate-200 pt-5 first:border-t-0 first:pt-0">
             <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
               <div>
                 <h2 className="text-xl font-semibold tracking-tight text-slate-950">{item.name}</h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  Janela média de {averageWindowDays} dias. Gráfico dos últimos {chartWindowDays} dias.
+                  Médias de 30, 60 e 90 dias. Gráfico dos últimos {chartWindowDays} dias.
                 </p>
               </div>
               <Link
@@ -165,16 +175,26 @@ export default function AdminCostMonitoringRoute() {
               </Link>
             </div>
 
-            <div className="mt-5 grid gap-4 border-t border-slate-100 pt-4 md:grid-cols-3">
+            <div className="mt-5 grid gap-4 border-t border-slate-100 pt-4 md:grid-cols-2 xl:grid-cols-5">
               <MetricCard
                 label="Último custo"
                 value={fmtMoney(item.latestCost?.normalizedCostAmount)}
                 hint={`${item.consumptionUm || item.latestCost?.unit || item.purchaseUm || "sem unidade"}${item.latestCost?.validFrom ? ` • ${fmtDateShort(item.latestCost.validFrom)}` : ""}`}
               />
               <MetricCard
-                label="Custo médio"
-                value={fmtMoney(item.averageCostPerConsumptionUnit)}
-                hint={`${item.consumptionUm || item.latestCost?.unit || "sem unidade"} • ${item.averageSamplesCount || 0} leitura(s)`}
+                label="Médio 30 dias"
+                value={fmtMoney(average30d?.averageCostPerConsumptionUnit)}
+                hint={`${item.consumptionUm || item.latestCost?.unit || item.purchaseUm || "sem unidade"} • ${average30d?.averageSamplesCount || 0} leitura(s)`}
+              />
+              <MetricCard
+                label="Médio 60 dias"
+                value={fmtMoney(average60d?.averageCostPerConsumptionUnit)}
+                hint={`${item.consumptionUm || item.latestCost?.unit || item.purchaseUm || "sem unidade"} • ${average60d?.averageSamplesCount || 0} leitura(s)`}
+              />
+              <MetricCard
+                label="Médio 90 dias"
+                value={fmtMoney(average90d?.averageCostPerConsumptionUnit)}
+                hint={`${item.consumptionUm || item.latestCost?.unit || item.purchaseUm || "sem unidade"} • ${average90d?.averageSamplesCount || 0} leitura(s)`}
               />
               <MetricCard
                 label="Fornecedores"
@@ -226,8 +246,9 @@ export default function AdminCostMonitoringRoute() {
                 )}
               </section>
             </div>
-          </article>
-        ))}
+            </article>
+          );
+        })}
       </div>
     </div>
   );

@@ -889,6 +889,24 @@ export async function action({ request, params }: ActionFunctionArgs) {
       });
     }
 
+    if (_action === "item-recipe-create") {
+      const currentItem = await db.item.findUnique({
+        where: { id },
+        select: { id: true, name: true },
+      });
+      if (!currentItem) return badRequest("Item não encontrado");
+
+      const newRecipe = await db.recipe.create({
+        data: {
+          id: crypto.randomUUID(),
+          name: currentItem.name,
+          itemId: id,
+        },
+      });
+
+      return redirect(`/admin/recipes/${newRecipe.id}`);
+    }
+
     return badRequest("Ação inválida");
   } catch (error) {
     return serverError(error);

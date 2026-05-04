@@ -149,7 +149,7 @@ export async function action({ request }: ActionFunctionArgs) {
         })),
       });
 
-      return redirect(`/admin/import-stock-movements/${result.batchId}`);
+      return redirect(`/admin/mobile/import-stock-movements/${result.batchId}`);
     }
 
     return badRequest("Ação inválida.");

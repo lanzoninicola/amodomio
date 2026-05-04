@@ -226,6 +226,75 @@ export async function countRecipeCompositionLines(db: any, recipeId: string): Pr
   return 0
 }
 
+export async function moveRecipeCompositionIngredient(params: {
+  db: any
+  recipeId: string
+  recipeIngredientId?: string | null
+  recipeLineId?: string | null
+  direction: "up" | "down"
+}): Promise<void> {
+  const { db, recipeId, recipeIngredientId, recipeLineId, direction } = params
+
+  if (isNewCompositionModelAvailable(db)) {
+    const ingredientId = String(recipeIngredientId || "").trim()
+    if (!ingredientId) throw new Error("Ingrediente inválido")
+
+    const rows = await db.recipeIngredient.findMany({
+      where: { recipeId },
+      select: { id: true, sortOrderIndex: true, createdAt: true },
+      orderBy: [{ sortOrderIndex: "asc" }, { createdAt: "asc" }],
+    })
+
+    const currentIndex = rows.findIndex((row: any) => row.id === ingredientId)
+    if (currentIndex < 0) throw new Error("Ingrediente não encontrado")
+
+    const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1
+    if (targetIndex < 0 || targetIndex >= rows.length) return
+
+    const current = rows[currentIndex]
+    const target = rows[targetIndex]
+    await db.$transaction([
+      db.recipeIngredient.update({
+        where: { id: current.id },
+        data: { sortOrderIndex: Number(target.sortOrderIndex || 0) },
+      }),
+      db.recipeIngredient.update({
+        where: { id: target.id },
+        data: { sortOrderIndex: Number(current.sortOrderIndex || 0) },
+      }),
+    ])
+    return
+  }
+
+  const lineId = String(recipeLineId || "").trim()
+  if (!lineId) throw new Error("Linha inválida")
+
+  const rows = await db.recipeLine.findMany({
+    where: { recipeId },
+    select: { id: true, sortOrderIndex: true, createdAt: true },
+    orderBy: [{ sortOrderIndex: "asc" }, { createdAt: "asc" }],
+  })
+
+  const currentIndex = rows.findIndex((row: any) => row.id === lineId)
+  if (currentIndex < 0) throw new Error("Linha não encontrada")
+
+  const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1
+  if (targetIndex < 0 || targetIndex >= rows.length) return
+
+  const current = rows[currentIndex]
+  const target = rows[targetIndex]
+  await db.$transaction([
+    db.recipeLine.update({
+      where: { id: current.id },
+      data: { sortOrderIndex: Number(target.sortOrderIndex || 0) },
+    }),
+    db.recipeLine.update({
+      where: { id: target.id },
+      data: { sortOrderIndex: Number(current.sortOrderIndex || 0) },
+    }),
+  ])
+}
+
 async function resolveTargetItemVariationIdsForRecipe(db: any, recipeId: string): Promise<string[]> {
   const linked = await db.itemVariation.findMany({
     where: { recipeId, deletedAt: null },

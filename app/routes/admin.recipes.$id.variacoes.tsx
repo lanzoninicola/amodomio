@@ -36,6 +36,7 @@ export default function AdminRecipeVariacoesTab() {
             recipeIngredientId: line.recipeIngredientId || null,
             itemName: line.Item?.name || "-",
             itemId: line.itemId,
+            sortOrderIndex: Number(line.sortOrderIndex || 0),
             linesByVariation: new Map<string, any>(),
         }
         const mapKey = String(line.ItemVariation?.id || "__base__")
@@ -47,10 +48,12 @@ export default function AdminRecipeVariacoesTab() {
         recipeIngredientId: string | null
         itemName: string
         itemId: string
+        sortOrderIndex: number
         linesByVariation: Map<string, any>
     }>())
 
     const compositionRows = Array.from(groupedLines.values())
+        .sort((a, b) => a.sortOrderIndex - b.sortOrderIndex || a.itemName.localeCompare(b.itemName, "pt-BR"))
     const compositionRowsWithUnit = compositionRows.map((row) => {
         const firstVisibleLine = effectiveVariationColumns
             .map((variation) => row.linesByVariation.get(String(variation.itemVariationId)))

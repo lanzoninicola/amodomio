@@ -84,6 +84,7 @@ Esta seção existe para orientar agentes de IA que precisem ler, editar, valida
 - A tela `/admin/item-cost-sheets/:id/custos` edita a composição da ficha raiz e distribui/edita valores por variação.
 - Cada linha da composição possui:
   - metadados da linha: `id`, `type`, `refId`, `name`, `notes`, `sortOrderIndex`
+  - `presetId` opcional para linhas `manual` e `labor` criadas a partir de preset operacional
   - valores por variação em `variationValues`
 - Cada valor por variação possui:
   - `itemVariationId`
@@ -125,6 +126,7 @@ Esta seção existe para orientar agentes de IA que precisem ler, editar, valida
 
 - `manual`
   - É uma linha totalmente editável.
+  - Pode nascer de um preset (`ItemCostSheetComponentPreset`) para padronizar custos recorrentes em edição individual e futura edição em lote.
   - Deve aceitar edição de:
     - `name`
     - `notes`
@@ -135,6 +137,18 @@ Esta seção existe para orientar agentes de IA que precisem ler, editar, valida
 
 - `labor`
   - Mesmo comportamento de `manual`, mas semanticamente representa mão de obra.
+  - Também pode nascer de preset para permitir identificação estável em operações batch.
+
+### Presets operacionais
+
+- `ItemCostSheetComponentPreset` é o catálogo de custos livres recorrentes usados pela ficha.
+- Presets ativos dos tipos `manual` e `labor` aparecem na aba `/custos` antes dos campos livres.
+- Cada preset pode opcionalmente apontar para uma `Variation` do sistema.
+- Ao escolher um preset, a UI preenche nome, unidade, quantidade, custo unitário, perda e observação.
+- Se o preset estiver vinculado a uma variação, o custo unitário entra automaticamente apenas nas colunas da ficha que usam essa variação; as demais começam com custo zero.
+- A linha continua editável na ficha individual, mas salva `presetId` para que ferramentas batch futuras possam localizar o mesmo custo sem depender apenas de texto.
+- O modo `Personalizado` continua disponível para exceções sem preset.
+- A própria aba `/custos` também permite criar, editar e remover presets sem sair da ficha.
 
 ### Fórmula de custo
 
@@ -158,9 +172,11 @@ As ações abaixo vivem em `app/routes/admin.item-cost-sheets.$id.tsx`.
 
 - `item-cost-sheet-line-add-manual`
   - Adiciona linha `manual`
+  - Pode receber `presetId` de um preset ativo do tipo `manual`
 
 - `item-cost-sheet-line-add-labor`
   - Adiciona linha `labor`
+  - Pode receber `presetId` de um preset ativo do tipo `labor`
 
 - `item-cost-sheet-line-update`
   - Atualiza uma linha existente e seus valores por variação

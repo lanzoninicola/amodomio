@@ -1,12 +1,18 @@
 import { ActionFunctionArgs, LoaderFunctionArgs, redirect } from "@remix-run/node";
-import { Link, Outlet, useActionData, useLoaderData, useLocation } from "@remix-run/react";
+import { Link, Outlet, useActionData, useLoaderData, useLocation, type ShouldRevalidateFunction } from "@remix-run/react";
+
+export const shouldRevalidate: ShouldRevalidateFunction = ({ nextUrl }) => {
+  return nextUrl.pathname.endsWith("/custos");
+};
 import {
   calcItemCostSheetTotalCostAmount,
   getRecipeCompositionCostSnapshot,
   getItemCostSheetSnapshot,
   recalcItemCostSheetTotals,
+  resolveRecipeIngredientCostSnapshot,
   roundItemCostSheetMoney,
 } from "~/domain/costs/item-cost-sheet-recalc.server";
+import { listRecipeCompositionLines } from "~/domain/recipe/recipe-composition.server";
 import prismaClient from "~/lib/prisma/client.server";
 import { badRequest, ok, serverError } from "~/utils/http-response.server";
 
@@ -17,6 +23,8 @@ type SheetCompositionRow = {
   componentId: string;
   type: string;
   refId: string | null;
+  presetId: string | null;
+  presetName: string | null;
   name: string;
   sortOrderIndex: number;
   notes: string | null;
@@ -31,9 +39,140 @@ type SheetCompositionRow = {
   }>;
 };
 
+type ComponentPresetRecord = {
+  id: string;
+  key: string;
+  type: string;
+  variationId: string | null;
+  variationLabel: string | null;
+  variationCode: string | null;
+  variationKind: string | null;
+  name: string;
+  unit?: string | null;
+  quantity: number;
+  unitCostAmount: number;
+  wastePerc: number;
+  notes?: string | null;
+};
+
+type PresetVariationOption = {
+  id: string;
+  name: string;
+  code: string;
+  kind: string;
+};
+
+type RecipeCompositionBreakdownLine = {
+  ingredientId: string;
+  itemId: string;
+  itemName: string;
+  ingredientVariationId: string | null;
+  ingredientVariationLabel: string | null;
+  unit: string;
+  quantity: number;
+  lossPct: number;
+  grossQuantity: number;
+  avgUnitCostAmount: number;
+  totalCostAmount: number;
+  notes: string | null;
+};
+
+type RecipeCompositionBreakdown = {
+  recipeId: string;
+  recipeName: string;
+  ownerItemVariationId: string;
+  ownerVariationLabel: string | null;
+  unitCostAmount: number;
+  lines: RecipeCompositionBreakdownLine[];
+};
+
 function normalizeUnit(value: FormDataEntryValue | string | null | undefined) {
   const normalized = String(value || "").trim().toUpperCase();
   return normalized || null;
+}
+
+function normalizePresetText(value: FormDataEntryValue | string | null | undefined) {
+  return String(value || "").trim();
+}
+
+function slugifyPresetPart(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+async function createUniquePresetKey(db: any, type: string, name: string) {
+  const baseSlug = slugifyPresetPart(name) || "preset";
+  let attempt = `${type}.${baseSlug}`;
+  let suffix = 2;
+
+  while (true) {
+    const exists = await db.itemCostSheetComponentPreset.findUnique({
+      where: { key: attempt },
+      select: { id: true },
+    });
+    if (!exists) return attempt;
+    attempt = `${type}.${baseSlug}-${suffix}`;
+    suffix += 1;
+  }
+}
+
+function formatVariationDisplay(variation: {
+  name?: string | null;
+  code?: string | null;
+  kind?: string | null;
+} | null | undefined) {
+  if (!variation) return null;
+  const parts = [variation.name || null, variation.code || null, variation.kind || null].filter(Boolean);
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
+
+function buildPresetVariationEntries(params: {
+  preset: {
+    variationId?: string | null;
+    unit?: string | null;
+    quantity: number;
+    unitCostAmount: number;
+    wastePerc: number;
+  };
+  targetVariationRows: Array<{
+    itemVariationId: string;
+    variationId: string | null;
+  }>;
+  unit: string | null;
+  quantity: number;
+  unitCostAmount: number;
+  wastePerc: number;
+}) {
+  const {
+    preset,
+    targetVariationRows,
+    unit,
+    quantity,
+    unitCostAmount,
+    wastePerc,
+  } = params;
+
+  if (!preset.variationId) return null;
+
+  const matchingRows = targetVariationRows.filter(
+    (row) => row.variationId && row.variationId === preset.variationId
+  );
+  if (matchingRows.length === 0) return null;
+
+  return targetVariationRows.map((row) => {
+    const matches = row.variationId && row.variationId === preset.variationId;
+    return {
+      itemVariationId: row.itemVariationId,
+      unit,
+      quantity,
+      unitCostAmount: matches ? unitCostAmount : 0,
+      wastePerc,
+    };
+  });
 }
 
 async function getAvailableItemUnits() {
@@ -93,6 +232,7 @@ async function listItemCostSheetCompositionRows(
         },
         orderBy: [{ createdAt: "asc" }],
       },
+      preset: { select: { id: true, name: true } },
     },
     orderBy: [{ sortOrderIndex: "asc" }, { createdAt: "asc" }],
   });
@@ -107,6 +247,8 @@ async function listItemCostSheetCompositionRows(
       componentId: component.id,
       type: String(component.type || "manual"),
       refId: component.refId || null,
+      presetId: component.presetId || null,
+      presetName: component.preset?.name || null,
       name: component.name,
       sortOrderIndex: Number(component.sortOrderIndex || 0),
       notes: component.notes || null,
@@ -126,6 +268,175 @@ async function listItemCostSheetCompositionRows(
   });
 }
 
+async function buildRecipeCompositionBreakdownMap(
+  db: any,
+  params: {
+    compositionRows: SheetCompositionRow[];
+    variationSheets: Array<{
+      itemVariationId: string;
+      ItemVariation?: { Variation?: { name?: string | null } | null } | null;
+    }>;
+  }
+) {
+  const recipeRows = params.compositionRows.filter(
+    (line) => line.type === "recipe" && line.refId
+  );
+  if (recipeRows.length === 0 || params.variationSheets.length === 0) {
+    return {} as Record<string, Record<string, RecipeCompositionBreakdown>>;
+  }
+
+  const ownerVariationIds = params.variationSheets
+    .map((sheet) => String(sheet.itemVariationId || ""))
+    .filter(Boolean);
+
+  const ownerVariations = await db.itemVariation.findMany({
+    where: { id: { in: ownerVariationIds } },
+    select: {
+      id: true,
+      variationId: true,
+      Variation: { select: { name: true } },
+    },
+  });
+
+  const ownerVariationMap = new Map(
+    ownerVariations.map((row: any) => [
+      String(row.id),
+      {
+        variationId: row.variationId ? String(row.variationId) : null,
+        variationLabel: row.Variation?.name || null,
+      },
+    ])
+  );
+
+  const uniqueRecipeIds = Array.from(
+    new Set(recipeRows.map((line) => String(line.refId || "")).filter(Boolean))
+  );
+
+  const recipeEntries = await Promise.all(
+    uniqueRecipeIds.map(async (recipeId) => {
+      const recipe = await db.recipe.findUnique({
+        where: { id: recipeId },
+        select: { id: true, name: true },
+      });
+      const allLines = await listRecipeCompositionLines(db, recipeId);
+      return [
+        recipeId,
+        {
+          recipeName: recipe?.name || "Receita",
+          allLines,
+        },
+      ] as const;
+    })
+  );
+
+  const recipeCache = new Map(recipeEntries);
+  const costSnapshotCache = new Map<string, { avgUnitCostAmount: number }>();
+
+  async function getAvgCost(itemId: string, variationId?: string | null) {
+    const cacheKey = `${itemId}::${variationId || ""}`;
+    const cached = costSnapshotCache.get(cacheKey);
+    if (cached) return cached;
+
+    const snapshot = await resolveRecipeIngredientCostSnapshot({
+      db,
+      itemId,
+      variationId: variationId || null,
+    });
+    const result = { avgUnitCostAmount: Number(snapshot.avgUnitCostAmount || 0) };
+    costSnapshotCache.set(cacheKey, result);
+    return result;
+  }
+
+  const breakdownEntries = await Promise.all(
+    recipeRows.map(async (line) => {
+      const recipeId = String(line.refId || "");
+      const recipeData = recipeCache.get(recipeId);
+      const byVariation = await Promise.all(
+        params.variationSheets.map(async (sheet) => {
+          const ownerItemVariationId = String(sheet.itemVariationId || "");
+          const ownerVariation = ownerVariationMap.get(ownerItemVariationId);
+          const ownerVariationId = ownerVariation?.variationId || null;
+
+          const filteredLines = ownerVariationId
+            ? recipeData?.allLines.filter(
+                (recipeLine) =>
+                  String(recipeLine.ItemVariation?.variationId || "") ===
+                  ownerVariationId
+              ) || []
+            : recipeData?.allLines || [];
+
+          const breakdownLines = await Promise.all(
+            filteredLines.map(async (recipeLine) => {
+              const ingredientVariationId =
+                recipeLine.ItemVariation?.variationId || null;
+              const ingredientVariationLabel =
+                recipeLine.ItemVariation?.Variation?.name || null;
+              const lossPct = Number(
+                recipeLine.lossPct ?? recipeLine.defaultLossPct ?? 0
+              );
+              const safeLossPct = Math.min(99.9999, Math.max(0, lossPct));
+              const quantity = Number(recipeLine.quantity || 0);
+              const grossQuantity =
+                safeLossPct > 0
+                  ? Number((quantity / (1 - safeLossPct / 100)).toFixed(6))
+                  : quantity;
+              const costInfo = await getAvgCost(
+                recipeLine.itemId,
+                ingredientVariationId
+              );
+              const totalCostAmount = Number(
+                (Number(costInfo.avgUnitCostAmount || 0) * grossQuantity).toFixed(6)
+              );
+
+              return {
+                ingredientId: String(recipeLine.recipeIngredientId || recipeLine.id),
+                itemId: recipeLine.itemId,
+                itemName: recipeLine.Item?.name || "Ingrediente",
+                ingredientVariationId,
+                ingredientVariationLabel,
+                unit: recipeLine.unit,
+                quantity,
+                lossPct,
+                grossQuantity,
+                avgUnitCostAmount: Number(costInfo.avgUnitCostAmount || 0),
+                totalCostAmount,
+                notes: recipeLine.notes || null,
+              } satisfies RecipeCompositionBreakdownLine;
+            })
+          );
+
+          const unitCostAmount = breakdownLines.reduce(
+            (acc, breakdownLine) => acc + Number(breakdownLine.totalCostAmount || 0),
+            0
+          );
+
+          return [
+            ownerItemVariationId,
+            {
+              recipeId,
+              recipeName: recipeData?.recipeName || line.name || "Receita",
+              ownerItemVariationId,
+              ownerVariationLabel:
+                ownerVariation?.variationLabel ||
+                sheet.ItemVariation?.Variation?.name ||
+                null,
+              unitCostAmount: roundItemCostSheetMoney(unitCostAmount),
+              lines: breakdownLines,
+            } satisfies RecipeCompositionBreakdown,
+          ] as const;
+        })
+      );
+
+      return [line.id, Object.fromEntries(byVariation)] as const;
+    })
+  );
+
+  return Object.fromEntries(breakdownEntries) as Record<
+    string,
+    Record<string, RecipeCompositionBreakdown>
+  >;
+}
+
 async function createItemCostSheetRow(params: {
   db: any;
   itemCostSheetId: string;
@@ -140,6 +451,7 @@ async function createItemCostSheetRow(params: {
   }>;
   type: string;
   refId?: string | null;
+  presetId?: string | null;
   name: string;
   unit?: string | null;
   quantity: number;
@@ -155,6 +467,7 @@ async function createItemCostSheetRow(params: {
     variationEntries,
     type,
     refId,
+    presetId,
     name,
     unit,
     quantity,
@@ -180,6 +493,7 @@ async function createItemCostSheetRow(params: {
       itemCostSheetId,
       type,
       refId: refId || null,
+      presetId: presetId || null,
       name,
       notes: notes || null,
       sortOrderIndex: Number(lineCount || 0),
@@ -296,7 +610,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     const rootSheetId = currentSheet.baseItemCostSheetId || currentSheet.id;
     const isCostsTabRequest = pathname.endsWith("/custos");
 
-    const [recipeSheets, recipes, referenceSheets, recipeSheetDependencyAgg, unitOptions, activeItemVariationIds] = await Promise.all([
+    const [recipeSheets, recipes, referenceSheets, componentPresets, presetVariations, recipeSheetDependencyAgg, unitOptions, activeItemVariationIds] = await Promise.all([
       db.itemCostSheet.findMany({
         where: { OR: [{ id: rootSheetId }, { baseItemCostSheetId: rootSheetId }] },
         include: {
@@ -324,6 +638,33 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           select: { id: true, name: true, itemId: true, costAmount: true },
           orderBy: [{ updatedAt: "desc" }],
           take: 300,
+        })
+        : Promise.resolve([]),
+      isCostsTabRequest
+        ? db.itemCostSheetComponentPreset.findMany({
+          where: { active: true, type: { in: ["manual", "labor"] } },
+          select: {
+            id: true,
+            key: true,
+            type: true,
+            variationId: true,
+            name: true,
+            unit: true,
+            quantity: true,
+            unitCostAmount: true,
+            wastePerc: true,
+            notes: true,
+            sortOrderIndex: true,
+            Variation: { select: { id: true, name: true, code: true, kind: true } },
+          },
+          orderBy: [{ type: "asc" }, { sortOrderIndex: "asc" }, { name: "asc" }],
+        })
+        : Promise.resolve([]),
+      isCostsTabRequest
+        ? db.variation.findMany({
+          where: { deletedAt: null },
+          select: { id: true, name: true, code: true, kind: true },
+          orderBy: [{ kind: "asc" }, { sortOrderIndex: "asc" }, { name: "asc" }],
         })
         : Promise.resolve([]),
       db.itemCostSheetComponent.groupBy({
@@ -359,6 +700,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       itemCostSheetId: rootSheetId,
       itemVariationIds: visibleRecipeSheets.map((sheet: any) => String(sheet.itemVariationId || "")).filter(Boolean),
     });
+    const recipeCompositionBreakdownByLineId = isCostsTabRequest
+      ? await buildRecipeCompositionBreakdownMap(db, {
+        compositionRows,
+        variationSheets: visibleRecipeSheets,
+      })
+      : {};
     const deletionGuard = await getItemCostSheetDeletionGuard(db, {
       itemCostSheetId: rootSheetId,
       isActive: visibleRecipeSheets.some((sheet: any) => Boolean(sheet.isActive)),
@@ -372,8 +719,30 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       selectedSheetId: currentSheet.id,
       selectedSheet: currentSheet,
       compositionRows,
+      recipeCompositionBreakdownByLineId,
       recipeOptions,
       referenceSheetOptions: referenceSheets,
+      componentPresets: (componentPresets || []).map((preset: any) => ({
+        id: String(preset.id || ""),
+        key: String(preset.key || ""),
+        type: String(preset.type || "manual"),
+        variationId: preset.variationId ? String(preset.variationId) : null,
+        variationLabel: preset.Variation?.name || null,
+        variationCode: preset.Variation?.code || null,
+        variationKind: preset.Variation?.kind || null,
+        name: String(preset.name || ""),
+        unit: preset.unit || null,
+        quantity: Number(preset.quantity || 1),
+        unitCostAmount: Number(preset.unitCostAmount || 0),
+        wastePerc: Number(preset.wastePerc || 0),
+        notes: preset.notes || null,
+      })),
+      presetVariations: (presetVariations || []).map((variation: any) => ({
+        id: String(variation.id || ""),
+        name: String(variation.name || variation.code || "Variação"),
+        code: String(variation.code || ""),
+        kind: String(variation.kind || ""),
+      })),
       recipeSheetDependencyCountById,
       deletionGuard,
       unitOptions,
@@ -402,7 +771,17 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const [groupSheets, activeItemVariationIds] = await Promise.all([
       db.itemCostSheet.findMany({
         where: { OR: [{ id: rootSheetId }, { baseItemCostSheetId: rootSheetId }] },
-        select: { id: true, itemVariationId: true, isActive: true },
+        select: {
+          id: true,
+          itemVariationId: true,
+          isActive: true,
+          ItemVariation: {
+            select: {
+              variationId: true,
+              Variation: { select: { id: true, name: true, code: true, kind: true } },
+            },
+          },
+        },
         orderBy: [{ createdAt: "asc" }],
       }),
       listActiveItemVariationIdsForItem(db, currentSheet.itemId),
@@ -412,7 +791,14 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const visibleGroupSheets = groupSheets.filter((sheet: any) =>
       activeVariationIdSet.size === 0 || activeVariationIdSet.has(String(sheet.itemVariationId || ""))
     );
-    const targetItemVariationIds = visibleGroupSheets.map((sheet: any) => String(sheet.itemVariationId || "")).filter(Boolean);
+    const targetVariationRows = visibleGroupSheets
+      .map((sheet: any) => ({
+        itemVariationId: String(sheet.itemVariationId || ""),
+        variationId: sheet.ItemVariation?.variationId ? String(sheet.ItemVariation.variationId) : null,
+        variationName: sheet.ItemVariation?.Variation?.name || null,
+      }))
+      .filter((sheet) => sheet.itemVariationId);
+    const targetItemVariationIds = targetVariationRows.map((sheet) => sheet.itemVariationId);
 
     if (_action === "item-cost-sheet-meta-update") {
       const itemCostSheetId = String(formData.get("itemCostSheetId") || "").trim();
@@ -489,26 +875,54 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
     if (_action === "item-cost-sheet-line-add-manual") {
       const itemCostSheetId = String(formData.get("itemCostSheetId") || "").trim();
+      const presetId = String(formData.get("presetId") || "").trim();
       const name = String(formData.get("name") || "").trim();
       const unit = normalizeUnit(formData.get("unit"));
       const quantity = Number(String(formData.get("quantity") || "1").replace(",", "."));
       const unitCostAmount = Number(String(formData.get("unitCostAmount") || "0").replace(",", "."));
       const wastePerc = Number(String(formData.get("wastePerc") || "0").replace(",", "."));
       const notes = String(formData.get("notes") || "").trim();
+      const preset = presetId
+        ? await db.itemCostSheetComponentPreset.findFirst({
+          where: { id: presetId, active: true, type: "manual" },
+          select: { id: true, variationId: true, name: true },
+        })
+        : null;
 
       if (!itemCostSheetId) return badRequest("Ficha de custo inválida");
+      if (presetId && !preset) return badRequest("Preset de custo manual inválido");
       if (!name) return badRequest("Informe o nome do custo");
       if (!unit || !availableUnits.includes(unit)) return badRequest("Informe uma unidade válida");
       if (!(quantity > 0)) return badRequest("Informe uma quantidade válida");
       if (!(unitCostAmount >= 0)) return badRequest("Informe um custo unitário válido");
       if (itemCostSheetId !== currentSheet.id) return badRequest("Ficha de custo divergente");
+      const presetVariationEntries = preset
+        ? buildPresetVariationEntries({
+          preset: {
+            variationId: preset.variationId ? String(preset.variationId) : null,
+            quantity,
+            unitCostAmount,
+            wastePerc,
+          },
+          targetVariationRows,
+          unit,
+          quantity,
+          unitCostAmount,
+          wastePerc,
+        })
+        : null;
+      if (preset?.variationId && !presetVariationEntries) {
+        return badRequest(`O preset ${preset.name} está vinculado a uma variação ausente nesta ficha`);
+      }
 
       await createItemCostSheetRow({
         db,
         itemCostSheetId: rootSheetId,
         itemVariationId: currentSheet.itemVariationId,
         targetItemVariationIds,
+        variationEntries: presetVariationEntries || undefined,
         type: "manual",
+        presetId: preset?.id || null,
         name,
         unit,
         quantity,
@@ -523,25 +937,53 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
     if (_action === "item-cost-sheet-line-add-labor") {
       const itemCostSheetId = String(formData.get("itemCostSheetId") || "").trim();
+      const presetId = String(formData.get("presetId") || "").trim();
       const name = String(formData.get("name") || "").trim() || "Mão de obra";
       const unit = normalizeUnit(formData.get("unit"));
       const quantity = Number(String(formData.get("quantity") || "1").replace(",", "."));
       const unitCostAmount = Number(String(formData.get("unitCostAmount") || "0").replace(",", "."));
       const wastePerc = Number(String(formData.get("wastePerc") || "0").replace(",", "."));
       const notes = String(formData.get("notes") || "").trim();
+      const preset = presetId
+        ? await db.itemCostSheetComponentPreset.findFirst({
+          where: { id: presetId, active: true, type: "labor" },
+          select: { id: true, variationId: true, name: true },
+        })
+        : null;
 
       if (!itemCostSheetId) return badRequest("Ficha de custo inválida");
+      if (presetId && !preset) return badRequest("Preset de mão de obra inválido");
       if (!unit || !availableUnits.includes(unit)) return badRequest("Informe uma unidade válida");
       if (!(quantity > 0)) return badRequest("Informe uma quantidade válida");
       if (!(unitCostAmount >= 0)) return badRequest("Informe um custo unitário válido");
       if (itemCostSheetId !== currentSheet.id) return badRequest("Ficha de custo divergente");
+      const presetVariationEntries = preset
+        ? buildPresetVariationEntries({
+          preset: {
+            variationId: preset.variationId ? String(preset.variationId) : null,
+            quantity,
+            unitCostAmount,
+            wastePerc,
+          },
+          targetVariationRows,
+          unit,
+          quantity,
+          unitCostAmount,
+          wastePerc,
+        })
+        : null;
+      if (preset?.variationId && !presetVariationEntries) {
+        return badRequest(`O preset ${preset.name} está vinculado a uma variação ausente nesta ficha`);
+      }
 
       await createItemCostSheetRow({
         db,
         itemCostSheetId: rootSheetId,
         itemVariationId: currentSheet.itemVariationId,
         targetItemVariationIds,
+        variationEntries: presetVariationEntries || undefined,
         type: "labor",
+        presetId: preset?.id || null,
         name,
         unit,
         quantity,
@@ -551,6 +993,96 @@ export async function action({ request, params }: ActionFunctionArgs) {
       });
 
       await recalcItemCostSheetTotals(db, rootSheetId);
+      return redirect(postRedirectTo);
+    }
+
+    if (_action === "item-cost-sheet-preset-create" || _action === "item-cost-sheet-preset-update") {
+      const presetId = String(formData.get("presetId") || "").trim();
+      const type = String(formData.get("type") || "").trim();
+      const name = normalizePresetText(formData.get("name"));
+      const unit = normalizeUnit(formData.get("unit"));
+      const quantity = Number(String(formData.get("quantity") || "1").replace(",", "."));
+      const unitCostAmount = Number(String(formData.get("unitCostAmount") || "0").replace(",", "."));
+      const wastePerc = Number(String(formData.get("wastePerc") || "0").replace(",", "."));
+      const notes = normalizePresetText(formData.get("notes"));
+      const variationId = String(formData.get("variationId") || "").trim() || null;
+
+      if (!["manual", "labor"].includes(type)) return badRequest("Tipo de preset inválido");
+      if (!name) return badRequest("Informe o nome do preset");
+      if (!unit || !availableUnits.includes(unit)) return badRequest("Informe uma unidade válida para o preset");
+      if (!(quantity > 0)) return badRequest("Informe uma quantidade válida para o preset");
+      if (!(unitCostAmount >= 0)) return badRequest("Informe um custo unitário válido para o preset");
+
+      let variationRecord: any = null;
+      if (variationId) {
+        variationRecord = await db.variation.findFirst({
+          where: { id: variationId, deletedAt: null },
+          select: { id: true },
+        });
+        if (!variationRecord) return badRequest("Variação do preset inválida");
+      }
+
+      if (_action === "item-cost-sheet-preset-create") {
+        const key = await createUniquePresetKey(db, type, name);
+        const lastPreset = await db.itemCostSheetComponentPreset.findFirst({
+          where: { type, active: true },
+          select: { sortOrderIndex: true },
+          orderBy: [{ sortOrderIndex: "desc" }, { createdAt: "desc" }],
+        });
+        await db.itemCostSheetComponentPreset.create({
+          data: {
+            key,
+            type,
+            name,
+            unit,
+            quantity,
+            unitCostAmount,
+            wastePerc,
+            notes: notes || null,
+            variationId,
+            active: true,
+            sortOrderIndex: Number(lastPreset?.sortOrderIndex || 0) + 10,
+          },
+        });
+      } else {
+        if (!presetId) return badRequest("Preset inválido");
+        const existingPreset = await db.itemCostSheetComponentPreset.findFirst({
+          where: { id: presetId, active: true, type: { in: ["manual", "labor"] } },
+          select: { id: true },
+        });
+        if (!existingPreset) return badRequest("Preset não encontrado");
+
+        await db.itemCostSheetComponentPreset.update({
+          where: { id: presetId },
+          data: {
+            type,
+            name,
+            unit,
+            quantity,
+            unitCostAmount,
+            wastePerc,
+            notes: notes || null,
+            variationId,
+          },
+        });
+      }
+
+      return redirect(postRedirectTo);
+    }
+
+    if (_action === "item-cost-sheet-preset-delete") {
+      const presetId = String(formData.get("presetId") || "").trim();
+      if (!presetId) return badRequest("Preset inválido");
+
+      const preset = await db.itemCostSheetComponentPreset.findFirst({
+        where: { id: presetId, active: true, type: { in: ["manual", "labor"] } },
+        select: { id: true },
+      });
+      if (!preset) return badRequest("Preset não encontrado");
+
+      await db.itemCostSheetComponentPreset.delete({
+        where: { id: preset.id },
+      });
       return redirect(postRedirectTo);
     }
 
@@ -837,6 +1369,10 @@ export type AdminItemCostSheetDetailOutletContext = {
   rootSheetId: string;
   selectedSheet: any | null;
   compositionRows: SheetCompositionRow[];
+  recipeCompositionBreakdownByLineId: Record<
+    string,
+    Record<string, RecipeCompositionBreakdown>
+  >;
   recipeOptions: Array<{
     id: string;
     name: string;
@@ -849,6 +1385,8 @@ export type AdminItemCostSheetDetailOutletContext = {
     itemId: string;
     costAmount: number;
   }>;
+  componentPresets: ComponentPresetRecord[];
+  presetVariations: PresetVariationOption[];
   unitOptions: string[];
   recipeSheetDependencyCountById: Record<string, number>;
   deletionGuard: {
@@ -878,6 +1416,10 @@ export default function AdminItemCostSheetDetail() {
   const rootSheetId = String(payload.rootSheetId || "");
   const selectedSheet = payload.selectedSheet as any | null;
   const compositionRows = (payload.compositionRows || []) as SheetCompositionRow[];
+  const recipeCompositionBreakdownByLineId = (payload.recipeCompositionBreakdownByLineId || {}) as Record<
+    string,
+    Record<string, RecipeCompositionBreakdown>
+  >;
   const recipeOptions = (payload.recipeOptions || []) as Array<{
     id: string;
     name: string;
@@ -890,6 +1432,8 @@ export default function AdminItemCostSheetDetail() {
     itemId: string;
     costAmount: number;
   }>;
+  const componentPresets = (payload.componentPresets || []) as ComponentPresetRecord[];
+  const presetVariations = (payload.presetVariations || []) as PresetVariationOption[];
   const unitOptions = (payload.unitOptions || ITEM_UNIT_OPTIONS) as string[];
   const recipeSheetDependencyCountById = (payload.recipeSheetDependencyCountById || {}) as Record<string, number>;
   const deletionGuard = (payload.deletionGuard || {}) as {
@@ -929,8 +1473,11 @@ export default function AdminItemCostSheetDetail() {
     rootSheetId,
     selectedSheet,
     compositionRows,
+    recipeCompositionBreakdownByLineId,
     recipeOptions,
     referenceSheetOptions,
+    componentPresets,
+    presetVariations,
     unitOptions,
     recipeSheetDependencyCountById,
     deletionGuard,

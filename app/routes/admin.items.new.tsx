@@ -29,7 +29,7 @@ function normalizeUnit(value: FormDataEntryValue | null) {
   return normalizeItemUnit(value);
 }
 
-export async function loader({}: LoaderFunctionArgs) {
+export async function loader({ }: LoaderFunctionArgs) {
   try {
     const db = prismaClient as any;
     const [categories, unitOptions] = await Promise.all([
@@ -123,7 +123,7 @@ export default function AdminItemsNewPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <section className="space-y-5 border-b border-slate-200/80 pb-5">
+      <section className="space-y-5">
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <Link
             to="/admin/items"
@@ -147,7 +147,7 @@ export default function AdminItemsNewPage() {
       <Form method="post" className="space-y-4">
         <input type="hidden" name="_action" value="item-create" />
 
-        <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5">
+        <div className="space-y-4 ">
           <div className="grid gap-4 md:grid-cols-2">
             <div>
               <Label htmlFor="name">Nome</Label>

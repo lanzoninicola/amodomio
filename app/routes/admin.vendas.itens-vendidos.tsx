@@ -44,7 +44,7 @@ type SellingRow = {
   channelVisible: boolean;
   totalVariations: number;
   totalPriceEntries: number;
-  publishedPriceEntries: number;
+  channelPriceEntries: number;
   referenceVariationName: string | null;
   referencePriceAmount: number | null;
   updatedBy: string | null;
@@ -142,7 +142,6 @@ function buildSoldItemWhere(cardapioChannelId: string) {
     ItemSellingPriceVariation: {
       some: {
         itemSellingChannelId: cardapioChannelId,
-        published: true,
       },
     },
   };
@@ -245,7 +244,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       },
     };
 
-    const [totalItems, activeForSales, visibleInChannel, publishedInChannel, upcomingItems] = await Promise.all([
+    const [totalItems, activeForSales, visibleInChannel, pricedInChannel, upcomingItems] = await Promise.all([
       db.item.count({ where }),
       db.item.count({ where }),
       db.item.count({
@@ -265,7 +264,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
           ItemSellingPriceVariation: {
             some: {
               itemSellingChannelId: selectedChannel.id,
-              published: true,
             },
           },
         },
@@ -343,7 +341,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
           select: {
             id: true,
             priceAmount: true,
-            published: true,
             updatedAt: true,
             updatedBy: true,
             ItemVariation: {
@@ -368,16 +365,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const rows: SellingRow[] = (items || []).map((item: any) => {
       const channelLink = item.ItemSellingChannelItem?.[0] || null;
       const prices = item.ItemSellingPriceVariation || [];
-      const publishedPrices = prices.filter((row: any) => row.published);
       const referencePrice =
         prices.find((row: any) => row.ItemVariation?.isReference) ||
-        publishedPrices.find((row: any) => row.ItemVariation?.isReference) ||
-        publishedPrices[0] ||
         prices[0] ||
         null;
       const upcoming = Boolean(item.ItemSellingInfo?.upcoming);
       const channelVisible = channelLink?.visible === true;
-      const commerciallyReady = true;
+      const commerciallyReady = Boolean(item.canSell) && Boolean(item.active) && channelVisible && !upcoming && prices.length > 0;
 
       return {
         id: String(item.id),
@@ -394,7 +388,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         channelVisible,
         totalVariations: (item.ItemVariation || []).length,
         totalPriceEntries: prices.length,
-        publishedPriceEntries: publishedPrices.length,
+        channelPriceEntries: prices.length,
         referenceVariationName: referencePrice?.ItemVariation?.Variation?.name || null,
         referencePriceAmount: referencePrice ? Number(referencePrice.priceAmount || 0) : null,
         updatedBy: referencePrice?.updatedBy || null,
@@ -417,7 +411,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         totalItems,
         activeForSales,
         visibleInChannel,
-        publishedInChannel,
+        publishedInChannel: pricedInChannel,
         upcomingItems: 0,
       },
     });
@@ -498,7 +492,7 @@ export default function AdminVendasItensVendidosPage() {
         <span>·</span>
         <span>{payload.summary?.visibleInChannel || 0} visíveis no canal</span>
         <span>·</span>
-        <span>{payload.summary?.publishedInChannel || 0} com preço publicado</span>
+        <span>{payload.summary?.publishedInChannel || 0} com preço no canal</span>
         <span>·</span>
         <span>Pág. {payload.filters.page}/{payload.filters.totalPages}</span>
       </div>
@@ -666,7 +660,7 @@ export default function AdminVendasItensVendidosPage() {
                   <TableCell>
                     <div className="space-y-2">
                       <div className="text-sm font-medium text-slate-900">
-                        {row.publishedPriceEntries}/{row.totalPriceEntries} preço(s) publicado(s)
+                        {row.channelPriceEntries}/{row.totalPriceEntries} preço(s) no canal
                       </div>
                       <Badge
                         variant="outline"

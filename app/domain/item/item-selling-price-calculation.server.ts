@@ -27,10 +27,10 @@ export function computeNativeItemSellingPriceBreakdown(params: {
   size: MenuItemSize | null;
 }): ComputedSellingPriceBreakdown {
   const custoFichaTecnica = Number(params.itemCostAmount || 0);
-  const wasteFactor = 1 + Number(params.sellingPriceConfig.wastePercentage || 0) / 100;
+  const wasteCost = 0;
   const doughCostAmount = 0;
   const packagingCostAmount = 0;
-  const itemTotalCost = custoFichaTecnica * wasteFactor + packagingCostAmount;
+  const itemTotalCost = custoFichaTecnica;
   const targetProfitPerc = Number(params.channel?.targetMarginPerc || 0);
 
   let price = menuItemSellingPriceUtilityEntity.calculateSellingPrice(
@@ -49,9 +49,9 @@ export function computeNativeItemSellingPriceBreakdown(params: {
 
   return {
     custoFichaTecnica: Number(custoFichaTecnica.toFixed(2)),
-    wasteCost: Number((custoFichaTecnica * (wasteFactor - 1)).toFixed(2)),
+    wasteCost,
     doughCostAmount: Number(doughCostAmount.toFixed(2)),
-    packagingCostAmount: 0,
+    packagingCostAmount: Number(packagingCostAmount.toFixed(2)),
     dnaPercentage: Number(params.sellingPriceConfig.dnaPercentage || 0),
     channel: {
       name: params.channel?.name || "",

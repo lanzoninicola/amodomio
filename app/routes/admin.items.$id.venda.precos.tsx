@@ -13,6 +13,7 @@ import {
 } from "~/domain/item/item-selling-price-calculation.server";
 import { itemSellingPriceVariationEntity } from "~/domain/item/item-selling-price-variation.entity.server";
 import { menuItemSellingPriceUtilityEntity } from "~/domain/cardapio/menu-item-selling-price-utility.entity";
+import { settingPrismaEntity } from "~/domain/setting/setting.prisma.entity.server";
 import prismaClient from "~/lib/prisma/client.server";
 import { badRequest, ok, serverError } from "~/utils/http-response.server";
 import { lastUrlSegment } from "~/utils/url";
@@ -51,6 +52,8 @@ export async function loader({ params }: LoaderFunctionArgs) {
       activeSheets,
       sizeMap,
       sellingPriceConfig,
+      dnaHelpSetting,
+      profitPriceHelpSetting,
     ] = await Promise.all([
       db.item.findUnique({
         where: { id },
@@ -99,6 +102,8 @@ export async function loader({ params }: LoaderFunctionArgs) {
       }),
       listSizeMapByKey(),
       menuItemSellingPriceUtilityEntity.getSellingPriceConfig(),
+      settingPrismaEntity.findByContextAndName("sell-price-management", "dnaHelpUrl"),
+      settingPrismaEntity.findByContextAndName("sell-price-management", "profitPriceHelpUrl"),
     ]);
 
     if (!item) return badRequest("Item não encontrado");
@@ -173,6 +178,8 @@ export async function loader({ params }: LoaderFunctionArgs) {
       nativeRows,
       nativeModelAvailable,
       pricingRows,
+      dnaHelpUrl: String(dnaHelpSetting?.value || "").trim() || null,
+      profitPriceHelpUrl: String(profitPriceHelpSetting?.value || "").trim() || null,
     });
   } catch (error) {
     return serverError(error);
@@ -262,6 +269,8 @@ export type AdminItemVendaPrecosOutletContext = AdminItemVendaOutletContext & {
     updatedBy?: string | null;
   }>;
   nativeModelAvailable: boolean;
+  dnaHelpUrl: string | null;
+  profitPriceHelpUrl: string | null;
   pricingRows: Array<{
     itemVariationId: string;
     itemSellingChannelId: string;
@@ -296,6 +305,8 @@ export default function AdminItemVendaPrecosLayout() {
     editableVariations?: AdminItemVendaPrecosOutletContext["editableVariations"];
     nativeRows?: AdminItemVendaPrecosOutletContext["nativeRows"];
     nativeModelAvailable?: boolean;
+    dnaHelpUrl?: AdminItemVendaPrecosOutletContext["dnaHelpUrl"];
+    profitPriceHelpUrl?: AdminItemVendaPrecosOutletContext["profitPriceHelpUrl"];
     pricingRows?: AdminItemVendaPrecosOutletContext["pricingRows"];
   };
   const basePath = `/admin/items/${sellingContext.item.id}/venda/precos`;
@@ -315,6 +326,8 @@ export default function AdminItemVendaPrecosLayout() {
     editableVariations: payload.editableVariations || [],
     nativeRows: payload.nativeRows || [],
     nativeModelAvailable: payload.nativeModelAvailable ?? false,
+    dnaHelpUrl: payload.dnaHelpUrl || null,
+    profitPriceHelpUrl: payload.profitPriceHelpUrl || null,
     pricingRows: payload.pricingRows || [],
   };
 

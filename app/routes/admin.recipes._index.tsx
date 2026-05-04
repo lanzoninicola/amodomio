@@ -114,7 +114,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
             select: { name: true },
           },
         },
-        orderBy: [{ name: "asc" }],
+        orderBy: [{ createdAt: "desc" }],
         skip: (page - 1) * PAGE_SIZE,
         take: PAGE_SIZE,
       }),
@@ -375,9 +375,8 @@ export default function RecipesIndex() {
               <button
                 type="button"
                 className="inline-flex h-9 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700"
-                aria-label={`Rows per page: ${
-                  pagination?.pageSize || PAGE_SIZE
-                }`}
+                aria-label={`Rows per page: ${pagination?.pageSize || PAGE_SIZE
+                  }`}
               >
                 <span>{pagination?.pageSize || PAGE_SIZE}</span>
                 <ChevronLeft className="h-4 w-4 rotate-[-90deg] text-slate-400" />
@@ -390,17 +389,16 @@ export default function RecipesIndex() {
                     href={
                       pagination?.page > 1
                         ? buildPageHref({
-                            q: filters?.q || "",
-                            itemId: filters?.itemId || "",
-                            page: 1,
-                          })
+                          q: filters?.q || "",
+                          itemId: filters?.itemId || "",
+                          page: 1,
+                        })
                         : "#"
                     }
-                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${
-                      pagination?.page <= 1
+                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${pagination?.page <= 1
                         ? "pointer-events-none opacity-40"
                         : ""
-                    }`}
+                      }`}
                     aria-label="Primeira pagina"
                   >
                     <ChevronsLeft className="h-4 w-4" />
@@ -411,17 +409,16 @@ export default function RecipesIndex() {
                     href={
                       pagination?.page > 1
                         ? buildPageHref({
-                            q: filters?.q || "",
-                            itemId: filters?.itemId || "",
-                            page: (pagination?.page || 1) - 1,
-                          })
+                          q: filters?.q || "",
+                          itemId: filters?.itemId || "",
+                          page: (pagination?.page || 1) - 1,
+                        })
                         : "#"
                     }
-                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${
-                      pagination?.page <= 1
+                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${pagination?.page <= 1
                         ? "pointer-events-none opacity-40"
                         : ""
-                    }`}
+                      }`}
                     aria-label="Pagina anterior"
                   >
                     <ChevronLeft className="h-4 w-4" />
@@ -432,17 +429,16 @@ export default function RecipesIndex() {
                     href={
                       pagination?.page < (pagination?.totalPages || 1)
                         ? buildPageHref({
-                            q: filters?.q || "",
-                            itemId: filters?.itemId || "",
-                            page: (pagination?.page || 1) + 1,
-                          })
+                          q: filters?.q || "",
+                          itemId: filters?.itemId || "",
+                          page: (pagination?.page || 1) + 1,
+                        })
                         : "#"
                     }
-                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${
-                      pagination?.page >= (pagination?.totalPages || 1)
+                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${pagination?.page >= (pagination?.totalPages || 1)
                         ? "pointer-events-none opacity-40"
                         : ""
-                    }`}
+                      }`}
                     aria-label="Proxima pagina"
                   >
                     <ChevronLeft className="h-4 w-4 rotate-180" />
@@ -453,17 +449,16 @@ export default function RecipesIndex() {
                     href={
                       pagination?.page < (pagination?.totalPages || 1)
                         ? buildPageHref({
-                            q: filters?.q || "",
-                            itemId: filters?.itemId || "",
-                            page: pagination?.totalPages || 1,
-                          })
+                          q: filters?.q || "",
+                          itemId: filters?.itemId || "",
+                          page: pagination?.totalPages || 1,
+                        })
                         : "#"
                     }
-                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${
-                      pagination?.page >= (pagination?.totalPages || 1)
+                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${pagination?.page >= (pagination?.totalPages || 1)
                         ? "pointer-events-none opacity-40"
                         : ""
-                    }`}
+                      }`}
                     aria-label="Ultima pagina"
                   >
                     <ChevronsRight className="h-4 w-4" />

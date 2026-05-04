@@ -191,7 +191,6 @@ export async function loadItemSellingOverview(params: {
           select: {
             id: true,
             priceAmount: true,
-            published: true,
             updatedAt: true,
             ItemVariation: {
               select: {
@@ -221,12 +220,27 @@ export async function loadItemSellingOverview(params: {
   const enabledNativePriceRows = (nativePriceRows || []).filter((row: any) =>
     enabledChannelKeys.has(String(row.ItemSellingChannel?.key || "").toLowerCase())
   );
+  const isNativeRowPublic = (row: any) => {
+    const channelKey = String(row?.ItemSellingChannel?.key || "").toLowerCase();
+
+    return (
+      Boolean(item.canSell) &&
+      Boolean(item.active) &&
+      Boolean(channelKey) &&
+      channelLinkByKey.get(channelKey)?.visible === true &&
+      item.ItemSellingInfo?.upcoming !== true
+    );
+  };
+  const publicNativePriceRows = enabledNativePriceRows.filter((row: any) => isNativeRowPublic(row));
+  const publicCardapioPriceRows = publicNativePriceRows.filter(
+    (row: any) => String(row.ItemSellingChannel?.key || "").toLowerCase() === "cardapio"
+  );
   const nativeCardapioVisible =
     Boolean(item.canSell) &&
     Boolean(item.active) &&
     channelLinkByKey.get("cardapio")?.visible === true &&
     item.ItemSellingInfo?.upcoming !== true &&
-    enabledNativePriceRows.some((row: any) => Boolean(row.published));
+    publicCardapioPriceRows.length > 0;
 
   const legacyPublications: ItemLegacyPublicationSummary[] = (linkedMenuItems || []).map((menuItem: any) => {
     const publishedChannelKeys = Array.from(
@@ -271,7 +285,7 @@ export async function loadItemSellingOverview(params: {
     const nativeRows = (nativePriceRows || []).filter(
       (priceRow: any) => String(priceRow.ItemSellingChannel?.key || "").toLowerCase() === catalogChannel.key
     );
-    const nativeActivePublications = nativeRows.filter((row: any) => Boolean(row.published)).length;
+    const nativeActivePublications = nativeRows.filter((row: any) => isNativeRowPublic(row)).length;
 
     const totalPriceEntries = nativeRows.length;
 
@@ -337,18 +351,13 @@ export async function loadItemSellingOverview(params: {
     current.channels[channelKey].push({
       id: nativeRow.id,
       priceAmount: Number(nativeRow.priceAmount || 0),
-      showOnCardapio: Boolean(nativeRow.published),
+      showOnCardapio: isNativeRowPublic(nativeRow),
       updatedAt: nativeRow.updatedAt ? new Date(nativeRow.updatedAt).toISOString() : null,
       channelName: nativeRow.ItemSellingChannel?.name || null,
       sourceMenuItemId: item.id,
       sourceMenuItemName: item.name,
       sourceMenuItemActive: Boolean(item.canSell && item.active),
-      sourceMenuItemVisible:
-        Boolean(item.canSell) &&
-        Boolean(item.active) &&
-        channelLinkByKey.get(channelKey)?.visible === true &&
-        item.ItemSellingInfo?.upcoming !== true &&
-        Boolean(nativeRow.published),
+      sourceMenuItemVisible: isNativeRowPublic(nativeRow),
     });
   }
 
@@ -366,8 +375,7 @@ export async function loadItemSellingOverview(params: {
   ];
   const nativePublishedChannelKeys = Array.from(
     new Set(
-      (nativePriceRows || [])
-        .filter((row: any) => Boolean(row.published))
+      publicNativePriceRows
         .map((row: any) => String(row.ItemSellingChannel?.key || "").toLowerCase())
         .filter((key: string) => Boolean(key) && enabledChannelKeys.has(key))
     )
@@ -375,13 +383,13 @@ export async function loadItemSellingOverview(params: {
   const nativePublication: ItemNativePublicationSummary = {
     canSell: Boolean(item.canSell),
     hasAnyNativePrice: enabledNativePriceRows.length > 0,
-    hasAnyPublishedPrice: enabledNativePriceRows.some((row: any) => Boolean(row.published)),
+    hasAnyPublishedPrice: publicNativePriceRows.length > 0,
     slug: item.ItemSellingInfo?.slug || null,
     visibleFlag: channelLinkByKey.get("cardapio")?.visible === true,
     upcoming: item.ItemSellingInfo?.upcoming === true,
     publishedChannelKeys: nativePublishedChannelKeys,
     totalPriceEntries: enabledNativePriceRows.length,
-    publishedPriceEntries: enabledNativePriceRows.filter((row: any) => Boolean(row.published)).length,
+    publishedPriceEntries: publicNativePriceRows.length,
     visible: nativeCardapioVisible,
   };
 

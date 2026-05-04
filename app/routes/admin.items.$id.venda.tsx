@@ -188,7 +188,7 @@ export default function AdminItemVendaLayout() {
           {!nativePricingReady ? <span>· publicações legadas: {legacyPublications.length}</span> : null}
         </div>
 
-        <div className="grid gap-3 md:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-2">
           <div className="rounded-lg border border-slate-200 bg-white px-3 py-3">
             <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Disponibilidade nativa</div>
             <div className="mt-2 text-sm font-medium text-slate-900">
@@ -207,14 +207,6 @@ export default function AdminItemVendaLayout() {
               {` Canal cardápio: ${nativePublication.visibleFlag ? "visível" : "oculto"}.`}
               {nativePublication.upcoming ? " Marcado como lançamento futuro." : ""}
             </div>
-          </div>
-
-          <div className="rounded-lg border border-slate-200 bg-white px-3 py-3">
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Bridge legada</div>
-            <div className="mt-2 text-sm font-medium text-slate-900">
-              {legacyPublications.length > 0 ? `${legacyPublications.length} vínculo(s)` : "Sem bridge ativa"}
-            </div>
-            <div className="mt-1 text-xs text-slate-500">Mantida apenas para compatibilidade residual, sem dirigir a venda nativa.</div>
           </div>
         </div>
       </div>

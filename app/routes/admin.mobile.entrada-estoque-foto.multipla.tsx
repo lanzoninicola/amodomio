@@ -391,7 +391,7 @@ export default function AdminMobileEntradaEstoqueFotoMultiplaPage() {
           {importedBatches.map((batch) => (
             <a
               key={batch.batchId}
-              href={`/admin/import-stock-movements/${batch.batchId}`}
+              href={`/admin/mobile/import-stock-movements/${batch.batchId}`}
               className="flex items-center justify-between rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm text-emerald-700"
             >
               <span className="font-medium">{batch.supplierName}</span>

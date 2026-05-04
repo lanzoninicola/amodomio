@@ -16,10 +16,130 @@ export function calcItemCostSheetTotalCostAmount(
   return roundItemCostSheetMoney(baseAmount * wasteFactor);
 }
 
+async function findRecipeLinkedIngredientVariation(params: {
+  db: any;
+  itemId: string;
+  variationId?: string | null;
+}) {
+  const itemId = String(params.itemId || "").trim();
+  if (!itemId) return null;
+
+  if (params.variationId) {
+    const exact = await params.db.itemVariation.findFirst({
+      where: {
+        itemId,
+        variationId: params.variationId,
+        deletedAt: null,
+        recipeId: { not: null },
+      },
+      select: {
+        id: true,
+        recipeId: true,
+      },
+    });
+    if (exact?.recipeId) return exact;
+  }
+
+  return await params.db.itemVariation.findFirst({
+    where: {
+      itemId,
+      deletedAt: null,
+      recipeId: { not: null },
+    },
+    select: {
+      id: true,
+      recipeId: true,
+    },
+    orderBy: [{ isReference: "desc" }, { createdAt: "asc" }],
+  });
+}
+
+async function findLatestActiveCostSheetForVariation(params: {
+  db: any;
+  itemVariationId: string;
+}) {
+  const itemVariationId = String(params.itemVariationId || "").trim();
+  if (!itemVariationId) return null;
+
+  return await params.db.itemCostSheet.findFirst({
+    where: {
+      itemVariationId,
+      isActive: true,
+    },
+    select: {
+      id: true,
+      costAmount: true,
+      activatedAt: true,
+      updatedAt: true,
+    },
+    orderBy: [{ activatedAt: "desc" }, { updatedAt: "desc" }],
+  });
+}
+
+export async function resolveRecipeIngredientCostSnapshot(params: {
+  db: any;
+  itemId: string;
+  variationId?: string | null;
+  _depth?: number;
+}) {
+  const depth = Number(params._depth || 0);
+
+  const costInfo = await resolveItemCostSnapshot({
+    db: params.db,
+    itemId: params.itemId,
+    variationId: params.variationId || null,
+  });
+
+  const hasDirectCost =
+    Number(costInfo.lastUnitCostAmount || 0) > 0 ||
+    Number(costInfo.avgUnitCostAmount || 0) > 0;
+  if (hasDirectCost) return costInfo;
+
+  const linkedVariation = await findRecipeLinkedIngredientVariation({
+    db: params.db,
+    itemId: params.itemId,
+    variationId: params.variationId || null,
+  });
+  if (!linkedVariation?.id || !linkedVariation.recipeId) return costInfo;
+
+  const activeSheet = await findLatestActiveCostSheetForVariation({
+    db: params.db,
+    itemVariationId: linkedVariation.id,
+  });
+  const activeSheetCost = Number(activeSheet?.costAmount || 0);
+  if (activeSheetCost > 0) {
+    return {
+      ...costInfo,
+      itemVariationId: linkedVariation.id,
+      lastUnitCostAmount: activeSheetCost,
+      avgUnitCostAmount: activeSheetCost,
+    };
+  }
+
+  if (depth >= 5) return costInfo;
+
+  const subSnapshot = await getRecipeCompositionCostSnapshot(
+    params.db,
+    linkedVariation.recipeId,
+    linkedVariation.id,
+    depth + 1
+  );
+  const subCost = Number(subSnapshot.unitCostAmount || 0);
+  if (subCost <= 0) return costInfo;
+
+  return {
+    ...costInfo,
+    itemVariationId: linkedVariation.id,
+    lastUnitCostAmount: subCost,
+    avgUnitCostAmount: subCost,
+  };
+}
+
 export async function getRecipeCompositionCostSnapshot(
   db: any,
   recipeId: string,
-  itemVariationId?: string | null
+  itemVariationId?: string | null,
+  _depth = 0
 ) {
   const recipe = await db.recipe.findUnique({
     where: { id: recipeId },
@@ -50,10 +170,11 @@ export async function getRecipeCompositionCostSnapshot(
   for (const line of lines) {
     const variationId = line.ItemVariation?.variationId || null;
     const effectiveLossPct = Number(line.lossPct ?? line.defaultLossPct ?? 0);
-    const costInfo = await resolveItemCostSnapshot({
+    const costInfo = await resolveRecipeIngredientCostSnapshot({
       db,
       itemId: line.itemId,
-      variationId,
+      variationId: variationId || null,
+      _depth,
     });
     const safeLossPct = Math.min(99.9999, Math.max(0, effectiveLossPct));
     const grossQuantity =

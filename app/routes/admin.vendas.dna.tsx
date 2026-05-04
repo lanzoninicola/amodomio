@@ -1,6 +1,7 @@
-import { LoaderFunctionArgs, defer, type ActionFunction } from "@remix-run/node";
+import { LoaderFunctionArgs, defer, type ActionFunction, type MetaFunction } from "@remix-run/node";
 import { useActionData, Form, Await, useLoaderData, Link } from "@remix-run/react";
 import { Suspense, useState, useTransition } from "react";
+import type { FinancialMonthlyClose } from "@prisma/client";
 
 import SubmitButton from "~/components/primitives/submit-button/submit-button";
 import prismaClient from "~/lib/prisma/client.server";
@@ -11,14 +12,108 @@ import { Separator } from "~/components/ui/separator";
 import toFixedNumber from "~/utils/to-fixed-number";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { TriangleAlert } from "lucide-react";
-import DnaEmpresaForm from "~/domain/finance/components/dna-empresa-form";
+import DnaEmpresaForm, { type DnaFieldHistory, type DnaFieldHistorySummary } from "~/domain/finance/components/dna-empresa-form";
 import getSearchParam from "~/utils/get-search-param";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "~/components/ui/dialog";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
+import { calcMonthlyCloseTotals } from "~/domain/finance/calc-monthly-close-totals";
+
+export const meta: MetaFunction = () => [
+    { title: "DNA da Empresa | Admin" },
+];
+
+function average(values: number[], size: number) {
+    const slice = values.slice(0, size);
+    if (!slice.length) return null;
+    return slice.reduce((acc, value) => acc + value, 0) / slice.length;
+}
+
+function formatReferenceMonthYear(referenceMonth: number, referenceYear: number) {
+    return new Intl.DateTimeFormat("pt-BR", {
+        month: "2-digit",
+        year: "numeric",
+    }).format(new Date(referenceYear, referenceMonth - 1, 1));
+}
+
+function buildHistorySummary(
+    values: number[],
+    kind: "money" | "percent",
+    options?: {
+        note?: string;
+        latestReferenceLabel?: string | null;
+    }
+): DnaFieldHistorySummary {
+    const note = options?.note;
+    if (note) {
+        return { kind, note, latestReferenceLabel: options?.latestReferenceLabel ?? null };
+    }
+
+    return {
+        kind,
+        latest: values[0] ?? null,
+        avg3: average(values, 3),
+        avg6: average(values, 6),
+        latestReferenceLabel: options?.latestReferenceLabel ?? null,
+    };
+}
+
+function buildFieldHistory(closes: FinancialMonthlyClose[]): DnaFieldHistory {
+    const latestClose = closes[0];
+    const latestReferenceLabel = latestClose
+        ? formatReferenceMonthYear(latestClose.referenceMonth, latestClose.referenceYear)
+        : null;
+    const monthlyValues = closes.map((close) => {
+        const totals = calcMonthlyCloseTotals(close);
+        const receitaBase = close.faturamentoMensalAmount ?? 0;
+        const custoFixoPerc = receitaBase > 0 ? (totals.custoFixoTotal / receitaBase) * 100 : 0;
+        const custoVariavelPerc = totals.receitaBruta > 0 ? (totals.custoVariavelTotal / totals.receitaBruta) * 100 : 0;
+        const dnaPerc = custoFixoPerc + (close.taxaCartaoPerc ?? 0) + (close.impostoPerc ?? 0);
+
+        return {
+            faturamentoBrutoAmount: receitaBase,
+            custoFixoAmount: totals.custoFixoTotal,
+            taxaCartaoPerc: close.taxaCartaoPerc ?? 0,
+            impostoPerc: close.impostoPerc ?? 0,
+            custoVariavelPerc,
+            dnaPerc,
+        };
+    });
+
+    return {
+        faturamentoBrutoAmount: buildHistorySummary(monthlyValues.map((item) => item.faturamentoBrutoAmount), "money", { latestReferenceLabel }),
+        custoFixoAmount: buildHistorySummary(monthlyValues.map((item) => item.custoFixoAmount), "money", { latestReferenceLabel }),
+        taxaCartaoPerc: buildHistorySummary(monthlyValues.map((item) => item.taxaCartaoPerc), "percent", { latestReferenceLabel }),
+        impostoPerc: buildHistorySummary(monthlyValues.map((item) => item.impostoPerc), "percent", { latestReferenceLabel }),
+        investimentoPerc: buildHistorySummary([], "percent", {
+            note: "Preenchimento manual. Nao usa historico do fechamento mensal.",
+            latestReferenceLabel,
+        }),
+        wastePerc: buildHistorySummary([], "percent", {
+            note: "Sem historico equivalente no fechamento mensal.",
+            latestReferenceLabel,
+        }),
+        dnaPerc: buildHistorySummary(
+            monthlyValues.map((item) => item.dnaPerc),
+            "percent",
+            {
+                latestReferenceLabel,
+                note: monthlyValues.length
+                    ? "Baseado em faturamento, custos fixos, taxa de cartao e impostos do fechamento mensal."
+                    : undefined,
+            },
+        ),
+        custoVariavelPerc: buildHistorySummary(monthlyValues.map((item) => item.custoVariavelPerc), "percent", { latestReferenceLabel }),
+    };
+}
 
 export async function loader({ request }: LoaderFunctionArgs) {
-    const dnaEmpresaSettings = prismaIt(prismaClient.dnaEmpresaSettings.findFirst({ where: { isSnapshot: false } }));
+    const dnaEmpresaSettings = prismaIt(
+        prismaClient.dnaEmpresaSettings.findFirst({
+            where: { isSnapshot: false },
+            orderBy: { createdAt: "desc" },
+        })
+    );
     const dnaEmpresaSnapshots = prismaIt(
         prismaClient.dnaEmpresaSettings.findMany({
             where: { isSnapshot: true },
@@ -26,9 +121,21 @@ export async function loader({ request }: LoaderFunctionArgs) {
             take: 15,
         })
     );
+    const monthlyCloseRepo = (prismaClient as any).financialMonthlyClose;
+    const monthlyCloses: FinancialMonthlyClose[] =
+        monthlyCloseRepo && typeof monthlyCloseRepo.findMany === "function"
+            ? await monthlyCloseRepo.findMany({
+                orderBy: [
+                    { referenceYear: "desc" },
+                    { referenceMonth: "desc" },
+                ],
+                take: 6,
+            })
+            : [];
     const redirectFrom = getSearchParam({ request, paramName: "redirectFrom" });
+    const fieldHistory = buildFieldHistory(monthlyCloses);
 
-    return defer({ dnaEmpresaSettings, dnaEmpresaSnapshots, redirectFrom });
+    return defer({ dnaEmpresaSettings, dnaEmpresaSnapshots, redirectFrom, fieldHistory });
 }
 
 type ActionData = {
@@ -37,6 +144,7 @@ type ActionData = {
         custoFixoAmount?: string;
         taxaCartaoPerc?: string;
         impostoPerc?: string;
+        investimentoPerc?: string;
         wastePerc?: string;
         custoVariavelPerc?: string;
         dnaPerc?: string;
@@ -54,6 +162,7 @@ export const action: ActionFunction = async ({ request }) => {
         const custoFixoAmount = Number(formData.get("custoFixoAmount") ?? 0);
         const taxaCartaoPerc = Number(formData.get("taxaCartaoPerc") ?? 0);
         const impostoPerc = Number(formData.get("impostoPerc") ?? 0);
+        const investimentoPerc = Number(formData.get("investimentoPerc") ?? 0);
         const wastePerc = Number(formData.get("wastePerc") ?? 0);
         const custoVariavelPerc = Number(formData.get("custoVariavelPerc") ?? 0);
 
@@ -67,6 +176,9 @@ export const action: ActionFunction = async ({ request }) => {
         if (!Number.isFinite(custoVariavelPerc) || custoVariavelPerc < 0) {
             errors.custoVariavelPerc = "Informe custos variáveis (%) válido (>= 0)";
         }
+        if (!Number.isFinite(investimentoPerc) || investimentoPerc < 0) {
+            errors.investimentoPerc = "Informe investimento (%) válido (>= 0)";
+        }
         if (Object.keys(errors).length > 0) {
             return badRequest<ActionData>({ errors });
         }
@@ -77,37 +189,28 @@ export const action: ActionFunction = async ({ request }) => {
             toFixedNumber(custoFixoPerc) +
             toFixedNumber(taxaCartaoPerc) +
             toFixedNumber(impostoPerc) +
+            toFixedNumber(investimentoPerc) +
             toFixedNumber(wastePerc);
 
-        const current = await prismaClient.dnaEmpresaSettings.findFirst({ where: { isSnapshot: false } });
-        await (current
-            ? prismaClient.dnaEmpresaSettings.update({
-                where: { id: current.id },
+        await prismaClient.$transaction([
+            prismaClient.dnaEmpresaSettings.deleteMany({
+                where: { isSnapshot: false },
+            }),
+            prismaClient.dnaEmpresaSettings.create({
                 data: {
                     faturamentoBrutoAmount,
                     custoFixoAmount,
                     custoFixoPerc: custoFixoPerc,
                     taxaCartaoPerc,
                     impostoPerc,
+                    investimentoPerc,
                     wastePerc,
                     custoVariavelPerc,
                     dnaPerc,
                     isSnapshot: false,
                 },
-            })
-            : prismaClient.dnaEmpresaSettings.create({
-                data: {
-                    faturamentoBrutoAmount,
-                    custoFixoAmount,
-                    custoFixoPerc: custoFixoPerc,
-                    taxaCartaoPerc,
-                    impostoPerc,
-                    wastePerc,
-                    custoVariavelPerc,
-                    dnaPerc,
-                    isSnapshot: false,
-                },
-            }));
+            }),
+        ]);
 
         return ok<ActionData>({ ok: "Salvo" });
     }
@@ -135,6 +238,7 @@ export const action: ActionFunction = async ({ request }) => {
                 custoFixoPerc: Number(settings.custoFixoPerc ?? 0),
                 taxaCartaoPerc: Number(settings.taxaCartaoPerc ?? 0),
                 impostoPerc: Number(settings.impostoPerc ?? 0),
+                investimentoPerc: Number((settings as any).investimentoPerc ?? 0),
                 dnaPerc: Number(settings.dnaPerc ?? 0),
                 wastePerc: Number(settings.wastePerc ?? 0),
                 custoVariavelAmount: Number((settings as any).custoVariavelAmount ?? 0),
@@ -150,7 +254,7 @@ export const action: ActionFunction = async ({ request }) => {
 
 export default function AdminVendasDna() {
     const actionData = useActionData<ActionData>();
-    const { dnaEmpresaSettings, dnaEmpresaSnapshots, redirectFrom } = useLoaderData<typeof loader>();
+    const { dnaEmpresaSettings, dnaEmpresaSnapshots, redirectFrom, fieldHistory } = useLoaderData<typeof loader>();
     const [isFormTouched, setIsFormTouched] = useState(false);
     const [isPending, startTransition] = useTransition();
 
@@ -178,23 +282,50 @@ export default function AdminVendasDna() {
                 <Suspense fallback={<Loading cnContainer="h-24" />}>
                     <Await resolve={dnaEmpresaSettings} errorElement={<div className="text-red-600">Erro ao carregar</div>}>
                         {(settings) => {
+                            const currentSettings = settings[1];
                             const values = {
-                                faturamentoBrutoAmount: settings[1]?.faturamentoBrutoAmount ?? 0,
-                                custoFixoAmount: settings[1]?.custoFixoAmount ?? 0,
-                                taxaCartaoPerc: settings[1]?.taxaCartaoPerc ?? 0,
-                                impostoPerc: settings[1]?.impostoPerc ?? 0,
-                                wastePerc: settings[1]?.wastePerc ?? 0,
-                                custoVariavelPerc: settings[1]?.custoVariavelPerc ?? 0,
-                                dnaPerc: settings[1]?.dnaPerc ?? 0,
+                                faturamentoBrutoAmount: currentSettings?.faturamentoBrutoAmount ?? 0,
+                                custoFixoAmount: currentSettings?.custoFixoAmount ?? 0,
+                                taxaCartaoPerc: currentSettings?.taxaCartaoPerc ?? 0,
+                                impostoPerc: currentSettings?.impostoPerc ?? 0,
+                                investimentoPerc: (currentSettings as any)?.investimentoPerc ?? 0,
+                                wastePerc: currentSettings?.wastePerc ?? 0,
+                                custoVariavelPerc: currentSettings?.custoVariavelPerc ?? 0,
+                                dnaPerc: currentSettings?.dnaPerc ?? 0,
                             } as const;
+                            const lastCalculatedAt = currentSettings?.createdAt
+                                ? new Date(currentSettings.createdAt).toLocaleString("pt-BR")
+                                : null;
+                            const staleThreshold = new Date();
+                            staleThreshold.setMonth(staleThreshold.getMonth() - 2);
+                            const isCalculationOlderThanTwoMonths = currentSettings?.createdAt
+                                ? new Date(currentSettings.createdAt) < staleThreshold
+                                : false;
 
                             return (
                                 <div className="space-y-6">
+                                    {lastCalculatedAt ? (
+                                        <p className="text-sm text-muted-foreground">
+                                            Calculado em <span className="font-medium text-foreground">{lastCalculatedAt}</span>
+                                        </p>
+                                    ) : null}
+
+                                    {isCalculationOlderThanTwoMonths ? (
+                                        <Alert variant="default" className="border-amber-300">
+                                            <TriangleAlert className="h-4 w-4" />
+                                            <AlertTitle>Cálculo do DNA desatualizado</AlertTitle>
+                                            <AlertDescription>
+                                                O último cálculo foi feito há mais de 2 meses. Revise os valores e clique em <strong>Salvar</strong> para recalcular.
+                                            </AlertDescription>
+                                        </Alert>
+                                    ) : null}
+
                                     <DnaEmpresaForm
                                         defaultValues={values}
                                         errors={actionData?.errors}
                                         onAnyFieldChange={() => setIsFormTouched(true)}
                                         readOnlyCalculated
+                                        fieldHistory={fieldHistory}
                                     />
 
                                     {isFormTouched && (
@@ -244,6 +375,7 @@ export default function AdminVendasDna() {
                                             <span className="opacity-80">C.Fixo%: {Number(s.custoFixoPerc ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</span>
                                             <span className="opacity-80">Cartão: {Number(s.taxaCartaoPerc ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</span>
                                             <span className="opacity-80">Impostos: {Number(s.impostoPerc ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</span>
+                                            <span className="opacity-80">Invest.: {Number((s as any).investimentoPerc ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</span>
                                             <span className="opacity-80">Waste: {Number(s.wastePerc ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</span>
                                             <span className="opacity-80">Variáveis: {Number(s.custoVariavelPerc ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</span>
                                             <span className="opacity-80 font-medium">DNA: {Number(s.dnaPerc ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</span>

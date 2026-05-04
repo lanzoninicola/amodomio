@@ -21,7 +21,9 @@ vi.mock("~/domain/costs/item-cost-event.server", () => ({
 import {
   roundItemCostSheetMoney,
   calcItemCostSheetTotalCostAmount,
+  getRecipeCompositionCostSnapshot,
   recalcItemCostSheetTotals,
+  resolveRecipeIngredientCostSnapshot,
 } from "~/domain/costs/item-cost-sheet-recalc.server";
 
 describe("roundItemCostSheetMoney", () => {
@@ -107,6 +109,7 @@ describe("recalcItemCostSheetTotals", () => {
       },
       itemVariation: {
         findUnique: vi.fn(),
+        findFirst: vi.fn(),
       },
       recipe: {
         findUnique: vi.fn(),
@@ -227,5 +230,182 @@ describe("recalcItemCostSheetTotals", () => {
     await recalcItemCostSheetTotals(db, "root-1");
 
     expect(db.itemCostSheetVariationComponent.update).not.toHaveBeenCalled();
+  });
+
+  it("usa a ficha ativa da subreceita quando o ingrediente não possui custo próprio", async () => {
+    mocks.resolveItemCostSnapshot.mockResolvedValue({
+      itemVariationId: "ingredient-var-no-cost",
+      lastUnitCostAmount: 0,
+      avgUnitCostAmount: 0,
+    });
+
+    db.itemVariation.findFirst
+      .mockResolvedValueOnce({
+        id: "subrecipe-var-medium",
+        recipeId: "recipe-sub-bacon",
+      });
+    db.itemCostSheet.findFirst = vi.fn().mockResolvedValue({
+      id: "active-subrecipe-sheet",
+      costAmount: 18.5,
+      activatedAt: new Date("2026-04-01T00:00:00.000Z"),
+      updatedAt: new Date("2026-04-01T00:00:00.000Z"),
+    });
+
+    const result = await resolveRecipeIngredientCostSnapshot({
+      db,
+      itemId: "ingredient-item-bacon",
+      variationId: "size-medium",
+    });
+
+    expect(result.avgUnitCostAmount).toBe(18.5);
+    expect(result.lastUnitCostAmount).toBe(18.5);
+    expect(db.itemVariation.findFirst).toHaveBeenCalledWith({
+      where: {
+        itemId: "ingredient-item-bacon",
+        variationId: "size-medium",
+        deletedAt: null,
+        recipeId: { not: null },
+      },
+      select: {
+        id: true,
+        recipeId: true,
+      },
+    });
+  });
+
+  function makeSubrecipeSetup(activeSheet: object | null) {
+    mocks.resolveItemCostSnapshot.mockResolvedValueOnce({
+      itemVariationId: "ingredient-var-no-cost",
+      lastUnitCostAmount: 0,
+      avgUnitCostAmount: 0,
+    });
+    db.itemVariation.findFirst.mockResolvedValueOnce({
+      id: "subrecipe-var-medium",
+      recipeId: "recipe-sub-bacon",
+    });
+    db.itemCostSheet.findFirst = vi.fn().mockResolvedValue(activeSheet);
+    db.recipe.findUnique.mockResolvedValue({
+      id: "recipe-sub-bacon",
+      name: "Bacon desfiado",
+    });
+    db.itemVariation.findUnique.mockResolvedValue({
+      variationId: "size-medium",
+    });
+    mocks.listRecipeCompositionLines.mockResolvedValue([
+      {
+        id: "line-subing",
+        recipeId: "recipe-sub-bacon",
+        itemId: "item-raw-bacon",
+        unit: "KG",
+        quantity: 1,
+        defaultLossPct: 0,
+        lossPct: 0,
+        sortOrderIndex: 0,
+        notes: null,
+        ItemVariation: { variationId: "size-medium" },
+      },
+    ]);
+    mocks.resolveItemCostSnapshot.mockResolvedValue({
+      itemVariationId: "raw-bacon-var",
+      lastUnitCostAmount: 25,
+      avgUnitCostAmount: 25,
+    });
+  }
+
+  it("calcula composição dinamicamente quando subreceita não tem ficha técnica vinculada", async () => {
+    makeSubrecipeSetup(null);
+
+    const result = await resolveRecipeIngredientCostSnapshot({
+      db,
+      itemId: "ingredient-item-bacon",
+      variationId: "size-medium",
+    });
+
+    expect(result.avgUnitCostAmount).toBe(25);
+    expect(result.lastUnitCostAmount).toBe(25);
+  });
+
+  it("calcula composição dinamicamente quando ficha ativa da subreceita tem custo zero", async () => {
+    makeSubrecipeSetup({
+      id: "active-subrecipe-sheet",
+      costAmount: 0,
+      activatedAt: new Date("2026-04-01T00:00:00.000Z"),
+      updatedAt: new Date("2026-04-01T00:00:00.000Z"),
+    });
+
+    const result = await resolveRecipeIngredientCostSnapshot({
+      db,
+      itemId: "ingredient-item-bacon",
+      variationId: "size-medium",
+    });
+
+    expect(result.avgUnitCostAmount).toBe(25);
+    expect(result.lastUnitCostAmount).toBe(25);
+  });
+
+  it("calcula receita usando custo da ficha ativa da subreceita vinculada", async () => {
+    db.recipe.findUnique.mockResolvedValue({
+      id: "recipe-main",
+      name: "Receita principal",
+    });
+    db.itemVariation.findUnique.mockResolvedValue({
+      variationId: "size-medium",
+    });
+    db.itemVariation.findFirst
+      .mockResolvedValueOnce({
+        id: "subrecipe-var-medium",
+        recipeId: "recipe-sub-bacon",
+      });
+    db.itemCostSheet.findFirst = vi.fn().mockResolvedValue({
+      id: "active-subrecipe-sheet",
+      costAmount: 10,
+      activatedAt: new Date("2026-04-01T00:00:00.000Z"),
+      updatedAt: new Date("2026-04-01T00:00:00.000Z"),
+    });
+    mocks.listRecipeCompositionLines.mockResolvedValue([
+      {
+        id: "line-bacon",
+        recipeId: "recipe-main",
+        recipeIngredientId: "ingredient-bacon",
+        itemId: "item-bacon",
+        unit: "KG",
+        quantity: 0.04,
+        defaultLossPct: 0,
+        lossPct: 0,
+        sortOrderIndex: 0,
+        notes: null,
+        lastUnitCostAmount: 0,
+        avgUnitCostAmount: 0,
+        lastTotalCostAmount: 0,
+        avgTotalCostAmount: 0,
+        Item: {
+          id: "item-bacon",
+          name: "Bacon defumado desfiado",
+        },
+        ItemVariation: {
+          id: "ingredient-var-bacon",
+          variationId: "size-medium",
+          Variation: {
+            id: "size-medium",
+            name: "Tamanho Medio",
+          },
+        },
+      },
+    ]);
+    mocks.resolveItemCostSnapshot.mockResolvedValue({
+      itemVariationId: "ingredient-var-bacon",
+      lastUnitCostAmount: 0,
+      avgUnitCostAmount: 0,
+    });
+
+    const snapshot = await getRecipeCompositionCostSnapshot(
+      db,
+      "recipe-main",
+      "owner-var-medium"
+    );
+
+    expect(snapshot.unitCostAmount).toBe(0.4);
+    expect(snapshot.avgTotal).toBe(0.4);
+    expect(snapshot.lastTotal).toBe(0.4);
   });
 });

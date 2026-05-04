@@ -237,7 +237,7 @@ export default function ItemRecipeChatGptAssistantPanel(props: ItemRecipeChatGpt
         { name: "existingRecipeImportMode", value: existingRecipeImportMode },
       ]}
       externalUrl={externalUrl}
-      externalLabel="Abrir projeto"
+      externalLabel="Abrir projeto ChatGPT"
       flowDescription="1. Revise e copie o prompt. 2. Abra o projeto do ChatGPT. 3. Cole o JSON retornado. 4. Gere a pré-visualização. 5. Confirme a criação automática."
       responsePlaceholder="Cole aqui a resposta do ChatGPT em JSON ou em bloco ```json```."
       responseHelperText={

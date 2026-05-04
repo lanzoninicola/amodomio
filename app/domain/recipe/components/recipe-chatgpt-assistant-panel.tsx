@@ -236,12 +236,13 @@ export default function RecipeChatGptAssistantPanel(props: RecipeChatGptAssistan
             response={chatGptResponse}
             onResponseChange={setChatGptResponse}
             onPreview={handlePreviewImport}
-            previewButtonLabel="Pré-visualizar importação"
+            previewButtonLabel="Pre-visualizar composicao"
             previewLoadingLabel="Validando..."
             previewDisabled={!chatGptResponse.trim() || previewFetcher.state !== "idle"}
             previewLoading={previewFetcher.state !== "idle"}
             submitActionName="recipe-chatgpt-import"
-            submitButtonLabel="Importar resposta"
+            submitButtonLabel="Importa receita"
+            submitLoadingLabel="Importando receita..."
             submitDisabled={!hasUpToDatePreview}
             formAction={formAction}
             hiddenFields={[

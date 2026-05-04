@@ -1,7 +1,10 @@
+import type { MetaFunction } from "@remix-run/node";
 import { Link, NavLink, Outlet } from "@remix-run/react";
 import { ChevronLeft, LayoutGrid, List, PlusCircle } from "lucide-react";
 import Container from "~/components/layout/container/container";
 import { cn } from "~/lib/utils";
+
+export const meta: MetaFunction = () => [{ title: "Receitas" }];
 
 export default function RecipesOutlet() {
   return (

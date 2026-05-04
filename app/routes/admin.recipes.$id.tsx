@@ -13,7 +13,14 @@ import {
   useLoaderData,
   useLocation,
 } from "@remix-run/react";
-import { Check, ChevronLeft, RefreshCw } from "lucide-react";
+import {
+  Check,
+  ChevronLeft,
+  Copy,
+  FileSpreadsheet,
+  RefreshCw,
+  Trash2,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
   Select,
@@ -38,6 +45,7 @@ import {
   deleteRecipeCompositionLine,
   listRecipeLinkedVariations,
   listRecipeCompositionLines,
+  moveRecipeCompositionIngredient,
   updateRecipeCompositionIngredientDefaultLoss,
   updateRecipeCompositionLine,
 } from "~/domain/recipe/recipe-composition.server";
@@ -339,6 +347,51 @@ function buildRecipeSectionRedirect(recipeId: string, sectionRaw: unknown) {
   );
 }
 
+async function ensureRecipeLinkedItem(db: any, recipe: Recipe) {
+  const linkedItemId = String((recipe as any)?.itemId || "").trim();
+
+  if (linkedItemId) {
+    const item = await db.item.findUnique({
+      where: { id: linkedItemId },
+      select: { id: true, name: true },
+    });
+    if (item) return item;
+  }
+
+  let item = await db.item.findFirst({
+    where: { name: recipe.name },
+    orderBy: { updatedAt: "desc" },
+    select: { id: true, name: true },
+  });
+
+  if (!item) {
+    const isSemiFinished = recipe.type === "semiFinished";
+    item = await db.item.create({
+      data: {
+        name: recipe.name,
+        description: recipe.description || null,
+        classification: isSemiFinished ? "semi_acabado" : "produto_final",
+        active: true,
+        canPurchase: false,
+        canTransform: true,
+        canSell: !isSemiFinished,
+        canStock: true,
+      },
+      select: { id: true, name: true },
+    });
+  }
+
+  await db.recipe.update({
+    where: { id: recipe.id },
+    data: {
+      itemId: item.id,
+      variationId: null,
+    },
+  });
+
+  return item;
+}
+
 export function normalizeInitialLetter(value: string) {
   return String(value || "")
     .normalize("NFD")
@@ -408,6 +461,64 @@ export async function action({ request }: ActionFunctionArgs) {
   let formData = await request.formData();
   const { _action, ...values } = Object.fromEntries(formData);
   const currentSection = resolveRecipeSection(values.tab);
+
+  if (_action === "recipe-delete") {
+    const recipeId = String(values.recipeId || "").trim();
+    if (!recipeId) return badRequest("Receita inválida");
+
+    try {
+      await recipeEntity.delete(recipeId);
+      return redirect("/admin/recipes");
+    } catch (error) {
+      return badRequest(
+        (error as Error)?.message || "Erro ao eliminar receita"
+      );
+    }
+  }
+
+  if (_action === "recipe-duplicate") {
+    const recipeId = String(values.recipeId || "").trim();
+    if (!recipeId) return badRequest("Receita inválida");
+
+    try {
+      const duplicatedRecipe = await recipeEntity.duplicate(recipeId);
+      return redirect(buildRecipeSectionHref(duplicatedRecipe.id, "cadastro"));
+    } catch (error) {
+      return badRequest(
+        (error as Error)?.message || "Erro ao duplicar receita"
+      );
+    }
+  }
+
+  if (_action === "recipe-create-cost-sheet") {
+    const recipeId = String(values.recipeId || "").trim();
+    if (!recipeId) return badRequest("Receita inválida");
+
+    try {
+      const db = prismaClient as any;
+      const recipe = await recipeEntity.findById(recipeId);
+      if (!recipe) return badRequest("Receita não encontrada");
+
+      const item = await ensureRecipeLinkedItem(db, recipe);
+      const { rootSheetId } = await ensureItemCostSheetForRecipe({
+        db,
+        item,
+        recipe: {
+          id: recipe.id,
+          name: recipe.name,
+        },
+        sheetDescription: `Ficha tecnica gerada a partir da receita ${recipe.name}`,
+        componentNotes:
+          "Componente criado automaticamente a partir da receita aberta",
+      });
+
+      return redirect(`/admin/item-cost-sheets/${rootSheetId}/custos`);
+    } catch (error) {
+      return badRequest(
+        (error as Error)?.message || "Erro ao criar ficha técnica"
+      );
+    }
+  }
 
   if (_action === "recipe-ingredient-add") {
     const recipeId = String(values.recipeId || "").trim();
@@ -664,6 +775,33 @@ export async function action({ request }: ActionFunctionArgs) {
     } catch (error) {
       return badRequest(
         (error as Error)?.message || "Erro ao remover ingrediente da composição"
+      );
+    }
+  }
+
+  if (_action === "recipe-ingredient-move") {
+    const recipeId = String(values.recipeId || "").trim();
+    const recipeIngredientId = String(values.recipeIngredientId || "").trim();
+    const recipeLineId = String(values.recipeLineId || "").trim();
+    const direction = String(values.direction || "").trim().toLowerCase();
+
+    if (!recipeId) return badRequest("Ingrediente inválido");
+    if (!["up", "down"].includes(direction))
+      return badRequest("Direção inválida");
+
+    try {
+      const db = prismaClient as any;
+      await moveRecipeCompositionIngredient({
+        db,
+        recipeId,
+        recipeIngredientId,
+        recipeLineId,
+        direction: direction as "up" | "down",
+      });
+      return buildRecipeSectionRedirect(recipeId, currentSection);
+    } catch (error) {
+      return badRequest(
+        (error as Error)?.message || "Erro ao reordenar ingrediente da composição"
       );
     }
   }
@@ -1530,6 +1668,57 @@ export default function AdminRecipeDetailLayout() {
         </div>
 
         <div className="flex flex-wrap items-center gap-6 text-sm">
+          <Form method="post">
+            <input type="hidden" name="recipeId" value={recipe.id} />
+            <input type="hidden" name="tab" value={activeTab} />
+            <Button
+              type="submit"
+              name="_action"
+              value="recipe-create-cost-sheet"
+              variant="outline"
+              size="sm"
+              className="flex gap-x-2"
+            >
+              <FileSpreadsheet size={14} />
+              Criar ficha técnica
+            </Button>
+          </Form>
+          <Form method="post">
+            <input type="hidden" name="recipeId" value={recipe.id} />
+            <input type="hidden" name="tab" value={activeTab} />
+            <Button
+              type="submit"
+              name="_action"
+              value="recipe-duplicate"
+              variant="outline"
+              size="sm"
+              className="flex gap-x-2"
+            >
+              <Copy size={14} />
+              Duplicar receita
+            </Button>
+          </Form>
+          <Form
+            method="post"
+            onSubmit={(e) => {
+              if (!window.confirm(`Eliminar a receita "${recipe.name}"? Esta ação não pode ser desfeita.`)) {
+                e.preventDefault();
+              }
+            }}
+          >
+            <input type="hidden" name="recipeId" value={recipe.id} />
+            <Button
+              type="submit"
+              name="_action"
+              value="recipe-delete"
+              variant="outline"
+              size="sm"
+              className="flex gap-x-2 text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+            >
+              <Trash2 size={14} />
+              Eliminar receita
+            </Button>
+          </Form>
           <div className="space-y-1">
             <div className="text-xs font-medium text-slate-400">
               Ingredientes

@@ -310,6 +310,7 @@ model Variation {
 
   ItemVariation ItemVariation[]
   Recipe        Recipe[]
+  ItemCostSheetComponentPreset ItemCostSheetComponentPreset[]
 
   @@unique([kind, code], map: "variations_kind_code_unique")
   @@index([kind], map: "variations_kind_idx")
@@ -881,6 +882,7 @@ model ItemCostSheetComponent {
   itemCostSheetId String                @map("item_cost_sheet_id")
   type            ItemCostSheetLineType @default(manual)
   refId           String?               @map("ref_id")
+  presetId        String?               @map("preset_id")
   name            String
   notes           String?               @db.Text
   sortOrderIndex  Int                   @default(0) @map("sort_order_index")
@@ -888,10 +890,36 @@ model ItemCostSheetComponent {
   updatedAt       DateTime              @default(now()) @updatedAt @map("updated_at")
 
   ItemCostSheet                   ItemCostSheet                     @relation(fields: [itemCostSheetId], references: [id], onDelete: Cascade)
+  preset                          ItemCostSheetComponentPreset?     @relation(fields: [presetId], references: [id], onDelete: SetNull)
   ItemCostSheetVariationComponent ItemCostSheetVariationComponent[]
 
   @@index([itemCostSheetId], map: "item_cost_sheet_components_sheet_idx")
+  @@index([presetId], map: "item_cost_sheet_components_preset_idx")
   @@map("item_cost_sheet_components")
+}
+
+model ItemCostSheetComponentPreset {
+  id             String                @id @default(uuid())
+  key            String                @unique
+  type           ItemCostSheetLineType @default(manual)
+  variationId    String?               @map("variation_id")
+  name           String
+  unit           String?
+  quantity       Float                 @default(1)
+  unitCostAmount Float                 @default(0) @map("unit_cost_amount")
+  wastePerc      Float                 @default(0) @map("waste_perc")
+  notes          String?               @db.Text
+  active         Boolean               @default(true)
+  sortOrderIndex Int                   @default(0) @map("sort_order_index")
+  createdAt      DateTime              @default(now()) @map("created_at")
+  updatedAt      DateTime              @default(now()) @updatedAt @map("updated_at")
+
+  Variation  Variation?               @relation(fields: [variationId], references: [id], onDelete: SetNull)
+  components ItemCostSheetComponent[]
+
+  @@index([type, active, sortOrderIndex], map: "item_cost_sheet_component_presets_type_active_idx")
+  @@index([variationId], map: "item_cost_sheet_component_presets_variation_idx")
+  @@map("item_cost_sheet_component_presets")
 }
 
 model ItemCostSheetVariationComponent {
@@ -945,6 +973,7 @@ model DnaEmpresaSettings {
   custoFixoPerc          Float    @default(0) @map("custo_fixo_perc")
   taxaCartaoPerc         Float    @default(0) @map("taxa_cartao_perc")
   impostoPerc            Float    @default(0) @map("imposto_perc")
+  investimentoPerc       Float    @default(0) @map("investimento_perc")
   dnaPerc                Float    @default(0) @map("dna_perc")
   wastePerc              Float    @default(0) @map("waste_perc")
   custoVariavelAmount    Float    @default(0) @map("custo_variavel_amount")
