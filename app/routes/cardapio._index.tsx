@@ -1175,7 +1175,7 @@ function CardapioGridItem({
                                 placeholder={item.imagePlaceholderURL || ""}
                                 placeholderIcon={false}
                                 cnPlaceholderText={cn(
-                                    "text-black font-urw text-sm tracking-tight",
+                                    "text-black font-lora text-sm tracking-tight",
                                     isExpanded && "text-lg"
                                 )}
                                 cnPlaceholderContainer="from-zinc-200 via-zinc-100 to-white "
@@ -1240,7 +1240,7 @@ function CardapioGridItem({
                                 placeholder={item.imagePlaceholderURL || ""}
                                 placeholderIcon={false}
                                 cnPlaceholderText={cn(
-                                    "text-black font-urw text-sm tracking-tight",
+                                    "text-black font-lora text-sm tracking-tight",
                                     isExpanded && "text-lg"
                                 )}
                                 cnPlaceholderContainer="from-zinc-200 via-zinc-100 to-white "
@@ -1422,7 +1422,7 @@ const CardapioItemFullImage = React.forwardRef(
                                 <div className="flex flex-col gap-0">
                                     <div className="flex items-center gap-2">
                                         {italyProduct && <ItalyIngredientsStatement showText={false} />}
-                                        <h3 className="font-urw text-xl">{item.name}</h3>
+                                        <h3 className="font-lora text-xl">{item.name}</h3>
                                     </div>
 
                                     <div className="flex flex-col gap-2">
@@ -2026,7 +2026,7 @@ function CardapioItemListDestaque({
                                                         cnContainer="h-full w-full"
                                                         enableOverlay={false}
                                                         cnPlaceholderContainer="from-white via-zinc-100 to-zinc-200 "
-                                                        cnPlaceholderText="text-black font-urw text-xl tracking-tighter"
+                                                        cnPlaceholderText="text-black font-lora text-xl tracking-tighter"
                                                     />
                                                     <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black/60 via-black/30 to-transparent" />
                                                     {badge && (
