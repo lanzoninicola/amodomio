@@ -55,13 +55,6 @@ type ComponentPresetRecord = {
   notes?: string | null;
 };
 
-type PresetVariationOption = {
-  id: string;
-  name: string;
-  code: string;
-  kind: string;
-};
-
 type RecipeCompositionBreakdownLine = {
   ingredientId: string;
   itemId: string;
@@ -89,45 +82,6 @@ type RecipeCompositionBreakdown = {
 function normalizeUnit(value: FormDataEntryValue | string | null | undefined) {
   const normalized = String(value || "").trim().toUpperCase();
   return normalized || null;
-}
-
-function normalizePresetText(value: FormDataEntryValue | string | null | undefined) {
-  return String(value || "").trim();
-}
-
-function slugifyPresetPart(value: string) {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
-async function createUniquePresetKey(db: any, type: string, name: string) {
-  const baseSlug = slugifyPresetPart(name) || "preset";
-  let attempt = `${type}.${baseSlug}`;
-  let suffix = 2;
-
-  while (true) {
-    const exists = await db.itemCostSheetComponentPreset.findUnique({
-      where: { key: attempt },
-      select: { id: true },
-    });
-    if (!exists) return attempt;
-    attempt = `${type}.${baseSlug}-${suffix}`;
-    suffix += 1;
-  }
-}
-
-function formatVariationDisplay(variation: {
-  name?: string | null;
-  code?: string | null;
-  kind?: string | null;
-} | null | undefined) {
-  if (!variation) return null;
-  const parts = [variation.name || null, variation.code || null, variation.kind || null].filter(Boolean);
-  return parts.length > 0 ? parts.join(" · ") : null;
 }
 
 function buildPresetVariationEntries(params: {
@@ -610,7 +564,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     const rootSheetId = currentSheet.baseItemCostSheetId || currentSheet.id;
     const isCostsTabRequest = pathname.endsWith("/custos");
 
-    const [recipeSheets, recipes, referenceSheets, componentPresets, presetVariations, recipeSheetDependencyAgg, unitOptions, activeItemVariationIds] = await Promise.all([
+    const [recipeSheets, recipes, referenceSheets, componentPresets, recipeSheetDependencyAgg, unitOptions, activeItemVariationIds] = await Promise.all([
       db.itemCostSheet.findMany({
         where: { OR: [{ id: rootSheetId }, { baseItemCostSheetId: rootSheetId }] },
         include: {
@@ -658,13 +612,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
             Variation: { select: { id: true, name: true, code: true, kind: true } },
           },
           orderBy: [{ type: "asc" }, { sortOrderIndex: "asc" }, { name: "asc" }],
-        })
-        : Promise.resolve([]),
-      isCostsTabRequest
-        ? db.variation.findMany({
-          where: { deletedAt: null },
-          select: { id: true, name: true, code: true, kind: true },
-          orderBy: [{ kind: "asc" }, { sortOrderIndex: "asc" }, { name: "asc" }],
         })
         : Promise.resolve([]),
       db.itemCostSheetComponent.groupBy({
@@ -736,12 +683,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         unitCostAmount: Number(preset.unitCostAmount || 0),
         wastePerc: Number(preset.wastePerc || 0),
         notes: preset.notes || null,
-      })),
-      presetVariations: (presetVariations || []).map((variation: any) => ({
-        id: String(variation.id || ""),
-        name: String(variation.name || variation.code || "Variação"),
-        code: String(variation.code || ""),
-        kind: String(variation.kind || ""),
       })),
       recipeSheetDependencyCountById,
       deletionGuard,
@@ -993,96 +934,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
       });
 
       await recalcItemCostSheetTotals(db, rootSheetId);
-      return redirect(postRedirectTo);
-    }
-
-    if (_action === "item-cost-sheet-preset-create" || _action === "item-cost-sheet-preset-update") {
-      const presetId = String(formData.get("presetId") || "").trim();
-      const type = String(formData.get("type") || "").trim();
-      const name = normalizePresetText(formData.get("name"));
-      const unit = normalizeUnit(formData.get("unit"));
-      const quantity = Number(String(formData.get("quantity") || "1").replace(",", "."));
-      const unitCostAmount = Number(String(formData.get("unitCostAmount") || "0").replace(",", "."));
-      const wastePerc = Number(String(formData.get("wastePerc") || "0").replace(",", "."));
-      const notes = normalizePresetText(formData.get("notes"));
-      const variationId = String(formData.get("variationId") || "").trim() || null;
-
-      if (!["manual", "labor"].includes(type)) return badRequest("Tipo de preset inválido");
-      if (!name) return badRequest("Informe o nome do preset");
-      if (!unit || !availableUnits.includes(unit)) return badRequest("Informe uma unidade válida para o preset");
-      if (!(quantity > 0)) return badRequest("Informe uma quantidade válida para o preset");
-      if (!(unitCostAmount >= 0)) return badRequest("Informe um custo unitário válido para o preset");
-
-      let variationRecord: any = null;
-      if (variationId) {
-        variationRecord = await db.variation.findFirst({
-          where: { id: variationId, deletedAt: null },
-          select: { id: true },
-        });
-        if (!variationRecord) return badRequest("Variação do preset inválida");
-      }
-
-      if (_action === "item-cost-sheet-preset-create") {
-        const key = await createUniquePresetKey(db, type, name);
-        const lastPreset = await db.itemCostSheetComponentPreset.findFirst({
-          where: { type, active: true },
-          select: { sortOrderIndex: true },
-          orderBy: [{ sortOrderIndex: "desc" }, { createdAt: "desc" }],
-        });
-        await db.itemCostSheetComponentPreset.create({
-          data: {
-            key,
-            type,
-            name,
-            unit,
-            quantity,
-            unitCostAmount,
-            wastePerc,
-            notes: notes || null,
-            variationId,
-            active: true,
-            sortOrderIndex: Number(lastPreset?.sortOrderIndex || 0) + 10,
-          },
-        });
-      } else {
-        if (!presetId) return badRequest("Preset inválido");
-        const existingPreset = await db.itemCostSheetComponentPreset.findFirst({
-          where: { id: presetId, active: true, type: { in: ["manual", "labor"] } },
-          select: { id: true },
-        });
-        if (!existingPreset) return badRequest("Preset não encontrado");
-
-        await db.itemCostSheetComponentPreset.update({
-          where: { id: presetId },
-          data: {
-            type,
-            name,
-            unit,
-            quantity,
-            unitCostAmount,
-            wastePerc,
-            notes: notes || null,
-            variationId,
-          },
-        });
-      }
-
-      return redirect(postRedirectTo);
-    }
-
-    if (_action === "item-cost-sheet-preset-delete") {
-      const presetId = String(formData.get("presetId") || "").trim();
-      if (!presetId) return badRequest("Preset inválido");
-
-      const preset = await db.itemCostSheetComponentPreset.findFirst({
-        where: { id: presetId, active: true, type: { in: ["manual", "labor"] } },
-        select: { id: true },
-      });
-      if (!preset) return badRequest("Preset não encontrado");
-
-      await db.itemCostSheetComponentPreset.delete({
-        where: { id: preset.id },
-      });
       return redirect(postRedirectTo);
     }
 
@@ -1386,7 +1237,6 @@ export type AdminItemCostSheetDetailOutletContext = {
     costAmount: number;
   }>;
   componentPresets: ComponentPresetRecord[];
-  presetVariations: PresetVariationOption[];
   unitOptions: string[];
   recipeSheetDependencyCountById: Record<string, number>;
   deletionGuard: {
@@ -1433,7 +1283,6 @@ export default function AdminItemCostSheetDetail() {
     costAmount: number;
   }>;
   const componentPresets = (payload.componentPresets || []) as ComponentPresetRecord[];
-  const presetVariations = (payload.presetVariations || []) as PresetVariationOption[];
   const unitOptions = (payload.unitOptions || ITEM_UNIT_OPTIONS) as string[];
   const recipeSheetDependencyCountById = (payload.recipeSheetDependencyCountById || {}) as Record<string, number>;
   const deletionGuard = (payload.deletionGuard || {}) as {
@@ -1477,7 +1326,6 @@ export default function AdminItemCostSheetDetail() {
     recipeOptions,
     referenceSheetOptions,
     componentPresets,
-    presetVariations,
     unitOptions,
     recipeSheetDependencyCountById,
     deletionGuard,

@@ -45,7 +45,6 @@ export default function AdminItemCostSheetCustosTab() {
     recipeOptions,
     referenceSheetOptions,
     componentPresets,
-    presetVariations,
   } =
     useOutletContext<AdminItemCostSheetDetailOutletContext>();
   const navigation = useNavigation();
@@ -88,21 +87,6 @@ export default function AdminItemCostSheetCustosTab() {
       })),
     ],
     [laborPresets]
-  );
-  const presetVariationOptions = useMemo<SearchableSelectOption[]>(
-    () => [
-      {
-        value: "__all__",
-        label: "Todas as variacoes da ficha",
-        searchText: "todas variacoes ficha geral",
-      },
-      ...presetVariations.map((variation) => ({
-        value: variation.id,
-        label: variation.name,
-        searchText: [variation.name, variation.code, variation.kind].filter(Boolean).join(" "),
-      })),
-    ],
-    [presetVariations]
   );
   const recipeSelectOptions = useMemo<SearchableSelectOption[]>(
     () =>
@@ -211,6 +195,11 @@ export default function AdminItemCostSheetCustosTab() {
           <Button asChild variant="outline" className="rounded-full border-slate-200 bg-white text-slate-700 hover:bg-slate-50">
             <Link to="/admin/cost-monitoring">
               Consultar custos
+            </Link>
+          </Button>
+          <Button asChild variant="outline" className="rounded-full border-slate-200 bg-white text-slate-700 hover:bg-slate-50">
+            <Link to="/admin/item-cost-sheets/presets">
+              Gerenciar presets
             </Link>
           </Button>
           <Form method="post" action={detailPath} onSubmit={() => setRecalcLoading(true)}>
@@ -485,50 +474,6 @@ export default function AdminItemCostSheetCustosTab() {
           </div>
         </Form>
       </div>
-
-      <section className="rounded-[28px] border border-slate-200 bg-slate-50/55 p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Presets operacionais</div>
-            <div className="mt-1 text-sm text-slate-500">
-              Cadastre custos recorrentes e, se quiser, vincule o preset a uma variacao do sistema para aplicar custo automatico so nas colunas compatíveis.
-            </div>
-          </div>
-          <div className="rounded-full bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-            {componentPresets.length} presets
-          </div>
-        </div>
-
-        <div className="mt-4 grid gap-4 xl:grid-cols-[1.05fr_1.45fr]">
-          <PresetEditorCard
-            detailPath={detailPath}
-            unitOptions={unitOptions}
-            variationOptions={presetVariationOptions}
-            title="Novo preset"
-            submitLabel="Salvar preset"
-          />
-
-          <div className="space-y-3">
-            {componentPresets.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-6 text-sm text-slate-500">
-                Nenhum preset cadastrado.
-              </div>
-            ) : (
-              componentPresets.map((preset) => (
-                <PresetEditorCard
-                  key={preset.id}
-                  detailPath={detailPath}
-                  unitOptions={unitOptions}
-                  variationOptions={presetVariationOptions}
-                  preset={preset}
-                  title={preset.name}
-                  submitLabel="Atualizar"
-                />
-              ))
-            )}
-          </div>
-        </div>
-      </section>
 
       <section className="">
         <div className="border-b border-slate-200 px-5 py-4">
@@ -922,198 +867,5 @@ export default function AdminItemCostSheetCustosTab() {
       </DialogContent>
     </Dialog>
     </>
-  );
-}
-
-function PresetEditorCard(props: {
-  detailPath: string;
-  unitOptions: string[];
-  variationOptions: SearchableSelectOption[];
-  preset?: {
-    id: string;
-    key: string;
-    type: string;
-    variationId: string | null;
-    variationLabel?: string | null;
-    variationCode?: string | null;
-    variationKind?: string | null;
-    name: string;
-    unit?: string | null;
-    quantity: number;
-    unitCostAmount: number;
-    wastePerc: number;
-    notes?: string | null;
-  };
-  title: string;
-  submitLabel: string;
-}) {
-  const {
-    detailPath,
-    unitOptions,
-    variationOptions,
-    preset,
-    title,
-    submitLabel,
-  } = props;
-  const [selectedVariationId, setSelectedVariationId] = useState(preset?.variationId || "__all__");
-  const defaultUnit = preset?.unit && unitOptions.includes(String(preset.unit).toUpperCase())
-    ? String(preset.unit).toUpperCase()
-    : (unitOptions.includes("UN") ? "UN" : unitOptions[0] || "");
-  const isExisting = Boolean(preset?.id);
-  const variationSummary = presetVariationText(preset);
-
-  useEffect(() => {
-    setSelectedVariationId(preset?.variationId || "__all__");
-  }, [preset?.variationId]);
-
-  return (
-    <div className="rounded-[24px] border border-slate-200 bg-white p-4">
-      <Form method="post" action={detailPath} className="space-y-3">
-        <input type="hidden" name="redirectTo" value={`${detailPath}/custos`} />
-        <input type="hidden" name="presetId" value={preset?.id || ""} />
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <div className="text-sm font-semibold text-slate-900">{title}</div>
-            {isExisting ? (
-              <div className="mt-1 text-xs text-slate-500">
-                Chave: <span className="font-mono">{preset?.key}</span>
-              </div>
-            ) : (
-              <div className="mt-1 text-xs text-slate-500">Crie um preset reutilizável para custo manual ou mão de obra.</div>
-            )}
-          </div>
-          {isExisting ? (
-            <div className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-              {preset?.type === "labor" ? "Mao de obra" : "Custo manual"}
-            </div>
-          ) : null}
-        </div>
-
-        <div className="grid gap-2 md:grid-cols-[140px_1fr]">
-          <div>
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Tipo</label>
-            <Select name="type" defaultValue={preset?.type || "manual"}>
-              <SelectTrigger className="h-10 rounded-lg border-slate-200 bg-white">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="manual">Custo manual</SelectItem>
-                <SelectItem value="labor">Mao de obra</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Nome</label>
-            <input
-              name="name"
-              defaultValue={preset?.name || ""}
-              className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
-              placeholder="Ex.: Embalagem borda recheada"
-              required
-            />
-          </div>
-        </div>
-
-        <div>
-          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Variacao vinculada</label>
-          <input type="hidden" name="variationId" value={selectedVariationId === "__all__" ? "" : selectedVariationId} />
-          <SearchableSelect
-            value={selectedVariationId}
-            onValueChange={setSelectedVariationId}
-            options={variationOptions}
-            placeholder="Todas as variacoes da ficha"
-            searchPlaceholder="Buscar variacao..."
-            emptyText="Nenhuma variacao encontrada."
-            triggerClassName="h-10 w-full max-w-none justify-between rounded-lg border-slate-200 px-3 text-sm"
-            contentClassName="w-[var(--radix-popover-trigger-width)] p-0"
-          />
-          <div className="mt-1 text-xs text-slate-500">
-            {isExisting ? `Aplicacao atual: ${variationSummary}` : "Quando vinculada, o custo entra automaticamente apenas nas colunas dessa variacao."}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-4 gap-2">
-          <div>
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Unidade</label>
-            <Select name="unit" defaultValue={defaultUnit}>
-              <SelectTrigger className="h-10 rounded-lg border-slate-200 bg-white">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {unitOptions.map((unit) => (
-                  <SelectItem key={unit} value={unit}>
-                    {unit}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Quantidade</label>
-            <NumericInput
-              name="quantity"
-              min="0.01"
-              step="0.01"
-              defaultValue={Number(preset?.quantity || 1)}
-              decimalScale={2}
-              className="h-10 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
-              required
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Custo unit.</label>
-            <MoneyInput
-              name="unitCostAmount"
-              defaultValue={Number(preset?.unitCostAmount || 0)}
-              className="h-10 w-full rounded-lg border-slate-200 bg-white px-3 py-2 text-sm"
-              required
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Perda %</label>
-            <NumericInput
-              name="wastePerc"
-              min="0"
-              step="0.01"
-              defaultValue={Number(preset?.wastePerc || 0)}
-              decimalScale={2}
-              className="h-10 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
-            />
-          </div>
-        </div>
-
-        <input
-          name="notes"
-          defaultValue={preset?.notes || ""}
-          className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
-          placeholder="Observacao opcional"
-        />
-
-        <div className="flex flex-wrap justify-between gap-2">
-          {isExisting ? (
-            <Button
-              type="submit"
-              variant="outline"
-              name="_action"
-              value="item-cost-sheet-preset-delete"
-              className="rounded-full border-red-200 bg-white text-red-700 hover:bg-red-50 hover:text-red-800"
-            >
-              Remover
-            </Button>
-          ) : (
-            <span />
-          )}
-          <Button
-            type="submit"
-            variant="outline"
-            name="_action"
-            value={isExisting ? "item-cost-sheet-preset-update" : "item-cost-sheet-preset-create"}
-            className="rounded-full border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-          >
-            {submitLabel}
-          </Button>
-        </div>
-      </Form>
-    </div>
   );
 }

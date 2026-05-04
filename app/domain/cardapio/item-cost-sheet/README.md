@@ -144,11 +144,11 @@ Esta seção existe para orientar agentes de IA que precisem ler, editar, valida
 - `ItemCostSheetComponentPreset` é o catálogo de custos livres recorrentes usados pela ficha.
 - Presets ativos dos tipos `manual` e `labor` aparecem na aba `/custos` antes dos campos livres.
 - Cada preset pode opcionalmente apontar para uma `Variation` do sistema.
-- Ao escolher um preset, a UI preenche nome, unidade, quantidade, custo unitário, perda e observação.
+- A manutenção dos presets acontece em rotas dedicadas (`/admin/item-cost-sheets/presets*`), e a aba `/custos` fica focada só na composição da ficha.
+- Ao escolher um preset na ficha, a UI preenche nome, unidade, quantidade, custo unitário, perda e observação.
 - Se o preset estiver vinculado a uma variação, o custo unitário entra automaticamente apenas nas colunas da ficha que usam essa variação; as demais começam com custo zero.
 - A linha continua editável na ficha individual, mas salva `presetId` para que ferramentas batch futuras possam localizar o mesmo custo sem depender apenas de texto.
 - O modo `Personalizado` continua disponível para exceções sem preset.
-- A própria aba `/custos` também permite criar, editar e remover presets sem sair da ficha.
 
 ### Fórmula de custo
 
