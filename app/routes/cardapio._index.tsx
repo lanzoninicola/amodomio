@@ -430,19 +430,19 @@ export default function CardapioWebIndex() {
 
                                     {likesEnabled && (
                                         <>
-                                        <div className="col-span-full mx-2 my-2 h-[2px] bg-zinc-900 md:hidden" />
-                                        <section
-                                            id="mais-curtidas"
-                                            className="flex flex-col gap-4 mx-2 md:flex-1"
-                                        >
-                                            <ChefSuggestionsCarousel
-                                                title="Mais curtidas: "
-                                                mobileTitle="Mais curtidas"
-                                                subtitle="nossos clientes gostam de mostrar o que é bom. Aqui está uma seleção dos sabores que eles mais curtem e querem compartilhar com todo mundo."
-                                                groups={[topLikedItems]}
-                                                headerProfile={SECTION_THREAD_PROFILE_BY_SECTION.likes}
-                                            />
-                                        </section>
+                                            <div className="col-span-full mx-2 my-2 h-[2px] bg-zinc-900 md:hidden" />
+                                            <section
+                                                id="mais-curtidas"
+                                                className="flex flex-col gap-4 mx-2 md:flex-1"
+                                            >
+                                                <ChefSuggestionsCarousel
+                                                    title="Mais curtidas: "
+                                                    mobileTitle="Mais curtidas"
+                                                    subtitle="nossos clientes gostam de mostrar o que é bom. Aqui está uma seleção dos sabores que eles mais curtem e querem compartilhar com todo mundo."
+                                                    groups={[topLikedItems]}
+                                                    headerProfile={SECTION_THREAD_PROFILE_BY_SECTION.likes}
+                                                />
+                                            </section>
                                         </>
                                     )}
                                 </>
@@ -454,18 +454,18 @@ export default function CardapioWebIndex() {
 
             {reelsEnabled && reelUrls.length > 0 ? (
                 <>
-                <div className="mx-4 my-4 h-[2px] bg-zinc-900 md:hidden" />
-                <div className="mx-4 md:mx-0 my-4">
-                    <div className="mb-3">
-                        <h2 className="font-neue font-semibold text-sm tracking-tight">Reels sugeridos</h2>
-                        <p className="font-neue text-sm mt-1 text-zinc-700">conteúdos curtos da equipe para inspirar seu próximo pedido.</p>
+                    <div className="mx-4 my-4 h-[2px] bg-zinc-900 md:hidden" />
+                    <div className="mx-4 md:mx-0 my-4">
+                        <div className="mb-3">
+                            <h2 className="font-neue font-semibold text-sm tracking-tight">Reels sugeridos</h2>
+                            <p className="font-neue text-sm mt-1 text-zinc-700">conteúdos curtos da equipe para inspirar seu próximo pedido.</p>
+                        </div>
+                        <ReelsCarousel urls={reelUrls} />
                     </div>
-                    <ReelsCarousel urls={reelUrls} />
-                </div>
                 </>
             ) : null}
 
-            <Separator className="m-4" />
+            <div className="mx-4 my-4 h-[2px] bg-zinc-900" />
 
             {/* ===================================================== */}
             {/* LISTA PRINCIPAL DO CARDÁPIO COM FILTRO + BARRA DE GRUPOS */}
@@ -539,17 +539,34 @@ export default function CardapioWebIndex() {
 
                         return (
                             <div className="flex flex-col mx-4">
-                                {/* linha título + filtro */}
-                                <div className="flex justify-between items-center mb-4">
-                                    <h2 className="font-neue text-sm md:text-lg font-semibold tracking-wider">
-                                        Todos os produtos
+                                {/* título + filtros inline */}
+                                <div className="mb-4">
+                                    <h2 className="font-lora text-2xl font-bold tracking-tight leading-tight mb-3">
+                                        Sabores da casa
                                     </h2>
-                                    <FilterTagSelect
-                                        tags={loadedTags}
-                                        currentTag={currentFilterTag}
-                                        onCurrentTagSelected={onCurrentTagSelected}
-                                        label="Categorias"
-                                    />
+                                    <div className="flex flex-wrap gap-x-4 gap-y-1">
+                                        <button
+                                            onClick={() => onCurrentTagSelected(null)}
+                                            className={cn(
+                                                "font-neue text-xs font-semibold tracking-widest uppercase transition-colors",
+                                                !currentFilterTag ? "text-black underline underline-offset-4" : "text-zinc-400 hover:text-black"
+                                            )}
+                                        >
+                                            Todos
+                                        </button>
+                                        {loadedTags.map((tag) => (
+                                            <button
+                                                key={tag.id}
+                                                onClick={() => onCurrentTagSelected(tag)}
+                                                className={cn(
+                                                    "font-neue text-xs font-semibold tracking-widest uppercase transition-colors",
+                                                    currentFilterTag?.id === tag.id ? "text-black underline underline-offset-4" : "text-zinc-400 hover:text-black"
+                                                )}
+                                            >
+                                                {tag.name}
+                                            </button>
+                                        ))}
+                                    </div>
                                 </div>
 
 
@@ -561,7 +578,7 @@ export default function CardapioWebIndex() {
                                             <button
                                                 key={g.groupId}
                                                 onClick={() => scrollToGroup(g.groupId)}
-                                                className="whitespace-nowrap px-3 py-1 rounded-full bg-zinc-100 text-xs md:text-sm font-neue hover:bg-zinc-200 transition"
+                                                className="whitespace-nowrap px-3 py-1 rounded-full bg-zinc-100 text-xs md:text-sm font-neue uppercase tracking-wider hover:bg-zinc-200 transition"
                                             >
                                                 {g.group}
                                             </button>
@@ -579,15 +596,14 @@ export default function CardapioWebIndex() {
                                             ref={(el) => (groupRefs.current[g.groupId] = el)}
                                             className="mb-6 scroll-mt-28"
                                         >
-                                            <SectionThreadHeader
-                                                profile={SECTION_THREAD_PROFILE_BY_SECTION.chef}
+                                            <CardapioGroupHeader
                                                 title={g.group}
                                                 subtitle={
                                                     g.description?.trim() ||
                                                     g.menuItems?.[0]?.MenuItemGroup?.description?.trim() ||
                                                     ""
                                                 }
-                                                className="mb-2 border-b pb-2"
+                                                profile={SECTION_THREAD_PROFILE_BY_SECTION.chef}
                                             />
                                             <CardapioItemsGrid
                                                 items={g.menuItems}
@@ -908,6 +924,48 @@ const CardapioItemList = ({
         </div>
     );
 };
+
+// ======================================================
+// HEADER DE SUBGRUPO (estilo ChefSuggestionsCarousel)
+// ======================================================
+function CardapioGroupHeader({
+    title,
+    subtitle,
+    profile,
+}: {
+    title: string;
+    subtitle?: string;
+    profile: ThreadSectionProfile;
+}) {
+    return (
+        <div className="mb-3 pb-3 border-b">
+            <div className="flex items-start gap-2">
+                <div className="flex-1 min-w-0">
+                    <h3 className="font-lora text-lg font-bold tracking-tight leading-tight">
+                        {title}
+                    </h3>
+                </div>
+            </div>
+
+            {subtitle && (
+                <p className="font-neue text-sm tracking-wide mt-2 text-zinc-700">
+                    {subtitle}
+                </p>
+            )}
+
+            <div className="flex items-center gap-2 mt-3">
+                {profile.avatarImageUrl ? (
+                    <img
+                        src={profile.avatarImageUrl}
+                        alt={profile.username}
+                        className="h-7 w-7 rounded-full object-cover border border-zinc-200"
+                    />
+                ) : null}
+                <span className="font-neue text-sm font-semibold">{profile.username}</span>
+            </div>
+        </div>
+    );
+}
 
 // ======================================================
 // GRID DE ITENS (teu componente atualizado)
