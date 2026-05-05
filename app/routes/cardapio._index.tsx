@@ -38,7 +38,7 @@ import Autoplay from "embla-carousel-autoplay";
 import CardapioItemImageSingle from "~/domain/cardapio/components/cardapio-item-image-single/cardapio-item-image-single";
 import prismaClient from "~/lib/prisma/client.server";
 import { Tag } from "@prisma/client";
-import { ChevronRight, Heart, Pizza, X } from "lucide-react";
+import { ArrowRight, ChevronRight, Heart, Pizza, Sparkles, X } from "lucide-react";
 import { useSoundEffects } from "~/components/sound-effects/use-sound-effects";
 import { getOrCreateMenuItemInterestClientId } from "~/domain/cardapio/menu-item-interest/menu-item-interest.client";
 import Logo from "~/components/primitives/logo/logo";
@@ -65,6 +65,32 @@ function getVisiblePublicPriceVariations(item: CardapioItem) {
     const variations = item.publicPriceVariations ?? [];
     const visibleVariations = variations.filter((variation) => variation.showOnCardapio);
     return visibleVariations.length > 0 ? visibleVariations : variations;
+}
+
+function getPrimaryCardapioMedia(item: CardapioItem) {
+    return item.MenuItemGalleryImage?.find((img) => img.isPrimary) || item.MenuItemGalleryImage?.[0];
+}
+
+function itemHasPublicTag(item: Pick<CardapioItem, "tags">, tagName: string) {
+    const normalized = tagName.trim().toLocaleLowerCase();
+    return [...(item.tags?.public || []), ...(item.tags?.all || [])].some(
+        (tag) => tag?.trim().toLocaleLowerCase() === normalized
+    );
+}
+
+function getNoveltyItems(input: CardapioItem[] | GroupedItems[]) {
+    const flatItems = isGrouped(input)
+        ? input.flatMap((group) => group.menuItems)
+        : input;
+
+    return [...flatItems]
+        .filter((item) => itemHasPublicTag(item, "novidade"))
+        .sort((a, b) => {
+            const aHasImage = getPrimaryCardapioMedia(a)?.secureUrl ? 1 : 0;
+            const bHasImage = getPrimaryCardapioMedia(b)?.secureUrl ? 1 : 0;
+            const likesDiff = (b.likes?.amount || 0) - (a.likes?.amount || 0);
+            return bHasImage - aHasImage || likesDiff;
+        });
 }
 
 const INTEREST_ENDPOINT = "/api/menu-item-interest";
@@ -365,6 +391,21 @@ export default function CardapioWebIndex() {
             />
             <Separator className="my-6 md:hidden" />
 
+            <Suspense fallback={null}>
+                <Await resolve={items}>
+                    {(items) => {
+                        const noveltyItems = getNoveltyItems(items);
+                        return noveltyItems.length > 0 ? (
+                            <NoveltiesHeroSection
+                                items={noveltyItems}
+                                likesEnabled={likesEnabled}
+                                sharesEnabled={sharesEnabled}
+                            />
+                        ) : null;
+                    }}
+                </Await>
+            </Suspense>
+
             {/* TOPO: Halloween + Destaques (igual ao teu) */}
             <div
                 className={cn(
@@ -460,9 +501,9 @@ export default function CardapioWebIndex() {
 
             {reelsEnabled && reelUrls.length > 0 ? (
                 <>
-                    <div className="mx-4 my-4 h-[2px] bg-zinc-900 md:hidden" />
-                    <div className="mx-4 md:mx-0 my-4">
-                        <div className="mb-3">
+                    <div className="mx-4 my-2 h-[2px] bg-zinc-900 md:hidden" />
+                    <div className="mx-4 md:mx-0 my-2">
+                        <div className="mb-2">
                             <h2 className="font-neue font-semibold text-sm tracking-tight">Reels sugeridos</h2>
                             <p className="font-neue text-sm mt-1 text-zinc-700">conteúdos curtos da equipe para inspirar seu próximo pedido.</p>
                         </div>
@@ -546,7 +587,7 @@ export default function CardapioWebIndex() {
                         return (
                             <div className="flex flex-col mx-4">
                                 {/* título + filtros inline */}
-                                <div className="mb-4">
+                                <div className="mb-4 ">
                                     <h2 className="font-lora text-2xl font-bold tracking-tight leading-tight mb-3">
                                         Sabores da casa
                                     </h2>
@@ -1430,6 +1471,155 @@ function CardapioItemPriceDialog({
     );
 }
 
+function NoveltiesHeroSection({
+    items,
+    likesEnabled,
+    sharesEnabled,
+}: {
+    items: CardapioItem[];
+    likesEnabled: boolean;
+    sharesEnabled: boolean;
+}) {
+    const featuredItem = items[0];
+    const secondaryItems = items.slice(1, 5);
+    const featuredMedia = getPrimaryCardapioMedia(featuredItem);
+    const featuredPrices = getVisiblePublicPriceVariations(featuredItem);
+    const featuredPrice = featuredPrices[0];
+
+    return (
+        <section>
+            <div className="mx-4 mb-8 h-[2px] bg-zinc-900" />
+
+            <div className="px-4 pb-10 md:px-6 md:pb-14">
+                {/* Eyebrow */}
+                <div className="mb-5 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <span className="relative flex h-1.5 w-1.5 shrink-0">
+                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-50" />
+                            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-red-500" />
+                        </span>
+                        <span className="font-neue text-[10px] uppercase tracking-[0.36em] text-zinc-500">
+                            novidades
+                        </span>
+                    </div>
+                    <span className="font-neue text-sm text-zinc-400">
+                        {items.length} sabores novos
+                    </span>
+                </div>
+
+                {/* Headline */}
+                <h2 className="mb-8 font-lora text-3xl font-bold leading-tight tracking-tight text-zinc-950 md:mb-10 md:text-5xl">
+                    O que chegou<br />agora.
+                </h2>
+
+                {/* Grid */}
+                <div className="grid gap-6 md:grid-cols-[1fr_0.72fr] md:gap-8 md:items-start">
+
+                    {/* Featured */}
+                    <Link to={getCardapioItemHref(featuredItem)} className="group block">
+                        <div className="relative min-h-[280px] overflow-hidden rounded-lg bg-zinc-100 md:min-h-[360px]">
+                            <div className="absolute inset-0">
+                                <CardapioItemImageSingle
+                                    src={featuredMedia?.secureUrl || ""}
+                                    placeholder={featuredItem.imagePlaceholderURL || ""}
+                                    placeholderIcon={false}
+                                    placeholderText={featuredItem.ingredients || featuredItem.name}
+                                    cnPlaceholderContainer="from-zinc-200 via-zinc-100 to-zinc-50"
+                                    cnPlaceholderText="font-lora text-xl text-zinc-500"
+                                    cnContainer="h-full w-full"
+                                    enableOverlay={false}
+                                />
+                            </div>
+                            <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/75 via-zinc-950/10 to-transparent" />
+                            <div className="absolute inset-x-0 bottom-0 p-4 md:p-5">
+                                {likesEnabled && (
+                                    <div className="mb-3">
+                                        <LikeIt
+                                            item={featuredItem}
+                                            size={16}
+                                            cnContainer="h-8 w-8 rounded bg-white/90 text-zinc-900 items-center justify-center"
+                                            color="red"
+                                            filled
+                                        />
+                                    </div>
+                                )}
+                                <h3 className="font-lora text-xl font-bold leading-tight text-white md:text-2xl">
+                                    {featuredItem.name}
+                                </h3>
+                                <p className="mt-1 font-neue text-sm leading-snug text-white/60">
+                                    {capitalize(featuredItem.ingredients || "Novo sabor.")}
+                                </p>
+                            </div>
+                        </div>
+                        <div className="mt-3 flex items-baseline justify-between border-b border-zinc-200 pb-3">
+                            {featuredPrice ? (
+                                <span className="font-neue text-base font-bold text-zinc-950">
+                                    {formatMoneyString(featuredPrice.priceAmount)}
+                                </span>
+                            ) : <span />}
+                            <span className="inline-flex items-center gap-1 font-neue text-sm text-zinc-400 transition group-hover:text-zinc-950">
+                                Ver sabor
+                                <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+                            </span>
+                        </div>
+                    </Link>
+
+                    {/* List */}
+                    <div>
+                        <div className="mb-2 border-b border-zinc-200 pb-2">
+                            <span className="font-neue text-[10px] uppercase tracking-[0.32em] text-zinc-400">
+                                também chegaram
+                            </span>
+                        </div>
+                        {secondaryItems.map((item) => {
+                            const media = getPrimaryCardapioMedia(item);
+                            const price = getVisiblePublicPriceVariations(item)[0];
+                            return (
+                                <Link
+                                    key={item.id}
+                                    to={getCardapioItemHref(item)}
+                                    className="group flex items-center gap-3 border-b border-zinc-100 py-3 transition-opacity hover:opacity-60"
+                                >
+                                    <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded bg-zinc-100 md:h-16 md:w-16">
+                                        <CardapioItemImageSingle
+                                            src={media?.secureUrl || ""}
+                                            placeholder={item.imagePlaceholderURL || ""}
+                                            placeholderIcon={false}
+                                            placeholderText={item.name}
+                                            cnPlaceholderContainer="from-zinc-200 via-zinc-100 to-zinc-50"
+                                            cnPlaceholderText="font-lora text-xs text-zinc-500"
+                                            cnContainer="h-full w-full"
+                                            enableOverlay={false}
+                                        />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                        <h4 className="font-neue text-[13px] font-bold uppercase leading-tight tracking-wide text-zinc-950">
+                                            {item.name}
+                                        </h4>
+                                        <p className="mt-0.5 line-clamp-1 font-lora text-[12px] text-zinc-500">
+                                            {capitalize(item.ingredients || "Novo sabor.")}
+                                        </p>
+                                    </div>
+                                    {price && (
+                                        <span className="shrink-0 font-neue text-sm font-bold text-zinc-950">
+                                            {formatMoneyString(price.priceAmount)}
+                                        </span>
+                                    )}
+                                </Link>
+                            );
+                        })}
+                        {secondaryItems.length === 0 && (
+                            <p className="pt-4 font-lora text-zinc-400">
+                                Sabor exclusivo abrindo a seleção sozinho.
+                            </p>
+                        )}
+                    </div>
+                </div>
+            </div>
+        </section>
+    );
+}
+
 // ======================================================
 // CARD DE LISTA COMPLETA (full image)
 // ======================================================
@@ -1527,7 +1717,7 @@ type GroupedItems = {
     group: string;
     description?: string;
     sortOrderIndex?: number;
-    menuItems: MenuItem[];
+    menuItems: CardapioItem[];
 };
 
 type CardapioItemListDestaqueProps = {
