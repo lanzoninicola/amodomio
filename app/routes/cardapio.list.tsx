@@ -10,7 +10,7 @@ import { tagPrismaEntity } from "~/domain/tags/tag.prisma.entity.server";
 import { FiltersTags } from "~/domain/cardapio/components/filter-tags/filter-tags";
 import CardapioTabs from "~/domain/cardapio/components/cardapio-tabs/cardapio-tabs";
 import { getEngagementSettings } from "~/domain/cardapio/engagement-settings.server";
-import { findAllCardapioItems } from "~/domain/cardapio/cardapio-items-source.server";
+import { PublicCardapioVariation, findAllCardapioItems } from "~/domain/cardapio/cardapio-items-source.server";
 
 export async function loader({}: LoaderFunctionArgs) {
 
@@ -195,7 +195,12 @@ interface CardapioItemProps {
     item: MenuItemWithAssociations;
 }
 
+type CardapioPublicItem = MenuItemWithAssociations & {
+    publicPriceVariations?: PublicCardapioVariation[];
+}
+
 const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) => {
+    const publicItem = item as CardapioPublicItem
     const italyProduct = item.tags?.public.some(t => t.toLocaleLowerCase() === "produtos-italianos")
 
     return (
@@ -216,7 +221,7 @@ const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) =>
                     <h3 className="font-neue text-sm font-semibold uppercase">{item.name}</h3>
                     {italyProduct && <ItalyIngredientsStatement />}
                     <p className="font-neue leading-tight text-sm mb-2">{item.ingredients}</p>
-                    <CardapioItemPrice prices={item?.priceVariations} cnLabel="text-black" />
+                    <CardapioItemPrice variations={publicItem.publicPriceVariations} cnLabel="text-black" />
                 </div>
             </div>
             <CardapioItemActionBarVertical

@@ -15,7 +15,6 @@ import ItalyIngredientsStatement from "~/domain/cardapio/components/italy-ingred
 import {
     CardapioItemActionBarVertical,
     LikeIt,
-    ShareIt
 } from "~/domain/cardapio/components/cardapio-item-action-bar/cardapio-item-action-bar";
 import { tagPrismaEntity } from "~/domain/tags/tag.prisma.entity.server";
 import Loading from "~/components/loading/loading";
@@ -26,7 +25,6 @@ import AwardBadge from "~/components/award-badge/award-badge";
 import { Separator } from "~/components/ui/separator";
 import {
     CardapioItemPrice,
-    CardapioItemPriceSelect
 } from "~/domain/cardapio/components/cardapio-item-price/cardapio-item-price";
 import {
     Carousel,
@@ -56,10 +54,18 @@ import { CARDAPIO_INDEX_CACHE_KEY } from "~/domain/cardapio/cardapio-cache.serve
 import { notifyCardapioContingencyByWhatsapp } from "~/domain/cardapio/cardapio-contingency-alert.server";
 import { findAllCardapioItemsGroupedByGroupLight } from "~/domain/cardapio/cardapio-items-source.server";
 import WEBSITE_LINKS from "~/domain/website-navigation/links/website-links";
+import { Dialog, DialogContent, DialogTitle } from "~/components/ui/dialog";
+import formatMoneyString from "~/utils/format-money-string";
 
 type CardapioItem = Awaited<
     ReturnType<typeof findAllCardapioItemsGroupedByGroupLight>
 >[number]["items"][number];
+
+function getVisiblePublicPriceVariations(item: CardapioItem) {
+    const variations = item.publicPriceVariations ?? [];
+    const visibleVariations = variations.filter((variation) => variation.showOnCardapio);
+    return visibleVariations.length > 0 ? visibleVariations : variations;
+}
 
 const INTEREST_ENDPOINT = "/api/menu-item-interest";
 const REELS_SETTING_KEY = "reel.urls";
@@ -1122,6 +1128,7 @@ function CardapioGridItem({
 }) {
     const localRef = useRef<HTMLLIElement | null>(null);
     const [isMediaFullscreen, setIsMediaFullscreen] = useState(false);
+    const [isPriceDialogOpen, setIsPriceDialogOpen] = useState(false);
     const featuredImage =
         item.MenuItemGalleryImage?.find((img) => img.isPrimary) ||
         item.MenuItemGalleryImage?.[0];
@@ -1177,151 +1184,143 @@ function CardapioGridItem({
         setIsMediaFullscreen(true);
     };
 
+    const visiblePrices = getVisiblePublicPriceVariations(item);
+    const firstPrice = visiblePrices[0];
+    const hasMultiplePrices = visiblePrices.length > 1;
+
     return (
         <li
             ref={setRefs}
             className={cn(
-                "flex h-full flex-col rounded-md border border-transparent",
+                "flex flex-col rounded-xl overflow-hidden bg-zinc-900",
                 "transition-all duration-300 ease-in-out",
                 "scroll-mt-24 lg:scroll-mt-0",
                 isExpanded ? "col-span-2 lg:col-span-1" : "col-span-1"
             )}
         >
-            {isDesktop ? (
-                <Link
-                    to={getCardapioItemHref(item)}
-                    className="flex h-full flex-col cursor-pointer"
-                    aria-label={`Abrir ${item.name}`}
-                    onClick={onOpenDetail}
-                >
-                    <div className="group overflow-hidden rounded-t-md relative focus:outline-none focus:ring-2 focus:ring-black/20">
-                        <div
-                            className={cn(
-                                "relative transition-all duration-300 ease-in-out",
-                                isExpanded ? "h-[260px]" : "h-[150px]"
-                            )}
-                        >
-                            <CardapioItemImageSingle
-                                src={featuredImage?.secureUrl || ""}
-                                placeholder={item.imagePlaceholderURL || ""}
-                                placeholderIcon={false}
-                                cnPlaceholderText={cn(
-                                    "text-black font-lora text-sm tracking-tight",
-                                    isExpanded && "text-lg"
-                                )}
-                                cnPlaceholderContainer="from-zinc-200 via-zinc-100 to-white "
-                                cnContainer="w-full h-full"
-                                enableOverlay={false}
-                            />
+            {/* Image */}
+            <div
+                className={cn(
+                    "relative overflow-hidden transition-all duration-300 ease-in-out",
+                    isExpanded ? "h-[220px]" : "h-[160px]"
+                )}
+            >
+                <CardapioItemImageSingle
+                    src={featuredImage?.secureUrl || ""}
+                    placeholder={item.imagePlaceholderURL || ""}
+                    placeholderIcon={false}
+                    cnPlaceholderText="text-white/60 font-lora text-sm"
+                    cnPlaceholderContainer="from-zinc-800 via-zinc-700 to-zinc-600"
+                    cnContainer="w-full h-full"
+                    enableOverlay={false}
+                />
 
-                            {item.meta?.isBestSeller && (
-                                <div className="absolute left-1 top-2 rounded-sm bg-black px-2 py-[2px] text-[10px] font-medium text-white backdrop-blur font-neue tracking-wide">
-                                    <span>Mais vendido</span>
-                                </div>
-                            )}
-                            {item.tags?.all?.includes("produtos-italianos") && (
-                                <div className="absolute left-1 top-2 rounded-sm bg-black px-2 py-[2px] text-[10px] font-medium text-white backdrop-blur font-neue tracking-wide">
-                                    <span>Com produtos italianos</span>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    <div className="flex h-[138px] flex-col rounded-b-md bg-white px-1 pb-2 pt-1 sm:h-[142px] sm:pt-2">
-                        <span
-                            className={cn(
-                                "font-neue line-clamp-1 font-medium text-xs tracking-wide sm:tracking-widest md:uppercase ",
-                                isExpanded && "text-md"
-                            )}
-                        >
-                            {item.name}
-                        </span>
-
-                        <div className={cn("my-1 flex-1", isExpanded && "mb-2")}>
-                            <span
-                                className={cn(
-                                    "block font-neue text-[13px] tracking-wide leading-[115%] sm:text-[15px] md:text-sm",
-                                    isExpanded && "text-base leading-[125%]"
-                                )}
-                            >
-                                {item.ingredients}
-                            </span>
-                        </div>
-                        <span className="mt-auto inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                            <span>{isExpanded ? "VOLTAR" : "EXPANDIR"}</span>
-                        </span>
-                    </div>
-                </Link>
-            ) : (
-                <div className="flex h-full flex-col">
+                {!isDesktop && (
                     <div
-                        className="group overflow-hidden rounded-t-md relative focus:outline-none focus:ring-2 focus:ring-black/20 cursor-pointer"
+                        className="absolute inset-0 z-0"
                         role="button"
                         aria-label={isExpanded ? `Abrir mídia de ${item.name} em tela cheia` : `Expandir ${item.name}`}
                         onClick={handleMobileMediaClick}
-                    >
-                        <div
-                            className={cn(
-                                "relative transition-all duration-300 ease-in-out",
-                                isExpanded ? "h-[260px]" : "h-[150px]"
-                            )}
+                    />
+                )}
+
+                {likesEnabled && (
+                    <div className="absolute -top-2 -right-2 z-10">
+                        <LikeIt
+                            item={item}
+                            size={22}
+                            cnContainer="w-16 h-16 rounded-full bg-white hover:bg-white/90 flex-col items-center justify-center gap-1 p-0"
+                            color="red"
+                            filled
                         >
-                            <CardapioItemImageSingle
-                                src={featuredImage?.secureUrl || ""}
-                                placeholder={item.imagePlaceholderURL || ""}
-                                placeholderIcon={false}
-                                cnPlaceholderText={cn(
-                                    "text-black font-lora text-sm tracking-tight",
-                                    isExpanded && "text-lg"
-                                )}
-                                cnPlaceholderContainer="from-zinc-200 via-zinc-100 to-white "
-                                cnContainer="w-full h-full"
-                                enableOverlay={false}
-                            />
-
-                            {item.meta?.isBestSeller && (
-                                <div className="absolute left-1 top-2 rounded-sm bg-black px-2 py-[2px] text-[10px] font-medium text-white backdrop-blur font-neue tracking-wide">
-                                    <span>Mais vendido</span>
-                                </div>
-                            )}
-                            {item.tags?.all?.includes("produtos-italianos") && (
-                                <div className="absolute left-1 top-2 rounded-sm bg-black px-2 py-[2px] text-[10px] font-medium text-white backdrop-blur font-neue tracking-wide">
-                                    <span>Com produtos italianos</span>
-                                </div>
-                            )}
-                        </div>
+                            <span className="font-neue text-[10px] uppercase tracking-wide text-red-500 leading-tight">Adorei</span>
+                        </LikeIt>
                     </div>
+                )}
+            </div>
 
-                    <div
-                        className="flex h-[138px] flex-col rounded-b-md bg-white px-1 pb-2 pt-1 cursor-pointer sm:h-[154px]"
-                        onClick={onClick}
-                        role="button"
-                        aria-label={`Alternar detalhes de ${item.name}`}
-                    >
-                        <span
-                            className={cn(
-                                "font-neue line-clamp-1 font-medium text-xs tracking-wide sm:text-base",
-                                isExpanded && "text-md"
-                            )}
-                        >
-                            {item.name}
-                        </span>
+            {/* Content */}
+            <div
+                className="flex flex-col flex-1 px-3 pt-2 pb-3 cursor-pointer"
+                onClick={isDesktop ? undefined : onClick}
+                role={isDesktop ? undefined : "button"}
+                aria-label={isDesktop ? undefined : `Alternar detalhes de ${item.name}`}
+            >
+                <span className="font-neue text-md font-semibold uppercase text-white mb-4 leading-5">
+                    {item.name}
+                </span>
 
-                        <div className={cn("my-1 flex-1", isExpanded && "mb-2")}>
-                            <span
-                                className={cn(
-                                    "block font-neue text-[13px] tracking-wide leading-[115%] sm:text-[15px] md:text-sm",
-                                    isExpanded && "text-base leading-[125%]"
-                                )}
-                            >
-                                {item.ingredients}
-                            </span>
-                        </div>
-                        <span className="mt-auto inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                            <span>{isExpanded ? "VOLTAR" : "EXPANDIR"}</span>
-                        </span>
-                    </div>
+                <div className="flex-1 mb-6">
+                    <span className={cn(
+                        "font-lora text-md text-white leading-none",
+                        // isExpanded ? "line-clamp-none" : "line-clamp-4"
+                    )}>
+                        {item.ingredients}
+                    </span>
                 </div>
+
+                {firstPrice && (
+                    <div className="flex items-center justify-between mt-auto">
+                        {!isDesktop && hasMultiplePrices ? (
+                            <button
+                                type="button"
+                                className="text-left"
+                                aria-label={`Ver outros tamanhos de ${item.name}`}
+                                onClick={(event) => {
+                                    event.stopPropagation();
+                                    setIsPriceDialogOpen(true);
+                                }}
+                            >
+                                <span className="block font-neue text-[10px] uppercase tracking-widest text-zinc-500">
+                                    {firstPrice.label}
+                                </span>
+                                <span className="font-neue font-bold text-xl text-white leading-tight">
+                                    {formatMoneyString(firstPrice.priceAmount)}
+                                </span>
+                            </button>
+                        ) : (
+                            <div>
+                                <span className="block font-neue text-[10px] uppercase tracking-widest text-zinc-500">
+                                    {firstPrice.label}
+                                </span>
+                                <span className="font-neue font-bold text-xl text-white leading-tight">
+                                    {formatMoneyString(firstPrice.priceAmount)}
+                                </span>
+                            </div>
+                        )}
+                        {isDesktop ? (
+                            <Link
+                                to={getCardapioItemHref(item)}
+                                className="h-9 w-9 rounded-full bg-white flex items-center justify-center flex-shrink-0"
+                                aria-label={`Abrir ${item.name}`}
+                                onClick={e => { e.stopPropagation(); onOpenDetail?.(); }}
+                            >
+                                <ChevronRight className="h-5 w-5 text-black" />
+                            </Link>
+                        ) : (
+                            <button
+                                type="button"
+                                className="h-9 w-9 rounded-full bg-white flex items-center justify-center flex-shrink-0"
+                                aria-label={`Alternar detalhes de ${item.name}`}
+                                onClick={(event) => {
+                                    event.stopPropagation();
+                                    onClick();
+                                }}
+                            >
+                                <ChevronRight className="h-5 w-5 text-black" />
+                            </button>
+                        )}
+                    </div>
+                )}
+            </div>
+
+            {!isDesktop && (
+                <CardapioItemPriceDialog
+                    item={item}
+                    featuredImageUrl={featuredImage?.secureUrl || ""}
+                    open={isPriceDialogOpen}
+                    onOpenChange={setIsPriceDialogOpen}
+                />
             )}
 
             {!isDesktop && isMediaFullscreen && (
@@ -1362,48 +1361,72 @@ function CardapioGridItem({
                     )}
                 </div>
             )}
-
-            <CardapioItemPriceSelect prices={item.MenuItemSellingPriceVariation} />
-
-            {(sharesEnabled || likesEnabled) && (
-                <div className={cn(
-                    "shadow-sm bg-white my-2",
-                    isExpanded && sharesEnabled && likesEnabled
-                        ? "grid grid-cols-2 gap-2"
-                        : "flex flex-col gap-y-1"
-                )}>
-                    {sharesEnabled && (
-                        <ShareIt
-                            item={item}
-                            size={isExpanded === true ? 20 : 16}
-                            cnContainer={cn("w-full px-2 py-0 h-7 border border-black")}
-                        >
-                            <span className="font-neue text-xs uppercase tracking-wide ">Compartilhar</span>
-                        </ShareIt>
-                    )}
-
-                    {likesEnabled && (
-                        <LikeIt
-                            item={item}
-                            size={isExpanded === true ? 20 : 16}
-                            cnContainer={cn("w-full px-2 py-0 h-7 bg-red-500 text-white")}
-                            color="white"
-                        >
-                            <span className="font-neue text-xs uppercase tracking-wide">Gostei</span>
-                        </LikeIt>
-                    )}
-                </div>
-            )}
-
-            <div
-                className={cn(
-                    "overflow-hidden transition-all duration-300 ease-in-out bg-white rounded-b-md",
-                    isExpanded ? "max-h-[320px] opacity-100 px-3 pb-3" : "max-h-0 opacity-0 px-0 pb-0"
-                )}
-            >
-                <div className="mt-1 space-y-2 text-xs">{/* extra se quiser */}</div>
-            </div>
         </li>
+    );
+}
+
+function CardapioItemPriceDialog({
+    item,
+    featuredImageUrl,
+    open,
+    onOpenChange,
+}: {
+    item: CardapioItem;
+    featuredImageUrl: string;
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+}) {
+    const variations = getVisiblePublicPriceVariations(item);
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="max-w-[calc(100vw-1.5rem)] rounded-[1.25rem] border-none bg-transparent p-0 shadow-none sm:max-w-sm [&>button]:rounded-full [&>button]:bg-black/60 [&>button]:text-white [&>button]:opacity-100 [&>button]:ring-0 [&>button]:ring-offset-0">
+                <DialogTitle className="sr-only">
+                    Outros tamanhos de {item.name}
+                </DialogTitle>
+
+                <div className="overflow-hidden rounded-[1.25rem] bg-zinc-900 text-white">
+                    <div className="relative h-[170px] overflow-hidden">
+                        <CardapioItemImageSingle
+                            src={featuredImageUrl}
+                            placeholder={item.imagePlaceholderURL || ""}
+                            placeholderIcon={false}
+                            cnPlaceholderText="text-white/60 font-lora text-sm"
+                            cnPlaceholderContainer="from-zinc-800 via-zinc-700 to-zinc-600"
+                            cnContainer="w-full h-full"
+                            enableOverlay={false}
+                        />
+                    </div>
+
+                    <div className="px-4 pb-5 pt-4">
+                        <div className="mb-4">
+                            <p className="font-neue text-[10px] uppercase tracking-[0.28em] text-zinc-500">
+                                Tamanhos
+                            </p>
+                            <h3 className="mt-2 font-neue text-lg font-semibold uppercase leading-tight">
+                                {item.name}
+                            </h3>
+                        </div>
+
+                        <div className="space-y-2">
+                            {variations.map((variation) => (
+                                <div
+                                    key={variation.id}
+                                    className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-3 py-3"
+                                >
+                                    <span className="font-neue text-sm uppercase tracking-wide text-zinc-200">
+                                        {variation.label}
+                                    </span>
+                                    <span className="font-neue text-base font-bold leading-none text-white">
+                                        {formatMoneyString(variation.priceAmount)}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            </DialogContent>
+        </Dialog>
     );
 }
 
@@ -1466,7 +1489,7 @@ const CardapioItemFullImage = React.forwardRef(
                                             {capitalize(item.ingredients)}
                                         </p>
                                         <CardapioItemPrice
-                                            prices={item?.MenuItemSellingPriceVariation}
+                                            variations={item?.publicPriceVariations}
                                             cnLabel="text-white"
                                             cnValue="text-white font-semibold"
                                             showValuta={false}
@@ -1519,13 +1542,11 @@ function isGrouped(items: MenuItem[] | GroupedItems[]): items is GroupedItems[] 
 }
 
 function getItemMarginPerc(item: CardapioItem) {
-    const variations = item.MenuItemSellingPriceVariation ?? [];
-    const visibleVariations = variations.filter((v) => v.showOnCardapio);
-    const source = visibleVariations.length > 0 ? visibleVariations : variations;
+    const source = getVisiblePublicPriceVariations(item);
     if (!source.length) return 0;
     return Math.max(
         ...source.map(
-            (v) => Number(v.profitActualPerc ?? v.profitExpectedPerc ?? 0)
+            (v) => Number(v.profitExpectedPerc ?? 0)
         )
     );
 }

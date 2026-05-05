@@ -217,7 +217,7 @@ function CardapioHeader() {
     const { fazerPedidoPublicURL, notificationsEnabled, vapidPublicKey } = useLoaderData<typeof loader>()
 
     return (
-        <header className="fixed top-0 w-full z-10 md:max-w-6xl md:-translate-x-1/2 md:left-1/2 " >
+        <header className="fixed top-0 w-full z-30 md:max-w-6xl md:-translate-x-1/2 md:left-1/2 " >
             <div className="flex flex-col bg-white px-1 pt-2 py-3 h-[50px] md:h-[70px]">
                 <div className="grid grid-cols-3 items-center w-full">
                     {/* <div className="flex gap-1 items-center" onClick={() => setShowSearch(!showSearch)}>

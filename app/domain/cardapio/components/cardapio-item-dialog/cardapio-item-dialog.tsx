@@ -8,6 +8,7 @@ import isItalyProduct from "~/utils/is-italy-product";
 import capitalize from "~/utils/capitalize";
 import AwardBadge from "~/components/award-badge/award-badge";
 import { Separator } from "~/components/ui/separator";
+import { PublicCardapioVariation } from "~/domain/cardapio/cardapio-items-source.server";
 
 
 interface CardapioItemDialogProps {
@@ -16,8 +17,13 @@ interface CardapioItemDialogProps {
     triggerComponent?: React.ReactNode;
 }
 
+type CardapioPublicItem = MenuItemWithAssociations & {
+    publicPriceVariations?: PublicCardapioVariation[];
+}
+
 
 export default function CardapioItemDialog({ item, children, triggerComponent }: CardapioItemDialogProps) {
+    const publicItem = item as CardapioPublicItem
     const italyProduct = item.tags?.public.some(t => t.toLocaleLowerCase() === "produtos-italianos")
     const bestMonthlySeller = item.tags?.all.some(t => t.toLocaleLowerCase() === "mais-vendido-mes")
     const bestSeller = item.tags?.all.some(t => t.toLocaleLowerCase() === "mais-vendido")
@@ -54,7 +60,7 @@ export default function CardapioItemDialog({ item, children, triggerComponent }:
 
                         <p className="leading-snug text-[15px] mb-6">{capitalize(item.ingredients)}</p>
 
-                        <CardapioItemPrice prices={item?.MenuItemSellingPriceVariation} cnLabel="text-black items-start" showValuta={false} />
+                        <CardapioItemPrice variations={publicItem.publicPriceVariations} cnLabel="text-black items-start" showValuta={false} />
                     </div>
                     {children}
                     <DialogClose asChild>

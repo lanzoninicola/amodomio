@@ -8,6 +8,7 @@ import {
 type CardapioCompatItem = MenuItemWithAssociations & {
   sourceType?: "native";
   sourceItemId?: string;
+  publicPriceVariations?: PublicCardapioVariation[];
 };
 
 type NativeCardapioRow = Awaited<ReturnType<typeof listNativeCardapioItems>>[number];
@@ -26,6 +27,23 @@ type CompatMediaAsset = {
   sortOrder?: number | null;
   createdAt?: Date | null;
   updatedAt?: Date | null;
+};
+
+export type PublicCardapioVariation = {
+  id: string;
+  itemVariationId: string | null;
+  variationId: string | null;
+  variationCode: string | null;
+  label: string;
+  priceAmount: number;
+  priceExpectedAmount: number;
+  profitExpectedPerc: number;
+  discountPercentage: number;
+  previousPriceAmount: number;
+  showOnCardapio: boolean;
+  showOnCardapioAt: Date | null;
+  sortOrderIndex: number;
+  isReference: boolean;
 };
 
 function normalizeText(value?: string | null) {
@@ -180,6 +198,35 @@ function buildCompatPriceRows(item: NativeCardapioRow) {
     );
 }
 
+export function buildPublicPriceVariations(item: NativeCardapioRow): PublicCardapioVariation[] {
+  return (item.ItemSellingPriceVariation || [])
+    .map((row: any, index: number) => {
+      const label = row.ItemVariation?.Variation?.name || "Sem variacao";
+      const code = row.ItemVariation?.Variation?.code || null;
+      const sortOrderIndex = resolveSortOrderIndex(row.ItemVariation, index);
+
+      return {
+        id: row.id,
+        itemVariationId: row.ItemVariation?.id || null,
+        variationId: row.ItemVariation?.Variation?.id || null,
+        variationCode: code,
+        label,
+        priceAmount: Number(row.priceAmount || 0),
+        priceExpectedAmount: Number(row.priceExpectedAmount || 0),
+        profitExpectedPerc: Number(row.profitExpectedPerc || 0),
+        discountPercentage: Number(row.discountPercentage || 0),
+        previousPriceAmount: Number(row.previousPriceAmount || 0),
+        showOnCardapio: true,
+        showOnCardapioAt: row.updatedAt || null,
+        sortOrderIndex,
+        isReference: Boolean(row.ItemVariation?.isReference) || code === "base",
+      };
+    })
+    .sort(
+      (a, b) => a.sortOrderIndex - b.sortOrderIndex || a.priceAmount - b.priceAmount
+    );
+}
+
 function buildPriceVariations(
   sellingPrices: Array<{
     id: string;
@@ -270,6 +317,7 @@ function toCompatCardapioItem(item: NativeCardapioRow): CardapioCompatItem {
         }
       : null;
   const sellingPrices = buildCompatPriceRows(item);
+  const publicPriceVariations = buildPublicPriceVariations(item);
 
   const cardapioChannelVisible =
     (item.ItemSellingChannelItem || []).some((row: any) => row?.visible === true) || false;
@@ -314,6 +362,7 @@ function toCompatCardapioItem(item: NativeCardapioRow): CardapioCompatItem {
     MenuItemSellingPriceVariation: sellingPrices as any,
     MenuItemCostVariation: [] as any,
     priceVariations: buildPriceVariations(sellingPrices as any) as any,
+    publicPriceVariations,
     MenuItemGroup: group as any,
     menuItemGroupId: group?.id || null,
     MenuItemSellingPriceVariationAudit: [] as any,

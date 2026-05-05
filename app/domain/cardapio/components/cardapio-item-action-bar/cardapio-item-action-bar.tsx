@@ -334,14 +334,18 @@ export function LikeIt({
     cnLabel,
     children,
     cnContainer,
+    cnIcon,
     color = "red",
+    filled = false,
 }: {
     item: MenuItemWithAssociations,
     size?: number,
     cnLabel?: string,
     children?: React.ReactNode,
     cnContainer?: string,
+    cnIcon?: string,
     color?: "red" | "white",
+    filled?: boolean,
 }) {
     const [likeIt, setLikeIt] = useState(false)
     const [likesAmount, setLikesAmount] = useState(item.likes?.amount || 0)
@@ -389,15 +393,14 @@ export function LikeIt({
             <Heart
                 size={size ?? 16}
                 className={cn(
-                    "mr-2",
-                    likeIt ? fillColor : "fill-none",
-                    likeIt ? strokeColor : strokeColor,
-                    item.likes?.amount && item.likes?.amount > 0 ? strokeColor : strokeColor
+                    (likeIt || filled) ? fillColor : "fill-none",
+                    strokeColor,
+                    cnIcon,
                 )}
             />
             {children}
 
-            <span className={
+            {/* <span className={
                 cn(
                     `text-xs font-neue font-medium tracking-widest uppercase pl-1 ${textColor}`,
                     cnLabel
@@ -405,7 +408,7 @@ export function LikeIt({
             }>
                 ({likesAmount > 0 && `${likesAmount}`})
 
-            </span>
+            </span> */}
         </Button>
     )
 }

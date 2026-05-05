@@ -237,7 +237,7 @@ export default function SingleCardapioItem() {
 
           <div className="transform transition-all duration-300 hover:scale-105 w-full">
             <CardapioItemPrice
-              prices={item?.MenuItemSellingPriceVariation || []}
+              variations={item?.publicPriceVariations || []}
               cnLabel="text-black/90 transition-colors duration-300 hover:text-black md:text-md"
               cnValue="text-black font-bold transition-all duration-300 hover:text-orange-400 hover:scale-110 md:text-md"
               showValuta={false}

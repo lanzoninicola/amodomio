@@ -1,29 +1,55 @@
-import { Separator } from "@radix-ui/react-separator"
 import { cn } from "~/lib/utils"
 import { MenuItemWithAssociations } from "../../menu-item.prisma.entity.server"
 import { Button } from "~/components/ui/button"
+import { PublicCardapioVariation } from "~/domain/cardapio/cardapio-items-source.server"
 
 import * as React from "react"
 import { ChevronsUpDown, Check } from "lucide-react"
 import { Popover, PopoverTrigger, PopoverContent } from "~/components/ui/popover"
-import { Command, CommandInput, CommandGroup, CommandItem, CommandEmpty } from "~/components/ui/command"
-import formatDecimalPlaces from "~/utils/format-decimal-places"
+import { Command, CommandGroup, CommandItem, CommandEmpty } from "~/components/ui/command"
 import formatMoneyString from "~/utils/format-money-string"
 
 
 
 
 interface CardapioItemPriceProps {
-    prices: MenuItemWithAssociations["MenuItemSellingPriceVariation"]
+    prices?: MenuItemWithAssociations["MenuItemSellingPriceVariation"]
+    variations?: PublicCardapioVariation[]
     showValuta?: boolean
     cnLabel?: string
     cnValue?: string
 }
 
-export function CardapioItemPrice({ prices, cnLabel, cnValue, showValuta = true }: CardapioItemPriceProps) {
+function normalizePublicVariations(
+    prices?: MenuItemWithAssociations["MenuItemSellingPriceVariation"],
+    variations?: PublicCardapioVariation[]
+) {
+    if (variations?.length) {
+        return variations
+            .filter((variation) => variation.showOnCardapio)
+            .sort((a, b) => a.sortOrderIndex - b.sortOrderIndex)
+    }
 
-    const lastIndex = prices.length - 1
-    const colsNumber = prices.filter(p => p.showOnCardapio === true).length
+    return (prices ?? [])
+        .filter((price) => price.showOnCardapio === true)
+        .sort((a, b) => (a.MenuItemSize?.sortOrderIndex ?? 0) - (b.MenuItemSize?.sortOrderIndex ?? 0))
+        .map((price) => ({
+            id: price.id,
+            label: price?.MenuItemSize?.nameShort || price?.MenuItemSize?.name || "Sem variacao",
+            priceAmount: Number(price?.priceAmount || 0),
+            sortOrderIndex: Number(price?.MenuItemSize?.sortOrderIndex || 0),
+            showOnCardapio: Boolean(price?.showOnCardapio),
+        }))
+}
+
+export function CardapioItemPrice({ prices, variations, cnLabel, cnValue, showValuta = true }: CardapioItemPriceProps) {
+    const visibleVariations = normalizePublicVariations(prices, variations)
+    const lastIndex = visibleVariations.length - 1
+    const colsNumber = visibleVariations.length
+
+    if (visibleVariations.length === 0) {
+        return null
+    }
 
     return (
         <div className={
@@ -33,13 +59,11 @@ export function CardapioItemPrice({ prices, cnLabel, cnValue, showValuta = true 
             )
         }>
             {
-                prices.filter(p => p.showOnCardapio === true)
-                    .sort((a, b) => a.MenuItemSize.sortOrderIndex - b.MenuItemSize.sortOrderIndex)
-                    .map((p, idx) => {
+                visibleVariations.map((variation, idx) => {
 
                         return (
 
-                            <div key={p.id} className={
+                            <div key={variation.id} className={
                                 cn(
                                     "flex flex-col items-center gap-1",
                                     lastIndex === idx && "order-last"
@@ -52,7 +76,7 @@ export function CardapioItemPrice({ prices, cnLabel, cnValue, showValuta = true 
                                         "uppercase text-[12px] text-muted-foreground leading-[1.1]",
                                         cnLabel
                                     )
-                                }>{p?.MenuItemSize?.nameShort}</span>
+                                }>{variation.label}</span>
                                 <div className={
                                     cn(
                                         "flex items-end gap-[2px] text-muted-foreground",
@@ -60,7 +84,7 @@ export function CardapioItemPrice({ prices, cnLabel, cnValue, showValuta = true 
                                     )
                                 }>
                                     {showValuta && <span className="text-[12px]">R$</span>}
-                                    <span className="text-[13px]">{p?.priceAmount}</span>
+                                    <span className="text-[13px]">{variation.priceAmount}</span>
                                 </div>
                             </div>
                         )
@@ -75,10 +99,11 @@ export function CardapioItemPrice({ prices, cnLabel, cnValue, showValuta = true 
 
 
 
-type PriceVar = NonNullable<MenuItemWithAssociations["MenuItemSellingPriceVariation"]>[number]
+type PriceVar = ReturnType<typeof normalizePublicVariations>[number]
 
 interface CardapioItemPriceSelectProps {
-    prices: MenuItemWithAssociations["MenuItemSellingPriceVariation"]
+    prices?: MenuItemWithAssociations["MenuItemSellingPriceVariation"]
+    variations?: PublicCardapioVariation[]
     label?: string
     defaultSelectedId?: string
     showCurrency?: boolean
@@ -88,6 +113,7 @@ interface CardapioItemPriceSelectProps {
 
 export function CardapioItemPriceSelect({
     prices,
+    variations,
     label = "Tamanho",
     defaultSelectedId,
     showCurrency = true,
@@ -97,10 +123,8 @@ export function CardapioItemPriceSelect({
     const [open, setOpen] = React.useState(false)
 
     const list = React.useMemo(() => {
-        return (prices ?? [])
-            .filter(p => p.showOnCardapio)
-            .sort((a, b) => (a.MenuItemSize?.sortOrderIndex ?? 0) - (b.MenuItemSize?.sortOrderIndex ?? 0))
-    }, [prices])
+        return normalizePublicVariations(prices, variations)
+    }, [prices, variations])
 
     const [current, setCurrent] = React.useState<PriceVar | null>(() => {
         if (!list.length) return null
@@ -131,7 +155,7 @@ export function CardapioItemPriceSelect({
     const triggerText = current
         ? (
             <div className="flex justify-between items-center w-full font-neue font-normal text-xs tracking-wide truncate">
-                <span>{current.MenuItemSize?.nameShort}</span>
+                <span>{current.label}</span>
                 <span>{formatMoneyString(current.priceAmount)}</span>
             </div>
         )
@@ -160,7 +184,7 @@ export function CardapioItemPriceSelect({
                     <CommandEmpty>Nenhum tamanho encontrado.</CommandEmpty>
                     <CommandGroup className="max-h-[300px] overflow-auto">
                         {list.map((p) => {
-                            const text = `${p.MenuItemSize?.nameShort} • ${showCurrency ? "R$ " : ""}${p.priceAmount}`
+                            const text = `${p.label} • ${showCurrency ? "R$ " : ""}${p.priceAmount}`
                             const selected = current?.id === p.id
                             return (
                                 <CommandItem
@@ -171,8 +195,7 @@ export function CardapioItemPriceSelect({
                                 >
                                     <Check className={cn("h-4 w-4", selected ? "opacity-100" : "opacity-0")} />
                                     <div className="grid grid-cols-2 gap-x-4 w-[160px] font-neue tracking-wide font-medium">
-                                        {/* <span className="font-medium leading-tight">{p.MenuItemSize?.name ?? p.MenuItemSize?.nameShort}</span> */}
-                                        <span className="text-xs">{p.MenuItemSize?.nameShort}</span>
+                                        <span className="text-xs">{p.label}</span>
                                         <span className="text-xs">{formatMoneyString(p.priceAmount)}</span>
                                     </div>
                                 </CommandItem>
