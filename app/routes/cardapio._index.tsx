@@ -40,7 +40,7 @@ import Autoplay from "embla-carousel-autoplay";
 import CardapioItemImageSingle from "~/domain/cardapio/components/cardapio-item-image-single/cardapio-item-image-single";
 import prismaClient from "~/lib/prisma/client.server";
 import { Tag } from "@prisma/client";
-import { Heart, X } from "lucide-react";
+import { ChevronRight, Heart, Pizza, X } from "lucide-react";
 import { useSoundEffects } from "~/components/sound-effects/use-sound-effects";
 import { getOrCreateMenuItemInterestClientId } from "~/domain/cardapio/menu-item-interest/menu-item-interest.client";
 import Logo from "~/components/primitives/logo/logo";
@@ -362,7 +362,7 @@ export default function CardapioWebIndex() {
             {/* TOPO: Halloween + Destaques (igual ao teu) */}
             <div
                 className={cn(
-                    "flex flex-col gap-8 md:grid md:grid-cols-2 md:gap-0 md:items-start md:mb-10 md:justify-center",
+                    "flex flex-col gap-0 md:grid md:grid-cols-2 md:gap-0 md:items-start md:mb-10 md:justify-center",
                     "mt-28 md:mt-48"
                 )}
             >
@@ -429,49 +429,21 @@ export default function CardapioWebIndex() {
                                     </section>
 
                                     {likesEnabled && (
+                                        <>
+                                        <div className="col-span-full mx-2 my-2 h-[2px] bg-zinc-900 md:hidden" />
                                         <section
                                             id="mais-curtidas"
                                             className="flex flex-col gap-4 mx-2 md:flex-1"
                                         >
-                                            <div className="p-2">
-                                                <SectionThreadHeader
-                                                    profile={SECTION_THREAD_PROFILE_BY_SECTION.likes}
-                                                    title="Mais curtidas: "
-                                                    subtitle="nossos clientes gostam de mostrar o que é bom. Aqui está uma seleção dos sabores que eles mais curtem e querem compartilhar com todo mundo."
-                                                    className="mb-3"
-                                                />
-                                                <div className="grid grid-cols-2 gap-3 md:grid-cols-2">
-                                                    {topLikedItems.map((i) => {
-                                                        const featuredImage =
-                                                            i.MenuItemGalleryImage?.find((img) => img.isPrimary) ||
-                                                            i.MenuItemGalleryImage?.[0];
-                                                        return (
-                                                            <Link
-                                                                key={i.id}
-                                                                to={getCardapioItemHref(i)}
-                                                                className="group relative block overflow-hidden rounded-md"
-                                                            >
-                                                                <div className="relative h-[160px] md:h-[200px]">
-                                                                    <CardapioItemImageSingle
-                                                                        src={featuredImage?.secureUrl || ""}
-                                                                        placeholder={i.imagePlaceholderURL || ""}
-                                                                        placeholderIcon={false}
-                                                                        cnContainer="h-full w-full"
-                                                                        enableOverlay={false}
-                                                                    />
-                                                                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-90" />
-                                                                    <div className="absolute bottom-2 left-2 right-2">
-                                                                        <span className="font-neue text-white text-xs tracking-widest uppercase font-semibold drop-shadow leading-none">
-                                                                            {i.name}
-                                                                        </span>
-                                                                    </div>
-                                                                </div>
-                                                            </Link>
-                                                        );
-                                                    })}
-                                                </div>
-                                            </div>
+                                            <ChefSuggestionsCarousel
+                                                title="Mais curtidas: "
+                                                mobileTitle="Mais curtidas"
+                                                subtitle="nossos clientes gostam de mostrar o que é bom. Aqui está uma seleção dos sabores que eles mais curtem e querem compartilhar com todo mundo."
+                                                groups={[topLikedItems]}
+                                                headerProfile={SECTION_THREAD_PROFILE_BY_SECTION.likes}
+                                            />
                                         </section>
+                                        </>
                                     )}
                                 </>
                             );
@@ -481,15 +453,16 @@ export default function CardapioWebIndex() {
             </div>
 
             {reelsEnabled && reelUrls.length > 0 ? (
-                <div className="mx-4 md:mx-0 my-6">
-                    <SectionThreadHeader
-                        profile={SECTION_THREAD_PROFILE_BY_SECTION.reels}
-                        title="Reels sugeridos"
-                        subtitle="Conteúdos curtos da equipe para inspirar seu próximo pedido."
-                        className="mb-3 px-2"
-                    />
+                <>
+                <div className="mx-4 my-4 h-[2px] bg-zinc-900 md:hidden" />
+                <div className="mx-4 md:mx-0 my-4">
+                    <div className="mb-3">
+                        <h2 className="font-neue font-semibold text-sm tracking-tight">Reels sugeridos</h2>
+                        <p className="font-neue text-sm mt-1 text-zinc-700">conteúdos curtos da equipe para inspirar seu próximo pedido.</p>
+                    </div>
                     <ReelsCarousel urls={reelUrls} />
                 </div>
+                </>
             ) : null}
 
             <Separator className="m-4" />
@@ -1654,7 +1627,7 @@ function ReelsCarousel({ urls }: { urls: string[] }) {
         <Carousel opts={{ align: "start" }} className="relative">
             <CarouselContent>
                 {urls.map((url, index) => (
-                    <CarouselItem key={`${url}-${index}`} className="basis-[45%] md:basis-1/5 lg:basis-1/6">
+                    <CarouselItem key={`${url}-${index}`} className="basis-[18%] md:basis-1/5 lg:basis-1/6">
                         <div className="px-0">
                             <div
                                 ref={(el) => {
@@ -1744,6 +1717,7 @@ function ReelsCarousel({ urls }: { urls: string[] }) {
 type ChefSuggestionsCarouselProps = {
     title?: string;
     subtitle?: string;
+    mobileTitle?: React.ReactNode;
     groups: CardapioItem[][];
     carouselDelay?: number;
     headerProfile?: ThreadSectionProfile;
@@ -1752,6 +1726,7 @@ type ChefSuggestionsCarouselProps = {
 function ChefSuggestionsCarousel({
     title,
     subtitle,
+    mobileTitle,
     groups,
     carouselDelay = 2500,
     headerProfile,
@@ -1759,6 +1734,7 @@ function ChefSuggestionsCarousel({
     const { playNavigation } = useSoundEffects();
     const [api, setApi] = React.useState<CarouselApi | null>(null);
     const [selectedIndex, setSelectedIndex] = React.useState(0);
+    const [isOpen, setIsOpen] = React.useState(false);
 
     React.useEffect(() => {
         if (!api) return;
@@ -1773,79 +1749,183 @@ function ChefSuggestionsCarousel({
     const items = groups.flat();
     const groupSize = 4;
     const selectedGroupIndex = Math.floor(selectedIndex / groupSize);
+    const previewItems = items.slice(0, 4);
+
+    const carouselContent = (
+        <Carousel
+            setApi={setApi}
+            opts={{ loop: true, align: "start" }}
+            plugins={[
+                Autoplay({
+                    delay: carouselDelay,
+                    stopOnInteraction: false,
+                    stopOnMouseEnter: true
+                })
+            ]}
+            className="relative"
+        >
+            <CarouselContent>
+                {items.map((i) => {
+                    const featuredImage =
+                        i.MenuItemGalleryImage?.find((img) => img.isPrimary) ||
+                        i.MenuItemGalleryImage?.[0];
+
+                    return (
+                        <CarouselItem key={i.id} className="basis-full">
+                            <Link
+                                to={getCardapioItemHref(i)}
+                                className="group relative block overflow-hidden rounded-md"
+                                onClick={() => playNavigation()}
+                            >
+                                <div className="relative h-[220px] md:h-[280px]">
+                                    <CardapioItemImageSingle
+                                        src={featuredImage?.secureUrl || ""}
+                                        placeholder={i.imagePlaceholderURL || ""}
+                                        placeholderIcon={false}
+                                        placeholderText={i.ingredients}
+                                        cnContainer="h-full w-full"
+                                        enableOverlay={false}
+                                    />
+                                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-90" />
+                                    <div className="absolute bottom-2 left-2 right-2">
+                                        <span className="font-neue text-white text-xs tracking-widest uppercase font-semibold drop-shadow leading-tight">
+                                            {i.name}
+                                        </span>
+                                    </div>
+                                </div>
+                            </Link>
+                        </CarouselItem>
+                    );
+                })}
+            </CarouselContent>
+
+            <div className="absolute inset-x-0 -bottom-3 flex items-center justify-center gap-2 md:-bottom-4">
+                {groups.map((_, idx) => (
+                    <button
+                        key={idx}
+                        aria-label={`Ir para slide ${idx + 1}`}
+                        onClick={() => api?.scrollTo(idx * groupSize)}
+                        className={[
+                            "h-2 w-2 rounded-full transition-all",
+                            selectedGroupIndex === idx ? "w-6 bg-black/80" : "bg-black/30"
+                        ].join(" ")}
+                    />
+                ))}
+            </div>
+        </Carousel>
+    );
 
     return (
         <div className="p-2">
-            {title ? (
-                <SectionThreadHeader
-                    profile={headerProfile ?? SECTION_THREAD_PROFILE_BY_SECTION.chef}
-                    title={title}
-                    subtitle={subtitle}
-                    className="mb-3"
-                />
-            ) : null}
-
-            <Carousel
-                setApi={setApi}
-                opts={{ loop: true, align: "start" }}
-                plugins={[
-                    Autoplay({
-                        delay: carouselDelay,
-                        stopOnInteraction: false,
-                        stopOnMouseEnter: true
-                    })
-                ]}
-                className="relative"
-            >
-                <CarouselContent>
-                    {items.map((i) => {
-                        const featuredImage =
-                            i.MenuItemGalleryImage?.find((img) => img.isPrimary) ||
-                            i.MenuItemGalleryImage?.[0];
-
-                        return (
-                            <CarouselItem key={i.id} className="basis-full">
-                                <Link
-                                    to={getCardapioItemHref(i)}
-                                    className="group relative block overflow-hidden rounded-md"
-                                    onClick={() => playNavigation()}
-                                >
-                                    <div className="relative h-[220px] md:h-[280px]">
-                                        <CardapioItemImageSingle
-                                            src={featuredImage?.secureUrl || ""}
-                                            placeholder={i.imagePlaceholderURL || ""}
-                                            placeholderIcon={false}
-                                            placeholderText={i.ingredients}
-                                            cnContainer="h-full w-full"
-                                            enableOverlay={false}
-                                        />
-                                        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-90" />
-                                        <div className="absolute bottom-2 left-2 right-2">
-                                            <span className="font-neue text-white text-xs tracking-widest uppercase font-semibold drop-shadow leading-tight">
-                                                {i.name}
-                                            </span>
+            {/* MOBILE: accordion */}
+            <div className="md:hidden">
+                <button
+                    type="button"
+                    className="w-full text-left"
+                    onClick={() => setIsOpen((v) => !v)}
+                    aria-expanded={isOpen}
+                >
+                    <div className="flex items-start gap-2">
+                        <div className="flex-1 min-w-0">
+                            <h2 className="font-lora text-2xl font-bold tracking-tight leading-tight">
+                                {mobileTitle ?? (<>Sugestões<br />para hoje</>)}
+                            </h2>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                            <div className="flex gap-1">
+                                {previewItems.map((i) => {
+                                    const img =
+                                        i.MenuItemGalleryImage?.find((img) => img.isPrimary) ||
+                                        i.MenuItemGalleryImage?.[0];
+                                    const isVideo =
+                                        img?.kind === "video" ||
+                                        /\.(mp4|mov|webm|m4v|ogg|ogv)(\?|$)/i.test(img?.secureUrl ?? "");
+                                    return (
+                                        <div key={i.id} className="h-[48px] w-[38px] overflow-hidden rounded-lg shrink-0">
+                                            {img?.secureUrl ? (
+                                                isVideo ? (
+                                                    <video
+                                                        src={img.secureUrl}
+                                                        className="h-full w-full object-cover"
+                                                        muted
+                                                        playsInline
+                                                        preload="metadata"
+                                                    />
+                                                ) : (
+                                                    <img
+                                                        src={img.secureUrl}
+                                                        alt={i.name}
+                                                        className="h-full w-full object-cover"
+                                                        loading="lazy"
+                                                    />
+                                                )
+                                            ) : (
+                                                <div className="h-full w-full bg-white border border-black flex items-center justify-center">
+                                                    <Pizza className="h-5 w-5 text-black" strokeWidth={1.5} />
+                                                </div>
+                                            )}
                                         </div>
-                                    </div>
-                                </Link>
-                            </CarouselItem>
-                        );
-                    })}
-                </CarouselContent>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
 
-                <div className="absolute inset-x-0 -bottom-3 flex items-center justify-center gap-2 md:-bottom-4">
-                    {groups.map((_, idx) => (
-                        <button
-                            key={idx}
-                            aria-label={`Ir para slide ${idx + 1}`}
-                            onClick={() => api?.scrollTo(idx * groupSize)}
-                            className={[
-                                "h-2 w-2 rounded-full transition-all",
-                                selectedGroupIndex === idx ? "w-6 bg-black/80" : "bg-black/30"
-                            ].join(" ")}
-                        />
-                    ))}
+                    {subtitle && (
+                        <p className="font-neue text-sm tracking-wide mt-2 flex items-center gap-2">
+                            <span>{subtitle}</span>
+                            <span className="flex flex-col items-center shrink-0 gap-0.5">
+                                <ChevronRight
+                                    className={cn(
+                                        "h-10 w-10 transition-transform duration-300",
+                                        isOpen && "rotate-90"
+                                    )}
+                                />
+                                <span className="text-[9px] font-neue tracking-widest uppercase leading-none">
+                                    {isOpen ? "fechar" : "ver"}
+                                </span>
+                            </span>
+                        </p>
+                    )}
+
+                    {headerProfile && (
+                        <div className="flex items-center gap-2 mt-3">
+                            {headerProfile.avatarImageUrl ? (
+                                <img
+                                    src={headerProfile.avatarImageUrl}
+                                    alt={headerProfile.username}
+                                    className="h-8 w-8 rounded-full object-cover border border-zinc-200"
+                                />
+                            ) : null}
+                            <span className="font-neue text-sm font-semibold">
+                                {headerProfile.username === "chef.nicola" ? "Chef Nicola" : headerProfile.username}
+                            </span>
+                        </div>
+                    )}
+                </button>
+
+                <div
+                    className={cn(
+                        "overflow-hidden transition-all duration-300 ease-in-out",
+                        isOpen ? "max-h-[400px] opacity-100 mt-6" : "max-h-0 opacity-0 mt-0"
+                    )}
+                >
+                    {carouselContent}
                 </div>
-            </Carousel>
+            </div>
+
+            {/* DESKTOP: always visible, unchanged */}
+            <div className="hidden md:block">
+                {title ? (
+                    <SectionThreadHeader
+                        profile={headerProfile ?? SECTION_THREAD_PROFILE_BY_SECTION.chef}
+                        title={title}
+                        subtitle={subtitle}
+                        className="mb-3"
+                    />
+                ) : null}
+                {carouselContent}
+            </div>
         </div>
     );
 }
