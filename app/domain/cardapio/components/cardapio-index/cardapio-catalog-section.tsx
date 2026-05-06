@@ -334,7 +334,7 @@ function CardapioGridItem({
     const featuredMediaUrl = featuredImage?.secureUrl || "";
     const featuredMediaKind =
         featuredImage?.kind === "video" ||
-        /\.(mp4|mov|webm|m4v|ogg|ogv)(\?|$)/i.test(featuredMediaUrl)
+            /\.(mp4|mov|webm|m4v|ogg|ogv)(\?|$)/i.test(featuredMediaUrl)
             ? "video"
             : "image";
 
@@ -404,8 +404,8 @@ function CardapioGridItem({
                     src={featuredImage?.secureUrl || ""}
                     placeholder={item.imagePlaceholderURL || ""}
                     placeholderIcon={false}
-                    cnPlaceholderText="text-white/60 font-lora text-sm"
-                    cnPlaceholderContainer="from-zinc-800 via-zinc-700 to-zinc-600"
+                    cnPlaceholderText="font-lora font-bold leading-none text-white/80"
+                    cnPlaceholderContainer="from-zinc-900 via-zinc-800 to-zinc-700"
                     cnContainer="w-full h-full"
                     enableOverlay={false}
                 />
@@ -539,7 +539,19 @@ function CardapioGridItem({
                         <X className="h-5 w-5" />
                     </button>
 
-                    {featuredMediaKind === "video" ? (
+                    {!featuredMediaUrl ? (
+                        <div
+                            className="flex flex-col items-center justify-center bg-gradient-to-b from-zinc-800 to-zinc-950 px-6 text-center w-full h-full"
+                            onClick={(event) => event.stopPropagation()}
+                        >
+                            <span className="font-lora text-8xl font-bold leading-none text-white/80">
+                                {item.name?.charAt(0).toUpperCase() ?? "?"}
+                            </span>
+                            <span className="mt-3 font-neue text-sm uppercase tracking-[0.2em] text-white/40">
+                                {item.name}
+                            </span>
+                        </div>
+                    ) : featuredMediaKind === "video" ? (
                         <video
                             src={featuredMediaUrl}
                             className="max-h-[100dvh] w-full object-contain"
@@ -588,8 +600,8 @@ function CardapioItemPriceDialog({
                                 src={featuredImageUrl}
                                 placeholder={item.imagePlaceholderURL || ""}
                                 placeholderIcon={false}
-                                cnPlaceholderText="text-white/60 font-lora text-sm"
-                                cnPlaceholderContainer="from-zinc-800 via-zinc-700 to-zinc-600"
+                                cnPlaceholderText="font-lora font-semibold text-white/80"
+                                cnPlaceholderContainer="from-zinc-900 via-zinc-900 to-zinc-800"
                                 cnContainer="w-full h-full"
                                 enableOverlay={false}
                             />
