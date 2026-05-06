@@ -1,17 +1,15 @@
-import { Outlet } from "@remix-run/react";
-import Container from "~/components/layout/container/container";
-import PageHeader from "~/components/layout/page/page-header/page-header";
+import { redirect, type ActionFunctionArgs, type LoaderFunctionArgs } from "@remix-run/node";
 
-export default function ProductsOutlet() {
-    return (
-        <Container className="mt-12">
-            <PageHeader
-                title="Produtos"
-                goBackLink="/admin/products"
-                newItemBtnLabel="Novo Produto"
-            />
-            <Outlet />
-        </Container>
-    )
+const TARGET = "/admin/items";
+
+export async function loader(_: LoaderFunctionArgs) {
+  throw redirect(TARGET);
 }
 
+export async function action(_: ActionFunctionArgs) {
+  throw redirect(TARGET);
+}
+
+export default function RemovedProductsRoute() {
+  return null;
+}

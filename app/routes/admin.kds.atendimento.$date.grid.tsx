@@ -2,7 +2,7 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json, defer } from "@remix-run/node";
 import { Await, useFetcher, useLoaderData } from "@remix-run/react";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import prisma from "~/lib/prisma/client.server";
 import { Prisma } from "@prisma/client";
 
@@ -71,7 +71,6 @@ import {
   Pizza,
   ChevronUp,
   ChevronDown,
-  GripVertical,
   PencilLine,
   SaveIcon,
   CrossIcon,
@@ -81,6 +80,7 @@ import {
   Bike,
   Settings as SettingsIcon,
   CalendarClock,
+  Banknote,
 } from "lucide-react";
 import { Separator } from "~/components/ui/separator";
 import { cn } from "~/lib/utils";
@@ -88,9 +88,9 @@ import DeliveryZoneCombobox from "~/domain/kds/components/delivery-zone-combobox
 import { computeNetRevenueAmount } from "~/domain/finance/compute-net-revenue-amount";
 import { calcWeightedCostPerc } from "~/domain/finance/calc-weighted-cost-perc";
 import { setOrderStatus } from "~/domain/kds/server/repository.server";
+import { sendKdsDailyReportWhatsapp } from "~/domain/kds/kds-daily-report-whatsapp.server";
 import { MoneyInput } from "~/components/money-input/MoneyInput";
 import { getAvailableDoughSizes, getDoughStock, normalizeCounts, saveDoughStock, type DoughSizeOption, type DoughStockSnapshot } from "~/domain/kds/dough-stock.server";
-import { Link } from "@remix-run/react";
 import { NumericInput } from "~/components/numeric-input/numeric-input";
 import { ExitIcon } from "@radix-ui/react-icons";
 import { Badge } from "@/components/ui/badge";
@@ -127,12 +127,141 @@ function toDecimal(value: FormDataEntryValue | null | undefined): Prisma.Decimal
   return new Prisma.Decimal(Number.isFinite(n) ? n.toFixed(2) : "0");
 }
 
+type PaymentMethod = "credit" | "cash" | "other";
+type DayReportActionResult = {
+  ok: boolean;
+  status?: "CLOSED" | "REOPENED" | "OPENED";
+  already?: boolean;
+  error?: string;
+  report?: {
+    ok: boolean;
+    attempted: boolean;
+    skipped: boolean;
+    detail: string;
+    sentCount: number;
+    totalRecipients: number;
+  };
+};
+
+function paymentMethodToFlags(method: PaymentMethod) {
+  return {
+    isCreditCard: method === "credit",
+    isCash: method === "cash",
+    isOtherPaymentMethod: method === "other",
+  };
+}
+
+function paymentFlagsFromForm(form: FormData) {
+  const isCreditCard = String(form.get("isCreditCard") ?? "") === "on";
+  const isCash = !isCreditCard && String(form.get("isCash") ?? "") === "on";
+  const isOtherPaymentMethod =
+    !isCreditCard &&
+    !isCash &&
+    String(form.get("isOtherPaymentMethod") ?? "") === "on";
+
+  return { isCreditCard, isCash, isOtherPaymentMethod };
+}
+
 function fmtBRL(n: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2 }).format(n || 0);
 }
 
 function pad2(value: number) {
   return String(value).padStart(2, "0");
+}
+
+function PaymentMethodDialog({
+  open,
+  onOpenChange,
+  onSelect,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSelect: (method: PaymentMethod) => void;
+}) {
+  useEffect(() => {
+    if (!open) return;
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "1" || event.code === "Numpad1") {
+        event.preventDefault();
+        onSelect("credit");
+      } else if (event.key === "2" || event.code === "Numpad2") {
+        event.preventDefault();
+        onSelect("cash");
+      } else if (event.key === "3" || event.code === "Numpad3") {
+        event.preventDefault();
+        onSelect("other");
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open, onSelect]);
+
+  const options: Array<{
+    key: PaymentMethod;
+    label: string;
+    shortcut: string;
+    icon: typeof CreditCard;
+    className: string;
+  }> = [
+      {
+        key: "credit",
+        label: "Crédito",
+        shortcut: "1",
+        icon: CreditCard,
+        className: "border-slate-300 bg-slate-100 text-slate-900 hover:bg-slate-200",
+      },
+      {
+        key: "cash",
+        label: "Dinheiro",
+        shortcut: "2",
+        icon: Banknote,
+        className: "border-slate-300 bg-zinc-100 text-zinc-900 hover:bg-zinc-200",
+      },
+      {
+        key: "other",
+        label: "Outro",
+        shortcut: "3",
+        icon: Ellipsis,
+        className: "border-slate-300 bg-neutral-100 text-neutral-900 hover:bg-neutral-200",
+      },
+    ];
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-3xl">
+        <DialogHeader>
+          <DialogTitle>Selecionar forma de pagamento</DialogTitle>
+        </DialogHeader>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          {options.map((option) => {
+            const Icon = option.icon;
+            return (
+              <button
+                key={option.key}
+                type="button"
+                onClick={() => onSelect(option.key)}
+                className={cn(
+                  "flex min-h-[220px] flex-col items-center justify-center gap-4 rounded-[2rem] border-2 p-6 text-center transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2",
+                  option.className
+                )}
+              >
+                <div className="flex h-24 w-24 items-center justify-center rounded-full bg-white/90 shadow-sm">
+                  <Icon className="h-12 w-12" />
+                </div>
+                <div className="space-y-1">
+                  <div className="text-2xl font-semibold">{option.label}</div>
+                  <div className="text-sm font-medium opacity-80">Tecla {option.shortcut}</div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 function CommandNumberInput({
@@ -240,6 +369,7 @@ function calcRemaining(stock: SizeCounts | null, used: SizeCounts): SizeCounts {
 type DashboardMeta = {
   grossAmount: number;
   cardAmount: number;
+  marketplaceAmount: number;
   motoAmount: number;
   netAmount: number;
   taxPerc: number;
@@ -254,8 +384,8 @@ type DashboardMeta = {
   costAverageBaseLabel: string;
   goalMinAmount: number;
   goalTargetAmount: number;
-  pctOfMin: number; // 0..100
-  pctOfTarget: number; // 0..100
+  pctOfMin: number;
+  pctOfTarget: number;
   status: "below-min" | "between" | "hit-target";
 };
 
@@ -268,8 +398,8 @@ function mapGoalForDate(goal: any, dateStr: string): { min: number; target: numb
   const key = map[dow];
   if (!key) return { min: 0, target: 0 };
 
-  const minField = `minimumGoalDia0${key}Amount`;
-  const targetField = `targetProfitDia0${key}Amount`;
+  const minField = `minSalesGoalAmountDia0${key}`;
+  const targetField = `targetSalesGoalAmountDia0${key}`;
 
   const min = Number(goal?.[minField] ?? 0) || 0;
   const target = Number(goal?.[targetField] ?? 0) || 0;
@@ -297,7 +427,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
   const listPromise = listByDate(dateInt);
   const header = await prisma.kdsDailyOrder.findUnique({
     where: { dateInt },
-    select: { id: true, operationStatus: true },
+    select: { id: true, operationStatus: true, financialDailyGoalId: true },
   });
 
   const deliveryZones = await prisma.deliveryZone.findMany({
@@ -357,29 +487,79 @@ export async function loader({ params }: LoaderFunctionArgs) {
   const grossPrevMonthAmount = Number(grossPrevMonthRow._sum.orderAmount ?? 0);
   const marketplaceAmount = Number(marketplaceRow._sum.orderAmount ?? 0);
 
-  // Taxas vigentes (snapshot=false)
-  const fs = await prisma.financialSummary.findFirst({
-    where: { isSnapshot: false },
+  const hasConfiguredRates = (close: {
+    taxaCartaoPerc: number;
+    impostoPerc: number;
+    taxaMarketplacePerc: number;
+  } | null) =>
+    Number(close?.taxaCartaoPerc ?? 0) > 0 ||
+    Number(close?.impostoPerc ?? 0) > 0 ||
+    Number(close?.taxaMarketplacePerc ?? 0) > 0;
+
+  const monthlyCloseRates = await prisma.financialMonthlyClose.findUnique({
+    where: {
+      referenceYear_referenceMonth: {
+        referenceYear: year,
+        referenceMonth: month,
+      },
+    },
     select: { taxaCartaoPerc: true, impostoPerc: true, taxaMarketplacePerc: true },
   });
-  const taxPerc = Number(fs?.impostoPerc ?? 0);       // ex.: 4 para 4%
-  const cardFeePerc = Number(fs?.taxaCartaoPerc ?? 0); // ex.: 3.2 para 3,2%
-  const taxaMarketplacePerc = Number(fs?.taxaMarketplacePerc ?? 0);
 
-  // Meta ativa
-  const activeGoal = await prisma.financialDailyGoal.findFirst({
+  const fallbackMonthlyCloseRates = hasConfiguredRates(monthlyCloseRates)
+    ? monthlyCloseRates
+    : await prisma.financialMonthlyClose.findFirst({
+      where: {
+        AND: [
+          {
+            OR: [
+              { referenceYear: { lt: year } },
+              { referenceYear: year, referenceMonth: { lte: month } },
+            ],
+          },
+          {
+            OR: [
+              { taxaCartaoPerc: { gt: 0 } },
+              { impostoPerc: { gt: 0 } },
+              { taxaMarketplacePerc: { gt: 0 } },
+            ],
+          },
+        ],
+      },
+      orderBy: [{ referenceYear: "desc" }, { referenceMonth: "desc" }],
+      select: { taxaCartaoPerc: true, impostoPerc: true, taxaMarketplacePerc: true },
+    });
+
+  const rates = fallbackMonthlyCloseRates;
+  const taxPerc = Number(rates?.impostoPerc ?? 0); // ex.: 4 para 4%
+  const cardFeePerc = Number(rates?.taxaCartaoPerc ?? 0); // ex.: 3.2 para 3,2%
+  const taxaMarketplacePerc = Number(rates?.taxaMarketplacePerc ?? 0);
+
+  const goalSelect = {
+    minSalesGoalAmountDia01: true,
+    minSalesGoalAmountDia02: true,
+    minSalesGoalAmountDia03: true,
+    minSalesGoalAmountDia04: true,
+    minSalesGoalAmountDia05: true,
+    targetSalesGoalAmountDia01: true,
+    targetSalesGoalAmountDia02: true,
+    targetSalesGoalAmountDia03: true,
+    targetSalesGoalAmountDia04: true,
+    targetSalesGoalAmountDia05: true,
+  } as const;
+
+  // Meta do dia (snapshot via FK no header); fallback para meta ativa.
+  const goalForDay = header?.financialDailyGoalId
+    ? await prisma.financialDailyGoal.findUnique({
+      where: { id: header.financialDailyGoalId },
+      select: goalSelect,
+    })
+    : null;
+  const activeGoal = goalForDay ?? await prisma.financialDailyGoal.findFirst({
     where: { isActive: true },
+    orderBy: { createdAt: "desc" },
     select: {
-      minimumGoalDia01Amount: true,
-      minimumGoalDia02Amount: true,
-      minimumGoalDia03Amount: true,
-      minimumGoalDia04Amount: true,
-      minimumGoalDia05Amount: true,
-      targetProfitDia01Amount: true,
-      targetProfitDia02Amount: true,
-      targetProfitDia03Amount: true,
-      targetProfitDia04Amount: true,
-      targetProfitDia05Amount: true,
+      ...goalSelect,
     },
   });
 
@@ -395,15 +575,15 @@ export async function loader({ params }: LoaderFunctionArgs) {
     impostoPerc: taxPerc,
   });
 
-  // Status vs metas
+  // Status e alcance vs metas (base: receita bruta)
   let status: DashboardMeta["status"] = "below-min";
-  if (netAmount >= goalTargetAmount && goalTargetAmount > 0) status = "hit-target";
-  else if (netAmount >= goalMinAmount) status = "between";
+  if (grossAmount >= goalTargetAmount && goalTargetAmount > 0) status = "hit-target";
+  else if (grossAmount >= goalMinAmount) status = "between";
 
   const pctOfMin =
-    goalMinAmount > 0 ? Math.min(100, (netAmount / goalMinAmount) * 100) : 0;
+    goalMinAmount > 0 ? (grossAmount / goalMinAmount) * 100 : 0;
   const pctOfTarget =
-    goalTargetAmount > 0 ? Math.min(100, (netAmount / goalTargetAmount) * 100) : 0;
+    goalTargetAmount > 0 ? (grossAmount / goalTargetAmount) * 100 : 0;
 
   const monthlyCloseRepo = (prisma as any).financialMonthlyClose;
   let costFixedPerc = 0;
@@ -468,6 +648,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
   const dashboard: DashboardMeta = {
     grossAmount,
     cardAmount,
+    marketplaceAmount,
     motoAmount,
     netAmount,
     taxPerc,
@@ -547,7 +728,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
           orderId: header.id, dateInt, commandNumber: n, isVendaLivre: false,
           sortOrderIndex: sort, orderAmount: new Prisma.Decimal(0),
           status: "pendente", channel: "", hasMoto: false, motoValue: new Prisma.Decimal(0),
-          takeAway: false, isCreditCard: false,
+          takeAway: false, isCreditCard: false, isCash: false, isOtherPaymentMethod: false,
         } as any);
         sort += 1000;
       }
@@ -573,7 +754,15 @@ export async function action({ request, params }: ActionFunctionArgs) {
         where: { id: header.id },
         data: { operationStatus: "CLOSED" },
       });
-      return json({ ok: true, status: "CLOSED" });
+      const report = await sendKdsDailyReportWhatsapp(dateInt, dateStr).catch((error) => ({
+        ok: false,
+        attempted: true,
+        skipped: false,
+        detail: error instanceof Error ? error.message : "Falha ao enviar relatorio do WhatsApp.",
+        sentCount: 0,
+        totalRecipients: 0,
+      }));
+      return json({ ok: true, status: "CLOSED", report });
     }
 
     if (_action === "reopenDay") {
@@ -585,6 +774,26 @@ export async function action({ request, params }: ActionFunctionArgs) {
         data: { operationStatus: "REOPENED" },
       });
       return json({ ok: true, status: "REOPENED" });
+    }
+
+    if (_action === "sendDayReportWhatsapp") {
+      if (headerFlags?.operationStatus !== "CLOSED") {
+        return json(
+          { ok: false, error: "O relatorio WhatsApp manual so pode ser enviado com o dia fechado." },
+          { status: 400 }
+        );
+      }
+
+      const report = await sendKdsDailyReportWhatsapp(dateInt, dateStr).catch((error) => ({
+        ok: false,
+        attempted: true,
+        skipped: false,
+        detail: error instanceof Error ? error.message : "Falha ao enviar relatorio do WhatsApp.",
+        sentCount: 0,
+        totalRecipients: 0,
+      }));
+
+      return json({ ok: report.ok, status: "CLOSED", report });
     }
 
     if (_action === "savePredictionSettings") {
@@ -672,7 +881,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
           orderId: header.id, dateInt, commandNumber: n, isVendaLivre: false,
           sortOrderIndex: sort, orderAmount: new Prisma.Decimal(0),
           status: "pendente", channel: "", hasMoto: false, motoValue: new Prisma.Decimal(0),
-          takeAway: false, isCreditCard: false,
+          takeAway: false, isCreditCard: false, isCash: false, isOtherPaymentMethod: false,
         } as any);
         sort += 1000;
       }
@@ -688,6 +897,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         return json({ ok: false, error: "Venda livre só é permitida com o dia ABERTO." }, { status: 400 });
       }
       const amount = toDecimal(form.get("orderAmount"));
+      const paymentFlags = paymentFlagsFromForm(form);
       const created = await prisma.kdsDailyOrderDetail.create({
         data: {
           orderId: header.id,
@@ -701,7 +911,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
           hasMoto: false,
           motoValue: new Prisma.Decimal(0),
           takeAway: false,
-          isCreditCard: String(form.get("isCreditCard") ?? "") === "on", // ← agora pega do form
+          ...paymentFlags,
         },
         select: { id: true },
       });
@@ -826,6 +1036,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
       const dzIdRaw = String(form.get("deliveryZoneId") ?? "").trim();
       const deliveryZoneId = dzIdRaw === "" ? null : dzIdRaw;
+      const customerNameRaw = String(form.get("customerName") ?? "").trim();
+      const customerPhoneRaw = String(form.get("customerPhone") ?? "").trim();
+
+      const paymentFlags = paymentFlagsFromForm(form);
 
       await prisma.kdsDailyOrderDetail.update({
         where: { id },
@@ -839,7 +1053,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
           takeAway: String(form.get("takeAway") ?? "") === "on",
           size: stringifySize(sizeCounts as any),
           deliveryZoneId: deliveryZoneId as any,
-          isCreditCard: String(form.get("isCreditCard") ?? "") === "on",
+          ...paymentFlags,
+          customerName: customerNameRaw === "" ? null : customerNameRaw,
+          customerPhone: customerPhoneRaw === "" ? null : customerPhoneRaw,
           ...(patchNovoPedidoAt !== undefined ? { novoPedidoAt: patchNovoPedidoAt as any } : {}),
         },
       });
@@ -895,6 +1111,8 @@ function RowItem({
   // estados por linha
   const [openConfirmId, setOpenConfirmId] = useState(false);
   const [detailsOpenId, setDetailsOpenId] = useState(false);
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
+  const formRef = useRef<HTMLFormElement | null>(null);
 
   const [cmdLocal, setCmdLocal] = useState<number | null>(o.commandNumber);
   const [isVendaLivre] = useState<boolean>(!!o.isVendaLivre);
@@ -907,10 +1125,43 @@ function RowItem({
   const [motoKey, setMotoKey] = useState(0);
 
   const [isCreditCard, setIsCreditCard] = useState<boolean>(!!(o as any).isCreditCard);
+  const [isCash, setIsCash] = useState<boolean>(!!(o as any).isCash);
+  const [isOtherPaymentMethod, setIsOtherPaymentMethod] = useState<boolean>(!!(o as any).isOtherPaymentMethod);
 
   const [sizes, setSizes] = useState<SizeCounts>(sizeCounts);
   const statusText = (o as any).status ?? "pendente";
   const npAt = (o as any).novoPedidoAt ? new Date((o as any).novoPedidoAt as any) : null;
+  const [detailsStatus, setDetailsStatus] = useState<string>((o as any).status ?? "pendente");
+  const [customerName, setCustomerName] = useState<string>((o as any).customerName ?? "");
+  const [customerPhone, setCustomerPhone] = useState<string>((o as any).customerPhone ?? "");
+
+  useEffect(() => {
+    setDetailsStatus((o as any).status ?? "pendente");
+    setCustomerName((o as any).customerName ?? "");
+    setCustomerPhone((o as any).customerPhone ?? "");
+  }, [(o as any).status, (o as any).customerName, (o as any).customerPhone]);
+
+  useEffect(() => {
+    if (readOnly) return;
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.defaultPrevented) return;
+      if (event.key.toLowerCase() !== "s") return;
+      if (!event.ctrlKey || event.metaKey || event.altKey) return;
+
+      const active = document.activeElement as HTMLElement | null;
+      if (!active) return;
+
+      const rowEl = formRef.current?.closest("li");
+      if (!rowEl || !rowEl.contains(active)) return;
+
+      event.preventDefault();
+      setPaymentDialogOpen(true);
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [readOnly]);
 
   const rowError =
     rowFx.data && typeof (rowFx.data as any) === "object" && (rowFx.data as any).rowId === o.id
@@ -926,15 +1177,61 @@ function RowItem({
   const savingIcon =
     fxState !== "idle" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />;
 
+  const submitRowUpdate = (statusValue: string) => {
+    if (readOnly) return;
+    const fd = new FormData();
+    fd.set("_action", "saveRow");
+    fd.set("id", o.id);
+    fd.set("date", dateStr);
+    fd.set("status", statusValue);
+    fd.set("commandNumber", String(cmdLocal ?? ""));
+    fd.set("orderAmount", String(o.orderAmount ?? 0));
+    fd.set("motoValue", String(o.motoValue ?? 0));
+    fd.set("hasMoto", hasMoto ? "on" : "");
+    fd.set("takeAway", takeAway ? "on" : "");
+    const sc = parseSize(o.size);
+    fd.set("sizeF", String(sc.F));
+    fd.set("sizeM", String(sc.M));
+    fd.set("sizeP", String(sc.P));
+    fd.set("sizeI", String(sc.I));
+    fd.set("sizeFT", String(sc.FT));
+    fd.set("channel", String((o.channel ?? "").trim()));
+    fd.set("deliveryZoneId", String(deliveryZoneId ?? ""));
+    fd.set("isCreditCard", String(isCreditCard ? "on" : ""));
+    fd.set("isCash", String(isCash ? "on" : ""));
+    fd.set("isOtherPaymentMethod", String(isOtherPaymentMethod ? "on" : ""));
+    fd.set("customerName", customerName.trim());
+    fd.set("customerPhone", customerPhone.trim());
+    rowFx.submit(fd, { method: "post" });
+  };
+
+  const submitWithPaymentMethod = (method: PaymentMethod) => {
+    if (readOnly || !formRef.current) return;
+
+    const nextFlags = paymentMethodToFlags(method);
+    setIsCreditCard(nextFlags.isCreditCard);
+    setIsCash(nextFlags.isCash);
+    setIsOtherPaymentMethod(nextFlags.isOtherPaymentMethod);
+
+    const fd = new FormData(formRef.current);
+    fd.set("isCreditCard", nextFlags.isCreditCard ? "on" : "");
+    fd.set("isCash", nextFlags.isCash ? "on" : "");
+    fd.set("isOtherPaymentMethod", nextFlags.isOtherPaymentMethod ? "on" : "");
+    rowFx.submit(fd, { method: "post" });
+    setPaymentDialogOpen(false);
+  };
+
   return (
     <li key={o.id} className="flex flex-col">
       <div className={COLS + " bg-white px-1 border-b border-b-gray-50 pb-1"}>
-        <rowFx.Form method="post" className="contents" id={`row-form-${o.id}`}>
+        <rowFx.Form method="post" className="contents" id={`row-form-${o.id}`} ref={formRef}>
           <input type="hidden" name="_action" value="saveRow" />
           <input type="hidden" name="id" value={o.id} />
           <input type="hidden" name="date" value={dateStr} />
           <input type="hidden" name="deliveryZoneId" value={deliveryZoneId ?? ""} />
           <input type="hidden" name="isCreditCard" value={isCreditCard ? "on" : ""} />
+          <input type="hidden" name="isCash" value={isCash ? "on" : ""} />
+          <input type="hidden" name="isOtherPaymentMethod" value={isOtherPaymentMethod ? "on" : ""} />
 
           {/* nº comanda */}
           <div className="flex items-center justify-center">
@@ -942,29 +1239,14 @@ function RowItem({
             <input type="hidden" name="commandNumber" value={cmdLocal ?? ""} />
           </div>
 
-          {/* Pedido (R$) + ícone Cartão (à direita) */}
+          {/* Pedido (R$) */}
           <div className="flex justify-center">
-            <div className="flex items-center gap-2">
-              <MoneyInput
-                name="orderAmount"
-                defaultValue={o.orderAmount}
-                className="w-28"
-                disabled={readOnly}
-              />
-
-              {/* Ícone de cartão: preto = true, cinza = false */}
-              <button
-                type="button"
-                onClick={() => setIsCreditCard((v) => !v)}
-                className={`h-9 w-9 grid place-items-center rounded-md border transition
-                            ${readOnly ? "pointer-events-none opacity-60" : "hover:bg-slate-50"}
-                            ${isCreditCard ? "border-blue-600" : "border-slate-200"}`}
-                title="Pago no cartão"
-                aria-pressed={isCreditCard}
-              >
-                <CreditCard className={`h-6 w-6 ${isCreditCard ? "text-blue-600" : "text-slate-300"}`} />
-              </button>
-            </div>
+            <MoneyInput
+              name="orderAmount"
+              defaultValue={o.orderAmount}
+              className="w-28"
+              disabled={readOnly}
+            />
           </div>
 
           {/* Tamanhos */}
@@ -1073,7 +1355,13 @@ function RowItem({
 
           {/* Ações */}
           <div className="flex items-center justify-center gap-2">
-            <Button type="submit" variant="outline" title="Salvar" disabled={readOnly}>
+            <Button
+              type="button"
+              variant="outline"
+              title="Salvar"
+              disabled={readOnly}
+              onClick={() => setPaymentDialogOpen(true)}
+            >
               {savingIcon}
             </Button>
             <Button
@@ -1108,35 +1396,29 @@ function RowItem({
             onOpenChange={(v) => !v && setDetailsOpenId(false)}
             createdAt={(o as any).novoPedidoAt as any}
             nowMs={nowMs}
-            status={o.status ?? "pendente"}
+            status={detailsStatus}
             onStatusChange={(value) => {
-              if (readOnly) return;
-              const fd = new FormData();
-              fd.set("_action", "saveRow");
-              fd.set("id", o.id);
-              fd.set("date", dateStr);
-              fd.set("status", value);
-              fd.set("commandNumber", String(cmdLocal ?? ""));
-              fd.set("orderAmount", String(o.orderAmount ?? 0));
-              fd.set("motoValue", String(o.motoValue ?? 0));
-              fd.set("hasMoto", hasMoto ? "on" : "");
-              fd.set("takeAway", takeAway ? "on" : "");
-              const sc = parseSize(o.size);
-              fd.set("sizeF", String(sc.F));
-              fd.set("sizeM", String(sc.M));
-              fd.set("sizeP", String(sc.P));
-              fd.set("sizeI", String(sc.I));
-              fd.set("sizeFT", String(sc.FT));
-              fd.set("channel", String((o.channel ?? "").trim()));
-              fd.set("deliveryZoneId", String(deliveryZoneId ?? ""));
-              fd.set("isCreditCard", String(isCreditCard ? "on" : ""));
-              rowFx.submit(fd, { method: "post" });
+              setDetailsStatus(value);
+              submitRowUpdate(value);
             }}
-            onSubmit={() => setDetailsOpenId(false)}
+            onSubmit={() => {
+              submitRowUpdate(detailsStatus);
+              setDetailsOpenId(false);
+            }}
             orderAmount={Number(o.orderAmount ?? 0)}
             motoValue={Number(o.motoValue ?? 0)}
             sizeSummary={sizeSummary(parseSize(o.size))}
             channel={(o.channel ?? "").trim()}
+            customerName={customerName}
+            customerPhone={customerPhone}
+            onCustomerNameChange={setCustomerName}
+            onCustomerPhoneChange={setCustomerPhone}
+          />
+
+          <PaymentMethodDialog
+            open={paymentDialogOpen}
+            onOpenChange={setPaymentDialogOpen}
+            onSelect={submitWithPaymentMethod}
           />
         </rowFx.Form>
       </div>
@@ -1505,7 +1787,7 @@ function computePredictionData(
    =========================== */
 export default function GridKdsPage() {
   const { dateStr, items, header, deliveryZones, dzTimes, dashboard, doughStock, doughUsage, availableSizes, predictionSettings } = useLoaderData<typeof loader>();
-  const listFx = useFetcher();
+  const listFx = useFetcher<DayReportActionResult>();
   const rowFx = useFetcher();
   const stockFx = useFetcher<{ ok: boolean; stock: DoughStockSnapshot }>();
   const settingsFx = useFetcher<{ ok: boolean; settings: PredictionSettings }>();
@@ -1528,9 +1810,11 @@ export default function GridKdsPage() {
     predictionSettings.operatorCount ?? getOperatorCountByDate(dateStr)
   );
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
+  const stockBarRef = useRef<HTMLDivElement | null>(null);
+  const [isStockBarPinned, setIsStockBarPinned] = useState(false);
 
-  // ← estado do botão de cartão na Venda Livre rápida
-  const [vlIsCreditCard, setVlIsCreditCard] = useState(false);
+  const [vlPaymentDialogOpen, setVlPaymentDialogOpen] = useState(false);
+  const vlFormRef = useRef<HTMLFormElement | null>(null);
 
   const stockSnapshot: DoughStockSnapshot | null =
     (stockFx.data?.stock as DoughStockSnapshot | undefined) ?? (doughStock as DoughStockSnapshot | null);
@@ -1547,30 +1831,44 @@ export default function GridKdsPage() {
     return base;
   }, [availableSizes]);
 
-  const [showStockPanel, setShowStockPanel] = useState(() => true);
-  const [floatingTop, setFloatingTop] = useState(160);
-  const [dragging, setDragging] = useState(false);
-
-  useEffect(() => {
-    function onMove(e: MouseEvent) {
-      if (!dragging) return;
-      const next = Math.min(Math.max(80, e.clientY - 30), window.innerHeight - 140);
-      setFloatingTop(next);
-    }
-    function onUp() { setDragging(false); }
-    if (dragging) {
-      window.addEventListener("mousemove", onMove);
-      window.addEventListener("mouseup", onUp);
-    }
-    return () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    };
-  }, [dragging]);
-
   useEffect(() => {
     setAdjustmentDraft(stockSnapshot?.effective ?? defaultSizeCounts());
   }, [stockSnapshot, dateStr]);
+
+  useEffect(() => {
+    if (!(status === "OPENED" || status === "REOPENED")) {
+      setIsStockBarPinned(false);
+      return;
+    }
+
+    let rafId: number | null = null;
+    const checkPinned = () => {
+      rafId = null;
+      const el = stockBarRef.current;
+      if (!el) {
+        setIsStockBarPinned(false);
+        return;
+      }
+
+      const stickyTop = Number.parseFloat(window.getComputedStyle(el).top || "0");
+      const pinned = el.getBoundingClientRect().top <= stickyTop + 0.5;
+      setIsStockBarPinned((prev) => (prev === pinned ? prev : pinned));
+    };
+
+    const onScrollOrResize = () => {
+      if (rafId !== null) return;
+      rafId = window.requestAnimationFrame(checkPinned);
+    };
+
+    checkPinned();
+    window.addEventListener("scroll", onScrollOrResize, { passive: true });
+    window.addEventListener("resize", onScrollOrResize);
+    return () => {
+      if (rafId !== null) window.cancelAnimationFrame(rafId);
+      window.removeEventListener("scroll", onScrollOrResize);
+      window.removeEventListener("resize", onScrollOrResize);
+    };
+  }, [status]);
 
   function setAdjustmentValue(key: keyof SizeCounts, value: number | string) {
     const numeric = Number(value);
@@ -1627,6 +1925,17 @@ export default function GridKdsPage() {
     }
   }, [settingsFx.state, settingsFx.data, dateStr]);
 
+  const submitVlWithPaymentMethod = (method: PaymentMethod) => {
+    if (!vlFormRef.current) return;
+    const flags = paymentMethodToFlags(method);
+    const fd = new FormData(vlFormRef.current);
+    fd.set("isCreditCard", flags.isCreditCard ? "on" : "");
+    fd.set("isCash", flags.isCash ? "on" : "");
+    fd.set("isOtherPaymentMethod", flags.isOtherPaymentMethod ? "on" : "");
+    listFx.submit(fd, { method: "post" });
+    setVlPaymentDialogOpen(false);
+  };
+
   // Cores do status de meta
   const statusColor =
     dashboard.status === "hit-target" ? "bg-emerald-50 text-emerald-900 border-emerald-200" :
@@ -1646,6 +1955,9 @@ export default function GridKdsPage() {
       status === "REOPENED" ? "bg-amber-50 text-amber-700 border-amber-200" :
         status === "CLOSED" ? "bg-slate-100 text-slate-700 border-slate-200" :
           "bg-slate-100 text-slate-700 border-slate-200";
+  const currentListAction = String(listFx.formData?.get("_action") ?? "");
+  const isClosingDay = listFx.state !== "idle" && currentListAction === "closeDay";
+  const reportFeedback = listFx.data?.report?.detail ?? null;
   const dayStatusLabel =
     status === "OPENED" ? "Dia aberto" :
       status === "REOPENED" ? "Dia reaberto" :
@@ -1655,9 +1967,17 @@ export default function GridKdsPage() {
   const prevMonthDiffArrow = prevMonthDiff > 0 ? "▲" : prevMonthDiff < 0 ? "▼" : "•";
   const prevMonthDiffTone = prevMonthDiff > 0 ? "text-emerald-700" : prevMonthDiff < 0 ? "text-red-700" : "text-slate-500";
   const prevMonthDiffPrefix = prevMonthDiff > 0 ? "+" : prevMonthDiff < 0 ? "-" : "";
+  const cardSharePerc = dashboard.grossAmount > 0 ? (dashboard.cardAmount / dashboard.grossAmount) * 100 : 0;
+  const grossCardAmount = dashboard.grossAmount > 0 ? (dashboard.grossAmount * cardSharePerc) / 100 : 0;
+  const cardFeeAmount = grossCardAmount > 0 ? (grossCardAmount * dashboard.cardFeePerc) / 100 : 0;
+  const taxAmount = dashboard.grossAmount > 0 ? (dashboard.grossAmount * dashboard.taxPerc) / 100 : 0;
+  const marketplaceFeeAmount = dashboard.marketplaceAmount > 0
+    ? (dashboard.marketplaceAmount * dashboard.marketplaceTaxPerc) / 100
+    : 0;
+  const netAmountByRule = dashboard.grossAmount - cardFeeAmount - taxAmount - marketplaceFeeAmount;
 
   return (
-    <div className="space-y-4 mt-6">
+    <div className="space-y-4">
       {/* Toolbar topo + Painel-resumo SEM suspense (feedback imediato) */}
 
 
@@ -1700,10 +2020,24 @@ export default function GridKdsPage() {
                 <listFx.Form method="post" className="flex flex-wrap items-center gap-2">
                   <input type="hidden" name="_action" value="closeDay" />
                   <input type="hidden" name="date" value={dateStr} />
-                  <Button type="submit" variant="secondary" className="w-full">
-                    <Lock className="w-4 h-4 mr-2" /> Fechar dia
+                  <Button type="submit" variant="secondary" className="w-full" disabled={isClosingDay}>
+                    {isClosingDay ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Fechando dia...
+                      </>
+                    ) : (
+                      <>
+                        <Lock className="w-4 h-4 mr-2" /> Fechar dia
+                      </>
+                    )}
                   </Button>
                 </listFx.Form>
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+                  {isClosingDay
+                    ? "Fechando o dia e enviando o relatorio final no WhatsApp..."
+                    : "Ao fechar o dia, o relatorio final e enviado automaticamente no WhatsApp."}
+                </div>
               </div>
             )}
 
@@ -1721,16 +2055,29 @@ export default function GridKdsPage() {
                 <listFx.Form method="post" className="flex items-center gap-2">
                   <input type="hidden" name="_action" value="closeDay" />
                   <input type="hidden" name="date" value={dateStr} />
-                  <Button type="submit" variant="secondary" className="w-full">
-                    <Lock className="w-4 h-4 mr-2" /> Fechar dia
+                  <Button type="submit" variant="secondary" className="w-full" disabled={isClosingDay}>
+                    {isClosingDay ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Fechando dia...
+                      </>
+                    ) : (
+                      <>
+                        <Lock className="w-4 h-4 mr-2" /> Fechar dia
+                      </>
+                    )}
                   </Button>
                 </listFx.Form>
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+                  {isClosingDay
+                    ? "Fechando o dia e enviando o relatorio final no WhatsApp..."
+                    : "Ao fechar o dia, o relatorio final e enviado automaticamente no WhatsApp."}
+                </div>
               </div>
             )}
 
             {status === "CLOSED" && (
               <div className="space-y-3">
-
                 <listFx.Form method="post" className="flex flex-wrap items-center">
                   <input type="hidden" name="_action" value="reopenDay" />
                   <input type="hidden" name="date" value={dateStr} />
@@ -1738,6 +2085,11 @@ export default function GridKdsPage() {
                     <Unlock className="w-4 h-4 mr-2" /> Reabrir dia
                   </Button>
                 </listFx.Form>
+                {reportFeedback ? (
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+                    {reportFeedback}
+                  </div>
+                ) : null}
               </div>
             )}
           </div>
@@ -1928,10 +2280,57 @@ export default function GridKdsPage() {
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-center space-y-1">
-                          <div className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Receita Líquida</div>
-                          <div className="text-3xl font-extrabold text-emerald-700 tabular-nums">{fmtBRL(dashboard.netAmount).slice(3, 99)}</div>
-                        </div>
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <button
+                              type="button"
+                              className="rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-center space-y-1 transition-colors hover:border-emerald-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
+                            >
+                              <div className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Receita Líquida</div>
+                              <div className="text-3xl font-extrabold text-emerald-700 tabular-nums">{fmtBRL(dashboard.netAmount).slice(3, 99)}</div>
+                              <div className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700/80">Ver cálculo</div>
+                            </button>
+                          </DialogTrigger>
+                          <DialogContent className="max-w-xl">
+                            <DialogHeader>
+                              <DialogTitle>Cálculo da receita líquida do dia</DialogTitle>
+                            </DialogHeader>
+                            <div className="space-y-3 text-sm">
+                              <p className="text-slate-600">
+                                Regra aplicada: Receita Líquida = Receita Bruta - Taxa Cartão - Imposto - Taxa Marketplace.
+                              </p>
+                              <div className="rounded-lg border bg-slate-50 p-3 space-y-2">
+                                <div className="flex items-center justify-between gap-3">
+                                  <span className="text-slate-600">1. Receita bruta</span>
+                                  <span className="font-mono font-semibold tabular-nums">{fmtBRL(dashboard.grossAmount)}</span>
+                                </div>
+                                <div className="flex items-center justify-between gap-3">
+                                  <span className="text-slate-600">
+                                    2. Taxa cartão ({dashboard.cardFeePerc.toFixed(2)}% sobre {fmtBRL(grossCardAmount)})
+                                  </span>
+                                  <span className="font-mono font-semibold tabular-nums text-red-700">- {fmtBRL(cardFeeAmount)}</span>
+                                </div>
+                                <div className="pl-4 text-xs text-slate-500">
+                                  Parcela cartão no dia: {fmtBRL(dashboard.cardAmount)} ({cardSharePerc.toFixed(2)}% da bruta).
+                                </div>
+                                <div className="flex items-center justify-between gap-3">
+                                  <span className="text-slate-600">3. Imposto ({dashboard.taxPerc.toFixed(2)}% sobre a bruta)</span>
+                                  <span className="font-mono font-semibold tabular-nums text-red-700">- {fmtBRL(taxAmount)}</span>
+                                </div>
+                                <div className="flex items-center justify-between gap-3">
+                                  <span className="text-slate-600">
+                                    4. Taxa marketplace ({dashboard.marketplaceTaxPerc.toFixed(2)}% sobre {fmtBRL(dashboard.marketplaceAmount)})
+                                  </span>
+                                  <span className="font-mono font-semibold tabular-nums text-red-700">- {fmtBRL(marketplaceFeeAmount)}</span>
+                                </div>
+                              </div>
+                              <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 flex items-center justify-between gap-3">
+                                <span className="font-semibold text-emerald-800">Receita líquida final</span>
+                                <span className="font-mono text-lg font-bold text-emerald-800 tabular-nums">{fmtBRL(netAmountByRule)}</span>
+                              </div>
+                            </div>
+                          </DialogContent>
+                        </Dialog>
                         <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-center space-y-1">
                           <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Receita Bruta</div>
                           <div className="text-3xl font-bold text-slate-800 tabular-nums">{fmtBRL(dashboard.grossAmount).slice(3, 99)}</div>
@@ -1987,7 +2386,7 @@ export default function GridKdsPage() {
 
                       <div className="grid grid-cols-1 gap-3">
                         <div className="rounded-lg border border-white/60 bg-white/80 px-3 py-2 space-y-1.5">
-                          <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-500">Meta Mínima (dia)</div>
+                          <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-500">Meta Mínima (bruta)</div>
                           <div className={`text-3xl font-black ${statusTextColor} tabular-nums leading-none mb-2`}>
                             {dashboard.pctOfMin.toFixed(0)}%
                           </div>
@@ -1995,7 +2394,7 @@ export default function GridKdsPage() {
                           <div className="font-mono text-base text-slate-800 tabular-nums">{fmtBRL(dashboard.goalMinAmount)}</div>
                         </div>
                         <div className="rounded-lg border border-white/60 bg-white/80 px-3 py-2 space-y-1.5">
-                          <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-500">Meta Target (dia)</div>
+                          <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-500">Meta Target (bruta)</div>
                           <div className={`text-3xl font-black ${statusTextColor} tabular-nums leading-none mb-2`}>
                             {dashboard.pctOfTarget.toFixed(0)}%
                           </div>
@@ -2025,108 +2424,95 @@ export default function GridKdsPage() {
         </div>
       </div>
 
-      <Separator className="my-12" />
-
-      {/* Venda livre rápida + Filtro de Canal */}
       {(status === "OPENED" || status === "REOPENED") && (
-        <>
+        <Suspense fallback={null}>
+          <Await resolve={doughUsage}>
+            {(used: SizeCounts) => {
+              const effectiveCounts = stockSnapshot?.effective ?? defaultSizeCounts();
+              const baseCounts = baseStock ?? defaultSizeCounts();
+              const remaining = calcRemaining(effectiveCounts, used);
+              const ordered = (availableSizes as DoughSizeOption[]) ?? [];
+              const manual = effectiveCounts;
+              const hasManualInfo = (["F", "M", "P", "I", "FT"] as (keyof SizeCounts)[])
+                .some((k) => manual[k] > 0);
+              const manualText = ordered
+                .map(({ key, abbr }) => ({ key, abbr, value: manual[key] ?? 0 }))
+                .filter((item) => item.value > 0)
+                .map((item) => `${item.abbr || item.key}: ${item.value}`)
+                .join(" · ");
 
-          {/* Barra contador do estoque */}
-          <Suspense fallback={null}>
-            <Await resolve={doughUsage}>
-              {(used: SizeCounts) => {
-                const effectiveCounts = stockSnapshot?.effective ?? defaultSizeCounts();
-                const baseCounts = baseStock ?? defaultSizeCounts();
-                const remaining = calcRemaining(effectiveCounts, used);
-                const ordered = (availableSizes as DoughSizeOption[]) ?? [];
-                const manual = effectiveCounts;
-                const hasManualInfo = (["F", "M", "P", "I", "FT"] as (keyof SizeCounts)[])
-                  .some((k) => manual[k] > 0);
-                const manualText = ordered
-                  .map(({ key, abbr }) => ({ key, abbr, value: manual[key] ?? 0 }))
-                  .filter((item) => item.value > 0)
-                  .map((item) => `${item.abbr || item.key}: ${item.value}`)
-                  .join(" · ");
+              function chipClasses(k: keyof SizeCounts) {
+                const init = effectiveCounts[k];
+                if (init <= 0) return "border border-slate-200 text-slate-500 bg-white";
+                const ratio = remaining[k] / init;
+                if (remaining[k] === 0) return "bg-rose-500 text-white"; // crítico
+                if (remaining[k] <= 2) return "bg-amber-400 text-slate-900"; // alerta
+                if (remaining[k] < 3) return "border border-rose-500 text-rose-600 bg-white";
+                return "bg-emerald-500 text-white"; // ok
+              }
 
-                function chipClasses(k: keyof SizeCounts) {
-                  const init = effectiveCounts[k];
-                  if (init <= 0) return "border border-slate-200 text-slate-500 bg-white";
-                  const ratio = remaining[k] / init;
-                  if (remaining[k] === 0) return "bg-rose-500 text-white"; // crítico
-                  if (remaining[k] <= 2) return "bg-amber-400 text-slate-900"; // alerta
-                  if (remaining[k] < 3) return "border border-rose-500 text-rose-600 bg-white";
-                  return "bg-emerald-500 text-white"; // ok
-                }
-
-                return (
-                  <div
-                    className="fixed right-5 z-40"
-                    style={{ top: `${floatingTop}px` }}
+              return (
+                <div ref={stockBarRef} className="w-full sticky top-3 z-30">
+                  <stockFx.Form
+                    method="post"
+                    className="w-full rounded-2xl border bg-white/95 backdrop-blur shadow-sm px-4 py-3 flex flex-col items-center gap-4"
+                    onSubmit={() => setEditingBar(false)}
                   >
-                    <stockFx.Form
-                      method="post"
-                      className="rounded-full border bg-white shadow-lg px-3 py-2 flex items-center gap-3 backdrop-blur"
-                      onSubmit={() => setEditingBar(false)}
-                    >
-                      <input type="hidden" name="_action" value="saveDoughStock" />
-                      <input type="hidden" name="date" value={dateStr} />
+                    <input type="hidden" name="_action" value="saveDoughStock" />
+                    <input type="hidden" name="date" value={dateStr} />
 
-                      <div
-                        className="flex items-center justify-center w-7 h-7 rounded text-slate-600 hover:bg-slate-200 cursor-grab active:cursor-grabbing"
-                        onMouseDown={(e) => { setDragging(true); e.preventDefault(); }}
-                        role="presentation"
-                      >
-                        <GripVertical className="w-4 h-4" />
-                      </div>
+                    <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-3 w-full">
+                      {ordered.map(({ key, label, abbr }) => (
+                        <div key={key} className="flex flex-col items-center gap-1 min-w-[60px]">
+                          <input type="hidden" name={`stock${key}`} value={baseCounts[key]} />
+                          <input type="hidden" name={`adjust${key}`} value={adjustmentDraft[key]} />
 
-                      <div className="flex items-center gap-2">
-                        {ordered.map(({ key, label, abbr }) => (
-                          <div key={key} className="flex flex-col items-center gap-1 min-w-[60px]">
-                            <input type="hidden" name={`stock${key}`} value={baseCounts[key]} />
-                            <input type="hidden" name={`adjust${key}`} value={adjustmentDraft[key]} />
-
-                            <div
-                              className={`w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-semibold ${chipClasses(key)}`}
-                              title={`${label}: ${Math.max(0, remaining[key])}`}
-                            >
-                              {abbr || key} {Math.max(0, remaining[key])}
-                            </div>
-
-                            {editingBar && (
-                              <div className="flex items-center gap-0 text-[11px] text-slate-600">
-                                <button
-                                  type="button"
-                                  className="h-6 w-6 rounded-full border border-slate-200 hover:bg-slate-50 font-semibold"
-                                  onClick={() => setAdjustmentValue(key, (adjustmentDraft[key] ?? 0) - 1)}
-                                >
-                                  –
-                                </button>
-                                <NumericInput
-                                  min={0}
-                                  step={1}
-                                  className="h-6 w-12 text-center rounded bg-white text-xs font-semibold border-none"
-                                  value={adjustmentDraft[key]}
-                                  onChange={(e) => setAdjustmentValue(key, e.target.value)}
-                                  aria-label={`Ajuste ${label}`}
-                                />
-                                <button
-                                  type="button"
-                                  className="h-6 w-6 rounded-full border border-slate-200 hover:bg-slate-50"
-                                  onClick={() => setAdjustmentValue(key, (adjustmentDraft[key] ?? 0) + 1)}
-                                >
-                                  +
-                                </button>
-                              </div>
+                          <div
+                            className={cn(
+                              "rounded-full flex items-center justify-center font-bold leading-none tabular-nums transition-all duration-300 ease-out",
+                              isStockBarPinned ? "w-16 h-16" : "w-14 h-14",
+                              chipClasses(key)
                             )}
+                            title={`${label}: ${Math.max(0, remaining[key])}`}
+                          >
+                            <span className="flex items-baseline gap-1">
+                              <span className={cn("uppercase tracking-tight", isStockBarPinned ? "text-[22px]" : "text-[18px]")}>
+                                {abbr || key}
+                              </span>
+                              <span className={cn(isStockBarPinned ? "text-2xl" : "text-xl")}>
+                                {Math.max(0, remaining[key])}
+                              </span>
+                            </span>
                           </div>
-                        ))}
-                      </div>
 
-                      {/* {hasManualInfo && !editingBar && (
-                    <div className="text-[11px] text-slate-500 ml-1">
-                      Saldo manual: {manualText}
-                    </div>
-                  )} */}
+                          {editingBar && (
+                            <div className="flex items-center gap-0 text-[11px] text-slate-600">
+                              <button
+                                type="button"
+                                className="h-6 w-6 rounded-full border border-slate-200 hover:bg-slate-50 font-semibold"
+                                onClick={() => setAdjustmentValue(key, (adjustmentDraft[key] ?? 0) - 1)}
+                              >
+                                –
+                              </button>
+                              <NumericInput
+                                min={0}
+                                step={1}
+                                className="h-6 w-12 text-center rounded bg-white text-xs font-semibold border-none"
+                                value={adjustmentDraft[key]}
+                                onChange={(e) => setAdjustmentValue(key, e.target.value)}
+                                aria-label={`Ajuste ${label}`}
+                              />
+                              <button
+                                type="button"
+                                className="h-6 w-6 rounded-full border border-slate-200 hover:bg-slate-50"
+                                onClick={() => setAdjustmentValue(key, (adjustmentDraft[key] ?? 0) + 1)}
+                              >
+                                +
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ))}
 
                       {editingBar ? (
                         <div className="flex items-center gap-2">
@@ -2162,40 +2548,46 @@ export default function GridKdsPage() {
                           <PencilLine className="w-4 h-4 mr-1" />
                         </Button>
                       )}
-                    </stockFx.Form>
-                  </div>
-                );
-              }}
-            </Await>
-          </Suspense>
+                    </div>
 
+                    {/* {hasManualInfo && !editingBar && (
+                      <div className="text-[11px] text-slate-500 ml-1">
+                        Saldo manual: {manualText}
+                      </div>
+                    )} */}
+
+                  </stockFx.Form>
+                </div>
+              );
+            }}
+          </Await>
+        </Suspense>
+      )}
+
+      <Separator className="my-12" />
+
+      {/* Venda livre rápida + Filtro de Canal */}
+      {(status === "OPENED" || status === "REOPENED") && (
+        <>
           <div className="flex flex-wrap items-center justify-between gap-3">
             {/* Venda Livre rápida */}
             <div className="flex items-center gap-3">
               <div className="text-sm font-medium">Venda livre (rápida)</div>
-              <listFx.Form method="post" className="flex flex-wrap items-center gap-3">
+              <listFx.Form method="post" className="flex flex-wrap items-center gap-3" ref={vlFormRef}>
                 <input type="hidden" name="_action" value="createVL" />
                 <input type="hidden" name="date" value={dateStr} />
+                <input type="hidden" name="isCreditCard" value="" />
+                <input type="hidden" name="isCash" value="" />
+                <input type="hidden" name="isOtherPaymentMethod" value="" />
 
                 <MoneyInput name="orderAmount" />
 
-                {/* hidden para enviar o cartão no submit */}
-                <input type="hidden" name="isCreditCard" value={vlIsCreditCard ? "on" : ""} />
-
-                {/* Ícone Cartão (preto ativo / cinza inativo) */}
-                <button
+                <Button
                   type="button"
-                  onClick={() => setVlIsCreditCard(v => !v)}
-                  className={`h-9 w-9 grid place-items-center rounded-md border transition
-                              hover:bg-slate-50
-                              ${vlIsCreditCard ? "border-blue-800" : "border-slate-200"}`}
-                  title="Pago no cartão"
-                  aria-pressed={vlIsCreditCard}
+                  variant="secondary"
+                  disabled={listFx.state !== "idle"}
+                  onClick={() => setVlPaymentDialogOpen(true)}
                 >
-                  <CreditCard className={`h-6 w-6 ${vlIsCreditCard ? "text-blue-800" : "text-slate-300"}`} />
-                </button>
-
-                <Button type="submit" variant="secondary" disabled={listFx.state !== "idle"}>
                   {listFx.state !== "idle" ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin mr-1" /> Adicionando…
@@ -2206,6 +2598,12 @@ export default function GridKdsPage() {
                 </Button>
               </listFx.Form>
             </div>
+
+            <PaymentMethodDialog
+              open={vlPaymentDialogOpen}
+              onOpenChange={setVlPaymentDialogOpen}
+              onSelect={submitVlWithPaymentMethod}
+            />
 
             {/* Filtro por Canal */}
             <div className="flex items-center gap-2">

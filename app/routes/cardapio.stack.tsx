@@ -7,6 +7,7 @@ import { CardapioItemActionBarVertical } from "~/domain/cardapio/components/card
 import CardapioItemImage from "~/domain/cardapio/components/cardapio-item-image/cardapio-item-image";
 import { CardapioItemPrice } from "~/domain/cardapio/components/cardapio-item-price/cardapio-item-price";
 import Loading from "~/components/loading/loading";
+import { PublicCardapioVariation } from "~/domain/cardapio/cardapio-items-source.server";
 
 const CardapioItemList = ({ allItems }: { allItems: MenuItemWithAssociations[] }) => {
     const [searchParams] = useSearchParams();
@@ -92,7 +93,12 @@ interface CardapioItemProps {
     item: MenuItemWithAssociations;
 }
 
+type CardapioPublicItem = MenuItemWithAssociations & {
+    publicPriceVariations?: PublicCardapioVariation[];
+}
+
 const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) => {
+    const publicItem = item as CardapioPublicItem
 
     const italyProduct = item.tags?.public.some(t => t.toLocaleLowerCase() === "produtos-italianos")
 
@@ -106,7 +112,7 @@ const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) =>
                     <CardapioItemImage item={item} />
                 } />
                 <div className="absolute bottom-0 inset-x-0 py-4 px-2">
-                    <CardapioItemPrice prices={item?.priceVariations} />
+                    <CardapioItemPrice variations={publicItem.publicPriceVariations} />
                 </div>
             </div>
             <div className="flex flex-col px-4 mb-2">

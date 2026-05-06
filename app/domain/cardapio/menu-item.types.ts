@@ -68,6 +68,7 @@ export interface MenuItemWithSellPriceVariations {
   ingredients?: string;
   visible: boolean;
   active: boolean;
+  upcoming?: boolean;
   sellPriceVariations: SellPriceVariation[];
   warnings?: Warning[];
 }

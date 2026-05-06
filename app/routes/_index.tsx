@@ -1,10 +1,14 @@
 import { LoaderFunctionArgs } from "@remix-run/node";
-import { Link, useLoaderData } from "@remix-run/react";
-import { ChevronRight } from "lucide-react";
-import { Heart, MenuSquare, Share2 } from "lucide-react";
-import { useState } from "react";
+import { Link, useLoaderData, useNavigation } from "@remix-run/react";
+import { QuestionMarkCircledIcon } from "@radix-ui/react-icons";
+import { ChevronRight, ClipboardCopy, Heart, LoaderCircle, MenuSquare, Share2 } from "lucide-react";
+import { MouseEvent, useState } from "react";
 import TypewriterComponent from "typewriter-effect";
 import Logo from "~/components/primitives/logo/logo";
+import RouteProgressBar from "~/components/route-progress-bar/route-progress-bar";
+import { Button } from "~/components/ui/button";
+import { Dialog, DialogContent, DialogTrigger } from "~/components/ui/dialog";
+import { useToast } from "~/components/ui/use-toast";
 import WhatsappExternalLink from "~/components/primitives/whatsapp/whatsapp-external-link";
 import WhatsAppIcon from "~/components/primitives/whatsapp/whatsapp-icon";
 import { fmtYYYMMDD } from "~/domain/kds";
@@ -26,6 +30,83 @@ export async function loader({ request }: LoaderFunctionArgs) {
     });
 }
 
+type CardapioLinkProps = {
+    mode?: "header" | "hero" | "campaign";
+    className?: string;
+};
+
+function CardapioLink({ mode = "hero", className }: CardapioLinkProps) {
+    const navigation = useNavigation();
+    const cardapioPath = WEBSITE_LINKS.cardapioPublic.href;
+    const nextPath = navigation.location?.pathname ?? "";
+    const isNavigatingToCardapio = navigation.state !== "idle" && nextPath.startsWith(cardapioPath);
+
+    const preventRepeatedClick = (e: MouseEvent<HTMLAnchorElement>) => {
+        if (isNavigatingToCardapio) {
+            e.preventDefault();
+        }
+    };
+
+    if (mode === "header") {
+        return (
+            <Link
+                to={cardapioPath}
+                className={cn("hidden md:block", className, isNavigatingToCardapio && "pointer-events-none")}
+                onClick={preventRepeatedClick}
+                aria-disabled={isNavigatingToCardapio}
+            >
+                <div className={cn("bg-black px-2 py-2 rounded-lg w-max flex items-center gap-2 shadow-sm", isNavigatingToCardapio && "opacity-80")}>
+                    <span className="font-neue font-semibold text-white uppercase tracking-wider text-xs">
+                        {isNavigatingToCardapio ? "Abrindo..." : "cardápio"}
+                    </span>
+                    <span className="flex items-center justify-center rounded-full bg-white/10 text-white">
+                        {isNavigatingToCardapio ? <LoaderCircle className="h-[14px] w-[14px] animate-spin" /> : <ChevronRight color="#ffffff" size={14} />}
+                    </span>
+                </div>
+            </Link>
+        );
+    }
+
+    if (mode === "campaign") {
+        return (
+            <Link
+                to={cardapioPath}
+                className={cn("w-full", className, isNavigatingToCardapio && "pointer-events-none")}
+                onClick={preventRepeatedClick}
+                aria-disabled={isNavigatingToCardapio}
+            >
+                <Button
+                    className="h-12 w-full justify-center bg-brand-green text-white hover:opacity-90 uppercase font-neue tracking-wide"
+                    aria-label="Abrir cardápio"
+                    disabled={isNavigatingToCardapio}
+                >
+                    {isNavigatingToCardapio ? "Abrindo cardápio..." : "Cardápio"}
+                    {isNavigatingToCardapio && <LoaderCircle className="ml-2 h-4 w-4 animate-spin" />}
+                </Button>
+            </Link>
+        );
+    }
+
+    return (
+        <Link
+            to={cardapioPath}
+            className={cn(className, isNavigatingToCardapio && "pointer-events-none")}
+            onClick={preventRepeatedClick}
+            aria-disabled={isNavigatingToCardapio}
+        >
+            <div className="group relative overflow-hidden rounded-xl border border-black bg-black px-6 py-3.5 text-white shadow-[0_10px_30px_rgba(0,0,0,0.25)] transition-all duration-150 hover:-translate-y-0.5 hover:shadow-[0_16px_40px_rgba(0,0,0,0.28)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black">
+                <div className="absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-10 bg-white" aria-hidden />
+                <div className="relative flex items-center gap-3 font-neue font-bold uppercase tracking-wide">
+                    <span>{isNavigatingToCardapio ? "Abrindo cardápio..." : "Ver cardápio"}</span>
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white">
+                        {isNavigatingToCardapio ? <LoaderCircle className="h-5 w-5 animate-spin" /> : <ChevronRight color="#ffffff" />}
+                    </span>
+                </div>
+            </div>
+        </Link>
+    );
+}
+
 
 export default function HomePage() {
     const loaderData = useLoaderData<typeof loader>();
@@ -35,6 +116,7 @@ export default function HomePage() {
 
     return (
         <>
+            <RouteProgressBar />
             <section className={
                 cn(
                     today === mktDateTarget && 'hidden'
@@ -44,14 +126,7 @@ export default function HomePage() {
                     <div className="w-[130px] md:w-[150px] ">
                         <Logo onlyText={true} className="w-full h-full" color="black" />
                     </div>
-                    <Link to={WEBSITE_LINKS.cardapioPublic.href} className="hidden md:block" >
-                        <div className="bg-black px-2 py-2 rounded-lg w-max flex items-center gap-2 shadow-sm">
-                            <span className="font-neue font-semibold text-white uppercase tracking-wider text-xs">cardápio</span>
-                            <span className="flex  items-center justify-center rounded-full bg-white/10 text-white">
-                                <ChevronRight color="#ffffff" size={14} />
-                            </span>
-                        </div>
-                    </Link>
+                    <CardapioLink mode="header" />
                 </header>
                 <section className="relative bg-white overflow-hidden">
 
@@ -74,17 +149,7 @@ export default function HomePage() {
                             </div>
 
                             <div className="mt-2 flex flex-wrap items-center gap-3">
-                                <Link to={WEBSITE_LINKS.cardapioPublic.href} >
-                                    <div className="group relative overflow-hidden rounded-xl border border-black bg-black px-6 py-3.5 text-white shadow-[0_10px_30px_rgba(0,0,0,0.25)] transition-all duration-150 hover:-translate-y-0.5 hover:shadow-[0_16px_40px_rgba(0,0,0,0.28)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black">
-                                        <div className="absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-10 bg-white" aria-hidden />
-                                        <div className="relative flex items-center gap-3 font-neue font-bold uppercase tracking-wide">
-                                            <span>Ver cardápio</span>
-                                            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white">
-                                                <ChevronRight color="#ffffff" />
-                                            </span>
-                                        </div>
-                                    </div>
-                                </Link>
+                                <CardapioLink />
                             </div>
                         </div>
 
@@ -95,7 +160,7 @@ export default function HomePage() {
                         </div>
                     </div>
                 </section >
-
+                <ItalianIngredientsSection />
             </section>
             <DiaCliente25 targetDate={mktDateTarget} />
         </>
@@ -131,15 +196,82 @@ function HeroVideo({ videoURLs }: HeroVideoProps) {
     );
 }
 
+function ItalianPizzaLineArt() {
+    return (
+        <svg
+            viewBox="0 0 300 380"
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            className="w-full max-w-[240px] md:max-w-[280px]"
+            aria-hidden
+        >
+            {/* Main face – 3/4 view */}
+            <path
+                d="M 145 35 C 165 30 192 42 202 62 C 212 82 207 108 198 128 C 196 136 197 140 197 148 C 192 168 184 188 171 204 C 159 220 143 226 130 224 C 116 222 102 208 95 193 C 88 178 88 158 92 141 C 92 134 96 129 96 121 C 92 106 89 83 94 64 C 100 46 121 32 145 35 Z"
+                stroke="#1a1a1a" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"
+            />
+            <path
+                d="M 145 35 C 140 21 127 14 113 14 C 98 13 86 21 86 34 C 83 46 89 56 94 64"
+                stroke="#1a1a1a" strokeWidth="1.3" strokeLinecap="round"
+            />
+            <path
+                d="M 202 62 C 210 49 208 32 197 22 C 186 11 169 10 156 16 C 150 20 146 28 145 35"
+                stroke="#1a1a1a" strokeWidth="1.3" strokeLinecap="round"
+            />
+            <path
+                d="M 94 121 C 83 126 79 137 82 148 C 85 158 95 162 100 155"
+                stroke="#1a1a1a" strokeWidth="1.2" strokeLinecap="round"
+            />
+            <path d="M 149 74 C 160 67 175 67 183 73" stroke="#1a1a1a" strokeWidth="1.2" strokeLinecap="round" />
+            <path d="M 147 86 C 157 79 174 79 180 87 C 173 97 156 98 147 86" stroke="#1a1a1a" strokeWidth="1.2" strokeLinecap="round" />
+            <path d="M 107 77 C 114 71 124 71 129 77" stroke="#1a1a1a" strokeWidth="1.2" strokeLinecap="round" />
+            <path d="M 106 88 C 113 82 124 82 128 89 C 122 96 113 96 106 88" stroke="#1a1a1a" strokeWidth="1.2" strokeLinecap="round" />
+            <path d="M 164 83 C 162 102 161 122 158 138 C 155 150 148 156 152 162" stroke="#1a1a1a" strokeWidth="1.2" strokeLinecap="round" />
+            <path d="M 140 158 C 144 164 154 164 158 159" stroke="#1a1a1a" strokeWidth="1.2" strokeLinecap="round" />
+            <path d="M 127 176 C 136 169 149 168 159 174 C 163 177 163 181 158 183" stroke="#1a1a1a" strokeWidth="1.2" strokeLinecap="round" />
+            <path d="M 136 170 C 142 166 148 166 153 170" stroke="#1a1a1a" strokeWidth="1.0" strokeLinecap="round" />
+            <path d="M 126 185 C 136 196 155 196 161 185" stroke="#1a1a1a" strokeWidth="1.2" strokeLinecap="round" />
+            <path d="M 123 230 C 118 248 116 268 118 284" stroke="#1a1a1a" strokeWidth="1.2" strokeLinecap="round" />
+            <path d="M 153 227 C 158 244 160 265 157 280" stroke="#1a1a1a" strokeWidth="1.2" strokeLinecap="round" />
+            <path d="M 118 284 C 103 294 86 298 68 295" stroke="#1a1a1a" strokeWidth="1.2" strokeLinecap="round" />
+            <path d="M 157 280 C 172 290 190 296 210 293" stroke="#1a1a1a" strokeWidth="1.2" strokeLinecap="round" />
+
+            {/* Second face – profile facing right */}
+            <path
+                d="M 218 70 C 227 50 248 44 265 50 C 280 56 288 72 287 90 C 286 107 276 121 268 134 C 260 146 254 158 252 172 C 250 184 254 197 247 208 C 240 218 226 220 222 230"
+                stroke="#1a1a1a" strokeWidth="1.1" strokeLinecap="round"
+            />
+            <path
+                d="M 218 70 C 218 53 220 38 228 29 C 236 20 248 17 258 20 C 268 23 276 32 278 46 C 281 58 282 72 287 90"
+                stroke="#1a1a1a" strokeWidth="1.0" strokeLinecap="round"
+            />
+            <path d="M 252 78 C 260 72 271 73 276 79" stroke="#1a1a1a" strokeWidth="1.0" strokeLinecap="round" />
+            <path d="M 255 88 C 262 82 273 83 276 90" stroke="#1a1a1a" strokeWidth="1.0" strokeLinecap="round" />
+            <path d="M 271 92 C 276 106 275 122 269 134 C 265 144 258 150 261 156" stroke="#1a1a1a" strokeWidth="1.0" strokeLinecap="round" />
+            <path d="M 247 172 C 253 166 261 166 263 173 C 259 181 249 180 247 172" stroke="#1a1a1a" strokeWidth="1.0" strokeLinecap="round" />
+            <path d="M 222 230 C 220 244 222 258 226 268" stroke="#1a1a1a" strokeWidth="1.0" strokeLinecap="round" />
+        </svg>
+    )
+}
+
+function ItalianIngredientsSection() {
+    return (
+        <section className="hidden flex-col md:flex-row items-center gap-10 md:gap-16 px-6 py-14 md:px-52 bg-white border-t border-black/5">
+            <div className="flex-1 flex justify-center order-2 md:order-1">
+                <ItalianPizzaLineArt />
+            </div>
+            <div className="flex-1 flex justify-center md:justify-start order-1 md:order-2">
+                <p className="font-lora italic text-black/75 leading-relaxed text-center md:text-left text-[1.35rem] md:text-[1.55rem] max-w-[28ch]">
+                    Todas as nossas pizzas são preparadas com farinha e molho de tomate importados da Itália.
+                </p>
+            </div>
+        </section>
+    )
+}
+
 interface DiaCliente25Props {
     targetDate: string
 }
-
-import { ClipboardCopy } from "lucide-react";
-import { Dialog, DialogContent, DialogTrigger } from "~/components/ui/dialog";
-import { Button } from "~/components/ui/button";
-import { useToast } from "~/components/ui/use-toast";
-import { QuestionMarkCircledIcon } from "@radix-ui/react-icons";
 
 function DiaCliente25({ targetDate }: DiaCliente25Props) {
     const [loaded, setLoaded] = useState(false)
@@ -283,14 +415,7 @@ function DiaCliente25({ targetDate }: DiaCliente25Props) {
                                 </DialogContent>
                             </Dialog>
 
-                            <Link to={WEBSITE_LINKS.cardapioPublic.href} className="w-full">
-                                <Button
-                                    className="h-12 w-full justify-center bg-brand-green text-white hover:opacity-90 uppercase font-neue tracking-wide"
-                                    aria-label="Abrir cardápio"
-                                >
-                                    Cardápio
-                                </Button>
-                            </Link>
+                            <CardapioLink mode="campaign" />
                         </div>
                     </div>
 
@@ -301,6 +426,3 @@ function DiaCliente25({ targetDate }: DiaCliente25Props) {
         </section>
     )
 }
-
-
-

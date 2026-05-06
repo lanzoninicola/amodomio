@@ -1,13 +1,15 @@
-import { LoaderFunctionArgs } from "@remix-run/node";
-import { categoryEntity } from "~/domain/category/category.entity.server";
+import { ActionFunctionArgs } from "@remix-run/node";
+import { useLoaderData } from "@remix-run/react";
+import { categoryPrismaEntity } from "~/domain/category/category.entity.server";
 import { Category, CategoryType } from "~/domain/category/category.model.server";
 import CategoryForm from "~/domain/category/components/category-form/category-form";
+import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { ok, serverError } from "~/utils/http-response.server";
 import tryit from "~/utils/try-it";
 
 export async function loader() {
 
-    const categoryTypes = categoryEntity.getTypes()
+    const categoryTypes = categoryPrismaEntity.getTypes()
 
     return ok({
         types: categoryTypes
@@ -15,7 +17,7 @@ export async function loader() {
 }
 
 
-export async function action({ request }: LoaderFunctionArgs) {
+export async function action({ request }: ActionFunctionArgs) {
 
     let formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);
@@ -28,7 +30,11 @@ export async function action({ request }: LoaderFunctionArgs) {
     }
 
     if (_action === "category-create") {
-        const [err, itemCreated] = await tryit(categoryEntity.create(category))
+        const [err, itemCreated] = await tryit(categoryPrismaEntity.create({
+            name: category.name,
+            type: category.type,
+            sortOrder: category.sortOrder ?? 0,
+        }))
 
         if (err) {
             return serverError(err)
@@ -41,12 +47,17 @@ export async function action({ request }: LoaderFunctionArgs) {
 }
 
 export default function AdminCategoriaNew() {
+    const loaderData = useLoaderData<typeof loader>()
+    const types = loaderData?.payload.types || []
+
     return (
-        <div className="flex flex-col gap-6">
-            <h3 className="text-xl font-semibold text-muted-foreground mb-3">Nova categoria</h3>
-            <div className="border rounded-md p-4">
-                <CategoryForm action={"category-create"} />
-            </div>
-        </div>
+        <Card className="border-slate-200 shadow-sm">
+            <CardHeader>
+                <CardTitle>Nova categoria</CardTitle>
+            </CardHeader>
+            <CardContent>
+                <CategoryForm action={"category-create"} types={types} />
+            </CardContent>
+        </Card>
     )
 }

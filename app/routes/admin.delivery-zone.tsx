@@ -1,37 +1,12 @@
 // app/routes/admin.delivery-zones._index.tsx
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useLoaderData, useFetcher } from "@remix-run/react";
+import { useFetcher, useLoaderData } from "@remix-run/react";
+import { useEffect, useMemo, useState } from "react";
 
-
-// shadcn/ui
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import {
-  Table,
-  TableBody,
-  TableCaption,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -42,12 +17,100 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  BRAZIL_SOCIOECONOMIC_CLASSES,
+  getBrazilSocioeconomicClass,
+  type BrazilSocioeconomicClassCode,
+} from "~/domain/campaigns/brazil-socioeconomic-class";
 import prismaClient from "~/lib/prisma/client.server";
 
-// -------------------------
-// Loader: lista + contagens
-// -------------------------
+type ZoneRow = {
+  id: string;
+  name: string;
+  city: string;
+  state: string;
+  zipCode: string | null;
+  audienceClasses: BrazilSocioeconomicClassCode[];
+  _count: {
+    distances: number;
+    deliveryFees: number;
+    KdsDailyOrderDetail: number;
+  };
+};
+
+type ZoneFormState = {
+  id: string;
+  name: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  audienceClasses: BrazilSocioeconomicClassCode[];
+};
+
+const BRAZIL_STATES = [
+  "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA",
+  "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN",
+  "RS", "RO", "RR", "SC", "SP", "SE", "TO",
+];
+
+function parseAudienceClasses(formData: FormData): BrazilSocioeconomicClassCode[] {
+  const validCodes = new Set(
+    BRAZIL_SOCIOECONOMIC_CLASSES.map((item) => item.code)
+  );
+
+  return formData
+    .getAll("audienceClasses")
+    .map((value) => String(value))
+    .filter(
+      (value, index, list): value is BrazilSocioeconomicClassCode =>
+        validCodes.has(value as BrazilSocioeconomicClassCode) &&
+        list.indexOf(value) === index
+    );
+}
+
+async function updateDeliveryZoneAudienceClasses(
+  zoneId: string,
+  audienceClasses: BrazilSocioeconomicClassCode[]
+) {
+  await prismaClient.$executeRaw`
+    UPDATE delivery_zones
+    SET audience_classes = ${audienceClasses}::text[]
+    WHERE id = ${zoneId}
+  `;
+}
+
 export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const q = url.searchParams.get("q")?.trim() ?? "";
@@ -55,13 +118,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const zones = await prismaClient.deliveryZone.findMany({
     where: q
       ? {
-        OR: [
-          { name: { contains: q, mode: "insensitive" } },
-          { city: { contains: q, mode: "insensitive" } },
-          { state: { contains: q, mode: "insensitive" } },
-          { zipCode: { contains: q, mode: "insensitive" } },
-        ],
-      }
+          OR: [
+            { name: { contains: q, mode: "insensitive" } },
+            { city: { contains: q, mode: "insensitive" } },
+            { state: { contains: q, mode: "insensitive" } },
+            { zipCode: { contains: q, mode: "insensitive" } },
+          ],
+        }
       : undefined,
     include: {
       _count: {
@@ -75,14 +138,26 @@ export async function loader({ request }: LoaderFunctionArgs) {
     orderBy: [{ name: "asc" }],
   });
 
-  // Opcional: ID de uma zona "Não definido" se você criar uma no seed
-  // Não é necessário para o requisito atual (vamos setar null no delete).
-  return json({ zones, q });
+  const audienceRows = await prismaClient.$queryRaw<
+    Array<{ id: string; audience_classes: string[] | null }>
+  >`
+    SELECT id, audience_classes
+    FROM delivery_zones
+  `;
+
+  const audienceByZoneId = new Map(
+    audienceRows.map((row) => [row.id, row.audience_classes ?? []])
+  );
+
+  return json({
+    zones: zones.map((zone) => ({
+      ...zone,
+      audienceClasses: audienceByZoneId.get(zone.id) ?? [],
+    })),
+    q,
+  });
 }
 
-// -------------------------
-// Action: create/update/delete (com transação no delete)
-// -------------------------
 export async function action({ request }: ActionFunctionArgs) {
   const formData = await request.formData();
   const intent = String(formData.get("_intent") ?? "");
@@ -94,6 +169,7 @@ export async function action({ request }: ActionFunctionArgs) {
       const state = String(formData.get("state") ?? "").trim();
       const zipCodeRaw = formData.get("zipCode");
       const zipCode = zipCodeRaw ? String(zipCodeRaw).trim() : null;
+      const audienceClasses = parseAudienceClasses(formData);
 
       if (!name || !city || !state) {
         return json(
@@ -105,6 +181,7 @@ export async function action({ request }: ActionFunctionArgs) {
       const zone = await prismaClient.deliveryZone.create({
         data: { name, city, state, zipCode },
       });
+      await updateDeliveryZoneAudienceClasses(zone.id, audienceClasses);
       return json({ ok: true, zone });
     }
 
@@ -115,6 +192,7 @@ export async function action({ request }: ActionFunctionArgs) {
       const state = String(formData.get("state") ?? "").trim();
       const zipCodeRaw = formData.get("zipCode");
       const zipCode = zipCodeRaw ? String(zipCodeRaw).trim() : null;
+      const audienceClasses = parseAudienceClasses(formData);
 
       if (!id || !name || !city || !state) {
         return json(
@@ -127,7 +205,21 @@ export async function action({ request }: ActionFunctionArgs) {
         where: { id },
         data: { name, city, state, zipCode },
       });
+      await updateDeliveryZoneAudienceClasses(zone.id, audienceClasses);
       return json({ ok: true, zone });
+    }
+
+    if (intent === "updateAudienceClasses") {
+      const id = String(formData.get("id") ?? "").trim();
+      const audienceClasses = parseAudienceClasses(formData);
+
+      if (!id) {
+        return json({ ok: false, message: "ID é obrigatório." }, { status: 400 });
+      }
+
+      await updateDeliveryZoneAudienceClasses(id, audienceClasses);
+
+      return json({ ok: true });
     }
 
     if (intent === "delete") {
@@ -137,18 +229,15 @@ export async function action({ request }: ActionFunctionArgs) {
       }
 
       await prismaClient.$transaction(async (tx) => {
-        // 1) Apaga distances vinculados a essa zone
         await tx.deliveryZoneDistance.deleteMany({
           where: { deliveryZoneId: id },
         });
 
-        // 2) Set deliveryZoneId = null nos KDS detalhes
         await tx.kdsDailyOrderDetail.updateMany({
           where: { deliveryZoneId: id },
           data: { deliveryZoneId: null },
         });
 
-        // 3) Apaga a zone
         await tx.deliveryZone.delete({ where: { id } });
       });
 
@@ -157,47 +246,223 @@ export async function action({ request }: ActionFunctionArgs) {
 
     return json({ ok: false, message: "Intent inválido." }, { status: 400 });
   } catch (e: any) {
-    return json({ ok: false, message: e?.message ?? "Erro inesperado" }, { status: 500 });
+    return json(
+      { ok: false, message: e?.message ?? "Erro inesperado" },
+      { status: 500 }
+    );
   }
 }
 
-// ---------
-// Component
-// ---------
-type ZoneRow = {
-  id: string;
-  name: string;
-  city: string;
-  state: string;
-  zipCode: string | null;
-  _count: {
-    distances: number;
-    deliveryFees: number;
-    KdsDailyOrderDetail: number;
-  };
-};
+function toggleAudienceClass(
+  audienceClasses: BrazilSocioeconomicClassCode[],
+  code: BrazilSocioeconomicClassCode,
+  checked: boolean
+) {
+  if (checked) {
+    return [...audienceClasses, code].filter(
+      (value, index, list) => list.indexOf(value) === index
+    );
+  }
+
+  return audienceClasses.filter((value) => value !== code);
+}
+
+function AudienceClassesField({
+  selectedClasses,
+  onToggle,
+  disabled = false,
+  showSummary = true,
+}: {
+  selectedClasses: BrazilSocioeconomicClassCode[];
+  onToggle: (code: BrazilSocioeconomicClassCode, checked: boolean) => void;
+  disabled?: boolean;
+  showSummary?: boolean;
+}) {
+  return (
+    <div className="space-y-2">
+      <TooltipProvider>
+        <div className="flex flex-wrap gap-2">
+        {BRAZIL_SOCIOECONOMIC_CLASSES.map((item) => (
+          <Tooltip key={item.code}>
+            <TooltipTrigger asChild>
+              <label className="flex items-center gap-2 rounded-md border px-2 py-1 text-xs">
+                <Checkbox
+                  checked={selectedClasses.includes(item.code)}
+                  onCheckedChange={(checked) => onToggle(item.code, checked === true)}
+                  disabled={disabled}
+                />
+                <span>{item.code}</span>
+              </label>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="max-w-[280px] text-xs leading-relaxed">
+              <div className="font-semibold">{item.code}</div>
+              <div>Renda familiar: {item.familyIncomeRangeLabel} R$/mês</div>
+              <div>Sensibilidade a preço: {item.priceSensitivity}</div>
+              <div>Motivação principal: {item.purchaseMotivation}</div>
+            </TooltipContent>
+          </Tooltip>
+        ))}
+        </div>
+      </TooltipProvider>
+
+      {showSummary && selectedClasses.length > 0 ? (
+        <div className="space-y-2">
+          <div className="flex flex-wrap gap-2">
+            {selectedClasses.map((code) => (
+              <Badge key={code} variant="secondary">
+                {code}
+              </Badge>
+            ))}
+          </div>
+
+          <div className="space-y-2">
+            {selectedClasses.map((code) => {
+              const audienceClass = getBrazilSocioeconomicClass(code);
+              if (!audienceClass) return null;
+
+              return (
+                <div
+                  key={code}
+                  className="rounded-md border bg-muted/30 p-2 text-xs leading-relaxed"
+                >
+                  <div className="font-semibold">{audienceClass.code}</div>
+                  <div>Renda familiar: {audienceClass.familyIncomeRangeLabel} R$/mês</div>
+                  <div>Sensibilidade a preço: {audienceClass.priceSensitivity}</div>
+                  <div>Motivação principal: {audienceClass.purchaseMotivation}</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : showSummary ? (
+        <p className="text-xs text-muted-foreground">
+          Selecione uma ou mais classes para descrever o público da zona.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function AudienceClassesInlineTable({
+  selectedClasses,
+}: {
+  selectedClasses: BrazilSocioeconomicClassCode[];
+}) {
+  if (selectedClasses.length === 0) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        Nenhuma classe selecionada para esta zona.
+      </p>
+    );
+  }
+
+  return (
+    <div className="overflow-hidden rounded-md border">
+      <table className="w-full text-xs">
+        <thead className="bg-muted/40 text-left">
+          <tr>
+            <th className="px-2 py-2 font-medium">Classe</th>
+            <th className="px-2 py-2 font-medium">Renda familiar</th>
+            <th className="px-2 py-2 font-medium">Sensibilidade</th>
+            <th className="px-2 py-2 font-medium">Motivação</th>
+          </tr>
+        </thead>
+        <tbody>
+      {selectedClasses.map((code) => {
+        const audienceClass = getBrazilSocioeconomicClass(code);
+        if (!audienceClass) return null;
+
+        return (
+          <tr key={code} className="border-t align-top">
+            <td className="px-2 py-2 font-medium">{audienceClass.code}</td>
+            <td className="px-2 py-2">{audienceClass.familyIncomeRangeLabel} R$/mês</td>
+            <td className="px-2 py-2">{audienceClass.priceSensitivity}</td>
+            <td className="px-2 py-2">{audienceClass.purchaseMotivation}</td>
+          </tr>
+        );
+      })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function DeliveryZoneAudienceCell({ zone }: { zone: ZoneRow }) {
+  const fetcher = useFetcher<any>();
+  const [selectedClasses, setSelectedClasses] = useState<BrazilSocioeconomicClassCode[]>(
+    zone.audienceClasses ?? []
+  );
+
+  useEffect(() => {
+    setSelectedClasses(zone.audienceClasses ?? []);
+  }, [zone.audienceClasses]);
+
+  function submitAudienceClasses(nextClasses: BrazilSocioeconomicClassCode[]) {
+    const fd = new FormData();
+    fd.set("_intent", "updateAudienceClasses");
+    fd.set("id", zone.id);
+    nextClasses.forEach((item) => fd.append("audienceClasses", item));
+    fetcher.submit(fd, { method: "post" });
+  }
+
+  function onToggle(code: BrazilSocioeconomicClassCode, checked: boolean) {
+    const nextClasses = toggleAudienceClass(selectedClasses, code, checked);
+    setSelectedClasses(nextClasses);
+    submitAudienceClasses(nextClasses);
+  }
+
+  return (
+    <div className="min-w-[520px] space-y-2">
+      <AudienceClassesField
+        selectedClasses={selectedClasses}
+        onToggle={onToggle}
+        disabled={fetcher.state !== "idle"}
+        showSummary={false}
+      />
+
+      <div className="flex flex-wrap gap-2">
+        {selectedClasses.map((code) => (
+          <Badge key={code} variant="secondary">
+            {code}
+          </Badge>
+        ))}
+      </div>
+
+      <AudienceClassesInlineTable selectedClasses={selectedClasses} />
+
+      <p className="text-[11px] text-muted-foreground">
+        {fetcher.state === "submitting"
+          ? "Salvando classes..."
+          : fetcher.data?.ok === false
+            ? fetcher.data.message ?? "Erro ao salvar classes."
+            : "Alterações salvas automaticamente."}
+      </p>
+    </div>
+  );
+}
 
 export default function DeliveryZonesPage() {
   const { zones, q } = useLoaderData<typeof loader>();
   const [search, setSearch] = useState(q ?? "");
   const fetcher = useFetcher<any>();
-  const [openDialog, setOpenDialog] = useState<null | { mode: "create" } | { mode: "edit"; zone: ZoneRow }>(null);
+  const [openDialog, setOpenDialog] = useState<
+    null | { mode: "create" } | { mode: "edit"; zone: ZoneRow }
+  >(null);
   const [pendingDelete, setPendingDelete] = useState<null | ZoneRow>(null);
 
-  // Estados do formulário
-  const initialForm = useMemo(
+  const initialForm = useMemo<ZoneFormState>(
     () => ({
       id: "",
       name: "",
       city: "",
       state: "",
       zipCode: "",
+      audienceClasses: [],
     }),
     []
   );
   const [form, setForm] = useState(initialForm);
 
-  // Preenche form quando abre o editar
   useEffect(() => {
     if (openDialog && openDialog.mode === "edit") {
       const z = openDialog.zone;
@@ -207,13 +472,13 @@ export default function DeliveryZonesPage() {
         city: z.city ?? "",
         state: z.state ?? "",
         zipCode: z.zipCode ?? "",
+        audienceClasses: z.audienceClasses ?? [],
       });
     } else if (openDialog && openDialog.mode === "create") {
       setForm(initialForm);
     }
   }, [openDialog, initialForm]);
 
-  // Fecha dialog ao terminar a action com sucesso
   useEffect(() => {
     if (fetcher.state === "idle" && fetcher.data?.ok) {
       setOpenDialog(null);
@@ -221,7 +486,10 @@ export default function DeliveryZonesPage() {
     }
   }, [fetcher.state, fetcher.data]);
 
-  // Helpers de submit
+  function appendAudienceClasses(fd: FormData) {
+    form.audienceClasses.forEach((item) => fd.append("audienceClasses", item));
+  }
+
   function onSubmitCreate(e: React.FormEvent) {
     e.preventDefault();
     const fd = new FormData();
@@ -230,6 +498,7 @@ export default function DeliveryZonesPage() {
     fd.set("city", form.city);
     fd.set("state", form.state);
     if (form.zipCode) fd.set("zipCode", form.zipCode);
+    appendAudienceClasses(fd);
     fetcher.submit(fd, { method: "post" });
   }
 
@@ -243,6 +512,7 @@ export default function DeliveryZonesPage() {
     fd.set("state", form.state);
     if (form.zipCode) fd.set("zipCode", form.zipCode);
     else fd.set("zipCode", "");
+    appendAudienceClasses(fd);
     fetcher.submit(fd, { method: "post" });
   }
 
@@ -254,90 +524,121 @@ export default function DeliveryZonesPage() {
     fetcher.submit(fd, { method: "post" });
   }
 
-  // Filtro local (busca controlada pelo loader via query param)
-  function onSearchSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const params = new URLSearchParams();
-    if (search.trim()) params.set("q", search.trim());
-    // Navegação via GET do fetcher para recarregar loader
-    fetcher.submit(params, { method: "get", action: "/admin/delivery-zones" });
+  function onToggleFormAudienceClass(
+    code: BrazilSocioeconomicClassCode,
+    checked: boolean
+  ) {
+    setForm((current) => ({
+      ...current,
+      audienceClasses: toggleAudienceClass(current.audienceClasses, code, checked),
+    }));
   }
 
-  // Estados brasileiros comuns (opcional). Pode digitar livremente também.
-  const brazilStates = [
-    "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA",
-    "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN",
-    "RS", "RO", "RR", "SC", "SP", "SE", "TO",
-  ];
-
   return (
-    <div className="p-6 space-y-6">
+    <div className="space-y-6 p-6">
       <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Delivery Zones</h1>
           <p className="text-sm text-muted-foreground">
-            Gerencie zonas de entrega. Ao excluir, as distâncias são removidas e os pedidos no KDS ficam sem zona (deliveryZoneId = null).
+            Gerencie zonas de entrega. Ao excluir, as distâncias são removidas e os
+            pedidos no KDS ficam sem zona (`deliveryZoneId = null`).
           </p>
         </div>
 
         <div className="flex gap-2">
-          <form onSubmit={onSearchSubmit} className="flex gap-2">
+          <form method="get" action="/admin/delivery-zone" className="flex gap-2">
             <Input
+              name="q"
               placeholder="Buscar por nome, cidade, estado, CEP"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-64"
             />
-            <Button type="submit" variant="secondary">Buscar</Button>
+            <Button type="submit" variant="secondary">
+              Buscar
+            </Button>
           </form>
 
-          <Dialog open={!!openDialog && openDialog.mode === "create"} onOpenChange={(o) => setOpenDialog(o ? { mode: "create" } : null)}>
+          <Dialog
+            open={!!openDialog && openDialog.mode === "create"}
+            onOpenChange={(open) => setOpenDialog(open ? { mode: "create" } : null)}
+          >
             <DialogTrigger asChild>
-              <Button onClick={() => setOpenDialog({ mode: "create" })}>Nova zona</Button>
+              <Button onClick={() => setOpenDialog({ mode: "create" })}>
+                Nova zona
+              </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[520px]">
+            <DialogContent className="sm:max-w-[640px]">
               <DialogHeader>
                 <DialogTitle>Criar Delivery Zone</DialogTitle>
                 <DialogDescription>Preencha os campos obrigatórios.</DialogDescription>
               </DialogHeader>
               <form onSubmit={onSubmitCreate} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                   <div>
                     <label className="text-sm">Nome*</label>
-                    <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} required />
+                    <Input
+                      value={form.name}
+                      onChange={(e) => setForm((current) => ({ ...current, name: e.target.value }))}
+                      required
+                    />
                   </div>
                   <div>
                     <label className="text-sm">Cidade*</label>
-                    <Input value={form.city} onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))} required />
+                    <Input
+                      value={form.city}
+                      onChange={(e) => setForm((current) => ({ ...current, city: e.target.value }))}
+                      required
+                    />
                   </div>
                   <div>
                     <label className="text-sm">Estado*</label>
                     <Select
                       value={form.state}
-                      onValueChange={(v) => setForm((f) => ({ ...f, state: v }))}
+                      onValueChange={(value) =>
+                        setForm((current) => ({ ...current, state: value }))
+                      }
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Selecione..." />
                       </SelectTrigger>
                       <SelectContent>
-                        {brazilStates.map((uf) => (
-                          <SelectItem value={uf} key={uf}>{uf}</SelectItem>
+                        {BRAZIL_STATES.map((uf) => (
+                          <SelectItem value={uf} key={uf}>
+                            {uf}
+                          </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
                   <div>
                     <label className="text-sm">CEP</label>
-                    <Input value={form.zipCode} onChange={(e) => setForm((f) => ({ ...f, zipCode: e.target.value }))} />
+                    <Input
+                      value={form.zipCode}
+                      onChange={(e) => setForm((current) => ({ ...current, zipCode: e.target.value }))}
+                    />
                   </div>
                 </div>
 
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Classes de público da zona</label>
+                  <AudienceClassesField
+                    selectedClasses={form.audienceClasses}
+                    onToggle={onToggleFormAudienceClass}
+                    disabled={fetcher.state !== "idle"}
+                  />
+                </div>
+
                 {fetcher.data?.ok === false && (
-                  <p className="text-sm text-red-500">{fetcher.data.message ?? "Erro ao salvar."}</p>
+                  <p className="text-sm text-red-500">
+                    {fetcher.data.message ?? "Erro ao salvar."}
+                  </p>
                 )}
 
                 <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => setOpenDialog(null)}>Cancelar</Button>
+                  <Button type="button" variant="outline" onClick={() => setOpenDialog(null)}>
+                    Cancelar
+                  </Button>
                   <Button type="submit" disabled={fetcher.state !== "idle"}>
                     {fetcher.state === "submitting" ? "Salvando..." : "Salvar"}
                   </Button>
@@ -351,7 +652,9 @@ export default function DeliveryZonesPage() {
       <section className="rounded-xl border">
         <Table>
           <TableCaption>
-            {zones.length === 0 ? "Nenhuma zona encontrada" : `${zones.length} zona(s) encontrada(s)`}
+            {zones.length === 0
+              ? "Nenhuma zona encontrada"
+              : `${zones.length} zona(s) encontrada(s)`}
           </TableCaption>
           <TableHeader>
             <TableRow>
@@ -359,10 +662,11 @@ export default function DeliveryZonesPage() {
               <TableHead>Cidade</TableHead>
               <TableHead>UF</TableHead>
               <TableHead>CEP</TableHead>
+              <TableHead>Público da zona</TableHead>
               <TableHead className="text-right">Distâncias</TableHead>
               <TableHead className="text-right">Taxas</TableHead>
               <TableHead className="text-right">Pedidos KDS</TableHead>
-              <TableHead className="text-right w-[180px]">Ações</TableHead>
+              <TableHead className="w-[180px] text-right">Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -372,6 +676,9 @@ export default function DeliveryZonesPage() {
                 <TableCell>{z.city}</TableCell>
                 <TableCell>{z.state}</TableCell>
                 <TableCell>{z.zipCode ?? "—"}</TableCell>
+                <TableCell>
+                  <DeliveryZoneAudienceCell zone={z} />
+                </TableCell>
                 <TableCell className="text-right">{z._count.distances}</TableCell>
                 <TableCell className="text-right">{z._count.deliveryFees}</TableCell>
                 <TableCell className="text-right">{z._count.KdsDailyOrderDetail}</TableCell>
@@ -399,25 +706,24 @@ export default function DeliveryZonesPage() {
         </Table>
       </section>
 
-      {/* Editar */}
       <Dialog
         open={!!openDialog && openDialog.mode === "edit"}
-        onOpenChange={(o) => setOpenDialog(o ? openDialog : null)}
+        onOpenChange={(open) => setOpenDialog(open ? openDialog : null)}
       >
-        <DialogContent className="sm:max-w-[520px]">
+        <DialogContent className="sm:max-w-[640px]">
           <DialogHeader>
             <DialogTitle>Editar Delivery Zone</DialogTitle>
             <DialogDescription>Atualize os campos obrigatórios.</DialogDescription>
           </DialogHeader>
 
           <form onSubmit={onSubmitUpdate} className="space-y-4">
-            <input type="hidden" value={form.id} />
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <input type="hidden" value={form.id} readOnly />
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <div>
                 <label className="text-sm">Nome*</label>
                 <Input
                   value={form.name}
-                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                  onChange={(e) => setForm((current) => ({ ...current, name: e.target.value }))}
                   required
                 />
               </div>
@@ -425,7 +731,7 @@ export default function DeliveryZonesPage() {
                 <label className="text-sm">Cidade*</label>
                 <Input
                   value={form.city}
-                  onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))}
+                  onChange={(e) => setForm((current) => ({ ...current, city: e.target.value }))}
                   required
                 />
               </div>
@@ -433,14 +739,18 @@ export default function DeliveryZonesPage() {
                 <label className="text-sm">Estado*</label>
                 <Select
                   value={form.state}
-                  onValueChange={(v) => setForm((f) => ({ ...f, state: v }))}
+                  onValueChange={(value) =>
+                    setForm((current) => ({ ...current, state: value }))
+                  }
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {brazilStates.map((uf) => (
-                      <SelectItem value={uf} key={uf}>{uf}</SelectItem>
+                    {BRAZIL_STATES.map((uf) => (
+                      <SelectItem value={uf} key={uf}>
+                        {uf}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -449,13 +759,24 @@ export default function DeliveryZonesPage() {
                 <label className="text-sm">CEP</label>
                 <Input
                   value={form.zipCode}
-                  onChange={(e) => setForm((f) => ({ ...f, zipCode: e.target.value }))}
+                  onChange={(e) => setForm((current) => ({ ...current, zipCode: e.target.value }))}
                 />
               </div>
             </div>
 
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Classes de público da zona</label>
+              <AudienceClassesField
+                selectedClasses={form.audienceClasses}
+                onToggle={onToggleFormAudienceClass}
+                disabled={fetcher.state !== "idle"}
+              />
+            </div>
+
             {fetcher.data?.ok === false && (
-              <p className="text-sm text-red-500">{fetcher.data.message ?? "Erro ao salvar."}</p>
+              <p className="text-sm text-red-500">
+                {fetcher.data.message ?? "Erro ao salvar."}
+              </p>
             )}
 
             <DialogFooter>
@@ -470,21 +791,28 @@ export default function DeliveryZonesPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Confirmar Exclusão */}
-      <AlertDialog open={!!pendingDelete} onOpenChange={(o) => setPendingDelete(o ? pendingDelete : null)}>
+      <AlertDialog
+        open={!!pendingDelete}
+        onOpenChange={(open) => setPendingDelete(open ? pendingDelete : null)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir zona?</AlertDialogTitle>
             <AlertDialogDescription>
-              Isso irá <strong>remover</strong> as distâncias vinculadas e definir <code>deliveryZoneId = null</code> nos pedidos KDS relacionados.
+              Isso irá <strong>remover</strong> as distâncias vinculadas e definir{" "}
+              <code>deliveryZoneId = null</code> nos pedidos KDS relacionados.
               Esta ação não pode ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>
           {fetcher.data?.ok === false && (
-            <p className="text-sm text-red-500">{fetcher.data.message ?? "Erro ao excluir."}</p>
+            <p className="text-sm text-red-500">
+              {fetcher.data.message ?? "Erro ao excluir."}
+            </p>
           )}
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setPendingDelete(null)}>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => setPendingDelete(null)}>
+              Cancelar
+            </AlertDialogCancel>
             <AlertDialogAction
               onClick={onConfirmDelete}
               disabled={fetcher.state !== "idle"}

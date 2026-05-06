@@ -5,7 +5,6 @@ import { useLoaderData, useNavigate, useSearchParams } from "@remix-run/react";
 import { ok } from "~/utils/http-response.server";
 import type { MenuItem } from "~/domain/cardapio/menu-item.model.server";
 import { useEffect, useState } from "react";
-import { categoryEntity } from "~/domain/category/category.entity.server";
 import type { Category } from "~/domain/category/category.model.server";
 import { CategoriesTabs } from "~/domain/category/components";
 import { urlAt } from "~/utils/url";
@@ -38,7 +37,7 @@ export const links: LinksFunction = () => [
 
 export async function loader({ request }: LoaderFunctionArgs) {
   // const menuItems = await menuEntity.findAll() as MenuItem[]
-  // const categories = await categoryEntity.findAll()
+  // const categories = await categoryPrismaEntity.findAll()
 
   // return ok({
   //   items: menuItems.filter(item => item.visible).map(item => item as MenuItem),
@@ -187,5 +186,4 @@ function Price({ children }: PriceProps) {
   )
 
 }
-
 

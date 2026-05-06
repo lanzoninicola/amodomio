@@ -14,25 +14,38 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const now = new Date();
 
-  await prismaClient.adminNavigationClick.upsert({
-    where: { href },
-    create: {
+  const existing = await prismaClient.adminNavigationClick.findFirst({
+    where: {
       href,
-      title,
-      groupTitle: groupTitle || null,
-      count: 1,
-      lastClickedAt: now,
-      createdAt: now,
-      updatedAt: now,
+      pinned: false,
     },
-    update: {
-      title,
-      groupTitle: groupTitle || null,
-      count: { increment: 1 },
-      lastClickedAt: now,
-      updatedAt: now,
-    },
+    orderBy: [{ updatedAt: "desc" }],
   });
+
+  if (existing) {
+    await prismaClient.adminNavigationClick.update({
+      where: { id: existing.id },
+      data: {
+        title,
+        groupTitle: groupTitle || null,
+        count: { increment: 1 },
+        lastClickedAt: now,
+        updatedAt: now,
+      },
+    });
+  } else {
+    await prismaClient.adminNavigationClick.create({
+      data: {
+        href,
+        title,
+        groupTitle: groupTitle || null,
+        count: 1,
+        lastClickedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      },
+    });
+  }
 
   return ok({ href });
 }

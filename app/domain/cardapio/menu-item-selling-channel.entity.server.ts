@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 import prismaClient from "~/lib/prisma/client.server";
 import { PrismaEntityProps } from "~/lib/prisma/types.server";
 
-export type SellingChannelKey = "cardapio" | "aiqfome" | "ifood";
+export type SellingChannelKey = "cardapio" | "ecommerce" | "aiqfome" | "ifood";
 
 class MenuItemSellingChannelPrismaEntity {
   client;
@@ -39,3 +39,6 @@ export const menuItemSellingChannelPrismaEntity =
   new MenuItemSellingChannelPrismaEntity({
     client: prismaClient,
   });
+
+// Compatibility alias while legacy imports are being normalized.
+export const itemSellingChannelPrismaEntity = menuItemSellingChannelPrismaEntity;

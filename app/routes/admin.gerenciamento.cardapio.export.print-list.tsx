@@ -1,11 +1,11 @@
 import { json, type LoaderFunctionArgs } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
 import { useMemo, useState } from "react";
-import type { MenuItemSellingChannel, MenuItemSize } from "@prisma/client";
+import type { ItemSellingChannel, MenuItemSize } from "@prisma/client";
 import type { MenuItemWithSellPriceVariations } from "~/domain/cardapio/menu-item.types";
 import { menuItemSellingPriceHandler } from "~/domain/cardapio/menu-item-selling-price-handler.server";
 import { menuItemSizePrismaEntity } from "~/domain/cardapio/menu-item-size.entity.server";
-import { menuItemSellingChannelPrismaEntity } from "~/domain/cardapio/menu-item-selling-channel.entity.server";
+import { itemSellingChannelPrismaEntity } from "~/domain/cardapio/menu-item-selling-channel.entity.server";
 import { Button } from "~/components/ui/button";
 import {
   Card,
@@ -28,7 +28,7 @@ import formatDecimalPlaces from "~/utils/format-decimal-places";
 type LoaderData = {
   items: MenuItemWithSellPriceVariations[];
   sizes: MenuItemSize[];
-  channels: MenuItemSellingChannel[];
+  channels: ItemSellingChannel[];
 };
 type ItemWithVariation = {
   item: MenuItemWithSellPriceVariations;
@@ -39,7 +39,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const [items, sizes, channels] = await Promise.all([
     menuItemSellingPriceHandler.loadMany({}),
     menuItemSizePrismaEntity.findAll(),
-    menuItemSellingChannelPrismaEntity.findAll(),
+    itemSellingChannelPrismaEntity.findAll(),
   ]);
 
   return json<LoaderData>({ items, sizes, channels });

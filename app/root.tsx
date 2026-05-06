@@ -19,6 +19,8 @@ import { ok } from "./utils/http-response.server";
 import { ArrowRight } from "lucide-react";
 import Logo from "./components/primitives/logo/logo";
 import MicrosoftClarityScriptTag from "./components/primitives/ms-clarity/ms-clarity-script";
+import WEBSITE_LINKS from "./domain/website-navigation/links/website-links";
+import { getErrorMessage, isDatabaseConnectivityError } from "./lib/errors/connectivity";
 
 export const meta: MetaFunction = () => {
   return [
@@ -71,8 +73,8 @@ export const links: LinksFunction = () => [
   //   rel: "stylesheet",
   // },
   {
-    href: "https://fonts.googleapis.com/css2?family=Inter&family=Montagu+Slab:opsz,wght@16..144,400;16..144,600;16..144,700&display=swap",
-    rel: "preload",
+    href: "https://fonts.googleapis.com/css2?family=Inter&family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap",
+    rel: "stylesheet",
   },
   // {
   //   rel: 'apple-touch-icon',
@@ -172,23 +174,117 @@ export function ErrorBoundary() {
   const error = useRouteError();
   const location = useLocation();
   const pathname = location?.pathname || "";
+  const isAdminRootRoute = pathname === "/admin";
+  const shouldRedirectCardapio = pathname.startsWith("/cardapio");
+  const isDbUnavailable = isDatabaseConnectivityError(error);
+  const shouldForceCardapioRedirect = shouldRedirectCardapio && !isDbUnavailable;
+  const cardapioFallbackHref = WEBSITE_LINKS.saiposCardapio.href;
+  const errorDetails = (() => {
+    if (error instanceof Error) {
+      return [error.message, error.stack].filter(Boolean).join("\n\n");
+    }
+
+    try {
+      return JSON.stringify(error, null, 2);
+    } catch (stringifyError) {
+      return String(error);
+    }
+  })();
 
   const primaryAction = (() => {
     if (pathname.startsWith("/admin")) return { href: "/admin", label: "Voltar para o painel" };
-    if (pathname.startsWith("/cardapio")) return { href: "/cardapio", label: "Voltar ao cardápio" };
+    if (pathname.startsWith("/cardapio")) return { href: cardapioFallbackHref, label: "Ir para finalizar o pedido" };
     return { href: "/", label: "Ir para a página inicial" };
   })();
 
-  console.log({ error })
+  console.error("[root] route error boundary", error);
+
+  if (isAdminRootRoute) {
+    return (
+      <html>
+        <head>
+          <title>Erro no admin</title>
+          <Meta />
+          <Links />
+        </head>
+        <body>
+          <div className="min-h-screen bg-slate-50 px-6 py-8 text-slate-900 md:px-10 md:py-10">
+            <div className="mx-auto max-w-3xl space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Admin</p>
+                <h1 className="text-2xl font-semibold md:text-3xl">
+                  {isDbUnavailable ? "Banco temporariamente indisponível" : "Ocorreu um erro no painel administrativo"}
+                </h1>
+                <p className="text-sm text-slate-600 md:text-base">
+                  {isDbUnavailable
+                    ? "A aplicação não conseguiu falar com o banco de dados nesta tentativa."
+                    : "A rota falhou e o erro foi capturado no boundary global do admin."}
+                </p>
+              </div>
+
+              {isDbUnavailable ? (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                  {getErrorMessage(error) || "Falha de conectividade com a base de dados."}
+                </div>
+              ) : null}
+
+              <div className="flex flex-wrap gap-3">
+                <Link
+                  to={`${pathname}${location.search}`}
+                  reloadDocument
+                  className="inline-flex items-center rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
+                >
+                  Tentar novamente
+                </Link>
+                <Link
+                  to="/admin"
+                  className="inline-flex items-center rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700"
+                >
+                  Voltar ao painel
+                </Link>
+                <Link
+                  to="/"
+                  className="inline-flex items-center rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700"
+                >
+                  Ir para o site
+                </Link>
+              </div>
+
+              <details className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <summary className="cursor-pointer text-sm font-semibold text-slate-800">
+                  Ver detalhes do erro
+                </summary>
+                <pre className="mt-3 max-h-[28rem] overflow-auto whitespace-pre-wrap text-xs text-slate-700">
+                  {errorDetails || "Sem detalhes disponíveis."}
+                </pre>
+              </details>
+            </div>
+          </div>
+          <ScrollRestoration />
+          <Scripts />
+        </body>
+      </html>
+    );
+  }
 
   return (
     <html>
       <head>
         <title>Oops!</title>
+        {shouldForceCardapioRedirect ? (
+          <meta httpEquiv="refresh" content={`0;url=${cardapioFallbackHref}`} />
+        ) : null}
         <Meta />
         <Links />
       </head>
       <body>
+        {shouldForceCardapioRedirect ? (
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `window.location.replace(${JSON.stringify(cardapioFallbackHref)});`,
+            }}
+          />
+        ) : null}
         <div className="min-h-screen bg-gradient-to-br from-amber-50 via-white to-orange-50 text-slate-900">
           <div className="mx-auto flex min-h-screen max-w-5xl flex-col gap-10 px-6 py-10 md:py-16">
             <header className="flex items-center justify-between">
@@ -202,25 +298,40 @@ export function ErrorBoundary() {
               <div className="space-y-6">
                 <p className="text-xs font-semibold uppercase tracking-[0.25em] text-amber-600">Algo saiu do forno errado</p>
                 <div className="space-y-3">
-                  <h1 className="text-4xl font-semibold leading-tight md:text-5xl">Desculpe, tivemos um imprevisto.</h1>
+                  <h1 className="text-4xl font-semibold leading-tight md:text-5xl">
+                    {isDbUnavailable ? "Banco temporariamente indisponível." : "Desculpe, tivemos um imprevisto."}
+                  </h1>
                   <p className="text-lg text-slate-600 md:max-w-xl">
-                    Nosso time já foi avisado. Você pode retomar de onde estava ou voltar para o cardápio digital.
+                    {isDbUnavailable
+                      ? "A aplicação não conseguiu alcançar o banco de dados agora. Tente recarregar a rota atual em instantes."
+                      : "Ocorreu um erro no cardápio digital. Estamos redirecionando você imediatamente para finalizar seu pedido."}
                   </p>
+                  {isDbUnavailable ? (
+                    <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 md:max-w-xl">
+                      {getErrorMessage(error) || "Falha de conectividade com a base de dados."}
+                    </p>
+                  ) : null}
+                  {shouldForceCardapioRedirect ? (
+                    <p className="text-sm font-semibold text-slate-800">
+                      Caso isso não aconteça, use o botão abaixo.
+                    </p>
+                  ) : null}
                 </div>
 
                 <div className="flex flex-wrap gap-3">
                   <Link
-                    to={primaryAction.href}
+                    to={isDbUnavailable ? `${pathname}${location.search}` : primaryAction.href}
+                    reloadDocument={isDbUnavailable}
                     className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold uppercase tracking-wide text-white shadow-md transition hover:-translate-y-0.5 hover:shadow-lg"
                   >
-                    <span>{primaryAction.label}</span>
+                    <span>{isDbUnavailable ? "Tentar novamente" : primaryAction.label}</span>
                     <ArrowRight className="h-4 w-4" />
                   </Link>
                   <Link
-                    to="/cardapio"
+                    to={shouldForceCardapioRedirect ? cardapioFallbackHref : "/cardapio"}
                     className="inline-flex items-center gap-2 rounded-full border border-slate-300 px-5 py-3 text-sm font-semibold uppercase tracking-wide text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
                   >
-                    <span>Ver cardápio digital</span>
+                    <span>{shouldForceCardapioRedirect ? "Ir para finalizar o pedido" : "Ver cardápio digital"}</span>
                   </Link>
                 </div>
               </div>

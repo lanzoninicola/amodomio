@@ -14,6 +14,7 @@ interface MenuItemsFiltersProps {
   initialItems: MenuItemWithSellPriceVariations[] | MenuItemWithCostVariations[];
   groups: MenuItemGroup[];
   categories: Category[];
+  sizes?: { id: string; name: string }[];
   cnContainer?: string
   onItemsChange: (filteredItems: MenuItemWithSellPriceVariations[] | MenuItemWithCostVariations[]) => void;
 }
@@ -22,30 +23,39 @@ export function MenuItemsFilters({
   initialItems,
   groups,
   categories,
+  sizes,
   cnContainer,
   onItemsChange,
 }: MenuItemsFiltersProps) {
   const [search, setSearch] = useState("");
   const [currentGroup, setCurrentGroup] = useState<MenuItemGroup["key"] | null>(null);
   const [currentCategory, setCurrentCategory] = useState<Category | null>(null);
-  const [currentFilter, setCurrentFilter] = useState<MenuItemVisibilityFilterOption | null>("active");
+  const [currentFilter, setCurrentFilter] = useState<MenuItemVisibilityFilterOption | null>("all");
+  const [currentVariation, setCurrentVariation] = useState<string | null>(null);
 
   const applyFilters = (
     groupKey: MenuItemGroup["key"] | null,
     category: Category | null,
     visibility: MenuItemVisibilityFilterOption | null,
-    searchValue: string
+    searchValue: string,
+    variation: string | null
   ) => {
     let filtered = [...initialItems];
 
     if (groupKey) filtered = filtered.filter(i => i.group?.key === groupKey);
     if (category) filtered = filtered.filter(i => i.category?.id === category.id);
-    if (visibility === "active") filtered = filtered.filter(i => i.visible === true);
-    if (visibility === "venda-pausada") filtered = filtered.filter(i => i.active && !i.visible);
+    if (visibility === "active") filtered = filtered.filter(i => i.active === true && i.visible === true);
+    if (visibility === "venda-pausada") filtered = filtered.filter(i => i.active === true && i.visible === false);
+    if (visibility === "inactive") filtered = filtered.filter(i => i.active === false);
     if (searchValue) {
       filtered = filtered.filter(i =>
         i.name?.toLowerCase().includes(searchValue.toLowerCase()) ||
         i.ingredients?.toLowerCase().includes(searchValue.toLowerCase())
+      );
+    }
+    if (variation) {
+      filtered = filtered.filter(i =>
+        (i as MenuItemWithSellPriceVariations).sellPriceVariations?.some(v => v.sizeName === variation)
       );
     }
 
@@ -53,8 +63,12 @@ export function MenuItemsFilters({
   };
 
   useEffect(() => {
-    applyFilters(currentGroup, currentCategory, currentFilter, search);
+    applyFilters(currentGroup, currentCategory, currentFilter, search, currentVariation);
   }, []);
+
+  useEffect(() => {
+    applyFilters(currentGroup, currentCategory, currentFilter, search, currentVariation);
+  }, [initialItems]);
 
   return (
     <div className={
@@ -69,7 +83,7 @@ export function MenuItemsFilters({
           const parsed = value ? jsonParse(value) : null;
           const key = parsed?.key || null;
           setCurrentGroup(key);
-          applyFilters(key, currentCategory, currentFilter, search);
+          applyFilters(key, currentCategory, currentFilter, search, currentVariation);
         }}
       >
         <SelectTrigger className="w-full md:col-span-1 bg-white">
@@ -90,7 +104,7 @@ export function MenuItemsFilters({
         onValueChange={(value) => {
           const parsed = jsonParse(value);
           setCurrentCategory(parsed);
-          applyFilters(currentGroup, parsed, currentFilter, search);
+          applyFilters(currentGroup, parsed, currentFilter, search, currentVariation);
         }}
         disabled={currentGroup === null}
       >
@@ -111,18 +125,44 @@ export function MenuItemsFilters({
         onValueChange={(value) => {
           const v = value as MenuItemVisibilityFilterOption;
           setCurrentFilter(v);
-          applyFilters(currentGroup, currentCategory, v, search);
+          applyFilters(currentGroup, currentCategory, v, search, currentVariation);
         }}
-        defaultValue={"active"}
+        defaultValue={"all"}
       >
         <SelectTrigger className="w-full bg-white md:col-span-1">
           <SelectValue placeholder="Filtrar vendas" />
         </SelectTrigger>
         <SelectContent>
+          <SelectItem value="all">Todos</SelectItem>
           <SelectItem value="active">Venda ativa</SelectItem>
           <SelectItem value="venda-pausada">Venda pausada</SelectItem>
+          <SelectItem value="inactive">Desativados</SelectItem>
         </SelectContent>
       </Select>
+
+      {sizes && sizes.length > 0 && (
+        <Select
+          name="variation"
+          onValueChange={(value) => {
+            const v = value || null;
+            setCurrentVariation(v);
+            applyFilters(currentGroup, currentCategory, currentFilter, search, v);
+          }}
+          defaultValue=""
+        >
+          <SelectTrigger className="w-full bg-white md:col-span-1">
+            <SelectValue placeholder="Variação" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="">Todas</SelectItem>
+            {sizes.map((s) => (
+              <SelectItem key={s.id} value={s.name}>
+                {s.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
 
       <div className="grid place-items-center rounded-sm col-span-5 w-full" >
         <Input

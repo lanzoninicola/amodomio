@@ -1,5 +1,5 @@
 import { Link, Outlet, useLocation } from "@remix-run/react";
-import { List, Columns, Printer, SquarePlus, CircleArrowOutUpRight, LucideIcon } from "lucide-react";
+import { List, Columns, Printer, SquarePlus, CircleArrowOutUpRight, ImagePlus, LucideIcon } from "lucide-react";
 import { Separator } from "~/components/ui/separator";
 import { cn } from "~/lib/utils";
 import { lastUrlSegment } from "~/utils/url";
@@ -35,6 +35,9 @@ export default function AdminGerenciamentoCardapioMainListLayout() {
                 </PageMenu>
                 <PageMenu href="/admin/gerenciamento/cardapio/export" label="Exportar" >
                     <CircleArrowOutUpRight size={16} />
+                </PageMenu>
+                <PageMenu href="/admin/gerenciamento/cardapio/assets-batch" label="Assets lote">
+                    <ImagePlus size={16} />
                 </PageMenu>
 
 

@@ -23,7 +23,7 @@ class MenuItemCostPrismaEntity {
     }: {
       costScalingFactor: number;
       costBase: number;
-    }
+    },
   ) {
     const sizeConfig = await this.client.menuItemSize.findFirst({
       where: {
@@ -41,8 +41,6 @@ class MenuItemCostPrismaEntity {
       costBase,
     } as Prisma.MenuItemSizeUpdateInput;
 
-    console.log({ nextSizeConfig });
-
     return await this.client.menuItemSize.update({
       where: {
         id,
@@ -53,7 +51,7 @@ class MenuItemCostPrismaEntity {
 
   async findItemsCostBySize(
     sizeId: string,
-    refSizeKey: string = "pizza-medium"
+    refSizeKey: string = "pizza-medium",
   ) {
     const [refCosts, sizeCosts] = await Promise.all([
       this.client.menuItemCostVariation.findMany({
@@ -66,7 +64,7 @@ class MenuItemCostPrismaEntity {
 
     // Create a map of refCosts by ID for quick lookup of suggestedRecipeCost
     const refCostsMap = new Map(
-      refCosts.map((ref) => [ref.menuItemId, ref.costAmount])
+      refCosts.map((ref) => [ref.menuItemId, ref.costAmount]),
     );
 
     // Map over sizeCosts, using refCosts only for suggestedRecipeCost
@@ -82,7 +80,7 @@ class MenuItemCostPrismaEntity {
 
   async updateMenuItemCost(
     id: string,
-    data: Prisma.MenuItemCostVariationUpdateInput
+    data: Prisma.MenuItemCostVariationUpdateInput,
   ) {
     return await this.client.menuItemCostVariation.update({
       where: {
@@ -95,7 +93,7 @@ class MenuItemCostPrismaEntity {
   async upsertMenuItemCost(
     sizeId: string,
     menuItemId: string,
-    data: Prisma.MenuItemCostVariationCreateInput
+    data: Prisma.MenuItemCostVariationCreateInput,
   ) {
     const record = await this.client.menuItemCostVariation.findFirst({
       where: {

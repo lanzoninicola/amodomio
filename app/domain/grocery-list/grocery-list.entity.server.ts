@@ -1,6 +1,5 @@
 import { now } from "~/lib/dayjs";
 import { BaseEntity } from "../base.entity";
-import { Product } from "../product/product.model.server";
 import {
   GroceryList,
   GroceryListItem,

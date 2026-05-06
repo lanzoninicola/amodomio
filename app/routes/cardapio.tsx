@@ -1,6 +1,6 @@
 import { InstagramLogoIcon } from "@radix-ui/react-icons";
 import { LinksFunction, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
-import { Await, Link, Outlet, defer, useLoaderData } from "@remix-run/react";
+import { Await, Link, Outlet, defer, useLoaderData, useRouteError } from "@remix-run/react";
 import { ArrowRight, Bell, Divide, Info, Instagram, LayoutTemplate, MapPin, Proportions, SearchIcon } from "lucide-react";
 import React, { ReactNode, Suspense, useEffect, useState } from "react";
 
@@ -26,6 +26,10 @@ import useCurrentPage from "~/hooks/use-current-page";
 import { NotificationCenterProvider, useNotificationCenter } from "~/domain/push/notification-center-context";
 import { PwaInstallPrompt } from "~/domain/pwa/pwa-install-prompt";
 import { CardapioSizesContent } from "~/domain/cardapio/components/cardapio-sizes-content";
+import CardapioDatabaseUnavailable from "~/domain/cardapio/components/cardapio-database-unavailable/cardapio-database-unavailable";
+import CardapioErrorRedirect from "~/domain/cardapio/components/cardapio-error-redirect/cardapio-error-redirect";
+import RouteProgressBar from "~/components/route-progress-bar/route-progress-bar";
+import { isDatabaseConnectivityError } from "~/lib/errors/connectivity";
 
 
 /**
@@ -79,27 +83,51 @@ export const links: LinksFunction = () => [
 ];
 
 export async function loader({ request }: LoaderFunctionArgs) {
+    const url = new URL(request.url);
+    const simulateError = url.searchParams.get("simularErro");
+    const simulateErrorByQuery = simulateError === "cardapio-layout";
 
+    const CARDAPIO_SETTINGS_CONTEXT = "cardapio";
     const requestedKeys = [
-        "cardapio.fazer_pedido.public.url",
-        "cardapio.aviso_loja_fechada.yesno",
-        "cardapio.notificacoes.enabled",
+        "fazer_pedido.public.url",
+        "aviso_loja_fechada.yesno",
+        "notificacoes.enabled",
     ] as const;
 
-    const cardapioSettings = await prismaClient.cardapioSetting.findMany({
-        where: { key: { in: [...requestedKeys] } },
-        select: { key: true, value: true },
-    });
+    const defaults = {
+        fazerPedidoPublicURL: WEBSITE_LINKS.cardapioFallbackURL.href,
+        showLojaFechadaMessage: false,
+        notificationsEnabled: false,
+    };
 
-    const settingsMap = cardapioSettings.reduce<Record<string, string | null>>((acc, setting) => {
-        acc[setting.key] = setting.value;
-        return acc;
-    }, {});
+    let settingsMap: Record<string, string | null> = {};
 
-    const fPUrl = settingsMap[requestedKeys[0]] ?? WEBSITE_LINKS.cardapioFallbackURL.href;
+    try {
+        const globalSettings = await prismaClient.setting.findMany({
+            where: {
+                context: CARDAPIO_SETTINGS_CONTEXT,
+                name: { in: [...requestedKeys] }
+            },
+            select: { name: true, value: true },
+            orderBy: [{ createdAt: "desc" }],
+        });
 
-    const showLojaFechadaMessage = parseBooleanSetting(settingsMap[requestedKeys[1]], true);
-    const notificationsEnabled = parseBooleanSetting(settingsMap[requestedKeys[2]], true);
+        settingsMap = globalSettings.reduce<Record<string, string | null>>((acc, setting) => {
+            if (acc[setting.name] !== undefined) return acc;
+            acc[setting.name] = setting.value;
+            return acc;
+        }, {});
+    } catch (error) {
+        console.error("[cardapio] non-blocking settings load failed, using defaults", error);
+    }
+
+    const fPUrl = settingsMap[requestedKeys[0]] ?? defaults.fazerPedidoPublicURL;
+    const showLojaFechadaMessage = parseBooleanSetting(settingsMap[requestedKeys[1]], defaults.showLojaFechadaMessage);
+    const notificationsEnabled = parseBooleanSetting(settingsMap[requestedKeys[2]], defaults.notificationsEnabled);
+
+    if (simulateErrorByQuery) {
+        throw new Error("SIMULACAO_ERRO_CARDAPIO_LAYOUT");
+    }
 
     return defer({
         fazerPedidoPublicURL: fPUrl,
@@ -130,6 +158,7 @@ export default function CardapioWeb() {
 
     return (
         <NotificationCenterProvider enabled={notificationsEnabled}>
+            <RouteProgressBar />
             {showLojaFechadaMessage && <BannerFechado />}
             <CardapioHeader />
 
@@ -142,6 +171,19 @@ export default function CardapioWeb() {
             {currentPage === "other" && <CardapioFooter />}
         </NotificationCenterProvider>
     );
+}
+
+export function ErrorBoundary() {
+    const error = useRouteError();
+    const saiposHref = WEBSITE_LINKS.saiposCardapio.href;
+
+    console.error("[cardapio] route error boundary", error);
+
+    if (isDatabaseConnectivityError(error)) {
+        return <CardapioDatabaseUnavailable error={error} />;
+    }
+
+    return <CardapioErrorRedirect redirectHref={saiposHref} />;
 }
 
 function shouldShowBanner(date: Date = new Date()) {
@@ -162,10 +204,10 @@ function BannerFechado() {
 
     return (
         <>
-            <ScrollingBanner cnContainer="fixed top-0 inset-x-0 w-screen bg-red-500 z-50" data-element="banner-fechado">
+            <ScrollingBanner cnContainer="fixed top-0 right-0 w-fit bg-red-500 z-50" data-element="banner-fechado">
                 <span className="font-neue text-white  font-semibold uppercase tracking-wide">{text}</span>
             </ScrollingBanner>
-            <ScrollingBanner cnContainer="fixed bottom-0 w-screen bg-red-500 z-50" data-element="banner-fechado">
+            <ScrollingBanner cnContainer="fixed bottom-0 right-0 w-fit bg-red-500 z-50" data-element="banner-fechado">
                 <span className="font-neue text-white font-semibold uppercase tracking-wide">{text}</span>
             </ScrollingBanner>
         </>
@@ -181,21 +223,8 @@ function CardapioHeader() {
     const { fazerPedidoPublicURL, notificationsEnabled, vapidPublicKey } = useLoaderData<typeof loader>()
 
     return (
-        <>
-            <style>{`
-              @keyframes bell-shake {
-                0%, 100% { transform: rotate(0deg); }
-                20% { transform: rotate(-12deg); }
-                40% { transform: rotate(8deg); }
-                60% { transform: rotate(-6deg); }
-                80% { transform: rotate(4deg); }
-              }
-              .bell-shake {
-                animation: bell-shake 1s ease-in-out infinite;
-              }
-            `}</style>
-            <header className="fixed top-0 w-full z-10 md:max-w-6xl md:-translate-x-1/2 md:left-1/2 " >
-                <div className="flex flex-col bg-white px-1 pt-2 py-3 h-[50px] md:h-[70px]">
+        <header className="fixed top-0 w-full z-30 md:max-w-6xl md:-translate-x-1/2 md:left-1/2 " >
+            <div className="flex flex-col bg-white px-1 pt-2 py-3 h-[50px] md:h-[70px]">
                 <div className="grid grid-cols-3 items-center w-full">
                     {/* <div className="flex gap-1 items-center" onClick={() => setShowSearch(!showSearch)}>
                         <HamburgerMenuIcon className="w-6 h-6" />
@@ -288,18 +317,24 @@ function CardapioHeader() {
                 </WhatsappExternalLink>
             </div>
 
-            <ScrollingBanner
+            <div className="bg-black flex items-center justify-center h-[24px] md:h-[32px]">
+                <p className="font-neue text-white text-[11px] md:text-sm uppercase tracking-wider font-semibold">
+                    Hórarios de funcionamento: Qua <span className="lowercase">a</span> Dom, <span className="lowercase">das</span> 18h <span className="lowercase">às</span> 22h
+                </p>
+            </div>
+
+            {/* <ScrollingBanner
                 cnContainer="h-[30px] md:h-[40px] bg-white border-b border-t border-solid border-black flex"
             >
                 <div className="flex items-center gap-2 justify-center">
-                    {/* @ts-ignore */}
+
                     <ItalyFlag className="w-4 h-4 md:w-6 md:h-6" />
                     <p className="font-neue text-[15px] uppercase tracking-wider md:text-lg">
                         Todas as nossas pizzas são preparadas com farinha e molho de tomate importados da Itália
                     </p>
                 </div>
 
-            </ScrollingBanner>
+            </ScrollingBanner> */}
             {currentPage === "other" && notificationsEnabled && <PushOptIn vapidPublicKey={vapidPublicKey} />}
 
             </header>
@@ -413,7 +448,7 @@ function CardapioFooter() {
     const { fazerPedidoPublicURL } = useLoaderData<typeof loader>();
 
     return (
-        <footer className="fixed bottom-0 w-full h-[70px] bg-white px-4 flex items-center justify-between border-t border-gray-200
+        <footer className="fixed bottom-0 w-full h-[70px] bg-white px-4 flex gap-x-4 items-center justify-between border-t border-gray-200
         z-10 md:max-w-6xl md:-translate-x-1/2 md:left-1/2
         ">
             {/* Botão Tamanhos à esquerda */}
@@ -421,26 +456,17 @@ function CardapioFooter() {
                 <TamanhosLinkButton />
             </div>
 
-            {/* Botão flutuante central */}
-            <div className="absolute left-1/2 -translate-x-1/2 -translate-y-6 z-20">
-                <Suspense fallback={<span>Carregando...</span>}>
-                    <Await resolve={fazerPedidoPublicURL}>
-                        {(url) => (
-                            <div className="flex flex-col gap-1">
-                                <FazerPedidoButton
-                                    // variant="accent"
-                                    cnLabel="text-md tracking-wider font-semibold font-neue"
-                                    externalLinkURL={url}
-                                />
-                                <div className="flex flex-col justify-center items-center gap-0 ">
-                                    <p className="font-neue font-semibold text-[10px]">Hórarios de funcionamento</p>
-                                    <p className="text-muted-foreground font-neue text-xs ">QUA a DOM das 18h às 22h</p>
-                                </div>
-                            </div>
-                        )}
-                    </Await>
-                </Suspense>
-            </div>
+            {/* Botão central */}
+            <Suspense fallback={<span>Carregando...</span>}>
+                <Await resolve={fazerPedidoPublicURL}>
+                    {(url) => (
+                        <FazerPedidoButton
+                            cnLabel="text-md tracking-wider font-semibold font-neue"
+                            externalLinkURL={url}
+                        />
+                    )}
+                </Await>
+            </Suspense>
 
             {/* Botão Tamanhos à direita (se for necessário) */}
             <div className="flex">

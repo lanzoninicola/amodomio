@@ -3,22 +3,25 @@ import { AlertCircleIcon } from "lucide-react";
 import { NumericInput } from "~/components/numeric-input/numeric-input";
 import SubmitButton from "~/components/primitives/submit-button/submit-button";
 import { SellPriceVariation } from "../../menu-item.types";
-import { MenuItemSellingChannel } from "@prisma/client";
+import { ItemSellingChannel } from "@prisma/client";
 import { LoggedUser } from "~/domain/auth/types.server";
 import { Separator } from "~/components/ui/separator";
 import { cn } from "~/lib/utils";
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from "~/components/ui/dialog";
 import { Button } from "~/components/ui/button";
-import { Switch } from "~/components/ui/switch";
 import { MoneyInput } from "~/components/money-input/MoneyInput";
 
 
 interface MenuItemSellPriceFormProps {
   menuItemId: string,
   sellPriceVariation: SellPriceVariation
-  sellingChannel: MenuItemSellingChannel
+  sellingChannel: ItemSellingChannel
   user: LoggedUser
 
+}
+
+type MinimumPriceLabelDialogProps = {
+  computedSellingPriceBreakdown: SellPriceVariation["computedSellingPriceBreakdown"]
 }
 
 export default function MenuItemSellPriceForm({ menuItemId, sellPriceVariation, sellingChannel, user }: MenuItemSellPriceFormProps) {
@@ -29,7 +32,7 @@ export default function MenuItemSellPriceForm({ menuItemId, sellPriceVariation, 
       <div className="flex flex-col gap-2 mb-2">
         <input type="hidden" name="menuItemId" value={menuItemId} />
         <input type="hidden" name="menuItemSellPriceVariationId" value={sellPriceVariation.menuItemSellPriceVariationId ?? ""} />
-        <input type="hidden" name="menuItemSellingChannelId" value={sellingChannel.id ?? ""} />
+        <input type="hidden" name="itemSellingChannelId" value={sellingChannel.id ?? ""} />
         <input type="hidden" name="menuItemSizeId" value={sellPriceVariation.sizeId ?? ""} />
         <input type="hidden" name="updatedBy" value={sellPriceVariation.updatedBy || user?.email || ""} />
         <input type="hidden" name="previousPriceAmount" value={sellPriceVariation.previousPriceAmount} />
@@ -41,10 +44,6 @@ export default function MenuItemSellPriceForm({ menuItemId, sellPriceVariation, 
         <input type="hidden" name="sellingPriceExpectedAmount" value={sellPriceVariation.computedSellingPriceBreakdown?.minimumPrice.priceAmount.withProfit ?? 0} />
         <input type="hidden" name="profitExpectedPerc" value={sellPriceVariation.computedSellingPriceBreakdown?.channel.targetMarginPerc ?? 0} />
 
-        <div className="flex flex-row justify-between items-center mb-4">
-          <span className="text-xs"> Visualizar no cardapio:</span>
-          <Switch name="showOnCardapio" defaultChecked={sellPriceVariation?.showOnCardapio || false} />
-        </div>
         <div className="grid grid-cols-2 gap-2">
 
           <div className="flex flex-col gap-1 items-center">
@@ -92,7 +91,7 @@ export default function MenuItemSellPriceForm({ menuItemId, sellPriceVariation, 
       {(sellPriceVariation.computedSellingPriceBreakdown?.custoFichaTecnica ?? 0) === 0 && (
         <div className="flex gap-2 items-center mt-2">
           <AlertCircleIcon className="h-4 w-4 text-red-500" />
-          <span className="text-red-500 text-xs font font-semibold">Custo ficha tecnica não definido</span>
+          <span className="text-red-500 text-xs font font-semibold">Custo da ficha de custo não definido</span>
         </div>
       )}
 

@@ -41,6 +41,7 @@ export const meta: MetaFunction = ({ data }) => {
 
 const tabs = [
   { href: (id: string) => `/admin/crm/${id}/profile`, label: "Dados" },
+  { href: (id: string) => `/admin/crm/${id}/conversation`, label: "Conversa" },
   { href: (id: string) => `/admin/crm/${id}/timeline`, label: "Timeline" },
   { href: (id: string) => `/admin/crm/${id}/tags`, label: "Tags" },
   { href: (id: string) => `/admin/crm/${id}/sends`, label: "Envios" },
@@ -51,7 +52,7 @@ export default function AdminCrmCustomerLayout() {
   const location = useLocation();
 
   return (
-    <div className="grid gap-6 font-neue">
+    <div className="grid gap-6 ">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-xs text-muted-foreground">Cliente</p>

@@ -13,7 +13,7 @@ interface SelectRecipeTypeProps {
 export default function SelectRecipeType({ defaultValue, className }: SelectRecipeTypeProps) {
 
     return (
-        <Select name="type" required={true} defaultValue={defaultValue || ""}>
+        <Select name="type" required={true} defaultValue={defaultValue || RecipeType.semiFinished}>
             <SelectTrigger id="type" className={
                 cn(
                     className,

@@ -6,7 +6,7 @@ import {
   MenuItemImage,
   MenuItemLike,
   MenuItemPriceVariation,
-  MenuItemSellingChannel,
+  ItemSellingChannel,
   MenuItemSellingPriceVariation,
   MenuItemSellingPriceVariationAudit,
   MenuItemShare,
@@ -19,24 +19,22 @@ import { PrismaEntityProps } from "~/lib/prisma/types.server";
 import { menuItemTagPrismaEntity } from "./menu-item-tags.prisma.entity.server";
 import MenuItemPriceVariationUtility from "./menu-item-price-variations-utility";
 import { v4 as uuidv4 } from "uuid";
-import { CloudinaryUtils } from "~/lib/cloudinary";
 import {
   MenuItemWithCostVariations,
   MenuItemWithSellPriceVariations,
 } from "./menu-item.types";
 import { menuItemCostVariationPrismaEntity } from "./menu-item-cost-variation.entity.server";
-import { CacheManager } from "../cache/cache-manager.server";
 import {
   PizzaSizeKey,
   menuItemSizePrismaEntity,
 } from "./menu-item-size.entity.server";
 import { menuItemSellingPriceUtilityEntity } from "./menu-item-selling-price-utility.entity";
 import {
-  menuItemSellingChannelPrismaEntity,
+  itemSellingChannelPrismaEntity,
   SellingChannelKey,
 } from "./menu-item-selling-channel.entity.server";
 import { slugifyString } from "~/utils/slugify";
-import { group } from "console";
+import { invalidateCardapioIndexCache } from "./cardapio-cache.server";
 
 export interface MenuItemWithAssociations extends MenuItem {
   priceVariations: MenuItemPriceVariation[];
@@ -53,7 +51,7 @@ export interface MenuItemWithAssociations extends MenuItem {
   MenuItemGroup: MenuItemGroup;
   MenuItemSellingPriceVariation: Array<
     MenuItemSellingPriceVariation & {
-      MenuItemSellingChannel: MenuItemSellingChannel;
+      ItemSellingChannel: ItemSellingChannel;
       MenuItemSize: MenuItemSize;
     }
   >;
@@ -89,24 +87,95 @@ export interface MenuItemEntityFindAllOptions {
   imageScaleWidth?: number;
   sorted?: boolean;
   direction?: "asc" | "desc";
-  cacheRevalidation?: boolean;
 }
 
 interface MenuItemEntityProps extends PrismaEntityProps {
   menuItemCostVariation: typeof menuItemCostVariationPrismaEntity;
   menuItemSellingPriceUtility: typeof menuItemSellingPriceUtilityEntity;
   menuItemSize: typeof menuItemSizePrismaEntity;
-  menuItemSellingChannel: typeof menuItemSellingChannelPrismaEntity;
+  itemSellingChannel: typeof itemSellingChannelPrismaEntity;
+}
+
+type MenuItemMediaLike = {
+  secureUrl?: string | null;
+  thumbnailUrl?: string | null;
+  kind?: string | null;
+  isPrimary?: boolean | null;
+  visible?: boolean | null;
+};
+
+function normalizeMediaUrl(url?: string | null): string {
+  return typeof url === "string" ? url.trim() : "";
+}
+
+function isCloudinaryUrl(url: string): boolean {
+  return /^https?:\/\/res\.cloudinary\.com\//i.test(url);
+}
+
+function normalizeNonCloudinaryMediaUrl(url?: string | null): string {
+  const normalized = normalizeMediaUrl(url);
+  if (!normalized) return "";
+  return isCloudinaryUrl(normalized) ? "" : normalized;
+}
+
+function isVideoMedia(media?: MenuItemMediaLike | null): boolean {
+  const kind = String(media?.kind || "").toLowerCase();
+  if (kind === "video") return true;
+  return /\.(mp4|mov|webm|m4v|ogg|ogv)(\?|$)/i.test(
+    normalizeNonCloudinaryMediaUrl(media?.secureUrl)
+  );
+}
+
+function getFeaturedMedia(
+  gallery?: MenuItemMediaLike[] | null
+): MenuItemMediaLike | null {
+  const assets = (gallery ?? []).filter(
+    (asset) =>
+      asset?.visible !== false &&
+      Boolean(normalizeNonCloudinaryMediaUrl(asset?.secureUrl))
+  );
+
+  if (!assets.length) return null;
+  return assets.find((asset) => asset?.isPrimary) ?? assets[0];
+}
+
+function resolveMenuItemMedia(item: {
+  MenuItemImage?: { secureUrl?: string | null; thumbnailUrl?: string | null } | null;
+  MenuItemGalleryImage?: MenuItemMediaLike[] | null;
+}) {
+  const featured = getFeaturedMedia(item.MenuItemGalleryImage);
+  const imageAsset =
+    (item.MenuItemGalleryImage ?? []).find(
+      (asset) =>
+        asset?.visible !== false &&
+        Boolean(normalizeNonCloudinaryMediaUrl(asset?.secureUrl)) &&
+        !isVideoMedia(asset)
+    ) ?? null;
+
+  const mediaUrl =
+    normalizeNonCloudinaryMediaUrl(featured?.secureUrl) ||
+    normalizeNonCloudinaryMediaUrl(item.MenuItemImage?.secureUrl);
+  const imageUrl =
+    normalizeNonCloudinaryMediaUrl(imageAsset?.secureUrl) ||
+    normalizeNonCloudinaryMediaUrl(item.MenuItemImage?.secureUrl) ||
+    mediaUrl;
+  const placeholderUrl =
+    normalizeNonCloudinaryMediaUrl(imageAsset?.thumbnailUrl) ||
+    normalizeNonCloudinaryMediaUrl(item.MenuItemImage?.thumbnailUrl);
+
+  return {
+    mediaUrl,
+    imageUrl,
+    placeholderUrl,
+  };
 }
 
 export class MenuItemPrismaEntity {
   client;
-  // Simple in-memory cache
-  private cacheManager: CacheManager;
 
   menuItemCostVariation: typeof menuItemCostVariationPrismaEntity;
 
-  menuItemSellingChannel: typeof menuItemSellingChannelPrismaEntity;
+  itemSellingChannel: typeof itemSellingChannelPrismaEntity;
 
   menuItemSize: typeof menuItemSizePrismaEntity;
 
@@ -115,15 +184,14 @@ export class MenuItemPrismaEntity {
     menuItemCostVariation,
 
     menuItemSize,
-    menuItemSellingChannel,
+    itemSellingChannel,
   }: MenuItemEntityProps) {
     this.client = client;
-    this.cacheManager = new CacheManager();
 
     this.menuItemCostVariation = menuItemCostVariation;
 
     this.menuItemSize = menuItemSize;
-    this.menuItemSellingChannel = menuItemSellingChannel;
+    this.itemSellingChannel = itemSellingChannel;
   }
 
   async findAll(
@@ -135,12 +203,8 @@ export class MenuItemPrismaEntity {
     options: MenuItemEntityFindAllOptions = {
       imageTransform: false,
       imageScaleWidth: 1280,
-      cacheRevalidation: false,
     }
   ) {
-    const { imageScaleWidth = 1280, cacheRevalidation = false } =
-      options || {};
-
     if (process.env.NODE_ENV === "development") {
       const stack = new Error().stack?.split("\n").slice(1, 6).join("\n");
       console.log("[MenuItem.findAll] chamado", {
@@ -148,16 +212,6 @@ export class MenuItemPrismaEntity {
       });
       console.log(stack);
     }
-    const cacheKey = `MenuItemPrismaEntity.findAll:${JSON.stringify(params)}`;
-    let result = this.cacheManager.get<MenuItemWithAssociations[]>(cacheKey);
-
-    const shouldUseCache =
-      result !== undefined && cacheRevalidation === false;
-
-    if (shouldUseCache) {
-      return result;
-    }
-
     if (params?.mock) {
       // fake to remove TS error. need to be fixed
       return [] as MenuItemWithAssociations[];
@@ -175,15 +229,21 @@ export class MenuItemPrismaEntity {
         MenuItemLike: {
           where: {
             deletedAt: null,
+            amount: { gt: 0, lte: 1 },
           },
         },
         MenuItemShare: true,
         MenuItemImage: true,
-        MenuItemGalleryImage: true,
+        MenuItemGalleryImage: {
+          where: {
+            visible: true,
+          },
+          orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }, { createdAt: "asc" }],
+        },
         MenuItemGroup: true,
         MenuItemSellingPriceVariation: {
           where: {
-            MenuItemSellingChannel: {
+            ItemSellingChannel: {
               key: params.sellingChannelKey || "cardapio", // Default to 'cardapio'
             },
           },
@@ -191,46 +251,46 @@ export class MenuItemPrismaEntity {
             priceAmount: "asc",
           },
           include: {
-            MenuItemSellingChannel: true,
+            ItemSellingChannel: true,
             MenuItemSize: true,
           },
         },
       },
     });
 
-    const records = recordsFounded.map((r) => ({
-      ...r,
-      imageTransformedURL: CloudinaryUtils.scaleWidth(
-        r.MenuItemImage?.publicId || "",
-        { width: imageScaleWidth }
-      ),
-      tags: {
-        all: r.tags.map((t) => t.Tag?.name ?? ""),
-        public: r.tags
-          .filter((t) => t.Tag?.public === true)
-          .map((t) => t.Tag?.name ?? ""),
-        models: r.tags.map((t) => t.Tag),
-      },
-      likes: { amount: r.MenuItemLike.length },
-      shares: { amount: r.MenuItemShare.length },
-      meta: {
-        isItalyProduct: r.tags.some(
-          (t) => t.Tag?.name.toLowerCase() === "produtos-italiano"
-        ),
-        isBestSeller: r.tags.some(
-          (t) => t.Tag?.name.toLowerCase() === "mais-vendido"
-        ),
-        isMonthlyBestSeller: r.tags.some(
-          (t) => t.Tag?.name.toLowerCase() === "mais-vendido-mes"
-        ),
-        isChefSpecial: r.tags.some(
-          (t) => t.Tag?.name.toLowerCase() === "especial-chef"
-        ),
-        isMonthlySpecial: r.tags.some(
-          (t) => t.Tag?.name.toLowerCase() === "especial-mes"
-        ),
-      },
-    }));
+    const records = recordsFounded.map((r) => {
+      const media = resolveMenuItemMedia(r);
+      return {
+        ...r,
+        imageTransformedURL: media.imageUrl,
+        tags: {
+          all: r.tags.map((t) => t.Tag?.name ?? ""),
+          public: r.tags
+            .filter((t) => t.Tag?.public === true)
+            .map((t) => t.Tag?.name ?? ""),
+          models: r.tags.map((t) => t.Tag),
+        },
+        likes: { amount: r.MenuItemLike.length },
+        shares: { amount: r.MenuItemShare.length },
+        meta: {
+          isItalyProduct: r.tags.some(
+            (t) => t.Tag?.name.toLowerCase() === "produtos-italiano"
+          ),
+          isBestSeller: r.tags.some(
+            (t) => t.Tag?.name.toLowerCase() === "mais-vendido"
+          ),
+          isMonthlyBestSeller: r.tags.some(
+            (t) => t.Tag?.name.toLowerCase() === "mais-vendido-mes"
+          ),
+          isChefSpecial: r.tags.some(
+            (t) => t.Tag?.name.toLowerCase() === "especial-chef"
+          ),
+          isMonthlySpecial: r.tags.some(
+            (t) => t.Tag?.name.toLowerCase() === "especial-mes"
+          ),
+        },
+      };
+    });
 
     const returnedRecords = params?.option?.sorted
       ? records.sort((a, b) => {
@@ -239,7 +299,171 @@ export class MenuItemPrismaEntity {
         })
       : [...records];
 
-    this.cacheManager.set(cacheKey, returnedRecords);
+    return returnedRecords;
+  }
+
+  async findAllLight(
+    params: MenuItemEntityFindAllParams = {
+      where: {},
+      mock: false,
+      sellingChannelKey: "cardapio",
+    },
+    options: MenuItemEntityFindAllOptions = {
+      imageTransform: false,
+      imageScaleWidth: 1280,
+    }
+  ) {
+    if (params?.mock) {
+      return [] as MenuItemWithAssociations[];
+    }
+
+    const recordsFounded = await this.client.menuItem.findMany({
+      where: params?.where,
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        ingredients: true,
+        sortOrderIndex: true,
+        visible: true,
+        active: true,
+        upcoming: true,
+        MenuItemImage: {
+          select: {
+            secureUrl: true,
+            thumbnailUrl: true,
+          },
+        },
+        MenuItemGalleryImage: {
+          where: {
+            visible: true,
+          },
+          orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }, { createdAt: "asc" }],
+          select: {
+            isPrimary: true,
+            secureUrl: true,
+            thumbnailUrl: true,
+            visible: true,
+            kind: true,
+          },
+        },
+        MenuItemGroup: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            sortOrderIndex: true,
+          },
+        },
+        Category: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        tags: {
+          select: {
+            Tag: {
+              select: {
+                id: true,
+                name: true,
+                public: true,
+              },
+            },
+          },
+        },
+        MenuItemLike: {
+          where: {
+            deletedAt: null,
+            amount: { gt: 0, lte: 1 },
+          },
+          select: {
+            id: true,
+          },
+        },
+        MenuItemSellingPriceVariation: {
+          where: {
+            ItemSellingChannel: {
+              key: params.sellingChannelKey || "cardapio",
+            },
+          },
+          orderBy: {
+            priceAmount: "asc",
+          },
+          select: {
+            id: true,
+            priceAmount: true,
+            profitActualPerc: true,
+            profitExpectedPerc: true,
+            showOnCardapio: true,
+            ItemSellingChannel: {
+              select: {
+                id: true,
+                key: true,
+                name: true,
+              },
+            },
+            MenuItemSize: {
+              select: {
+                id: true,
+                name: true,
+                nameShort: true,
+                sortOrderIndex: true,
+              },
+            },
+          },
+        },
+        _count: {
+          select: {
+            MenuItemShare: true,
+          },
+        },
+      },
+    });
+
+    const records = recordsFounded.map((r) => {
+      const media = resolveMenuItemMedia(r);
+      return {
+        ...r,
+        MenuItemLike: [] as MenuItemLike[],
+        MenuItemShare: [] as MenuItemShare[],
+        imageTransformedURL: media.imageUrl,
+        imagePlaceholderURL: media.placeholderUrl,
+        tags: {
+          all: r.tags.map((t) => t.Tag?.name ?? ""),
+          public: r.tags
+            .filter((t) => t.Tag?.public === true)
+            .map((t) => t.Tag?.name ?? ""),
+          models: r.tags.map((t) => t.Tag),
+        },
+        likes: { amount: r.MenuItemLike?.length ?? 0 },
+        shares: { amount: r._count.MenuItemShare },
+        meta: {
+          isItalyProduct: r.tags.some(
+            (t) => t.Tag?.name.toLowerCase() === "produtos-italiano"
+          ),
+          isBestSeller: r.tags.some(
+            (t) => t.Tag?.name.toLowerCase() === "mais-vendido"
+          ),
+          isMonthlyBestSeller: r.tags.some(
+            (t) => t.Tag?.name.toLowerCase() === "mais-vendido-mes"
+          ),
+          isChefSpecial: r.tags.some(
+            (t) => t.Tag?.name.toLowerCase() === "especial-chef"
+          ),
+          isMonthlySpecial: r.tags.some(
+            (t) => t.Tag?.name.toLowerCase() === "especial-mes"
+          ),
+        },
+      };
+    }) as MenuItemWithAssociations[];
+
+    const returnedRecords = params?.option?.sorted
+      ? records.sort((a, b) => {
+          const direction = params.option?.direction === "asc" ? 1 : -1;
+          return (a.sortOrderIndex - b.sortOrderIndex) * direction;
+        })
+      : [...records];
 
     return returnedRecords;
   }
@@ -298,6 +522,7 @@ export class MenuItemPrismaEntity {
         acc[key] = {
           id: key,
           name: g?.name ?? "Sem grupo",
+          description: g?.description ?? "",
           sortOrderIndex:
             typeof g?.sortOrderIndex === "number"
               ? g.sortOrderIndex
@@ -308,7 +533,13 @@ export class MenuItemPrismaEntity {
 
       acc[key].items.push(menuItem);
       return acc;
-    }, {} as Record<string, { id: string; name: string; sortOrderIndex: number; items: MenuItemWithAssociations[] }>);
+    }, {} as Record<string, {
+      id: string;
+      name: string;
+      description: string;
+      sortOrderIndex: number;
+      items: MenuItemWithAssociations[];
+    }>);
 
     // Converte em array e ordena pelo índice do grupo
     const result = Object.values(grouped)
@@ -320,6 +551,62 @@ export class MenuItemPrismaEntity {
       .map((g) => ({
         groupId: g.id,
         group: g.name,
+        description: g.description,
+        sortOrderIndex: g.sortOrderIndex,
+        menuItems: g.items,
+      }));
+
+    return result;
+  }
+
+  async findAllGroupedByGroupLight(
+    params: MenuItemEntityFindAllParams = {},
+    options = {
+      imageTransform: false,
+      imageScaleWidth: 1280,
+    }
+  ) {
+    const allMenuItems = (await this.findAllLight(params, options)) || [];
+
+    const direction = params.option?.direction === "desc" ? -1 : 1;
+
+    const grouped = allMenuItems.reduce((acc, menuItem) => {
+      const g = menuItem.MenuItemGroup;
+      const key = g?.id ?? "__sem_grupo__";
+
+      if (!acc[key]) {
+        acc[key] = {
+          id: key,
+          name: g?.name ?? "Sem grupo",
+          description: g?.description ?? "",
+          sortOrderIndex:
+            typeof g?.sortOrderIndex === "number"
+              ? g.sortOrderIndex
+              : Number.MAX_SAFE_INTEGER,
+          items: [] as MenuItemWithAssociations[],
+        };
+      }
+
+      acc[key].items.push(menuItem);
+      return acc;
+    }, {} as Record<string, {
+      id: string;
+      name: string;
+      description: string;
+      sortOrderIndex: number;
+      items: MenuItemWithAssociations[];
+    }>);
+
+    const result = Object.values(grouped)
+      .sort(
+        (a, b) =>
+          (a.sortOrderIndex - b.sortOrderIndex) * direction ||
+          a.name.localeCompare(b.name)
+      )
+      .map((g) => ({
+        groupId: g.id,
+        group: g.name,
+        description: g.description,
         sortOrderIndex: g.sortOrderIndex,
         menuItems: g.items,
       }));
@@ -408,7 +695,7 @@ export class MenuItemPrismaEntity {
       include: {
         MenuItemSellingPriceVariation: {
           include: {
-            MenuItemSellingChannel: true,
+            ItemSellingChannel: true,
             MenuItemSize: true,
           },
         },
@@ -440,7 +727,7 @@ export class MenuItemPrismaEntity {
           audits =
             await this.client.menuItemSellingPriceVariationAudit.findMany({
               where: {
-                menuItemSellingChannelId: channelId,
+                itemSellingChannelId: channelId,
               },
             });
         }
@@ -451,7 +738,7 @@ export class MenuItemPrismaEntity {
       }
 
       for (const audit of audits) {
-        const key = `${audit.menuItemId}-${audit.menuItemSellingChannelId}-${audit.menuItemSizeId}`;
+        const key = `${audit.menuItemId}-${audit.itemSellingChannelId}-${audit.menuItemSizeId}`;
         if (!auditMap.has(key)) auditMap.set(key, []);
         auditMap.get(key)!.push(audit);
       }
@@ -464,12 +751,12 @@ export class MenuItemPrismaEntity {
             (cv) =>
               cv.menuItemSizeId === size.id &&
               (!sellingChannelKey ||
-                cv.MenuItemSellingChannel?.key === sellingChannelKey)
+                cv.ItemSellingChannel?.key === sellingChannelKey)
           );
 
           if (!variation) return null;
 
-          const auditKey = `${item.id}-${variation.menuItemSellingChannelId}-${variation.menuItemSizeId}`;
+          const auditKey = `${item.id}-${variation.itemSellingChannelId}-${variation.menuItemSizeId}`;
           const variationAuditRecords = options?.includeAuditRecords
             ? auditMap.get(auditKey) ?? []
             : [];
@@ -479,9 +766,9 @@ export class MenuItemPrismaEntity {
             sizeId: variation.MenuItemSize?.id!,
             sizeKey: variation.MenuItemSize?.key ?? null,
             sizeName: variation.MenuItemSize?.name!,
-            channelId: variation.MenuItemSellingChannel?.id ?? null,
-            channelKey: variation.MenuItemSellingChannel?.key ?? null,
-            channelName: variation.MenuItemSellingChannel?.name ?? "",
+            channelId: variation.ItemSellingChannel?.id ?? null,
+            channelKey: variation.ItemSellingChannel?.key ?? null,
+            channelName: variation.ItemSellingChannel?.name ?? "",
             priceAmount: variation.priceAmount ?? 0,
             profitActualPerc: variation.profitActualPerc ?? 0,
             priceExpectedAmount: variation.priceExpectedAmount ?? 0,
@@ -507,6 +794,7 @@ export class MenuItemPrismaEntity {
         ingredients: item.ingredients,
         visible: item.visible,
         active: item.active,
+        upcoming: item.upcoming,
         sellPriceVariations,
       };
     });
@@ -541,11 +829,14 @@ export class MenuItemPrismaEntity {
         MenuItemLike: {
           where: {
             deletedAt: null,
+            amount: { gt: 0, lte: 1 },
           },
         },
         MenuItemShare: true,
         MenuItemImage: true,
-        MenuItemGalleryImage: true,
+        MenuItemGalleryImage: {
+          orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }, { createdAt: "asc" }],
+        },
         MenuItemNote: true,
         MenuItemCostVariation: true,
         MenuItemSellingPriceVariation: true,
@@ -557,21 +848,11 @@ export class MenuItemPrismaEntity {
       return null;
     }
 
+    const media = resolveMenuItemMedia(item);
     return {
       ...item,
-      // imageURL: CloudinaryUtils.scaleWidth("livhax0d1aiiszxqgpc6", {
-      //   width: options.imageScaleWidth,
-      // }),
-      imageTransformedURL: CloudinaryUtils.scaleWidth(
-        item.MenuItemImage?.publicId || "",
-        {
-          width: options.imageScaleWidth,
-        }
-      ),
-      imagePlaceholderURL: CloudinaryUtils.scaleWidth(
-        item.MenuItemImage?.publicId || "",
-        { width: 20, quality: 1, blur: 1000 }
-      ),
+      imageTransformedURL: media.imageUrl,
+      imagePlaceholderURL: media.placeholderUrl,
       tags: {
         all: item.tags.map((t) => t.Tag?.name),
         public: item.tags
@@ -595,7 +876,9 @@ export class MenuItemPrismaEntity {
     }
   ) {
     const item = await this.client.menuItem.findFirst({
-      where: { slug },
+      where: {
+        OR: [{ slug }, { id: slug }],
+      },
       include: {
         Category: true,
         tags: {
@@ -606,13 +889,20 @@ export class MenuItemPrismaEntity {
         MenuItemLike: {
           where: {
             deletedAt: null,
+            amount: { gt: 0, lte: 1 },
           },
         },
         MenuItemShare: true,
-        MenuItemGalleryImage: true,
+        MenuItemImage: true,
+        MenuItemGalleryImage: {
+          where: {
+            visible: true,
+          },
+          orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }, { createdAt: "asc" }],
+        },
         MenuItemSellingPriceVariation: {
           include: {
-            MenuItemSellingChannel: true,
+            ItemSellingChannel: true,
             MenuItemSize: true,
           },
         },
@@ -623,18 +913,11 @@ export class MenuItemPrismaEntity {
       return null;
     }
 
+    const media = resolveMenuItemMedia(item);
     return {
       ...item,
-      imageTransformedURL: CloudinaryUtils.scaleWidth(
-        item.MenuItemImage?.publicId || "",
-        {
-          width: options.imageScaleWidth,
-        }
-      ),
-      imagePlaceholderURL: CloudinaryUtils.scaleWidth(
-        item.MenuItemImage?.publicId || "",
-        { width: 20, quality: 1, blur: 1000 }
-      ),
+      imageTransformedURL: media.imageUrl,
+      imagePlaceholderURL: media.placeholderUrl,
       tags: {
         all: item.tags.map((t) => t.Tag?.name),
         public: item.tags
@@ -701,7 +984,7 @@ export class MenuItemPrismaEntity {
       };
     }
 
-    await this.cacheManager.invalidate();
+    await invalidateCardapioIndexCache();
 
     return await this.client.menuItem.create({ data: nextItem });
   }
@@ -711,7 +994,7 @@ export class MenuItemPrismaEntity {
       data.updatedAt = new Date().toISOString();
     }
 
-    await this.cacheManager.invalidate();
+    await invalidateCardapioIndexCache();
 
     data.slug = slugifyString(data.name as string);
 
@@ -721,13 +1004,13 @@ export class MenuItemPrismaEntity {
   async softDelete(id: string, deletedBy: string = "undefined") {}
 
   async delete(id: string) {
-    await this.cacheManager.invalidate();
+    await invalidateCardapioIndexCache();
 
     return await this.client.menuItem.delete({ where: { id } });
   }
 
   async associateTag(itemId: string, tag: Tag) {
-    await this.cacheManager.invalidate();
+    await invalidateCardapioIndexCache();
 
     return await menuItemTagPrismaEntity.create({
       createdAt: new Date().toISOString(),
@@ -761,7 +1044,7 @@ export class MenuItemPrismaEntity {
   }
 
   async removeTag(itemId: string, tagId: string) {
-    await this.cacheManager.invalidate();
+    await invalidateCardapioIndexCache();
 
     const tag = await this.client.menuItemTag.findFirst({
       where: {
@@ -799,7 +1082,7 @@ const menuItemPrismaEntity = new MenuItemPrismaEntity({
   menuItemCostVariation: menuItemCostVariationPrismaEntity,
   menuItemSellingPriceUtility: menuItemSellingPriceUtilityEntity,
   menuItemSize: menuItemSizePrismaEntity,
-  menuItemSellingChannel: menuItemSellingChannelPrismaEntity,
+  itemSellingChannel: itemSellingChannelPrismaEntity,
 });
 
 export { menuItemPrismaEntity };

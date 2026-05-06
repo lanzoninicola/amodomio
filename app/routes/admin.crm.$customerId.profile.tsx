@@ -12,9 +12,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ImageOff } from "lucide-react";
+import { ImageOff, Trash2 } from "lucide-react";
 import prisma from "~/lib/prisma/client.server";
-import { useLoaderData, useNavigation, useActionData } from "@remix-run/react";
+import { Form, useLoaderData, useNavigation, useActionData } from "@remix-run/react";
 
 type LoaderData = {
   customer: {
@@ -58,7 +58,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
   });
   if (!customer) throw new Response("not found", { status: 404 });
 
-  const images = await prisma.crmCustomerImage.findMany({
+  const rawImages = await prisma.crmCustomerImage.findMany({
     where: { customer_id: customerId },
     orderBy: { created_at: "desc" },
     select: {
@@ -67,6 +67,19 @@ export async function loader({ params }: LoaderFunctionArgs) {
       description: true,
       created_at: true,
     },
+  });
+
+  const seenImageUrls = new Set<string>();
+  const images = rawImages.filter((image) => {
+    const normalizedUrl = image.url?.trim().toLowerCase();
+    if (!normalizedUrl || normalizedUrl === "null" || normalizedUrl === "undefined") {
+      return true;
+    }
+    if (seenImageUrls.has(normalizedUrl)) {
+      return false;
+    }
+    seenImageUrls.add(normalizedUrl);
+    return true;
   });
 
   return json<LoaderData>({
@@ -114,6 +127,38 @@ export async function action({ request, params }: ActionFunctionArgs) {
   if (!customerId) return json({ error: "not_found" }, { status: 404 });
 
   const form = await request.formData();
+  const intent = String(form.get("intent") || "update_profile").trim();
+
+  if (intent === "delete_image") {
+    const imageId = String(form.get("image_id") || "").trim();
+    if (!imageId) {
+      return json<ActionData>({ error: "Imagem inválida" }, { status: 400 });
+    }
+
+    const deleted = await prisma.crmCustomerImage.deleteMany({
+      where: {
+        id: imageId,
+        customer_id: customerId,
+      },
+    });
+
+    if (deleted.count === 0) {
+      return json<ActionData>({ error: "Imagem não encontrada" }, { status: 404 });
+    }
+
+    await prisma.crmCustomerEvent.create({
+      data: {
+        customer_id: customerId,
+        event_type: "PROFILE_UPDATE",
+        source: "admin-ui",
+        payload: { action: "customer_image_delete", image_id: imageId, source: "admin-ui" },
+        payload_raw: JSON.stringify({ action: "customer_image_delete", image_id: imageId, source: "admin-ui" }),
+      },
+    });
+
+    return redirect(`/admin/crm/${customerId}/profile`);
+  }
+
   const name = String(form.get("name") || "").trim();
 
   const email = String(form.get("email") || "").trim() || null;
@@ -190,7 +235,14 @@ export default function AdminCrmCustomerProfile() {
   const { customer } = useLoaderData<typeof loader>();
   const actionData = useActionData<ActionData>();
   const navigation = useNavigation();
-  const isSubmitting = navigation.state === "submitting";
+  const isSavingProfile =
+    navigation.state === "submitting" &&
+    String(navigation.formData?.get("intent") || "update_profile") === "update_profile";
+  const deletingImageId =
+    navigation.state === "submitting" &&
+    String(navigation.formData?.get("intent") || "") === "delete_image"
+      ? String(navigation.formData?.get("image_id") || "")
+      : null;
   const images = customer.images || [];
   const primaryImage = images[0];
   const galleryImages = primaryImage ? images.slice(1) : images;
@@ -229,56 +281,60 @@ export default function AdminCrmCustomerProfile() {
           </div>
           {primaryImage ? (
             <div className="grid gap-4 md:grid-cols-[200px,1fr]">
-              {hasValidImageUrl(primaryImage.url) ? (
-                <a
-                  href={primaryImage.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="overflow-hidden rounded-lg border bg-muted/40"
-                  title={primaryImage.description || "Foto do perfil"}
-                >
-                  <img
-                    src={primaryImage.url}
-                    alt={primaryImage.description || "Foto do perfil"}
-                    className="h-52 w-full object-cover"
-                    loading="lazy"
-                  />
-                </a>
-              ) : (
-                <div className="flex h-52 items-center justify-center rounded-lg border bg-muted/30 text-muted-foreground">
-                  <div className="grid justify-items-center gap-2 text-xs uppercase">
-                    <ImageOff className="h-8 w-8" aria-hidden="true" />
-                    <span>Sem imagem</span>
+              <div className="relative">
+                {hasValidImageUrl(primaryImage.url) ? (
+                  <a
+                    href={primaryImage.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="overflow-hidden rounded-lg border bg-muted/40"
+                    title={primaryImage.description || "Foto do perfil"}
+                  >
+                    <img
+                      src={primaryImage.url}
+                      alt={primaryImage.description || "Foto do perfil"}
+                      className="h-52 w-full object-cover"
+                      loading="lazy"
+                    />
+                  </a>
+                ) : (
+                  <div className="flex h-52 items-center justify-center rounded-lg border bg-muted/30 text-muted-foreground">
+                    <div className="grid justify-items-center gap-2 text-xs uppercase">
+                      <ImageOff className="h-8 w-8" aria-hidden="true" />
+                      <span>Sem imagem</span>
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+                <DeleteImageButton imageId={primaryImage.id} pending={deletingImageId === primaryImage.id} floating />
+              </div>
               <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-4">
                 {galleryImages.map((image) => (
-                  hasValidImageUrl(image.url) ? (
-                    <a
-                      key={image.id}
-                      href={image.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="overflow-hidden rounded-md border bg-muted/30"
-                      title={image.description || "Foto do perfil"}
-                    >
-                      <img
-                        src={image.url}
-                        alt={image.description || "Foto do perfil"}
-                        className="h-20 w-full object-cover"
-                        loading="lazy"
-                      />
-                    </a>
-                  ) : (
-                    <div
-                      key={image.id}
-                      className="flex h-20 items-center justify-center rounded-md border bg-muted/20 text-muted-foreground"
-                      aria-label="Sem imagem"
-                    >
-                      <ImageOff className="h-4 w-4" aria-hidden="true" />
-                    </div>
-                  )
+                  <div key={image.id} className="relative">
+                    {hasValidImageUrl(image.url) ? (
+                      <a
+                        href={image.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="overflow-hidden rounded-md border bg-muted/30"
+                        title={image.description || "Foto do perfil"}
+                      >
+                        <img
+                          src={image.url}
+                          alt={image.description || "Foto do perfil"}
+                          className="h-20 w-full object-cover"
+                          loading="lazy"
+                        />
+                      </a>
+                    ) : (
+                      <div
+                        className="flex h-20 items-center justify-center rounded-md border bg-muted/20 text-muted-foreground"
+                        aria-label="Sem imagem"
+                      >
+                        <ImageOff className="h-4 w-4" aria-hidden="true" />
+                      </div>
+                    )}
+                    <DeleteImageButton imageId={image.id} pending={deletingImageId === image.id} floating />
+                  </div>
                 ))}
               </div>
             </div>
@@ -438,8 +494,8 @@ export default function AdminCrmCustomerProfile() {
           </div>
 
           <div className="flex justify-end">
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Salvando..." : "Salvar alterações"}
+            <Button type="submit" disabled={isSavingProfile}>
+              {isSavingProfile ? "Salvando..." : "Salvar alterações"}
             </Button>
           </div>
         </form>
@@ -449,6 +505,34 @@ export default function AdminCrmCustomerProfile() {
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function DeleteImageButton({
+  imageId,
+  pending,
+  floating = false,
+}: {
+  imageId: string;
+  pending: boolean;
+  floating?: boolean;
+}) {
+  return (
+    <Form method="post" className={floating ? "absolute right-2 top-2" : undefined}>
+      <input type="hidden" name="intent" value="delete_image" />
+      <input type="hidden" name="image_id" value={imageId} />
+      <Button
+        type="submit"
+        variant="destructive"
+        size="icon"
+        className="h-8 w-8 rounded-full shadow-sm"
+        disabled={pending}
+        aria-label={pending ? "Removendo imagem" : "Eliminar imagem"}
+        title={pending ? "Removendo..." : "Eliminar imagem"}
+      >
+        <Trash2 className="h-4 w-4" aria-hidden="true" />
+      </Button>
+    </Form>
   );
 }
 

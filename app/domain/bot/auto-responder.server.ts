@@ -1,11 +1,21 @@
 // app/domain/bot/auto-responder.server.ts
 
 import { nlpProcess } from "~/domain/bot/nlp.runtime.server";
-import { sendMessage } from "~/domain/bot/wpp.server";
+import { normalizePhone } from "~/domain/z-api/zapi.service";
+import { sendTextMessage } from "~/domain/z-api/zapi.service.server";
 import prismaClient from "~/lib/prisma/client.server";
 import { Inbound } from "./auto-responder. types";
 
 const NLP_SCORE_MIN = Number(process.env.NLP_SCORE_MIN ?? "0.6");
+
+async function sendAutoReply(phone: string, message: string) {
+  const normalized = normalizePhone(phone);
+  if (!normalized) {
+    throw new Error(`Numero invalido para envio: ${phone}`);
+  }
+
+  await sendTextMessage({ phone: normalized, message });
+}
 
 function normalize(s: string) {
   return (s || "")
@@ -140,7 +150,7 @@ export async function handleInboundMessage(session: string, inbound: Inbound) {
   }
 
   if (usedReply) {
-    await sendMessage(session, inbound.from, usedReply);
+    await sendAutoReply(inbound.from, usedReply);
     await saveLog({
       session,
       inbound,
@@ -159,7 +169,7 @@ export async function handleInboundMessage(session: string, inbound: Inbound) {
     matchedRuleId = matched.id;
     usedReply = matched.response;
 
-    await sendMessage(session, inbound.from, usedReply);
+    await sendAutoReply(inbound.from, usedReply);
     await saveLog({
       session,
       inbound,
@@ -174,7 +184,7 @@ export async function handleInboundMessage(session: string, inbound: Inbound) {
   // 3) Fallback
   usedReply =
     'Desculpe, não entendi 🤔\nDigite "1" para ver o cardápio, "2" para promoções, ou "ajuda" para falar com um atendente.';
-  await sendMessage(session, inbound.from, usedReply);
+  await sendAutoReply(inbound.from, usedReply);
   await saveLog({
     session,
     inbound,

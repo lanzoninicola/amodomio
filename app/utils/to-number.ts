@@ -1,5 +1,3 @@
-import { serverError } from "./http-response.server";
-
 export default function toNumber(value: unknown): number {
   if (value === undefined || value === null) {
     value = 0;
@@ -13,7 +11,7 @@ export default function toNumber(value: unknown): number {
   const number = Number(value);
 
   if (isNaN(number)) {
-    serverError(`"${value}" is not a valid number`);
+    throw new Error(`"${value}" is not a valid number`);
   }
 
   return number;

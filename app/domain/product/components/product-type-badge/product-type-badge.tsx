@@ -1,6 +1,6 @@
 import { cn } from "~/lib/utils"
-import { ProductEntity } from "../../product.entity"
-import { ProductInfo } from "../../product.model.server"
+import type { ProductInfo } from "../../product.model.server"
+import { getProductTypeLabel } from "~/modules/products/product.constants"
 
 interface ProductTypeBadgeProps {
     type?: ProductInfo["type"] | null
@@ -23,9 +23,7 @@ export default function ProductTypeBadge({ type }: ProductTypeBadgeProps) {
                 type ? backgroundColor[type] : "bg-red-200",
             )
         }>
-            {ProductEntity.findProductTypeByName(type)}
+            {getProductTypeLabel(type)}
         </span>
     )
 }
-
-

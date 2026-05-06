@@ -1,6 +1,7 @@
 import { Prisma, Tag } from "@prisma/client";
 import prismaClient from "~/lib/prisma/client.server";
 import { PrismaEntityProps } from "~/lib/prisma/types.server";
+import { invalidateCardapioIndexCache } from "~/domain/cardapio/cardapio-cache.server";
 
 class TagPrismaEntity {
   client;
@@ -46,15 +47,21 @@ class TagPrismaEntity {
   }
 
   async create(data: Prisma.TagCreateInput) {
-    return await this.client.tag.create({ data });
+    const created = await this.client.tag.create({ data });
+    await invalidateCardapioIndexCache();
+    return created;
   }
 
   async update(id: string, data: Prisma.TagUpdateInput) {
-    return await this.client.tag.update({ where: { id }, data });
+    const updated = await this.client.tag.update({ where: { id }, data });
+    await invalidateCardapioIndexCache();
+    return updated;
   }
 
   async delete(id: string) {
-    return await this.client.tag.delete({ where: { id } });
+    const deleted = await this.client.tag.delete({ where: { id } });
+    await invalidateCardapioIndexCache();
+    return deleted;
   }
 
   async findAllContexts(): Promise<string[]> {

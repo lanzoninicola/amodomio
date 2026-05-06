@@ -38,7 +38,7 @@ export default function AdminCrmCustomerSends() {
   const { sends } = useLoaderData<typeof loader>();
 
   return (
-    <Card className="font-neue">
+    <Card className="">
       <CardHeader>
         <CardTitle>Envios de campanha</CardTitle>
         <CardDescription>Últimos 20 envios para este cliente.</CardDescription>

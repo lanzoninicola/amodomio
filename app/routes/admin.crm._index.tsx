@@ -1,15 +1,29 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json, redirect } from "@remix-run/node";
 import { Form, Link, useActionData, useLoaderData, useNavigation } from "@remix-run/react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { ImageOff } from "lucide-react";
-import { useState, type ReactNode } from "react";
-import prisma from "~/lib/prisma/client.server";
-import { normalize_phone_e164_br } from "~/domain/crm/normalize-phone.server";
+import {
+  ChevronLeft,
+  ChevronsLeft,
+  ChevronsRight,
+  ImageOff,
+  Plus,
+} from "lucide-react";
+import { useState } from "react";
+import { Badge } from "~/components/ui/badge";
+import { Button } from "~/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
+import { Input } from "~/components/ui/input";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+} from "~/components/ui/pagination";
 import { Separator } from "~/components/ui/separator";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~/components/ui/table";
+import { normalize_phone_e164_br } from "~/domain/crm/normalize-phone.server";
 import { dayjs } from "~/lib/dayjs";
+import prisma from "~/lib/prisma/client.server";
 
 type LoaderData = {
   customers: Array<{
@@ -35,6 +49,18 @@ type LoaderData = {
   };
 };
 
+function buildPageHref(params: {
+  page: number;
+  pageSize: number;
+  query: string;
+}) {
+  const searchParams = new URLSearchParams();
+  searchParams.set("page", String(params.page));
+  searchParams.set("pageSize", String(params.pageSize));
+  if (params.query) searchParams.set("q", params.query);
+  return `/admin/crm?${searchParams.toString()}`;
+}
+
 export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const page = Math.max(1, Number(url.searchParams.get("page") || 1));
@@ -42,11 +68,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const query = (url.searchParams.get("q") || "").trim();
   const where = query
     ? {
-      OR: [
-        { name: { contains: query, mode: "insensitive" } },
-        { phone_e164: { contains: query, mode: "insensitive" } },
-      ],
-    }
+        OR: [
+          { name: { contains: query, mode: "insensitive" } },
+          { phone_e164: { contains: query, mode: "insensitive" } },
+        ],
+      }
     : undefined;
 
   const now = dayjs();
@@ -106,10 +132,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
       tags: c._count.tags,
       tagBadges: c.tags.map((t) => t.tag.label || t.tag.key),
       profileImageUrl: (() => {
-        const url = c.images[0]?.url?.trim();
-        if (!url) return null;
-        const normalized = url.toLowerCase();
-        return normalized === "null" || normalized === "undefined" ? null : url;
+        const imageUrl = c.images[0]?.url?.trim();
+        if (!imageUrl) return null;
+        const normalized = imageUrl.toLowerCase();
+        return normalized === "null" || normalized === "undefined" ? null : imageUrl;
       })(),
     })),
     pagination: { page, pageSize, total },
@@ -164,49 +190,94 @@ export default function AdminCrmIndex() {
   const isSubmitting = navigation.state === "submitting";
   const [showQuick, setShowQuick] = useState(false);
   const numberFormatter = new Intl.NumberFormat("pt-BR");
+  const totalPages = Math.max(1, Math.ceil(pagination.total / pagination.pageSize));
+  const hasNextPage = pagination.page < totalPages;
 
   return (
-    <div className="grid gap-5 font-neue">
-
-      <div className="space-y-3">
-        <div className="space-y-1">
-          <h2 className="text-xl font-semibold">Clientes</h2>
-        </div>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-wrap gap-2">
-            <Button asChild variant="secondary">
-              <Link to="/admin/crm/new">Novo cliente completo</Link>
-            </Button>
-            <Button asChild variant="outline">
-              <Link to="/admin/crm/jornada-de-inserimento">Relatório de inserções</Link>
-            </Button>
-            <Button variant={showQuick ? "default" : "outline"} type="button" onClick={() => setShowQuick((v) => !v)}>
-              {showQuick ? "Ocultar cadastro rápido" : "Cadastro rápido"}
-            </Button>
+    <div className="flex flex-col gap-4 p-4">
+      <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h1 className="text-lg font-semibold text-slate-900">CRM</h1>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Button asChild variant="secondary" className="border-slate-300 bg-white text-slate-700 hover:bg-slate-50">
+                <Link to="/admin/crm/jornada-de-inserimento">Relatório de inserções</Link>
+              </Button>
+            </div>
           </div>
-          <Form method="get" className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-            <div className="flex-1 sm:min-w-[280px]">
+          <div className="flex items-center gap-2">
+            <Link
+              to="/admin/crm/new"
+              className="inline-flex items-center gap-1 rounded-md bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-700"
+            >
+              <Plus size={14} />
+              Novo cliente
+            </Link>
+            <Link to="/admin" className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-800">
+              <ChevronLeft size={14} />
+              Voltar
+            </Link>
+          </div>
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-700">
+          <span>{numberFormatter.format(stats.total)} contato(s)</span>
+          <span>•</span>
+          <span>{numberFormatter.format(pagination.total)} registro(s) filtrado(s)</span>
+          <span>•</span>
+          <span>{numberFormatter.format(stats.addedLastWeek)} novo(s) nos últimos 7 dias</span>
+          <span>•</span>
+          <span>
+            Página {pagination.page} de {totalPages}
+          </span>
+        </div>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <Form method="get" className="flex flex-wrap items-end gap-3">
+            <div className="min-w-[260px] flex-1">
+              <label htmlFor="q" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Busca
+              </label>
               <Input
+                id="q"
                 name="q"
-                placeholder="Buscar por nome ou telefone"
+                type="search"
                 defaultValue={query}
-                className="w-full"
+                placeholder="Nome ou telefone"
+                className="mt-1 border-slate-300"
                 autoComplete="off"
               />
             </div>
             <input type="hidden" name="page" value="1" />
             <input type="hidden" name="pageSize" value={pagination.pageSize} />
-            <div className="flex gap-2 sm:justify-end">
-              <Button type="submit" variant="default">
-                Buscar
-              </Button>
-              {query ? (
-                <Button variant="ghost" asChild>
-                  <Link to="?">Limpar</Link>
-                </Button>
-              ) : null}
+            <div className="flex items-end gap-2">
+              <button
+                type="submit"
+                className="inline-flex items-center rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700"
+              >
+                Filtrar
+              </button>
+              <Link
+                to="/admin/crm"
+                className="inline-flex items-center rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Limpar
+              </Link>
             </div>
           </Form>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Cadastro rápido</div>
+              <div className="mt-1 text-sm text-slate-600">Cria ou atualiza contato pelo telefone.</div>
+            </div>
+            <Button variant={showQuick ? "default" : "outline"} type="button" onClick={() => setShowQuick((v) => !v)}>
+              {showQuick ? "Ocultar" : "Abrir"}
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -274,91 +345,163 @@ export default function AdminCrmIndex() {
 
       <Separator className="my-2" />
 
-      <section className="grid gap-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="rounded-xl border border-slate-200 bg-white">
+        <Table className="min-w-[980px]">
+          <TableHeader className="bg-slate-50/90">
+            <TableRow className="hover:bg-slate-50/90">
+              <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Contato</TableHead>
+              <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Telefone</TableHead>
+              <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Eventos</TableHead>
+              <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Tags</TableHead>
+              <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Principais tags</TableHead>
+              <TableHead className="h-10 px-4 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Acoes</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {customers.length === 0 ? (
+              <TableRow className="hover:bg-transparent">
+                <TableCell colSpan={6} className="px-4 py-8 text-sm text-slate-500">
+                  Nenhum cliente encontrado.
+                </TableCell>
+              </TableRow>
+            ) : (
+              customers.map((customer) => (
+                <TableRow key={customer.id} className="border-slate-100 hover:bg-slate-50/50">
+                  <TableCell className="px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      {customer.profileImageUrl ? (
+                        <img
+                          src={customer.profileImageUrl}
+                          alt={customer.name ? `Foto de ${customer.name}` : "Foto do cliente"}
+                          className="h-10 w-10 rounded-full object-cover"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 text-slate-400">
+                          <ImageOff className="h-4 w-4" aria-label="Sem foto" />
+                        </div>
+                      )}
+                      <div className="flex min-w-0 flex-col gap-0.5">
+                        <Link
+                          to={`/admin/crm/${customer.id}/profile`}
+                          className="truncate font-semibold text-slate-900 hover:underline"
+                          title={customer.name || customer.phone_e164}
+                        >
+                          {customer.name || "Sem nome"}
+                        </Link>
+                        <span className="text-xs text-slate-500">ID: {customer.id}</span>
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell className="px-4 py-3 font-medium text-slate-800">{customer.phone_e164}</TableCell>
+                  <TableCell className="px-4 py-3">
+                    <Badge variant="outline" className="border-slate-200 bg-white font-medium text-slate-700">
+                      {numberFormatter.format(customer.events)}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="px-4 py-3">
+                    <Badge variant="outline" className="border-slate-200 bg-slate-50 font-medium text-slate-700">
+                      {numberFormatter.format(customer.tags)}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="px-4 py-3">
+                    <div className="flex flex-wrap gap-1">
+                      {customer.tagBadges.length === 0 ? (
+                        <span className="text-sm text-slate-400">Sem tags</span>
+                      ) : (
+                        customer.tagBadges.slice(0, 3).map((tag) => (
+                          <Badge key={tag} variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">
+                            {tag}
+                          </Badge>
+                        ))
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell className="px-4 py-3">
+                    <div className="flex items-center justify-end">
+                      <Link
+                        to={`/admin/crm/${customer.id}/profile`}
+                        className="inline-flex items-center rounded-md border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                      >
+                        Abrir
+                      </Link>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
 
+        <div className="flex flex-col gap-3 border-t border-slate-200 px-4 py-3 text-sm text-slate-600 lg:flex-row lg:items-center lg:justify-between">
+          <div className="text-sm text-slate-500">
+            Mostrando {customers.length} de {pagination.total} contato(s).
+          </div>
 
-          <p className="text-xs text-muted-foreground">
-            Mostrando {customers.length} de {pagination.total} registros.
-          </p>
+          <div className="flex flex-wrap items-center gap-4 lg:gap-6">
+            <div className="text-xs font-semibold text-slate-900">
+              Page {pagination.page} of {totalPages}
+            </div>
 
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <PageLink
-              page={pagination.page - 1}
-              disabled={pagination.page <= 1}
-              pageSize={pagination.pageSize}
-              query={query}
-            >
-              Anterior
-            </PageLink>
-            <span className="text-muted-foreground">Página {pagination.page}</span>
-            <PageLink
-              page={pagination.page + 1}
-              disabled={pagination.page * pagination.pageSize >= pagination.total}
-              pageSize={pagination.pageSize}
-              query={query}
-            >
-              Próxima
-            </PageLink>
+            <Pagination className="mx-0 w-auto justify-start">
+              <PaginationContent className="gap-1.5">
+                <PaginationItem>
+                  <PaginationLink
+                    href={pagination.page > 1 ? buildPageHref({ page: 1, pageSize: pagination.pageSize, query }) : "#"}
+                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${
+                      pagination.page <= 1 ? "pointer-events-none opacity-40" : ""
+                    }`}
+                    aria-label="Primeira pagina"
+                  >
+                    <ChevronsLeft className="h-4 w-4" />
+                  </PaginationLink>
+                </PaginationItem>
+                <PaginationItem>
+                  <PaginationLink
+                    href={
+                      pagination.page > 1
+                        ? buildPageHref({ page: pagination.page - 1, pageSize: pagination.pageSize, query })
+                        : "#"
+                    }
+                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${
+                      pagination.page <= 1 ? "pointer-events-none opacity-40" : ""
+                    }`}
+                    aria-label="Pagina anterior"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </PaginationLink>
+                </PaginationItem>
+                <PaginationItem>
+                  <PaginationLink
+                    href={
+                      hasNextPage
+                        ? buildPageHref({ page: pagination.page + 1, pageSize: pagination.pageSize, query })
+                        : "#"
+                    }
+                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${
+                      !hasNextPage ? "pointer-events-none opacity-40" : ""
+                    }`}
+                    aria-label="Proxima pagina"
+                  >
+                    <ChevronLeft className="h-4 w-4 rotate-180" />
+                  </PaginationLink>
+                </PaginationItem>
+                <PaginationItem>
+                  <PaginationLink
+                    href={hasNextPage ? buildPageHref({ page: totalPages, pageSize: pagination.pageSize, query }) : "#"}
+                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${
+                      !hasNextPage ? "pointer-events-none opacity-40" : ""
+                    }`}
+                    aria-label="Ultima pagina"
+                  >
+                    <ChevronsRight className="h-4 w-4" />
+                  </PaginationLink>
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
           </div>
         </div>
-        {customers.length ? (
-          <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
-            {customers.map((c) => (
-              <Link
-                key={c.id}
-                to={`/admin/crm/${c.id}/profile`}
-                className="group flex flex-col items-center gap-2 rounded-lg border bg-card p-3 text-center transition hover:border-primary/40 hover:bg-muted/30"
-              >
-                {c.profileImageUrl ? (
-                  <img
-                    src={c.profileImageUrl}
-                    alt={c.name ? `Foto de ${c.name}` : "Foto do cliente"}
-                    className="h-14 w-14 rounded-full object-cover"
-                    loading="lazy"
-                  />
-                ) : (
-                  <div className="flex h-14 w-14 items-center justify-center rounded-full border text-muted-foreground">
-                    <ImageOff className="h-5 w-5" aria-label="Sem foto" />
-                  </div>
-                )}
-                <div className="text-sm font-medium">{c.name || "-"}</div>
-                <div className="text-xs text-muted-foreground">{c.phone_e164}</div>
-              </Link>
-            ))}
-          </div>
-        ) : (
-          <div className="rounded-lg border py-10 text-center text-sm text-muted-foreground">
-            Nenhum cliente ainda.
-          </div>
-        )}
-      </section>
+      </div>
     </div>
-  );
-}
-
-function PageLink({
-  page,
-  pageSize,
-  disabled,
-  children,
-  query,
-}: {
-  page: number;
-  pageSize: number;
-  disabled?: boolean;
-  children: ReactNode;
-  query?: string;
-}) {
-  if (disabled || page < 1) {
-    return <span className="rounded border px-2 py-1 text-muted-foreground/70">{children}</span>;
-  }
-  const searchParams = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
-  if (query) searchParams.set("q", query);
-  const search = searchParams.toString();
-  return (
-    <Link to={`?${search}`} className="rounded border px-2 py-1 text-primary hover:bg-muted">
-      {children}
-    </Link>
   );
 }

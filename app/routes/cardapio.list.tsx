@@ -1,26 +1,24 @@
-import { Await, Link, defer, useLoaderData, useLocation, useSearchParams } from "@remix-run/react";
+import { Await, defer, useLoaderData, useSearchParams } from "@remix-run/react";
 import React, { Suspense, useCallback, useEffect, useRef, useState } from "react";
-import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
+import { MenuItemWithAssociations } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { cn } from "~/lib/utils";
 import { CardapioItemActionBarVertical } from "~/domain/cardapio/components/cardapio-item-action-bar/cardapio-item-action-bar";
 import ItalyIngredientsStatement from "~/domain/cardapio/components/italy-ingredient-statement/italy-ingredient-statement";
-import { LayoutTemplate, LayoutList } from "lucide-react";
 import Loading from "~/components/loading/loading";
 import { LoaderFunctionArgs } from "@remix-run/node";
 import { tagPrismaEntity } from "~/domain/tags/tag.prisma.entity.server";
-import { Badge } from "~/components/ui/badge";
-import BadgeTag from "~/domain/tags/components/badge-tag";
 import { FiltersTags } from "~/domain/cardapio/components/filter-tags/filter-tags";
 import CardapioTabs from "~/domain/cardapio/components/cardapio-tabs/cardapio-tabs";
+import { getEngagementSettings } from "~/domain/cardapio/engagement-settings.server";
+import { PublicCardapioVariation, findAllCardapioItems } from "~/domain/cardapio/cardapio-items-source.server";
 
-export async function loader({ request }: LoaderFunctionArgs) {
-    const env = process.env?.NODE_ENV
-    // const tagParam = getSearchParam({ request, paramName: 'tag' })
+export async function loader({}: LoaderFunctionArgs) {
 
-    //@ts-ignore
-    const items = menuItemPrismaEntity.findAll({
+    const items = findAllCardapioItems({
         where: {
             visible: true,
+            active: true,
+            upcoming: false,
             // tags: {
             //     some: {
             //         Tag: {
@@ -46,16 +44,20 @@ export async function loader({ request }: LoaderFunctionArgs) {
         public: true
     })
 
+    const { likesEnabled, sharesEnabled } = await getEngagementSettings();
+
     return defer({
         items,
-        tags
+        tags,
+        likesEnabled,
+        sharesEnabled
     })
 
 
 }
 
 export default function CardapioList() {
-    const { items, tags } = useLoaderData<typeof loader>()
+    const { items, tags, likesEnabled, sharesEnabled } = useLoaderData<typeof loader>()
 
     return (
         <section>
@@ -76,7 +78,13 @@ export default function CardapioList() {
 
                         {(items) => {
                             // @ts-ignore
-                            return <CardapioItemList allItems={items ?? []} />
+                            return (
+                                <CardapioItemList
+                                    allItems={items ?? []}
+                                    likesEnabled={likesEnabled}
+                                    sharesEnabled={sharesEnabled}
+                                />
+                            )
                         }}
                     </Await>
 
@@ -88,7 +96,15 @@ export default function CardapioList() {
     );
 }
 
-const CardapioItemList = ({ allItems }: { allItems: MenuItemWithAssociations[] }) => {
+const CardapioItemList = ({
+    allItems,
+    likesEnabled,
+    sharesEnabled
+}: {
+    allItems: MenuItemWithAssociations[];
+    likesEnabled: boolean;
+    sharesEnabled: boolean;
+}) => {
     const [searchParams] = useSearchParams();
     const currentFilterTag = searchParams.get("tag");
 
@@ -179,7 +195,12 @@ interface CardapioItemProps {
     item: MenuItemWithAssociations;
 }
 
+type CardapioPublicItem = MenuItemWithAssociations & {
+    publicPriceVariations?: PublicCardapioVariation[];
+}
+
 const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) => {
+    const publicItem = item as CardapioPublicItem
     const italyProduct = item.tags?.public.some(t => t.toLocaleLowerCase() === "produtos-italianos")
 
     return (
@@ -200,10 +221,14 @@ const CardapioItem = React.forwardRef(({ item }: CardapioItemProps, ref: any) =>
                     <h3 className="font-neue text-sm font-semibold uppercase">{item.name}</h3>
                     {italyProduct && <ItalyIngredientsStatement />}
                     <p className="font-neue leading-tight text-sm mb-2">{item.ingredients}</p>
-                    <CardapioItemPrice prices={item?.priceVariations} cnLabel="text-black" />
+                    <CardapioItemPrice variations={publicItem.publicPriceVariations} cnLabel="text-black" />
                 </div>
             </div>
-            <CardapioItemActionBarVertical item={item} />
+            <CardapioItemActionBarVertical
+                item={item}
+                likesEnabled={likesEnabled}
+                sharesEnabled={sharesEnabled}
+            />
 
             {/* </CardapioItemDialog> */}
         </li>
@@ -256,4 +281,3 @@ function CardapioItemPrice({ prices, cnLabel }: CardapioItemPriceProps) {
         </div>
     )
 }
-

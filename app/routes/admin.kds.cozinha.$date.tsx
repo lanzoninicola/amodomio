@@ -5,7 +5,6 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 /* shadcn/ui */
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 
 /* ========= Domínio KDS ========= */
@@ -14,14 +13,12 @@ import {
   ymdToDateInt,
   fmtHHMM,
   fmtElapsedHHMM,
-  STATUS_COLORS,
 } from "~/domain/kds";
 import {
   KdsStatus,
   listActiveOrdersByDate,
   setOrderStatus,
 } from "~/domain/kds/server/repository.server";
-import VoiceController from "~/domain/kds/utils/voice/components/voice-controller";
 import { cn } from "~/lib/utils";
 
 /* ===== Status (UI da rota) ===== */
@@ -33,7 +30,6 @@ const ALL_STATUSES = [
   { id: "finalizado", label: "Finalizado", abbr2: "DE" },
 ] as const;
 const STATUS_BY_ID = Object.fromEntries(ALL_STATUSES.map((s) => [s.id, s]));
-const CLICKABLE = ALL_STATUSES.filter((s) => s.id !== "finalizado");
 
 /* ===== Loader ===== */
 export async function loader({ params }: { params: { date: string } }) {
@@ -67,7 +63,7 @@ export default function CozinhaDia() {
   const { revalidate } = useRevalidator();
   const [nowMs, setNowMs] = useState(() => Date.now());
   const quickFetcher = useFetcher<{ ok: boolean }>();
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<"all" | "novoPedido" | "aguardandoForno" | "assando">("all");
 
   // relógio leve (atualização de 30s é suficiente para a cozinha)
   useEffect(() => {
@@ -99,14 +95,17 @@ export default function CozinhaDia() {
           {(orders: OrderRow[]) => {
             const countNO = orders.filter((o) => o.status === "novoPedido").length;
             const countAF = orders.filter((o) => o.status === "aguardandoForno").length;
+            const countAS = orders.filter((o) => o.status === "assando").length;
             const ordersRequestedForOven = orders.filter(
               (o) => o.status === "aguardandoForno" && (o as any).requestedForOven === true
             );
+            const visibleOrders =
+              statusFilter === "all" ? orders : orders.filter((o) => o.status === statusFilter);
 
             return (
               <>
                 {/* Barra fixa com contadores e atalhos */}
-                <div className="sticky top-20 z-30 bg-white/95 backdrop-blur border-b">
+                <div className="sticky top-20 z-30 border-b border-slate-200 bg-white/90 backdrop-blur-md shadow-[0_8px_20px_-16px_rgba(15,23,42,0.35)]">
                   {ordersRequestedForOven.length > 0 && (
                     <div className="px-3 pt-2 pb-2">
                       <div className="text-[11px] text-gray-500 mb-1">Pedidos para assar</div>
@@ -131,42 +130,76 @@ export default function CozinhaDia() {
                     </div>
                   )}
 
-                  <div className="px-3 py-2 flex items-center gap-3">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-500">Novo Pedido</span>
-                      <span className="px-2 py-0.5 text-sm font-semibold rounded bg-gray-200 text-gray-900">
-                        {countNO}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-500">Aguard. forno</span>
-                      <span className="px-2 py-0.5 text-sm font-semibold rounded bg-purple-100 text-purple-800">
-                        {countAF}
-                      </span>
+                  <div className="px-3 py-2 border-t border-slate-100 bg-white/85 backdrop-blur-md">
+                    <div className="grid grid-cols-3 gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={statusFilter === "novoPedido" ? "default" : "outline"}
+                      className={cn(
+                        "h-10 w-full rounded-xl px-2 text-sm font-bold whitespace-nowrap",
+                        statusFilter === "novoPedido"
+                          ? "bg-sky-600 text-white border-sky-600"
+                          : "bg-sky-50 text-sky-800 border-sky-200 hover:bg-sky-100"
+                      )}
+                      onClick={() =>
+                        setStatusFilter((f) => (f === "novoPedido" ? "all" : "novoPedido"))
+                      }
+                    >
+                      NP ({countNO})
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={statusFilter === "aguardandoForno" ? "default" : "outline"}
+                      className={cn(
+                        "h-10 w-full rounded-xl px-2 text-sm font-bold whitespace-nowrap",
+                        statusFilter === "aguardandoForno"
+                          ? "bg-amber-600 text-white border-amber-600"
+                          : "bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100"
+                      )}
+                      onClick={() =>
+                        setStatusFilter((f) =>
+                          f === "aguardandoForno" ? "all" : "aguardandoForno"
+                        )
+                      }
+                    >
+                      AF ({countAF})
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={statusFilter === "assando" ? "default" : "outline"}
+                      className={cn(
+                        "h-10 w-full rounded-xl px-2 text-sm font-bold whitespace-nowrap",
+                        statusFilter === "assando"
+                          ? "bg-rose-600 text-white border-rose-600"
+                          : "bg-rose-50 text-rose-800 border-rose-200 hover:bg-rose-100"
+                      )}
+                      onClick={() => setStatusFilter((f) => (f === "assando" ? "all" : "assando"))}
+                    >
+                      AS ({countAS})
+                    </Button>
                     </div>
                   </div>
                 </div>
 
                 {/* GRID DE CARDS — colapsado: # grande + tempo; expandido: detalhes */}
-                <ul className="grid grid-cols-3 sm:grid-cols-3 md:col-span-4 gap-2 p-2">
-                  {orders.map((o) => (
+                <ul className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 p-2">
+                  {visibleOrders.map((o) => (
                     <OrderCard
                       key={o.id}
                       order={o}
                       nowMs={nowMs}
-                      expanded={expandedId === o.id}
-                      onToggle={() => setExpandedId((id) => (id === o.id ? null : (o.id as string)))}
                     />
                   ))}
-                  {orders.length === 0 && (
+                  {visibleOrders.length === 0 && (
                     <li className="col-span-full text-center text-sm text-gray-500 py-6">
-                      Nenhum pedido para este dia.
+                      Nenhum pedido neste filtro.
                     </li>
                   )}
                 </ul>
 
-                {/* Controle de Voz (flutuante) */}
-                <VoiceController orders={orders} />
               </>
             );
           }}
@@ -180,22 +213,14 @@ export default function CozinhaDia() {
 function OrderCard({
   order,
   nowMs,
-  expanded,
-  onToggle,
 }: {
   order: OrderRow;
   nowMs: number;
-  expanded: boolean;
-  onToggle: () => void;
 }) {
   const fetcher = useFetcher<{ ok: boolean; id: string; status: string }>();
-  const current = STATUS_BY_ID[order.status ?? "novoPedido"] ?? ALL_STATUSES[0];
 
   const hora = useMemo(() => fmtHHMM(order.novoPedidoAt ?? undefined), [order.createdAt]);
-  const decorrido = useMemo(
-    () => fmtElapsedHHMM(order.novoPedidoAt ?? undefined, nowMs),
-    [order.novoPedidoAt, nowMs]
-  );
+  const decorrido = useMemo(() => fmtElapsedHHMM(order.novoPedidoAt ?? undefined, nowMs), [order.novoPedidoAt, nowMs]);
 
   function setStatus(nextId: string) {
     if (nextId === order.status) return;
@@ -207,106 +232,51 @@ function OrderCard({
   }
 
   return (
-    <li className={["list-none", expanded ? "col-span-3 sm:col-span-3 md:col-span-4 col-span-2 sm:col-span-3 md:col-span-4" : ""].join(" ")}>
+    <li className="list-none">
       <Card
-        role="button"
-        aria-expanded={expanded}
-        onClick={onToggle}
         className={[
           "relative overflow-hidden",
-          "transition-all duration-300 ease-out",
-          expanded ? "shadow-xl ring-2 ring-primary/40 scale-[1.01]" : "shadow-sm hover:shadow-md",
-          Number(decorrido.substring(0, 2)) >= 45 && "shadow-red-500"
+          "shadow-sm border-2",
+          Number(decorrido.substring(0, 2)) >= 45 && "border-red-400"
         ].join(" ")}
       >
-        <CardContent className="p-1">
-          {/* HEADER COMPACTO: número gigante + tempo */}
-          <div className="flex flex-col items-center justify-center select-none">
-            <div className="leading-none tracking-tight font-black text-5xl sm:text-6xl">
+        <CardContent className="p-2 sm:p-3">
+          <div className="flex flex-col items-center justify-center select-none pt-1">
+            <div className="leading-none tracking-tight font-black text-4xl sm:text-5xl">
               <span className="text-2xl text-foreground/90">#</span>
               <span className="font-mono tabular-nums">{order.commandNumber ?? "—"}</span>
             </div>
-            <div className="mt-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 font-mono text-xs tabular-nums bg-background/70 border-border/70">
-              <span className={
-                cn(
-                  "inline-block h-1.5 w-1.5 rounded-full bg-foreground/70 animate-pulse",
-                  Number(decorrido.substring(0, 2)) >= 45 && "bg-red-500")
-              } />
-              {decorrido}
+            <div className="mt-1 font-mono text-xs sm:text-sm tabular-nums text-muted-foreground">
+              {hora}
             </div>
           </div>
+          <Separator className="my-2" />
 
-          {/* CONTEÚDO EXPANDIDO */}
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className={[
-              "transition-all duration-300 ease-out",
-              expanded ? "mt-3 max-h-[520px] opacity-100" : "mt-0 max-h-0 opacity-0",
-            ].join(" ")}
-          >
-            <Separator className="my-3" />
-
-            <div className="flex items-center justify-between mb-3">
-              <div className="text-xs text-gray-700 font-mono">{hora}</div>
-              <div
-                className={[
-                  "text-[11px] px-2 py-0.5 rounded",
-                  STATUS_COLORS[order.status ?? "novoPedido"] ?? "bg-gray-200 text-gray-800",
-                ].join(" ")}
-              >
-                {current.label}
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between mb-4 text-[11px] text-gray-600">
-              <div className="flex items-center gap-2">
-                {(order as any).requestedForOven && (
-                  <span className="relative inline-flex items-center">
-                    <span className="absolute inline-flex h-2.5 w-2.5 rounded-full bg-red-500 opacity-75 animate-ping" />
-                    <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-600" />
-                  </span>
-                )}
-                <span>
-                  {(order as any).takeAway ?? (order as any).take_away ? "Retirada" : "Entrega"}
-                </span>
-              </div>
-              <span className="font-mono">ID {String(order.id).slice(0, 6)}</span>
-            </div>
-
-            {/* Ações de status (sem 'finalizado') */}
-            <div className="grid grid-cols-4 gap-2 mb-3">
-              {CLICKABLE.map((s) => {
-                const active = s.id === order.status;
-                return (
-                  <Button
-                    key={s.id}
-                    type="button"
-                    size="sm"
-                    variant={active ? "default" : "outline"}
-                    className={[
-                      "w-full h-10 rounded-full p-0 text-sm font-semibold tracking-wider",
-                      active ? "bg-blue-600 text-white" : "bg-white",
-                    ].join(" ")}
-                    onClick={() => setStatus(s.id)}
-                    title={s.label}
-                  >
-                    {s.abbr2}
-                  </Button>
-                );
-              })}
-            </div>
-
-            {order.status === "assando" && (
-              <Button
-                type="button"
-                size="sm"
-                className="w-full h-10 rounded-full p-0 text-sm font-semibold uppercase tracking-wider bg-green-600 text-white"
-                onClick={() => setStatus("finalizado")}
-                title="Finalizado"
-              >
-                Finalizado
-              </Button>
-            )}
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              type="button"
+              variant={order.status === "aguardandoForno" ? "default" : "outline"}
+              className={cn(
+                "h-12 sm:h-14 rounded-xl text-lg sm:text-xl font-bold tracking-wide",
+                order.status === "aguardandoForno" && "bg-blue-600 text-white"
+              )}
+              onClick={() => setStatus("aguardandoForno")}
+              title="Aguardando forno"
+            >
+              AF
+            </Button>
+            <Button
+              type="button"
+              variant={order.status === "assando" ? "default" : "outline"}
+              className={cn(
+                "h-12 sm:h-14 rounded-xl text-lg sm:text-xl font-bold tracking-wide",
+                order.status === "assando" && "bg-blue-600 text-white"
+              )}
+              onClick={() => setStatus("assando")}
+              title="Assando"
+            >
+              AS
+            </Button>
           </div>
         </CardContent>
       </Card>

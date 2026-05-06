@@ -1,13 +1,13 @@
 import WEBSITE_LINKS from "./website-links";
 import { WebsiteNavigationConfig } from "../types/navigation-types";
-import { Shield } from "lucide-react";
+import { House, Shield } from "lucide-react";
 import { todayLocalYMD } from "~/domain/kds";
 
 const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
   mainNav: [WEBSITE_LINKS.admin, WEBSITE_LINKS.website],
   sidebarNav: [
     {
-      title: "Iniçio",
+      title: "Fixados",
       items: [
         {
           title: "Pagina Inicial",
@@ -15,7 +15,7 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
           items: [],
           disabled: false,
           highlight: true,
-          icon: Shield,
+          icon: House,
         },
         {
           title: "Website",
@@ -121,12 +121,6 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
           disabled: false,
         },
         {
-          title: "Configurações",
-          href: "/admin/gerenciamento/cardapio/settings",
-          items: [],
-          disabled: false,
-        },
-        {
           title: "Relatorios",
           href: "",
           items: [
@@ -157,27 +151,213 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
           items: [],
           disabled: false,
         },
+        {
+          title: "Vínculo assets (lote)",
+          href: "/admin/gerenciamento/cardapio/assets-batch",
+          items: [],
+          disabled: false,
+        },
       ],
     },
     {
-      title: "PRECIFICAÇÃO",
+      title: "Vendas",
       items: [
         {
-          title: "Custo Ficha Tecnica",
-          href: "/admin/gerenciamento/cardapio/cost-management",
+          title: "Itens vendidos",
+          href: "/admin/vendas/itens-vendidos",
           items: [],
           disabled: false,
         },
         {
-          title: "Preços de Venda",
-          href: "/admin/gerenciamento/cardapio/sell-price-management",
+          title: "Canais de venda",
+          href: "/admin/canais-venda",
           items: [],
           disabled: false,
         },
         {
-          title: "DNA",
-          href: "/admin/financeiro/dna",
+          title: "Comercial",
+          href: "",
+          items: [
+            {
+              title: "Preços de venda",
+              href: "/admin/gerenciamento/cardapio/sell-price-management/cardapio/edit-items",
+              items: [],
+              disabled: false,
+            },
+            {
+              title: "Preços de venda (Novo)",
+              href: "/admin/vendas/sell-price-management",
+              items: [],
+              disabled: false,
+            },
+            {
+              title: "DNA",
+              href: "/admin/vendas/dna",
+              items: [],
+              disabled: false,
+            },
+          ],
+          disabled: false,
+        },
+
+        {
+          title: "Ferramentas",
+          href: "",
+          items: [
+            {
+              title: "Publicados sem ficha",
+              href: "/admin/vendas/publicados-sem-ficha",
+              items: [],
+              disabled: false,
+            },
+          ],
+          disabled: false,
+        },
+      ],
+    },
+    {
+      title: "Custos e Margem",
+      items: [
+        {
+          title: "Fornecedores",
+          href: "/admin/suppliers",
           items: [],
+          disabled: false,
+        },
+        {
+          title: "Fichas de custo",
+          href: "/admin/item-cost-sheets",
+          items: [],
+          disabled: false,
+        },
+        {
+          title: "Monitoramento",
+          href: "",
+          items: [
+            {
+              title: "Consulta de custo",
+              href: "/admin/cost-monitoring",
+              items: [],
+              disabled: false,
+            },
+            {
+              title: "Impacto de custos",
+              href: "/admin/cost-impact",
+              items: [],
+              disabled: false,
+            },
+            {
+              title: "Histórico global de custos",
+              href: "/admin/global-cost-history",
+              items: [],
+              disabled: false,
+            },
+          ],
+          disabled: false,
+        },
+        {
+          title: "Ferramentas",
+          href: "",
+          items: [
+            {
+              title: "Recalcular fichas técnicas",
+              href: "/admin/recalculate-item-cost-sheets",
+              items: [],
+              disabled: false,
+            },
+            {
+              title: "Recalcular custos itens",
+              href: "/admin/recalculate-costs",
+              items: [],
+              disabled: false,
+            },
+            {
+              title: "Editar fichas em lote",
+              href: "/admin/item-cost-sheets-batch",
+              items: [],
+              disabled: false,
+            },
+          ],
+          disabled: false,
+        },
+        {
+          title: "Comercial",
+          href: "",
+          items: [
+            {
+              title: "Custo cardápio",
+              href: "/admin/gerenciamento/cardapio/cost-management",
+              items: [],
+              disabled: false,
+            },
+          ],
+          disabled: false,
+        },
+      ],
+    },
+    {
+      title: "Estoque",
+      items: [
+        {
+          title: "Itens",
+          href: "/admin/items",
+          items: [],
+          disabled: false,
+        },
+        {
+          title: "Movimentações de estoque",
+          href: "/admin/stock-movements",
+          items: [],
+          disabled: false,
+        },
+        {
+          title: "Relatorios",
+          href: "",
+          items: [
+            {
+              title: "Por Fornecedor",
+              href: "/admin/estoque/relatorio/por-fornecedor",
+              items: [],
+              disabled: false,
+            },
+            {
+              title: "Frete por Fornecedor",
+              href: "/admin/estoque/relatorio/frete-fornecedor",
+              items: [],
+              disabled: false,
+            },
+            {
+              title: "Aprovações de custo",
+              href: "/admin/import-stock-movements/cost-review-approvals",
+              items: [],
+              disabled: false,
+            },
+          ],
+          disabled: false,
+        },
+        {
+          title: "Ferramentas",
+          href: "",
+          items: [
+            {
+              title: "Importação de movimentações",
+              href: "/admin/import-stock-movements",
+              items: [],
+              disabled: false,
+            },
+            {
+              title: "Aliases de Importação",
+              href: "/admin/item-import-aliases",
+              items: [],
+              disabled: false,
+            },
+            {
+              title: "Conciliação de fornecedor",
+              href: "/admin/supplier-reconciliation",
+              items: [],
+              disabled: false,
+            },
+          ],
           disabled: false,
         },
       ],
@@ -193,8 +373,27 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
         },
         {
           title: "Programação Diaria",
-          href: "/admin/producao/progamacao-diaria",
+          href: "/admin/producao/programacao-diaria",
           items: [],
+          disabled: false,
+        },
+        {
+          title: "Receitas",
+          href: "/admin/recipes",
+          items: [],
+          disabled: false,
+        },
+        {
+          title: "Ferramentas",
+          href: "",
+          items: [
+            {
+              title: "Publicados sem receita",
+              href: "/admin/producao/publicados-sem-receita",
+              items: [],
+              disabled: false,
+            },
+          ],
           disabled: false,
         },
       ],
@@ -202,12 +401,6 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
     {
       title: "Financeiro",
       items: [
-        {
-          title: "Resumo financeiro",
-          href: "/admin/financeiro/resumo-financeiro",
-          items: [],
-          disabled: false,
-        },
         {
           title: "Metas financeiras",
           href: "/admin/financeiro/metas",
@@ -222,12 +415,6 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
         },
 
         {
-          title: "Fechamento do dia",
-          href: "/admin/financeiro/fechamento-dia",
-          items: [],
-          disabled: false,
-        },
-        {
           title: "Importador",
           href: "/admin/financeiro/importer",
           items: [],
@@ -239,20 +426,20 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
       title: "Cadastro",
       items: [
         {
-          title: "Produtos",
-          href: "/admin/products",
-          items: [],
-          disabled: false,
-        },
-        {
-          title: "Receitas",
-          href: "/admin/recipes",
+          title: "Variações",
+          href: "/admin/variations",
           items: [],
           disabled: false,
         },
         {
           title: "Categorias",
           href: "/admin/categorias",
+          items: [],
+          disabled: false,
+        },
+        {
+          title: "Unidades de consumo",
+          href: "/admin/unidades-consumo",
           items: [],
           disabled: false,
         },
@@ -383,14 +570,38 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
       disabled: false,
       items: [
         {
+          title: "Configurações globais",
+          href: "/admin/administracao/settings",
+          items: [],
+          disabled: false,
+        },
+        {
+          title: "AI Context Profile",
+          href: "/admin/administracao/ai-context-profile",
+          items: [],
+          disabled: false,
+        },
+        {
           title: "Usuários",
           href: "/admin/users",
           items: [],
-          disabled: true,
+          disabled: false,
+        },
+        {
+          title: "Sessões",
+          href: "/admin/sessions",
+          items: [],
+          disabled: false,
         },
         {
           title: "Importador de dados",
           href: "/admin/importer",
+          items: [],
+          disabled: false,
+        },
+        {
+          title: "Gerenciamento de assets",
+          href: "/admin/assets",
           items: [],
           disabled: false,
         },

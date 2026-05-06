@@ -1,6 +1,7 @@
 export type NormalizedWebhookEvent = {
   event: "received" | "disconnected" | "traffic";
   phone?: string;
+  fromMe?: boolean;
   messageText?: string;
   messageType?: string;
   instanceId?: string;

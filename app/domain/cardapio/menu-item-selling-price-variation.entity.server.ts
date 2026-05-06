@@ -2,14 +2,18 @@ import prismaClient from "~/lib/prisma/client.server";
 import { PrismaEntityProps } from "~/lib/prisma/types.server";
 import createUUID from "~/utils/uuid";
 import { menuItemCostVariationPrismaEntity } from "./menu-item-cost-variation.entity.server";
-import { menuItemSellingChannelPrismaEntity } from "./menu-item-selling-channel.entity.server";
+import { itemSellingChannelPrismaEntity } from "./menu-item-selling-channel.entity.server";
 import { menuItemSellingPriceVariationAuditPrismaEntity } from "./menu-item-selling-price-variation-audit.entity.server";
 import { menuItemSellingPriceUtilityEntity } from "./menu-item-selling-price-utility.entity";
+import {
+  invalidateCardapioIndexCache,
+  invalidateSellingPriceHandlerCache,
+} from "./cardapio-cache.server";
 
 interface MenuItemSellingPriceVariationPrismaEntityConstructorProps
   extends PrismaEntityProps {
   menuItemCostVariationEntity: typeof menuItemCostVariationPrismaEntity;
-  menuItemSellingChannelEntity: typeof menuItemSellingChannelPrismaEntity;
+  itemSellingChannelEntity: typeof itemSellingChannelPrismaEntity;
   menuItemSellingPriceUtilityEntity: typeof menuItemSellingPriceUtilityEntity;
   menuItemSellingPriceVariationAuditEntity: typeof menuItemSellingPriceVariationAuditPrismaEntity;
 }
@@ -17,7 +21,7 @@ interface MenuItemSellingPriceVariationPrismaEntityConstructorProps
 export interface MenuItemSellingPriceVariationBaseParams {
   menuItemId: string;
   menuItemSizeId: string | null;
-  menuItemSellingChannelId: string | null;
+  itemSellingChannelId: string | null;
   priceAmount: number;
   profitActualPerc: number;
   priceExpectedAmount: number;
@@ -41,7 +45,7 @@ class MenuItemSellingPriceVariationPrismaEntity {
 
   menuItemCostVariationEntity;
 
-  menuItemSellingChannelEntity;
+  itemSellingChannelEntity;
 
   menuItemSellingPriceUtilityEntity;
 
@@ -50,21 +54,21 @@ class MenuItemSellingPriceVariationPrismaEntity {
   constructor({
     client,
     menuItemCostVariationEntity,
-    menuItemSellingChannelEntity,
+    itemSellingChannelEntity,
     menuItemSellingPriceUtilityEntity,
     menuItemSellingPriceVariationAuditEntity:
       menuItemSellingPriceVariationAuditPrismaEntity,
   }: MenuItemSellingPriceVariationPrismaEntityConstructorProps) {
     this.client = client;
     this.menuItemCostVariationEntity = menuItemCostVariationEntity;
-    this.menuItemSellingChannelEntity = menuItemSellingChannelEntity;
+    this.itemSellingChannelEntity = itemSellingChannelEntity;
     this.menuItemSellingPriceUtilityEntity = menuItemSellingPriceUtilityEntity;
     this.menuItemSellingPriceVariationAuditEntity =
       menuItemSellingPriceVariationAuditPrismaEntity;
   }
 
   async create(data: MenuItemSellingPriceVariationCreateParams) {
-    return await this.client.menuItemSellingPriceVariation.create({
+    const created = await this.client.menuItemSellingPriceVariation.create({
       data: {
         ...data,
         id: createUUID(),
@@ -72,6 +76,11 @@ class MenuItemSellingPriceVariationPrismaEntity {
         updatedAt: new Date(),
       },
     });
+    await Promise.all([
+      invalidateSellingPriceHandlerCache(),
+      invalidateCardapioIndexCache(),
+    ]);
+    return created;
   }
 
   async upsert(id: string, data: MenuItemSellingPriceVariationUpsertParams) {
@@ -82,7 +91,7 @@ class MenuItemSellingPriceVariationPrismaEntity {
     const now = new Date();
 
     if (record) {
-      return await this.client.menuItemSellingPriceVariation.update({
+      const updated = await this.client.menuItemSellingPriceVariation.update({
         where: { id },
         data: {
           ...data,
@@ -90,6 +99,11 @@ class MenuItemSellingPriceVariationPrismaEntity {
           previousPriceAmount: record.priceAmount,
         },
       });
+      await Promise.all([
+        invalidateSellingPriceHandlerCache(),
+        invalidateCardapioIndexCache(),
+      ]);
+      return updated;
     }
 
     return await this.create({
@@ -119,7 +133,12 @@ class MenuItemSellingPriceVariationPrismaEntity {
       })
     );
 
-    return await Promise.all(upsertPromises);
+    const result = await Promise.all(upsertPromises);
+    await Promise.all([
+      invalidateSellingPriceHandlerCache(),
+      invalidateCardapioIndexCache(),
+    ]);
+    return result;
   }
 }
 
@@ -127,7 +146,7 @@ export const menuItemSellingPriceVariationPrismaEntity =
   new MenuItemSellingPriceVariationPrismaEntity({
     client: prismaClient,
     menuItemCostVariationEntity: menuItemCostVariationPrismaEntity,
-    menuItemSellingChannelEntity: menuItemSellingChannelPrismaEntity,
+    itemSellingChannelEntity: itemSellingChannelPrismaEntity,
     menuItemSellingPriceUtilityEntity: menuItemSellingPriceUtilityEntity,
     menuItemSellingPriceVariationAuditEntity:
       menuItemSellingPriceVariationAuditPrismaEntity,

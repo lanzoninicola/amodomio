@@ -1,5 +1,5 @@
 import { createFirestoreModel } from "~/lib/firestore-model/src";
-import { Product } from "../product/product.model.server";
+import type { Product } from "../product/product.model.server";
 
 export interface GroceryListItem extends Product {
   quantity: number;

@@ -58,7 +58,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const showDeleted = url.searchParams.get("showDeleted") === "true";
 
-  const groups = await prismaClient.menuItemGroup.findMany({
+  const groups = await prismaClient.itemGroup.findMany({
     where: showDeleted ? {} : { deletedAt: null },
     orderBy: { sortOrderIndex: "asc" },
   });
@@ -112,7 +112,7 @@ export async function action({ request }: ActionFunctionArgs) {
       );
     }
 
-    await prismaClient.menuItemGroup.create({
+    await prismaClient.itemGroup.create({
       data: {
         key,
         name,
@@ -158,7 +158,7 @@ export async function action({ request }: ActionFunctionArgs) {
       );
     }
 
-    await prismaClient.menuItemGroup.update({
+    await prismaClient.itemGroup.update({
       where: { id },
       data: {
         key,
@@ -180,7 +180,7 @@ export async function action({ request }: ActionFunctionArgs) {
       return json({ ok: false, error: "ID inválido" }, { status: 400 });
     }
 
-    await prismaClient.menuItemGroup.update({
+    await prismaClient.itemGroup.update({
       where: { id },
       data: {
         deletedAt: new Date(),
@@ -199,7 +199,7 @@ export async function action({ request }: ActionFunctionArgs) {
       return json({ ok: false, error: "ID inválido" }, { status: 400 });
     }
 
-    await prismaClient.menuItemGroup.update({
+    await prismaClient.itemGroup.update({
       where: { id },
       data: {
         deletedAt: null,

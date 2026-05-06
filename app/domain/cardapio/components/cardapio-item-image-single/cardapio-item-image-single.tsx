@@ -4,6 +4,7 @@ import { cn } from "~/lib/utils";
 
 type Props = {
     src?: string;
+    kind?: "image" | "video";
     alt?: string;
     fallbackColor?: string;
     placeholder?: string;
@@ -19,6 +20,7 @@ type Props = {
 
 export default function CardapioItemImageSingle({
     src,
+    kind,
     alt = "Imagem do item",
     fallbackColor = "#1f2937",
     placeholder,
@@ -32,7 +34,16 @@ export default function CardapioItemImageSingle({
     itemId,
 }: Props) {
     const [loaded, setLoaded] = useState(false);
+    const [hasVideoError, setHasVideoError] = useState(false);
+    const [isInViewport, setIsInViewport] = useState(false);
+    const [videoObjectFit, setVideoObjectFit] = useState<"cover" | "contain">("cover");
     const imgRef = useRef<HTMLImageElement>(null);
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
+    const inferredKind =
+        kind ||
+        (/\.(mp4|mov|webm|m4v|ogg|ogv)(\?|$)/i.test(String(src || "")) ? "video" : "image");
+    const isVideo = inferredKind === "video";
 
     // Usa o hook para gerar mensagens aleatórias quando não há src
     const randomMessage = useRandomMessages({
@@ -41,13 +52,56 @@ export default function CardapioItemImageSingle({
     });
 
     useEffect(() => {
-        if (imgRef.current && imgRef.current.complete) {
+        setLoaded(false);
+        setHasVideoError(false);
+        setVideoObjectFit("cover");
+    }, [src, isVideo]);
+
+    useEffect(() => {
+        if (isVideo && videoRef.current?.readyState && videoRef.current.readyState >= 2) {
+            setLoaded(true);
+            return;
+        }
+
+        if (!isVideo && imgRef.current && imgRef.current.complete) {
             setLoaded(true);
         }
-    }, [src]);
+    }, [src, isVideo]);
+
+    useEffect(() => {
+        const element = containerRef.current;
+        if (!element) return;
+
+        const observer = new IntersectionObserver(
+            (entries) => {
+                const [entry] = entries;
+                setIsInViewport(Boolean(entry?.isIntersecting && entry.intersectionRatio > 0.35));
+            },
+            { threshold: [0, 0.35, 0.7] }
+        );
+
+        observer.observe(element);
+        return () => observer.disconnect();
+    }, []);
+
+    useEffect(() => {
+        if (!isVideo) return;
+        const video = videoRef.current;
+        if (!video) return;
+
+        if (isInViewport) {
+            video.play().catch(() => null);
+            return;
+        }
+
+        video.pause();
+    }, [isVideo, isInViewport, loaded, hasVideoError]);
+
+    const shouldShowFallback = !src || (isVideo && hasVideoError);
+    const shouldUseContain = videoObjectFit === "contain";
 
     return (
-        <div className={cn("relative w-full h-screen overflow-hidden bg-gray-800", cnContainer)}>
+        <div ref={containerRef} className={cn("relative w-full h-screen overflow-hidden bg-gray-800", cnContainer)}>
             {/* Placeholder visual (blurred) */}
             {placeholder && !loaded && (
                 <img
@@ -58,23 +112,57 @@ export default function CardapioItemImageSingle({
             )}
 
             {/* Real image */}
-            {src ? (
-                <img
-                    ref={imgRef}
-                    src={src}
-                    alt={alt}
-                    onLoad={() => setLoaded(true)}
-                    className={cn(
-                        "absolute w-full h-full object-cover transition-opacity duration-700 ease-in-out",
-                        loaded ? "opacity-100 animate-zoomOnce" : "opacity-0"
-                    )}
-                />
+            {!shouldShowFallback ? (
+                isVideo ? (
+                    <>
+                        {shouldUseContain && (
+                            <div className="absolute inset-0 bg-gradient-to-b from-zinc-900 via-zinc-800 to-black" />
+                        )}
+                        <video
+                            ref={videoRef}
+                            src={src}
+                            muted
+                            loop
+                            autoPlay
+                            playsInline
+                            disablePictureInPicture
+                            preload="metadata"
+                            poster={placeholder || undefined}
+                            onLoadedMetadata={(event) => {
+                                const video = event.currentTarget;
+                                const width = Number(video.videoWidth) || 0;
+                                const height = Number(video.videoHeight) || 0;
+                                if (!width || !height) return;
+                                setVideoObjectFit(width < height ? "contain" : "cover");
+                            }}
+                            onLoadedData={() => setLoaded(true)}
+                            onCanPlay={() => setLoaded(true)}
+                            onError={() => setHasVideoError(true)}
+                            className={cn(
+                                "absolute inset-0 h-full w-full transition-opacity duration-700 ease-in-out",
+                                shouldUseContain ? "object-contain" : "object-cover",
+                                loaded ? "opacity-100" : "opacity-0"
+                            )}
+                        />
+                    </>
+                ) : (
+                    <img
+                        ref={imgRef}
+                        src={src}
+                        alt={alt}
+                        onLoad={() => setLoaded(true)}
+                        className={cn(
+                            "absolute w-full h-full object-cover transition-opacity duration-700 ease-in-out",
+                            loaded ? "opacity-100 animate-zoomOnce" : "opacity-0"
+                        )}
+                    />
+                )
             ) : (
                 <div className={
                     cn(
-                        "absolute inset-0 bg-gradient-to-b from-zinc-900 via-zinc-800 to-black",
-                        cnPlaceholderContainer
-                    )
+                            "absolute inset-0 bg-gradient-to-b from-zinc-900 via-zinc-800 to-black",
+                            cnPlaceholderContainer
+                        )
                 }
 
                     data-element="image-placeholder">

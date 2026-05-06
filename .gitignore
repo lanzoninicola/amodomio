@@ -1,12 +1,12 @@
 
 node_modules/
-
 .cache/
-
 package-lock.json
-
 build/
-
 .env
-
 amodomio-191.zip
+.claude/
+.venv/
+.venv-graphify/
+.codex/
+graphify-out/

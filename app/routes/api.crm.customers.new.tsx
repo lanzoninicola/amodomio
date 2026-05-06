@@ -18,6 +18,8 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const phone = typeof body?.phone === "string" ? body.phone.trim() : "";
   const name = typeof body?.name === "string" ? body.name.trim() : "";
+  const source = typeof body?.source === "string" ? body.source.trim() : "api";
+  const qr_id = typeof body?.qr_id === "string" ? body.qr_id.trim() : "";
 
   if (!phone) return json({ error: "invalid_phone" }, { status: 400 });
 
@@ -33,13 +35,19 @@ export async function action({ request }: ActionFunctionArgs) {
     data: { phone_e164, name: name || null },
   });
 
+  const eventPayload = {
+    action: "customer_create",
+    source,
+    qr_id: qr_id || undefined,
+  };
+
   await prisma.crmCustomerEvent.create({
     data: {
       customer_id: customer.id,
       event_type: "PROFILE_CREATE",
-      source: "api",
-      payload: { action: "customer_create", source: "api" },
-      payload_raw: "customer_create",
+      source,
+      payload: eventPayload,
+      payload_raw: JSON.stringify(eventPayload),
     },
   });
 

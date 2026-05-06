@@ -13,7 +13,16 @@ const MESSAGE_KEYS = [
   "data.text",
 ];
 const MESSAGE_TYPE_KEYS = ["type", "messagetype", "typemessage"];
+const REACTION_KEYS = [
+  "reaction",
+  "reactiontext",
+  "reaction_text",
+  "reactionemoji",
+  "reaction_emoji",
+  "emoji",
+];
 const INSTANCE_KEYS = ["instanceid", "instance_id"];
+const FROM_ME_KEYS = ["fromme", "from_me", "self", "owner"];
 const CONTACT_NAME_KEYS = [
   "pushname",
   "sendername",
@@ -76,6 +85,28 @@ function deepFindByKeys(payload: any, keys: string[]): string | null {
   });
 }
 
+function deepFindBooleanByKeys(payload: any, keys: string[]): boolean | undefined {
+  const normalizedKeys = new Set(keys.map((k) => k.toLowerCase()));
+  const found = walkObject(payload, (key, value) => {
+    if (!normalizedKeys.has(key.toLowerCase())) return null;
+    if (typeof value === "boolean") return value ? "true" : "false";
+    if (typeof value === "string") {
+      const normalized = value.trim().toLowerCase();
+      if (normalized === "true" || normalized === "1" || normalized === "yes") return "true";
+      if (normalized === "false" || normalized === "0" || normalized === "no") return "false";
+    }
+    if (typeof value === "number") {
+      if (value === 1) return "true";
+      if (value === 0) return "false";
+    }
+    return null;
+  });
+
+  if (found === "true") return true;
+  if (found === "false") return false;
+  return undefined;
+}
+
 function extractPhone(payload: any): string | undefined {
   const rawPhone = deepFindByKeys(payload, PHONE_KEYS);
   if (!rawPhone) return undefined;
@@ -85,6 +116,15 @@ function extractPhone(payload: any): string | undefined {
 }
 
 function extractMessageText(payload: any): string | undefined {
+  const messageType = deepFindByKeys(payload, MESSAGE_TYPE_KEYS)?.toLowerCase();
+  const reaction = deepFindByKeys(payload, REACTION_KEYS);
+  const reactionTrimmed = reaction?.trim();
+  if (reactionTrimmed) return reactionTrimmed;
+
+  // Reaction payloads can include nested/quoted text from previous messages.
+  // Prefer reaction-specific keys to avoid showing stale text in the preview.
+  if (messageType?.includes("reaction")) return undefined;
+
   const message = deepFindByKeys(payload, MESSAGE_KEYS);
   const trimmed = message?.trim();
   return trimmed || undefined;
@@ -107,6 +147,10 @@ function extractInstanceId(payload: any): string | undefined {
   }
 
   return undefined;
+}
+
+function extractFromMe(payload: any): boolean | undefined {
+  return deepFindBooleanByKeys(payload, FROM_ME_KEYS);
 }
 
 function isHttpUrl(value: string): boolean {
@@ -150,6 +194,7 @@ export function normalizeWebhookPayload(
   return {
     event,
     phone: extractPhone(payload),
+    fromMe: extractFromMe(payload),
     messageText: extractMessageText(payload),
     messageType: extractMessageType(payload),
     instanceId: extractInstanceId(payload),

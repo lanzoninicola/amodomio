@@ -6,7 +6,7 @@ import type { CategoryMenu } from "../category/category.model.server";
 import type { Pizza, Topping } from "../pizza/pizza.entity.server";
 import type { Size } from "../size/size.model.server";
 import { ProductEntity } from "../product/product.entity";
-import { categoryEntity } from "../category/category.entity.server";
+import { categoryPrismaEntity } from "../category/category.entity.server";
 import { sizeEntity } from "../size/size.entity.server";
 import type { whereCompoundConditions } from "~/lib/firestore-model/src";
 
@@ -75,7 +75,7 @@ class PizzaCatalogEntity extends CatalogEntity {
   async getAllProducts(catalogId: string) {
     const productEntity = new ProductEntity();
     const products = await productEntity.findAll();
-    const categories = await categoryEntity.findAll();
+    const categories = await categoryPrismaEntity.findAll();
     const sizes = await sizeEntity.findAll();
 
     const catalog = (await pizzaCatalogEntity.findOne([

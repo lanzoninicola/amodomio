@@ -116,7 +116,7 @@ export default function AdminCrmNewCustomer() {
   const isSubmitting = navigation.state === "submitting";
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-8 font-neue">
+    <div className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-8 ">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-xs uppercase text-muted-foreground">CRM</p>

@@ -59,7 +59,7 @@ export async function action({ request }: ActionFunctionArgs) {
       return badRequest(err);
     }
 
-    return ok("O custo da ficha tecnica foi atualizado com sucesso");
+    return ok("O custo da ficha de custo do item foi atualizado com sucesso");
   }
 
   if (_action === "menu-item-cost-variation-upsert-proposed-input") {
@@ -85,7 +85,7 @@ export async function action({ request }: ActionFunctionArgs) {
       return badRequest(err);
     }
 
-    return ok("O custo da ficha tecnica foi atualizado com sucesso");
+    return ok("O custo da ficha de custo do item foi atualizado com sucesso");
   }
 
   if (_action === "menu-item-cost-variation-upsert-all-proposed-input") {
@@ -117,7 +117,7 @@ export async function action({ request }: ActionFunctionArgs) {
       return badRequest(err);
     }
 
-    return ok("Os custos da ficha tecnica foi atualizado com sucesso");
+    return ok("Os custos da ficha de custo do item foram atualizados com sucesso");
   }
 
   return ok("Elemento atualizado com successo");
@@ -242,7 +242,7 @@ export default function AdminGerenciamentoCardapioCostManagementSingle() {
                                 {(record?.costAmount ?? 0) === 0 && (
                                   <div className="flex gap-2 items-center mt-2">
                                     <AlertCircleIcon className="h-4 w-4 text-red-500" />
-                                    <span className="text-red-500 text-xs font font-semibold">Custo ficha tecnica não definido</span>
+                                    <span className="text-red-500 text-xs font font-semibold">Custo da ficha de custo não definido</span>
                                   </div>
                                 )}
                               </div>

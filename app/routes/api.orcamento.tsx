@@ -1,6 +1,6 @@
 import { MenuItemSize } from "@prisma/client";
 import { LoaderFunctionArgs } from "@remix-run/node";
-import { cache } from "~/domain/cache/cache-manager.server";
+import { redisDel, redisGetJson, redisSetJson } from "~/lib/cache/redis.server";
 
 import { menuItemSizePrismaEntity } from "~/domain/cardapio/menu-item-size.entity.server";
 import { menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
@@ -21,6 +21,9 @@ type MenuItemPriceSummary = {
   profitExpectedPerc: number;
   priceExpectedAmount: number;
 };
+
+const ORCAMENTO_CACHE_KEY = "api:orcamento:v1";
+const ORCAMENTO_CACHE_TTL_SECONDS = Number(process.env.ORCAMENTO_CACHE_TTL_SECONDS ?? 120);
 
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
@@ -44,7 +47,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const invalidateCacheSearchParam = getSearchParam({ request, paramName: "invalidate-cache" })
 
   if (invalidateCacheSearchParam === "true") {
-    cache.invalidate();
+    await redisDel(ORCAMENTO_CACHE_KEY);
   }
 
   const apiKey = request.headers.get("x-api-key");
@@ -53,20 +56,18 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     return badRequest(authResp.message);
   }
 
-  const mapKey = "menu-item-price-summary";
-  const sizesKey = "menu-item-sizes";
-  const bairrosKey = "delivery-bairros";
-
-  const cachedMap = cache.get<Record<string, MenuItemPriceSummary[]>>(mapKey);
-  const cachedSizes = cache.get<MenuItemSize[]>(sizesKey);
-  const cachedBairros = cache.get<BairroWithFeeAndDistance[]>(bairrosKey);
+  const cached = await redisGetJson<{
+    options: Record<string, MenuItemPriceSummary[]>;
+    sizes: MenuItemSize[];
+    bairros: BairroWithFeeAndDistance[];
+  }>(ORCAMENTO_CACHE_KEY);
 
   // Se tudo estiver em cache, retorna direto
-  if (cachedMap && cachedSizes && cachedBairros) {
+  if (cached) {
     return ok({
-      options: cachedMap,
-      sizes: cachedSizes.filter(size => size.key !== "pizza-slice"),
-      bairros: cachedBairros,
+      options: cached.options,
+      sizes: cached.sizes.filter(size => size.key !== "pizza-slice"),
+      bairros: cached.bairros,
     }, {
       cors: true,
       corsOrigin: "*",
@@ -107,13 +108,17 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   delete map["pizza-slice"];
 
-  const sizesRaw = cachedSizes ?? await menuItemSizePrismaEntity.findAll();
-  const bairros = cachedBairros ?? await bairroEntity.findManyWithFees();
+  const [sizesRaw, bairros] = await Promise.all([
+    menuItemSizePrismaEntity.findAll(),
+    bairroEntity.findManyWithFees()
+  ]);
 
   // Armazena em cache
-  cache.set(mapKey, map);
-  if (!cachedSizes) cache.set(sizesKey, sizesRaw);
-  if (!cachedBairros) cache.set(bairrosKey, bairros);
+  await redisSetJson(ORCAMENTO_CACHE_KEY, {
+    options: map,
+    sizes: sizesRaw,
+    bairros
+  }, Number.isFinite(ORCAMENTO_CACHE_TTL_SECONDS) ? ORCAMENTO_CACHE_TTL_SECONDS : 120);
 
   return ok({
     options: map,
