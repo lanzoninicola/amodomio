@@ -338,7 +338,6 @@ function CardapioHeader() {
             {currentPage === "other" && notificationsEnabled && <PushOptIn vapidPublicKey={vapidPublicKey} />}
 
             </header>
-        </>
     )
 }
 
